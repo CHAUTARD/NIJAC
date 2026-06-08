@@ -1,0 +1,17 @@
+La base officielle des codes postaux est un jeu de données qui fournit la correspondance entre les codes postaux et les codes INSEE des communes, de France (métropole et DOM), des COM, ainsi que de MONACO.
+
+Ce jeu de données comprend :
+
+Le code commune INSEE
+
+Le nom de la commune
+
+Le code postal de la commune
+
+Le libellé d’acheminement
+
+Le lieu-dit associé ou le nom de la commune déléguée associée (Ligne_5 dans le CSV)
+
+Les contours géographiques
+
+Un export CSV qui contient les coordonnées des centroïdes des communes est également disponible.
