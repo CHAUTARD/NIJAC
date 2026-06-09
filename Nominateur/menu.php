@@ -3,7 +3,7 @@ session_start();
 
 // Accès : tout utilisateur connecté (nominateur ou admin)
 if (!isset($_SESSION['utilisateur'])) {
-    header('Location: index.php');
+    header('Location: ../index.php');
     exit;
 }
 
@@ -19,10 +19,10 @@ $isAdmin     = !empty($u['is_admin']);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NIJAC – Menu nominateur</title>
+    <title>NIJAC – Menu Nominateur</title>
 
-    <link rel="stylesheet" href="asset/css/bootstrap.min.css">
-    <link rel="stylesheet" href="asset/css/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="../asset/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../asset/css/bootstrap-icons.min.css">
 
     <style>
         :root {
@@ -111,8 +111,7 @@ $isAdmin     = !empty($u['is_admin']);
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: flex-end;
-            gap: 10px;
+            justify-content: space-between;
             padding: 20px 12px 18px;
             border: 2px solid rgba(0,0,0,.12);
             border-radius: 10px;
@@ -128,15 +127,31 @@ $isAdmin     = !empty($u['is_admin']);
             min-height: 190px;
         }
 
-        .menu-btn img {
-            width: 96px;
-            height: 96px;
-            object-fit: contain;
+        .menu-btn .btn-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 120px;
+            height: 120px;
             flex-shrink: 0;
+        }
+
+        .menu-btn img {
+            max-width: 120px;
+            max-height: 120px;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+        }
+
+        .menu-btn .btn-icon i {
+            font-size: 5rem;
+            line-height: 1;
         }
 
         .menu-btn span {
             line-height: 1.25;
+            margin-top: 10px;
         }
 
         .menu-btn:hover {
@@ -177,10 +192,10 @@ $isAdmin     = !empty($u['is_admin']);
         <span class="ts-user">
             <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= $nomComplet ?><?= $departement ? " ($departement)" : '' ?>
         </span>
-        <a class="ts-pwd-warning" href="changer_mot_de_passe.php">
+        <a class="ts-pwd-warning" href="../changer_mot_de_passe.php">
             <i class="bi bi-key-fill"></i>Mot de passe à modifier
         </a>
-        <a id="btn-switch-admin" href="admin_menu.php" title="Basculer vers le menu administrateur">
+        <a id="btn-switch-admin" href="../admin_menu.php" title="Basculer vers le menu administrateur">
             <i class="bi bi-shield-lock-fill"></i>Menu administrateur
         </a>
     </div>
@@ -194,40 +209,45 @@ $isAdmin     = !empty($u['is_admin']);
     <div id="menu-grid">
 
         <!-- Ligne 1 -->
-        <a href="encours.php" class="menu-btn btn-nomination">
-            <img src="img/JA.png" alt="Nomination JA">
+        <a href="../encours.php" class="menu-btn btn-nomination">
+            <div class="btn-icon"><img src="../img/JA.png" alt="Nomination JA"></div>
             <span>Nomination JA</span>
         </a>
 
-        <a href="jugearbitre.php" class="menu-btn btn-ja">
-            <img src="img/Arbitre.png" alt="Juge-Arbitre">
+        <a href="../jugearbitre.php" class="menu-btn btn-ja">
+            <div class="btn-icon"><img src="../img/Arbitre.png" alt="Juge-Arbitre"></div>
             <span>Juge-Arbitre</span>
         </a>
 
-        <a href="encours.php" class="menu-btn btn-competition">
-            <img src="img/Competition.png" alt="Compétition">
+        <a href="../encours.php" class="menu-btn btn-competition">
+            <div class="btn-icon"><img src="../img/Competition.png" alt="Compétition"></div>
             <span>Compétition</span>
         </a>
 
-        <a href="encours.php" class="menu-btn btn-planning">
-            <img src="img/Phases.png" alt="Planning">
+        <a href="../encours.php" class="menu-btn btn-planning">
+            <div class="btn-icon"><img src="../img/Phases.png" alt="Planning"></div>
             <span>Planning</span>
         </a>
 
         <!-- Ligne 2 -->
-        <a href="encours.php" class="menu-btn btn-rapport">
-            <img src="img/MiseaJour.png" alt="Rapports">
+        <a href="../encours.php" class="menu-btn btn-rapport">
+            <div class="btn-icon"><img src="../img/MiseaJour.png" alt="Rapports"></div>
             <span>Rapports</span>
         </a>
 
-        <a href="encours.php" class="menu-btn btn-messagerie">
-            <img src="img/Correspondant.png" alt="Messagerie">
+        <a href="../encours.php" class="menu-btn btn-messagerie">
+            <div class="btn-icon"><img src="../img/Correspondant.png" alt="Messagerie"></div>
             <span>Messagerie</span>
         </a>
 
+        <a href="../disponibilite_ja.php" class="menu-btn" style="background-color:#e8eaf6;">
+            <div class="btn-icon"><img src="../img/Arbitre.png" alt="Disponibilités JA"></div>
+            <span>Disponibilités JA</span>
+        </a>
+
         <!-- Déconnexion -->
-        <a href="logout.php" class="menu-btn" style="background:#f8d7da; grid-column: 4;">
-            <i class="bi bi-box-arrow-right" style="font-size:5rem; color:#842029;"></i>
+        <a href="../logout.php" class="menu-btn" style="background:#f8d7da; grid-column: 4;">
+            <div class="btn-icon"><i class="bi bi-box-arrow-right" style="color:#842029;"></i></div>
             <span style="color:#842029;">Se déconnecter</span>
         </a>
 
@@ -238,11 +258,11 @@ $isAdmin     = !empty($u['is_admin']);
         &copy; <?= date('Y') ?> NIJAC &mdash; Tous droits réservés
     </div>
 
-    <script src="asset/js/jquery-3.7.1.min.js"></script>
-    <script src="asset/js/bootstrap.bundle.min.js"></script>
+    <script src="../asset/js/jquery-3.7.1.min.js"></script>
+    <script src="../asset/js/bootstrap.bundle.min.js"></script>
     <script>
     'use strict';
-    $('a[href="logout.php"]').on('click', function (e) {
+    $('a[href="../logout.php"]').on('click', function (e) {
         if (!confirm('Voulez-vous vous déconnecter ?')) {
             e.preventDefault();
         }

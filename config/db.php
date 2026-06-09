@@ -7,6 +7,10 @@ define('DB_USER', 'root');        // Utilisateur MariaDB
 define('DB_PASS', '');            // Mot de passe MariaDB (vide par défaut sous WAMP)
 define('DB_CHARSET', 'utf8mb4');
 
+// Seed secret pour l'obfuscation des identifiants JA dans les URL publiques
+// (doit rester identique entre génération et décodage)
+define('OBFUSCATOR_SEED', 167);
+
 /**
  * Retourne une instance PDO partagée (singleton).
  */

@@ -656,6 +656,7 @@ $changeLogin = !empty($moi['change_login']);
                 <th style="width:60px"  data-field="ordre">Ordre<span class="sort-icon"></span></th>
                 <th style="width:75px"  data-field="cp">CP<span class="sort-icon"></span></th>
                 <th style="width:160px" data-field="ville">Ville<span class="sort-icon"></span></th>
+                <th style="width:75px"  class="no-sort">Lien dispo</th>
             </tr>
         </thead>
         <tbody id="tbody-grille">
@@ -756,7 +757,7 @@ function renderGrille() {
 
     if (!affichees.length) {
         const msg = searchTerm ? 'Aucun résultat pour cette recherche.' : 'Aucun juge-arbitre.';
-        $body.append(`<tr><td colspan="13" class="text-center text-muted py-3">${msg}</td></tr>`);
+        $body.append(`<tr><td colspan="14" class="text-center text-muted py-3">${msg}</td></tr>`);
     } else {
         affichees.forEach(l => {
             const idx  = l._idx;          // index stable, indépendant du filtre/tri
@@ -778,6 +779,10 @@ function renderGrille() {
             $tr.append(makeTd(l.ordre,            idx, 'ordre',           false));
             $tr.append(makeTdLaPoste(l.cp,        idx, 'cp'));
             $tr.append(makeTdLaPoste(l.ville,     idx, 'ville'));
+            // Bouton lien disponibilité
+            const $tdLien = $('<td>').css({textAlign:'center', verticalAlign:'middle', padding:'.2rem'});
+            $tdLien.html(`<button class="btn btn-sm btn-outline-primary btn-lien-dispo" data-id="${l.id}" title="Copier le lien de disponibilité pour ce JA"><i class="bi bi-link-45deg"></i></button>`);
+            $tr.append($tdLien);
             $body.append($tr);
         });
     }
@@ -1131,6 +1136,25 @@ $('#btn-erreurs-cp').on('click', function () {
     if (!filtreActif && !filtreErreursCp) $('#btn-tous').addClass('active');
     else $('#btn-tous').removeClass('active');
     renderGrille();
+});
+
+// ── Bouton "Copier le lien de disponibilité" ─────────────────────────────────
+$(document).on('click', '.btn-lien-dispo', function (e) {
+    e.stopPropagation();
+    const id   = $(this).data('id');
+    const $btn = $(this);
+    $.getJSON('disponibilite_ja.php', { action: 'token', id: id }, function (r) {
+        if (!r.ok) { alert('Erreur lors de la génération du lien.'); return; }
+        navigator.clipboard.writeText(r.url).then(function () {
+            const orig = $btn.html();
+            $btn.html('<i class="bi bi-check2"></i>').addClass('btn-success').removeClass('btn-outline-primary');
+            setTimeout(function () {
+                $btn.html(orig).removeClass('btn-success').addClass('btn-outline-primary');
+            }, 2000);
+        }).catch(function () {
+            prompt('Lien à copier :', r.url);
+        });
+    });
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────

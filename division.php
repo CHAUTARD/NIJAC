@@ -13,15 +13,17 @@ $moi = $_SESSION['utilisateur'];
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 if ($action !== '') {
+    ob_start(); ob_end_clean();
     header('Content-Type: application/json; charset=utf-8');
 
     try {
         $pdo = getPDO();
 
+
         // ── Liste ──────────────────────────────────────────────────────────
         if ($action === 'liste') {
             $rows = $pdo->query(
-                'SELECT Id_Division, Division, Ord, Nom FROM Division ORDER BY Ord'
+                'SELECT Id_Division, Division, Ord, Nom, ArbitrageObligatoire FROM Division ORDER BY Ord'
             )->fetchAll();
             echo json_encode(['ok' => true, 'data' => $rows]);
             exit;
@@ -31,7 +33,7 @@ if ($action !== '') {
         if ($action === 'charger') {
             $id   = (int)($_GET['id'] ?? 0);
             $stmt = $pdo->prepare(
-                'SELECT Id_Division, Division, Ord, Nom FROM Division WHERE Id_Division = ?'
+                'SELECT Id_Division, Division, Ord, Nom, ArbitrageObligatoire FROM Division WHERE Id_Division = ?'
             );
             $stmt->execute([$id]);
             $row = $stmt->fetch();
@@ -45,6 +47,7 @@ if ($action !== '') {
             $nom     = trim($_POST['nom']        ?? '');
             $ord     = max(1, (int)($_POST['ord'] ?? 1));
             $nomLong = trim($_POST['nom_long']   ?? '');
+            $arbitrage = (int)($_POST['arbitrage_obligatoire'] ?? 1) === 0 ? 0 : 1;
 
             if ($nom === '') {
                 echo json_encode(['ok' => false, 'msg' => 'Le nom de la division ne peut pas être vide.']);
@@ -53,15 +56,15 @@ if ($action !== '') {
 
             if ($id > 0) {
                 $stmt = $pdo->prepare(
-                    'UPDATE Division SET Division=?, Ord=?, Nom=? WHERE Id_Division=?'
+                    'UPDATE Division SET Division=?, Ord=?, Nom=?, ArbitrageObligatoire=? WHERE Id_Division=?'
                 );
-                $stmt->execute([$nom, $ord, $nomLong, $id]);
+                $stmt->execute([$nom, $ord, $nomLong, $arbitrage, $id]);
                 echo json_encode(['ok' => true, 'msg' => 'Division mise à jour.', 'id' => $id]);
             } else {
                 $stmt = $pdo->prepare(
-                    'INSERT INTO Division (Division, Ord, Nom) VALUES (?, ?, ?)'
+                    'INSERT INTO Division (Division, Ord, Nom, ArbitrageObligatoire) VALUES (?, ?, ?, ?)'
                 );
-                $stmt->execute([$nom, $ord, $nomLong]);
+                $stmt->execute([$nom, $ord, $nomLong, $arbitrage]);
                 echo json_encode(['ok' => true, 'msg' => 'Division créée.', 'id' => (int)$pdo->lastInsertId()]);
             }
             exit;
@@ -258,9 +261,10 @@ $changeLogin = !empty($moi['change_login']);
             <table id="tbl-divisions">
                 <thead>
                     <tr>
-                        <th style="width:60px">Ord</th>
-                        <th style="width:120px">Division</th>
+                        <th style="width:50px">Ord</th>
+                        <th style="width:80px">Division</th>
                         <th>Nom</th>
+                        <th style="width:120px;text-align:center">Arbitrage JA</th>
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
@@ -291,6 +295,25 @@ $changeLogin = !empty($moi['change_login']);
         <div class="mb-2">
             <label class="form-label" for="txt-nom-long">Nom :</label>
             <input type="text" id="txt-nom-long" class="form-control form-control-sm" maxlength="255">
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Arbitrage JA :</label>
+            <div class="d-flex gap-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="arbitrage" id="radio-oblig" value="1" checked>
+                    <label class="form-check-label" for="radio-oblig">
+                        <span class="badge" style="background:#1565c0">Obligatoire</span>
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="arbitrage" id="radio-demande" value="0">
+                    <label class="form-check-label" for="radio-demande">
+                        <span class="badge" style="background:#e65100">Sur demande du club</span>
+                    </label>
+                </div>
+            </div>
+            <div class="form-text">Indique si un JA doit être désigné automatiquement pour chaque rencontre.</div>
         </div>
 
         <!-- Boutons -->
@@ -352,12 +375,16 @@ function chargerListe(selectId = null) {
             return;
         }
         res.data.forEach(d => {
+            const arb = +d.ArbitrageObligatoire === 1
+                ? '<span class="badge" style="background:#1565c0;font-size:.75rem">Obligatoire</span>'
+                : '<span class="badge" style="background:#e65100;font-size:.75rem">Sur demande</span>';
             const $tr = $('<tr>')
                 .attr('data-id', d.Id_Division)
                 .append(
                     $('<td class="text-center">').text(d.Ord),
                     $('<td>').text(d.Division),
-                    $('<td>').text(d.Nom)
+                    $('<td>').text(d.Nom),
+                    $('<td class="text-center">').html(arb)
                 )
                 .on('click', function () { selectionnerLigne($(this)); });
             $body.append($tr);
@@ -382,6 +409,7 @@ function selectionnerLigne($tr) {
         $('#txt-nom').val(d.Division);
         $('#num-ord').val(d.Ord);
         $('#txt-nom-long').val(d.Nom);
+        $('input[name="arbitrage"]').filter(`[value="${+d.ArbitrageObligatoire}"]`).prop('checked', true);
         $('#btn-supprimer').prop('disabled', false);
         setStatus('');
     }, 'json');
@@ -395,6 +423,7 @@ $('#btn-nouveau').on('click', function () {
     $('#txt-nom').val('').trigger('focus');
     $('#num-ord').val(1);
     $('#txt-nom-long').val('');
+    $('#radio-oblig').prop('checked', true);
     $('#btn-supprimer').prop('disabled', true);
     setStatus('');
 });
@@ -402,11 +431,12 @@ $('#btn-nouveau').on('click', function () {
 // ── Enregistrer ───────────────────────────────────────────────────────────────
 $('#btn-enregistrer').on('click', function () {
     $.post('division.php', {
-        action:   'enregistrer',
-        id:       currentId ?? 0,
-        nom:      $('#txt-nom').val().trim(),
-        ord:      $('#num-ord').val(),
-        nom_long: $('#txt-nom-long').val().trim(),
+        action:                  'enregistrer',
+        id:                      currentId ?? 0,
+        nom:                     $('#txt-nom').val().trim(),
+        ord:                     $('#num-ord').val(),
+        nom_long:                $('#txt-nom-long').val().trim(),
+        arbitrage_obligatoire:   $('input[name="arbitrage"]:checked').val(),
     }, function (res) {
         if (res.ok) {
             toast(res.msg);

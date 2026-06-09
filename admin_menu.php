@@ -114,8 +114,7 @@ $isAdmin      = !empty($u['is_admin']);
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: flex-end;
-            gap: 10px;
+            justify-content: space-between;
             padding: 20px 12px 18px;
             border: 2px solid rgba(0,0,0,.12);
             border-radius: 10px;
@@ -131,15 +130,32 @@ $isAdmin      = !empty($u['is_admin']);
             min-height: 190px;
         }
 
-        .menu-btn img {
-            width: 96px;
-            height: 96px;
-            object-fit: contain;
+        /* Conteneur image à hauteur fixe — même position pour toutes les cartes */
+        .menu-btn .btn-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 120px;
+            height: 120px;
             flex-shrink: 0;
+        }
+
+        .menu-btn img {
+            max-width: 120px;
+            max-height: 120px;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+        }
+
+        .menu-btn .btn-icon i {
+            font-size: 5rem;
+            line-height: 1;
         }
 
         .menu-btn span {
             line-height: 1.25;
+            margin-top: 10px;
         }
 
         .menu-btn:hover {
@@ -188,7 +204,7 @@ $isAdmin      = !empty($u['is_admin']);
         <a class="ts-pwd-warning" href="changer_mot_de_passe.php" id="lnk-chg-pwd">
             <i class="bi bi-key-fill"></i>Mot de passe à modifier
         </a>
-        <a id="btn-switch-nominateur" href="menu.php" title="Basculer vers le menu nominateur">
+        <a id="btn-switch-nominateur" href="Nominateur/menu.php" title="Basculer vers le menu nominateur">
             <i class="bi bi-people-fill"></i>Menu nominateur
         </a>
     </div>
@@ -203,60 +219,70 @@ $isAdmin      = !empty($u['is_admin']);
 
         <!-- Ligne 1 -->
         <a href="competition.php" class="menu-btn btn-competition">
-            <img src="img/Competition.png" alt="Compétition">
+            <div class="btn-icon"><img src="img/Competition.png" alt="Compétition"></div>
             <span>Type de compétition</span>
         </a>
 
         <a href="club.php" class="menu-btn btn-club">
-            <img src="img/Association.png" alt="Club / Association">
+            <div class="btn-icon"><img src="img/Association.png" alt="Club / Association"></div>
             <span>Club / Association</span>
         </a>
 
         <a href="salle.php" class="menu-btn btn-salle">
-            <img src="img/Salle.png" alt="Salle">
+            <div class="btn-icon"><img src="img/Salle.png" alt="Salle"></div>
             <span>Salle</span>
         </a>
 
         <a href="saison.php" class="menu-btn btn-saison">
-            <img src="img/Phases.png" alt="Saison">
+            <div class="btn-icon"><img src="img/Phases.png" alt="Saison"></div>
             <span>Saison</span>
         </a>
 
         <!-- Ligne 2 -->
         <a href="utilisateur.php" class="menu-btn btn-utilisateur">
-            <img src="img/Utilisateur.png" alt="Utilisateur">
+            <div class="btn-icon"><img src="img/Utilisateur.png" alt="Utilisateur"></div>
             <span>Utilisateur</span>
         </a>
 
         <a href="correspondant.php" class="menu-btn btn-correspondant">
-            <img src="img/Correspondant.png" alt="Correspondant Club">
+            <div class="btn-icon"><img src="img/Correspondant.png" alt="Correspondant Club"></div>
             <span>Correspondant Club</span>
         </a>
 
         <a href="communes.php" class="menu-btn btn-communes">
-            <img src="img/La_Poste.png" alt="Communes">
+            <div class="btn-icon"><img src="img/La_Poste.png" alt="Communes"></div>
             <span>Communes</span>
         </a>
 
         <a href="division.php" class="menu-btn btn-division">
-            <img src="img/podium.png" alt="Division">
+            <div class="btn-icon"><img src="img/podium.png" alt="Division"></div>
             <span>Division</span>
         </a>
 
-        <!-- Ligne 3 : Configuration seul + déconnexion -->
+        <!-- Ligne 3 -->
         <a href="configuration.php" class="menu-btn btn-configuration">
-            <img src="img/Parametres.png" alt="Configuration">
+            <div class="btn-icon"><img src="img/Parametres.png" alt="Configuration"></div>
             <span>Configuration</span>
         </a>
 
         <a href="jugearbitre.php" class="menu-btn btn-configuration">
-            <img src="img/ja.png" alt="Juge Arbitre">
+            <div class="btn-icon"><img src="img/JA.png" alt="Juge Arbitre"></div>
             <span>Juge Arbitre</span>
         </a>
 
-        <!-- Déconnexion (pas dans le C# original, mais utile en web) -->
+        <a href="import_rencontres.php" class="menu-btn" style="background-color:#e8f5e9;">
+            <div class="btn-icon"><img src="img/Competition.png" alt="Import Rencontres"></div>
+            <span>Import Rencontres</span>
+        </a>
+
+        <a href="disponibilite_ja.php" class="menu-btn" style="background-color:#e8eaf6;">
+            <div class="btn-icon"><img src="img/Arbitre.png" alt="Disponibilités JA"></div>
+            <span>Disponibilités JA</span>
+        </a>
+
+        <!-- Déconnexion -->
         <a href="logout.php" class="menu-btn" style="background:#f8d7da; grid-column: 4;">
-            <i class="bi bi-box-arrow-right" style="font-size:5rem; color:#842029;"></i>
+            <div class="btn-icon"><i class="bi bi-box-arrow-right" style="color:#842029;"></i></div>
             <span style="color:#842029;">Se déconnecter</span>
         </a>
 
