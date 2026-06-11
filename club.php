@@ -1,4 +1,15 @@
 <?php
+/**
+ * NIJAC – Gestion des clubs et associations (E008)
+ *
+ * Importe et gère la liste des clubs affiliés à la ligue depuis un fichier Excel FFTT.
+ * Le fichier doit comporter les colonnes "N° FFTT" (Id_Club) et "Nom club" (Nom),
+ * les données étant lues à partir de la ligne 3.
+ * L'import effectue un upsert : mise à jour si le club existe déjà, création sinon.
+ *
+ * Créé par : Patrick CHAUTARD
+ * Date de création : 2026-06-11
+ */
 session_start();
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/vendor/autoload.php';
@@ -141,7 +152,7 @@ $changeLogin = !empty($moi['change_login']);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NIJAC – Clubs et Associations (E003)</title>
+    <title>NIJAC – Clubs et Associations (E008)</title>
 
     <link rel="stylesheet" href="asset/css/bootstrap.min.css">
     <link rel="stylesheet" href="asset/css/bootstrap-icons.min.css">
@@ -175,6 +186,12 @@ $changeLogin = !empty($moi['change_login']);
             align-items: center; gap: .35rem;
             color: #c00; font-weight: 700;
             cursor: pointer; text-decoration: underline dotted;
+        }
+        #toolbar .ts-screen-id {
+            font-size: .78rem; font-weight: 700;
+            color: #1a3a6b; background: #ddeeff;
+            padding: .1rem .45rem; border-radius: 4px;
+            border: 1px solid #99bbdd; letter-spacing: .03em;
         }
 
         /* ── MenuStrip ── */
@@ -333,6 +350,7 @@ $changeLogin = !empty($moi['change_login']);
     </button>
     <input type="file" id="file-input" accept=".xlsx" style="display:none">
     <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 club(s)</span>
+    &nbsp;&nbsp;&nbsp;Fichier d'origine : édition 204 FFTT - comité D76.
     <span style="flex:1"></span>
     <input type="search" id="search-input" placeholder="🔍 Rechercher…">
 </div>
@@ -340,7 +358,7 @@ $changeLogin = !empty($moi['change_login']);
 <!-- En-tête -->
 <div id="page-header">
     <i class="bi bi-building me-2"></i>Gestion des clubs et Associations
-    <small class="opacity-75 ms-2">(E003)</small>
+    <small class="opacity-75 ms-2">(E008)</small>
     <a href="admin_menu.php" class="btn btn-sm btn-light float-end py-0">
         <i class="bi bi-arrow-left me-1"></i>Retour menu
     </a>

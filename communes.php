@@ -1,4 +1,14 @@
 <?php
+/**
+ * NIJAC – Gestion des communes / La Poste (E006)
+ *
+ * Référentiel des codes postaux et communes (table laposte) avec coordonnées
+ * GPS (latitude / longitude). Utilisé pour calculer les distances domicile-salle
+ * lors de la nomination des JA et pour alimenter les sélecteurs d'adresse.
+ *
+ * Créé par : Patrick CHAUTARD
+ * Date de création : 2026-06-11
+ */
 session_start();
 require_once __DIR__ . '/config/db.php';
 
@@ -334,6 +344,12 @@ $changeLogin = !empty($moi['change_login']);
             align-items: center; gap: .35rem;
             color: #c00; font-weight: 700;
             cursor: pointer; text-decoration: underline dotted;
+        }
+        #toolbar .ts-screen-id {
+            font-size: .78rem; font-weight: 700;
+            color: #1a3a6b; background: #ddeeff;
+            padding: .1rem .45rem; border-radius: 4px;
+            border: 1px solid #99bbdd; letter-spacing: .03em;
         }
 
         /* ── MenuStrip ── */

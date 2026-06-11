@@ -1,4 +1,14 @@
 <?php
+/**
+ * NIJAC – Page de connexion (E001)
+ *
+ * Point d'entrée de l'application : saisie du login et du mot de passe.
+ * Vérifie les identifiants en base, initialise la session et redirige
+ * l'utilisateur vers le menu adapté à son rôle (Administrateur ou Nominateur).
+ *
+ * Créé par : Patrick CHAUTARD
+ * Date de création : 2026-06-11
+ */
 session_unset();
 session_start();
 session_unset();
@@ -250,7 +260,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             autocomplete="current-password"
                         >
                         <button class="btn btn-outline-secondary" type="button" id="btn-toggle-pwd" tabindex="-1" title="Afficher / masquer le mot de passe">
-                            <img src="img/Oeil_32.png" alt="" width="20" height="20" class="me-1">
+                            <img id="eye-icon" src="img/Oeil_Cache_32.png" alt="" width="20" height="20" class="me-1">
                         </button>
                     </div>
                 </div>
@@ -275,14 +285,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <!-- Illustration droite -->
         <div class="img-panel">
-            <img src="img/Arbitre2.png" alt="Arbitre">
+            <img src="img/Arbitre_filet.png" alt="Arbitre">
         </div>
 
     </div>
 
     <!-- Pied de page -->
     <div class="login-footer">
-        &copy; <?= date('Y') ?> NIJAC &mdash; Tous droits réservés
+        &copy; <?= date('Y') ?> NIJAC &mdash; Tous droits réservés &mdash; Ligue Normandie de tennis de table &mdash; V: 0.01
     </div>
 
 </div>
@@ -302,10 +312,10 @@ $(function () {
         const $icon = $('#eye-icon');
         if ($pwd.attr('type') === 'password') {
             $pwd.attr('type', 'text');
-            $icon.attr('src', 'img/Oeil_Cache_32.png');
+            $icon.attr('src', 'img/Oeil_32.png');
         } else {
             $pwd.attr('type', 'password');
-            $icon.attr('src', 'img/Oeil_32.png');
+            $icon.attr('src', 'img/Oeil_Cache_32.png');
         }
     });
 

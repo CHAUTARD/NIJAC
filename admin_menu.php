@@ -1,4 +1,15 @@
 <?php
+/**
+ * NIJAC – Menu paramètres administrateur (E002)
+ *
+ * Menu principal réservé aux administrateurs. Donne accès à tous les écrans
+ * de paramétrage de l'application : compétitions, clubs, salles, saisons,
+ * utilisateurs, correspondants, communes, divisions, configuration, JA,
+ * import des rencontres et disponibilités.
+ *
+ * Créé par : Patrick CHAUTARD
+ * Date de création : 2026-06-11
+ */
 session_start();
 
 // Accès réservé aux administrateurs connectés
@@ -91,6 +102,17 @@ $isAdmin      = !empty($u['is_admin']);
         }
         #btn-switch-nominateur:hover { background: #1b5e20; color: #fff; }
 
+        #toolbar .ts-screen-id {
+            font-size: .78rem;
+            font-weight: 700;
+            color: #1a3a6b;
+            background: #ddeeff;
+            padding: .1rem .45rem;
+            border-radius: 4px;
+            border: 1px solid #99bbdd;
+            letter-spacing: .03em;
+        }
+
         /* ── En-tête de page ── */
         #page-header {
             background: var(--nijac-blue);
@@ -135,21 +157,21 @@ $isAdmin      = !empty($u['is_admin']);
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 120px;
-            height: 120px;
+            width: 150px;
+            height: 150px;
             flex-shrink: 0;
         }
 
         .menu-btn img {
-            max-width: 120px;
-            max-height: 120px;
-            width: auto;
-            height: auto;
+            max-width: 150px;
+            max-height: 150px;
+            width: 150px;
+            height: 150px;
             object-fit: contain;
         }
 
         .menu-btn .btn-icon i {
-            font-size: 5rem;
+            font-size: 6rem;
             line-height: 1;
         }
 
@@ -157,6 +179,16 @@ $isAdmin      = !empty($u['is_admin']);
             line-height: 1.25;
             margin-top: 10px;
         }
+
+        .menu-btn .btn-desc {
+            font-size: .72rem;
+            font-weight: 400;
+            color: #555;
+            margin-top: 4px;
+            line-height: 1.3;
+        }
+        .menu-btn:hover .btn-desc { color: #333; }
+        .btn-club:hover .btn-desc { color: #ddd; }
 
         .menu-btn:hover {
             filter: brightness(1.08);
@@ -221,69 +253,82 @@ $isAdmin      = !empty($u['is_admin']);
         <a href="competition.php" class="menu-btn btn-competition">
             <div class="btn-icon"><img src="img/Competition.png" alt="Compétition"></div>
             <span>Type de compétition</span>
+            <span class="btn-desc">Créer et paramétrer les types de compétitions</span>
         </a>
 
         <a href="club.php" class="menu-btn btn-club">
             <div class="btn-icon"><img src="img/Association.png" alt="Club / Association"></div>
             <span>Club / Association</span>
+            <span class="btn-desc" style="color:#ccc;">Gérer les clubs et associations affiliés</span>
         </a>
 
         <a href="salle.php" class="menu-btn btn-salle">
             <div class="btn-icon"><img src="img/Salle.png" alt="Salle"></div>
             <span>Salle</span>
+            <span class="btn-desc">Référencer les salles de compétition et leur adresse</span>
         </a>
 
         <a href="saison.php" class="menu-btn btn-saison">
             <div class="btn-icon"><img src="img/Phases.png" alt="Saison"></div>
             <span>Saison</span>
+            <span class="btn-desc">Créer et gérer les saisons et leurs phases</span>
         </a>
 
         <!-- Ligne 2 -->
         <a href="utilisateur.php" class="menu-btn btn-utilisateur">
             <div class="btn-icon"><img src="img/Utilisateur.png" alt="Utilisateur"></div>
             <span>Utilisateur</span>
+            <span class="btn-desc">Gérer les comptes et droits d'accès</span>
         </a>
 
         <a href="correspondant.php" class="menu-btn btn-correspondant">
             <div class="btn-icon"><img src="img/Correspondant.png" alt="Correspondant Club"></div>
             <span>Correspondant Club</span>
+            <span class="btn-desc">Contacts référents de chaque club</span>
         </a>
 
         <a href="communes.php" class="menu-btn btn-communes">
             <div class="btn-icon"><img src="img/La_Poste.png" alt="Communes"></div>
             <span>Communes</span>
+            <span class="btn-desc">Base des codes postaux et coordonnées GPS</span>
         </a>
 
         <a href="division.php" class="menu-btn btn-division">
             <div class="btn-icon"><img src="img/podium.png" alt="Division"></div>
             <span>Division</span>
+            <span class="btn-desc">Définir les divisions et leur niveau</span>
         </a>
 
         <!-- Ligne 3 -->
         <a href="configuration.php" class="menu-btn btn-configuration">
             <div class="btn-icon"><img src="img/Parametres.png" alt="Configuration"></div>
             <span>Configuration</span>
+            <span class="btn-desc">Paramètres généraux de l'application</span>
         </a>
 
         <a href="jugearbitre.php" class="menu-btn btn-configuration">
             <div class="btn-icon"><img src="img/JA.png" alt="Juge Arbitre"></div>
             <span>Juge Arbitre</span>
+            <span class="btn-desc">Importer et gérer les fiches JA</span>
         </a>
 
         <a href="import_rencontres.php" class="menu-btn" style="background-color:#e8f5e9;">
             <div class="btn-icon"><img src="img/Competition.png" alt="Import Rencontres"></div>
             <span>Import Rencontres</span>
+            <span class="btn-desc">Importer les rencontres depuis un fichier FFTT</span>
         </a>
 
         <a href="disponibilite_ja.php" class="menu-btn" style="background-color:#e8eaf6;">
             <div class="btn-icon"><img src="img/Arbitre.png" alt="Disponibilités JA"></div>
             <span>Disponibilités JA</span>
+            <span class="btn-desc">Consulter les disponibilités déclarées par les JA</span>
         </a>
 
         <!-- Déconnexion -->
         <a href="logout.php" class="menu-btn" style="background:#f8d7da; grid-column: 4;">
             <div class="btn-icon"><i class="bi bi-box-arrow-right" style="color:#842029;"></i></div>
             <span style="color:#842029;">Se déconnecter</span>
+            <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
         </a>
 
     </div>

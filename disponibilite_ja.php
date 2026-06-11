@@ -1,17 +1,18 @@
 <?php
 /**
- * Disponibilité JA — Page indépendante (sans session admin)
+ * NIJAC – Déclaration de disponibilité JA (E012)
  *
- * Niveau 1 : calendrier des journées → choix Disponible / Partiel / Non disponible
- * Niveau 2 : si Partiel → liste des lieux qui reçoivent (rencontres de la journée)
+ * Page publique (sans session administrateur) permettant à chaque Juge-Arbitre
+ * de déclarer ses disponibilités pour les journées de la saison en cours.
+ * Niveau 1 : choix Disponible / Partiel / Non disponible par journée.
+ * Niveau 2 (si Partiel) : sélection des lieux de rencontres souhaités.
+ * Accessible via un lien direct ou via un token obfusqué envoyé par email.
  *
- * Accès :
- *   disponibilite_ja.php               → choix du JA dans la liste
- *   disponibilite_ja.php?id_ja=X       → formulaire direct (usage interne)
- *   disponibilite_ja.php?ja=XXXXXXXX   → formulaire avec ID obfusqué (URL publique)
+ * Créé par : Patrick CHAUTARD
+ * Date de création : 2026-06-11
  */
 require __DIR__ . '/config/db.php';
-require __DIR__ . '/Obfuscator.php';
+require __DIR__ . '/Classes/Obfuscator.php';
 
 // ── Décodage du paramètre obfusqué ?ja=TOKEN ─────────────────────────────────
 $_obf = new Obfuscator(OBFUSCATOR_SEED);
@@ -340,7 +341,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NIJAC – Disponibilités JA</title>
+    <title>NIJAC – Disponibilités JA (E012)</title>
     <link rel="stylesheet" href="asset/css/bootstrap.min.css">
     <link rel="stylesheet" href="asset/css/bootstrap-icons.min.css">
     <style>
@@ -621,7 +622,7 @@ try {
 <!-- ── En-tête unifié ─────────────────────────────────────────────────────── -->
 <div id="page-header">
     <i class="bi bi-calendar2-check fs-5 flex-shrink-0"></i>
-    <h1>Disponibilités JA</h1>
+    <h1>Disponibilités JA <small class="opacity-75" style="font-size:.75rem;">(E012)</small></h1>
     <!-- Séparateur + identité du JA sur la même ligne -->
     <span id="ja-info-bar" style="display:none;align-items:center;gap:.65rem;flex-wrap:wrap">
         <span class="ja-header-sep">|</span>

@@ -1,4 +1,14 @@
 <?php
+/**
+ * NIJAC – Gestion des divisions (E010)
+ *
+ * Définition des divisions sportives et de leur niveau hiérarchique.
+ * Les divisions sont utilisées pour classer les rencontres et orienter
+ * les règles de nomination des Juges-Arbitres selon le niveau de la compétition.
+ *
+ * Créé par : Patrick CHAUTARD
+ * Date de création : 2026-06-11
+ */
 session_start();
 require_once __DIR__ . '/config/db.php';
 
@@ -99,7 +109,7 @@ $changeLogin = !empty($moi['change_login']);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NIJAC – Gestion des divisions (E904)</title>
+    <title>NIJAC – Gestion des divisions (E010)</title>
 
     <link rel="stylesheet" href="asset/css/bootstrap.min.css">
     <link rel="stylesheet" href="asset/css/bootstrap-icons.min.css">
@@ -133,6 +143,12 @@ $changeLogin = !empty($moi['change_login']);
             align-items: center; gap: .35rem;
             color: #c00; font-weight: 700;
             cursor: pointer; text-decoration: underline dotted;
+        }
+        #toolbar .ts-screen-id {
+            font-size: .78rem; font-weight: 700;
+            color: #1a3a6b; background: #ddeeff;
+            padding: .1rem .45rem; border-radius: 4px;
+            border: 1px solid #99bbdd; letter-spacing: .03em;
         }
 
         /* ── En-tête ── */
@@ -245,7 +261,7 @@ $changeLogin = !empty($moi['change_login']);
 <!-- En-tête -->
 <div id="page-header">
     <i class="bi bi-diagram-3-fill me-2"></i>Gestion des divisions
-    <small class="opacity-75 ms-2">(E904)</small>
+    <small class="opacity-75 ms-2">(E010)</small>
     <a href="admin_menu.php" class="btn btn-sm btn-light float-end py-0">
         <i class="bi bi-arrow-left me-1"></i>Retour menu
     </a>

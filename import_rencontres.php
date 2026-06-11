@@ -1,7 +1,14 @@
 <?php
 /**
- * Import des rencontres depuis les fichiers XLS (PDFs convertis)
- * Dossier source : Importation/Rencontres/*.xls
+ * NIJAC – Import des rencontres (E011)
+ *
+ * Importe les rencontres de la saison depuis des fichiers Excel (format FFTT).
+ * Les fichiers sont déposés dans le dossier Importation/ et traités pour
+ * alimenter la table rencontre en base. Les doublons sont ignorés et
+ * les données manquantes (salles, clubs) sont signalées.
+ *
+ * Créé par : Patrick CHAUTARD
+ * Date de création : 2026-06-11
  */
 session_start();
 if (!isset($_SESSION['utilisateur']) || empty($_SESSION['utilisateur']['is_admin'])) {
@@ -384,7 +391,7 @@ if (isset($_GET['action'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NIJAC – Import Rencontres</title>
+    <title>NIJAC – Import Rencontres (E011)</title>
     <link rel="stylesheet" href="asset/css/bootstrap.min.css">
     <link rel="stylesheet" href="asset/css/bootstrap-icons.min.css">
     <style>
@@ -395,6 +402,12 @@ if (isset($_GET['action'])) {
             justify-content: space-between; font-size: .85rem; gap: .5rem;
         }
         #toolbar .ts-user { color: #1a3a6b; font-weight: 600; }
+        #toolbar .ts-screen-id {
+            font-size: .78rem; font-weight: 700;
+            color: #1a3a6b; background: #ddeeff;
+            padding: .1rem .45rem; border-radius: 4px;
+            border: 1px solid #99bbdd; letter-spacing: .03em;
+        }
         #page-header {
             background: #1a3a6b; color: #fff;
             padding: .65rem 1.25rem; font-size: .9rem; font-weight: 600;
@@ -457,6 +470,7 @@ if (isset($_GET['action'])) {
 
 <div id="page-header">
     <i class="bi bi-file-earmark-spreadsheet me-2"></i>Import des rencontres (XLS)
+    <small class="opacity-75 ms-2">(E011)</small>
 </div>
 
 <div id="content">

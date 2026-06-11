@@ -1,4 +1,14 @@
 <?php
+/**
+ * NIJAC – Gestion des salles (E005)
+ *
+ * Référencement des salles de compétition avec leur adresse, code postal/ville
+ * et rattachement à un club. Permet de désigner la salle principale d'un club.
+ * Les coordonnées GPS sont récupérées via la table laposte.
+ *
+ * Créé par : Patrick CHAUTARD
+ * Date de création : 2026-06-11
+ */
 session_start();
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/vendor/autoload.php';
@@ -276,6 +286,12 @@ $changeLogin = !empty($moi['change_login']);
             align-items: center; gap: .35rem;
             color: #c00; font-weight: 700;
             cursor: pointer; text-decoration: underline dotted;
+        }
+        #toolbar .ts-screen-id {
+            font-size: .78rem; font-weight: 700;
+            color: #1a3a6b; background: #ddeeff;
+            padding: .1rem .45rem; border-radius: 4px;
+            border: 1px solid #99bbdd; letter-spacing: .03em;
         }
 
         /* ── MenuStrip ── */
