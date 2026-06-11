@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * NIJAC – Menu nominateur (E020)
  *
@@ -97,15 +97,7 @@ $isAdmin     = !empty($u['is_admin']);
             background: #0f2550;
             color: #fff;
         }
-
-        #toolbar .ts-screen-id {
-            font-size: .78rem; font-weight: 700;
-            color: #1a3a6b; background: #ddeeff;
-            padding: .1rem .45rem; border-radius: 4px;
-            border: 1px solid #99bbdd; letter-spacing: .03em;
-        }
-
-        /* ── En-tête de page ── */
+/* ── En-tête de page ── */
         #page-header {
             background: #2e7d32;
             color: #fff;

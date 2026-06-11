@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * NIJAC – Saisie des disponibilités JA par le nominateur (E021)
  *
@@ -89,8 +89,6 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 .ts-pwd-warning { display:<?= $changeLogin ? 'inline-flex' : 'none' ?>; align-items:center; gap:.35rem; color:#c00; font-weight:700; cursor:pointer; text-decoration:underline dotted; }
 #btn-switch-admin { display:<?= $isAdmin ? 'inline-flex' : 'none' ?>; align-items:center; gap:.35rem; padding:.25rem .75rem; background:var(--nijac-blue); color:#fff; border:none; border-radius:5px; font-size:.82rem; font-weight:600; text-decoration:none; }
 #btn-switch-admin:hover { background:#0f2550; color:#fff; }
-.ts-screen-id { font-size:.78rem; font-weight:700; color:#1a3a6b; background:#ddeeff; padding:.1rem .45rem; border-radius:4px; border:1px solid #99bbdd; letter-spacing:.03em; }
-
 /* ── En-tête ── */
 #page-header { background:var(--nijac-blue); color:#fff; padding:.65rem 1.25rem; display:flex; align-items:center; gap:.75rem; font-size:.9rem; font-weight:600; }
 

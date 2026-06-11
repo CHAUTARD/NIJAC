@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * NIJAC – Import des rencontres (E011)
  *
@@ -402,13 +402,7 @@ if (isset($_GET['action'])) {
             justify-content: space-between; font-size: .85rem; gap: .5rem;
         }
         #toolbar .ts-user { color: #1a3a6b; font-weight: 600; }
-        #toolbar .ts-screen-id {
-            font-size: .78rem; font-weight: 700;
-            color: #1a3a6b; background: #ddeeff;
-            padding: .1rem .45rem; border-radius: 4px;
-            border: 1px solid #99bbdd; letter-spacing: .03em;
-        }
-        #page-header {
+#page-header {
             background: #1a3a6b; color: #fff;
             padding: .65rem 1.25rem; font-size: .9rem; font-weight: 600;
         }

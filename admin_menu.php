@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * NIJAC – Menu paramètres administrateur (E002)
  *
@@ -101,19 +101,7 @@ $isAdmin      = !empty($u['is_admin']);
             transition: background .15s;
         }
         #btn-switch-nominateur:hover { background: #1b5e20; color: #fff; }
-
-        #toolbar .ts-screen-id {
-            font-size: .78rem;
-            font-weight: 700;
-            color: #1a3a6b;
-            background: #ddeeff;
-            padding: .1rem .45rem;
-            border-radius: 4px;
-            border: 1px solid #99bbdd;
-            letter-spacing: .03em;
-        }
-
-        /* ── En-tête de page ── */
+/* ── En-tête de page ── */
         #page-header {
             background: var(--nijac-blue);
             color: #fff;
@@ -268,10 +256,10 @@ $isAdmin      = !empty($u['is_admin']);
             <span class="btn-desc">Référencer les salles de compétition et leur adresse</span>
         </a>
 
-        <a href="saison.php" class="menu-btn btn-saison">
-            <div class="btn-icon"><img src="img/Phases.png" alt="Saison"></div>
+        <a href="clean.php" class="menu-btn btn-saison">
+            <div class="btn-icon"><img src="img/Nettoyage.png" alt="Saison"></div>
             <span>Saison</span>
-            <span class="btn-desc">Créer et gérer les saisons et leurs phases</span>
+            <span class="btn-desc">Suppression des informations sur la saison dernière</span>
         </a>
 
         <!-- Ligne 2 -->
@@ -318,11 +306,13 @@ $isAdmin      = !empty($u['is_admin']);
             <span class="btn-desc">Importer les rencontres depuis un fichier FFTT</span>
         </a>
 
+        <!--
         <a href="disponibilite_ja.php" class="menu-btn" style="background-color:#e8eaf6;">
             <div class="btn-icon"><img src="img/Arbitre.png" alt="Disponibilités JA"></div>
             <span>Disponibilités JA</span>
             <span class="btn-desc">Consulter les disponibilités déclarées par les JA</span>
         </a>
+        -->
 
         <!-- Déconnexion -->
         <a href="logout.php" class="menu-btn" style="background:#f8d7da; grid-column: 4;">

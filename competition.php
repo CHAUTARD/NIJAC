@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * NIJAC – Gestion des types de compétition (E003)
  *
@@ -168,14 +168,7 @@ $changeLogin = !empty($moi['change_login']);
             color: #c00; font-weight: 700;
             cursor: pointer; text-decoration: underline dotted;
         }
-        #toolbar .ts-screen-id {
-            font-size: .78rem; font-weight: 700;
-            color: #1a3a6b; background: #ddeeff;
-            padding: .1rem .45rem; border-radius: 4px;
-            border: 1px solid #99bbdd; letter-spacing: .03em;
-        }
-
-        /* ── En-tête ── */
+/* ── En-tête ── */
         #page-header {
             background: var(--nijac-blue);
             color: #fff;

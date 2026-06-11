@@ -56,13 +56,7 @@ $changeLogin = !empty($moi['change_login']);
             flex-shrink: 0;
         }
         #toolbar .ts-user { color: #1a3a6b; font-weight: 600; }
-        #toolbar .ts-screen-id {
-            font-size: .78rem; font-weight: 700;
-            color: #1a3a6b; background: #ddeeff;
-            padding: .1rem .45rem; border-radius: 4px;
-            border: 1px solid #99bbdd; letter-spacing: .03em;
-        }
-        #toolbar .ts-pwd-warning {
+#toolbar .ts-pwd-warning {
             display: <?= $changeLogin ? 'inline-flex' : 'none' ?>;
             align-items: center; gap: .35rem;
             color: #c00; font-weight: 700;
@@ -96,7 +90,6 @@ $changeLogin = !empty($moi['change_login']);
     <a class="ts-pwd-warning" href="changer_mot_de_passe.php">
         <i class="bi bi-key-fill"></i>Mot de passe à modifier
     </a>
-    <span class="ts-screen-id">(E013)</span>
 </div>
 
 <!-- Corps -->

@@ -860,7 +860,7 @@ function renderCalendrier(journees, saison) {
             </div>
             <div class="panel-partiel${statut==='P'?' ouvert':''}" data-journee="${j.Journee}" data-date="${date}" data-saison="${saison}">
                 <div class="panel-partiel-titre">
-                    <i class="bi bi-geo-alt-fill"></i>Lieux qui reçoivent — cochez les rencontres que vous pouvez arbitrer
+                    <i class="bi bi-geo-alt-fill"></i>Lieux qui reçoivent — cochez les rencontres que vous aimeriez arbitrer
                     <button class="sel-tout-btn" data-journee="${j.Journee}" data-date="${date}" data-saison="${saison}">Tout sélectionner</button>
                 </div>
                 <div class="panel-partiel-body" data-journee="${j.Journee}" data-date="${date}" data-saison="${saison}">

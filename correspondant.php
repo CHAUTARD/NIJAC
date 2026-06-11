@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * NIJAC – Gestion des correspondants de clubs (E004)
  *
@@ -232,14 +232,7 @@ $changeLogin = !empty($moi['change_login']);
             color: #c00; font-weight: 700;
             cursor: pointer; text-decoration: underline dotted;
         }
-        #toolbar .ts-screen-id {
-            font-size: .78rem; font-weight: 700;
-            color: #1a3a6b; background: #ddeeff;
-            padding: .1rem .45rem; border-radius: 4px;
-            border: 1px solid #99bbdd; letter-spacing: .03em;
-        }
-
-        /* ── MenuStrip ── */
+/* ── MenuStrip ── */
         #menu-strip {
             background: #f8f9fa;
             border-bottom: 1px solid #dee2e6;
@@ -422,13 +415,12 @@ $changeLogin = !empty($moi['change_login']);
                 <th style="width:200px" data-field="nom">Nom<span class="sort-icon"></span></th>
                 <th style="width:220px" data-field="email">Email<span class="sort-icon"></span></th>
                 <th style="width:130px" data-field="telephone">Téléphone<span class="sort-icon"></span></th>
-                <th style="width:140px" data-field="fonction">Fonction<span class="sort-icon"></span></th>
                 <th style="width:90px"  data-field="id_club">N° Club<span class="sort-icon"></span></th>
                 <th style="width:220px" data-field="nom_club">Nom du club<span class="sort-icon"></span></th>
             </tr>
         </thead>
         <tbody id="tbody-grille">
-            <tr><td colspan="6" class="text-center text-muted py-3">Chargement…</td></tr>
+            <tr><td colspan="5" class="text-center text-muted py-3">Chargement…</td></tr>
         </tbody>
     </table>
 </div>
@@ -516,7 +508,7 @@ function renderGrille() {
 
     if (!affichees.length) {
         const msg = searchTerm ? 'Aucun résultat pour cette recherche.' : 'Aucune donnée.';
-        $body.append(`<tr><td colspan="6" class="text-center text-muted py-3">${msg}</td></tr>`);
+        $body.append(`<tr><td colspan="5" class="text-center text-muted py-3">${msg}</td></tr>`);
         setStatus(searchTerm ? `0 résultat sur ${lignes.length} correspondant(s).` : 'Aucun correspondant.');
         return;
     }
@@ -528,7 +520,6 @@ function renderGrille() {
         $tr.append(makeTd(l.nom,       idx, 'nom',       false));
         $tr.append(makeTd(l.email,     idx, 'email',     false));
         $tr.append(makeTd(l.telephone, idx, 'telephone', false));
-        $tr.append(makeTd(l.fonction,  idx, 'fonction',  false));
         $tr.append(makeTd(l.id_club,   idx, 'id_club',   true));
         $tr.append(makeTd(l.nom_club,  idx, 'nom_club',  true));
         $body.append($tr);
