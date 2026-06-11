@@ -58,6 +58,9 @@ if ($action !== '') {
         if (!in_array('Cp', $cols)) {
             $pdo->exec("ALTER TABLE ja ADD COLUMN Cp VARCHAR(10) NULL, ADD COLUMN Ville VARCHAR(100) NULL");
         }
+        if (!in_array('Defiscalisation', $cols)) {
+            $pdo->exec("ALTER TABLE ja ADD COLUMN Defiscalisation TINYINT(1) NOT NULL DEFAULT 0");
+        }
         // Backfill : remplir Cp/Ville depuis laposte pour les lignes qui ont Id_LaPoste mais pas encore Cp
         $pdo->exec("UPDATE ja j
                     JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
@@ -69,9 +72,17 @@ if ($action !== '') {
             $rows = $pdo->query(
                 'SELECT j.Id_JA, j.Ordre, j.Nom, j.Prenom, j.Email, j.Telephone,
                         j.Grade, j.Actif, j.Id_Club, j.DistanceMaxKm, j.Id_LaPoste,
+                        j.Defiscalisation,
                         cl.Nom AS NomClub,
                         COALESCE(lp.CodePostal, j.Cp)   AS CodePostalJA,
-                        COALESCE(lp.Nom,        j.Ville) AS VilleJA
+                        COALESCE(lp.Nom,        j.Ville) AS VilleJA,
+                        (SELECT COUNT(*) FROM disponible d
+                         WHERE d.Id_JA = j.Id_JA
+                           AND d.DateCompetition >= (
+                               SELECT MIN(r2.Date) FROM rencontre r2
+                               WHERE r2.Saison = (SELECT Saison FROM rencontre ORDER BY Saison DESC LIMIT 1)
+                           )
+                        ) AS NbDispo
                  FROM ja j
                  LEFT JOIN Club cl ON cl.Id_Club = j.Id_Club
                  LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
@@ -90,20 +101,22 @@ if ($action !== '') {
                     return null;
                 };
                 return [
-                    'Id_JA'        => $find($r, 'Id_JA'),
-                    'Ordre'        => $find($r, 'Ordre'),
-                    'Nom'          => $find($r, 'Nom'),
-                    'Prenom'       => $find($r, 'Prenom'),
-                    'Email'        => $find($r, 'Email'),
-                    'Telephone'    => $find($r, 'Telephone'),
-                    'Grade'        => $find($r, 'Grade'),
-                    'Actif'        => $find($r, 'Actif'),
-                    'Id_Club'      => $find($r, 'Id_Club'),
-                    'DistanceMaxKm'=> $find($r, 'DistanceMaxKm'),
-                    'Id_LaPoste'   => $find($r, 'Id_LaPoste'),
-                    'NomClub'      => $find($r, 'NomClub'),
-                    'CP'           => $find($r, 'CodePostalJA'),
-                    'Ville'        => $find($r, 'VilleJA'),
+                    'Id_JA'          => $find($r, 'Id_JA'),
+                    'Ordre'          => $find($r, 'Ordre'),
+                    'Nom'            => $find($r, 'Nom'),
+                    'Prenom'         => $find($r, 'Prenom'),
+                    'Email'          => $find($r, 'Email'),
+                    'Telephone'      => $find($r, 'Telephone'),
+                    'Grade'          => $find($r, 'Grade'),
+                    'Actif'          => $find($r, 'Actif'),
+                    'Id_Club'        => $find($r, 'Id_Club'),
+                    'DistanceMaxKm'  => $find($r, 'DistanceMaxKm'),
+                    'Id_LaPoste'     => $find($r, 'Id_LaPoste'),
+                    'Defiscalisation'=> $find($r, 'Defiscalisation'),
+                    'NbDispo'        => $find($r, 'NbDispo'),
+                    'NomClub'        => $find($r, 'NomClub'),
+                    'CP'             => $find($r, 'CodePostalJA'),
+                    'Ville'          => $find($r, 'VilleJA'),
                 ];
             }, $rows);
 
@@ -313,12 +326,13 @@ if ($action !== '') {
             $stmtCheck  = $pdo->prepare('SELECT COUNT(*) FROM ja WHERE Id_JA = ?');
             $stmtInsert = $pdo->prepare(
                 'INSERT INTO ja (Id_JA, Ordre, Nom, Prenom, Email, Telephone, Grade, Actif,
-                                 Id_Club, DistanceMaxKm, Id_LaPoste, Cp, Ville)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                                 Id_Club, DistanceMaxKm, Id_LaPoste, Cp, Ville, Defiscalisation)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmtUpdate = $pdo->prepare(
                 'UPDATE ja SET Ordre=?, Nom=?, Prenom=?, Email=?, Telephone=?, Grade=?,
-                               Actif=?, Id_Club=?, DistanceMaxKm=?, Id_LaPoste=?, Cp=?, Ville=?
+                               Actif=?, Id_Club=?, DistanceMaxKm=?, Id_LaPoste=?, Cp=?, Ville=?,
+                               Defiscalisation=?
                  WHERE Id_JA=?'
             );
 
@@ -331,6 +345,7 @@ if ($action !== '') {
                 $tel     = formaterTelephone($l['telephone'] !== '' && $l['telephone'] !== null ? $l['telephone'] : null);
                 $grade   = trim($l['grade']            ?? '');
                 $actif   = !empty($l['actif']) ? 1 : 0;
+                $defisc  = !empty($l['defiscalisation']) ? 1 : 0;
                 $idClub  = $l['id_club'] !== '' && $l['id_club'] !== null ? (int)$l['id_club'] : null;
                 $distMax = $l['distance_max_km'] !== '' && $l['distance_max_km'] !== null ? (int)$l['distance_max_km'] : 999;
                 $idLap   = $l['id_laposte'] !== '' && $l['id_laposte'] !== null ? (int)$l['id_laposte'] : null;
@@ -343,19 +358,19 @@ if ($action !== '') {
                     if ($id > 0) {
                         $stmtCheck->execute([$id]);
                         if ((int)$stmtCheck->fetchColumn() > 0) {
-                            $stmtUpdate->execute([$ordre, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $distMax, $idLap, $cpVal, $villeVal, $id]);
+                            $stmtUpdate->execute([$ordre, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $distMax, $idLap, $cpVal, $villeVal, $defisc, $id]);
                             $updates++;
                         } else {
-                            $stmtInsert->execute([$id, $ordre, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $distMax, $idLap, $cpVal, $villeVal]);
+                            $stmtInsert->execute([$id, $ordre, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $distMax, $idLap, $cpVal, $villeVal, $defisc]);
                             $inserts++;
                         }
                     } else {
                         // Pas d'Id_JA → INSERT auto-increment
                         $pdo->prepare(
                             'INSERT INTO ja (Ordre, Nom, Prenom, Email, Telephone, Grade, Actif,
-                                             Id_Club, DistanceMaxKm, Id_LaPoste, Cp, Ville)
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                        )->execute([$ordre, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $distMax, $idLap, $cpVal, $villeVal]);
+                                             Id_Club, DistanceMaxKm, Id_LaPoste, Cp, Ville, Defiscalisation)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                        )->execute([$ordre, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $distMax, $idLap, $cpVal, $villeVal, $defisc]);
                         $inserts++;
                     }
                 } catch (PDOException $ex) {
@@ -536,6 +551,8 @@ $changeLogin = !empty($moi['change_login']);
         /* Actif badge */
         .badge-actif     { background: #d1fae5; color: #065f46; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
         .badge-inactif   { background: #fee2e2; color: #991b1b; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
+        .badge-defisc    { background: #dbeafe; color: #1e40af; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
+        .badge-no-defisc { background: #f3f4f6; color: #6b7280; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
 
         /* ── Label compteur ── */
         #lbl-count {
@@ -662,6 +679,7 @@ $changeLogin = !empty($moi['change_login']);
                 <th style="width:65px"  data-field="actif">Actif<span class="sort-icon"></span></th>
                 <th style="width:75px"  data-field="id_club">N° Club<span class="sort-icon"></span></th>
                 <th style="width:200px" data-field="nom_club">Nom du club<span class="sort-icon"></span></th>
+                <th style="width:90px"  data-field="defiscalisation">Défiscalisation<span class="sort-icon"></span></th>
                 <th style="width:80px"  data-field="distance_max_km">Dist. max<span class="sort-icon"></span></th>
                 <th style="width:60px"  data-field="ordre">Ordre<span class="sort-icon"></span></th>
                 <th style="width:75px"  data-field="cp">CP<span class="sort-icon"></span></th>
@@ -670,7 +688,7 @@ $changeLogin = !empty($moi['change_login']);
             </tr>
         </thead>
         <tbody id="tbody-grille">
-            <tr><td colspan="11" class="text-center text-muted py-3">Chargement…</td></tr>
+            <tr><td colspan="15" class="text-center text-muted py-3">Chargement…</td></tr>
         </tbody>
     </table>
 </div>
@@ -775,6 +793,9 @@ function renderGrille() {
             const actifHtml = l.actif
                 ? '<span class="badge-actif">Oui</span>'
                 : '<span class="badge-inactif">Non</span>';
+            const defiscHtml = l.defiscalisation
+                ? '<span class="badge-defisc">Oui</span>'
+                : '<span class="badge-no-defisc">Non</span>';
 
             $tr.append(makeTd(l.id,              idx, 'id',              true));
             $tr.append(makeTd(l.grade,            idx, 'grade',           false));
@@ -785,13 +806,16 @@ function renderGrille() {
             $tr.append(makeTdHtml(actifHtml,      idx, 'actif'));
             $tr.append(makeTd(l.id_club,          idx, 'id_club',         true));
             $tr.append(makeTd(l.nom_club,         idx, 'nom_club',        true));
+            $tr.append(makeTdHtml(defiscHtml,     idx, 'defiscalisation'));
             $tr.append(makeTd(l.distance_max_km,  idx, 'distance_max_km', false));
             $tr.append(makeTd(l.ordre,            idx, 'ordre',           false));
             $tr.append(makeTdLaPoste(l.cp,        idx, 'cp'));
             $tr.append(makeTdLaPoste(l.ville,     idx, 'ville'));
             // Bouton lien disponibilité
             const $tdLien = $('<td>').css({textAlign:'center', verticalAlign:'middle', padding:'.2rem'});
-            $tdLien.html(`<button class="btn btn-sm btn-outline-primary btn-lien-dispo" data-id="${l.id}" title="Copier le lien de disponibilité pour ce JA"><i class="bi bi-link-45deg"></i></button>`);
+            const dispoCls   = l.nb_dispo > 0 ? 'btn-success'         : 'btn-outline-secondary';
+            const dispoTitle = l.nb_dispo > 0 ? `Disponibilités saisies (${l.nb_dispo} journée(s))` : 'Aucune disponibilité saisie — cliquez pour ouvrir';
+            $tdLien.html(`<button class="btn btn-sm ${dispoCls} btn-lien-dispo" data-id="${l.id}" title="${dispoTitle}"><i class="bi bi-calendar2-check"></i></button>`);
             $tr.append($tdLien);
             $body.append($tr);
         });
@@ -840,9 +864,9 @@ function makeTdHtml(html, idx, field) {
     const $td = $('<td>').attr('data-idx', idx).attr('data-field', field)
                          .css({textAlign: 'center', verticalAlign: 'middle', padding: '.2rem'});
     $td.html(html);
-    // Clic → bascule Actif
+    // Clic → bascule la valeur booléenne du champ
     $td.on('click', function () {
-        lignes[idx].actif = lignes[idx].actif ? 0 : 1;
+        lignes[idx][field] = lignes[idx][field] ? 0 : 1;
         renderGrille();
         setStatus('Modification locale. Cliquez sur « Mettre à jour la BDD » pour sauvegarder.');
     });
@@ -1052,9 +1076,11 @@ function chargerListe() {
             id_club:         r.Id_Club,
             nom_club:        r.NomClub ?? '',
             distance_max_km: r.DistanceMaxKm,
-            id_laposte:      r.Id_LaPoste,
-            cp:              r.CP    ?? '',
-            ville:           r.Ville ?? '',
+            id_laposte:       r.Id_LaPoste,
+            defiscalisation:  +r.Defiscalisation,
+            nb_dispo:         +r.NbDispo,
+            cp:               r.CP    ?? '',
+            ville:            r.Ville ?? '',
         }));
         renderGrille();
     }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
@@ -1080,10 +1106,11 @@ $('#file-input').on('change', function () {
             if (!res.ok) { toast(res.msg, false); return; }
             // Les clés PHP sont déjà en minuscules (snake_case) côté import
             lignes = res.data.map((r, i) => Object.assign(r, {
-                _idx:  i,
-                actif: +r.actif,
-                cp:    r.cp    ?? '',
-                ville: r.ville ?? '',
+                _idx:           i,
+                actif:          +r.actif,
+                defiscalisation: r.defiscalisation != null ? +r.defiscalisation : 0,
+                cp:             r.cp    ?? '',
+                ville:          r.ville ?? '',
             }));
             renderGrille();
             toast(`${res.count} JA importé(s) depuis Excel (filtre grade JA*).`);
@@ -1148,22 +1175,13 @@ $('#btn-erreurs-cp').on('click', function () {
     renderGrille();
 });
 
-// ── Bouton "Copier le lien de disponibilité" ─────────────────────────────────
+// ── Bouton "Ouvrir la page de disponibilité du JA" ───────────────────────────
 $(document).on('click', '.btn-lien-dispo', function (e) {
     e.stopPropagation();
-    const id   = $(this).data('id');
-    const $btn = $(this);
+    const id = $(this).data('id');
     $.getJSON('disponibilite_ja.php', { action: 'token', id: id }, function (r) {
         if (!r.ok) { alert('Erreur lors de la génération du lien.'); return; }
-        navigator.clipboard.writeText(r.url).then(function () {
-            const orig = $btn.html();
-            $btn.html('<i class="bi bi-check2"></i>').addClass('btn-success').removeClass('btn-outline-primary');
-            setTimeout(function () {
-                $btn.html(orig).removeClass('btn-success').addClass('btn-outline-primary');
-            }, 2000);
-        }).catch(function () {
-            prompt('Lien à copier :', r.url);
-        });
+        window.open(r.url, '_blank');
     });
 });
 
