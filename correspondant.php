@@ -46,13 +46,33 @@ if ($action !== '') {
 
         // ── Charger la liste ───────────────────────────────────────────────
         if ($action === 'liste') {
-            $rows = $pdo->query(
-                'SELECT c.Id_Correspondant, c.Nom, c.Email, c.Telephone, c.Fonction,
-                        c.Id_Club, cl.Nom AS NomClub
-                 FROM Correspondant c
-                 LEFT JOIN Club cl ON cl.Id_Club = c.Id_Club
-                 ORDER BY c.Id_Club, c.Nom'
-            )->fetchAll();
+            $dept = isset($_POST['dept']) && $_POST['dept'] !== '' ? $_POST['dept'] : null;
+
+            $selectSql = 'SELECT c.Id_Correspondant, c.Nom, c.Email, c.Telephone, c.Fonction,
+                                 c.Id_Club, cl.Nom AS NomClub,
+                                 lp.CodePostal, lp.Nom AS Ville
+                          FROM Correspondant c
+                          LEFT JOIN Club    cl ON cl.Id_Club    = c.Id_Club
+                          LEFT JOIN Salle   sp ON sp.Id_Club    = c.Id_Club
+                                              AND sp.EstPrincipale = 1
+                          LEFT JOIN laposte lp ON lp.Id_LaPoste = sp.Id_Laposte';
+
+            if ($dept !== null) {
+                $stmt = $pdo->prepare(
+                    $selectSql . '
+                     WHERE c.Id_Club IN (
+                         SELECT s.Id_Club
+                         FROM Salle   s
+                         JOIN laposte lf ON lf.Id_LaPoste = s.Id_Laposte
+                         WHERE LEFT(lf.CodePostal, 2) = ?
+                     )
+                     ORDER BY c.Id_Club, c.Nom'
+                );
+                $stmt->execute([str_pad((string)$dept, 2, '0', STR_PAD_LEFT)]);
+                $rows = $stmt->fetchAll();
+            } else {
+                $rows = $pdo->query($selectSql . ' ORDER BY c.Id_Club, c.Nom')->fetchAll();
+            }
             echo json_encode(['ok' => true, 'data' => $rows]);
             exit;
         }
@@ -214,24 +234,6 @@ $changeLogin = !empty($moi['change_login']);
             overflow: hidden;
         }
 
-        /* ── Toolbar ── */
-        #toolbar {
-            background: #c0ffff;
-            border-bottom: 1px solid #90cccc;
-            padding: .3rem 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: .85rem;
-            flex-shrink: 0;
-        }
-        #toolbar .ts-user { color: #1a3a6b; font-weight: 600; }
-        #toolbar .ts-pwd-warning {
-            display: <?= $changeLogin ? 'inline-flex' : 'none' ?>;
-            align-items: center; gap: .35rem;
-            color: #c00; font-weight: 700;
-            cursor: pointer; text-decoration: underline dotted;
-        }
 /* ── MenuStrip ── */
         #menu-strip {
             background: #f8f9fa;
@@ -269,7 +271,6 @@ $changeLogin = !empty($moi['change_login']);
             flex-shrink: 0;
         }
 
-        /* ── Barre d'état ── */
         #status-bar {
             background: #e8eef7;
             border-top: 1px solid #c8d4e8;
@@ -374,15 +375,7 @@ $changeLogin = !empty($moi['change_login']);
     <div class="spinner-border text-light" style="width:3rem;height:3rem;"></div>
 </div>
 
-<!-- Toolbar -->
-<div id="toolbar">
-    <span class="ts-user">
-        <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= $nomComplet ?><?= $departement ? " ($departement)" : '' ?>
-    </span>
-    <a class="ts-pwd-warning" href="changer_mot_de_passe.php">
-        <i class="bi bi-key-fill"></i>Mot de passe à modifier
-    </a>
-</div>
+<?php require __DIR__ . '/includes/toolbar.php'; ?>
 
 <!-- MenuStrip -->
 <div id="menu-strip">
@@ -393,7 +386,19 @@ $changeLogin = !empty($moi['change_login']);
         <img src="img/MAJ_Database_32.png" alt="">Mettre à jour la Base de données
     </button>
     <input type="file" id="file-input" accept=".xlsx" style="display:none">
+    <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 correspondant(s)</span>
     <span style="flex:1"></span>
+    <label for="sel-dept" style="font-size:.85rem;font-weight:700;color:#444;white-space:nowrap;margin:0;">
+        <i class="bi bi-map me-1"></i>Département
+    </label>
+    <select id="sel-dept" class="form-select form-select-sm w-auto">
+        <option value="">— Tous —</option>
+        <option value="14">14 — Calvados</option>
+        <option value="27">27 — Eure</option>
+        <option value="50">50 — Manche</option>
+        <option value="61">61 — Orne</option>
+        <option value="76">76 — Seine-Maritime</option>
+    </select>
     <input type="search" id="search-input" placeholder="🔍 Rechercher…">
 </div>
 
@@ -417,10 +422,12 @@ $changeLogin = !empty($moi['change_login']);
                 <th style="width:130px" data-field="telephone">Téléphone<span class="sort-icon"></span></th>
                 <th style="width:90px"  data-field="id_club">N° Club<span class="sort-icon"></span></th>
                 <th style="width:220px" data-field="nom_club">Nom du club<span class="sort-icon"></span></th>
+                <th style="width:100px" data-field="code_postal">Code postal<span class="sort-icon"></span></th>
+                <th style="width:180px" data-field="ville">Ville<span class="sort-icon"></span></th>
             </tr>
         </thead>
         <tbody id="tbody-grille">
-            <tr><td colspan="5" class="text-center text-muted py-3">Chargement…</td></tr>
+            <tr><td colspan="8" class="text-center text-muted py-3">Chargement…</td></tr>
         </tbody>
     </table>
 </div>
@@ -442,6 +449,7 @@ let cellActive = null;
 let sortField  = 'id_club';
 let sortDir    = 'asc';
 let searchTerm = '';
+let deptFiltre = '';
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
 function spinner(show) { $('#spinner').toggleClass('show', show); }
@@ -475,8 +483,10 @@ function lignesFiltreesTriees() {
             String(l.email     ?? '').toLowerCase().includes(term) ||
             String(l.telephone ?? '').toLowerCase().includes(term) ||
             String(l.fonction  ?? '').toLowerCase().includes(term) ||
-            String(l.id_club   ?? '').toLowerCase().includes(term) ||
-            String(l.nom_club  ?? '').toLowerCase().includes(term))
+            String(l.id_club     ?? '').toLowerCase().includes(term) ||
+            String(l.nom_club    ?? '').toLowerCase().includes(term) ||
+            String(l.code_postal ?? '').toLowerCase().includes(term) ||
+            String(l.ville       ?? '').toLowerCase().includes(term))
         : [...lignes];
 
     const numFields = ['id', 'id_club'];
@@ -508,25 +518,29 @@ function renderGrille() {
 
     if (!affichees.length) {
         const msg = searchTerm ? 'Aucun résultat pour cette recherche.' : 'Aucune donnée.';
-        $body.append(`<tr><td colspan="5" class="text-center text-muted py-3">${msg}</td></tr>`);
+        $body.append(`<tr><td colspan="8" class="text-center text-muted py-3">${msg}</td></tr>`);
         setStatus(searchTerm ? `0 résultat sur ${lignes.length} correspondant(s).` : 'Aucun correspondant.');
+        $('#lbl-count').text(`${lignes.length} correspondant(s)`);
         return;
     }
 
     affichees.forEach((l) => {
         const idx = lignes.indexOf(l);
         const $tr = $('<tr>').attr('data-idx', idx);
-        $tr.append(makeTd(l.id,        idx, 'id',        true));
-        $tr.append(makeTd(l.nom,       idx, 'nom',       false));
-        $tr.append(makeTd(l.email,     idx, 'email',     false));
-        $tr.append(makeTd(l.telephone, idx, 'telephone', false));
-        $tr.append(makeTd(l.id_club,   idx, 'id_club',   true));
-        $tr.append(makeTd(l.nom_club,  idx, 'nom_club',  true));
+        $tr.append(makeTd(l.id,          idx, 'id',          true));
+        $tr.append(makeTd(l.nom,         idx, 'nom',         false));
+        $tr.append(makeTd(l.email,       idx, 'email',       false));
+        $tr.append(makeTd(l.telephone,   idx, 'telephone',   false));
+        $tr.append(makeTd(l.id_club,     idx, 'id_club',     true));
+        $tr.append(makeTd(l.nom_club,    idx, 'nom_club',    true));
+        $tr.append(makeTd(l.code_postal, idx, 'code_postal', true));
+        $tr.append(makeTd(l.ville,       idx, 'ville',       true));
         $body.append($tr);
     });
 
     const info = searchTerm ? `${affichees.length} résultat(s) sur ${lignes.length}` : `${lignes.length} correspondant(s)`;
     setStatus(`${info}. Cliquez sur une cellule puis <kbd>F2</kbd> pour modifier.`);
+    $('#lbl-count').text(`${lignes.length} correspondant(s)`);
 }
 
 function makeTd(val, idx, field, readonly) {
@@ -597,17 +611,19 @@ function validerCellule($inner, $td) {
 // ── Charger depuis la BDD ─────────────────────────────────────────────────────
 function chargerListe() {
     spinner(true);
-    $.post('correspondant.php', { action: 'liste' }, function (res) {
+    $.post('correspondant.php', { action: 'liste', dept: deptFiltre }, function (res) {
         spinner(false);
         if (!res.ok) { toast(res.msg, false); return; }
         lignes = res.data.map(r => ({
-            id:        r.Id_Correspondant,
-            nom:       r.Nom,
-            email:     r.Email,
-            telephone: r.Telephone,
-            fonction:  r.Fonction,
-            id_club:   r.Id_Club,
-            nom_club:  r.NomClub ?? '',
+            id:          r.Id_Correspondant,
+            nom:         r.Nom,
+            email:       r.Email,
+            telephone:   r.Telephone,
+            fonction:    r.Fonction,
+            id_club:     r.Id_Club,
+            nom_club:    r.NomClub    ?? '',
+            code_postal: r.CodePostal ?? '',
+            ville:       r.Ville      ?? '',
         }));
         renderGrille();
     }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
@@ -671,6 +687,12 @@ $('#tbl-correspondants thead th[data-field]').on('click', function () {
         sortDir   = 'asc';
     }
     renderGrille();
+});
+
+// ── Filtre département ────────────────────────────────────────────────────────
+$('#sel-dept').on('change', function () {
+    deptFiltre = $(this).val();
+    chargerListe();
 });
 
 // ── Recherche ─────────────────────────────────────────────────────────────────

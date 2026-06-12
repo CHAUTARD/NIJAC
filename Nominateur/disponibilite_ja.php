@@ -10,9 +10,10 @@
  *
  * Créé par : Patrick CHAUTARD
  * Date de création : 2026-06-11
+ * Déplacé dans Nominateur/ : 2026-06-12
  */
-require __DIR__ . '/config/db.php';
-require __DIR__ . '/Classes/Obfuscator.php';
+require __DIR__ . '/../config/db.php';
+require __DIR__ . '/../Classes/Obfuscator.php';
 
 // ── Décodage du paramètre obfusqué ?ja=TOKEN ─────────────────────────────────
 $_obf = new Obfuscator(OBFUSCATOR_SEED);
@@ -70,10 +71,12 @@ if ($action !== '') {
         $hasVille = in_array('Ville', $jaCols);
         $cpExpr    = $hasCp    ? 'COALESCE(lp.CodePostal, ja.Cp)'    : 'lp.CodePostal';
         $villeExpr = $hasVille ? 'COALESCE(lp.Nom,        ja.Ville)' : 'lp.Nom';
+        $hasDefisc = in_array('Defiscalisation', $jaCols);
         $stmt = $pdo->prepare("
             SELECT ja.Id_JA, ja.Nom, ja.Prenom, ja.Grade,
                    $cpExpr    AS Cp,
-                   $villeExpr AS Ville
+                   $villeExpr AS Ville" .
+                   ($hasDefisc ? ", ja.Defiscalisation" : ", 0 AS Defiscalisation") . "
             FROM ja
             LEFT JOIN laposte lp ON lp.Id_LaPoste = ja.Id_LaPoste
             WHERE ja.Id_JA = ?
@@ -347,6 +350,17 @@ if ($action !== '') {
         exit;
     }
 
+    // ── Sauvegarder la défiscalisation du JA ──────────────────────────────
+    if ($action === 'sauvegarder_defiscalisation') {
+        $id    = (int)($_POST['id_ja'] ?? 0);
+        $defisc = !empty($_POST['defiscalisation']) ? 1 : 0;
+        if (!$id) { echo json_encode(['ok' => false, 'err' => 'ID manquant']); exit; }
+        $pdo->prepare("UPDATE JA SET Defiscalisation = ? WHERE Id_JA = ?")
+            ->execute([$defisc, $id]);
+        echo json_encode(['ok' => true]);
+        exit;
+    }
+
     echo json_encode(['ok' => false, 'err' => 'Action inconnue']);
 
     } catch (PDOException $e) {
@@ -368,8 +382,8 @@ try {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NIJAC – Disponibilités JA (E012)</title>
-    <link rel="stylesheet" href="asset/css/bootstrap.min.css">
-    <link rel="stylesheet" href="asset/css/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="../asset/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../asset/css/bootstrap-icons.min.css">
     <style>
         :root {
             --nijac-blue:  #1a3a6b;
@@ -641,6 +655,70 @@ try {
             animation: spin .7s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Vue calendrier ──────────────────────────────────────────────── */
+        #section-cal-grille {
+            max-width: 960px; margin: 0 auto;
+            padding: .75rem 1rem 1rem;
+            display: none;
+        }
+        .cal-legende {
+            display: flex; gap: 1.2rem; flex-wrap: wrap;
+            align-items: center; margin-bottom: .75rem;
+            font-size: .78rem; color: #555;
+        }
+        .cal-legende-item { display: flex; align-items: center; gap: .35rem; }
+        .cal-dot {
+            width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+        }
+        .dot-O { background: var(--col-dispo); }
+        .dot-P { background: var(--col-partiel); }
+        .dot-N { background: var(--col-nodispo); }
+        .dot-vide { background: #cbd5e1; border: 1px solid #94a3b8; }
+
+        .cal-mois-grille {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 1rem;
+        }
+        .cal-mois {
+            background: #fff; border: 1px solid #d0d8e8;
+            border-radius: 10px; overflow: hidden;
+            box-shadow: 0 1px 4px rgba(0,0,0,.07);
+        }
+        .cal-mois-titre {
+            background: var(--nijac-blue); color: #fff;
+            text-align: center; font-size: .85rem; font-weight: 700;
+            padding: .4rem;
+        }
+        .cal-semaine-header {
+            display: grid; grid-template-columns: repeat(7, 1fr);
+            text-align: center; font-size: .7rem; font-weight: 700;
+            color: #888; padding: .3rem 0 .1rem;
+        }
+        .cal-semaine-header span:last-child { color: #c62828; } /* Dim */
+        .cal-grid {
+            display: grid; grid-template-columns: repeat(7, 1fr);
+            padding: .2rem .25rem .4rem;
+        }
+        .cal-jour {
+            aspect-ratio: 1; display: flex; align-items: center;
+            justify-content: center; border-radius: 50%;
+            font-size: .78rem; margin: 1px;
+            cursor: default; user-select: none;
+        }
+        .cal-jour.vide { color: transparent; }
+        .cal-jour.autre-mois { color: #ccc; }
+        .cal-jour.jour-journee {
+            font-weight: 700; cursor: pointer;
+            transition: filter .12s, transform .1s;
+        }
+        .cal-jour.jour-journee:hover { filter: brightness(1.12); transform: scale(1.1); }
+        .cal-jour.statut-O { background: var(--col-dispo);   color: #fff; }
+        .cal-jour.statut-P { background: var(--col-partiel); color: #fff; }
+        .cal-jour.statut-N { background: var(--col-nodispo); color: #fff; }
+        .cal-jour.statut-vide { background: #e2e8f0; color: #475569; }
+        .cal-jour.today { outline: 2px solid var(--nijac-blue); outline-offset: 1px; }
     </style>
 </head>
 <body>
@@ -660,8 +738,21 @@ try {
             <span id="ja-ib-cp"></span> <span id="ja-ib-ville"></span>
         </span>
     </span>
+    <!-- Case défiscalisation (visible quand JA chargé) -->
+    <label id="lbl-defisc" class="d-none ms-auto align-items-center gap-2"
+           style="font-size:.84rem;font-weight:700;color:#fff;cursor:pointer;user-select:none;">
+        <input type="checkbox" id="chk-defisc" style="width:1.1rem;height:1.1rem;cursor:pointer;accent-color:#2e7d32;">
+        Défiscalisation
+    </label>
+    <!-- Bouton plaquette PDF -->
+    <a href="../JA/Plaquette_Defiscalisation.pdf" target="_blank"
+       class="btn btn-sm ms-1"
+       style="background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:.84rem;font-weight:700;"
+       title="Ouvrir la plaquette de défiscalisation (PDF)">
+        <i class="bi bi-file-earmark-pdf-fill me-1"></i>Défiscalisation
+    </a>
     <!-- Bouton Note (visible seulement quand un JA est chargé) -->
-    <button id="btn-note" class="btn btn-sm ms-auto d-none"
+    <button id="btn-note" class="btn btn-sm ms-1 d-none"
             style="background:#f0c040;color:#1a3a6b;border:none;font-size:.84rem;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.3)"
             data-bs-toggle="modal" data-bs-target="#modal-note">
         <i class="bi bi-sticky-fill me-1"></i>Note
@@ -696,6 +787,46 @@ try {
     </div>
 </div>
 
+<!-- ── Modale Journée ──────────────────────────────────────────────────────── -->
+<div class="modal fade" id="modal-journee" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background:var(--nijac-blue);color:#fff;padding:.6rem 1rem">
+                <h5 class="modal-title" id="mj-titre" style="font-size:.95rem;font-weight:700">
+                    <i class="bi bi-calendar-week me-2"></i>Journée
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <!-- Boutons de statut -->
+                <div class="d-flex gap-2 flex-wrap p-3 border-bottom" id="mj-btns">
+                    <button class="btn-statut dispo"   data-statut="O" id="mj-btn-O">
+                        <i class="bi bi-check-circle"></i>Disponible
+                    </button>
+                    <button class="btn-statut partiel" data-statut="P" id="mj-btn-P">
+                        <i class="bi bi-exclamation-circle"></i>Partiel
+                    </button>
+                    <button class="btn-statut nodispo" data-statut="N" id="mj-btn-N">
+                        <i class="bi bi-x-circle"></i>Non disponible
+                    </button>
+                    <span id="mj-spin" class="spin-sm ms-auto align-self-center d-none"></span>
+                </div>
+                <!-- Panneau Partiel -->
+                <div id="mj-panel-partiel" style="display:none">
+                    <div class="panel-partiel-titre">
+                        <i class="bi bi-geo-alt-fill"></i>Lieux qui reçoivent — cochez les rencontres
+                        <button class="sel-tout-btn" id="mj-sel-tout">Tout sélectionner</button>
+                    </div>
+                    <div id="mj-renc-body" style="max-height:340px;overflow-y:auto"></div>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fermer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Message d'erreur si aucun paramètre JA dans l'URL -->
 <div id="section-erreur" style="display:none" class="alert alert-warning m-3">
     <i class="bi bi-exclamation-triangle-fill me-2"></i>
@@ -708,6 +839,17 @@ try {
     <label class="fw-bold me-1" style="font-size:.85rem">Saison :</label>
     <select id="sel-saison" class="form-select form-select-sm" style="width:140px"></select>
     <span id="barre-spin" style="display:none"><span class="spin-sm"></span></span>
+</div>
+
+<!-- ── Vue calendrier mensuelle ───────────────────────────────────────── -->
+<div id="section-cal-grille">
+    <div class="cal-legende">
+        <span class="cal-legende-item"><span class="cal-dot dot-O"></span>Disponible</span>
+        <span class="cal-legende-item"><span class="cal-dot dot-P"></span>Partiel</span>
+        <span class="cal-legende-item"><span class="cal-dot dot-N"></span>Non disponible</span>
+        <span class="cal-legende-item"><span class="cal-dot dot-vide"></span>Pas de réponse</span>
+    </div>
+    <div class="cal-mois-grille" id="cal-mois-grille"></div>
 </div>
 
 <!-- ── Calendrier des journées ───────────────────────────────────────────── -->
@@ -725,8 +867,8 @@ try {
 <!-- Toasts -->
 <div id="toast-zone"></div>
 
-<script src="asset/js/jquery-3.7.1.min.js"></script>
-<script src="asset/js/bootstrap.bundle.min.js"></script>
+<script src="../asset/js/jquery-3.7.1.min.js"></script>
+<script src="../asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';
 
@@ -808,9 +950,23 @@ function chargerInfosJA() {
             $('#ja-ib-loc').hide();
         }
         $('#ja-info-bar').css('display', 'flex');
+        // Case défiscalisation
+        $('#chk-defisc').prop('checked', +r.data.Defiscalisation === 1);
+        $('#lbl-defisc').addClass('d-flex').removeClass('d-none');
         $('#btn-note').removeClass('d-none');
     });
 }
+
+// ── Sauvegarde défiscalisation ────────────────────────────────────────────────
+$('#chk-defisc').on('change', function () {
+    $.post('disponibilite_ja.php', {
+        action:          'sauvegarder_defiscalisation',
+        id_ja:           idJaCourant,
+        defiscalisation: this.checked ? 1 : 0,
+    }, function (r) {
+        if (!r.ok) toast('Erreur défiscalisation : ' + r.err, false);
+    }, 'json');
+});
 
 // ── Modale Note ───────────────────────────────────────────────────────────────
 $('#modal-note').on('show.bs.modal', function () {
@@ -899,6 +1055,8 @@ function chargerJournees() {
         });
         renderCalendrier(r.data, saison);
         majRecapSave();
+        renderCalendrierMensuel();
+        afficherVueInitiale();
     });
 }
 
@@ -1188,6 +1346,7 @@ function sauvegarderJournee(journee, date, saison) {
         rencontres: e.rencontres,
     }, function (r) {
         if (!r.ok) toast('Erreur : ' + r.err, false);
+        else rafraichirCalSiActif();
     }, 'json');
 }
 
@@ -1205,6 +1364,296 @@ $('#sel-saison').on('change', function () {
     chargerJournees();
 });
 
+
+// ── Vue calendrier ────────────────────────────────────────────────────────────
+const MOIS_NOMS = ['Janvier','Février','Mars','Avril','Mai','Juin',
+                   'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+const JOURS_COURTS = ['L','M','M','J','V','S','D'];
+
+// jourDetailMap : "YYYY-MM-DD" → { journee, saison, statut }
+let jourDetailMap = {};
+
+function renderCalendrierMensuel() {
+    const saison = $('#sel-saison').val() || saisonCourante;
+
+    // Reconstruire jourDetailMap depuis etatJournees
+    // Clé format : "saison_J<n>_YYYY-MM-DD"
+    jourDetailMap = {};
+    Object.entries(etatJournees).forEach(([k, e]) => {
+        const m = k.match(/^(.+)_J(\d+)_(\d{4}-\d{2}-\d{2})$/);
+        if (!m) return;
+        const [, s, jn, date] = m;
+        if (s !== saison) return;
+        jourDetailMap[date] = { journee: +jn, saison: s, statut: e.statut || 'vide' };
+    });
+
+    if (!Object.keys(jourDetailMap).length) {
+        $('#cal-mois-grille').html('<div class="text-muted text-center py-4">Aucune journée disponible pour cette saison.</div>');
+        return;
+    }
+
+    const dates = Object.keys(jourDetailMap).sort();
+    const debut = new Date(dates[0] + 'T00:00:00');
+    const fin   = new Date(dates[dates.length - 1] + 'T00:00:00');
+
+    const today = new Date();
+    today.setHours(0,0,0,0);
+
+    const $grille = $('#cal-mois-grille').empty();
+    let cur = new Date(debut.getFullYear(), debut.getMonth(), 1);
+    const finMois = new Date(fin.getFullYear(), fin.getMonth() + 1, 1);
+
+    while (cur < finMois) {
+        const annee = cur.getFullYear();
+        const mois  = cur.getMonth();
+        $grille.append(buildMonthGrid(annee, mois, today));
+        cur = new Date(annee, mois + 1, 1);
+    }
+}
+
+function buildMonthGrid(annee, mois, today) {
+    const $wrap = $('<div class="cal-mois">');
+    $wrap.append(`<div class="cal-mois-titre">${MOIS_NOMS[mois]} ${annee}</div>`);
+
+    const $hdr = $('<div class="cal-semaine-header">');
+    JOURS_COURTS.forEach(j => $hdr.append(`<span>${j}</span>`));
+    $wrap.append($hdr);
+
+    const $grid = $('<div class="cal-grid">');
+
+    // 1er du mois → décalage Lundi=0 … Dimanche=6
+    const premier = (new Date(annee, mois, 1).getDay() + 6) % 7;
+    for (let i = 0; i < premier; i++) {
+        $grid.append('<div class="cal-jour vide"></div>');
+    }
+
+    const nbJours = new Date(annee, mois + 1, 0).getDate();
+    for (let j = 1; j <= nbJours; j++) {
+        const dateStr = `${annee}-${String(mois+1).padStart(2,'0')}-${String(j).padStart(2,'0')}`;
+        const detail  = jourDetailMap[dateStr];
+        const isToday = (new Date(annee, mois, j).getTime() === today.getTime());
+
+        let cls = 'cal-jour';
+        if (detail) cls += ' jour-journee statut-' + detail.statut;
+        if (isToday) cls += ' today';
+
+        const $jour = $(`<div class="${cls}">${j}</div>`);
+
+        if (detail) {
+            $jour.attr('title', `Journée ${detail.journee} — ${formatDateLong(dateStr)}\nCliquez pour modifier`);
+            $jour.on('click', () => ouvrirModaleJournee(dateStr, detail));
+        }
+
+        $grid.append($jour);
+    }
+
+    $wrap.append($grid);
+    return $wrap;
+}
+
+// ── Modale journée ────────────────────────────────────────────────────────────
+let modalJournee = null;
+
+function ouvrirModaleJournee(dateStr, detail) {
+    const { journee, saison, statut } = detail;
+    const k = cle(saison, journee, dateStr);
+
+    // Titre
+    $('#mj-titre').html(`<i class="bi bi-calendar-week me-2"></i>Journée ${journee} — ${formatDateLong(dateStr)}`);
+
+    // Boutons statut : rafraîchir l'état visuel
+    majBtnsModale(statut === 'vide' ? null : statut);
+
+    // Panneau partiel
+    if (statut === 'P') {
+        $('#mj-panel-partiel').show();
+        chargerRencontresModale(journee, dateStr, saison, k);
+    } else {
+        $('#mj-panel-partiel').hide().data('loaded', false);
+        $('#mj-renc-body').empty();
+    }
+
+    // Stocker le contexte dans la modale
+    $('#modal-journee').data({ journee, date: dateStr, saison, k });
+
+    if (!modalJournee) modalJournee = new bootstrap.Modal($('#modal-journee')[0]);
+    modalJournee.show();
+}
+
+function majBtnsModale(statut) {
+    ['O','P','N'].forEach(s => {
+        const $b = $(`#mj-btn-${s}`);
+        $b.toggleClass('actif', s === statut);
+        const icons = { O: ['bi-check-circle','bi-check-circle-fill'],
+                        P: ['bi-exclamation-circle','bi-exclamation-circle-fill'],
+                        N: ['bi-x-circle','bi-x-circle-fill'] };
+        $b.find('i').removeClass(icons[s][0] + ' ' + icons[s][1])
+                    .addClass(s === statut ? icons[s][1] : icons[s][0]);
+    });
+}
+
+// Clic sur un bouton statut dans la modale
+$('#mj-btns').on('click', '.btn-statut', function (e) {
+    e.stopPropagation();
+    const $btn   = $(this);
+    const statut = $btn.data('statut');
+    const { journee, date, saison, k } = $('#modal-journee').data();
+
+    if (!etatJournees[k]) etatJournees[k] = { statut: null, rencontres: [], modifie: false, date };
+    const ancien = etatJournees[k].statut;
+    if (ancien === statut) return;
+
+    etatJournees[k].statut  = statut;
+    etatJournees[k].modifie = true;
+    if (statut !== 'P') etatJournees[k].rencontres = [];
+
+    majBtnsModale(statut);
+
+    if (statut === 'P') {
+        $('#mj-panel-partiel').show();
+        chargerRencontresModale(journee, date, saison, k);
+    } else {
+        $('#mj-panel-partiel').hide().data('loaded', false);
+        $('#mj-renc-body').empty();
+    }
+
+    majRecapSave();
+    sauvegarderJournee(journee, date, saison);
+
+    // Mettre à jour la cellule du calendrier
+    const $cellule = $(`.cal-jour.jour-journee`).filter(function () {
+        return $(this).closest('.cal-mois').length &&
+               jourDetailMap[date] && true;
+    });
+    // Reconstruire la map et re-render pour refléter le nouveau statut
+    jourDetailMap[date].statut = statut;
+    // Mettre à jour la classe de la cellule directement
+    $(`.cal-jour.jour-journee[title*="${formatDateLong(date)}"]`)
+        .removeClass('statut-O statut-P statut-N statut-vide')
+        .addClass('statut-' + statut);
+});
+
+function chargerRencontresModale(journee, date, saison, k) {
+    if ($('#mj-panel-partiel').data('loaded')) return;
+
+    $('#mj-renc-body').html('<div class="text-muted text-center py-3"><span class="spin-sm me-2"></span>Chargement…</div>');
+
+    $.getJSON('disponibilite_ja.php', {
+        action: 'rencontres_journee',
+        id_ja:  idJaCourant,
+        saison, journee, date,
+    }, function (r) {
+        if (!r.ok) {
+            $('#mj-renc-body').html(`<div class="alert alert-danger m-2">${r.err}</div>`);
+            return;
+        }
+        $('#mj-panel-partiel').data('loaded', true);
+
+        // Initialiser sélection depuis BDD
+        const selBDD = r.data.filter(renc => renc.ReponseDisp === 'O').map(renc => +renc.Id_Rencontre);
+        if (!etatJournees[k]) etatJournees[k] = { statut: 'P', rencontres: [], modifie: false, date };
+        if (selBDD.length && !etatJournees[k].rencontres.length) etatJournees[k].rencontres = selBDD;
+
+        renderRencontresModale(r.data, journee, date, saison, k);
+        majBadgeModale(k);
+    });
+}
+
+function renderRencontresModale(rencontres, journee, date, saison, k) {
+    const $body = $('#mj-renc-body').empty();
+    const sel   = new Set(etatJournees[k]?.rencontres || []);
+
+    rencontres.forEach(function (r) {
+        const id    = +r.Id_Rencontre;
+        const actif = sel.has(id);
+
+        let lieu = '';
+        if (r.NomSalle) {
+            lieu = `<i class="bi bi-geo-alt-fill" style="color:var(--col-partiel)"></i> ${r.NomSalle}`;
+            if (r.VilleSalle) lieu += ` — ${r.CpSalle ? r.CpSalle + ' ' : ''}${r.VilleSalle}`;
+        } else if (r.VilleSalle) {
+            lieu = `<i class="bi bi-geo-alt" style="color:var(--col-partiel)"></i> ${r.CpSalle ? r.CpSalle + ' ' : ''}${r.VilleSalle}`;
+        }
+
+        const $row = $(`
+            <div class="renc-row${actif?' selectionne':''}" data-id="${id}" data-journee="${journee}" data-date="${date}" data-saison="${saison}" data-modal="1">
+                <div class="renc-check"><i class="bi bi-check-lg"></i></div>
+                <div class="renc-heure">${(r.Heure||'').substring(0,5)}</div>
+                <div class="renc-div">${r.DivisionCode}</div>
+                <div class="renc-info">
+                    <div class="renc-match">${r.NomDom || '—'} <span style="color:#999;font-size:.8em">vs</span> ${r.NomExt || '—'}</div>
+                    ${lieu ? `<div class="renc-lieu">${lieu}</div>` : ''}
+                </div>
+                ${distBadge(r.DistanceKm)}
+            </div>
+        `);
+        $body.append($row);
+    });
+}
+
+// Clic rencontre dans la modale
+$('#mj-renc-body').on('click', '.renc-row', function (e) {
+    e.stopPropagation();
+    const $row    = $(this);
+    const id      = +$row.data('id');
+    const journee = +$row.data('journee');
+    const date    = $row.data('date');
+    const saison  = $row.data('saison');
+    const k       = cle(saison, journee, date);
+
+    $row.toggleClass('selectionne');
+    const actif = $row.hasClass('selectionne');
+
+    if (!etatJournees[k]) etatJournees[k] = { statut: 'P', rencontres: [], modifie: false, date };
+    const idx = etatJournees[k].rencontres.indexOf(id);
+    if (actif && idx === -1)  etatJournees[k].rencontres.push(id);
+    if (!actif && idx !== -1) etatJournees[k].rencontres.splice(idx, 1);
+    etatJournees[k].modifie = true;
+
+    majBadgeModale(k);
+    majRecapSave();
+    sauvegarderJournee(journee, date, saison);
+});
+
+// Bouton "Tout sélectionner" dans la modale
+$('#mj-sel-tout').on('click', function () {
+    const { journee, date, saison, k } = $('#modal-journee').data();
+    const $rows = $('#mj-renc-body .renc-row');
+    const toutSelec = $rows.length && $rows.toArray().every(el => $(el).hasClass('selectionne'));
+
+    if (toutSelec) {
+        $rows.removeClass('selectionne');
+        etatJournees[k].rencontres = [];
+        $(this).text('Tout sélectionner');
+    } else {
+        const ids = [];
+        $rows.each(function () { $(this).addClass('selectionne'); ids.push(+$(this).data('id')); });
+        etatJournees[k].rencontres = ids;
+        $(this).text('Tout désélectionner');
+    }
+    etatJournees[k].modifie = true;
+    majBadgeModale(k);
+    majRecapSave();
+    sauvegarderJournee(journee, date, saison);
+});
+
+function majBadgeModale(k) {
+    const nb    = (etatJournees[k]?.rencontres || []).length;
+    const total = $('#mj-renc-body .renc-row').length;
+    const toutSelec = nb > 0 && nb === total;
+    $('#mj-sel-tout').text(toutSelec ? 'Tout désélectionner' : 'Tout sélectionner');
+}
+
+// Afficher vue calendrier par défaut dès que le calendrier est chargé
+function afficherVueInitiale() {
+    $('#section-calendrier').hide();
+    $('#section-cal-grille').show();
+}
+
+// Rafraîchir la vue calendrier si elle est active (après sauvegarde)
+function rafraichirCalSiActif() {
+    renderCalendrierMensuel();
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 $(function () {

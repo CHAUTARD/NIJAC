@@ -16,11 +16,12 @@ require_once __DIR__ . '/vendor/autoload.php';
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
 // ── Sécurité ──────────────────────────────────────────────────────────────────
-if (!isset($_SESSION['utilisateur']) || empty($_SESSION['utilisateur']['is_admin'])) {
+if (!isset($_SESSION['utilisateur'])) {
     header('Location: index.php');
     exit;
 }
-$moi = $_SESSION['utilisateur'];
+$moi     = $_SESSION['utilisateur'];
+$isAdmin = !empty($moi['is_admin']);
 
 // ── Points d'API AJAX ────────────────────────────────────────────────────────
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
@@ -34,15 +35,31 @@ if ($action !== '') {
 
         // ── Charger la liste ───────────────────────────────────────────────
         if ($action === 'liste') {
-            $rows = $pdo->query(
-                'SELECT s.Id_Salle, s.Nom, s.Adresse, s.Id_Laposte, s.Id_Club,
-                        s.EstPrincipale, cl.Nom AS NomClub,
-                        CONCAT(lp.CodePostal, \' \', lp.Nom) AS CpVille
-                 FROM Salle s
-                 LEFT JOIN Club    cl ON cl.Id_Club    = s.Id_Club
-                 LEFT JOIN laposte lp ON lp.Id_LaPoste = s.Id_Laposte
-                 ORDER BY cl.Nom, s.Nom'
-            )->fetchAll();
+            $dept = null;
+            if (!$isAdmin) {
+                // Nominateur : restreint à son département
+                $dept = $moi['id_departement'] ?? null;
+            } elseif (isset($_POST['dept']) && $_POST['dept'] !== '') {
+                // Administrateur avec filtre optionnel
+                $dept = $_POST['dept'];
+            }
+
+            $sql = 'SELECT s.Id_Salle, s.Nom, s.Adresse, s.Id_Laposte, s.Id_Club,
+                           s.EstPrincipale, cl.Nom AS NomClub,
+                           CONCAT(lp.CodePostal, \' \', lp.Nom) AS CpVille
+                    FROM Salle s
+                    LEFT JOIN Club    cl ON cl.Id_Club    = s.Id_Club
+                    LEFT JOIN laposte lp ON lp.Id_LaPoste = s.Id_Laposte';
+            $params = [];
+            if ($dept !== null && $dept !== '') {
+                $sql .= ' WHERE LEFT(lp.CodePostal, 2) = ?';
+                $params[] = str_pad((string)$dept, 2, '0', STR_PAD_LEFT);
+            }
+            $sql .= ' ORDER BY cl.Nom, s.Nom';
+
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $rows = $stmt->fetchAll();
             ob_end_clean();
             echo json_encode(['ok' => true, 'data' => $rows]);
             exit;
@@ -61,6 +78,13 @@ if ($action !== '') {
             $rows = $pdo->query('SELECT Id_Club, Nom FROM Club ORDER BY Nom')->fetchAll();
             ob_end_clean();
             echo json_encode(['ok' => true, 'data' => $rows]);
+            exit;
+        }
+
+        // ── Actions réservées aux administrateurs ──────────────────────────
+        if (!$isAdmin && in_array($action, ['importer_excel', 'sauvegarder', 'supprimer'], true)) {
+            ob_end_clean();
+            echo json_encode(['ok' => false, 'msg' => 'Accès refusé.']);
             exit;
         }
 
@@ -243,9 +267,11 @@ if ($action !== '') {
 }
 
 // ── Rendu HTML ────────────────────────────────────────────────────────────────
-$nomComplet  = htmlspecialchars($moi['nom'] . ' ' . $moi['prenom']);
-$departement = htmlspecialchars($moi['id_departement'] ?? '');
-$changeLogin = !empty($moi['change_login']);
+$nomComplet     = htmlspecialchars($moi['nom'] . ' ' . $moi['prenom']);
+$departement    = htmlspecialchars($moi['id_departement'] ?? '');
+$changeLogin    = !empty($moi['change_login']);
+$isAdminJs      = $isAdmin ? 'true' : 'false';
+$deptUserJs     = json_encode($moi['id_departement'] ?? null);
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -269,24 +295,6 @@ $changeLogin = !empty($moi['change_login']);
             overflow: hidden;
         }
 
-        /* ── Toolbar ── */
-        #toolbar {
-            background: #c0ffff;
-            border-bottom: 1px solid #90cccc;
-            padding: .3rem 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: .85rem;
-            flex-shrink: 0;
-        }
-        #toolbar .ts-user { color: #1a3a6b; font-weight: 600; }
-        #toolbar .ts-pwd-warning {
-            display: <?= $changeLogin ? 'inline-flex' : 'none' ?>;
-            align-items: center; gap: .35rem;
-            color: #c00; font-weight: 700;
-            cursor: pointer; text-decoration: underline dotted;
-        }
 /* ── MenuStrip ── */
         #menu-strip {
             background: #f8f9fa;
@@ -426,18 +434,11 @@ $changeLogin = !empty($moi['change_login']);
     <div class="spinner-border text-light" style="width:3rem;height:3rem;"></div>
 </div>
 
-<!-- Toolbar -->
-<div id="toolbar">
-    <span class="ts-user">
-        <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= $nomComplet ?><?= $departement ? " ($departement)" : '' ?>
-    </span>
-    <a class="ts-pwd-warning" href="changer_mot_de_passe.php">
-        <i class="bi bi-key-fill"></i>Mot de passe à modifier
-    </a>
-</div>
+<?php require __DIR__ . '/includes/toolbar.php'; ?>
 
 <!-- MenuStrip -->
 <div id="menu-strip">
+<?php if ($isAdmin): ?>
     <button class="menu-item" id="btn-importer">
         <img src="img/Importer_32.png" alt="">Importation Excel (xlsx)
     </button>
@@ -456,6 +457,25 @@ $changeLogin = !empty($moi['change_login']);
     <input type="file" id="file-input" accept=".xlsx" style="display:none">
     <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 salle(s)</span>
     <span style="flex:1"></span>
+    <!-- Filtre département (admin uniquement) -->
+    <label for="sel-dept" style="font-size:.85rem;font-weight:700;color:#444;white-space:nowrap;margin:0;">
+        <i class="bi bi-map me-1"></i>Département
+    </label>
+    <select id="sel-dept" class="form-select form-select-sm w-auto">
+        <option value="">— Tous —</option>
+        <option value="14">14 — Calvados</option>
+        <option value="27">27 — Eure</option>
+        <option value="50">50 — Manche</option>
+        <option value="61">61 — Orne</option>
+        <option value="76">76 — Seine-Maritime</option>
+    </select>
+<?php else: ?>
+    <span style="padding:.2rem .6rem; background:#fff3cd; border:1px solid #ffc107; border-radius:4px; font-size:.82rem; color:#856404;">
+        <i class="bi bi-eye-fill me-1"></i>Consultation — département <?= $departement ?>
+    </span>
+    <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 salle(s)</span>
+    <span style="flex:1"></span>
+<?php endif; ?>
     <input type="search" id="search-input" placeholder="🔍 Rechercher…">
 </div>
 
@@ -463,7 +483,7 @@ $changeLogin = !empty($moi['change_login']);
 <div id="page-header">
     <i class="bi bi-building-fill me-2"></i>Gestion des salles
     <small class="opacity-75 ms-2">(E005)</small>
-    <a href="admin_menu.php" class="btn btn-sm btn-light float-end py-0">
+    <a href="<?= $isAdmin ? 'admin_menu.php' : 'Nominateur/menu.php' ?>" class="btn btn-sm btn-light float-end py-0">
         <i class="bi bi-arrow-left me-1"></i>Retour menu
     </a>
 </div>
@@ -499,6 +519,9 @@ $changeLogin = !empty($moi['change_login']);
 <script>
 'use strict';
 
+const IS_ADMIN  = <?= $isAdminJs ?>;
+const DEPT_USER = <?= $deptUserJs ?>;
+
 let lignes     = [];
 let clubs      = [];   // [{id_club, nom}]
 let cellActive = null;
@@ -506,6 +529,7 @@ let rowActive  = null; // idx de la ligne sélectionnée
 let sortField  = 'nom_club';
 let sortDir    = 'asc';
 let searchTerm = '';
+let deptFiltre = IS_ADMIN ? '' : (DEPT_USER ?? '');
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
 function spinner(show) { $('#spinner').toggleClass('show', show); }
@@ -735,7 +759,7 @@ function chargerClubs() {
 function chargerListe() {
     spinner(true);
     chargerClubs().then(() => {
-        $.post('salle.php', { action: 'liste' }, function (res) {
+        $.post('salle.php', { action: 'liste', dept: deptFiltre }, function (res) {
             spinner(false);
             if (!res.ok) { toast(res.msg, false); return; }
             lignes = res.data.map(r => ({
@@ -752,6 +776,7 @@ function chargerListe() {
         }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
     });
 }
+
 
 // ── Ajouter ───────────────────────────────────────────────────────────────────
 $('#btn-ajouter').on('click', function () {
@@ -835,6 +860,12 @@ $('#tbl-salles thead th[data-field]').on('click', function () {
 $('#search-input').on('input', function () {
     searchTerm = $(this).val().trim();
     renderGrille();
+});
+
+// ── Filtre département (admin) ────────────────────────────────────────────────
+$('#sel-dept').on('change', function () {
+    deptFiltre = $(this).val();
+    chargerListe();
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────

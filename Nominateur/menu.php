@@ -47,51 +47,10 @@ $isAdmin     = !empty($u['is_admin']);
             flex-direction: column;
         }
 
-        /* ── Barre d'outils ── */
-        #toolbar {
-            background: #c0ffff;
-            border-bottom: 1px solid #90cccc;
-            padding: .3rem 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: .85rem;
-            gap: .75rem;
-        }
 
-        #toolbar .ts-user {
-            color: #1a3a6b;
-            font-weight: 600;
-        }
 
-        #toolbar .ts-pwd-warning {
-            display: <?= $changeLogin ? 'inline-flex' : 'none' ?>;
-            align-items: center;
-            gap: .35rem;
-            color: #c00;
-            font-weight: 700;
-            cursor: pointer;
-            text-decoration: underline dotted;
-        }
 
-        #toolbar .ts-pwd-warning:hover { color: #900; }
 
-        /* Bouton bascule menu admin (visible admins seulement) */
-        #btn-switch-admin {
-            display: <?= $isAdmin ? 'inline-flex' : 'none' ?>;
-            align-items: center;
-            gap: .35rem;
-            padding: .25rem .75rem;
-            background: var(--nijac-blue);
-            color: #fff;
-            border: none;
-            border-radius: 5px;
-            font-size: .82rem;
-            font-weight: 600;
-            cursor: pointer;
-            text-decoration: none;
-            transition: background .15s;
-        }
 
         #btn-switch-admin:hover {
             background: #0f2550;
@@ -207,18 +166,7 @@ $isAdmin     = !empty($u['is_admin']);
 </head>
 <body>
 
-    <!-- ToolStrip -->
-    <div id="toolbar">
-        <span class="ts-user">
-            <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= $nomComplet ?><?= $departement ? " ($departement)" : '' ?>
-        </span>
-        <a class="ts-pwd-warning" href="../changer_mot_de_passe.php">
-            <i class="bi bi-key-fill"></i>Mot de passe à modifier
-        </a>
-        <a id="btn-switch-admin" href="../admin_menu.php" title="Basculer vers le menu administrateur">
-            <i class="bi bi-shield-lock-fill"></i>Menu administrateur
-        </a>
-    </div>
+    <?php require __DIR__ . '/includes/toolbar.php'; ?>
 
     <!-- En-tête -->
     <div id="page-header">
@@ -229,7 +177,7 @@ $isAdmin     = !empty($u['is_admin']);
     <div id="menu-grid">
 
         <!-- Ligne 1 -->
-        <a href="../jugearbitre.php" class="menu-btn btn-ja">
+        <a href="jugearbitre.php" class="menu-btn btn-ja">
             <div class="btn-icon"><img src="../img/Arbitre_filet.png" alt="Juge-Arbitre"></div>
             <span>Juge-Arbitre</span>
             <span class="btn-desc">Gérer la liste des juges-arbitres, grades et coordonnées</span>

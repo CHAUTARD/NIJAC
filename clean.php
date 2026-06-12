@@ -248,24 +248,6 @@ $changeLogin = !empty($moi['change_login']);
             min-height: 100vh;
         }
 
-        /* ── Toolbar ── */
-        #toolbar {
-            background: #c0ffff;
-            border-bottom: 1px solid #90cccc;
-            padding: .3rem 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: .85rem;
-            flex-shrink: 0;
-        }
-        #toolbar .ts-user { color: #1a3a6b; font-weight: 600; }
-        #toolbar .ts-pwd-warning {
-            display: <?= $changeLogin ? 'inline-flex' : 'none' ?>;
-            align-items: center; gap: .35rem;
-            color: #c00; font-weight: 700;
-            cursor: pointer; text-decoration: underline dotted;
-        }
 /* ── En-tête ── */
         #page-header {
             background: var(--nijac-blue);
@@ -444,7 +426,6 @@ $changeLogin = !empty($moi['change_login']);
         }
         #spinner.show { display: flex; }
 
-        /* ── Barre d'état ── */
         #status-bar {
             background: #e8eef7;
             border-top: 1px solid #c8d4e8;
@@ -471,15 +452,7 @@ $changeLogin = !empty($moi['change_login']);
     <div class="spinner-border text-light" style="width:3rem;height:3rem;"></div>
 </div>
 
-<!-- Toolbar -->
-<div id="toolbar">
-    <span class="ts-user">
-        <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= $nomComplet ?><?= $departement ? " ($departement)" : '' ?>
-    </span>
-    <a class="ts-pwd-warning" href="changer_mot_de_passe.php">
-        <i class="bi bi-key-fill"></i>Mot de passe à modifier
-    </a>
-</div>
+<?php require __DIR__ . '/includes/toolbar.php'; ?>
 
 <!-- En-tête -->
 <div id="page-header">

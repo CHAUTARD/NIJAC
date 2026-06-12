@@ -385,6 +385,12 @@ if (isset($_GET['action'])) {
     echo json_encode(['ok' => false, 'err' => 'Action inconnue']);
     exit;
 }
+
+$u           = $_SESSION['utilisateur'];
+$nomComplet  = htmlspecialchars(($u['nom'] ?? '') . ' ' . ($u['prenom'] ?? ''));
+$departement = htmlspecialchars($u['id_departement'] ?? '');
+$changeLogin = !empty($u['change_login']);
+$isAdmin     = !empty($u['is_admin']);
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -395,16 +401,18 @@ if (isset($_GET['action'])) {
     <link rel="stylesheet" href="asset/css/bootstrap.min.css">
     <link rel="stylesheet" href="asset/css/bootstrap-icons.min.css">
     <style>
+        :root { --nijac-blue: #1a3a6b; }
+
         body { background: #f0f4fa; font-family: 'Segoe UI', system-ui, sans-serif; }
-        #toolbar {
-            background: #c0ffff; border-bottom: 1px solid #90cccc;
-            padding: .3rem 1rem; display: flex; align-items: center;
-            justify-content: space-between; font-size: .85rem; gap: .5rem;
-        }
-        #toolbar .ts-user { color: #1a3a6b; font-weight: 600; }
-#page-header {
-            background: #1a3a6b; color: #fff;
-            padding: .65rem 1.25rem; font-size: .9rem; font-weight: 600;
+
+
+        #page-header {
+            background: var(--nijac-blue);
+            color: #fff;
+            padding: .5rem 1.25rem;
+            font-size: .9rem;
+            font-weight: 600;
+            flex-shrink: 0;
         }
         #content { padding: 1.25rem; }
         .fichier-card {
@@ -455,16 +463,15 @@ if (isset($_GET['action'])) {
 </head>
 <body>
 
-<div id="toolbar">
-    <span class="ts-user"><i class="bi bi-person-fill me-1"></i><?= htmlspecialchars(($u ?? $_SESSION['utilisateur'])['nom'] . ' ' . ($_SESSION['utilisateur']['prenom'] ?? '')) ?></span>
-    <a href="admin_menu.php" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-arrow-left me-1"></i>Menu
-    </a>
-</div>
+<?php require __DIR__ . '/includes/toolbar.php'; ?>
 
+<!-- En-tête -->
 <div id="page-header">
     <i class="bi bi-file-earmark-spreadsheet me-2"></i>Import des rencontres (XLS)
     <small class="opacity-75 ms-2">(E011)</small>
+    <a href="<?= $isAdmin ? 'admin_menu.php' : 'Nominateur/menu.php' ?>" class="btn btn-sm btn-light float-end py-0">
+        <i class="bi bi-arrow-left me-1"></i>Retour menu
+    </a>
 </div>
 
 <div id="content">

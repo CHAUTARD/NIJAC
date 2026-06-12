@@ -391,15 +391,9 @@ $isAdmin     = !empty($u['is_admin']);
 body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-height:100vh; display:flex; flex-direction:column; }
 
 /* ── Toolbar ── */
-#toolbar { background:#c0ffff; border-bottom:1px solid #90cccc; padding:.3rem 1rem; display:flex; align-items:center; justify-content:space-between; font-size:.85rem; gap:.75rem; }
-#toolbar .ts-user { color:#1a3a6b; font-weight:600; }
-#toolbar .ts-pwd-warning { display:<?= $changeLogin ? 'inline-flex' : 'none' ?>; align-items:center; gap:.35rem; color:#c00; font-weight:700; cursor:pointer; text-decoration:underline dotted; }
-#btn-switch-admin { display:<?= $isAdmin ? 'inline-flex' : 'none' ?>; align-items:center; gap:.35rem; padding:.25rem .75rem; background:var(--nijac-blue); color:#fff; border:none; border-radius:5px; font-size:.82rem; font-weight:600; cursor:pointer; text-decoration:none; }
-#btn-switch-admin:hover { background:#0f2550; color:#fff; }
 /* ── En-tête ── */
 #page-header { background:var(--nom-green); color:#fff; padding:.65rem 1.25rem; font-size:.9rem; font-weight:600; display:flex; align-items:center; gap:.75rem; }
 
-/* ── Barre de sélection ── */
 #barre-selection { background:#fff; border-bottom:1px solid #dee2e6; padding:.6rem 1.25rem; display:flex; align-items:center; gap:1rem; flex-wrap:wrap; }
 #barre-selection label { font-size:.85rem; font-weight:600; color:#555; margin-bottom:0; }
 #barre-selection select { font-size:.85rem; min-width:130px; }
@@ -455,7 +449,6 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 .badge-dispo-P { background:#fff8e1; color:#f57f17; border:1px solid #ffe082; font-size:.68rem; }
 .btn-affecter { font-size:.8rem; padding:.25rem .7rem; }
 
-/* ── Barre du bas ── */
 #barre-actions { background:#fff; border-top:2px solid #dee2e6; padding:.65rem 1.25rem; display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; }
 #btn-valider { display:none; }
 #btn-envoyer { display:none; }
@@ -490,18 +483,13 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 </head>
 <body>
 
-<!-- Toolbar -->
-<div id="toolbar">
-    <span class="ts-user"><i class="bi bi-person-fill me-1"></i>Utilisateur : <?= $nomComplet ?><?= $departement ? " ($departement)" : '' ?></span>
-    <a class="ts-pwd-warning" href="../changer_mot_de_passe.php"><i class="bi bi-key-fill"></i>Mot de passe à modifier</a>
-    <a id="btn-switch-admin" href="../admin_menu.php"><i class="bi bi-shield-lock-fill"></i>Menu administrateur</a>
-</div>
+<?php require __DIR__ . '/includes/toolbar.php'; ?>
 
 <!-- En-tête -->
 <div id="page-header">
     <i class="bi bi-person-check-fill fs-5"></i>
     <span>Nomination des Juges-Arbitres <small class="opacity-75">(E022)</small></span>
-    <a href="menu.php" class="ms-auto btn btn-sm btn-outline-light"><i class="bi bi-arrow-left me-1"></i>Menu</a>
+    <a href="menu.php" class="ms-auto btn btn-sm btn-outline-light"><i class="bi bi-arrow-left me-1"></i>Retour au menu</a>
 </div>
 
 <!-- Barre de sélection -->

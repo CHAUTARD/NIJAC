@@ -9,19 +9,21 @@
  *
  * Créé par : Patrick CHAUTARD
  * Date de création : 2026-06-11
+ * Déplacé dans Nominateur/ : 2026-06-12
  */
 session_start();
-require_once __DIR__ . '/config/db.php';
-require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../vendor/autoload.php';
 
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
 // ── Sécurité ──────────────────────────────────────────────────────────────────
-if (!isset($_SESSION['utilisateur']) || empty($_SESSION['utilisateur']['is_admin'])) {
-    header('Location: index.php');
+if (!isset($_SESSION['utilisateur'])) {
+    header('Location: ../index.php');
     exit;
 }
-$moi = $_SESSION['utilisateur'];
+$moi     = $_SESSION['utilisateur'];
+$isAdmin = !empty($moi['is_admin']);
 
 // ── Formater un numéro de téléphone ───────────────────────────────────────────
 // Normalise un nom de ville : majuscules, tirets et apostrophes → espace, espaces multiples réduits
@@ -50,6 +52,13 @@ if ($action !== '') {
     ob_start();
     header('Content-Type: application/json; charset=utf-8');
 
+    // Actions réservées aux administrateurs
+    $actionsAdmin = ['importer_excel', 'sauvegarder', 'supprimer', 'maj_laposte'];
+    if (in_array($action, $actionsAdmin) && !$isAdmin) {
+        echo json_encode(['ok' => false, 'err' => 'Accès refusé']);
+        exit;
+    }
+
     try {
         $pdo = getPDO();
 
@@ -69,8 +78,20 @@ if ($action !== '') {
 
         // ── Charger la liste ───────────────────────────────────────────────
         if ($action === 'liste') {
-            $rows = $pdo->query(
-                'SELECT j.Id_JA, j.Ordre, j.Nom, j.Prenom, j.Email, j.Telephone,
+            $dept = isset($_POST['dept']) && $_POST['dept'] !== '' ? $_POST['dept'] : null;
+
+            $whereDept = $dept !== null
+                ? 'WHERE j.Id_Club IN (
+                       SELECT s.Id_Club
+                       FROM Salle   s
+                       JOIN laposte lf ON lf.Id_LaPoste = s.Id_Laposte
+                       WHERE s.EstPrincipale = 1
+                         AND LEFT(lf.CodePostal, 2) = ?
+                   )'
+                : '';
+
+            $stmt = $pdo->prepare(
+                'SELECT j.Id_JA, j.Nom, j.Prenom, j.Email, j.Telephone,
                         j.Grade, j.Actif, j.Id_Club, j.DistanceMaxKm, j.Id_LaPoste,
                         j.Defiscalisation,
                         cl.Nom AS NomClub,
@@ -84,10 +105,13 @@ if ($action !== '') {
                            )
                         ) AS NbDispo
                  FROM ja j
-                 LEFT JOIN Club cl ON cl.Id_Club = j.Id_Club
+                 LEFT JOIN Club    cl ON cl.Id_Club    = j.Id_Club
                  LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
+                 ' . $whereDept . '
                  ORDER BY j.Nom, j.Prenom'
-            )->fetchAll(PDO::FETCH_ASSOC);
+            );
+            $stmt->execute($dept !== null ? [str_pad((string)$dept, 2, '0', STR_PAD_LEFT)] : []);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             // Normalisation des clés pour éviter les problèmes de casse PDO
             $rows = array_map(function($r) {
@@ -102,7 +126,6 @@ if ($action !== '') {
                 };
                 return [
                     'Id_JA'          => $find($r, 'Id_JA'),
-                    'Ordre'          => $find($r, 'Ordre'),
                     'Nom'            => $find($r, 'Nom'),
                     'Prenom'         => $find($r, 'Prenom'),
                     'Email'          => $find($r, 'Email'),
@@ -271,7 +294,6 @@ if ($action !== '') {
 
                 $lignes[] = [
                     'id'              => $idJA !== '' ? (int)$idJA : 0,
-                    'ordre'           => 999,
                     'nom'             => mb_strtoupper($nom, 'UTF-8'),
                     'prenom'          => mb_convert_case($prenom, MB_CASE_TITLE, 'UTF-8'),
                     'email'           => $email !== '' ? $email : null,
@@ -325,12 +347,12 @@ if ($action !== '') {
 
             $stmtCheck  = $pdo->prepare('SELECT COUNT(*) FROM ja WHERE Id_JA = ?');
             $stmtInsert = $pdo->prepare(
-                'INSERT INTO ja (Id_JA, Ordre, Nom, Prenom, Email, Telephone, Grade, Actif,
+                'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Telephone, Grade, Actif,
                                  Id_Club, DistanceMaxKm, Id_LaPoste, Cp, Ville, Defiscalisation)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmtUpdate = $pdo->prepare(
-                'UPDATE ja SET Ordre=?, Nom=?, Prenom=?, Email=?, Telephone=?, Grade=?,
+                'UPDATE ja SET Nom=?, Prenom=?, Email=?, Telephone=?, Grade=?,
                                Actif=?, Id_Club=?, DistanceMaxKm=?, Id_LaPoste=?, Cp=?, Ville=?,
                                Defiscalisation=?
                  WHERE Id_JA=?'
@@ -338,7 +360,6 @@ if ($action !== '') {
 
             foreach ($lignes as $l) {
                 $id      = (int)($l['id']              ?? 0);
-                $ordre   = (int)($l['ordre']           ?? 999);
                 $nom     = trim($l['nom']              ?? '');
                 $prenom  = trim($l['prenom']           ?? '');
                 $email   = $l['email']   !== '' && $l['email']   !== null ? $l['email']   : null;
@@ -358,19 +379,19 @@ if ($action !== '') {
                     if ($id > 0) {
                         $stmtCheck->execute([$id]);
                         if ((int)$stmtCheck->fetchColumn() > 0) {
-                            $stmtUpdate->execute([$ordre, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $distMax, $idLap, $cpVal, $villeVal, $defisc, $id]);
+                            $stmtUpdate->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $distMax, $idLap, $cpVal, $villeVal, $defisc, $id]);
                             $updates++;
                         } else {
-                            $stmtInsert->execute([$id, $ordre, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $distMax, $idLap, $cpVal, $villeVal, $defisc]);
+                            $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $distMax, $idLap, $cpVal, $villeVal, $defisc]);
                             $inserts++;
                         }
                     } else {
                         // Pas d'Id_JA → INSERT auto-increment
                         $pdo->prepare(
-                            'INSERT INTO ja (Ordre, Nom, Prenom, Email, Telephone, Grade, Actif,
+                            'INSERT INTO ja (Nom, Prenom, Email, Telephone, Grade, Actif,
                                              Id_Club, DistanceMaxKm, Id_LaPoste, Cp, Ville, Defiscalisation)
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                        )->execute([$ordre, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $distMax, $idLap, $cpVal, $villeVal, $defisc]);
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                        )->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $distMax, $idLap, $cpVal, $villeVal, $defisc]);
                         $inserts++;
                     }
                 } catch (PDOException $ex) {
@@ -410,6 +431,8 @@ if ($action !== '') {
 $nomComplet  = htmlspecialchars($moi['nom'] . ' ' . $moi['prenom']);
 $departement = htmlspecialchars($moi['id_departement'] ?? '');
 $changeLogin = !empty($moi['change_login']);
+$isAdminJs   = $isAdmin ? 'true' : 'false';
+$deptUserJs  = $isAdmin ? "''" : "'" . addslashes($moi['id_departement'] ?? '') . "'";
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -418,8 +441,8 @@ $changeLogin = !empty($moi['change_login']);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NIJAC – Juges-Arbitres (E007)</title>
 
-    <link rel="stylesheet" href="asset/css/bootstrap.min.css">
-    <link rel="stylesheet" href="asset/css/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="../asset/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../asset/css/bootstrap-icons.min.css">
 
     <style>
         :root { --nijac-blue: #1a3a6b; }
@@ -433,24 +456,6 @@ $changeLogin = !empty($moi['change_login']);
             overflow: hidden;
         }
 
-        /* ── Toolbar ── */
-        #toolbar {
-            background: #c0ffff;
-            border-bottom: 1px solid #90cccc;
-            padding: .3rem 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: .85rem;
-            flex-shrink: 0;
-        }
-        #toolbar .ts-user { color: #1a3a6b; font-weight: 600; }
-        #toolbar .ts-pwd-warning {
-            display: <?= $changeLogin ? 'inline-flex' : 'none' ?>;
-            align-items: center; gap: .35rem;
-            color: #c00; font-weight: 700;
-            cursor: pointer; text-decoration: underline dotted;
-        }
 /* ── MenuStrip ── */
         #menu-strip {
             background: #f8f9fa;
@@ -566,7 +571,6 @@ $changeLogin = !empty($moi['change_login']);
             font-weight: 600;
         }
 
-        /* ── Barre d'état ── */
         #status-bar {
             background: #e8eef7;
             border-top: 1px solid #c8d4e8;
@@ -626,25 +630,19 @@ $changeLogin = !empty($moi['change_login']);
     <div class="spinner-border text-light" style="width:3rem;height:3rem;"></div>
 </div>
 
-<!-- Toolbar -->
-<div id="toolbar">
-    <span class="ts-user">
-        <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= $nomComplet ?><?= $departement ? " ($departement)" : '' ?>
-    </span>
-    <a class="ts-pwd-warning" href="changer_mot_de_passe.php">
-        <i class="bi bi-key-fill"></i>Mot de passe à modifier
-    </a>
-</div>
+<?php require __DIR__ . '/includes/toolbar.php'; ?>
 
 <!-- MenuStrip -->
 <div id="menu-strip">
+    <?php if ($isAdmin): ?>
     <button class="menu-item" id="btn-importer">
-        <img src="img/Importer_32.png" alt="">Importer Excel
+        <img src="../img/Importer_32.png" alt="">Importer Excel
     </button>
     <button class="menu-item" id="btn-maj-bdd">
-        <img src="img/MAJ_Database_32.png" alt="">Mettre à jour la Base de données
+        <img src="../img/MAJ_Database_32.png" alt="">Mettre à jour la Base de données
     </button>
     <input type="file" id="file-input" accept=".xlsx" style="display:none">
+    <?php endif; ?>
     <span id="lbl-count">0 JA</span>
     <div id="toggle-actif" style="margin-left:.5rem">
         <button id="btn-tous"         class="active">Tous</button>
@@ -653,6 +651,19 @@ $changeLogin = !empty($moi['change_login']);
     </div>
     &nbsp;Site utile : <a href="https://www.dcode.fr/code-postal" target="_blank" class="text-decoration-none">dCode code-postal</a>
     <span style="flex:1"></span>
+    <?php if ($isAdmin): ?>
+    <label for="sel-dept" style="font-size:.85rem;font-weight:700;color:#444;white-space:nowrap;margin:0;">
+        <i class="bi bi-map me-1"></i>Département
+    </label>
+    <select id="sel-dept" class="form-select form-select-sm w-auto">
+        <option value="">— Tous —</option>
+        <option value="14">14 — Calvados</option>
+        <option value="27">27 — Eure</option>
+        <option value="50">50 — Manche</option>
+        <option value="61">61 — Orne</option>
+        <option value="76">76 — Seine-Maritime</option>
+    </select>
+    <?php endif; ?>
     <input type="search" id="search-input" placeholder="🔍 Rechercher…">
 </div>
 
@@ -660,8 +671,8 @@ $changeLogin = !empty($moi['change_login']);
 <div id="page-header">
     <i class="bi bi-person-badge-fill me-2"></i>Gestion des Juges-Arbitres
     <small class="opacity-75 ms-2">(E007)</small>
-    <a href="admin_menu.php" class="btn btn-sm btn-light float-end py-0">
-        <i class="bi bi-arrow-left me-1"></i>Retour menu
+    <a href="menu.php" class="btn btn-sm btn-light float-end py-0">
+        <i class="bi bi-arrow-left me-1"></i>Retour au menu
     </a>
 </div>
 
@@ -681,7 +692,6 @@ $changeLogin = !empty($moi['change_login']);
                 <th style="width:200px" data-field="nom_club">Nom du club<span class="sort-icon"></span></th>
                 <th style="width:90px"  data-field="defiscalisation">Défiscalisation<span class="sort-icon"></span></th>
                 <th style="width:80px"  data-field="distance_max_km">Dist. max<span class="sort-icon"></span></th>
-                <th style="width:60px"  data-field="ordre">Ordre<span class="sort-icon"></span></th>
                 <th style="width:75px"  data-field="cp">CP<span class="sort-icon"></span></th>
                 <th style="width:160px" data-field="ville">Ville<span class="sort-icon"></span></th>
                 <th style="width:75px"  class="no-sort">Lien dispo</th>
@@ -699,8 +709,8 @@ $changeLogin = !empty($moi['change_login']);
 <!-- Toast -->
 <div id="toast-container"></div>
 
-<script src="asset/js/jquery-3.7.1.min.js"></script>
-<script src="asset/js/bootstrap.bundle.min.js"></script>
+<script src="../asset/js/jquery-3.7.1.min.js"></script>
+<script src="../asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';
 
@@ -711,6 +721,8 @@ let cellActive = null;
 let sortField  = 'nom';
 let sortDir    = 'asc';
 let searchTerm = '';
+const isAdmin  = <?= $isAdminJs ?>;
+let deptFiltre = <?= $deptUserJs ?>; // nominateur : filtré sur son dept
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
 function spinner(show) { $('#spinner').toggleClass('show', show); }
@@ -753,7 +765,7 @@ function lignesFiltreesTriees() {
             String(l.ville           ?? '').toLowerCase().includes(term))
         : source;
 
-    const numFields = ['id', 'id_club', 'distance_max_km', 'ordre'];
+    const numFields = ['id', 'id_club', 'distance_max_km'];
     result.sort((a, b) => {
         if (numFields.includes(sortField)) {
             return sortDir === 'asc' ? (+a[sortField]) - (+b[sortField]) : (+b[sortField]) - (+a[sortField]);
@@ -794,8 +806,8 @@ function renderGrille() {
                 ? '<span class="badge-actif">Oui</span>'
                 : '<span class="badge-inactif">Non</span>';
             const defiscHtml = l.defiscalisation
-                ? '<span class="badge-defisc">Oui</span>'
-                : '<span class="badge-no-defisc">Non</span>';
+                ? '<span class="badge-actif">Oui</span>'
+                : '<span class="badge-inactif">Non</span>';
 
             $tr.append(makeTd(l.id,              idx, 'id',              true));
             $tr.append(makeTd(l.grade,            idx, 'grade',           false));
@@ -808,7 +820,6 @@ function renderGrille() {
             $tr.append(makeTd(l.nom_club,         idx, 'nom_club',        true));
             $tr.append(makeTdHtml(defiscHtml,     idx, 'defiscalisation'));
             $tr.append(makeTd(l.distance_max_km,  idx, 'distance_max_km', false));
-            $tr.append(makeTd(l.ordre,            idx, 'ordre',           false));
             $tr.append(makeTdLaPoste(l.cp,        idx, 'cp'));
             $tr.append(makeTdLaPoste(l.ville,     idx, 'ville'));
             // Bouton lien disponibilité
@@ -832,7 +843,7 @@ function renderGrille() {
     $('#lbl-count').text(lblTxt);
 }
 
-const CHAMPS_NUMERIQUES = ['ordre', 'distance_max_km'];
+const CHAMPS_NUMERIQUES = ['distance_max_km'];
 
 function makeTd(val, idx, field, readonly) {
     const $td  = $('<td>').addClass(readonly ? 'col-readonly' : '').attr('data-idx', idx).attr('data-field', field);
@@ -1022,7 +1033,7 @@ $(document).on('blur', '.cell-inner[contenteditable="true"]', function () {
     validerCellule($(this), $(this).closest('td'));
 });
 
-// Bloquer la saisie non numérique dans Ordre et Distance
+// Bloquer la saisie non numérique dans Distance
 $(document).on('keypress', '.cell-inner[contenteditable="true"]', function (e) {
     const field = $(this).closest('td').attr('data-field');
     if (CHAMPS_NUMERIQUES.includes(field)) {
@@ -1036,7 +1047,7 @@ function validerCellule($inner, $td) {
     const field = $td.attr('data-field');
     let   val   = $inner.text().trim();
 
-    // Validation numérique pour Ordre et Distance
+    // Validation numérique pour Distance
     if (CHAMPS_NUMERIQUES.includes(field)) {
         const n = parseInt(val, 10);
         if (val !== '' && (isNaN(n) || n < 0)) {
@@ -1060,13 +1071,12 @@ function validerCellule($inner, $td) {
 // ── Charger depuis la BDD ─────────────────────────────────────────────────────
 function chargerListe() {
     spinner(true);
-    $.post('jugearbitre.php', { action: 'liste' }, function (res) {
+    $.post('jugearbitre.php', { action: 'liste', dept: deptFiltre }, function (res) {
         spinner(false);
         if (!res.ok) { toast(res.msg, false); return; }
         lignes = res.data.map((r, i) => ({
             _idx:            i,
             id:              r.Id_JA,
-            ordre:           r.Ordre,
             nom:             r.Nom,
             prenom:          r.Prenom,
             email:           r.Email,
@@ -1143,6 +1153,12 @@ $('#tbl-ja thead th[data-field]').on('click', function () {
     sortDir   = sortField === f ? (sortDir === 'asc' ? 'desc' : 'asc') : 'asc';
     sortField = f;
     renderGrille();
+});
+
+// ── Filtre département ────────────────────────────────────────────────────────
+$('#sel-dept').on('change', function () {
+    deptFiltre = $(this).val();
+    chargerListe();
 });
 
 // ── Recherche ─────────────────────────────────────────────────────────────────

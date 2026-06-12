@@ -84,11 +84,8 @@ $isAdmin     = !empty($u['is_admin']);
 body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-height:100vh; display:flex; flex-direction:column; }
 
 /* ── Toolbar ── */
-#toolbar { background:#c0ffff; border-bottom:1px solid #90cccc; padding:.3rem 1rem; display:flex; align-items:center; justify-content:space-between; font-size:.85rem; gap:.75rem; }
 .ts-user { color:#1a3a6b; font-weight:600; }
 .ts-pwd-warning { display:<?= $changeLogin ? 'inline-flex' : 'none' ?>; align-items:center; gap:.35rem; color:#c00; font-weight:700; cursor:pointer; text-decoration:underline dotted; }
-#btn-switch-admin { display:<?= $isAdmin ? 'inline-flex' : 'none' ?>; align-items:center; gap:.35rem; padding:.25rem .75rem; background:var(--nijac-blue); color:#fff; border:none; border-radius:5px; font-size:.82rem; font-weight:600; text-decoration:none; }
-#btn-switch-admin:hover { background:#0f2550; color:#fff; }
 /* ── En-tête ── */
 #page-header { background:var(--nijac-blue); color:#fff; padding:.65rem 1.25rem; display:flex; align-items:center; gap:.75rem; font-size:.9rem; font-weight:600; }
 
@@ -168,18 +165,13 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 </head>
 <body>
 
-<!-- Toolbar -->
-<div id="toolbar">
-    <span class="ts-user"><i class="bi bi-person-fill me-1"></i><?= $nomComplet ?><?= $departement ? " ($departement)" : '' ?></span>
-    <a class="ts-pwd-warning" href="../changer_mot_de_passe.php"><i class="bi bi-key-fill"></i>Mot de passe à modifier</a>
-    <a id="btn-switch-admin" href="../admin_menu.php"><i class="bi bi-shield-lock-fill"></i>Menu administrateur</a>
-</div>
+<?php require __DIR__ . '/includes/toolbar.php'; ?>
 
 <!-- En-tête -->
 <div id="page-header">
     <i class="bi bi-calendar2-check fs-5"></i>
     <span>Saisie des disponibilités JA <small class="opacity-75">(E021)</small></span>
-    <a href="menu.php" class="ms-auto btn btn-sm btn-outline-light"><i class="bi bi-arrow-left me-1"></i>Menu</a>
+    <a href="menu.php" class="ms-auto btn btn-sm btn-outline-light"><i class="bi bi-arrow-left me-1"></i>Retour au menu</a>
 </div>
 
 <!-- Bandeau département -->
@@ -307,7 +299,7 @@ function chargerJA(dept) {
                 // Lien vers disponibilite_ja.php dans une nouvelle fenêtre
                 $grid.append(`
                     <a class="ja-card ${gradeClass} ${noDispoClass}"
-                       href="../disponibilite_ja.php?id_ja=${ja.Id_JA}"
+                       href="disponibilite_ja.php?id_ja=${ja.Id_JA}"
                        target="_blank"
                        title="Ouvrir les disponibilités de ${escHtml(ja.Prenom)} ${escHtml(ja.Nom)}">
                         <div class="ja-avatar">${escHtml(initiales)}</div>
