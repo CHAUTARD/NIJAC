@@ -292,7 +292,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <!-- Pied de page -->
     <div class="login-footer">
-        &copy; <?= date('Y') ?> NIJAC &mdash; Tous droits réservés &mdash; Ligue Normandie de tennis de table &mdash; V: 0.01
+        &copy; <?= date('Y') ?> NIJAC &mdash; Tous droits réservés &mdash; Ligue Normandie de tennis de table &mdash; V: 0.03
     </div>
 
 </div>

@@ -165,8 +165,10 @@ if ($action !== '') {
         $jaCols = array_column($pdo->query('DESCRIBE ja')->fetchAll(), 'Field');
         $hasCp    = in_array('Cp',    $jaCols);
         $hasVille = in_array('Ville', $jaCols);
+        $hasNote  = in_array('Note',  $jaCols);
         $cpExpr    = $hasCp    ? 'COALESCE(lp_ja.CodePostal, ja.Cp)'    : 'lp_ja.CodePostal';
         $villeExpr = $hasVille ? 'COALESCE(lp_ja.Nom, ja.Ville)'        : 'lp_ja.Nom';
+        $noteExpr  = $hasNote  ? 'ja.Note'                               : 'NULL';
 
         $stmt = $pdo->prepare("
             SELECT
@@ -176,6 +178,7 @@ if ($action !== '') {
                 ja.Grade,
                 $cpExpr    AS Cp,
                 $villeExpr AS Ville,
+                $noteExpr  AS Note,
                 d.Reponse  AS Disponibilite,
                 (d.Id_Rencontre = ?)             AS PrefereRenc,
                 $distExpr                         AS DistanceKm,
@@ -471,6 +474,10 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 /* ── Pied ── */
 #page-footer { background:#e8eef7; border-top:1px solid #c8d4e8; padding:.5rem 1.25rem; font-size:.75rem; color:#6b7280; text-align:right; }
 
+/* ── Bouton note JA ── */
+.btn-note-ja { background:#f0c040; color:#1a3a6b; border:none; font-size:.8rem; font-weight:700; padding:.3rem .75rem; border-radius:5px; line-height:1.4; flex-shrink:0; box-shadow:0 2px 5px rgba(0,0,0,.2); }
+.btn-note-ja:hover { background:#e0b030; color:#1a3a6b; }
+
 /* ── Spinner ── */
 .spinner-sm { width:1rem; height:1rem; }
 
@@ -599,6 +606,29 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
             <div class="modal-body py-2">
                 <p class="mb-2" id="msg-envoi-resume" style="font-size:.85rem"></p>
                 <div id="liensBody"></div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fermer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modale note JA (lecture seule) -->
+<div class="modal fade" id="modalNoteJa" tabindex="-1" aria-labelledby="modalNoteJaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2" style="background:#1a3a6b;color:#fff">
+                <h5 class="modal-title fs-6" id="modalNoteJaLabel">
+                    <i class="bi bi-sticky-fill me-2" style="color:#f0c040"></i>Note de <span id="note-ja-nom"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-2" style="font-size:.78rem"><i class="bi bi-info-circle me-1"></i>Information communiquée par le JA à destination des nominateurs.</p>
+                <div id="note-ja-texte"
+                     class="p-3 rounded"
+                     style="background:#fffde7;border:1px solid #f0c040;font-size:.88rem;white-space:pre-wrap;min-height:60px"></div>
             </div>
             <div class="modal-footer py-2">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fermer</button>
@@ -840,7 +870,7 @@ function chargerCandidats(idRenc) {
             return;
         }
 
-        // Afficher les 3 premiers candidats (les autres en complément)
+        // Afficher les 5 premiers candidats
         r.data.forEach((ja, idx) => {
             const rang = idx + 1;
             const estAffecter = !!(nominations[idRenc] && nominations[idRenc].Id_JA == ja.Id_JA);
@@ -854,11 +884,15 @@ function chargerCandidats(idRenc) {
             badges += `<span class="badge ${ja.Disponibilite === 'O' ? 'badge-dispo-O' : 'badge-dispo-P'} rounded-pill">${ja.Disponibilite === 'O' ? 'Disponible' : 'Partiel'}</span>`;
 
             const btnLabel = estAffecter ? 'Affecter' : 'Affecter';
+            const noteBtn = ja.Note
+                ? `<button class="btn btn-note-ja btn-note-ja-trigger" data-note="${escHtml(ja.Note)}" data-nom="${escHtml(ja.Prenom + ' ' + ja.Nom)}"><i class="bi bi-sticky-fill me-1"></i>Note</button>`
+                : '';
             const card = $(`
                 <div class="cand-card" data-ja="${ja.Id_JA}" data-nom="${escHtml(ja.Nom)}" data-prenom="${escHtml(ja.Prenom)}">
                     <div class="cand-header">
                         <span class="cand-rang">${rang}</span>
                         <span class="cand-nom">${escHtml(ja.Prenom)} ${escHtml(ja.Nom)}</span>
+                        ${noteBtn}
                         ${ja.Grade ? `<span class="cand-grade">${escHtml(ja.Grade)}</span>` : ''}
                     </div>
                     <div class="cand-body">
@@ -1053,6 +1087,16 @@ function envoyerConvocations() {
         if (envoyes > 0 || (r.liens || []).length > 0) $('#btn-envoyer').hide();
     });
 }
+
+// ── Note JA (lecture seule) ───────────────────────────────────────────────────
+$(document).on('click', '.btn-note-ja-trigger', function (e) {
+    e.stopPropagation();
+    const note = $(this).data('note');
+    const nom  = $(this).data('nom');
+    $('#note-ja-nom').text(nom);
+    $('#note-ja-texte').text(note);
+    new bootstrap.Modal('#modalNoteJa').show();
+});
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
 function escHtml(s) {

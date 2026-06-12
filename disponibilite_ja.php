@@ -25,13 +25,17 @@ if (isset($_GET['ja']) && $_GET['ja'] !== '') {
 
 $pdo = getPDO();
 
-// ── Initialisation : colonne Preference dans disponible ──────────────────────
-// Reponse ENUM('O','P','N') et Id_Rencontre nullable existent déjà en base.
-// On ajoute uniquement Preference si absente (pour les rencontres en mode Partiel).
+// ── Initialisation : colonnes optionnelles ────────────────────────────────────
 try {
+    // Colonne Preference dans disponible
     $cols = array_column($pdo->query('DESCRIBE disponible')->fetchAll(), 'Field');
     if (!in_array('Preference', $cols)) {
         $pdo->exec("ALTER TABLE disponible ADD COLUMN Preference TINYINT NULL COMMENT '1=faible … 10=forte'");
+    }
+    // Colonne Note dans JA
+    $jaCols = array_column($pdo->query('DESCRIBE JA')->fetchAll(), 'Field');
+    if (!in_array('Note', $jaCols)) {
+        $pdo->exec("ALTER TABLE JA ADD COLUMN Note TEXT NULL COMMENT 'Note à destination des nominateurs'");
     }
     // Contrainte unicité rencontre-niveau (peut déjà exister)
     try {
@@ -318,6 +322,28 @@ if ($action !== '') {
                . '://' . $_SERVER['HTTP_HOST']
                . rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\') . '/disponibilite_ja.php';
         echo json_encode(['ok' => true, 'token' => $token, 'url' => "$base?ja=$token"]);
+        exit;
+    }
+
+    // ── Lire la note du JA ────────────────────────────────────────────────
+    if ($action === 'lire_note') {
+        $id = (int)($_GET['id_ja'] ?? $_POST['id_ja'] ?? 0);
+        if (!$id) { echo json_encode(['ok' => false, 'err' => 'ID manquant']); exit; }
+        $stmt = $pdo->prepare("SELECT Note FROM JA WHERE Id_JA = ?");
+        $stmt->execute([$id]);
+        $row = $stmt->fetch();
+        echo json_encode(['ok' => true, 'note' => $row ? ($row['Note'] ?? '') : '']);
+        exit;
+    }
+
+    // ── Sauvegarder la note du JA ─────────────────────────────────────────
+    if ($action === 'sauvegarder_note') {
+        $id   = (int)($_POST['id_ja'] ?? 0);
+        $note = trim($_POST['note'] ?? '');
+        if (!$id) { echo json_encode(['ok' => false, 'err' => 'ID manquant']); exit; }
+        $pdo->prepare("UPDATE JA SET Note = ? WHERE Id_JA = ?")
+            ->execute([$note === '' ? null : $note, $id]);
+        echo json_encode(['ok' => true]);
         exit;
     }
 
@@ -634,6 +660,40 @@ try {
             <span id="ja-ib-cp"></span> <span id="ja-ib-ville"></span>
         </span>
     </span>
+    <!-- Bouton Note (visible seulement quand un JA est chargé) -->
+    <button id="btn-note" class="btn btn-sm ms-auto d-none"
+            style="background:#f0c040;color:#1a3a6b;border:none;font-size:.84rem;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.3)"
+            data-bs-toggle="modal" data-bs-target="#modal-note">
+        <i class="bi bi-sticky-fill me-1"></i>Note
+    </button>
+</div>
+
+<!-- ── Modale Note ─────────────────────────────────────────────────────────── -->
+<div class="modal fade" id="modal-note" tabindex="-1" aria-labelledby="modal-note-label" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" style="background:var(--nijac-blue);color:#fff">
+                <h5 class="modal-title" id="modal-note-label">
+                    <i class="bi bi-sticky me-2"></i>Note à destination des nominateurs
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted" style="font-size:.83rem">
+                    Cette note est visible par les nominateurs lors de la désignation des juges-arbitres.
+                </p>
+                <textarea id="note-texte" class="form-control" rows="6"
+                          placeholder="Saisissez ici vos informations (contraintes ponctuelles, préférences, indisponibilités particulières…)"></textarea>
+            </div>
+            <div class="modal-footer">
+                <span id="note-spin" class="spin-sm d-none me-auto"></span>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" id="btn-save-note" class="btn btn-primary btn-sm px-4">
+                    <i class="bi bi-floppy me-1"></i>Enregistrer
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Message d'erreur si aucun paramètre JA dans l'URL -->
@@ -748,8 +808,43 @@ function chargerInfosJA() {
             $('#ja-ib-loc').hide();
         }
         $('#ja-info-bar').css('display', 'flex');
+        $('#btn-note').removeClass('d-none');
     });
 }
+
+// ── Modale Note ───────────────────────────────────────────────────────────────
+$('#modal-note').on('show.bs.modal', function () {
+    $('#note-texte').val('').prop('disabled', true);
+    $('#note-spin').removeClass('d-none');
+    $.getJSON('disponibilite_ja.php', { action: 'lire_note', id_ja: idJaCourant }, function (r) {
+        $('#note-spin').addClass('d-none');
+        $('#note-texte').val(r.ok ? (r.note || '') : '').prop('disabled', false).trigger('focus');
+    });
+});
+
+$('#btn-save-note').on('click', function () {
+    const note = $('#note-texte').val();
+    $('#note-spin').removeClass('d-none');
+    $('#btn-save-note').prop('disabled', true);
+    $.post('disponibilite_ja.php', {
+        action: 'sauvegarder_note',
+        id_ja:  idJaCourant,
+        note:   note,
+    }, function (r) {
+        $('#note-spin').addClass('d-none');
+        $('#btn-save-note').prop('disabled', false);
+        if (r.ok) {
+            bootstrap.Modal.getInstance($('#modal-note')[0]).hide();
+            toast('Note enregistrée.');
+        } else {
+            toast('Erreur : ' + r.err, false);
+        }
+    }, 'json').fail(function () {
+        $('#note-spin').addClass('d-none');
+        $('#btn-save-note').prop('disabled', false);
+        toast('Erreur réseau.', false);
+    });
+});
 
 function chargerSaisons() {
     $.getJSON('disponibilite_ja.php?action=saisons', function (r) {
