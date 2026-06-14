@@ -40,7 +40,8 @@ if ($action !== '') {
             // CP/Ville proviennent toujours de la salle principale (EstPrincipale=1)
             $selectPrincipale = 'SELECT c.Id_Club, c.Nom,
                                         lp.CodePostal,
-                                        lp.Nom AS Ville
+                                        lp.Nom AS Ville,
+                                        (SELECT COUNT(*) FROM Salle s2 WHERE s2.Id_Club = c.Id_Club) AS NbSalles
                                  FROM Club c
                                  LEFT JOIN Salle   sp ON sp.Id_Club    = c.Id_Club
                                                      AND sp.EstPrincipale = 1
@@ -181,6 +182,7 @@ $changeLogin = !empty($moi['change_login']);
 
     <link rel="stylesheet" href="asset/css/bootstrap.min.css">
     <link rel="stylesheet" href="asset/css/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="asset/css/nijac.css">
 
     <style>
         :root { --nijac-blue: #1a3a6b; }
@@ -193,32 +195,6 @@ $changeLogin = !empty($moi['change_login']);
             height: 100vh;
             overflow: hidden;
         }
-
-/* ── MenuStrip ── */
-        #menu-strip {
-            background: #f8f9fa;
-            border-bottom: 1px solid #dee2e6;
-            padding: .25rem .75rem;
-            display: flex;
-            align-items: center;
-            gap: .25rem;
-            flex-shrink: 0;
-        }
-        .menu-item {
-            display: inline-flex;
-            align-items: center;
-            gap: .4rem;
-            padding: .25rem .75rem;
-            font-size: .85rem;
-            border: 1px solid transparent;
-            border-radius: 4px;
-            background: none;
-            cursor: pointer;
-            white-space: nowrap;
-            color: #212529;
-        }
-        .menu-item:hover { background: #e8eef7; border-color: #c8d4e8; }
-        .menu-item img   { width: 18px; height: 18px; object-fit: contain; }
 
         /* ── En-tête ── */
         #page-header {
@@ -279,16 +255,6 @@ $changeLogin = !empty($moi['change_login']);
             background: #f0f4fa;
         }
 
-        /* ── Barre d'état ── */
-        #status-bar {
-            background: #e8eef7;
-            border-top: 1px solid #c8d4e8;
-            padding: .25rem 1rem;
-            font-size: .8rem;
-            color: #374151;
-            flex-shrink: 0;
-            min-height: 26px;
-        }
 
         /* ── Recherche ── */
         #search-input {
@@ -335,10 +301,10 @@ $changeLogin = !empty($moi['change_login']);
 <!-- MenuStrip -->
 <div id="menu-strip">
     <button class="menu-item" id="btn-importer" title="Edition 203 FFTT : Liste des clubs du comité D76 - SEINE MARITIME">
-        <img src="img/Importer_32.png" alt="">Importation Excel (xlsx)
+        <i class="bi bi-file-earmark-arrow-up"></i>Importation Excel (xlsx)
     </button>
     <button class="menu-item" id="btn-maj-bdd">
-        <img src="img/MAJ_Database_32.png" alt="">Mettre à jour la Base de données
+        <i class="bi bi-database-fill-up"></i>Mettre à jour la Base de données
     </button>
     <input type="file" id="file-input" accept=".xlsx" style="display:none">
     <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 club(s)</span>
@@ -355,6 +321,9 @@ $changeLogin = !empty($moi['change_login']);
         <option value="61">61 — Orne</option>
         <option value="76">76 — Seine-Maritime</option>
     </select>
+    <button class="menu-item" id="btn-plusieurs-salles" title="Afficher uniquement les clubs ayant plusieurs salles" style="border-color:transparent;">
+        <i class="bi bi-door-open me-1"></i>Plusieurs salles
+    </button>
     <input type="search" id="search-input" placeholder="🔍 Rechercher…">
 </div>
 
@@ -384,8 +353,7 @@ $changeLogin = !empty($moi['change_login']);
     </table>
 </div>
 
-<!-- Barre d'état -->
-<div id="status-bar">Prêt. &mdash; Cliquez sur une cellule puis appuyez sur <kbd>F2</kbd> pour modifier.</div>
+<?php $statusInitial = 'Prêt. — Cliquez sur une cellule puis appuyez sur F2 pour modifier.'; ?>
 
 <!-- Toast -->
 <div id="toast-container"></div>
@@ -395,12 +363,13 @@ $changeLogin = !empty($moi['change_login']);
 <script>
 'use strict';
 
-let lignes     = [];
-let cellActive = null;
-let sortField  = 'id_club';
-let sortDir    = 'asc';
-let searchTerm = '';
-let deptFiltre = '';
+let lignes           = [];
+let cellActive       = null;
+let sortField        = 'id_club';
+let sortDir          = 'asc';
+let searchTerm       = '';
+let deptFiltre       = '';
+let filtreMultiSalle = false;
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
 function spinner(show) { $('#spinner').toggleClass('show', show); }
@@ -426,13 +395,13 @@ function toast(msg, ok = true) {
 // ── Tri & Recherche ───────────────────────────────────────────────────────────
 function lignesFiltreesTriees() {
     const term = searchTerm.toLowerCase();
-    let result = term
-        ? lignes.filter(l =>
-            String(l.id_club     ?? '').toLowerCase().includes(term) ||
-            String(l.nom         ?? '').toLowerCase().includes(term) ||
-            String(l.code_postal ?? '').toLowerCase().includes(term) ||
-            String(l.ville       ?? '').toLowerCase().includes(term))
-        : [...lignes];
+    let result = [...lignes];
+    if (filtreMultiSalle) result = result.filter(l => (l.nb_salles ?? 0) > 1);
+    if (term) result = result.filter(l =>
+        String(l.id_club     ?? '').toLowerCase().includes(term) ||
+        String(l.nom         ?? '').toLowerCase().includes(term) ||
+        String(l.code_postal ?? '').toLowerCase().includes(term) ||
+        String(l.ville       ?? '').toLowerCase().includes(term));
 
     result.sort((a, b) => {
         const va = String(a[sortField] ?? '').toLowerCase();
@@ -551,7 +520,14 @@ function chargerListe() {
             nom:         r.Nom,
             code_postal: r.CodePostal ?? '',
             ville:       r.Ville      ?? '',
+            nb_salles:   +(r.NbSalles ?? 0),
         }));
+        const aMultiSalles = lignes.some(l => l.nb_salles > 1);
+        $('#btn-plusieurs-salles').toggle(aMultiSalles);
+        if (!aMultiSalles && filtreMultiSalle) {
+            filtreMultiSalle = false;
+            $('#btn-plusieurs-salles').css({ background: '', color: '', borderColor: 'transparent' });
+        }
         renderGrille();
     }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
 }
@@ -612,6 +588,18 @@ $('#tbl-clubs thead th[data-field]').on('click', function () {
     renderGrille();
 });
 
+// ── Filtre plusieurs salles ───────────────────────────────────────────────────
+$('#btn-plusieurs-salles').on('click', function () {
+    filtreMultiSalle = !filtreMultiSalle;
+    $(this).toggleClass('active', filtreMultiSalle)
+           .css({
+               background:   filtreMultiSalle ? '#1a3a6b' : '',
+               color:        filtreMultiSalle ? '#fff'    : '',
+               borderColor:  filtreMultiSalle ? '#1a3a6b' : 'transparent',
+           });
+    renderGrille();
+});
+
 // ── Filtre département ────────────────────────────────────────────────────────
 $('#sel-dept').on('change', function () {
     deptFiltre = $(this).val();
@@ -627,5 +615,6 @@ $('#search-input').on('input', function () {
 // ── Init ──────────────────────────────────────────────────────────────────────
 $(function () { chargerListe(); });
 </script>
+<?php require __DIR__ . '/includes/footer.php'; ?>
 </body>
 </html>

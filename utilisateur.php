@@ -346,8 +346,15 @@ $changeLogin = !empty($moi['change_login']);
         </div>
 
         <div class="mb-2">
-            <label class="form-label" for="num-dept">Département :</label>
-            <input type="number" id="num-dept" class="form-control form-control-sm" min="0" max="999" value="0" style="width:100px">
+            <label class="form-label" for="cbo-dept">Département :</label>
+            <select id="cbo-dept" class="form-select form-select-sm" style="max-width:280px">
+                <option value="0">— Tous les départements —</option>
+                <option value="14">14 — Calvados</option>
+                <option value="27">27 — Eure</option>
+                <option value="50">50 — Manche</option>
+                <option value="61">61 — Orne</option>
+                <option value="76">76 — Seine-Maritime</option>
+            </select>
         </div>
 
         <div class="mb-2">
@@ -375,13 +382,13 @@ $changeLogin = !empty($moi['change_login']);
         <!-- Boutons -->
         <div id="panel-boutons">
             <button class="btn btn-sm btn-nouveau px-3" id="btn-nouveau">
-                <img src="img/Ajouter.png" alt="" width="18" height="18" class="me-1">Nouveau
+                <i class="bi bi-plus-circle me-1"></i>Nouveau
             </button>
             <button class="btn btn-sm btn-enregistrer px-3" id="btn-enregistrer">
-                <img src="img/MiseaJour.png" alt="" width="18" height="18" class="me-1">Enregistrer
+                <i class="bi bi-floppy me-1"></i>Enregistrer
             </button>
             <button class="btn btn-sm btn-supprimer px-3" id="btn-supprimer" disabled>
-                <img src="img/Supprimer.png" alt="" width="18" height="18" class="me-1">Supprimer
+                <i class="bi bi-trash3 me-1"></i>Supprimer
             </button>
         </div>
 
@@ -466,7 +473,7 @@ function selectionnerLigne($tr) {
         $('#txt-nom').val(u.Nom);
         $('#txt-prenom').val(u.Prenom);
         $('#cbo-role').val(u.Role);
-        $('#num-dept').val(u.Id_Departement);
+        $('#cbo-dept').val(u.Id_Departement);
         $('#txt-mdp').val('');
         $('#chk-actif').prop('checked', parseInt(u.Actif) === 1);
         $('#chk-change-login').prop('checked', parseInt(u.ChangeLogin) === 1);
@@ -485,7 +492,7 @@ $('#btn-nouveau').on('click', function () {
     $('#txt-nom').val('');
     $('#txt-prenom').val('');
     $('#cbo-role').val('Utilisateur');
-    $('#num-dept').val(0);
+    $('#cbo-dept').val(0);
     $('#txt-mdp').val('');
     $('#chk-actif').prop('checked', true);
     $('#chk-change-login').prop('checked', true);
@@ -503,7 +510,7 @@ $('#btn-enregistrer').on('click', function () {
         nom:          $('#txt-nom').val().trim(),
         prenom:       $('#txt-prenom').val().trim(),
         role:         $('#cbo-role').val(),
-        dept:         $('#num-dept').val(),
+        dept:         $('#cbo-dept').val(),
         mdp:          $('#txt-mdp').val(),
         actif:        $('#chk-actif').is(':checked') ? '1' : '0',
         change_login: $('#chk-change-login').is(':checked') ? '1' : '0',
@@ -542,5 +549,6 @@ $(function () {
     chargerListe();
 });
 </script>
+<?php require __DIR__ . '/includes/footer.php'; ?>
 </body>
 </html>

@@ -77,5 +77,6 @@ $changeLogin = !empty($moi['change_login']);
 
 <script src="asset/js/jquery-3.7.1.min.js"></script>
 <script src="asset/js/bootstrap.bundle.min.js"></script>
+<?php require __DIR__ . '/includes/footer.php'; ?>
 </body>
 </html>

@@ -48,6 +48,19 @@ function listeSauvegardes(string $sqlDir): array {
     ], $files);
 }
 
+/** Retourne la liste des fichiers Full_*.sql triés du plus récent au plus ancien. */
+function listeSauvegardesTotal(string $sqlDir): array {
+    if (!is_dir($sqlDir)) return [];
+    $files = glob($sqlDir . '/Full_*.sql');
+    if (!$files) return [];
+    usort($files, fn($a, $b) => filemtime($b) - filemtime($a));
+    return array_map(fn($f) => [
+        'nom'    => basename($f),
+        'taille' => round(filesize($f) / 1024, 1),
+        'date'   => date('d/m/Y H:i', filemtime($f)),
+    ], $files);
+}
+
 // ── Points d'API AJAX ────────────────────────────────────────────────────────
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
@@ -62,6 +75,12 @@ if ($action !== '') {
         if ($action === 'liste_sauvegardes') {
             ob_end_clean();
             echo json_encode(['ok' => true, 'fichiers' => listeSauvegardes($sqlDir)]);
+            exit;
+        }
+
+        if ($action === 'liste_sauvegardes_total') {
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'fichiers' => listeSauvegardesTotal($sqlDir)]);
             exit;
         }
 
@@ -145,6 +164,77 @@ if ($action !== '') {
                 'msg'     => 'Sauvegarde effectuée et tables vidées avec succès.',
                 'fichier' => $filename,
                 'lignes'  => substr_count($sql, "\n") + 1,
+            ]);
+            exit;
+        }
+
+        // ── Sauvegarde totale ─────────────────────────────────────────────────
+        if ($action === 'sauvegarde_totale') {
+
+            if (!is_dir($sqlDir) && !mkdir($sqlDir, 0755, true)) {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => 'Impossible de créer le répertoire /SQL/.']);
+                exit;
+            }
+
+            $filename = 'Full_' . date('YmdHi') . '.sql';
+            $filepath = $sqlDir . '/' . $filename;
+
+            // Récupérer toutes les tables de la base
+            $tables = $pdo->query("SHOW TABLES")->fetchAll(\PDO::FETCH_COLUMN);
+
+            $lines = [];
+            $lines[] = '-- NIJAC sauvegarde totale de la base de données';
+            $lines[] = '-- Fichier  : ' . $filename;
+            $lines[] = '-- Date     : ' . date('d/m/Y H:i');
+            $lines[] = '-- Opérateur: ' . $moi['nom'] . ' ' . $moi['prenom'];
+            $lines[] = '-- Tables   : ' . implode(', ', $tables);
+            $lines[] = '';
+            $lines[] = 'SET NAMES utf8mb4;';
+            $lines[] = 'SET FOREIGN_KEY_CHECKS = 0;';
+            $lines[] = '';
+
+            foreach ($tables as $table) {
+                $lines[] = '-- ── ' . $table . ' ──';
+
+                // Structure : CREATE TABLE
+                $createRow = $pdo->query("SHOW CREATE TABLE `$table`")->fetch(\PDO::FETCH_ASSOC);
+                $createSql = $createRow['Create Table'] ?? $createRow[array_key_last($createRow)];
+                $lines[] = "DROP TABLE IF EXISTS `$table`;";
+                $lines[] = $createSql . ';';
+                $lines[] = '';
+
+                // Données
+                $cols = [];
+                foreach ($pdo->query("SHOW COLUMNS FROM `$table`")->fetchAll() as $col) {
+                    $cols[] = $col['Field'];
+                }
+                $rows = $pdo->query("SELECT * FROM `$table`")->fetchAll(\PDO::FETCH_ASSOC);
+                if ($rows) {
+                    $colList = '`' . implode('`, `', $cols) . '`';
+                    foreach ($rows as $r) {
+                        $vals    = array_map(fn($v) => $v === null ? 'NULL' : $pdo->quote($v), array_values($r));
+                        $lines[] = "INSERT INTO `$table` ($colList) VALUES (" . implode(', ', $vals) . ");";
+                    }
+                    $lines[] = '';
+                }
+            }
+            $lines[] = 'SET FOREIGN_KEY_CHECKS = 1;';
+            $sql = implode("\n", $lines);
+
+            if (file_put_contents($filepath, $sql) === false) {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => 'Impossible d\'écrire le fichier de sauvegarde.']);
+                exit;
+            }
+
+            ob_end_clean();
+            echo json_encode([
+                'ok'      => true,
+                'msg'     => 'Sauvegarde totale effectuée avec succès.',
+                'fichier' => $filename,
+                'tables'  => count($tables),
+                'taille'  => round(strlen($sql) / 1024, 1),
             ]);
             exit;
         }
@@ -316,6 +406,24 @@ $changeLogin = !empty($moi['change_login']);
         }
         .info-list li { margin-bottom: .25rem; }
 
+        /* ── Sauvegarde totale : fond vert ── */
+        .card-full .card-head   { background: #d1fae5; border-color: #10b981; }
+        .card-full .card-head h2 { color: #065f46; }
+        .full-list {
+            margin: 0;
+            padding-left: 1.2rem;
+            font-size: .85rem;
+            color: #065f46;
+        }
+        .full-list li { margin-bottom: .25rem; }
+        .card-full .tables-badge span {
+            background: #a7f3d0;
+            border-color: #10b981;
+            color: #065f46;
+        }
+        .btn-full { background: #059669; color: #fff; }
+        .btn-full:hover:not(:disabled) { background: #047857; }
+
         /* ── Badges tables ── */
         .tables-badge {
             display: flex;
@@ -426,14 +534,6 @@ $changeLogin = !empty($moi['change_login']);
         }
         #spinner.show { display: flex; }
 
-        #status-bar {
-            background: #e8eef7;
-            border-top: 1px solid #c8d4e8;
-            padding: .25rem 1rem;
-            font-size: .8rem;
-            color: #374151;
-            flex-shrink: 0;
-        }
 
         /* ── Aucune sauvegarde ── */
         .no-backup {
@@ -569,10 +669,53 @@ $changeLogin = !empty($moi['change_login']);
         <div id="restore-result" class="result-zone"></div>
     </div>
 
+    <!-- ── CARTE 3 : Sauvegarde totale ── -->
+    <div class="op-card card-full">
+        <div class="card-head">
+            <h2>
+                <i class="bi bi-database-fill-down warn-icon"></i>
+                Sauvegarde totale de la base de données
+            </h2>
+            <ul class="full-list">
+                <li>Exporte <strong>toutes les tables</strong> (structure + données) dans un fichier SQL.</li>
+                <li>Le fichier est créé dans <code>/SQL/</code> sous la forme <code>Full_*.sql</code>.</li>
+                <li>Aucune suppression n'est effectuée — opération <strong>non destructive</strong>.</li>
+            </ul>
+            <div class="tables-badge" id="full-tables-badge">
+                <span>Toutes les tables</span>
+            </div>
+        </div>
+
+        <div class="card-body-custom" id="section-full">
+            <h3><i class="bi bi-shield-lock-fill me-1 text-success"></i>Confirmation par mot de passe</h3>
+
+            <div class="pwd-group">
+                <label for="full-password"><i class="bi bi-key-fill me-1"></i>Mot de passe administrateur</label>
+                <div class="input-group">
+                    <input type="password" id="full-password" class="pwd-input"
+                           autocomplete="current-password" placeholder="Entrez votre mot de passe…">
+                    <button class="btn btn-outline-secondary" type="button" id="full-toggle-pwd"
+                            tabindex="-1" title="Afficher / masquer le mot de passe">
+                        <img id="full-eye" src="img/Oeil_Cache_32.png" alt="" width="20" height="20">
+                    </button>
+                </div>
+                <div id="full-msg-pwd" class="pwd-msg text-danger"></div>
+            </div>
+
+            <button id="btn-full" class="btn-action btn-full" disabled>
+                <i class="bi bi-database-fill-down me-2"></i>Sauvegarder toute la base de données
+            </button>
+
+            <!-- Liste des sauvegardes totales existantes -->
+            <div id="full-liste-zone" style="margin-top:1.1rem;"></div>
+        </div>
+
+        <div id="full-result" class="result-zone"></div>
+    </div>
+
 </div><!-- /main-content -->
 
-<!-- Barre d'état -->
-<div id="status-bar">Prêt.</div>
+<?php $statusInitial = 'Prêt.'; ?>
 
 <script src="asset/js/jquery-3.7.1.min.js"></script>
 <script src="asset/js/bootstrap.bundle.min.js"></script>
@@ -771,6 +914,97 @@ $('#btn-restaurer').on('click', function () {
     });
 });
 
+// ═══════════════════════════════════════════════════════════════════
+//  Bloc SAUVEGARDE TOTALE
+// ═══════════════════════════════════════════════════════════════════
+let fullPwdOk  = false;
+let fullTimer  = null;
+
+function chargerListeSauvegardesTotal() {
+    $.get('clean.php', { action: 'liste_sauvegardes_total' }, res => {
+        const $zone = $('#full-liste-zone');
+        if (!res.ok || !res.fichiers.length) {
+            $zone.html('<p class="text-muted" style="font-size:.8rem;margin:0;">Aucune sauvegarde totale existante.</p>');
+            return;
+        }
+        let html = '<p style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:.4rem;"><i class="bi bi-clock-history me-1"></i>Sauvegardes existantes</p><ul style="font-size:.8rem;color:#374151;padding-left:1.1rem;margin:0;">';
+        res.fichiers.forEach(f => {
+            html += `<li><code>${f.nom}</code> &mdash; ${f.taille} Ko &mdash; ${f.date}</li>`;
+        });
+        html += '</ul>';
+        $zone.html(html);
+    }, 'json');
+}
+
+$('#full-password').on('input', function () {
+    const val = $(this).val();
+    fullPwdOk = false;
+    $('#btn-full').prop('disabled', true);
+    $('#full-msg-pwd').text('').removeClass('text-danger text-success');
+
+    clearTimeout(fullTimer);
+    if (val.length < 3) return;
+
+    fullTimer = setTimeout(() => {
+        $.post('clean.php', { action: 'verifier_mdp', password: val }, res => {
+            if (res.ok) {
+                fullPwdOk = true;
+                $('#full-password').removeClass('is-invalid');
+                $('#full-msg-pwd').text('✔ Mot de passe correct.').addClass('text-success').removeClass('text-danger');
+                $('#btn-full').prop('disabled', false);
+            } else {
+                $('#full-password').addClass('is-invalid');
+                $('#full-msg-pwd').text('✖ ' + res.msg).addClass('text-danger').removeClass('text-success');
+            }
+        }, 'json');
+    }, 600);
+});
+
+$('#full-password').on('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); if (fullPwdOk) $('#btn-full').trigger('click'); }
+});
+
+$('#btn-full').on('click', function () {
+    if (!fullPwdOk) return;
+    if (!confirm(
+        'SAUVEGARDE TOTALE\n\n' +
+        'Toutes les tables de la base de données vont être\n' +
+        'exportées (structure + données) dans un fichier SQL.\n\n' +
+        'Confirmer ?'
+    )) return;
+
+    spinner(true);
+    setStatus('Sauvegarde totale en cours…');
+    $(this).prop('disabled', true);
+
+    $.post('clean.php', { action: 'sauvegarde_totale', password: $('#full-password').val() }, res => {
+        spinner(false);
+        const $box = $('#full-result').addClass('show');
+        if (res.ok) {
+            $box.html(
+                `<div class="result-ok">
+                   ✅ <strong>Sauvegarde totale réussie !</strong><br>
+                   Fichier&nbsp;: <code>${res.fichier}</code><br>
+                   ${res.tables} table(s) exportée(s) — ${res.taille} Ko
+                 </div>`
+            );
+            $('#full-password').val('').prop('disabled', true);
+            $('#btn-full').prop('disabled', true);
+            $('#full-msg-pwd').text('');
+            setStatus('Sauvegarde totale terminée — ' + res.fichier);
+            chargerListeSauvegardesTotal();
+        } else {
+            $box.html(`<div class="result-err"><strong>Erreur :</strong> ${res.msg}</div>`);
+            $('#btn-full').prop('disabled', !fullPwdOk);
+            setStatus('Erreur sauvegarde totale : ' + res.msg);
+        }
+    }, 'json').fail(() => {
+        spinner(false);
+        $('#full-result').addClass('show').html('<div class="result-err"><strong>Erreur réseau.</strong></div>');
+        $('#btn-full').prop('disabled', !fullPwdOk);
+    });
+});
+
 // ── Afficher / masquer les mots de passe ─────────────────────────
 function togglePwd(inputId, imgId) {
     const $i = $('#' + inputId);
@@ -780,11 +1014,14 @@ function togglePwd(inputId, imgId) {
 }
 $('#clean-toggle-pwd').on('click',   () => togglePwd('clean-password',   'clean-eye'));
 $('#restore-toggle-pwd').on('click', () => togglePwd('restore-password', 'restore-eye'));
+$('#full-toggle-pwd').on('click',    () => togglePwd('full-password',    'full-eye'));
 
 // ── Initialisation ────────────────────────────────────────────────
 $(function () {
     chargerListeSauvegardes();
+    chargerListeSauvegardesTotal();
 });
 </script>
+<?php require __DIR__ . '/includes/footer.php'; ?>
 </body>
 </html>

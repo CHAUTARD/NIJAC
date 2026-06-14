@@ -221,6 +221,7 @@ $changeLogin = !empty($moi['change_login']);
 
     <link rel="stylesheet" href="asset/css/bootstrap.min.css">
     <link rel="stylesheet" href="asset/css/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="asset/css/nijac.css">
 
     <style>
         :root { --nijac-blue: #1a3a6b; }
@@ -234,33 +235,6 @@ $changeLogin = !empty($moi['change_login']);
             overflow: hidden;
         }
 
-/* ── MenuStrip ── */
-        #menu-strip {
-            background: #f8f9fa;
-            border-bottom: 1px solid #dee2e6;
-            padding: .25rem .75rem;
-            display: flex;
-            align-items: center;
-            gap: .25rem;
-            flex-shrink: 0;
-        }
-
-        .menu-item {
-            display: inline-flex;
-            align-items: center;
-            gap: .4rem;
-            padding: .25rem .75rem;
-            font-size: .85rem;
-            border: 1px solid transparent;
-            border-radius: 4px;
-            background: none;
-            cursor: pointer;
-            white-space: nowrap;
-            color: #212529;
-        }
-        .menu-item:hover { background: #e8eef7; border-color: #c8d4e8; }
-        .menu-item img { width: 18px; height: 18px; object-fit: contain; }
-
         /* ── En-tête ── */
         #page-header {
             background: var(--nijac-blue);
@@ -271,15 +245,6 @@ $changeLogin = !empty($moi['change_login']);
             flex-shrink: 0;
         }
 
-        #status-bar {
-            background: #e8eef7;
-            border-top: 1px solid #c8d4e8;
-            padding: .25rem 1rem;
-            font-size: .8rem;
-            color: #374151;
-            flex-shrink: 0;
-            min-height: 26px;
-        }
 
         /* ── Grille ── */
         #grid-wrapper {
@@ -380,10 +345,10 @@ $changeLogin = !empty($moi['change_login']);
 <!-- MenuStrip -->
 <div id="menu-strip">
     <button class="menu-item" id="btn-importer">
-        <img src="img/Importer_32.png" alt="">Importer Excel
+        <i class="bi bi-file-earmark-arrow-up"></i>Importer Excel
     </button>
     <button class="menu-item" id="btn-maj-bdd">
-        <img src="img/MAJ_Database_32.png" alt="">Mettre à jour la Base de données
+        <i class="bi bi-database-fill-up"></i>Mettre à jour la Base de données
     </button>
     <input type="file" id="file-input" accept=".xlsx" style="display:none">
     <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 correspondant(s)</span>
@@ -432,8 +397,7 @@ $changeLogin = !empty($moi['change_login']);
     </table>
 </div>
 
-<!-- Barre d'état -->
-<div id="status-bar">Prêt. &mdash; Cliquez sur une cellule puis appuyez sur <kbd>F2</kbd> pour modifier.</div>
+<?php $statusInitial = 'Prêt. — Cliquez sur une cellule puis appuyez sur F2 pour modifier.'; ?>
 
 <!-- Toast -->
 <div id="toast-container"></div>
@@ -704,5 +668,6 @@ $('#search-input').on('input', function () {
 // ── Init ──────────────────────────────────────────────────────────────────────
 $(function () { chargerListe(); });
 </script>
+<?php require __DIR__ . '/includes/footer.php'; ?>
 </body>
 </html>

@@ -410,6 +410,7 @@ $changeLogin = !empty($moi['change_login']);
 
     <link rel="stylesheet" href="asset/css/bootstrap.min.css">
     <link rel="stylesheet" href="asset/css/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="asset/css/nijac.css">
 
     <style>
         :root { --nijac-blue: #1a3a6b; }
@@ -422,32 +423,6 @@ $changeLogin = !empty($moi['change_login']);
             height: 100vh;
             overflow: hidden;
         }
-
-/* ── MenuStrip ── */
-        #menu-strip {
-            background: #f8f9fa;
-            border-bottom: 1px solid #dee2e6;
-            padding: .25rem .75rem;
-            display: flex;
-            align-items: center;
-            gap: .25rem;
-            flex-shrink: 0;
-        }
-        .menu-item {
-            display: inline-flex;
-            align-items: center;
-            gap: .4rem;
-            padding: .25rem .75rem;
-            font-size: .85rem;
-            border: 1px solid transparent;
-            border-radius: 4px;
-            background: none;
-            cursor: pointer;
-            white-space: nowrap;
-            color: #212529;
-        }
-        .menu-item:hover { background: #e8eef7; border-color: #c8d4e8; }
-        .menu-item img { width: 18px; height: 18px; object-fit: contain; }
 
         /* ── Option import ── */
         #import-options {
@@ -543,15 +518,6 @@ $changeLogin = !empty($moi['change_login']);
         #pagination-bar button:disabled { opacity: .4; cursor: default; }
         #pagination-bar button:not(:disabled):hover { background: #e8eef7; }
 
-        #status-bar {
-            background: #e8eef7;
-            border-top: 1px solid #c8d4e8;
-            padding: .25rem 1rem;
-            font-size: .8rem;
-            color: #374151;
-            flex-shrink: 0;
-            min-height: 26px;
-        }
 
         /* ── Bouton filtre sans géoloc (état actif) ── */
         #btn-sans-coords.actif {
@@ -642,10 +608,10 @@ $changeLogin = !empty($moi['change_login']);
         <i class="bi bi-plus-circle-fill me-1" style="font-size:1rem;"></i>Nouvelle commune
     </button>
     <button class="menu-item" id="btn-importer">
-        <img src="img/Importer_32.png" alt="">Importation CSV
+        <i class="bi bi-file-earmark-arrow-up"></i>Importation CSV
     </button>
     <button class="menu-item" id="btn-exporter">
-        <img src="img/Exporter_32.png" alt="">Exportation CSV
+        <i class="bi bi-file-earmark-arrow-down"></i>Exportation CSV
     </button>
     <div id="import-options">
         <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer;">
@@ -882,8 +848,7 @@ $changeLogin = !empty($moi['change_login']);
     <button id="btn-next" disabled>Suivant &#8594;</button>
 </div>
 
-<!-- Barre d'état -->
-<div id="status-bar">Prêt.</div>
+<?php $statusInitial = 'Prêt.'; ?>
 
 <!-- Toast -->
 <div id="toast-container"></div>
@@ -1323,5 +1288,6 @@ $(function () {
     chargerListe(0);
 });
 </script>
+<?php require __DIR__ . '/includes/footer.php'; ?>
 </body>
 </html>

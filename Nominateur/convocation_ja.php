@@ -697,6 +697,7 @@ $('#btn-save-frais').on('click', function () {
 // Recalc initial
 recalcTotal();
 </script>
+<?php require __DIR__ . '/../includes/footer.php'; ?>
 </body>
 </html>
 

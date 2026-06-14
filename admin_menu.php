@@ -203,15 +203,6 @@ $isAdmin      = !empty($u['is_admin']);
 
         .btn-club:hover   { color: #fff; }
 
-        /* ── Pied de page ── */
-        #page-footer {
-            background: #e8eef7;
-            border-top: 1px solid #c8d4e8;
-            padding: .5rem 1.25rem;
-            font-size: .75rem;
-            color: #6b7280;
-            text-align: right;
-        }
     </style>
 </head>
 <body>
@@ -310,9 +301,7 @@ $isAdmin      = !empty($u['is_admin']);
     </div>
 
     <!-- Pied de page -->
-    <div id="page-footer">
-        &copy; <?= date('Y') ?> NIJAC &mdash; Tous droits réservés
-    </div>
+    <?php require __DIR__ . '/includes/footer.php'; ?>
 
     <!-- jQuery + Bootstrap JS (local) -->
     <script src="asset/js/jquery-3.7.1.min.js"></script>

@@ -455,10 +455,6 @@ $isAdmin     = !empty($u['is_admin']);
         }
         .stat-box .sv { font-size: 1.6rem; font-weight: 700; color: #1a3a6b; }
         .stat-box .sl { font-size: .75rem; color: #555; }
-        #page-footer {
-            background: #e8eef7; border-top: 1px solid #c8d4e8;
-            padding: .5rem 1.25rem; font-size: .75rem; color: #6b7280; text-align: right;
-        }
     </style>
 </head>
 <body>
@@ -476,12 +472,22 @@ $isAdmin     = !empty($u['is_admin']);
 
 <div id="content">
 
-    <div class="d-flex align-items-center gap-2 mb-3">
+    <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
         <h5 class="mb-0">Fichiers disponibles</h5>
         <button class="btn btn-sm btn-outline-primary" id="btn-refresh">
             <i class="bi bi-arrow-clockwise"></i> Actualiser
         </button>
+        <span class="text-muted" style="font-size:.82rem;">
+            <i class="bi bi-folder2-open me-1"></i>
+            <code><?= htmlspecialchars(str_replace('/', DIRECTORY_SEPARATOR, __DIR__ . '/Importation/Rencontres/')) ?></code>
+            &mdash; fichiers <code>*.xls</code>
+        </span>
     </div>
+    <p class="text-muted mb-3" style="font-size:.82rem;">
+        <i class="bi bi-info-circle me-1"></i>
+        Les fichiers PDF de base ont été convertis en Excel grâce à
+        <a href="https://www.pdfgear.com/fr/" target="_blank" rel="noopener">PDFGear</a>.
+    </p>
 
     <div id="liste-fichiers">
         <div class="text-muted"><i class="bi bi-hourglass-split me-1"></i>Chargement…</div>
@@ -509,7 +515,8 @@ $isAdmin     = !empty($u['is_admin']);
 
 </div>
 
-<div id="page-footer">&copy; <?= date('Y') ?> NIJAC &mdash; Tous droits réservés</div>
+<?php $statusInitial = 'Les fichiers PDF de base ont été convertis en Excel grâce à <a href="https://www.pdfgear.com/fr/" target="_blank" rel="noopener" style="color:#1a3a6b;">PDFGear</a>'; ?>
+<?php require __DIR__ . '/includes/footer.php'; ?>
 
 <script src="asset/js/jquery-3.7.1.min.js"></script>
 <script src="asset/js/bootstrap.bundle.min.js"></script>
@@ -527,7 +534,7 @@ function chargerListe() {
             $('#liste-fichiers').html('<div class="text-muted">Aucun fichier XLS trouvé dans Importation/Rencontres/</div>');
             return;
         }
-        let html = '';
+        let html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.65rem;">';
         r.fichiers.forEach(function (f) {
             html += `<div class="fichier-card">
                 <i class="bi bi-file-earmark-excel text-success fs-4"></i>
@@ -538,6 +545,7 @@ function chargerListe() {
                 </button>
             </div>`;
         });
+        html += '</div>';
         $('#liste-fichiers').html(html);
     });
 }

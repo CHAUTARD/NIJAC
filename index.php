@@ -291,9 +291,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <!-- Pied de page -->
-    <div class="login-footer">
-        &copy; <?= date('Y') ?> NIJAC &mdash; Tous droits réservés &mdash; Ligue Normandie de tennis de table &mdash; V: 0.05
-    </div>
+    <?php require __DIR__ . '/includes/footer.php'; ?>
 
 </div>
 

@@ -443,6 +443,7 @@ $deptUserJs  = $isAdmin ? "''" : "'" . addslashes($moi['id_departement'] ?? '') 
 
     <link rel="stylesheet" href="../asset/css/bootstrap.min.css">
     <link rel="stylesheet" href="../asset/css/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="../asset/css/nijac.css">
 
     <style>
         :root { --nijac-blue: #1a3a6b; }
@@ -455,32 +456,6 @@ $deptUserJs  = $isAdmin ? "''" : "'" . addslashes($moi['id_departement'] ?? '') 
             height: 100vh;
             overflow: hidden;
         }
-
-/* ── MenuStrip ── */
-        #menu-strip {
-            background: #f8f9fa;
-            border-bottom: 1px solid #dee2e6;
-            padding: .25rem .75rem;
-            display: flex;
-            align-items: center;
-            gap: .25rem;
-            flex-shrink: 0;
-        }
-        .menu-item {
-            display: inline-flex;
-            align-items: center;
-            gap: .4rem;
-            padding: .25rem .75rem;
-            font-size: .85rem;
-            border: 1px solid transparent;
-            border-radius: 4px;
-            background: none;
-            cursor: pointer;
-            white-space: nowrap;
-            color: #212529;
-        }
-        .menu-item:hover { background: #e8eef7; border-color: #c8d4e8; }
-        .menu-item img { width: 18px; height: 18px; object-fit: contain; }
 
         /* ── Recherche ── */
         #search-input {
@@ -571,15 +546,6 @@ $deptUserJs  = $isAdmin ? "''" : "'" . addslashes($moi['id_departement'] ?? '') 
             font-weight: 600;
         }
 
-        #status-bar {
-            background: #e8eef7;
-            border-top: 1px solid #c8d4e8;
-            padding: .25rem 1rem;
-            font-size: .8rem;
-            color: #374151;
-            flex-shrink: 0;
-            min-height: 26px;
-        }
 
         /* ── Toggle Tous / Actifs ── */
         #toggle-actif {
@@ -630,16 +596,16 @@ $deptUserJs  = $isAdmin ? "''" : "'" . addslashes($moi['id_departement'] ?? '') 
     <div class="spinner-border text-light" style="width:3rem;height:3rem;"></div>
 </div>
 
-<?php require __DIR__ . '/includes/toolbar.php'; ?>
+<?php require __DIR__ . '../includes/toolbar.php'; ?>
 
 <!-- MenuStrip -->
 <div id="menu-strip">
     <?php if ($isAdmin): ?>
     <button class="menu-item" id="btn-importer">
-        <img src="../img/Importer_32.png" alt="">Importer Excel
+        <i class="bi bi-file-earmark-arrow-up"></i>Importer Excel
     </button>
     <button class="menu-item" id="btn-maj-bdd">
-        <img src="../img/MAJ_Database_32.png" alt="">Mettre à jour la Base de données
+        <i class="bi bi-database-fill-up"></i>Mettre à jour la Base de données
     </button>
     <input type="file" id="file-input" accept=".xlsx" style="display:none">
     <?php endif; ?>
@@ -703,8 +669,7 @@ $deptUserJs  = $isAdmin ? "''" : "'" . addslashes($moi['id_departement'] ?? '') 
     </table>
 </div>
 
-<!-- Barre d'état -->
-<div id="status-bar">Prêt. &mdash; Cliquez sur une cellule puis <kbd>F2</kbd> pour modifier.</div>
+<?php $statusInitial = 'Prêt. — Cliquez sur une cellule puis F2 pour modifier.'; ?>
 
 <!-- Toast -->
 <div id="toast-container"></div>
@@ -1204,5 +1169,6 @@ $(document).on('click', '.btn-lien-dispo', function (e) {
 // ── Init ──────────────────────────────────────────────────────────────────────
 $(function () { chargerListe(); });
 </script>
+<?php require __DIR__ . '/../includes/footer.php'; ?>
 </body>
 </html>

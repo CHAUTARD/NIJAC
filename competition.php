@@ -333,14 +333,6 @@ $changeLogin = !empty($moi['change_login']);
             flex-shrink: 0;
         }
 
-        #status-bar {
-            background: #e8eef7;
-            border-top: 1px solid #c8d4e8;
-            padding: .25rem 1rem;
-            font-size: .8rem;
-            color: #374151;
-            flex-shrink: 0;
-        }
 
         /* ── Toast ── */
         #toast-container { position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; }
@@ -463,8 +455,7 @@ $changeLogin = !empty($moi['change_login']);
     </div>
 </div>
 
-<!-- Barre d'état -->
-<div id="status-bar">Prêt.</div>
+<?php $statusInitial = 'Prêt.'; ?>
 
 <!-- Toast -->
 <div id="toast-container"></div>
@@ -681,5 +672,6 @@ $(document).on('keydown', function (e) {
 // ── Init ──────────────────────────────────────────────────────────────────────
 $(function () { chargerListe(); });
 </script>
+<?php require __DIR__ . '/includes/footer.php'; ?>
 </body>
 </html>

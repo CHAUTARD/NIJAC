@@ -302,13 +302,13 @@ $changeLogin = !empty($moi['change_login']);
         <!-- Boutons -->
         <div id="panel-boutons">
             <button class="btn btn-sm btn-nouveau px-3" id="btn-nouveau">
-                <img src="img/Ajouter.png" alt="" width="18" height="18" class="me-1">Nouveau
+                <i class="bi bi-plus-circle me-1"></i>Nouveau
             </button>
             <button class="btn btn-sm btn-enregistrer px-3" id="btn-enregistrer">
-                <img src="img/MiseaJour.png" alt="" width="18" height="18" class="me-1">Enregistrer
+                <i class="bi bi-floppy me-1"></i>Enregistrer
             </button>
             <button class="btn btn-sm btn-supprimer px-3" id="btn-supprimer" disabled>
-                <img src="img/Supprimer.png" alt="" width="18" height="18" class="me-1">Supprimer
+                <i class="bi bi-trash3 me-1"></i>Supprimer
             </button>
         </div>
 
@@ -451,5 +451,6 @@ $('#btn-supprimer').on('click', function () {
 // ── Init ──────────────────────────────────────────────────────────────────────
 $(function () { chargerListe(); });
 </script>
+<?php require __DIR__ . '/includes/footer.php'; ?>
 </body>
 </html>

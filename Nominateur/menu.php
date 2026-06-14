@@ -153,15 +153,6 @@ $isAdmin     = !empty($u['is_admin']);
         .btn-convocation  { background-color: #fff3e0; }
         .btn-disponibilite { background-color: #e8f5e9; }
 
-        /* ── Pied de page ── */
-        #page-footer {
-            background: #e8eef7;
-            border-top: 1px solid #c8d4e8;
-            padding: .5rem 1.25rem;
-            font-size: .75rem;
-            color: #6b7280;
-            text-align: right;
-        }
     </style>
 </head>
 <body>
@@ -195,12 +186,18 @@ $isAdmin     = !empty($u['is_admin']);
             <span class="btn-desc">Affecter les JA aux rencontres et valider les nominations</span>
         </a>
 
-        <!-- Ligne 2 -->
-
-        <a href="../encours.php" class="menu-btn btn-messagerie">
+        <a href="messagerie.php" class="menu-btn btn-messagerie">
             <div class="btn-icon"><img src="../img/Correspondant.png" alt="Messagerie"></div>
             <span>Messagerie</span>
-            <span class="btn-desc">Envoyer des messages aux JA et correspondants de club</span>
+            <span class="btn-desc">Préparer les messages pour JA et correspondants de club</span>
+        </a>
+
+        <!-- Ligne 2 -->
+
+        <a href="centrenvoye.php" class="menu-btn btn-messagerie">
+            <div class="btn-icon"><img src="../img/Centrenvoye.png" alt="Messagerie"></div>
+            <span>Messagerie</span>
+            <span class="btn-desc">Envoyer les messages envoyés aux JA</span>
         </a>
 
         <!-- Déconnexion -->
@@ -213,9 +210,7 @@ $isAdmin     = !empty($u['is_admin']);
     </div>
 
     <!-- Pied de page -->
-    <div id="page-footer">
-        &copy; <?= date('Y') ?> NIJAC &mdash; Tous droits réservés
-    </div>
+    <?php require __DIR__ . '/../includes/footer.php'; ?>
 
     <script src="../asset/js/jquery-3.7.1.min.js"></script>
     <script src="../asset/js/bootstrap.bundle.min.js"></script>

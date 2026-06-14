@@ -1,0 +1,892 @@
+<?php
+/**
+ * NIJAC – Centre d'envoi de messages (E021)
+ *
+ * Envoie les 4 types de messages aux JA actifs du département connecté.
+ *
+ * Créé par : Patrick CHAUTARD
+ * Date de création : 2026-06-14
+ */
+session_start();
+require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/app_config.php';
+require_once __DIR__ . '/../Classes/Obfuscator.php';
+
+$_obf = new Obfuscator(OBFUSCATOR_SEED);
+
+if (!isset($_SESSION['utilisateur'])) {
+    header('Location: ../index.php');
+    exit;
+}
+$moi     = $_SESSION['utilisateur'];
+$isAdmin = !empty($moi['is_admin']);
+
+// ── Points d'API AJAX ────────────────────────────────────────────────────────
+$action = $_POST['action'] ?? $_GET['action'] ?? '';
+
+if ($action !== '') {
+    header('Content-Type: application/json; charset=utf-8');
+
+    try {
+        $pdo  = getPDO();
+        $dept = str_pad((string)($moi['id_departement'] ?? '76'), 2, '0', STR_PAD_LEFT);
+
+        // Saison courante
+        $saisonRow = $pdo->query("SELECT Saison FROM rencontre ORDER BY Saison DESC LIMIT 1")->fetch();
+        $saison    = $saisonRow['Saison'] ?? null;
+
+        // ── Liste des journées (pour onglet Nomination) ─────────────────────
+        if ($action === 'liste_journees') {
+            if (!$saison) { echo json_encode(['ok' => true, 'data' => []]); exit; }
+            $rows = $pdo->prepare("
+                SELECT r.Journee,
+                       MIN(r.Date) AS DateMin,
+                       MAX(r.Date) AS DateMax,
+                       COUNT(DISTINCT n.Id_JA) AS NbJA
+                FROM rencontre r
+                LEFT JOIN nomination n ON n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
+                WHERE r.Saison = ?
+                GROUP BY r.Journee
+                ORDER BY r.Journee
+            ");
+            $rows->execute([$saison]);
+            echo json_encode(['ok' => true, 'data' => $rows->fetchAll(), 'saison' => $saison]);
+            exit;
+        }
+
+        // ── Liste des JA selon le type ──────────────────────────────────────
+        if ($action === 'liste_ja') {
+            $type    = $_POST['type']    ?? 'Disponibilites';
+            $journee = (int)($_POST['journee'] ?? 0);
+
+            switch ($type) {
+
+                // ── Disponibilités : tous JA actifs du dept ─────────────────
+                case 'Disponibilites':
+                    $stmt = $pdo->prepare("
+                        SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
+                               COALESCE(lp.CodePostal, j.Cp) AS CP
+                        FROM ja j
+                        LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
+                        WHERE j.Actif = 1
+                          AND LEFT(COALESCE(lp.CodePostal, j.Cp, ''), 2) = ?
+                        ORDER BY j.Nom, j.Prenom
+                    ");
+                    $stmt->execute([$dept]);
+                    $rows = $stmt->fetchAll();
+                    break;
+
+                // ── Rappel dispo : JA sans dispo dans la saison courante ────
+                case 'Rappel dispo':
+                    if (!$saison) { $rows = []; break; }
+                    $stmt = $pdo->prepare("
+                        SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
+                               COALESCE(lp.CodePostal, j.Cp) AS CP
+                        FROM ja j
+                        LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
+                        WHERE j.Actif = 1
+                          AND LEFT(COALESCE(lp.CodePostal, j.Cp, ''), 2) = ?
+                          AND NOT EXISTS (
+                              SELECT 1 FROM disponible d
+                              JOIN rencontre r ON r.Date = d.DateCompetition
+                              WHERE d.Id_JA = j.Id_JA AND r.Saison = ?
+                          )
+                        ORDER BY j.Nom, j.Prenom
+                    ");
+                    $stmt->execute([$dept, $saison]);
+                    $rows = $stmt->fetchAll();
+                    break;
+
+                // ── Convocation : JA nominés pour une journée ───────────────
+                case 'Convocation':
+                    if (!$saison || !$journee) { $rows = []; break; }
+                    $stmt = $pdo->prepare("
+                        SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
+                               r.Date, r.Heure, r.Journee, r.Poule,
+                               dv.Division,
+                               ed.Nom AS NomDom, ee.Nom AS NomExt,
+                               n.Id_Rencontre,
+                               co.Nom       AS CorrNom,
+                               co.Email     AS CorrEmail,
+                               co.Telephone AS CorrTel
+                        FROM nomination n
+                        JOIN ja j              ON j.Id_JA         = n.Id_JA
+                        JOIN rencontre r        ON r.Id_Rencontre  = n.Id_Rencontre
+                        JOIN equipe ed          ON ed.Id_Equipe    = r.Id_EquipeDom
+                        LEFT JOIN equipe ee     ON ee.Id_Equipe    = r.Id_EquipeExt
+                        JOIN division dv        ON dv.Id_Division  = r.Id_Division
+                        LEFT JOIN correspondant co ON co.Id_Correspondant = (
+                            SELECT c2.Id_Correspondant
+                            FROM correspondant c2
+                            WHERE c2.Id_Club = j.Id_Club
+                            ORDER BY c2.Id_Correspondant
+                            LIMIT 1
+                        )
+                        WHERE r.Saison = ? AND r.Journee = ? AND n.Valide = 1 AND j.Actif = 1
+                        ORDER BY j.Nom, j.Prenom, r.Date
+                    ");
+                    $stmt->execute([$saison, $journee]);
+                    $rows = $stmt->fetchAll();
+                    break;
+
+                // ── Liste nomination : JA ayant des nominations dans la phase ─
+                case 'Liste nomination':
+                    if (!$saison) { $rows = []; break; }
+                    $stmt = $pdo->prepare("
+                        SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
+                               COUNT(n.Id_JA) AS NbNominations
+                        FROM ja j
+                        LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
+                        JOIN nomination n ON n.Id_JA = j.Id_JA
+                        JOIN rencontre r  ON r.Id_Rencontre = n.Id_Rencontre
+                        WHERE r.Saison = ?
+                          AND j.Actif = 1
+                          AND LEFT(COALESCE(lp.CodePostal, j.Cp, ''), 2) = ?
+                        GROUP BY j.Id_JA, j.Nom, j.Prenom, j.Email
+                        ORDER BY j.Nom, j.Prenom
+                    ");
+                    $stmt->execute([$saison, $dept]);
+                    $rows = $stmt->fetchAll();
+                    break;
+
+                default:
+                    $rows = [];
+            }
+
+            foreach ($rows as &$row) {
+                $row['token'] = $_obf->obfuscate((int)$row['Id_JA']);
+            }
+            unset($row);
+            echo json_encode(['ok' => true, 'data' => $rows, 'dept' => $dept, 'saison' => $saison]);
+            exit;
+        }
+
+        // ── Envoyer les emails ──────────────────────────────────────────────
+        if ($action === 'envoyer') {
+            $type    = trim($_POST['type']    ?? 'Disponibilites');
+            $sujet   = trim($_POST['sujet']   ?? '');
+            $message = trim($_POST['message'] ?? '');
+            $ids     = json_decode($_POST['ids'] ?? '[]', true);
+            $saison  = trim($_POST['saison']  ?? ($saison ?? ''));
+
+            if ($sujet === '' || $message === '') {
+                echo json_encode(['ok' => false, 'msg' => 'Sujet et message obligatoires.']); exit;
+            }
+            if (empty($ids)) {
+                echo json_encode(['ok' => false, 'msg' => 'Aucun destinataire sélectionné.']); exit;
+            }
+
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            $stmtJas = $pdo->prepare("
+                SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
+                       n.Id_Rencontre,
+                       r.Date, r.Heure, r.Journee, r.Poule,
+                       dv.Division,
+                       ed.Nom AS NomDom, ee.Nom AS NomExt,
+                       co.Nom       AS CorrNom,
+                       co.Email     AS CorrEmail,
+                       co.Telephone AS CorrTel
+                FROM ja j
+                LEFT JOIN nomination n     ON n.Id_JA = j.Id_JA AND n.Valide = 1
+                LEFT JOIN rencontre r      ON r.Id_Rencontre  = n.Id_Rencontre
+                LEFT JOIN equipe ed        ON ed.Id_Equipe    = r.Id_EquipeDom
+                LEFT JOIN equipe ee        ON ee.Id_Equipe    = r.Id_EquipeExt
+                LEFT JOIN division dv      ON dv.Id_Division  = r.Id_Division
+                LEFT JOIN correspondant co ON co.Id_Correspondant = (
+                    SELECT c2.Id_Correspondant
+                    FROM correspondant c2
+                    WHERE c2.Id_Club = j.Id_Club
+                    ORDER BY c2.Id_Correspondant
+                    LIMIT 1
+                )
+                WHERE j.Id_JA IN ($placeholders) AND j.Actif = 1
+                  AND j.Email IS NOT NULL AND j.Email <> ''
+                GROUP BY j.Id_JA, j.Nom, j.Prenom, j.Email,
+                         n.Id_Rencontre, r.Date, r.Heure, r.Journee, r.Poule,
+                         dv.Division, ed.Nom, ee.Nom, co.Nom, co.Email, co.Telephone
+                ORDER BY j.Nom, j.Prenom
+            ");
+            $stmtJas->execute(array_map('intval', $ids));
+            $jas = $stmtJas->fetchAll();
+
+            // JA sans email
+            $stmt2 = $pdo->prepare("SELECT COUNT(*) FROM ja WHERE Id_JA IN ($placeholders) AND (Email IS NULL OR Email = '')");
+            $stmt2->execute(array_map('intval', $ids));
+            $sans_email = (int)$stmt2->fetchColumn();
+
+            // Préparer requête nominations pour type "Liste nomination"
+            $stmtNoms = null;
+            if ($type === 'Liste nomination' && $saison) {
+                $stmtNoms = $pdo->prepare("
+                    SELECT r.Date, r.Heure, dv.Division,
+                           ed.Nom AS Dom, ee.Nom AS Ext
+                    FROM nomination n
+                    JOIN rencontre r  ON r.Id_Rencontre = n.Id_Rencontre
+                    JOIN equipe ed    ON ed.Id_Equipe   = r.Id_EquipeDom
+                    LEFT JOIN equipe ee ON ee.Id_Equipe = r.Id_EquipeExt
+                    JOIN division dv  ON dv.Id_Division = r.Id_Division
+                    WHERE n.Id_JA = ? AND r.Saison = ?
+                    ORDER BY r.Date, r.Heure
+                ");
+            }
+
+            $envoyes = 0;
+            $erreurs = [];
+            $modeDev = isModeDeveloppement();
+
+            foreach ($jas as $ja) {
+                $token = $_obf->obfuscate((int)$ja['Id_JA']);
+
+                // Générer la liste des nominations pour "Liste nomination"
+                $listeNoms = '';
+                if ($stmtNoms) {
+                    $stmtNoms->execute([$ja['Id_JA'], $saison]);
+                    $noms = $stmtNoms->fetchAll();
+                    if ($noms) {
+                        $lignes = [];
+                        foreach ($noms as $n) {
+                            $lignes[] = sprintf("%-12s %5s  %-20s  %s vs %s",
+                                $n['Date'], $n['Heure'] ?? '',
+                                $n['Division'],
+                                $n['Dom'], $n['Ext'] ?? ''
+                            );
+                        }
+                        $listeNoms = implode("\n", $lignes);
+                    } else {
+                        $listeNoms = '(aucune nomination)';
+                    }
+                }
+
+                $corps = str_replace(
+                    ['{NOM}', '{PRENOM}', '{NOM_COMPLET}', '{ID_JA}',
+                     '{DATE}', '{HEURE}', '{JOURNEE}', '{POULE}', '{DIVISION}', '{DOM}', '{EXT}',
+                     '{CORR_NOM}', '{CORR_EMAIL}', '{CORR_TEL}',
+                     '{LISTE_NOMINATIONS}'],
+                    [$ja['Nom'], $ja['Prenom'], $ja['Prenom'] . ' ' . $ja['Nom'], $token,
+                     $ja['Date'] ?? '', $ja['Heure'] ?? '', $ja['Journee'] ?? '', $ja['Poule'] ?? '', $ja['Division'] ?? '',
+                     $ja['NomDom'] ?? '', $ja['NomExt'] ?? '',
+                     $ja['CorrNom'] ?? '', $ja['CorrEmail'] ?? '', $ja['CorrTel'] ?? '',
+                     $listeNoms],
+                    $message
+                );
+
+                $dest = getEmailDestinataire($ja['Email']);
+                try {
+                    $mail = getNijacMailer();
+                    $mail->addAddress($dest, $ja['Prenom'] . ' ' . $ja['Nom']);
+                    $mail->Subject = ($modeDev && $dest !== $ja['Email'])
+                        ? "[DEV → {$ja['Email']}] $sujet"
+                        : $sujet;
+                    $mail->Body = $corps;
+                    $mail->send();
+                    $envoyes++;
+                } catch (\Exception $e) {
+                    $erreurs[] = ['nom' => $ja['Prenom'] . ' ' . $ja['Nom'], 'msg' => $e->getMessage()];
+                    error_log('[NIJAC] centrenvoye mail error : ' . $e->getMessage());
+                }
+            }
+
+            echo json_encode([
+                'ok'         => true,
+                'envoyes'    => $envoyes,
+                'erreurs'    => $erreurs,
+                'sans_email' => $sans_email,
+                'mode_dev'   => $modeDev,
+            ]);
+            exit;
+        }
+
+    } catch (PDOException $e) {
+        error_log('[NIJAC] centrenvoye.php PDO : ' . $e->getMessage());
+        echo json_encode(['ok' => false, 'msg' => 'Erreur base de données : ' . $e->getMessage()]);
+        exit;
+    }
+
+    echo json_encode(['ok' => false, 'msg' => 'Action inconnue.']);
+    exit;
+}
+
+// ── Chargement des modèles de messages ───────────────────────────────────────
+$pdo      = getPDO();
+$modeles  = [];
+$rows = $pdo->query("SELECT Type, Sujet, Message FROM messagerie ORDER BY Id_Messagerie")->fetchAll();
+foreach ($rows as $r) {
+    if (!isset($modeles[$r['Type']])) {
+        $modeles[$r['Type']] = ['sujet' => $r['Sujet'], 'message' => $r['Message']];
+    }
+}
+
+$dept        = str_pad((string)($moi['id_departement'] ?? '76'), 2, '0', STR_PAD_LEFT);
+$nomComplet  = htmlspecialchars($moi['nom'] . ' ' . $moi['prenom']);
+$departement = htmlspecialchars($moi['id_departement'] ?? '');
+$changeLogin = !empty($moi['change_login']);
+
+$types = ['Disponibilites', 'Rappel dispo', 'Convocation', 'Liste nomination'];
+$modeleJson = json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS);
+?>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NIJAC – Centre d'envoi (E021)</title>
+
+    <link rel="stylesheet" href="../asset/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../asset/css/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="../asset/css/nijac.css">
+
+    <style>
+        :root { --nijac-blue: #1a3a6b; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #f0f4fa;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #page-header {
+            background: var(--nijac-blue);
+            color: #fff;
+            padding: .5rem 1.25rem;
+            font-size: .9rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        #split-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* ── Panneau message (gauche) ── */
+        #panel-message {
+            width: 55%;
+            display: flex;
+            flex-direction: column;
+            border-right: 2px solid #c8d4e8;
+            background: #fff;
+            overflow: hidden;
+        }
+
+        /* ── Onglets ── */
+        #type-tabs {
+            display: flex;
+            border-bottom: 2px solid #c8d4e8;
+            flex-shrink: 0;
+            background: #f0f4fa;
+        }
+
+        .type-tab {
+            padding: .45rem .9rem;
+            font-size: .8rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            border-bottom: 3px solid transparent;
+            background: none;
+            color: #6b7280;
+            white-space: nowrap;
+            transition: color .15s, border-color .15s;
+        }
+
+        .type-tab:hover   { color: var(--nijac-blue); }
+        .type-tab.active  { color: var(--nijac-blue); border-bottom-color: var(--nijac-blue); background: #fff; }
+
+        /* ── Corps du panneau message ── */
+        #panel-message-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: .75rem 1rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-label {
+            font-size: .82rem;
+            font-weight: 700;
+            color: #374151;
+            margin-bottom: .2rem;
+        }
+
+        #txt-message {
+            resize: vertical;
+            min-height: 220px;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            font-size: .88rem;
+            flex: 1;
+        }
+
+        .hint-vars {
+            font-size: .74rem;
+            color: #6b7280;
+            margin-top: .25rem;
+        }
+
+        /* ── Barre d'envoi ── */
+        #envoi-bar {
+            background: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+            padding: .4rem .75rem;
+            display: flex;
+            align-items: flex-start;
+            gap: .75rem;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+        }
+
+        #result-envoi { font-size: .82rem; flex: 1; }
+
+        /* ── Panneau JA (droite) ── */
+        #panel-ja {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #ja-header {
+            background: steelblue;
+            color: #fff;
+            font-weight: 700;
+            font-size: .85rem;
+            padding: .4rem .75rem;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+        }
+
+        .badge-dept {
+            background: #fff;
+            color: steelblue;
+            font-size: .75rem;
+            padding: .1rem .4rem;
+            border-radius: 3px;
+            font-weight: 700;
+        }
+
+        /* ── Sélecteur journée (Nomination) ── */
+        #journee-bar {
+            background: #fff8e1;
+            border-bottom: 1px solid #ffe082;
+            padding: .35rem .6rem;
+            display: none;
+            align-items: center;
+            gap: .5rem;
+            flex-shrink: 0;
+            font-size: .83rem;
+        }
+
+        #journee-bar.visible { display: flex; }
+
+        /* ── Barre de recherche ── */
+        #ja-search-bar {
+            background: #f0f4fa;
+            border-bottom: 1px solid #c8d4e8;
+            padding: .3rem .6rem;
+            display: flex;
+            align-items: center;
+            gap: .4rem;
+            flex-shrink: 0;
+        }
+
+        #txt-recherche-ja {
+            flex: 1;
+            font-size: .82rem;
+            padding: .2rem .4rem;
+            border: 1px solid #c8d4e8;
+            border-radius: 4px;
+        }
+
+        #ja-list-wrapper { flex: 1; overflow-y: auto; }
+
+        #tbl-ja {
+            width: 100%;
+            font-size: .82rem;
+            border-collapse: collapse;
+        }
+
+        #tbl-ja thead th {
+            background: #e8eef7;
+            border-bottom: 2px solid #c8d4e8;
+            padding: .3rem .4rem;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            white-space: nowrap;
+        }
+
+        #tbl-ja tbody tr { border-bottom: 1px solid #e0e8f0; }
+        #tbl-ja tbody tr:hover { background: #f4f7fc; }
+        #tbl-ja tbody td { padding: .22rem .4rem; }
+
+        .col-sort { cursor: pointer; user-select: none; }
+        .no-email { color: #bbb; font-style: italic; font-size: .75rem; }
+        tr.masque { display: none; }
+
+        /* ── Toast ── */
+        #toast-container { position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; }
+    </style>
+</head>
+<body>
+
+<?php require __DIR__ . '/../includes/toolbar.php'; ?>
+
+<div id="page-header">
+    <i class="bi bi-send-fill me-2"></i>Centre d'envoi
+    <small class="opacity-75 ms-2">(E021)</small>
+    <a href="menu.php" class="btn btn-sm btn-light float-end py-0">
+        <i class="bi bi-arrow-left me-1"></i>Retour menu
+    </a>
+</div>
+
+<div id="split-container">
+
+    <!-- ── Panneau message ── -->
+    <div id="panel-message">
+
+        <!-- Onglets -->
+        <div id="type-tabs">
+            <button class="type-tab active" data-type="Disponibilites">
+                <i class="bi bi-calendar-check me-1"></i>Disponibilités
+            </button>
+            <button class="type-tab" data-type="Rappel dispo">
+                <i class="bi bi-bell me-1"></i>Rappel dispo
+            </button>
+            <button class="type-tab" data-type="Convocation">
+                <i class="bi bi-person-check me-1"></i>Convocation
+            </button>
+            <button class="type-tab" data-type="Liste nomination">
+                <i class="bi bi-list-check me-1"></i>Liste nomination
+            </button>
+        </div>
+
+        <!-- Corps -->
+        <div id="panel-message-body">
+
+            <div class="mb-2">
+                <label class="form-label" for="txt-sujet">Sujet :</label>
+                <input type="text" id="txt-sujet" class="form-control form-control-sm" maxlength="150">
+            </div>
+
+            <div class="mb-1 d-flex flex-column flex-grow-1">
+                <label class="form-label" for="txt-message">Message :</label>
+                <textarea id="txt-message" class="form-control form-control-sm flex-grow-1"></textarea>
+            </div>
+
+            <p id="hint-vars" class="hint-vars mb-2"></p>
+
+        </div>
+
+        <!-- Barre d'envoi -->
+        <div id="envoi-bar">
+            <button class="btn btn-sm btn-success px-3" id="btn-envoyer">
+                <i class="bi bi-send me-1"></i>Envoyer
+            </button>
+            <div id="result-envoi"></div>
+        </div>
+
+    </div>
+
+    <!-- ── Panneau JA ── -->
+    <div id="panel-ja">
+
+        <div id="ja-header">
+            <span id="ja-header-titre">JA actifs</span>
+            <span class="badge-dept">Dép. <?= htmlspecialchars($dept) ?></span>
+            <span id="nb-ja" class="ms-auto opacity-75" style="font-weight:400;font-size:.78rem;"></span>
+        </div>
+
+        <!-- Sélecteur journée (visible seulement pour Nomination) -->
+        <div id="journee-bar">
+            <i class="bi bi-calendar3 text-warning"></i>
+            <label class="fw-bold mb-0" style="font-size:.82rem;">Journée :</label>
+            <select id="cbo-journee" class="form-select form-select-sm" style="max-width:300px;">
+                <option value="">— Sélectionner —</option>
+            </select>
+            <span id="nb-ja-journee" class="text-muted" style="font-size:.78rem;"></span>
+        </div>
+
+        <!-- Recherche -->
+        <div id="ja-search-bar">
+            <i class="bi bi-search text-muted" style="font-size:.82rem;"></i>
+            <input type="text" id="txt-recherche-ja" placeholder="Rechercher…">
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2" id="btn-effacer-recherche" title="Effacer">
+                <i class="bi bi-x"></i>
+            </button>
+            <span id="nb-visibles" class="text-muted" style="font-size:.76rem;white-space:nowrap;"></span>
+        </div>
+
+        <div id="ja-list-wrapper">
+            <table id="tbl-ja">
+                <thead id="tbl-ja-thead">
+                    <tr>
+                        <th style="width:28px">
+                            <input type="checkbox" id="chk-header" checked title="Tout cocher/décocher">
+                        </th>
+                        <th class="col-sort" data-col="1">Nom <span class="sort-icon">↕</span></th>
+                        <th class="col-sort" data-col="2">Prénom <span class="sort-icon">↕</span></th>
+                        <th>Email</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody-ja">
+                    <tr><td colspan="4" class="text-center text-muted py-3">Chargement…</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="../asset/js/jquery-3.7.1.min.js"></script>
+<script src="../asset/js/bootstrap.bundle.min.js"></script>
+<script>
+'use strict';
+
+const MODELES = <?= $modeleJson ?>;
+
+const HINTS = {
+    'Disponibilites':  '{PRENOM}  {NOM}  {NOM_COMPLET}  {ID_JA}',
+    'Rappel dispo':    '{PRENOM}  {NOM}  {NOM_COMPLET}  {ID_JA}',
+    'Convocation':     '{PRENOM}  {NOM}  {NOM_COMPLET}  {ID_JA}  {DATE}  {HEURE}  {JOURNEE}  {POULE}  {DIVISION}  {DOM}  {EXT}  {CORR_NOM}  {CORR_EMAIL}  {CORR_TEL}',
+    'Liste nomination':'{PRENOM}  {NOM}  {NOM_COMPLET}  {ID_JA}  {LISTE_NOMINATIONS}',
+};
+
+const TITRES_JA = {
+    'Disponibilites':  'JA actifs du département',
+    'Rappel dispo':    'JA sans disponibilités saisies',
+    'Convocation':     'JA nominés — journée sélectionnée',
+    'Liste nomination':'JA avec nominations dans la phase',
+};
+
+let typeActif  = 'Disponibilites';
+let saisonCourante = null;
+let sortCol = 1, sortAsc = true;
+
+// ── Utilitaires ───────────────────────────────────────────────────────────────
+function toast(msg, ok = true) {
+    const id  = 'toast-' + Date.now();
+    const cls = ok ? 'text-bg-success' : 'text-bg-danger';
+    $('#toast-container').append(
+        `<div id="${id}" class="toast align-items-center ${cls} border-0 mb-2 show" role="alert">
+           <div class="d-flex">
+             <div class="toast-body">${msg}</div>
+             <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+           </div>
+         </div>`
+    );
+    setTimeout(() => { $(`#${id}`).remove(); }, 4500);
+}
+
+// ── Onglets ───────────────────────────────────────────────────────────────────
+$('.type-tab').on('click', function () {
+    typeActif = $(this).data('type');
+    $('.type-tab').removeClass('active');
+    $(this).addClass('active');
+    chargerModele(typeActif);
+    majColonnesJA(typeActif);
+    const isConv = typeActif === 'Convocation';
+    $('#journee-bar').toggleClass('visible', isConv);
+    if (isConv) {
+        chargerJournees();
+    } else {
+        chargerJA();
+    }
+});
+
+function chargerModele(type) {
+    const m = MODELES[type] || { sujet: '', message: '' };
+    $('#txt-sujet').val(m.sujet || '');
+    $('#txt-message').val(m.message || '');
+    $('#hint-vars').text('Variables : ' + (HINTS[type] || ''));
+    $('#ja-header-titre').text(TITRES_JA[type] || 'JA');
+    $('#result-envoi').html('');
+}
+
+function majColonnesJA(type) {
+    const $thead = $('#tbl-ja-thead tr');
+    $thead.find('th:gt(3)').remove(); // supprimer colonnes extra
+    if (type === 'Convocation') {
+        $thead.append(
+            '<th>Date</th><th>Heure</th><th>Division</th><th>Dom vs Ext</th>'
+        );
+    } else if (type === 'Liste nomination') {
+        $thead.append('<th class="text-center">Nominations</th>');
+    }
+}
+
+// ── Journées (Convocation) ───────────────────────────────────────────────────
+function chargerJournees() {
+    $.post('centrenvoye.php', { action: 'liste_journees' }, function (res) {
+        const $cbo = $('#cbo-journee').empty().append('<option value="">— Sélectionner —</option>');
+        if (res.ok) {
+            saisonCourante = res.saison;
+            res.data.forEach(j => {
+                $cbo.append($('<option>').val(j.Journee).text(
+                    `J${j.Journee}  (${j.DateMin} → ${j.DateMax})  — ${j.NbJA} JA`
+                ));
+            });
+        }
+        $('#tbody-ja').html('<tr><td colspan="8" class="text-center text-muted py-2">Sélectionner une journée</td></tr>');
+    }, 'json');
+}
+
+$('#cbo-journee').on('change', function () {
+    if ($(this).val()) chargerJA();
+    else $('#tbody-ja').html('<tr><td colspan="8" class="text-center text-muted py-2">Sélectionner une journée</td></tr>');
+});
+
+// ── Chargement JA ─────────────────────────────────────────────────────────────
+function chargerJA() {
+    const data = { action: 'liste_ja', type: typeActif };
+    if (typeActif === 'Convocation') {
+        data.journee = $('#cbo-journee').val();
+        if (!data.journee) return;
+    }
+
+    const colSpan = typeActif === 'Convocation' ? 8 : (typeActif === 'Liste nomination' ? 5 : 4);
+    $('#tbody-ja').html(`<tr><td colspan="${colSpan}" class="text-center text-muted py-2"><i class="bi bi-hourglass-split me-1"></i>Chargement…</td></tr>`);
+
+    $.post('centrenvoye.php', data, function (res) {
+        saisonCourante = res.saison;
+        const $body = $('#tbody-ja').empty();
+        if (!res.ok || !res.data.length) {
+            $body.append(`<tr><td colspan="${colSpan}" class="text-center text-muted py-3">Aucun JA.</td></tr>`);
+            $('#nb-ja').text('');
+            return;
+        }
+        let nbEmail = 0;
+        res.data.forEach(ja => {
+            const aEmail = ja.Email && ja.Email.trim() !== '';
+            if (aEmail) nbEmail++;
+            const emailCell = aEmail ? `<span>${ja.Email}</span>`
+                : `<span class="no-email"><i class="bi bi-exclamation-triangle me-1"></i>Pas d'email</span>`;
+
+            const $tr = $('<tr>').attr('data-id', ja.Id_JA).append(
+                $('<td>').append($('<input type="checkbox">').prop('checked', aEmail).prop('disabled', !aEmail).addClass('chk-ja')),
+                $('<td>').text(ja.Nom),
+                $('<td>').text(ja.Prenom),
+                $('<td>').html(emailCell)
+            );
+
+            if (typeActif === 'Convocation') {
+                $tr.append(
+                    $('<td>').text(ja.Date ?? ''),
+                    $('<td>').text(ja.Heure ?? ''),
+                    $('<td>').text(ja.Division ?? ''),
+                    $('<td>').text((ja.NomDom ?? '') + (ja.NomExt ? ' vs ' + ja.NomExt : ''))
+                );
+            } else if (typeActif === 'Liste nomination') {
+                $tr.append($('<td class="text-center">').text(ja.NbNominations ?? ''));
+            }
+            $body.append($tr);
+        });
+        $('#nb-ja').text(`${res.data.length} JA — ${nbEmail} avec email`);
+    }, 'json');
+}
+
+// ── Tri ───────────────────────────────────────────────────────────────────────
+function trierJA(col) {
+    sortAsc = (sortCol === col) ? !sortAsc : true;
+    sortCol = col;
+    $('.sort-icon').text('↕');
+    $(`.col-sort[data-col="${col}"] .sort-icon`).text(sortAsc ? '↑' : '↓');
+    const rows = $('#tbody-ja tr').toArray();
+    rows.sort((a, b) => {
+        const va = $(a).find('td').eq(col).text().trim().toLowerCase();
+        const vb = $(b).find('td').eq(col).text().trim().toLowerCase();
+        return sortAsc ? va.localeCompare(vb, 'fr') : vb.localeCompare(va, 'fr');
+    });
+    rows.forEach(r => $('#tbody-ja').append(r));
+    filtrerJA();
+}
+
+$('#tbl-ja').on('click', '.col-sort', function () { trierJA(parseInt($(this).data('col'))); });
+
+// ── Recherche ─────────────────────────────────────────────────────────────────
+function filtrerJA() {
+    const terme = $('#txt-recherche-ja').val().toLowerCase().trim();
+    let visibles = 0;
+    $('#tbody-ja tr').each(function () {
+        const ok = terme === '' || $(this).text().toLowerCase().includes(terme);
+        $(this).toggleClass('masque', !ok);
+        if (ok) visibles++;
+    });
+    $('#nb-visibles').text(terme ? `${visibles} / ${$('#tbody-ja tr').length}` : '');
+}
+
+$('#txt-recherche-ja').on('input', filtrerJA);
+$('#btn-effacer-recherche').on('click', () => $('#txt-recherche-ja').val('').trigger('input').trigger('focus'));
+
+// ── Cocher/décocher ───────────────────────────────────────────────────────────
+$('#chk-header').on('change', function () { $('.chk-ja:not(:disabled)').prop('checked', this.checked); });
+$('#tbody-ja').on('change', '.chk-ja', function () {
+    const total  = $('.chk-ja:not(:disabled)').length;
+    const coches = $('.chk-ja:not(:disabled):checked').length;
+    $('#chk-header').prop('checked', coches === total);
+});
+
+// ── Envoi ─────────────────────────────────────────────────────────────────────
+$('#btn-envoyer').on('click', function () {
+    const sujet   = $('#txt-sujet').val().trim();
+    const message = $('#txt-message').val().trim();
+    const ids = [], noms = [];
+
+    $('#tbody-ja tr:not(.masque)').each(function () {
+        if ($(this).find('.chk-ja').is(':checked')) {
+            ids.push($(this).data('id'));
+            const tds = $(this).find('td');
+            noms.push(`${tds.eq(1).text().trim()} ${tds.eq(2).text().trim()}`);
+        }
+    });
+
+    if (!sujet || !message) { toast('Le sujet et le message sont obligatoires.', false); return; }
+    if (!ids.length)         { toast('Aucun destinataire sélectionné.', false); return; }
+    if (!confirm(`Envoyer le message à ${ids.length} JA ?\n\n${noms.join('\n')}`)) return;
+
+    $('#btn-envoyer').prop('disabled', true).html('<i class="bi bi-hourglass-split me-1"></i>Envoi…');
+    $('#result-envoi').html('');
+
+    $.post('centrenvoye.php', {
+        action:  'envoyer',
+        type:    typeActif,
+        sujet,
+        message,
+        ids:     JSON.stringify(ids),
+        saison:  saisonCourante ?? '',
+    }, function (res) {
+        $('#btn-envoyer').prop('disabled', false).html('<i class="bi bi-send me-1"></i>Envoyer');
+        if (res.ok) {
+            let txt = `<span class="text-success fw-bold"><i class="bi bi-check-circle me-1"></i>${res.envoyes} email(s) envoyé(s)</span>`;
+            if (res.sans_email > 0) txt += ` &nbsp;<span class="text-muted">${res.sans_email} sans email</span>`;
+            if (res.erreurs.length) {
+                txt += ` &nbsp;<span class="text-danger">${res.erreurs.length} échec(s)</span>`;
+                txt += '<div class="mt-1 text-danger" style="font-size:.76rem;">' +
+                    res.erreurs.map(e => `${e.nom} — ${e.msg}`).join('<br>') + '</div>';
+            }
+            $('#result-envoi').html(txt);
+            const nomsEchecs = res.erreurs.map(e => `${e.nom}`).join(', ');
+            let msgToast = `${res.envoyes} email(s) envoyé(s).`;
+            if (res.erreurs.length) msgToast += ` Échecs : ${nomsEchecs}.`;
+            toast(msgToast, res.erreurs.length === 0);
+        } else {
+            toast(res.msg, false);
+        }
+    }, 'json');
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+$(function () {
+    chargerModele(typeActif);
+    chargerJA();
+});
+</script>
+<?php require __DIR__ . '/../includes/footer.php'; ?>
+</body>
+</html>

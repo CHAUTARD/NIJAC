@@ -52,6 +52,16 @@ if ($action !== '') {
                 exit;
             }
 
+            // Validation JSON pour regles_departements
+            if ($cle === 'regles_departements' && $valeur !== '') {
+                $decoded = json_decode($valeur, true);
+                if (!is_array($decoded)) {
+                    ob_end_clean();
+                    echo json_encode(['ok' => false, 'msg' => 'Format de règles invalide (JSON attendu).']);
+                    exit;
+                }
+            }
+
             // Valeurs autorisées pour etat_logiciel
             if ($cle === 'etat_logiciel' && !in_array($valeur, ['Operationnel', 'Developpement'], true)) {
                 ob_end_clean();
@@ -66,6 +76,20 @@ if ($action !== '') {
                     echo json_encode(['ok' => false, 'msg' => 'Adresse email invalide.']);
                     exit;
                 }
+            }
+
+            // Validation départements_actifs : liste de numéros séparés par virgule
+            if ($cle === 'departements_actifs') {
+                $deptsValides = ['14', '27', '50', '61', '76'];
+                $depts = array_filter(array_map('trim', explode(',', $valeur)));
+                foreach ($depts as $d) {
+                    if (!in_array($d, $deptsValides, true)) {
+                        ob_end_clean();
+                        echo json_encode(['ok' => false, 'msg' => "Département « $d » non reconnu."]);
+                        exit;
+                    }
+                }
+                $valeur = implode(',', $depts);
             }
 
             $stmt = $pdo->prepare(
@@ -99,12 +123,17 @@ if ($action !== '') {
 try {
     $pdo = getPDO();
     initTableConfiguration($pdo);
-    $etatCourant = getConfig('etat_logiciel', 'Developpement');
-    $emailDev    = getConfig('email_developpement', 'patrick.chautard@free.fr');
+    $etatCourant   = getConfig('etat_logiciel', 'Developpement');
+    $emailDev      = getConfig('email_developpement', 'patrick.chautard@free.fr');
+    $deptsActifs      = getConfig('departements_actifs', '14,27,50,61,76');
+    $reglesDepts      = getConfig('regles_departements', '{"76":["27"]}');
 } catch (\Throwable $e) {
-    $etatCourant = 'Developpement';
-    $emailDev    = 'patrick.chautard@free.fr';
+    $etatCourant      = 'Developpement';
+    $emailDev         = 'patrick.chautard@free.fr';
+    $deptsActifs      = '14,27,50,61,76';
+    $reglesDepts      = '{"76":["27"]}';
 }
+$deptsActifsArray = array_map('trim', explode(',', $deptsActifs));
 
 // ── Rendu HTML ────────────────────────────────────────────────────────────────
 $nomComplet  = htmlspecialchars($moi['nom'] . ' ' . $moi['prenom']);
@@ -142,9 +171,10 @@ $changeLogin = !empty($moi['change_login']);
         /* ── Contenu ── */
         #main-content {
             flex: 1;
-            display: flex; flex-direction: column;
-            align-items: center;
-            padding: 2rem 1rem;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            align-items: start;
+            padding: 2rem 1.5rem;
             gap: 1.25rem;
         }
 
@@ -153,7 +183,7 @@ $changeLogin = !empty($moi['change_login']);
             background: #fff;
             border-radius: 10px;
             box-shadow: 0 3px 14px rgba(0,0,0,.10);
-            width: 100%; max-width: 720px;
+            width: 100%;
             overflow: hidden;
         }
         .param-card-head {
@@ -242,10 +272,6 @@ $changeLogin = !empty($moi['change_login']);
             font-size: .85rem; margin-top: .85rem; min-height: 20px;
         }
 
-        #status-bar {
-            background: #e8eef7; border-top: 1px solid #c8d4e8;
-            padding: .25rem 1rem; font-size: .8rem; color: #374151; flex-shrink: 0;
-        }
 
         /* ── Champ email dev ── */
         .email-dev-group label {
@@ -273,6 +299,20 @@ $changeLogin = !empty($moi['change_login']);
         #btn-sauvegarder-email:hover:not(:disabled) { background: #2557a7; }
         #btn-sauvegarder-email:disabled { opacity: .5; cursor: default; }
         #msg-result-email { font-size: .82rem; margin-top: .4rem; min-height: 18px; }
+
+        /* ── Bouton départements & règle 76 ── */
+        #btn-sauvegarder-depts, #btn-sauvegarder-regle76 {
+            padding: .42rem 1.4rem;
+            font-size: .88rem; font-weight: 700;
+            background: var(--nijac-blue); color: #fff;
+            border: none; border-radius: 6px; cursor: pointer;
+            white-space: nowrap; transition: background .2s;
+        }
+        #btn-sauvegarder-depts:hover:not(:disabled),
+        #btn-sauvegarder-regle76:hover:not(:disabled) { background: #2557a7; }
+        #btn-sauvegarder-depts:disabled,
+        #btn-sauvegarder-regle76:disabled { opacity: .5; cursor: default; }
+        #textarea-regle76:focus { outline: none; border-color: #1a3a6b; }
 
         /* ── Spinner ── */
         #spinner {
@@ -398,10 +438,92 @@ $changeLogin = !empty($moi['change_login']);
         </div>
     </div>
 
+    <!-- ── Paramètre : Départements & règle 76 ── -->
+    <div class="param-card">
+        <div class="param-card-head">
+            <i class="bi bi-map-fill param-icon"></i>
+            <div>
+                <h2>Départements concernés &amp; règle particulière</h2>
+                <small>Départements gérés par la ligue et règle spécifique au 76</small>
+            </div>
+        </div>
+        <div class="param-card-body">
+
+            <p style="font-size:.85rem;color:#374151;margin-bottom:1.1rem;">
+                Cochez les départements pris en charge par la ligue.
+                Seuls les clubs et salles de ces départements apparaîtront dans les filtres.
+            </p>
+
+            <!-- Sélection par région -->
+            <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.1rem;">
+                <label for="cbo-region" style="font-size:.85rem;font-weight:600;color:#374151;white-space:nowrap;">
+                    <i class="bi bi-geo-alt-fill me-1"></i>Sélection par région :
+                </label>
+                <select id="cbo-region" class="form-select form-select-sm" style="max-width:320px;">
+                    <option value="">— Choisir une région —</option>
+                    <option value="auvergne-rhone-alpes">Auvergne-Rhône-Alpes</option>
+                    <option value="bourgogne-franche-comte">Bourgogne-Franche-Comté</option>
+                    <option value="bretagne">Bretagne</option>
+                    <option value="centre-val-de-loire">Centre-Val de Loire</option>
+                    <option value="corse">Corse</option>
+                    <option value="grand-est">Grand Est</option>
+                    <option value="guadeloupe">Guadeloupe</option>
+                    <option value="guyane">Guyane</option>
+                    <option value="hauts-de-france">Hauts-de-France</option>
+                    <option value="ile-de-france">Île-de-France</option>
+                    <option value="la-reunion">La Réunion</option>
+                    <option value="martinique">Martinique</option>
+                    <option value="mayotte">Mayotte</option>
+                    <option value="normandie">Normandie</option>
+                    <option value="nouvelle-aquitaine">Nouvelle-Aquitaine</option>
+                    <option value="occitanie">Occitanie</option>
+                    <option value="pays-de-la-loire">Pays de la Loire</option>
+                    <option value="provence-alpes-cote-dazur">Provence-Alpes-Côte d'Azur</option>
+                </select>
+            </div>
+
+            <!-- Cases à cocher départements (rendues par JS) -->
+            <div style="display:flex;flex-wrap:wrap;gap:.6rem 1.4rem;margin-bottom:1.4rem;min-height:32px;" id="depts-checks">
+                <span class="text-muted" style="font-size:.83rem;">Sélectionnez une région pour afficher ses départements.</span>
+            </div>
+
+            <div class="d-flex align-items-center gap-3 mb-4">
+                <button id="btn-sauvegarder-depts">
+                    <i class="bi bi-floppy-fill me-1"></i>Enregistrer les départements
+                </button>
+                <div id="msg-result-depts" style="font-size:.82rem;min-height:18px;"></div>
+            </div>
+
+            <hr style="border-color:#e0e8f0;">
+
+            <!-- Règles d'association génériques -->
+            <div style="margin-top:1.1rem;">
+                <p style="font-size:.85rem;font-weight:600;color:#374151;margin-bottom:.3rem;">
+                    <i class="bi bi-link-45deg me-1 text-warning"></i>
+                    Règles d'association entre départements
+                </p>
+                <p style="font-size:.82rem;color:#6b7280;margin-bottom:.75rem;">
+                    Pour chaque département, cochez ceux qui seront <strong>automatiquement inclus</strong>
+                    lorsqu'il est sélectionné. Sélectionnez d'abord une région ci-dessus.
+                </p>
+                <div id="regles-container">
+                    <span class="text-muted" style="font-size:.82rem;">Sélectionnez d'abord une région pour configurer les règles.</span>
+                </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-3 mt-3">
+                <button id="btn-sauvegarder-regles">
+                    <i class="bi bi-floppy-fill me-1"></i>Enregistrer les règles
+                </button>
+                <div id="msg-result-regles" style="font-size:.82rem;min-height:18px;"></div>
+            </div>
+
+        </div>
+    </div>
+
 </div><!-- /main-content -->
 
-<!-- Barre d'état -->
-<div id="status-bar">État actuel : <?= $etatCourant === 'Developpement' ? 'Développement — emails redirigés' : 'Opérationnel — emails réels' ?></div>
+<?php $statusInitial = 'État actuel : ' . ($etatCourant === 'Developpement' ? 'Développement — emails redirigés' : 'Opérationnel — emails réels'); ?>
 
 <script src="asset/js/jquery-3.7.1.min.js"></script>
 <script src="asset/js/bootstrap.bundle.min.js"></script>
@@ -511,6 +633,250 @@ $('#input-email-dev').on('input', function () {
     $(this).removeClass('is-invalid');
     $('#msg-result-email').text('');
 });
+
+// ── Référentiel complet départements ─────────────────────────────────────────
+const deptNoms = {
+    '01':'Ain','02':'Aisne','03':'Allier','04':'Alpes-de-Haute-Provence',
+    '05':'Hautes-Alpes','06':'Alpes-Maritimes','07':'Ardèche','08':'Ardennes',
+    '09':'Ariège','10':'Aube','11':'Aude','12':'Aveyron','13':'Bouches-du-Rhône',
+    '14':'Calvados','15':'Cantal','16':'Charente','17':'Charente-Maritime',
+    '18':'Cher','19':'Corrèze','2A':'Corse-du-Sud','2B':'Haute-Corse',
+    '21':'Côte-d\'Or','22':'Côtes-d\'Armor','23':'Creuse','24':'Dordogne',
+    '25':'Doubs','26':'Drôme','27':'Eure','28':'Eure-et-Loir','29':'Finistère',
+    '30':'Gard','31':'Haute-Garonne','32':'Gers','33':'Gironde','34':'Hérault',
+    '35':'Ille-et-Vilaine','36':'Indre','37':'Indre-et-Loire','38':'Isère',
+    '39':'Jura','40':'Landes','41':'Loir-et-Cher','42':'Loire',
+    '43':'Haute-Loire','44':'Loire-Atlantique','45':'Loiret','46':'Lot',
+    '47':'Lot-et-Garonne','48':'Lozère','49':'Maine-et-Loire','50':'Manche',
+    '51':'Marne','52':'Haute-Marne','53':'Mayenne','54':'Meurthe-et-Moselle',
+    '55':'Meuse','56':'Morbihan','57':'Moselle','58':'Nièvre','59':'Nord',
+    '60':'Oise','61':'Orne','62':'Pas-de-Calais','63':'Puy-de-Dôme',
+    '64':'Pyrénées-Atlantiques','65':'Hautes-Pyrénées','66':'Pyrénées-Orientales',
+    '67':'Bas-Rhin','68':'Haut-Rhin','69':'Rhône','70':'Haute-Saône',
+    '71':'Saône-et-Loire','72':'Sarthe','73':'Savoie','74':'Haute-Savoie',
+    '75':'Paris','76':'Seine-Maritime','77':'Seine-et-Marne','78':'Yvelines',
+    '79':'Deux-Sèvres','80':'Somme','81':'Tarn','82':'Tarn-et-Garonne',
+    '83':'Var','84':'Vaucluse','85':'Vendée','86':'Vienne','87':'Haute-Vienne',
+    '88':'Vosges','89':'Yonne','90':'Territoire de Belfort','91':'Essonne',
+    '92':'Hauts-de-Seine','93':'Seine-Saint-Denis','94':'Val-de-Marne',
+    '95':'Val-d\'Oise','971':'Guadeloupe','972':'Martinique','973':'Guyane',
+    '974':'La Réunion','976':'Mayotte',
+};
+
+const regionsMap = {
+    'auvergne-rhone-alpes':      ['01','03','07','15','26','38','42','43','63','69','73','74'],
+    'bourgogne-franche-comte':   ['21','25','39','58','70','71','89','90'],
+    'bretagne':                  ['22','29','35','56'],
+    'centre-val-de-loire':       ['18','28','36','37','41','45'],
+    'corse':                     ['2A','2B'],
+    'grand-est':                 ['08','10','51','52','54','55','57','67','68','88'],
+    'guadeloupe':                ['971'],
+    'guyane':                    ['973'],
+    'hauts-de-france':           ['02','59','60','62','80'],
+    'ile-de-france':             ['75','77','78','91','92','93','94','95'],
+    'la-reunion':                ['974'],
+    'martinique':                ['972'],
+    'mayotte':                   ['976'],
+    'normandie':                 ['14','27','50','61','76'],
+    'nouvelle-aquitaine':        ['16','17','19','23','24','33','40','47','64','79','86','87'],
+    'occitanie':                 ['09','11','12','30','31','32','34','46','48','65','66','81','82'],
+    'pays-de-la-loire':          ['44','49','53','72','85'],
+    'provence-alpes-cote-dazur': ['04','05','06','13','83','84'],
+};
+
+// Départements actuellement sauvegardés (depuis PHP)
+let deptsInitiaux = <?= json_encode($deptsActifsArray) ?>;
+
+// Règles d'association sauvegardées : JSON {"76":["27"], "14":["61"], ...}
+let regles = (function () {
+    try { return JSON.parse(<?= json_encode($reglesDepts) ?>) || {}; }
+    catch (e) { return {}; }
+})();
+
+// Reconstruit les cases à cocher de la liste principale
+function rendreCheckboxes(depts, cochés) {
+    const $zone = $('#depts-checks').empty();
+    if (!depts.length) {
+        $zone.append('<span class="text-muted" style="font-size:.83rem;">Aucun département pour cette région.</span>');
+        rendreRegles([]);
+        return;
+    }
+    depts.forEach(num => {
+        const nom     = deptNoms[num] ?? num;
+        const checked = cochés.includes(num) ? 'checked' : '';
+        $zone.append(`
+            <div class="form-check" style="min-width:200px">
+                <input class="form-check-input dept-check" type="checkbox"
+                       id="chk-dept-${num}" value="${num}" ${checked}>
+                <label class="form-check-label" for="chk-dept-${num}" style="font-size:.88rem;">
+                    <strong>${num}</strong> — ${nom}
+                </label>
+            </div>`);
+    });
+
+    appliquerRegles();
+
+    // Réappliquer à chaque changement de case
+    $('#depts-checks').on('change', '.dept-check', appliquerRegles);
+
+    rendreRegles(depts);
+}
+
+// Applique toutes les règles d'association :
+// si un département source est coché, ses associés sont cochés et verrouillés
+function appliquerRegles() {
+    // D'abord déverrouiller tout
+    $('.dept-check').prop('disabled', false);
+
+    Object.entries(regles).forEach(([src, associes]) => {
+        const $src = $('#chk-dept-' + src);
+        if (!$src.length) return;
+        associes.forEach(num => {
+            const $chk = $('#chk-dept-' + num);
+            if (!$chk.length) return;
+            if ($src.is(':checked')) {
+                $chk.prop('checked', true).prop('disabled', true);
+            }
+        });
+    });
+}
+
+// Reconstruit le tableau des règles d'association (une ligne par département)
+function rendreRegles(depts) {
+    const $container = $('#regles-container').empty();
+    if (!depts.length) {
+        $container.append('<span class="text-muted" style="font-size:.82rem;">Sélectionnez d\'abord une région pour configurer les règles.</span>');
+        return;
+    }
+
+    const $table = $(`
+        <table style="width:100%;border-collapse:collapse;font-size:.83rem;">
+            <thead>
+                <tr style="background:#e8eef7;">
+                    <th style="padding:.4rem .6rem;border:1px solid #c8d4e8;white-space:nowrap;">Si ce département est coché…</th>
+                    <th style="padding:.4rem .6rem;border:1px solid #c8d4e8;">… inclure automatiquement</th>
+                </tr>
+            </thead>
+            <tbody id="regles-tbody"></tbody>
+        </table>`);
+
+    depts.forEach(src => {
+        const autresDepts = depts.filter(d => d !== src);
+        const associesSauv = Array.isArray(regles[src]) ? regles[src] : [];
+
+        const cases = autresDepts.map(num => {
+            const ch = associesSauv.includes(num) ? 'checked' : '';
+            return `<div class="form-check form-check-inline mb-0" style="margin-right:.8rem">
+                <input class="form-check-input regle-check" type="checkbox"
+                       id="r-${src}-${num}" value="${num}" data-src="${src}" ${ch}>
+                <label class="form-check-label" for="r-${src}-${num}">
+                    <strong>${num}</strong> ${deptNoms[num] ?? num}
+                </label>
+            </div>`;
+        }).join('');
+
+        $table.find('#regles-tbody').append(`
+            <tr>
+                <td style="padding:.4rem .6rem;border:1px solid #e0e8f0;white-space:nowrap;font-weight:700;background:#f7faff;">
+                    ${src} — ${deptNoms[src] ?? src}
+                </td>
+                <td style="padding:.4rem .6rem;border:1px solid #e0e8f0;">
+                    ${cases.length ? cases : '<span class="text-muted">Aucun autre département dans cette région.</span>'}
+                </td>
+            </tr>`);
+    });
+
+    $container.append($table);
+}
+
+$('#cbo-region').on('change', function () {
+    const region = $(this).val();
+    if (!region) return;
+    const depts = regionsMap[region] || [];
+    rendreCheckboxes(depts, depts);
+    $('#msg-result-depts').text('');
+});
+
+// Initialisation : si des départements sont déjà sauvegardés, déduire la région
+(function init() {
+    if (!deptsInitiaux.length) return;
+    for (const [region, depts] of Object.entries(regionsMap)) {
+        if (deptsInitiaux.every(d => depts.includes(d)) && deptsInitiaux.some(d => depts.includes(d))) {
+            $('#cbo-region').val(region);
+            rendreCheckboxes(depts, deptsInitiaux);
+            return;
+        }
+    }
+    rendreCheckboxes(deptsInitiaux, deptsInitiaux);
+})();
+
+// ── Enregistrement départements actifs ───────────────────────────────────────
+$('#btn-sauvegarder-depts').on('click', function () {
+    const depts = [];
+    $('.dept-check:checked').each(function () { depts.push($(this).val()); });
+
+    if (!depts.length) {
+        $('#msg-result-depts').html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Sélectionnez au moins un département.</span>');
+        return;
+    }
+
+    spinner(true);
+    $(this).prop('disabled', true);
+    $('#msg-result-depts').text('');
+
+    $.post('configuration.php', {
+        action: 'enregistrer',
+        cle:    'departements_actifs',
+        valeur: depts.join(',')
+    }, function (res) {
+        spinner(false);
+        $('#btn-sauvegarder-depts').prop('disabled', false);
+        if (res.ok) {
+            $('#msg-result-depts').html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+        } else {
+            $('#msg-result-depts').html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+        }
+    }, 'json').fail(() => {
+        spinner(false);
+        $('#btn-sauvegarder-depts').prop('disabled', false);
+        $('#msg-result-depts').html('<span class="text-danger">Erreur réseau.</span>');
+    });
+});
+
+// ── Enregistrement règles d'association ──────────────────────────────────────
+$('#btn-sauvegarder-regles').on('click', function () {
+    // Construire l'objet {src: [associes]} depuis les cases cochées
+    const nouvellesRegles = {};
+    $('.regle-check:checked').each(function () {
+        const src = $(this).data('src');
+        if (!nouvellesRegles[src]) nouvellesRegles[src] = [];
+        nouvellesRegles[src].push($(this).val());
+    });
+    regles = nouvellesRegles;
+
+    spinner(true);
+    $(this).prop('disabled', true);
+    $('#msg-result-regles').text('');
+
+    $.post('configuration.php', {
+        action: 'enregistrer',
+        cle:    'regles_departements',
+        valeur: JSON.stringify(nouvellesRegles)
+    }, function (res) {
+        spinner(false);
+        $('#btn-sauvegarder-regles').prop('disabled', false);
+        if (res.ok) {
+            $('#msg-result-regles').html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+        } else {
+            $('#msg-result-regles').html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+        }
+    }, 'json').fail(() => {
+        spinner(false);
+        $('#btn-sauvegarder-regles').prop('disabled', false);
+        $('#msg-result-regles').html('<span class="text-danger">Erreur réseau.</span>');
+    });
+});
 </script>
+<?php require __DIR__ . '/includes/footer.php'; ?>
 </body>
 </html>

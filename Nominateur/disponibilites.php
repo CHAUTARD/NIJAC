@@ -159,8 +159,6 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 /* ── Spinner ── */
 #spinner-dept { display:none; }
 
-/* ── Pied ── */
-#page-footer { background:#e8eef7; border-top:1px solid #c8d4e8; padding:.5rem 1.25rem; font-size:.75rem; color:#6b7280; text-align:right; }
 </style>
 </head>
 <body>
@@ -201,7 +199,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 </div>
 
 <!-- Pied de page -->
-<div id="page-footer">&copy; <?= date('Y') ?> NIJAC &mdash; Tous droits réservés</div>
+<?php require __DIR__ . '/../includes/footer.php'; ?>
 
 <script src="../asset/js/jquery-3.7.1.min.js"></script>
 <script src="../asset/js/bootstrap.bundle.min.js"></script>

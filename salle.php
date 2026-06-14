@@ -282,6 +282,7 @@ $deptUserJs     = json_encode($moi['id_departement'] ?? null);
 
     <link rel="stylesheet" href="asset/css/bootstrap.min.css">
     <link rel="stylesheet" href="asset/css/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="asset/css/nijac.css">
 
     <style>
         :root { --nijac-blue: #1a3a6b; }
@@ -294,33 +295,6 @@ $deptUserJs     = json_encode($moi['id_departement'] ?? null);
             height: 100vh;
             overflow: hidden;
         }
-
-/* ── MenuStrip ── */
-        #menu-strip {
-            background: #f8f9fa;
-            border-bottom: 1px solid #dee2e6;
-            padding: .25rem .75rem;
-            display: flex;
-            align-items: center;
-            gap: .25rem;
-            flex-shrink: 0;
-        }
-        .menu-item {
-            display: inline-flex;
-            align-items: center;
-            gap: .4rem;
-            padding: .25rem .75rem;
-            font-size: .85rem;
-            border: 1px solid transparent;
-            border-radius: 4px;
-            background: none;
-            cursor: pointer;
-            white-space: nowrap;
-            color: #212529;
-        }
-        .menu-item:hover { background: #e8eef7; border-color: #c8d4e8; }
-        .menu-item img { width: 18px; height: 18px; object-fit: contain; }
-        .menu-item.danger:hover { background: #fde8e8; border-color: #f5c6cb; color: #c00; }
 
         /* ── Recherche ── */
         #search-input {
@@ -400,16 +374,6 @@ $deptUserJs     = json_encode($moi['id_departement'] ?? null);
         td.col-principale input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
 
 
-        /* ── Barre d'état ── */
-        #status-bar {
-            background: #e8eef7;
-            border-top: 1px solid #c8d4e8;
-            padding: .25rem 1rem;
-            font-size: .8rem;
-            color: #374151;
-            flex-shrink: 0;
-            min-height: 26px;
-        }
 
         /* ── Toast ── */
         #toast-container { position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; }
@@ -440,19 +404,19 @@ $deptUserJs     = json_encode($moi['id_departement'] ?? null);
 <div id="menu-strip">
 <?php if ($isAdmin): ?>
     <button class="menu-item" id="btn-importer">
-        <img src="img/Importer_32.png" alt="">Importation Excel (xlsx)
+        <i class="bi bi-file-earmark-arrow-up"></i>Importation Excel (xlsx)
     </button>
     <button class="menu-item" id="btn-ajouter">
-        <img src="img/Ajouter_32.png" alt="">Ajouter
+        <i class="bi bi-plus-circle"></i>Ajouter
     </button>
     <button class="menu-item danger" id="btn-supprimer">
-        <img src="img/Supprimer_32.png" alt="">Supprimer
+        <i class="bi bi-trash3"></i>Supprimer
     </button>
     <label style="display:inline-flex;align-items:center;gap:.3rem;font-size:.82rem;cursor:pointer;padding:.2rem .4rem;">
         <input type="checkbox" id="chk-vider"> Vider avant enregistrement
     </label>
     <button class="menu-item" id="btn-sauvegarder">
-        <img src="img/MAJ_Database_32.png" alt="">Enregistrer dans la Base de données
+        <i class="bi bi-database-fill-up"></i>Enregistrer dans la Base de données
     </button>
     <input type="file" id="file-input" accept=".xlsx" style="display:none">
     <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 salle(s)</span>
@@ -508,8 +472,7 @@ $deptUserJs     = json_encode($moi['id_departement'] ?? null);
     </table>
 </div>
 
-<!-- Barre d'état -->
-<div id="status-bar">Prêt.</div>
+<?php $statusInitial = 'Prêt.'; ?>
 
 <!-- Toast -->
 <div id="toast-container"></div>
@@ -871,5 +834,6 @@ $('#sel-dept').on('change', function () {
 // ── Init ──────────────────────────────────────────────────────────────────────
 $(function () { chargerListe(); });
 </script>
+<?php require __DIR__ . '/includes/footer.php'; ?>
 </body>
 </html>
