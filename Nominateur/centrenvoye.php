@@ -106,6 +106,10 @@ if ($action !== '') {
                                dv.Division,
                                ed.Nom AS NomDom, ee.Nom AS NomExt,
                                n.Id_Rencontre,
+                               s.Nom        AS SalleNom,
+                               s.Adresse    AS SalleAdresse,
+                               lps.CodePostal AS SalleCP,
+                               lps.Nom      AS SalleVille,
                                co.Nom       AS CorrNom,
                                co.Email     AS CorrEmail,
                                co.Telephone AS CorrTel
@@ -115,6 +119,8 @@ if ($action !== '') {
                         JOIN equipe ed          ON ed.Id_Equipe    = r.Id_EquipeDom
                         LEFT JOIN equipe ee     ON ee.Id_Equipe    = r.Id_EquipeExt
                         JOIN division dv        ON dv.Id_Division  = r.Id_Division
+                        LEFT JOIN salle s           ON s.Id_Salle      = r.id_Salle
+                        LEFT JOIN laposte lps       ON lps.Id_LaPoste  = s.Id_Laposte
                         LEFT JOIN correspondant co ON co.Id_Correspondant = (
                             SELECT c2.Id_Correspondant
                             FROM correspondant c2
@@ -183,6 +189,10 @@ if ($action !== '') {
                        r.Date, r.Heure, r.Journee, r.Poule,
                        dv.Division,
                        ed.Nom AS NomDom, ee.Nom AS NomExt,
+                       s.Nom        AS SalleNom,
+                       s.Adresse    AS SalleAdresse,
+                       lps.CodePostal AS SalleCP,
+                       lps.Nom      AS SalleVille,
                        co.Nom       AS CorrNom,
                        co.Email     AS CorrEmail,
                        co.Telephone AS CorrTel
@@ -192,6 +202,8 @@ if ($action !== '') {
                 LEFT JOIN equipe ed        ON ed.Id_Equipe    = r.Id_EquipeDom
                 LEFT JOIN equipe ee        ON ee.Id_Equipe    = r.Id_EquipeExt
                 LEFT JOIN division dv      ON dv.Id_Division  = r.Id_Division
+                LEFT JOIN salle s          ON s.Id_Salle      = r.id_Salle
+                LEFT JOIN laposte lps      ON lps.Id_LaPoste  = s.Id_Laposte
                 LEFT JOIN correspondant co ON co.Id_Correspondant = (
                     SELECT c2.Id_Correspondant
                     FROM correspondant c2
@@ -203,7 +215,9 @@ if ($action !== '') {
                   AND j.Email IS NOT NULL AND j.Email <> ''
                 GROUP BY j.Id_JA, j.Nom, j.Prenom, j.Email,
                          n.Id_Rencontre, r.Date, r.Heure, r.Journee, r.Poule,
-                         dv.Division, ed.Nom, ee.Nom, co.Nom, co.Email, co.Telephone
+                         dv.Division, ed.Nom, ee.Nom,
+                         s.Nom, s.Adresse, lps.CodePostal, lps.Nom,
+                         co.Nom, co.Email, co.Telephone
                 ORDER BY j.Nom, j.Prenom
             ");
             $stmtJas->execute(array_map('intval', $ids));
@@ -243,41 +257,60 @@ if ($action !== '') {
                     $stmtNoms->execute([$ja['Id_JA'], $saison]);
                     $noms = $stmtNoms->fetchAll();
                     if ($noms) {
-                        $lignes = [];
-                        foreach ($noms as $n) {
-                            $lignes[] = sprintf("%-12s %5s  %-20s  %s vs %s",
-                                $n['Date'], $n['Heure'] ?? '',
-                                $n['Division'],
-                                $n['Dom'], $n['Ext'] ?? ''
+                        $listeNoms  = '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;">';
+                        $listeNoms .= '<tr style="background:#1a3a6b;color:#fff;">'
+                            . '<th>Date</th><th>Heure</th><th>Division</th><th>Domicile</th><th>Extérieur</th>'
+                            . '</tr>';
+                        foreach ($noms as $idx => $n) {
+                            $bg   = ($idx % 2 === 0) ? '#f0f4fa' : '#ffffff';
+                            $date = $n['Date'] ? date('d/m/Y', strtotime($n['Date'])) : '';
+                            $listeNoms .= sprintf(
+                                '<tr style="background:%s"><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>',
+                                $bg,
+                                htmlspecialchars($date),
+                                htmlspecialchars($n['Heure'] ?? ''),
+                                htmlspecialchars($n['Division']),
+                                htmlspecialchars($n['Dom']),
+                                htmlspecialchars($n['Ext'] ?? '')
                             );
                         }
-                        $listeNoms = implode("\n", $lignes);
+                        $listeNoms .= '</table>';
                     } else {
-                        $listeNoms = '(aucune nomination)';
+                        $listeNoms = '<em>(aucune nomination)</em>';
                     }
                 }
 
+                // Passe 1 : remplacer les marqueurs texte (les valeurs seront échappées ensuite)
                 $corps = str_replace(
                     ['{NOM}', '{PRENOM}', '{NOM_COMPLET}', '{ID_JA}',
+                     '{UTI_NOM}', '{UTI_PRENOM}',
                      '{DATE}', '{HEURE}', '{JOURNEE}', '{POULE}', '{DIVISION}', '{DOM}', '{EXT}',
-                     '{CORR_NOM}', '{CORR_EMAIL}', '{CORR_TEL}',
-                     '{LISTE_NOMINATIONS}'],
+                     '{SALLE_NOM}', '{SALLE_ADRESSE}', '{SALLE_CP}', '{SALLE_VILLE}',
+                     '{CORR_NOM}', '{CORR_EMAIL}', '{CORR_TEL}'],
                     [$ja['Nom'], $ja['Prenom'], $ja['Prenom'] . ' ' . $ja['Nom'], $token,
-                     $ja['Date'] ?? '', $ja['Heure'] ?? '', $ja['Journee'] ?? '', $ja['Poule'] ?? '', $ja['Division'] ?? '',
+                     $moi['nom'] ?? '', $moi['prenom'] ?? '',
+                     $ja['Date'] ? date('d/m/Y', strtotime($ja['Date'])) : '', $ja['Heure'] ?? '',
+                     $ja['Journee'] ?? '', $ja['Poule'] ?? '', $ja['Division'] ?? '',
                      $ja['NomDom'] ?? '', $ja['NomExt'] ?? '',
-                     $ja['CorrNom'] ?? '', $ja['CorrEmail'] ?? '', $ja['CorrTel'] ?? '',
-                     $listeNoms],
+                     $ja['SalleNom'] ?? '', $ja['SalleAdresse'] ?? '', $ja['SalleCP'] ?? '', $ja['SalleVille'] ?? '',
+                     $ja['CorrNom'] ?? '', $ja['CorrEmail'] ?? '', $ja['CorrTel'] ?? ''],
                     $message
                 );
+                // Passe 2 : encoder le texte brut en HTML (sauts de ligne → <br>)
+                $corps = nl2br(htmlspecialchars($corps, ENT_NOQUOTES, 'UTF-8'));
+                // Passe 3 : injecter la table HTML (non échappée) à la place du marqueur
+                $corps = str_replace('{LISTE_NOMINATIONS}', $listeNoms, $corps);
 
                 $dest = getEmailDestinataire($ja['Email']);
                 try {
                     $mail = getNijacMailer();
+                    $mail->isHTML(true);
                     $mail->addAddress($dest, $ja['Prenom'] . ' ' . $ja['Nom']);
                     $mail->Subject = ($modeDev && $dest !== $ja['Email'])
                         ? "[DEV → {$ja['Email']}] $sujet"
                         : $sujet;
-                    $mail->Body = $corps;
+                    $mail->Body    = $corps;
+                    $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>','<br />'], "\n", $corps));
                     $mail->send();
                     $envoyes++;
                 } catch (\Exception $e) {
@@ -420,11 +453,40 @@ $modeleJson = json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS);
             flex: 1;
         }
 
-        .hint-vars {
-            font-size: .74rem;
-            color: #6b7280;
-            margin-top: .25rem;
+        /* ── Cartouche marqueurs ── */
+        #cartouche-marqueurs {
+            font-size: .76rem;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: .4rem .6rem;
+            flex-shrink: 0;
         }
+
+        #cartouche-marqueurs .cart-titre {
+            font-size: .7rem;
+            font-weight: 700;
+            color: #6b7280;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+            margin-bottom: .25rem;
+        }
+
+        #cartouche-marqueurs code {
+            display: inline-block;
+            background: #e8eef7;
+            border: 1px solid #b8cce4;
+            border-radius: 3px;
+            padding: .02rem .28rem;
+            font-size: .73rem;
+            cursor: pointer;
+            user-select: none;
+            transition: background .12s, transform .1s;
+            margin: .1rem .15rem .1rem 0;
+        }
+
+        #cartouche-marqueurs code:hover  { background: #cfe0f8; border-color: #7aaddf; transform: scale(1.06); }
+        #cartouche-marqueurs code:active { transform: scale(.95); }
 
         /* ── Barre d'envoi ── */
         #envoi-bar {
@@ -578,7 +640,40 @@ $modeleJson = json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS);
                 <textarea id="txt-message" class="form-control form-control-sm flex-grow-1"></textarea>
             </div>
 
-            <p id="hint-vars" class="hint-vars mb-2"></p>
+            <!-- Cartouche marqueurs (mis à jour selon l'onglet actif) -->
+            <div id="cartouche-marqueurs" class="mb-1">
+                <div class="cart-titre"><i class="bi bi-braces me-1"></i>Marqueurs disponibles — clic pour insérer</div>
+                <div id="cart-communs">
+                    <span class="badge bg-secondary me-1 fw-normal" style="font-size:.68rem;">Tous</span>
+                    <code data-cible="message" data-marqueur="{PRENOM}">{PRENOM}</code>
+                    <code data-cible="message" data-marqueur="{NOM}">{NOM}</code>
+                    <code data-cible="message" data-marqueur="{NOM_COMPLET}">{NOM_COMPLET}</code>
+                    <code data-cible="message" data-marqueur="{ID_JA}">{ID_JA}</code>
+                    <code data-cible="message" data-marqueur="{UTI_NOM}">{UTI_NOM}</code>
+                    <code data-cible="message" data-marqueur="{UTI_PRENOM}">{UTI_PRENOM}</code>
+                </div>
+                <div id="cart-convocation" style="display:none;margin-top:.2rem;">
+                    <span class="badge me-1 fw-normal" style="font-size:.68rem;background:#1a7f4b;">Convocation</span>
+                    <code data-cible="message" data-marqueur="{DATE}">{DATE}</code>
+                    <code data-cible="message" data-marqueur="{HEURE}">{HEURE}</code>
+                    <code data-cible="message" data-marqueur="{JOURNEE}">{JOURNEE}</code>
+                    <code data-cible="message" data-marqueur="{POULE}">{POULE}</code>
+                    <code data-cible="message" data-marqueur="{DIVISION}">{DIVISION}</code>
+                    <code data-cible="message" data-marqueur="{DOM}">{DOM}</code>
+                    <code data-cible="message" data-marqueur="{EXT}">{EXT}</code>
+                    <code data-cible="message" data-marqueur="{SALLE_NOM}">{SALLE_NOM}</code>
+                    <code data-cible="message" data-marqueur="{SALLE_ADRESSE}">{SALLE_ADRESSE}</code>
+                    <code data-cible="message" data-marqueur="{SALLE_CP}">{SALLE_CP}</code>
+                    <code data-cible="message" data-marqueur="{SALLE_VILLE}">{SALLE_VILLE}</code>
+                    <code data-cible="message" data-marqueur="{CORR_NOM}">{CORR_NOM}</code>
+                    <code data-cible="message" data-marqueur="{CORR_EMAIL}">{CORR_EMAIL}</code>
+                    <code data-cible="message" data-marqueur="{CORR_TEL}">{CORR_TEL}</code>
+                </div>
+                <div id="cart-liste-nom" style="display:none;margin-top:.2rem;">
+                    <span class="badge me-1 fw-normal" style="font-size:.68rem;background:#6f42c1;">Liste nomination</span>
+                    <code data-cible="message" data-marqueur="{LISTE_NOMINATIONS}">{LISTE_NOMINATIONS}</code>
+                </div>
+            </div>
 
         </div>
 
@@ -651,12 +746,6 @@ $modeleJson = json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS);
 
 const MODELES = <?= $modeleJson ?>;
 
-const HINTS = {
-    'Disponibilites':  '{PRENOM}  {NOM}  {NOM_COMPLET}  {ID_JA}',
-    'Rappel dispo':    '{PRENOM}  {NOM}  {NOM_COMPLET}  {ID_JA}',
-    'Convocation':     '{PRENOM}  {NOM}  {NOM_COMPLET}  {ID_JA}  {DATE}  {HEURE}  {JOURNEE}  {POULE}  {DIVISION}  {DOM}  {EXT}  {CORR_NOM}  {CORR_EMAIL}  {CORR_TEL}',
-    'Liste nomination':'{PRENOM}  {NOM}  {NOM_COMPLET}  {ID_JA}  {LISTE_NOMINATIONS}',
-};
 
 const TITRES_JA = {
     'Disponibilites':  'JA actifs du département',
@@ -704,7 +793,9 @@ function chargerModele(type) {
     const m = MODELES[type] || { sujet: '', message: '' };
     $('#txt-sujet').val(m.sujet || '');
     $('#txt-message').val(m.message || '');
-    $('#hint-vars').text('Variables : ' + (HINTS[type] || ''));
+    // Afficher/masquer les sections du cartouche selon le type actif
+    $('#cart-convocation').toggle(type === 'Convocation');
+    $('#cart-liste-nom').toggle(type === 'Liste nomination');
     $('#ja-header-titre').text(TITRES_JA[type] || 'JA');
     $('#result-envoi').html('');
 }
@@ -790,6 +881,20 @@ function chargerJA() {
         $('#nb-ja').text(`${res.data.length} JA — ${nbEmail} avec email`);
     }, 'json');
 }
+
+// ── Clic sur un marqueur : insérer à la position du curseur ──────────────────
+let dernierChamp = 'message'; // 'sujet' ou 'message'
+$('#txt-sujet').on('focus', () => { dernierChamp = 'sujet'; });
+$('#txt-message').on('focus', () => { dernierChamp = 'message'; });
+
+$(document).on('click', '[data-marqueur]', function () {
+    const ta    = document.getElementById(dernierChamp === 'sujet' ? 'txt-sujet' : 'txt-message');
+    const texte = $(this).data('marqueur');
+    const debut = ta.selectionStart ?? ta.value.length;
+    const fin   = ta.selectionEnd   ?? debut;
+    ta.setRangeText(texte, debut, fin, 'end');
+    ta.focus();
+});
 
 // ── Tri ───────────────────────────────────────────────────────────────────────
 function trierJA(col) {

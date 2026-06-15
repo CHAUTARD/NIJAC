@@ -265,6 +265,29 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
 
         .btn-supprimer:disabled { opacity:.5; cursor:not-allowed; }
 
+        /* ── Marqueurs cliquables ── */
+        #cartouche-marqueurs code {
+            display: inline-block;
+            background: #e8eef7;
+            border: 1px solid #b8cce4;
+            border-radius: 3px;
+            padding: .05rem .3rem;
+            font-size: .76rem;
+            cursor: pointer;
+            user-select: none;
+            transition: background .12s, transform .1s;
+        }
+
+        #cartouche-marqueurs code:hover {
+            background: #cfe0f8;
+            border-color: #7aaddf;
+            transform: scale(1.06);
+        }
+
+        #cartouche-marqueurs code:active {
+            transform: scale(.95);
+        }
+
         /* ── Toast ── */
         #toast-container {
             position: fixed;
@@ -312,11 +335,9 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
     <!-- ── Formulaire ── -->
     <div id="panel-form">
 
-        <div class="row g-2 mb-2">
-            <div class="col-auto">
-                <label class="form-label">Id :</label>
-                <input type="text" id="txt-id" class="form-control form-control-sm" readonly tabindex="-1">
-            </div>
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <label class="form-label mb-0">Id :</label>
+            <input type="text" id="txt-id" class="form-control form-control-sm" readonly tabindex="-1">
         </div>
 
         <div class="mb-2">
@@ -351,8 +372,45 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
             </button>
         </div>
 
+        <!-- Cartouche des marqueurs disponibles -->
+        <div id="cartouche-marqueurs" class="mt-3 border rounded p-2" style="background:#f8f9fa;font-size:.78rem;">
+            <div class="fw-bold text-secondary mb-1" style="font-size:.75rem;letter-spacing:.04em;text-transform:uppercase;">
+                <i class="bi bi-braces me-1"></i>Marqueurs disponibles
+            </div>
+            <div class="mb-1">
+                <span class="badge bg-secondary me-1 fw-normal">Tous types</span>
+                <code data-marqueur="{PRENOM}" class="me-2">{PRENOM}</code>
+                <code data-marqueur="{NOM}" class="me-2">{NOM}</code>
+                <code data-marqueur="{NOM_COMPLET}" class="me-2">{NOM_COMPLET}</code>
+                <code data-marqueur="{ID_JA}" class="me-2">{ID_JA}</code>
+                <code data-marqueur="{UTI_NOM}" class="me-2">{UTI_NOM}</code>
+                <code data-marqueur="{UTI_PRENOM}" class="me-2">{UTI_PRENOM}</code>
+            </div>
+            <div class="mb-1">
+                <span class="badge me-1 fw-normal" style="background:#1a7f4b;">Convocation</span>
+                <code data-marqueur="{DATE}" class="me-2">{DATE}</code>
+                <code data-marqueur="{HEURE}" class="me-2">{HEURE}</code>
+                <code data-marqueur="{JOURNEE}" class="me-2">{JOURNEE}</code>
+                <code data-marqueur="{POULE}" class="me-2">{POULE}</code>
+                <code data-marqueur="{DIVISION}" class="me-2">{DIVISION}</code>
+                <code data-marqueur="{DOM}" class="me-2">{DOM}</code>
+                <code data-marqueur="{EXT}" class="me-2">{EXT}</code>
+                <code data-marqueur="{SALLE_NOM}" class="me-2">{SALLE_NOM}</code>
+                <code data-marqueur="{SALLE_ADRESSE}" class="me-2">{SALLE_ADRESSE}</code>
+                <code data-marqueur="{SALLE_CP}" class="me-2">{SALLE_CP}</code>
+                <code data-marqueur="{SALLE_VILLE}" class="me-2">{SALLE_VILLE}</code>
+                <code data-marqueur="{CORR_NOM}" class="me-2">{CORR_NOM}</code>
+                <code data-marqueur="{CORR_EMAIL}" class="me-2">{CORR_EMAIL}</code>
+                <code data-marqueur="{CORR_TEL}" class="me-2">{CORR_TEL}</code>
+            </div>
+            <div>
+                <span class="badge me-1 fw-normal" style="background:#6f42c1;">Liste nomination</span>
+                <code data-marqueur="{LISTE_NOMINATIONS}" class="me-2">{LISTE_NOMINATIONS}</code>
+            </div>
+        </div>
+
         <!-- Statut -->
-        <div id="form-status" class="mt-3 small fw-bold"></div>
+        <div id="form-status" class="mt-2 small fw-bold"></div>
 
     </div><!-- /panel-form -->
 </div><!-- /split-container -->
@@ -477,6 +535,16 @@ $('#btn-supprimer').on('click', function () {
             toast(res.msg, false);
         }
     }, 'json');
+});
+
+// ── Clic sur un marqueur : insérer à la position du curseur ──────────────────
+$(document).on('click', '[data-marqueur]', function () {
+    const ta     = document.getElementById('txt-message');
+    const texte  = $(this).data('marqueur');
+    const debut  = ta.selectionStart ?? ta.value.length;
+    const fin    = ta.selectionEnd   ?? debut;
+    ta.setRangeText(texte, debut, fin, 'end');
+    ta.focus();
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
