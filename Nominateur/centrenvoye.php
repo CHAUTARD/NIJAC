@@ -1,6 +1,6 @@
 <?php
 /**
- * NIJAC – Centre d'envoi de messages (E021)
+ * NIJAC – Centre d'envoi de messages (E024)
  *
  * Envoie les 4 types de messages aux JA actifs du département connecté.
  *
@@ -362,7 +362,7 @@ $modeleJson = json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NIJAC – Centre d'envoi (E021)</title>
+    <title>NIJAC – Centre d'envoi (E024)</title>
 
     <link rel="stylesheet" href="../asset/css/bootstrap.min.css">
     <link rel="stylesheet" href="../asset/css/bootstrap-icons.min.css">
@@ -600,7 +600,7 @@ $modeleJson = json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS);
 
 <div id="page-header">
     <i class="bi bi-send-fill me-2"></i>Centre d'envoi
-    <small class="opacity-75 ms-2">(E021)</small>
+    <small class="opacity-75 ms-2">(E024)</small>
     <a href="menu.php" class="btn btn-sm btn-light float-end py-0">
         <i class="bi bi-arrow-left me-1"></i>Retour menu
     </a>

@@ -149,7 +149,7 @@ $isAdmin     = !empty($u['is_admin']);
         .btn-competition  { background-color: #8080ff; }
         .btn-planning     { background-color: #c8e6c9; }
         .btn-rapport      { background-color: #ffe0b2; }
-        .btn-messagerie   { background-color: #f8bbd0; }
+        .btn-messagerie   { background-color: #c8e6c9; }
         .btn-convocation  { background-color: #fff3e0; }
         .btn-disponibilite { background-color: #e8f5e9; }
 

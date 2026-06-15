@@ -1,6 +1,6 @@
 <?php
 /**
- * NIJAC – Gestion des messages (E010)
+ * NIJAC – Gestion des messages (E016)
  *
  * Création et gestion des modèles de messages de l'application.
  * Chaque message possède un type, un sujet, un corps de message
@@ -140,7 +140,7 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NIJAC – Gestion des messages (E010)</title>
+    <title>NIJAC – Gestion des messages (E016)</title>
 
     <link rel="stylesheet" href="../asset/css/bootstrap.min.css">
     <link rel="stylesheet" href="../asset/css/bootstrap-icons.min.css">
@@ -304,7 +304,7 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
 <!-- En-tête -->
 <div id="page-header">
     <i class="bi bi-envelope-fill me-2"></i>Gestion des messages
-    <small class="opacity-75 ms-2">(E010)</small>
+    <small class="opacity-75 ms-2">(E016)</small>
     <a href="menu.php" class="btn btn-sm btn-light float-end py-0">
         <i class="bi bi-arrow-left me-1"></i>Retour menu
     </a>
