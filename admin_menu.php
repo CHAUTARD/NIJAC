@@ -190,7 +190,6 @@ $isAdmin      = !empty($u['is_admin']);
         }
 
         /* Couleurs individuelles */
-        .btn-competition  { background-color: #e8eaf6; }
         .btn-club         { background-color: #e8f5e9; }
         .btn-salle        { background-color: #e0f2f1; }
         .btn-saison       { background-color: #fff8e1; }
@@ -226,12 +225,6 @@ $isAdmin      = !empty($u['is_admin']);
 
     <!-- Grille de boutons -->
     <div id="menu-grid">
-
-        <a href="competition.php" class="menu-btn btn-competition">
-            <div class="btn-icon"><img src="img/Competition.png" alt="Compétition"></div>
-            <span>Type de compétition</span>
-            <span class="btn-desc">Créer et paramétrer les types de compétitions</span>
-        </a>
 
         <a href="club.php" class="menu-btn btn-club">
             <div class="btn-icon"><img src="img/Association.png" alt="Club / Association"></div>

@@ -12,6 +12,7 @@
 session_start();
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/csrf.php';
+require_once __DIR__ . '/config/app_config.php';
 require_once __DIR__ . '/vendor/autoload.php';
 
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -37,15 +38,6 @@ if ($action !== '') {
 
         // ── Charger la liste ───────────────────────────────────────────────
         if ($action === 'liste') {
-            $dept = null;
-            if (!$isAdmin) {
-                // Nominateur : restreint à son département
-                $dept = $moi['id_departement'] ?? null;
-            } elseif (isset($_POST['dept']) && $_POST['dept'] !== '') {
-                // Administrateur avec filtre optionnel
-                $dept = $_POST['dept'];
-            }
-
             $sql = 'SELECT s.Id_Salle, s.Nom, s.Adresse, s.Id_Laposte, s.Id_Club,
                            s.EstPrincipale, cl.Nom AS NomClub,
                            CONCAT(lp.CodePostal, \' \', lp.Nom) AS CpVille
@@ -53,9 +45,22 @@ if ($action !== '') {
                     LEFT JOIN Club    cl ON cl.Id_Club    = s.Id_Club
                     LEFT JOIN laposte lp ON lp.Id_LaPoste = s.Id_Laposte';
             $params = [];
-            if ($dept !== null && $dept !== '') {
+
+            if (!$isAdmin) {
+                // Nominateur : restreint à son département + ceux associés (configuration.php)
+                $depts = getDepartementsAutorises($moi['id_departement'] ?? null);
+                if (!$depts) {
+                    ob_end_clean();
+                    echo json_encode(['ok' => true, 'data' => []]);
+                    exit;
+                }
+                $deptPh = implode(',', array_fill(0, count($depts), '?'));
+                $sql .= " WHERE LEFT(lp.CodePostal, 2) IN ($deptPh)";
+                foreach ($depts as $d) $params[] = str_pad((string)$d, 2, '0', STR_PAD_LEFT);
+            } elseif (isset($_POST['dept']) && $_POST['dept'] !== '') {
+                // Administrateur avec filtre optionnel (département exact, sans association)
                 $sql .= ' WHERE LEFT(lp.CodePostal, 2) = ?';
-                $params[] = str_pad((string)$dept, 2, '0', STR_PAD_LEFT);
+                $params[] = str_pad((string)$_POST['dept'], 2, '0', STR_PAD_LEFT);
             }
             $sql .= ' ORDER BY cl.Nom, s.Nom';
 

@@ -408,8 +408,8 @@ if (isset($_GET['action'])) {
         );
         $stmtRencIns = $pdo->prepare(
             'INSERT INTO rencontre (Date, Heure, Id_Division, Poule, Id_EquipeDom, Id_EquipeExt,
-                                    Phase, Id_Competition, Saison, Journee, ArbitrageObligatoire)
-             VALUES (?,?,?,?,?,?,?,1,?,?,?)'
+                                    Phase, Saison, Journee, ArbitrageObligatoire)
+             VALUES (?,?,?,?,?,?,?,?,?,?)'
         );
         // Cache ArbitrageObligatoire par division
         $stmtArbitrage = $pdo->prepare('SELECT ArbitrageObligatoire FROM division WHERE Id_Division = ?');

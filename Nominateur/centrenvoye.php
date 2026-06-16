@@ -294,12 +294,12 @@ if ($action !== '') {
             $token = $_obf->obfuscate((int)$ja['Id_JA']);
             $corps = str_replace(
                 ['{NOM}','{PRENOM}','{NOM_COMPLET}','{ID_JA}',
-                 '{UTI_NOM}','{UTI_PRENOM}',
+                 '{UTI_NOM}','{UTI_PRENOM}','{LIEN_LIGUE}',
                  '{DATE}','{HEURE}','{JOURNEE}','{POULE}','{DIVISION}','{DOM}','{EXT}',
                  '{SALLE_NOM}','{SALLE_ADRESSE}','{SALLE_CP}','{SALLE_VILLE}',
                  '{CORR_NOM}','{CORR_EMAIL}','{CORR_TEL}'],
                 [$ja['Nom'],$ja['Prenom'],$ja['Prenom'].' '.$ja['Nom'],$token,
-                 $moi['nom']??'',$moi['prenom']??'',
+                 $moi['nom']??'',$moi['prenom']??'',getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),
                  $ja['Date'] ? date('d/m/Y', strtotime($ja['Date'])) : '',$ja['Heure']??'',
                  $ja['Journee']??'',$ja['Poule']??'',$ja['Division']??'',
                  $ja['NomDom']??'',$ja['NomExt']??'',

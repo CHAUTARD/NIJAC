@@ -80,6 +80,26 @@ if ($action !== '') {
                 }
             }
 
+            // Validation URL pour url_ligue
+            if ($cle === 'url_ligue') {
+                if ($valeur === '' || !filter_var($valeur, FILTER_VALIDATE_URL)) {
+                    ob_end_clean();
+                    echo json_encode(['ok' => false, 'msg' => 'Adresse du site invalide.']);
+                    exit;
+                }
+            }
+
+            // Validation numérique pour indemnité forfaitaire et frais kilométriques
+            if (in_array($cle, ['indemnite_forfaitaire', 'frais_kilometrique'], true)) {
+                $valeurNum = str_replace(',', '.', $valeur);
+                if ($valeurNum === '' || !is_numeric($valeurNum) || (float)$valeurNum < 0) {
+                    ob_end_clean();
+                    echo json_encode(['ok' => false, 'msg' => 'Valeur numérique positive attendue.']);
+                    exit;
+                }
+                $valeur = number_format((float)$valeurNum, 2, '.', '');
+            }
+
             // Validation départements_actifs : liste de numéros séparés par virgule
             if ($cle === 'departements_actifs') {
                 $deptsValides = ['14', '27', '50', '61', '76'];
@@ -101,6 +121,91 @@ if ($action !== '') {
 
             ob_end_clean();
             echo json_encode(['ok' => true, 'msg' => 'Paramètre enregistré.', 'cle' => $cle, 'valeur' => $valeur]);
+            exit;
+        }
+
+        // ── Gestion complète : créer une ligne ─────────────────────────────
+        if ($action === 'table_creer') {
+            $cle         = trim($_POST['cle']         ?? '');
+            $valeur      = (string)($_POST['valeur']      ?? '');
+            $libelle     = trim($_POST['libelle']     ?? '');
+            $description = (string)($_POST['description'] ?? '');
+
+            if ($cle === '') {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => 'La clé est obligatoire.']);
+                exit;
+            }
+            if (!preg_match('/^[a-z0-9_]+$/i', $cle)) {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => 'La clé ne doit contenir que lettres, chiffres et underscores.']);
+                exit;
+            }
+
+            $existe = $pdo->prepare('SELECT 1 FROM configuration WHERE cle = ?');
+            $existe->execute([$cle]);
+            if ($existe->fetchColumn()) {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => "La clé « $cle » existe déjà."]);
+                exit;
+            }
+
+            $pdo->prepare('INSERT INTO configuration (cle, valeur, libelle, description) VALUES (?, ?, ?, ?)')
+                ->execute([$cle, $valeur, $libelle, $description ?: null]);
+
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'msg' => 'Ligne créée.']);
+            exit;
+        }
+
+        // ── Gestion complète : modifier une ligne (tous les champs) ────────
+        if ($action === 'table_modifier') {
+            $cleOriginale = trim($_POST['cle_originale'] ?? '');
+            $cle          = trim($_POST['cle']           ?? '');
+            $valeur       = (string)($_POST['valeur']       ?? '');
+            $libelle      = trim($_POST['libelle']       ?? '');
+            $description  = (string)($_POST['description']  ?? '');
+
+            if ($cleOriginale === '' || $cle === '') {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => 'Clé manquante.']);
+                exit;
+            }
+            if (!preg_match('/^[a-z0-9_]+$/i', $cle)) {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => 'La clé ne doit contenir que lettres, chiffres et underscores.']);
+                exit;
+            }
+
+            if ($cle !== $cleOriginale) {
+                $existe = $pdo->prepare('SELECT 1 FROM configuration WHERE cle = ?');
+                $existe->execute([$cle]);
+                if ($existe->fetchColumn()) {
+                    ob_end_clean();
+                    echo json_encode(['ok' => false, 'msg' => "La clé « $cle » existe déjà."]);
+                    exit;
+                }
+            }
+
+            $pdo->prepare('UPDATE configuration SET cle = ?, valeur = ?, libelle = ?, description = ? WHERE cle = ?')
+                ->execute([$cle, $valeur, $libelle, $description ?: null, $cleOriginale]);
+
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'msg' => 'Ligne modifiée.']);
+            exit;
+        }
+
+        // ── Gestion complète : supprimer une ligne ──────────────────────────
+        if ($action === 'table_supprimer') {
+            $cle = trim($_POST['cle'] ?? '');
+            if ($cle === '') {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => 'Clé manquante.']);
+                exit;
+            }
+            $pdo->prepare('DELETE FROM configuration WHERE cle = ?')->execute([$cle]);
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'msg' => 'Ligne supprimée.']);
             exit;
         }
 
@@ -129,11 +234,17 @@ try {
     $emailDev      = getConfig('email_developpement', 'patrick.chautard@free.fr');
     $deptsActifs      = getConfig('departements_actifs', '14,27,50,61,76');
     $reglesDepts      = getConfig('regles_departements', '{"76":["27"]}');
+    $urlLigue         = getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr');
+    $indemniteForfait = getConfig('indemnite_forfaitaire', '25.00');
+    $fraisKm          = getConfig('frais_kilometrique', '0.30');
 } catch (\Throwable $e) {
     $etatCourant      = 'Developpement';
     $emailDev         = 'patrick.chautard@free.fr';
     $deptsActifs      = '14,27,50,61,76';
     $reglesDepts      = '{"76":["27"]}';
+    $urlLigue         = 'https://www.ligue-normandie-tt.fr';
+    $indemniteForfait = '25.00';
+    $fraisKm          = '0.30';
 }
 $deptsActifsArray = array_map('trim', explode(',', $deptsActifs));
 
@@ -283,14 +394,16 @@ $changeLogin = !empty($moi['change_login']);
         .email-dev-row {
             display: flex; gap: .6rem; align-items: center;
         }
-        #input-email-dev {
+        #input-email-dev, #input-url-ligue, #input-indemnite, #input-frais-km {
             flex: 1; min-width: 0;
             border: 2px solid #c8d4e8; border-radius: 6px;
             padding: .42rem .75rem; font-size: .9rem;
             transition: border-color .2s;
         }
-        #input-email-dev:focus      { outline: none; border-color: #1a3a6b; }
-        #input-email-dev.is-invalid { border-color: #dc2626; }
+        #input-email-dev:focus, #input-url-ligue:focus,
+        #input-indemnite:focus, #input-frais-km:focus { outline: none; border-color: #1a3a6b; }
+        #input-email-dev.is-invalid, #input-url-ligue.is-invalid,
+        #input-indemnite.is-invalid, #input-frais-km.is-invalid { border-color: #dc2626; }
         #btn-sauvegarder-email {
             padding: .42rem 1.4rem;
             font-size: .88rem; font-weight: 700;
@@ -315,6 +428,72 @@ $changeLogin = !empty($moi['change_login']);
         #btn-sauvegarder-depts:disabled,
         #btn-sauvegarder-regle76:disabled { opacity: .5; cursor: default; }
         #textarea-regle76:focus { outline: none; border-color: #1a3a6b; }
+
+        /* ── Onglets ── */
+        #config-tabs .nav-link {
+            font-size: .85rem; font-weight: 600; color: #555;
+            border: none; border-bottom: 3px solid transparent;
+            padding: .65rem 1.1rem;
+        }
+        #config-tabs .nav-link.active {
+            color: var(--nijac-blue); border-bottom-color: var(--nijac-blue);
+            background: transparent;
+        }
+        .tab-content { display: flex; flex-direction: column; }
+        #tab-table { flex: 1; display: flex; flex-direction: column; padding: 1.25rem 1.5rem; }
+
+        /* ── Gestion complète : table configuration ── */
+        #table-toolbar {
+            display: flex; align-items: center; gap: .75rem;
+            margin-bottom: .9rem;
+        }
+        #search-input-config {
+            font-size: .85rem; padding: .2rem .5rem;
+            border: 1px solid #c8d4e8; border-radius: 4px; width: 240px;
+        }
+        #table-grid-wrapper { flex: 1; overflow: auto; }
+        .table-config {
+            width: 100%; font-size: .83rem; border-collapse: collapse;
+            background: #fff;
+        }
+        .table-config thead th {
+            background: #e8eef7; border: 1px solid #c8d4e8;
+            padding: .4rem .6rem; text-align: left; white-space: nowrap;
+            position: sticky; top: 0; z-index: 1;
+            cursor: pointer; user-select: none;
+        }
+        .table-config thead th:hover { background: #d4dff0; }
+        .table-config thead th .sort-icon { margin-left: .3rem; opacity: .4; font-size: .75rem; }
+        .table-config thead th.sort-asc .sort-icon::after  { content: '▲'; opacity: 1; }
+        .table-config thead th.sort-desc .sort-icon::after { content: '▼'; opacity: 1; }
+        .table-config thead th:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
+        .table-config thead th[style*="width:90px"] { cursor: default; }
+        .table-config thead th[style*="width:90px"]:hover { background: #e8eef7; }
+
+        .table-config tbody tr { border-bottom: 1px solid #e0e8f0; }
+        .table-config tbody tr:nth-child(even) { background: #f7faff; }
+        .table-config tbody tr:hover { background: #dce8f8; }
+        .table-config tbody tr.selected { background: #b8d0f0 !important; }
+        .table-config tbody tr.new-row { background: #fffbe6 !important; }
+        .table-config tbody td { border: 1px solid #e0e8f0; padding: 0; vertical-align: top; }
+
+        .table-config .cell-inner {
+            display: block; padding: .28rem .5rem; min-height: 28px;
+            outline: none; white-space: pre-wrap; word-break: break-word;
+        }
+        .table-config .cell-inner[contenteditable="true"] {
+            background: #fffbe6; outline: 2px solid #f0a000; outline-offset: -2px;
+        }
+        .table-config td.col-cle .cell-inner { font-weight: 700; font-family: monospace; }
+
+        .table-config .row-actions { display: flex; gap: .35rem; white-space: nowrap; padding: .25rem .4rem; }
+        .table-config .row-actions button {
+            font-size: .78rem; padding: .2rem .5rem; border-radius: 4px;
+            border: 1px solid #c8d4e8; background: #f7faff; cursor: pointer;
+        }
+        .table-config .row-actions .btn-save { color: #1565c0; }
+        .table-config .row-actions .btn-del  { color: #c0392b; }
+        .table-config .row-actions button:hover { background: #e8eef7; }
 
         /* ── Spinner ── */
         #spinner {
@@ -343,6 +522,22 @@ $changeLogin = !empty($moi['change_login']);
     </a>
 </div>
 
+<!-- Onglets -->
+<ul class="nav nav-tabs" id="config-tabs" role="tablist" style="background:#fff;padding:0 1.5rem;flex-shrink:0;">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-params-btn" data-bs-toggle="tab" data-bs-target="#tab-params" type="button" role="tab">
+            <i class="bi bi-sliders me-1"></i>Paramètres
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-table-btn" data-bs-toggle="tab" data-bs-target="#tab-table" type="button" role="tab">
+            <i class="bi bi-table me-1"></i>Gestion complète
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" style="flex:1;overflow:auto;">
+<div class="tab-pane fade show active" id="tab-params" role="tabpanel">
 <!-- Contenu -->
 <div id="main-content">
 
@@ -440,6 +635,88 @@ $changeLogin = !empty($moi['change_login']);
         </div>
     </div>
 
+    <!-- ── Paramètre : Site de la ligue ── -->
+    <div class="param-card" style="grid-column:1 / -1">
+        <div class="param-card-head">
+            <i class="bi bi-globe2 param-icon"></i>
+            <div>
+                <h2>Site de la ligue</h2>
+                <small>Adresse du serveur de la Ligue de Normandie de Tennis de Table</small>
+            </div>
+        </div>
+        <div class="param-card-body">
+
+            <p style="font-size:.85rem;color:#374151;margin-bottom:1.1rem;">
+                Adresse utilisée pour les liens vers le site de la ligue depuis l'application.
+            </p>
+
+            <div class="email-dev-group">
+                <label for="input-url-ligue">
+                    <i class="bi bi-link-45deg me-1"></i>URL du site
+                </label>
+                <div class="email-dev-row">
+                    <input type="url" id="input-url-ligue"
+                           value="<?= htmlspecialchars($urlLigue) ?>"
+                           placeholder="https://www.ligue-normandie-tt.fr"
+                           autocomplete="off">
+                    <button id="btn-sauvegarder-url-ligue">
+                        <i class="bi bi-floppy-fill me-1"></i>Enregistrer
+                    </button>
+                </div>
+                <div id="msg-result-url-ligue"></div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ── Paramètre : Frais JA (ex-table Competition) ── -->
+    <div class="param-card">
+        <div class="param-card-head">
+            <i class="bi bi-cash-coin param-icon"></i>
+            <div>
+                <h2>Indemnités et frais JA</h2>
+                <small>Barème appliqué aux convocations (remplace la table Compétition)</small>
+            </div>
+        </div>
+        <div class="param-card-body">
+
+            <p style="font-size:.85rem;color:#374151;margin-bottom:1.1rem;">
+                Indemnité forfaitaire et barème kilométrique utilisés par défaut sur les convocations des JA.
+            </p>
+
+            <div class="email-dev-group mb-3">
+                <label for="input-indemnite">
+                    <i class="bi bi-cash me-1"></i>Indemnité forfaitaire (€)
+                </label>
+                <div class="email-dev-row">
+                    <input type="number" id="input-indemnite" step="0.01" min="0"
+                           value="<?= htmlspecialchars($indemniteForfait) ?>"
+                           autocomplete="off">
+                    <button id="btn-sauvegarder-indemnite">
+                        <i class="bi bi-floppy-fill me-1"></i>Enregistrer
+                    </button>
+                </div>
+                <div id="msg-result-indemnite"></div>
+            </div>
+
+            <div class="email-dev-group">
+                <label for="input-frais-km">
+                    <i class="bi bi-signpost-split me-1"></i>Frais kilométriques (€/km)
+                </label>
+                <div class="email-dev-row">
+                    <input type="number" id="input-frais-km" step="0.01" min="0"
+                           value="<?= htmlspecialchars($fraisKm) ?>"
+                           autocomplete="off">
+                    <button id="btn-sauvegarder-frais-km">
+                        <i class="bi bi-floppy-fill me-1"></i>Enregistrer
+                    </button>
+                </div>
+                <div id="msg-result-frais-km"></div>
+            </div>
+
+        </div>
+    </div>
+
     <!-- ── Paramètre : Départements & règle 76 ── -->
     <div class="param-card">
         <div class="param-card-head">
@@ -524,6 +801,37 @@ $changeLogin = !empty($moi['change_login']);
     </div>
 
 </div><!-- /main-content -->
+</div><!-- /tab-params -->
+
+<!-- ── Onglet : Gestion complète de la table configuration ── -->
+<div class="tab-pane fade" id="tab-table" role="tabpanel">
+    <div id="table-toolbar">
+        <button class="btn btn-sm btn-success" id="btn-table-ajouter">
+            <i class="bi bi-plus-circle me-1"></i>Ajouter une ligne
+        </button>
+        <span style="flex:1"></span>
+        <span id="table-msg" style="font-size:.82rem;margin-right:.75rem"></span>
+        <input type="search" id="search-input-config" placeholder="🔍 Rechercher…">
+    </div>
+    <div id="table-grid-wrapper">
+        <table id="tbl-config" class="table-config">
+            <thead>
+                <tr>
+                    <th style="width:220px" data-field="cle">Clé<span class="sort-icon"></span></th>
+                    <th data-field="valeur">Valeur<span class="sort-icon"></span></th>
+                    <th style="width:220px" data-field="libelle">Libellé<span class="sort-icon"></span></th>
+                    <th data-field="description">Description<span class="sort-icon"></span></th>
+                    <th style="width:90px">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="tbody-config">
+                <tr><td colspan="5" class="text-center text-muted py-3">Chargement…</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div><!-- /tab-table -->
+
+</div><!-- /tab-content -->
 
 <?php $statusInitial = 'État actuel : ' . ($etatCourant === 'Developpement' ? 'Développement — emails redirigés' : 'Opérationnel — emails réels'); ?>
 
@@ -635,6 +943,88 @@ $('#btn-sauvegarder-email').on('click', function () {
 $('#input-email-dev').on('input', function () {
     $(this).removeClass('is-invalid');
     $('#msg-result-email').text('');
+});
+
+// ── Enregistrement URL du site de la ligue ───────────────────────────────────
+$('#btn-sauvegarder-url-ligue').on('click', function () {
+    const val = $('#input-url-ligue').val().trim();
+
+    if (!/^https?:\/\/.+/i.test(val)) {
+        $('#input-url-ligue').addClass('is-invalid');
+        $('#msg-result-url-ligue').html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Adresse du site invalide.</span>');
+        return;
+    }
+    $('#input-url-ligue').removeClass('is-invalid');
+
+    spinner(true);
+    $(this).prop('disabled', true);
+    $('#msg-result-url-ligue').text('');
+
+    $.post('configuration.php', {
+        action: 'enregistrer',
+        cle:    'url_ligue',
+        valeur: val
+    }, function (res) {
+        spinner(false);
+        $('#btn-sauvegarder-url-ligue').prop('disabled', false);
+        if (res.ok) {
+            $('#msg-result-url-ligue').html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+        } else {
+            $('#input-url-ligue').addClass('is-invalid');
+            $('#msg-result-url-ligue').html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+        }
+    }, 'json').fail(() => {
+        spinner(false);
+        $('#btn-sauvegarder-url-ligue').prop('disabled', false);
+        $('#msg-result-url-ligue').html('<span class="text-danger">Erreur réseau.</span>');
+    });
+});
+
+$('#input-url-ligue').on('input', function () {
+    $(this).removeClass('is-invalid');
+    $('#msg-result-url-ligue').text('');
+});
+
+// ── Enregistrement indemnité forfaitaire / frais kilométriques ──────────────
+function sauvegarderMontant(cle, $input, $msg, $btn) {
+    const val = $input.val().trim().replace(',', '.');
+    if (val === '' || isNaN(val) || parseFloat(val) < 0) {
+        $input.addClass('is-invalid');
+        $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Valeur numérique positive attendue.</span>');
+        return;
+    }
+    $input.removeClass('is-invalid');
+
+    spinner(true);
+    $btn.prop('disabled', true);
+    $msg.text('');
+
+    $.post('configuration.php', { action: 'enregistrer', cle, valeur: val }, function (res) {
+        spinner(false);
+        $btn.prop('disabled', false);
+        if (res.ok) {
+            $msg.html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+            $input.val(res.valeur);
+        } else {
+            $input.addClass('is-invalid');
+            $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+        }
+    }, 'json').fail(() => {
+        spinner(false);
+        $btn.prop('disabled', false);
+        $msg.html('<span class="text-danger">Erreur réseau.</span>');
+    });
+}
+
+$('#btn-sauvegarder-indemnite').on('click', function () {
+    sauvegarderMontant('indemnite_forfaitaire', $('#input-indemnite'), $('#msg-result-indemnite'), $(this));
+});
+$('#btn-sauvegarder-frais-km').on('click', function () {
+    sauvegarderMontant('frais_kilometrique', $('#input-frais-km'), $('#msg-result-frais-km'), $(this));
+});
+$('#input-indemnite, #input-frais-km').on('input', function () {
+    $(this).removeClass('is-invalid');
+    $(this).closest('.email-dev-group').find('[id^=msg-result]').text('');
 });
 
 // ── Référentiel complet départements ─────────────────────────────────────────
@@ -878,6 +1268,208 @@ $('#btn-sauvegarder-regles').on('click', function () {
         $('#btn-sauvegarder-regles').prop('disabled', false);
         $('#msg-result-regles').html('<span class="text-danger">Erreur réseau.</span>');
     });
+});
+
+// ── Onglet : Gestion complète de la table configuration ──────────────────────
+let configRows      = [];
+let tableChargee    = false;
+let cellActiveConfig = null;
+let sortFieldConfig  = 'cle';
+let sortDirConfig    = 'asc';
+let searchTermConfig = '';
+
+function tableMsg(msg, ok = true) {
+    $('#table-msg').html(msg ? `<span class="${ok ? 'text-success' : 'text-danger'}">${msg}</span>` : '');
+}
+
+function chargerTableConfig() {
+    spinner(true);
+    $.post('configuration.php', { action: 'lire' }, function (res) {
+        spinner(false);
+        if (!res.ok) { tableMsg('Erreur de chargement.', false); return; }
+        configRows = res.params.map(p => ({ ...p, _nouveau: false, cle_originale: p.cle }));
+        renderTableConfig();
+    }, 'json').fail(() => { spinner(false); tableMsg('Erreur réseau.', false); });
+}
+
+// ── Tri & Recherche ───────────────────────────────────────────────────────────
+function lignesConfigFiltreesTriees() {
+    const term = searchTermConfig.toLowerCase();
+    let result = term
+        ? configRows.filter(r =>
+            String(r.cle         ?? '').toLowerCase().includes(term) ||
+            String(r.valeur      ?? '').toLowerCase().includes(term) ||
+            String(r.libelle     ?? '').toLowerCase().includes(term) ||
+            String(r.description ?? '').toLowerCase().includes(term))
+        : [...configRows];
+
+    result.sort((a, b) => {
+        const va = String(a[sortFieldConfig] ?? '').toLowerCase();
+        const vb = String(b[sortFieldConfig] ?? '').toLowerCase();
+        return sortDirConfig === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    });
+    return result;
+}
+
+function majEnteteTriConfig() {
+    $('#tbl-config thead th').each(function () {
+        const f = $(this).data('field');
+        $(this).removeClass('sort-asc sort-desc');
+        if (f && f === sortFieldConfig) $(this).addClass(sortDirConfig === 'asc' ? 'sort-asc' : 'sort-desc');
+    });
+}
+
+// ── Rendu ─────────────────────────────────────────────────────────────────────
+function renderTableConfig() {
+    const $body = $('#tbody-config').empty();
+    majEnteteTriConfig();
+
+    const affichees = lignesConfigFiltreesTriees();
+
+    if (!affichees.length) {
+        const msg = searchTermConfig ? 'Aucun résultat pour cette recherche.' : 'Aucun paramètre.';
+        $body.append(`<tr><td colspan="5" class="text-center text-muted py-3">${msg}</td></tr>`);
+        return;
+    }
+
+    affichees.forEach((r) => {
+        const idx = configRows.indexOf(r);
+        const $tr = $('<tr>').attr('data-idx', idx).toggleClass('new-row', !!r._nouveau);
+
+        $tr.append(makeTdConfig(r.cle,         idx, 'cle'));
+        $tr.append(makeTdConfig(r.valeur,      idx, 'valeur'));
+        $tr.append(makeTdConfig(r.libelle,     idx, 'libelle'));
+        $tr.append(makeTdConfig(r.description, idx, 'description'));
+
+        const $actions = $('<div class="row-actions">').append(
+            $('<button type="button" class="btn-save" title="Enregistrer"><i class="bi bi-check-lg"></i></button>')
+                .on('click', () => sauvegarderLigneConfig(idx)),
+            $('<button type="button" class="btn-del" title="Supprimer"><i class="bi bi-trash3"></i></button>')
+                .on('click', () => supprimerLigneConfig(idx))
+        );
+        $tr.append($('<td>').append($actions));
+        $body.append($tr);
+    });
+
+    $('#table-msg').text(searchTermConfig
+        ? `${affichees.length} résultat(s) sur ${configRows.length}`
+        : `${configRows.length} paramètre(s)`);
+}
+
+function makeTdConfig(val, idx, field) {
+    const $td  = $('<td>').addClass(field === 'cle' ? 'col-cle' : '').attr('data-idx', idx).attr('data-field', field);
+    const $div = $('<div class="cell-inner">').text(val ?? '').attr('contenteditable', 'false');
+    $td.append($div);
+    $td.on('click', function () { selectionnerCelluleConfig($(this)); });
+    return $td;
+}
+
+// ── Sélection de cellule ──────────────────────────────────────────────────────
+function selectionnerCelluleConfig($td) {
+    if (cellActiveConfig) {
+        cellActiveConfig.find('.cell-inner').attr('contenteditable', 'false').trigger('blur');
+        cellActiveConfig.closest('tr').removeClass('selected');
+    }
+    cellActiveConfig = $td;
+    $td.closest('tr').addClass('selected');
+    tableMsg('Cellule sélectionnée — F2 pour modifier, Échap pour annuler.');
+}
+
+// ── Clavier : F2 / Échap / Entrée ────────────────────────────────────────────
+$(document).on('keydown', function (e) {
+    if (!cellActiveConfig || !$('#tab-table').hasClass('active')) return;
+    const $inner = cellActiveConfig.find('.cell-inner');
+
+    if (e.key === 'F2' && $inner.attr('contenteditable') === 'false') {
+        e.preventDefault();
+        $inner.attr('contenteditable', 'true').trigger('focus');
+        const range = document.createRange();
+        range.selectNodeContents($inner[0]);
+        range.collapse(false);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+
+    } else if (e.key === 'Escape') {
+        const idx   = +cellActiveConfig.attr('data-idx');
+        const field = cellActiveConfig.attr('data-field');
+        $inner.text(configRows[idx]?.[field] ?? '').attr('contenteditable', 'false');
+        tableMsg('Modification annulée.');
+
+    } else if (e.key === 'Enter' && $inner.attr('contenteditable') === 'true') {
+        e.preventDefault();
+        validerCelluleConfig($inner, cellActiveConfig);
+    }
+});
+
+$(document).on('blur', '#tab-table .cell-inner[contenteditable="true"]', function () {
+    validerCelluleConfig($(this), $(this).closest('td'));
+});
+
+function validerCelluleConfig($inner, $td) {
+    $inner.attr('contenteditable', 'false');
+    const idx   = +$td.attr('data-idx');
+    const field = $td.attr('data-field');
+    if (configRows[idx]) configRows[idx][field] = $inner.text();
+    tableMsg('Modification locale. Cliquez sur ✓ pour enregistrer cette ligne.');
+}
+
+// ── Enregistrer / Supprimer une ligne ─────────────────────────────────────────
+function sauvegarderLigneConfig(idx) {
+    const r = configRows[idx];
+    const cle = (r.cle ?? '').trim();
+
+    if (!cle) { tableMsg('La clé est obligatoire.', false); return; }
+
+    spinner(true);
+    const action = r._nouveau ? 'table_creer' : 'table_modifier';
+    const data = { action, cle, valeur: r.valeur ?? '', libelle: r.libelle ?? '', description: r.description ?? '' };
+    if (!r._nouveau) data.cle_originale = r.cle_originale ?? r.cle;
+
+    $.post('configuration.php', data, function (res) {
+        spinner(false);
+        tableMsg(res.msg, res.ok);
+        if (res.ok) chargerTableConfig();
+    }, 'json').fail(() => { spinner(false); tableMsg('Erreur réseau.', false); });
+}
+
+function supprimerLigneConfig(idx) {
+    const r = configRows[idx];
+    if (r._nouveau) { configRows.splice(idx, 1); renderTableConfig(); return; }
+    if (!confirm(`Supprimer le paramètre « ${r.cle} » ?`)) return;
+
+    spinner(true);
+    $.post('configuration.php', { action: 'table_supprimer', cle: r.cle }, function (res) {
+        spinner(false);
+        tableMsg(res.msg, res.ok);
+        if (res.ok) chargerTableConfig();
+    }, 'json').fail(() => { spinner(false); tableMsg('Erreur réseau.', false); });
+}
+
+$('#btn-table-ajouter').on('click', function () {
+    configRows.push({ cle: '', valeur: '', libelle: '', description: '', _nouveau: true });
+    renderTableConfig();
+});
+
+// ── Tri sur clic en-tête ──────────────────────────────────────────────────────
+$('#tbl-config thead th[data-field]').on('click', function () {
+    const f = $(this).data('field');
+    if (sortFieldConfig === f) {
+        sortDirConfig = sortDirConfig === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortFieldConfig = f;
+        sortDirConfig   = 'asc';
+    }
+    renderTableConfig();
+});
+
+// ── Recherche ─────────────────────────────────────────────────────────────────
+$('#search-input-config').on('input', function () {
+    searchTermConfig = $(this).val().trim();
+    renderTableConfig();
+});
+
+$('#tab-table-btn').on('shown.bs.tab', function () {
+    if (!tableChargee) { tableChargee = true; chargerTableConfig(); }
 });
 </script>
 <?php require __DIR__ . '/includes/footer.php'; ?>

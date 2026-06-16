@@ -133,15 +133,7 @@ if ($idJa && $idRencontre) {
         $ja = $stmtJa->fetch();
 
         //  Rencontre
-        // DÃ©tecter si rencontre a Id_Competition
         $rencCols = array_column($pdo->query('DESCRIBE rencontre')->fetchAll(), 'Field');
-        $hasComp  = in_array('Id_Competition', $rencCols);
-        $compJoin = $hasComp
-            ? "LEFT JOIN Competition comp ON comp.Id_Competition = r.Id_Competition"
-            : "";
-        $compSel  = $hasComp
-            ? "comp.Nom AS CompetitionNom, comp.IndemniteForfaitaire, comp.FraisKilometrique,"
-            : "NULL AS CompetitionNom, NULL AS IndemniteForfaitaire, NULL AS FraisKilometrique,";
         // NumÃ©ro de convocation (ref PDF : 457)
         $convNum  = in_array('NumConvocation', $rencCols) ? 'r.NumConvocation' : 'r.Id_Rencontre';
         $hasPhase = in_array('Phase', $rencCols);
@@ -152,7 +144,6 @@ if ($idJa && $idRencontre) {
             SELECT r.Id_Rencontre, r.Saison, r.Journee, r.Date, r.Heure, r.Poule,
                    $convNum  AS NumConvocation,
                    $phaseSel
-                   $compSel
                    d.Division AS DivisionCode, d.Nom AS DivisionNom,
                    ed.Nom     AS NomDom,  ed.Id_Club AS IdClubDom,
                    ee.Nom     AS NomExt,
@@ -171,7 +162,6 @@ if ($idJa && $idRencontre) {
             LEFT JOIN laposte lp_r ON lp_r.Id_LaPoste = s_r.Id_Laposte
             LEFT JOIN salle   s_c  ON s_c.Id_Club = ed.Id_Club AND s_c.EstPrincipale = 1
             LEFT JOIN laposte lp_c ON lp_c.Id_LaPoste = s_c.Id_Laposte
-            $compJoin
             WHERE r.Id_Rencontre = ?
         ");
         $stmtR->execute([$idRencontre]);
@@ -221,8 +211,8 @@ if ($idJa && $idRencontre) {
 }
 
 //  Valeurs d'affichage 
-$indemniteForfait = $rencontre['IndemniteForfaitaire'] ?? 25.00;
-$tauxKm           = $rencontre['FraisKilometrique']    ?? 0.30;
+$indemniteForfait = (float)getConfig('indemnite_forfaitaire', '25.00');
+$tauxKm           = (float)getConfig('frais_kilometrique', '0.30');
 $peages           = $frais['Peages']      ?? 0;
 $km               = $frais['Kilometres']  ?? $kmCalc ?? 0;
 $total            = $indemniteForfait + $peages + ($km * $tauxKm);
@@ -569,7 +559,7 @@ $saisonAffich = $rencontre['Saison'] ?? '';
     <!-- Texte intro -->
     <div class="conv-body-text">
         J'ai l'avantage de vous informer que vous Ãªtes dÃ©signÃ©(e) pour diriger la rencontre suivante du<br>
-        <strong><?= htmlspecialchars($rencontre['CompetitionNom'] ?? 'CHAMPIONNAT DE FRANCE PAR Ã‰QUIPES') ?></strong>
+        <strong>CHAMPIONNAT DE FRANCE PAR ÉQUIPES</strong>
     </div>
 
     <!-- Tableau rencontre -->

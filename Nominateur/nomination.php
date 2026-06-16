@@ -365,6 +365,7 @@ if ($action !== '') {
                         . "Date : {$nom['Date']} à {$nom['Heure']}\r\n\r\n"
                         . "Veuillez consulter votre convocation et saisir vos frais via le lien :\r\n"
                         . "$lien\r\n\r\n"
+                        . "Site de la ligue : " . getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr') . "\r\n\r\n"
                         . "Cordialement,\r\nLe Comité d'Arbitrage";
                 if (@mail($nom['Email'], $sujet, $corps,
                     'From: noreply@nijac.fr' . "\r\n" .
