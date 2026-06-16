@@ -22,10 +22,14 @@ if (!isset($_SESSION['utilisateur'])) {
 
 require __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/csrf.php';
+require_once __DIR__ . '/../config/app_config.php';
 require __DIR__ . '/../Classes/Obfuscator.php';
 
 $pdo = getPDO();
 $_obf = new Obfuscator(OBFUSCATOR_SEED);
+
+// ── Départements visibles pour l'utilisateur connecté ────────────────────────
+$deptsAutorises = getDepartementsAutorises($_SESSION['utilisateur']['id_departement'] ?? null);
 
 // ── Actions AJAX ────────────────────────────────────────────────────────────
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
@@ -51,6 +55,12 @@ if ($action !== '') {
         $saison = trim($_GET['saison'] ?? '');
         if (!$saison) { echo json_encode(['ok' => false, 'err' => 'Saison manquante']); exit; }
 
+        if (!$deptsAutorises) {
+            echo json_encode(['ok' => true, 'data' => []]);
+            exit;
+        }
+        $deptPh = implode(',', array_fill(0, count($deptsAutorises), '?'));
+
         $stmt = $pdo->prepare("
             SELECT
                 r.Journee,
@@ -65,12 +75,13 @@ if ($action !== '') {
                       AND d2.Reponse IN ('O','P')
                 ) AS NbDispo
             FROM rencontre r
-            LEFT JOIN nomination n ON n.Id_Rencontre = r.Id_Rencontre
-            WHERE r.Saison = ?
+            JOIN  equipe ed         ON ed.Id_Equipe = r.Id_EquipeDom
+            LEFT JOIN nomination n  ON n.Id_Rencontre = r.Id_Rencontre
+            WHERE r.Saison = ? AND SUBSTRING(ed.Id_Club, 2, 2) IN ($deptPh)
             GROUP BY r.Journee, r.Date
             ORDER BY r.Journee, r.Date
         ");
-        $stmt->execute([$saison]);
+        $stmt->execute(array_merge([$saison], $deptsAutorises));
         echo json_encode(['ok' => true, 'data' => $stmt->fetchAll()]);
         exit;
     }
@@ -83,6 +94,11 @@ if ($action !== '') {
         if (!$saison || !$journee || !$date) {
             echo json_encode(['ok' => false, 'err' => 'Paramètres manquants']); exit;
         }
+        if (!$deptsAutorises) {
+            echo json_encode(['ok' => true, 'data' => []]);
+            exit;
+        }
+        $deptPh = implode(',', array_fill(0, count($deptsAutorises), '?'));
 
         $stmt = $pdo->prepare("
             SELECT
@@ -93,6 +109,7 @@ if ($action !== '') {
                 r.Poule,
                 dv.Division AS DivisionCode,
                 dv.Nom      AS DivisionNom,
+                dv.Color    AS DivisionColor,
                 ed.Nom       AS NomDom,
                 ed.Id_Club   AS IdClubDom,
                 ee.Nom       AS NomExt,
@@ -114,9 +131,10 @@ if ($action !== '') {
             LEFT JOIN nomination n  ON n.Id_Rencontre  = r.Id_Rencontre
             LEFT JOIN ja ja_n       ON ja_n.Id_JA       = n.Id_JA
             WHERE r.Saison = ? AND r.Journee = ? AND r.Date = ?
+              AND SUBSTRING(ed.Id_Club, 2, 2) IN ($deptPh)
             ORDER BY dv.Division, r.Poule, r.Id_Rencontre
         ");
-        $stmt->execute([$saison, $journee, $date]);
+        $stmt->execute(array_merge([$saison, $journee, $date], $deptsAutorises));
         echo json_encode(['ok' => true, 'data' => $stmt->fetchAll()]);
         exit;
     }
@@ -796,9 +814,10 @@ function renderRencontres() {
         const attr = !!nominations[rc.Id_Rencontre];
         const nomJa = attr ? (nominations[rc.Id_Rencontre].Prenom + ' ' + nominations[rc.Id_Rencontre].Nom).trim() : '';
         const lieu  = [rc.CpSalle, rc.VilleSalle].filter(Boolean).join(' ');
+        const divColor = rc.DivisionColor || '#1a3a6b';
         $liste.append(`
             <div class="renc-item ${attr ? 'attribue' : ''}" data-id="${rc.Id_Rencontre}">
-                <span class="renc-div">${escHtml(rc.DivisionCode || '')}</span>
+                <span class="renc-div" style="background:${escHtml(divColor)}">${escHtml(rc.DivisionCode || '')}</span>
                 <div class="renc-corps">
                     <div class="renc-equipes">${escHtml(rc.NomDom)} vs ${escHtml(rc.NomExt || '?')}</div>
                     ${lieu ? `<div class="renc-lieu"><i class="bi bi-geo-alt" style="font-size:.68rem"></i> ${escHtml(lieu)}</div>` : ''}

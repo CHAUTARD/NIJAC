@@ -35,7 +35,7 @@ if ($action !== '') {
         // ── Liste ──────────────────────────────────────────────────────────
         if ($action === 'liste') {
             $rows = $pdo->query(
-                'SELECT Id_Division, Division, Ord, Nom, ArbitrageObligatoire FROM Division ORDER BY Ord'
+                'SELECT Id_Division, Division, Ord, Nom, Color, ArbitrageObligatoire FROM Division ORDER BY Ord'
             )->fetchAll();
             echo json_encode(['ok' => true, 'data' => $rows]);
             exit;
@@ -45,7 +45,7 @@ if ($action !== '') {
         if ($action === 'charger') {
             $id   = (int)($_GET['id'] ?? 0);
             $stmt = $pdo->prepare(
-                'SELECT Id_Division, Division, Ord, Nom, ArbitrageObligatoire FROM Division WHERE Id_Division = ?'
+                'SELECT Id_Division, Division, Ord, Nom, Color, ArbitrageObligatoire FROM Division WHERE Id_Division = ?'
             );
             $stmt->execute([$id]);
             $row = $stmt->fetch();
@@ -59,6 +59,7 @@ if ($action !== '') {
             $nom     = trim($_POST['nom']        ?? '');
             $ord     = max(1, (int)($_POST['ord'] ?? 1));
             $nomLong = trim($_POST['nom_long']   ?? '');
+            $color   = trim($_POST['color']      ?? '') ?: '#1565c0';
             $arbitrage = (int)($_POST['arbitrage_obligatoire'] ?? 1) === 0 ? 0 : 1;
 
             if ($nom === '') {
@@ -68,15 +69,15 @@ if ($action !== '') {
 
             if ($id > 0) {
                 $stmt = $pdo->prepare(
-                    'UPDATE Division SET Division=?, Ord=?, Nom=?, ArbitrageObligatoire=? WHERE Id_Division=?'
+                    'UPDATE Division SET Division=?, Ord=?, Nom=?, Color=?, ArbitrageObligatoire=? WHERE Id_Division=?'
                 );
-                $stmt->execute([$nom, $ord, $nomLong, $arbitrage, $id]);
+                $stmt->execute([$nom, $ord, $nomLong, $color, $arbitrage, $id]);
                 echo json_encode(['ok' => true, 'msg' => 'Division mise à jour.', 'id' => $id]);
             } else {
                 $stmt = $pdo->prepare(
-                    'INSERT INTO Division (Division, Ord, Nom, ArbitrageObligatoire) VALUES (?, ?, ?, ?)'
+                    'INSERT INTO Division (Division, Ord, Nom, Color, ArbitrageObligatoire) VALUES (?, ?, ?, ?, ?)'
                 );
-                $stmt->execute([$nom, $ord, $nomLong, $arbitrage]);
+                $stmt->execute([$nom, $ord, $nomLong, $color, $arbitrage]);
                 echo json_encode(['ok' => true, 'msg' => 'Division créée.', 'id' => (int)$pdo->lastInsertId()]);
             }
             exit;
@@ -249,6 +250,7 @@ $changeLogin = !empty($moi['change_login']);
                         <th style="width:50px">Ord</th>
                         <th style="width:80px">Division</th>
                         <th>Nom</th>
+                        <th style="width:50px;text-align:center">Couleur</th>
                         <th style="width:120px;text-align:center">Arbitrage JA</th>
                     </tr>
                 </thead>
@@ -280,6 +282,11 @@ $changeLogin = !empty($moi['change_login']);
         <div class="mb-2">
             <label class="form-label" for="txt-nom-long">Nom :</label>
             <input type="text" id="txt-nom-long" class="form-control form-control-sm" maxlength="255">
+        </div>
+
+        <div class="mb-2">
+            <label class="form-label" for="color-couleur">Couleur :</label>
+            <input type="color" id="color-couleur" class="form-control form-control-sm" value="#1565c0" style="width:60px;padding:.2rem">
         </div>
 
         <div class="mb-3">
@@ -357,19 +364,21 @@ function chargerListe(selectId = null) {
     $.post('division.php', { action: 'liste' }, function (res) {
         const $body = $('#tbody-liste').empty();
         if (!res.ok || !res.data.length) {
-            $body.append('<tr><td colspan="3" class="text-center text-muted py-3">Aucune division.</td></tr>');
+            $body.append('<tr><td colspan="5" class="text-center text-muted py-3">Aucune division.</td></tr>');
             return;
         }
         res.data.forEach(d => {
             const arb = +d.ArbitrageObligatoire === 1
                 ? '<span class="badge" style="background:#1565c0;font-size:.75rem">Obligatoire</span>'
                 : '<span class="badge" style="background:#e65100;font-size:.75rem">Sur demande</span>';
+            const couleur = `<span style="display:inline-block;width:16px;height:16px;border-radius:3px;border:1px solid #999;background:${d.Color || '#1565c0'}"></span>`;
             const $tr = $('<tr>')
                 .attr('data-id', d.Id_Division)
                 .append(
                     $('<td class="text-center">').text(d.Ord),
                     $('<td>').text(d.Division),
                     $('<td>').text(d.Nom),
+                    $('<td class="text-center">').html(couleur),
                     $('<td class="text-center">').html(arb)
                 )
                 .on('click', function () { selectionnerLigne($(this)); });
@@ -395,6 +404,7 @@ function selectionnerLigne($tr) {
         $('#txt-nom').val(d.Division);
         $('#num-ord').val(d.Ord);
         $('#txt-nom-long').val(d.Nom);
+        $('#color-couleur').val(d.Color || '#1565c0');
         $('input[name="arbitrage"]').filter(`[value="${+d.ArbitrageObligatoire}"]`).prop('checked', true);
         $('#btn-supprimer').prop('disabled', false);
         setStatus('');
@@ -409,6 +419,7 @@ $('#btn-nouveau').on('click', function () {
     $('#txt-nom').val('').trigger('focus');
     $('#num-ord').val(1);
     $('#txt-nom-long').val('');
+    $('#color-couleur').val('#1565c0');
     $('#radio-oblig').prop('checked', true);
     $('#btn-supprimer').prop('disabled', true);
     setStatus('');
@@ -422,6 +433,7 @@ $('#btn-enregistrer').on('click', function () {
         nom:                     $('#txt-nom').val().trim(),
         ord:                     $('#num-ord').val(),
         nom_long:                $('#txt-nom-long').val().trim(),
+        color:                   $('#color-couleur').val(),
         arbitrage_obligatoire:   $('input[name="arbitrage"]:checked').val(),
     }, function (res) {
         if (res.ok) {

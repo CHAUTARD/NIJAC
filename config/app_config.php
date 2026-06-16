@@ -191,6 +191,23 @@ function enregistrerEnvois(int $nb): void
 }
 
 /**
+ * Retourne la liste des départements qu'un utilisateur est autorisé à voir,
+ * en appliquant les règles d'association définies dans configuration.php
+ * (paramètre 'regles_departements', ex: {"76":["27"]} → un utilisateur du 76
+ * voit aussi les rencontres du 27).
+ */
+function getDepartementsAutorises(?string $deptUtilisateur): array
+{
+    if (!$deptUtilisateur) return [];
+    $regles = json_decode(getConfig('regles_departements', '{}'), true) ?: [];
+    $autorises = [$deptUtilisateur];
+    if (!empty($regles[$deptUtilisateur]) && is_array($regles[$deptUtilisateur])) {
+        $autorises = array_merge($autorises, $regles[$deptUtilisateur]);
+    }
+    return array_values(array_unique($autorises));
+}
+
+/**
  * Indique si le logiciel est en mode développement.
  */
 function isModeDeveloppement(): bool
