@@ -9,6 +9,7 @@
  */
 session_start();
 require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/csrf.php';
 require_once __DIR__ . '/../config/app_config.php';
 require_once __DIR__ . '/../Classes/Obfuscator.php';
 
@@ -26,6 +27,7 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 if ($action !== '') {
     header('Content-Type: application/json; charset=utf-8');
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfVerify(true);
 
     try {
         $pdo  = getPDO();
@@ -168,12 +170,11 @@ if ($action !== '') {
         }
 
         // ── Envoyer les emails ──────────────────────────────────────────────
+        // ── Vérification initiale avant envoi groupé (rate limit + comptage sans-email) ──
         if ($action === 'envoyer') {
-            $type    = trim($_POST['type']    ?? 'Disponibilites');
-            $sujet   = trim($_POST['sujet']   ?? '');
-            $message = trim($_POST['message'] ?? '');
-            $ids     = json_decode($_POST['ids'] ?? '[]', true);
-            $saison  = trim($_POST['saison']  ?? ($saison ?? ''));
+            $ids    = json_decode($_POST['ids'] ?? '[]', true);
+            $sujet  = trim($_POST['sujet']   ?? '');
+            $message= trim($_POST['message'] ?? '');
 
             if ($sujet === '' || $message === '') {
                 echo json_encode(['ok' => false, 'msg' => 'Sujet et message obligatoires.']); exit;
@@ -182,150 +183,151 @@ if ($action !== '') {
                 echo json_encode(['ok' => false, 'msg' => 'Aucun destinataire sélectionné.']); exit;
             }
 
+            // Rate limiting : vérifier globalement avant de commencer
+            $errRl = checkRateLimit(count($ids));
+            if ($errRl !== null) {
+                echo json_encode(['ok' => false, 'msg' => $errRl]); exit;
+            }
+
+            // Compter les JA sans email (info pour le JS)
             $placeholders = implode(',', array_fill(0, count($ids), '?'));
-            $stmtJas = $pdo->prepare("
+            $stmt2 = $pdo->prepare("SELECT COUNT(*) FROM ja WHERE Id_JA IN ($placeholders) AND (Email IS NULL OR Email = '')");
+            $stmt2->execute(array_map('intval', $ids));
+            $sans_email = (int)$stmt2->fetchColumn();
+
+            echo json_encode(['ok' => true, 'sans_email' => $sans_email, 'mode_dev' => isModeDeveloppement()]);
+            exit;
+        }
+
+        // ── Envoi d'un seul email (appelé séquentiellement par le JS) ──────────
+        if ($action === 'envoyer_un') {
+            $type    = trim($_POST['type']    ?? 'Disponibilites');
+            $sujet   = trim($_POST['sujet']   ?? '');
+            $message = trim($_POST['message'] ?? '');
+            $idJa    = (int)($_POST['id_ja']  ?? 0);
+            $saison  = trim($_POST['saison']  ?? ($saison ?? ''));
+
+            if (!$idJa || $sujet === '' || $message === '') {
+                echo json_encode(['ok' => false, 'msg' => 'Paramètres manquants.']); exit;
+            }
+
+            // Rate limiting unitaire
+            $errRl = checkRateLimit(1);
+            if ($errRl !== null) {
+                echo json_encode(['ok' => false, 'msg' => $errRl]); exit;
+            }
+
+            $ja = $pdo->prepare("
                 SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
                        n.Id_Rencontre,
                        r.Date, r.Heure, r.Journee, r.Poule,
                        dv.Division,
                        ed.Nom AS NomDom, ee.Nom AS NomExt,
-                       s.Nom        AS SalleNom,
-                       s.Adresse    AS SalleAdresse,
+                       s.Nom          AS SalleNom,
+                       s.Adresse      AS SalleAdresse,
                        lps.CodePostal AS SalleCP,
-                       lps.Nom      AS SalleVille,
-                       co.Nom       AS CorrNom,
-                       co.Email     AS CorrEmail,
-                       co.Telephone AS CorrTel
+                       lps.Nom        AS SalleVille,
+                       co.Nom         AS CorrNom,
+                       co.Email       AS CorrEmail,
+                       co.Telephone   AS CorrTel
                 FROM ja j
                 LEFT JOIN nomination n     ON n.Id_JA = j.Id_JA AND n.Valide = 1
-                LEFT JOIN rencontre r      ON r.Id_Rencontre  = n.Id_Rencontre
-                LEFT JOIN equipe ed        ON ed.Id_Equipe    = r.Id_EquipeDom
-                LEFT JOIN equipe ee        ON ee.Id_Equipe    = r.Id_EquipeExt
-                LEFT JOIN division dv      ON dv.Id_Division  = r.Id_Division
-                LEFT JOIN salle s          ON s.Id_Salle      = r.id_Salle
-                LEFT JOIN laposte lps      ON lps.Id_LaPoste  = s.Id_Laposte
+                LEFT JOIN rencontre r      ON r.Id_Rencontre = n.Id_Rencontre
+                LEFT JOIN equipe ed        ON ed.Id_Equipe   = r.Id_EquipeDom
+                LEFT JOIN equipe ee        ON ee.Id_Equipe   = r.Id_EquipeExt
+                LEFT JOIN division dv      ON dv.Id_Division = r.Id_Division
+                LEFT JOIN salle s          ON s.Id_Salle     = r.id_Salle
+                LEFT JOIN laposte lps      ON lps.Id_LaPoste = s.Id_Laposte
                 LEFT JOIN correspondant co ON co.Id_Correspondant = (
-                    SELECT c2.Id_Correspondant
-                    FROM correspondant c2
-                    WHERE c2.Id_Club = j.Id_Club
-                    ORDER BY c2.Id_Correspondant
-                    LIMIT 1
+                    SELECT c2.Id_Correspondant FROM correspondant c2
+                    WHERE c2.Id_Club = j.Id_Club ORDER BY c2.Id_Correspondant LIMIT 1
                 )
-                WHERE j.Id_JA IN ($placeholders) AND j.Actif = 1
-                  AND j.Email IS NOT NULL AND j.Email <> ''
+                WHERE j.Id_JA = ? AND j.Actif = 1
                 GROUP BY j.Id_JA, j.Nom, j.Prenom, j.Email,
                          n.Id_Rencontre, r.Date, r.Heure, r.Journee, r.Poule,
                          dv.Division, ed.Nom, ee.Nom,
                          s.Nom, s.Adresse, lps.CodePostal, lps.Nom,
                          co.Nom, co.Email, co.Telephone
-                ORDER BY j.Nom, j.Prenom
             ");
-            $stmtJas->execute(array_map('intval', $ids));
-            $jas = $stmtJas->fetchAll();
+            $ja->execute([$idJa]);
+            $ja = $ja->fetch();
 
-            // JA sans email
-            $stmt2 = $pdo->prepare("SELECT COUNT(*) FROM ja WHERE Id_JA IN ($placeholders) AND (Email IS NULL OR Email = '')");
-            $stmt2->execute(array_map('intval', $ids));
-            $sans_email = (int)$stmt2->fetchColumn();
+            if (!$ja || empty($ja['Email'])) {
+                echo json_encode(['ok' => false, 'skip' => true, 'msg' => 'Pas d\'email.']); exit;
+            }
 
-            // Préparer requête nominations pour type "Liste nomination"
-            $stmtNoms = null;
+            // Générer la liste des nominations pour "Liste nomination"
+            $listeNoms = '';
             if ($type === 'Liste nomination' && $saison) {
                 $stmtNoms = $pdo->prepare("
-                    SELECT r.Date, r.Heure, dv.Division,
-                           ed.Nom AS Dom, ee.Nom AS Ext
+                    SELECT r.Date, r.Heure, dv.Division, ed.Nom AS Dom, ee.Nom AS Ext
                     FROM nomination n
-                    JOIN rencontre r  ON r.Id_Rencontre = n.Id_Rencontre
-                    JOIN equipe ed    ON ed.Id_Equipe   = r.Id_EquipeDom
-                    LEFT JOIN equipe ee ON ee.Id_Equipe = r.Id_EquipeExt
-                    JOIN division dv  ON dv.Id_Division = r.Id_Division
-                    WHERE n.Id_JA = ? AND r.Saison = ?
-                    ORDER BY r.Date, r.Heure
+                    JOIN rencontre r    ON r.Id_Rencontre = n.Id_Rencontre
+                    JOIN equipe ed      ON ed.Id_Equipe   = r.Id_EquipeDom
+                    LEFT JOIN equipe ee ON ee.Id_Equipe   = r.Id_EquipeExt
+                    JOIN division dv    ON dv.Id_Division = r.Id_Division
+                    WHERE n.Id_JA = ? AND r.Saison = ? ORDER BY r.Date, r.Heure
                 ");
-            }
-
-            $envoyes = 0;
-            $erreurs = [];
-            $modeDev = isModeDeveloppement();
-
-            foreach ($jas as $ja) {
-                $token = $_obf->obfuscate((int)$ja['Id_JA']);
-
-                // Générer la liste des nominations pour "Liste nomination"
-                $listeNoms = '';
-                if ($stmtNoms) {
-                    $stmtNoms->execute([$ja['Id_JA'], $saison]);
-                    $noms = $stmtNoms->fetchAll();
-                    if ($noms) {
-                        $listeNoms  = '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;">';
-                        $listeNoms .= '<tr style="background:#1a3a6b;color:#fff;">'
-                            . '<th>Date</th><th>Heure</th><th>Division</th><th>Domicile</th><th>Extérieur</th>'
-                            . '</tr>';
-                        foreach ($noms as $idx => $n) {
-                            $bg   = ($idx % 2 === 0) ? '#f0f4fa' : '#ffffff';
-                            $date = $n['Date'] ? date('d/m/Y', strtotime($n['Date'])) : '';
-                            $listeNoms .= sprintf(
-                                '<tr style="background:%s"><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>',
-                                $bg,
-                                htmlspecialchars($date),
-                                htmlspecialchars($n['Heure'] ?? ''),
-                                htmlspecialchars($n['Division']),
-                                htmlspecialchars($n['Dom']),
-                                htmlspecialchars($n['Ext'] ?? '')
-                            );
-                        }
-                        $listeNoms .= '</table>';
-                    } else {
-                        $listeNoms = '<em>(aucune nomination)</em>';
+                $stmtNoms->execute([$idJa, $saison]);
+                $noms = $stmtNoms->fetchAll();
+                if ($noms) {
+                    $listeNoms = '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;">'
+                        . '<tr style="background:#1a3a6b;color:#fff;"><th>Date</th><th>Heure</th><th>Division</th><th>Domicile</th><th>Extérieur</th></tr>';
+                    foreach ($noms as $idx => $n) {
+                        $bg = ($idx % 2 === 0) ? '#f0f4fa' : '#ffffff';
+                        $listeNoms .= sprintf(
+                            '<tr style="background:%s"><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>',
+                            $bg,
+                            htmlspecialchars($n['Date'] ? date('d/m/Y', strtotime($n['Date'])) : ''),
+                            htmlspecialchars($n['Heure'] ?? ''),
+                            htmlspecialchars($n['Division']),
+                            htmlspecialchars($n['Dom']),
+                            htmlspecialchars($n['Ext'] ?? '')
+                        );
                     }
-                }
-
-                // Passe 1 : remplacer les marqueurs texte (les valeurs seront échappées ensuite)
-                $corps = str_replace(
-                    ['{NOM}', '{PRENOM}', '{NOM_COMPLET}', '{ID_JA}',
-                     '{UTI_NOM}', '{UTI_PRENOM}',
-                     '{DATE}', '{HEURE}', '{JOURNEE}', '{POULE}', '{DIVISION}', '{DOM}', '{EXT}',
-                     '{SALLE_NOM}', '{SALLE_ADRESSE}', '{SALLE_CP}', '{SALLE_VILLE}',
-                     '{CORR_NOM}', '{CORR_EMAIL}', '{CORR_TEL}'],
-                    [$ja['Nom'], $ja['Prenom'], $ja['Prenom'] . ' ' . $ja['Nom'], $token,
-                     $moi['nom'] ?? '', $moi['prenom'] ?? '',
-                     $ja['Date'] ? date('d/m/Y', strtotime($ja['Date'])) : '', $ja['Heure'] ?? '',
-                     $ja['Journee'] ?? '', $ja['Poule'] ?? '', $ja['Division'] ?? '',
-                     $ja['NomDom'] ?? '', $ja['NomExt'] ?? '',
-                     $ja['SalleNom'] ?? '', $ja['SalleAdresse'] ?? '', $ja['SalleCP'] ?? '', $ja['SalleVille'] ?? '',
-                     $ja['CorrNom'] ?? '', $ja['CorrEmail'] ?? '', $ja['CorrTel'] ?? ''],
-                    $message
-                );
-                // Passe 2 : encoder le texte brut en HTML (sauts de ligne → <br>)
-                $corps = nl2br(htmlspecialchars($corps, ENT_NOQUOTES, 'UTF-8'));
-                // Passe 3 : injecter la table HTML (non échappée) à la place du marqueur
-                $corps = str_replace('{LISTE_NOMINATIONS}', $listeNoms, $corps);
-
-                $dest = getEmailDestinataire($ja['Email']);
-                try {
-                    $mail = getNijacMailer();
-                    $mail->isHTML(true);
-                    $mail->addAddress($dest, $ja['Prenom'] . ' ' . $ja['Nom']);
-                    $mail->Subject = ($modeDev && $dest !== $ja['Email'])
-                        ? "[DEV → {$ja['Email']}] $sujet"
-                        : $sujet;
-                    $mail->Body    = $corps;
-                    $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>','<br />'], "\n", $corps));
-                    $mail->send();
-                    $envoyes++;
-                } catch (\Exception $e) {
-                    $erreurs[] = ['nom' => $ja['Prenom'] . ' ' . $ja['Nom'], 'msg' => $e->getMessage()];
-                    error_log('[NIJAC] centrenvoye mail error : ' . $e->getMessage());
+                    $listeNoms .= '</table>';
+                } else {
+                    $listeNoms = '<em>(aucune nomination)</em>';
                 }
             }
 
-            echo json_encode([
-                'ok'         => true,
-                'envoyes'    => $envoyes,
-                'erreurs'    => $erreurs,
-                'sans_email' => $sans_email,
-                'mode_dev'   => $modeDev,
-            ]);
+            $token = $_obf->obfuscate((int)$ja['Id_JA']);
+            $corps = str_replace(
+                ['{NOM}','{PRENOM}','{NOM_COMPLET}','{ID_JA}',
+                 '{UTI_NOM}','{UTI_PRENOM}',
+                 '{DATE}','{HEURE}','{JOURNEE}','{POULE}','{DIVISION}','{DOM}','{EXT}',
+                 '{SALLE_NOM}','{SALLE_ADRESSE}','{SALLE_CP}','{SALLE_VILLE}',
+                 '{CORR_NOM}','{CORR_EMAIL}','{CORR_TEL}'],
+                [$ja['Nom'],$ja['Prenom'],$ja['Prenom'].' '.$ja['Nom'],$token,
+                 $moi['nom']??'',$moi['prenom']??'',
+                 $ja['Date'] ? date('d/m/Y', strtotime($ja['Date'])) : '',$ja['Heure']??'',
+                 $ja['Journee']??'',$ja['Poule']??'',$ja['Division']??'',
+                 $ja['NomDom']??'',$ja['NomExt']??'',
+                 $ja['SalleNom']??'',$ja['SalleAdresse']??'',$ja['SalleCP']??'',$ja['SalleVille']??'',
+                 $ja['CorrNom']??'',$ja['CorrEmail']??'',$ja['CorrTel']??''],
+                $message
+            );
+            $corps = nl2br(htmlspecialchars($corps, ENT_NOQUOTES, 'UTF-8'));
+            $corps = str_replace('{LISTE_NOMINATIONS}', $listeNoms, $corps);
+
+            $modeDev = isModeDeveloppement();
+            $dest    = getEmailDestinataire($ja['Email']);
+            try {
+                $mail = getNijacMailer();
+                $mail->isHTML(true);
+                $mail->addAddress($dest, $ja['Prenom'] . ' ' . $ja['Nom']);
+                $mail->Subject = ($modeDev && $dest !== $ja['Email'])
+                    ? "[DEV → {$ja['Email']}] $sujet"
+                    : $sujet;
+                $mail->Body    = $corps;
+                $mail->AltBody = strip_tags(str_replace(['<br>','<br/>','<br />'], "\n", $corps));
+                $mail->send();
+                enregistrerEnvois(1);
+                echo json_encode(['ok' => true, 'nom' => $ja['Prenom'] . ' ' . $ja['Nom']]);
+            } catch (\Exception $e) {
+                error_log('[NIJAC] centrenvoye mail error : ' . $e->getMessage());
+                echo json_encode(['ok' => false, 'nom' => $ja['Prenom'] . ' ' . $ja['Nom'], 'msg' => $e->getMessage()]);
+            }
             exit;
         }
 
@@ -685,6 +687,20 @@ $modeleJson = json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS);
             <div id="result-envoi"></div>
         </div>
 
+        <!-- Barre de progression (masquée par défaut) -->
+        <div id="envoi-progress" style="display:none;margin-top:.6rem;">
+            <div class="d-flex justify-content-between align-items-center mb-1" style="font-size:.78rem;">
+                <span id="progress-label" class="text-secondary fw-semibold"></span>
+                <span id="progress-counts" class="text-muted"></span>
+            </div>
+            <div class="progress" style="height:14px;border-radius:8px;">
+                <div id="progress-bar"
+                     class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                     role="progressbar" style="width:0%;transition:width .3s ease;"></div>
+            </div>
+            <div id="progress-erreurs" class="mt-1 text-danger" style="font-size:.72rem;"></div>
+        </div>
+
     </div>
 
     <!-- ── Panneau JA ── -->
@@ -740,6 +756,7 @@ $modeleJson = json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS);
 <div id="toast-container"></div>
 
 <script src="../asset/js/jquery-3.7.1.min.js"></script>
+    <script src="../asset/js/nijac-csrf.js"></script>
 <script src="../asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';
@@ -955,35 +972,97 @@ $('#btn-envoyer').on('click', function () {
     if (!ids.length)         { toast('Aucun destinataire sélectionné.', false); return; }
     if (!confirm(`Envoyer le message à ${ids.length} JA ?\n\n${noms.join('\n')}`)) return;
 
-    $('#btn-envoyer').prop('disabled', true).html('<i class="bi bi-hourglass-split me-1"></i>Envoi…');
-    $('#result-envoi').html('');
+    const total   = ids.length;
+    let envoyes   = 0, echecs = 0, sansEmail = 0;
+    const erreursDetail = [];
 
-    $.post('centrenvoye.php', {
-        action:  'envoyer',
-        type:    typeActif,
-        sujet,
-        message,
-        ids:     JSON.stringify(ids),
-        saison:  saisonCourante ?? '',
-    }, function (res) {
-        $('#btn-envoyer').prop('disabled', false).html('<i class="bi bi-send me-1"></i>Envoyer');
-        if (res.ok) {
-            let txt = `<span class="text-success fw-bold"><i class="bi bi-check-circle me-1"></i>${res.envoyes} email(s) envoyé(s)</span>`;
-            if (res.sans_email > 0) txt += ` &nbsp;<span class="text-muted">${res.sans_email} sans email</span>`;
-            if (res.erreurs.length) {
-                txt += ` &nbsp;<span class="text-danger">${res.erreurs.length} échec(s)</span>`;
-                txt += '<div class="mt-1 text-danger" style="font-size:.76rem;">' +
-                    res.erreurs.map(e => `${e.nom} — ${e.msg}`).join('<br>') + '</div>';
-            }
-            $('#result-envoi').html(txt);
-            const nomsEchecs = res.erreurs.map(e => `${e.nom}`).join(', ');
-            let msgToast = `${res.envoyes} email(s) envoyé(s).`;
-            if (res.erreurs.length) msgToast += ` Échecs : ${nomsEchecs}.`;
-            toast(msgToast, res.erreurs.length === 0);
-        } else {
-            toast(res.msg, false);
+    function demarrerProgress() {
+        $('#btn-envoyer').prop('disabled', true).html('<i class="bi bi-hourglass-split me-1"></i>Envoi en cours…');
+        $('#result-envoi').html('');
+        $('#envoi-progress').show();
+        $('#progress-bar').css('width', '0%').removeClass('bg-danger').addClass('bg-success progress-bar-animated');
+        $('#progress-erreurs').html('');
+        majProgress(0);
+    }
+
+    function majProgress(fait) {
+        const pct   = total > 0 ? Math.round(fait / total * 100) : 0;
+        $('#progress-bar').css('width', pct + '%').attr('aria-valuenow', pct);
+        $('#progress-label').text(`Envoi ${fait} / ${total}…`);
+        $('#progress-counts').html(
+            `<span class="text-success">${envoyes} ✓</span>` +
+            (echecs   > 0 ? ` &nbsp;<span class="text-danger">${echecs} ✗</span>` : '') +
+            (sansEmail > 0 ? ` &nbsp;<span class="text-muted">${sansEmail} sans email</span>` : '')
+        );
+    }
+
+    function terminerProgress() {
+        const ok = echecs === 0;
+        $('#progress-bar')
+            .css('width', '100%')
+            .removeClass('progress-bar-animated' + (ok ? '' : ' bg-success'))
+            .addClass(ok ? '' : 'bg-danger');
+        $('#progress-label').html(ok
+            ? `<span class="text-success fw-bold"><i class="bi bi-check-circle me-1"></i>Envoi terminé</span>`
+            : `<span class="text-danger fw-bold"><i class="bi bi-exclamation-triangle me-1"></i>Envoi terminé avec ${echecs} erreur(s)</span>`
+        );
+        $('#progress-counts').html(
+            `<span class="text-success fw-semibold">${envoyes} envoyé(s)</span>` +
+            (echecs   > 0 ? ` &nbsp;<span class="text-danger">${echecs} échec(s)</span>` : '') +
+            (sansEmail > 0 ? ` &nbsp;<span class="text-muted">${sansEmail} sans email</span>` : '')
+        );
+        if (erreursDetail.length) {
+            $('#progress-erreurs').html(erreursDetail.map(e => `<i class="bi bi-x-circle me-1"></i>${e.nom} — ${e.msg}`).join('<br>'));
         }
-    }, 'json');
+        $('#btn-envoyer').prop('disabled', false).html('<i class="bi bi-send me-1"></i>Envoyer');
+        toast(ok ? `${envoyes} email(s) envoyé(s).` : `${envoyes} envoyé(s), ${echecs} échec(s).`, ok);
+    }
+
+    // Vérification initiale (rate limit global + comptage sans-email)
+    $.post('centrenvoye.php', {
+        action: 'envoyer',
+        sujet, message,
+        ids: JSON.stringify(ids),
+    }, function (res) {
+        if (!res.ok) { toast(res.msg, false); return; }
+        sansEmail = res.sans_email || 0;
+
+        demarrerProgress();
+
+        // Envoi séquentiel un par un
+        let idx = 0;
+        function envoyerSuivant() {
+            if (idx >= ids.length) { terminerProgress(); return; }
+            const id = ids[idx++];
+            $.post('centrenvoye.php', {
+                action:  'envoyer_un',
+                type:    typeActif,
+                sujet, message,
+                id_ja:   id,
+                saison:  saisonCourante ?? '',
+            }, function (r) {
+                if (r.ok) {
+                    envoyes++;
+                } else if (r.skip) {
+                    // pas d'email, déjà compté dans sansEmail
+                } else {
+                    echecs++;
+                    erreursDetail.push({ nom: r.nom || `JA #${id}`, msg: r.msg || 'Erreur inconnue' });
+                }
+                majProgress(idx);
+                envoyerSuivant();
+            }, 'json').fail(function () {
+                echecs++;
+                erreursDetail.push({ nom: `JA #${id}`, msg: 'Erreur réseau' });
+                majProgress(idx);
+                envoyerSuivant();
+            });
+        }
+        envoyerSuivant();
+
+    }, 'json').fail(function () {
+        toast('Erreur réseau lors de la vérification.', false);
+    });
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────

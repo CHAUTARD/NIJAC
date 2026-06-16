@@ -13,6 +13,7 @@
  * Déplacé dans Nominateur/ : 2026-06-12
  */
 require __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/csrf.php';
 require __DIR__ . '/../Classes/Obfuscator.php';
 
 // ── Décodage du paramètre obfusqué ?ja=TOKEN ─────────────────────────────────
@@ -50,6 +51,7 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 if ($action !== '') {
     ob_start(); ob_end_clean();
     header('Content-Type: application/json; charset=utf-8');
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfVerify(true);
 
     try {
 
@@ -868,6 +870,7 @@ try {
 <div id="toast-zone"></div>
 
 <script src="../asset/js/jquery-3.7.1.min.js"></script>
+    <script src="../asset/js/nijac-csrf.js"></script>
 <script src="../asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';

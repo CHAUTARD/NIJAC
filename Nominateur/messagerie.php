@@ -11,6 +11,7 @@
  */
 session_start();
 require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/csrf.php';
 
 // ── Sécurité : accès admin uniquement ────────────────────────────────────────
 if (!isset($_SESSION['utilisateur']) || empty($_SESSION['utilisateur']['is_admin'])) {
@@ -24,6 +25,7 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 if ($action !== '') {
     header('Content-Type: application/json; charset=utf-8');
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfVerify(true);
 
     try {
         $pdo = getPDO();
@@ -419,6 +421,7 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
 <div id="toast-container"></div>
 
 <script src="../asset/js/jquery-3.7.1.min.js"></script>
+    <script src="../asset/js/nijac-csrf.js"></script>
 <script src="../asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';

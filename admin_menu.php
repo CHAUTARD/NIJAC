@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * NIJAC – Menu paramètres administrateur (E002)
  *
@@ -28,7 +28,7 @@ if (empty($u['is_admin'])) {
 
 $nomComplet   = htmlspecialchars(($u['nom'] ?? '') . ' ' . ($u['prenom'] ?? ''));
 $departement  = htmlspecialchars($u['id_departement'] ?? '');
-$changeLogin  = !empty($u['change_login']); // true = forcer le changement de mot de passe
+$changeLogin  = !empty($u['change_login']);
 $isAdmin      = !empty($u['is_admin']);
 ?>
 <!DOCTYPE html>
@@ -58,8 +58,8 @@ $isAdmin      = !empty($u['is_admin']);
 
         /* ── Barre d'outils (ToolStrip) ── */
         #toolbar {
-            background: #c0ffff;
-            border-bottom: 1px solid #90cccc;
+            background: #f8fafc;
+            border-bottom: 1px solid #dde5f0;
             padding: .3rem 1rem;
             display: flex;
             align-items: center;
@@ -101,7 +101,8 @@ $isAdmin      = !empty($u['is_admin']);
             transition: background .15s;
         }
         #btn-switch-nominateur:hover { background: #1b5e20; color: #fff; }
-/* ── En-tête de page ── */
+
+        /* ── En-tête de page ── */
         #page-header {
             background: var(--nijac-blue);
             color: #fff;
@@ -132,7 +133,7 @@ $isAdmin      = !empty($u['is_admin']);
             text-decoration: none;
             font-size: 1.1rem;
             font-weight: 700;
-            font-family: 'Microsoft Sans Serif', 'Segoe UI', sans-serif;
+            font-family: 'Segoe UI', system-ui, sans-serif;
             color: #222;
             transition: filter .15s, transform .1s, box-shadow .15s;
             box-shadow: 2px 2px 6px rgba(0,0,0,.15);
@@ -140,7 +141,6 @@ $isAdmin      = !empty($u['is_admin']);
             min-height: 190px;
         }
 
-        /* Conteneur image à hauteur fixe — même position pour toutes les cartes */
         .menu-btn .btn-icon {
             display: flex;
             align-items: center;
@@ -176,7 +176,6 @@ $isAdmin      = !empty($u['is_admin']);
             line-height: 1.3;
         }
         .menu-btn:hover .btn-desc { color: #333; }
-        .btn-club:hover .btn-desc { color: #ddd; }
 
         .menu-btn:hover {
             filter: brightness(1.08);
@@ -190,18 +189,16 @@ $isAdmin      = !empty($u['is_admin']);
             box-shadow: 1px 2px 4px rgba(0,0,0,.15);
         }
 
-        /* Couleurs individuelles (fidèles au C#) */
-        .btn-competition  { background-color: #8080ff; }
-        .btn-club         { background-color: #228b22; color: #fff; }
-        .btn-salle        { background-color: #c0ffc0; }
-        .btn-saison       { background-color: #c0ffc0; }
-        .btn-division     { background-color: #ffd700; }
-        .btn-utilisateur  { background-color: #ffffc0; }
-        .btn-correspondant{ background-color: #ffc080; }
-        .btn-communes     { background-color: #ffffc0; }
-        .btn-configuration{ background-color: #80ff80; }
-
-        .btn-club:hover   { color: #fff; }
+        /* Couleurs individuelles */
+        .btn-competition  { background-color: #e8eaf6; }
+        .btn-club         { background-color: #e8f5e9; }
+        .btn-salle        { background-color: #e0f2f1; }
+        .btn-saison       { background-color: #fff8e1; }
+        .btn-division     { background-color: #fbe9e7; }
+        .btn-utilisateur  { background-color: #e3f2fd; }
+        .btn-correspondant{ background-color: #f3e5f5; }
+        .btn-communes     { background-color: #e0f7fa; }
+        .btn-configuration{ background-color: #eceff1; }
 
     </style>
 </head>
@@ -225,10 +222,9 @@ $isAdmin      = !empty($u['is_admin']);
         <i class="bi bi-grid-3x3-gap-fill me-2"></i>Menu pour les paramètres &nbsp;<small class="opacity-75">(E002)</small>
     </div>
 
-    <!-- Grille 4 × 2 + bouton configuration -->
+    <!-- Grille de boutons -->
     <div id="menu-grid">
 
-        <!-- Ligne 1 -->
         <a href="competition.php" class="menu-btn btn-competition">
             <div class="btn-icon"><img src="img/Competition.png" alt="Compétition"></div>
             <span>Type de compétition</span>
@@ -238,7 +234,7 @@ $isAdmin      = !empty($u['is_admin']);
         <a href="club.php" class="menu-btn btn-club">
             <div class="btn-icon"><img src="img/Association.png" alt="Club / Association"></div>
             <span>Club / Association</span>
-            <span class="btn-desc" style="color:#ccc;">Gérer les clubs et associations affiliés</span>
+            <span class="btn-desc">Gérer les clubs et associations affiliés</span>
         </a>
 
         <a href="salle.php" class="menu-btn btn-salle">
@@ -253,7 +249,6 @@ $isAdmin      = !empty($u['is_admin']);
             <span class="btn-desc">Suppression des informations sur la saison dernière</span>
         </a>
 
-        <!-- Ligne 2 -->
         <a href="utilisateur.php" class="menu-btn btn-utilisateur">
             <div class="btn-icon"><img src="img/Utilisateur.png" alt="Utilisateur"></div>
             <span>Utilisateur</span>
@@ -278,20 +273,18 @@ $isAdmin      = !empty($u['is_admin']);
             <span class="btn-desc">Définir les divisions et leur niveau</span>
         </a>
 
-        <!-- Ligne 3 -->
         <a href="configuration.php" class="menu-btn btn-configuration">
             <div class="btn-icon"><img src="img/Parametres.png" alt="Configuration"></div>
             <span>Configuration</span>
             <span class="btn-desc">Paramètres généraux de l'application</span>
         </a>
 
-        <a href="import_rencontres.php" class="menu-btn" style="background-color:#e8f5e9;">
+        <a href="import_rencontres.php" class="menu-btn btn-club">
             <div class="btn-icon"><img src="img/Competition.png" alt="Import Rencontres"></div>
             <span>Import Rencontres</span>
             <span class="btn-desc">Importer les rencontres depuis un fichier FFTT</span>
         </a>
 
-        <!-- Déconnexion -->
         <a href="logout.php" class="menu-btn" style="background:#f8d7da; grid-column: 5;">
             <div class="btn-icon"><i class="bi bi-box-arrow-right" style="color:#842029;"></i></div>
             <span style="color:#842029;">Se déconnecter</span>
@@ -305,12 +298,12 @@ $isAdmin      = !empty($u['is_admin']);
 
     <!-- jQuery + Bootstrap JS (local) -->
     <script src="asset/js/jquery-3.7.1.min.js"></script>
+    <script src="asset/js/nijac-csrf.js"></script>
     <script src="asset/js/bootstrap.bundle.min.js"></script>
 
     <script>
     'use strict';
 
-    // Confirmation avant déconnexion
     $('a[href="logout.php"]').on('click', function (e) {
         if (!confirm('Voulez-vous vous déconnecter ?')) {
             e.preventDefault();

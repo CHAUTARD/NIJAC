@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * NIJAC – Gestion des correspondants de clubs (E004)
  *
@@ -12,6 +12,7 @@
  */
 session_start();
 require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/config/csrf.php';
 require_once __DIR__ . '/vendor/autoload.php';
 
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -40,6 +41,7 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 if ($action !== '') {
     ob_start();
     header('Content-Type: application/json; charset=utf-8');
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfVerify(true);
 
     try {
         $pdo = getPDO();
@@ -403,6 +405,7 @@ $changeLogin = !empty($moi['change_login']);
 <div id="toast-container"></div>
 
 <script src="asset/js/jquery-3.7.1.min.js"></script>
+    <script src="asset/js/nijac-csrf.js"></script>
 <script src="asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';

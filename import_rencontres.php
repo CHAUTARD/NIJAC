@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * NIJAC – Import des rencontres (E011)
  *
@@ -17,6 +17,7 @@ if (!isset($_SESSION['utilisateur']) || empty($_SESSION['utilisateur']['is_admin
 }
 
 require __DIR__ . '/config/db.php';
+require_once __DIR__ . '/config/csrf.php';
 require __DIR__ . '/vendor/autoload.php';
 
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -266,6 +267,7 @@ if (isset($_GET['action'])) {
     ob_start();
     ob_end_clean();
     header('Content-Type: application/json; charset=utf-8');
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfVerify(true);
 
     $action = $_GET['action'];
 
@@ -519,6 +521,7 @@ $isAdmin     = !empty($u['is_admin']);
 <?php require __DIR__ . '/includes/footer.php'; ?>
 
 <script src="asset/js/jquery-3.7.1.min.js"></script>
+    <script src="asset/js/nijac-csrf.js"></script>
 <script src="asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';

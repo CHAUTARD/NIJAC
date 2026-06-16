@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * NIJAC – Gestion des Juges-Arbitres (E007)
  *
@@ -13,9 +13,7 @@
  */
 session_start();
 require_once __DIR__ . '/../config/db.php';
-require_once __DIR__ . '/../vendor/autoload.php';
-
-use PhpOffice\PhpSpreadsheet\IOFactory;
+require_once __DIR__ . '/../config/csrf.php';
 
 // ── Sécurité ──────────────────────────────────────────────────────────────────
 if (!isset($_SESSION['utilisateur'])) {
@@ -51,6 +49,7 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 if ($action !== '') {
     ob_start();
     header('Content-Type: application/json; charset=utf-8');
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfVerify(true);
 
     // Actions réservées aux administrateurs
     $actionsAdmin = ['importer_excel', 'sauvegarder', 'supprimer', 'maj_laposte'];
@@ -240,7 +239,13 @@ if ($action !== '') {
                 exit;
             }
 
-            $spreadsheet = IOFactory::load($_FILES['fichier']['tmp_name']);
+            if (!file_exists(__DIR__ . '/../vendor/autoload.php')) {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => 'PhpSpreadsheet non installé sur ce serveur. Contactez l\'administrateur.']);
+                exit;
+            }
+            require_once __DIR__ . '/../vendor/autoload.php';
+            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($_FILES['fichier']['tmp_name']);
             $sheet       = $spreadsheet->getActiveSheet();
             $maxRow      = $sheet->getHighestRow();
 
@@ -411,7 +416,7 @@ if ($action !== '') {
         ob_end_clean();
         echo json_encode(['ok' => false, 'msg' => 'Erreur BDD : ' . $e->getMessage()]);
         exit;
-    } catch (\PhpOffice\PhpSpreadsheet\Exception $e) {
+    } catch (\Throwable $e) {
         ob_end_clean();
         echo json_encode(['ok' => false, 'msg' => 'Erreur Excel : ' . $e->getMessage()]);
         exit;
@@ -596,7 +601,7 @@ $deptUserJs  = $isAdmin ? "''" : "'" . addslashes($moi['id_departement'] ?? '') 
     <div class="spinner-border text-light" style="width:3rem;height:3rem;"></div>
 </div>
 
-<?php require __DIR__ . '../includes/toolbar.php'; ?>
+<?php require __DIR__ . '/includes/toolbar.php'; ?>
 
 <!-- MenuStrip -->
 <div id="menu-strip">
@@ -675,6 +680,7 @@ $deptUserJs  = $isAdmin ? "''" : "'" . addslashes($moi['id_departement'] ?? '') 
 <div id="toast-container"></div>
 
 <script src="../asset/js/jquery-3.7.1.min.js"></script>
+    <script src="../asset/js/nijac-csrf.js"></script>
 <script src="../asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';

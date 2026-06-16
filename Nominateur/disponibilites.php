@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * NIJAC – Saisie des disponibilités JA par le nominateur (E021)
  *
@@ -17,6 +17,7 @@ if (!isset($_SESSION['utilisateur'])) {
 }
 
 require __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/csrf.php';
 
 $pdo = getPDO();
 
@@ -202,6 +203,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 <?php require __DIR__ . '/../includes/footer.php'; ?>
 
 <script src="../asset/js/jquery-3.7.1.min.js"></script>
+    <script src="../asset/js/nijac-csrf.js"></script>
 <script src="../asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';

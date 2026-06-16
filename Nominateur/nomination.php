@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * NIJAC – Nomination des Juges-Arbitres (E022)
  *
@@ -21,6 +21,7 @@ if (!isset($_SESSION['utilisateur'])) {
 }
 
 require __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/csrf.php';
 require __DIR__ . '/../Classes/Obfuscator.php';
 
 $pdo = getPDO();
@@ -31,6 +32,7 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 if ($action !== '') {
     ob_start(); ob_end_clean();
     header('Content-Type: application/json; charset=utf-8');
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfVerify(true);
 
     try {
 
@@ -627,6 +629,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 <?php require __DIR__ . '/../includes/footer.php'; ?>
 
 <script src="../asset/js/jquery-3.7.1.min.js"></script>
+    <script src="../asset/js/nijac-csrf.js"></script>
 <script src="../asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';

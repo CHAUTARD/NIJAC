@@ -1,11 +1,32 @@
 <?php
-// Connexion MariaDB — à adapter selon votre environnement WAMP
-define('DB_HOST', '127.0.0.1');
-define('DB_PORT', '3307');
-define('DB_NAME', 'nijac');       // Nom de votre base de données
-define('DB_USER', 'root');        // Utilisateur MariaDB
-define('DB_PASS', '');            // Mot de passe MariaDB (vide par défaut sous WAMP)
-define('DB_CHARSET', 'utf8mb4');
+// ── Détection de l'environnement ─────────────────────────────────────────────
+// Mettre ENV=production dans les variables d'environnement du serveur (Apache/IIS)
+// ou créer un fichier .env.production à la racine pour basculer automatiquement.
+$isProduction = (getenv('NIJAC_ENV') === 'production')
+             || file_exists(__DIR__ . '/../.env.production');
+
+// ── Configuration locale (WAMP / développement) ───────────────────────────────
+if (!$isProduction) {
+    define('DB_HOST',    '127.0.0.1');
+    define('DB_PORT',    '3307');
+    define('DB_NAME',    'nijac');
+    define('DB_USER',    'root');
+    define('DB_PASS',    '');
+    define('APP_DEBUG',  true);
+
+// ── Configuration serveur (production) ───────────────────────────────────────
+} else {
+    define('DB_HOST',    'localhost');
+    define('DB_PORT',    '3306');          // Port MySQL standard en production
+    define('DB_NAME',    'n42cfyle_nijac');
+    define('DB_USER',    'n42cfyle_nijac');    // Utilisateur dédié (pas root)
+    define('DB_PASS',    'A!h!Y4wG3Ka4Yj¡f');     // À remplacer par le vrai mot de passe
+    define('APP_DEBUG',  false);
+}
+
+// ── Constantes communes ───────────────────────────────────────────────────────
+define('DB_CHARSET',   'utf8mb4');
+define('APP_VERSION',  '0.09');
 
 // Seed secret pour l'obfuscation des identifiants JA dans les URL publiques
 // (doit rester identique entre génération et décodage)

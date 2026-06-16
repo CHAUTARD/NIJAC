@@ -1,10 +1,10 @@
-﻿<?php
+<?php
 /**
  * NIJAC – Nettoyage / Restauration de saison (E016)
  *
  * Deux fonctions :
- *   1. Sauvegarde + vidage des tables de la saison (JA, Disponible, Equipe,
- *      Rencontre, Nomination) après confirmation par mot de passe admin.
+ *   1. Sauvegarde + désactivation des JA (Actif=0) + vidage des tables
+ *      Disponible, Equipe, Rencontre, Nomination — après confirmation admin.
  *      Génère un fichier SQL dans /SQL/.
  *   2. Restauration à partir d'un fichier de sauvegarde sélectionné dans /SQL/,
  *      après confirmation par mot de passe admin.
@@ -14,6 +14,7 @@
  */
 session_start();
 require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/config/csrf.php';
 require_once __DIR__ . '/Classes/SecurePasswordHasher.php';
 
 // ── Sécurité ──────────────────────────────────────────────────────────────────
@@ -67,6 +68,7 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 if ($action !== '') {
     ob_start();
     header('Content-Type: application/json; charset=utf-8');
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfVerify(true);
 
     try {
         $pdo = getPDO();
@@ -151,19 +153,22 @@ if ($action !== '') {
                 exit;
             }
 
-            // Vidage dans l'ordre des dépendances FK
+            // Nettoyage dans l'ordre des dépendances FK
             $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
-            foreach (['Nomination', 'Disponible', 'Rencontre', 'Equipe', 'JA'] as $t) {
+            foreach (['Nomination', 'Disponible', 'Rencontre', 'Equipe'] as $t) {
                 $pdo->exec("DELETE FROM `$t`");
             }
+            // JA : désactivation plutôt que suppression
+            $jaDesactives = $pdo->exec("UPDATE `ja` SET Actif = 0");
             $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
 
             ob_end_clean();
             echo json_encode([
-                'ok'      => true,
-                'msg'     => 'Sauvegarde effectuée et tables vidées avec succès.',
-                'fichier' => $filename,
-                'lignes'  => substr_count($sql, "\n") + 1,
+                'ok'            => true,
+                'msg'           => 'Sauvegarde effectuée, tables vidées et JA désactivés avec succès.',
+                'fichier'       => $filename,
+                'lignes'        => substr_count($sql, "\n") + 1,
+                'ja_desactives' => $jaDesactives,
             ]);
             exit;
         }
@@ -602,7 +607,7 @@ $changeLogin = !empty($moi['change_login']);
             </div>
 
             <button id="btn-executer" class="btn-action btn-clean" disabled>
-                <i class="bi bi-trash3-fill me-2"></i>Sauvegarder et vider les tables
+                <i class="bi bi-calendar2-plus-fill me-2"></i>Sauvegarder et démarrer nouvelle saison
             </button>
         </div>
 
@@ -718,6 +723,7 @@ $changeLogin = !empty($moi['change_login']);
 <?php $statusInitial = 'Prêt.'; ?>
 
 <script src="asset/js/jquery-3.7.1.min.js"></script>
+    <script src="asset/js/nijac-csrf.js"></script>
 <script src="asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';
@@ -763,8 +769,9 @@ $('#btn-executer').on('click', function () {
     if (!cleanPwdOk) return;
     if (!confirm(
         'DERNIÈRE CONFIRMATION\n\n' +
-        'Les tables JA, Disponible, Equipe, Rencontre et Nomination\n' +
-        'vont être vidées après sauvegarde.\n\n' +
+        '• Les tables Disponible, Equipe, Rencontre et Nomination seront vidées.\n' +
+        '• Tous les JA seront désactivés (Actif = 0) mais conservés.\n\n' +
+        'Une sauvegarde sera effectuée avant le nettoyage.\n\n' +
         'Cette opération est IRRÉVERSIBLE.\n\nConfirmer ?'
     )) return;
 
@@ -778,9 +785,10 @@ $('#btn-executer').on('click', function () {
         if (res.ok) {
             $box.html(
                 `<div class="result-ok">
-                   ✅ <strong>Opération réussie !</strong><br>
+                   ✅ <strong>Nouvelle saison démarrée !</strong><br>
                    Sauvegarde&nbsp;: <code>${res.fichier}</code> (${res.lignes} lignes)<br>
-                   Tables JA, Disponible, Equipe, Rencontre, Nomination vidées.
+                   Tables Disponible, Equipe, Rencontre, Nomination vidées.<br>
+                   ${res.ja_desactives} JA désactivé(s) (conservés en base).
                  </div>`
             );
             $('#section-clean').hide();

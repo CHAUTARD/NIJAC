@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * NIJAC – Gestion des communes / La Poste (E006)
  *
@@ -11,6 +11,7 @@
  */
 session_start();
 require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/config/csrf.php';
 
 // ── Sécurité ──────────────────────────────────────────────────────────────────
 if (!isset($_SESSION['utilisateur']) || empty($_SESSION['utilisateur']['is_admin'])) {
@@ -25,6 +26,7 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 if ($action !== '') {
     ob_start();
     header('Content-Type: application/json; charset=utf-8');
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfVerify(true);
 
     try {
         $pdo = getPDO();
@@ -854,6 +856,7 @@ $changeLogin = !empty($moi['change_login']);
 <div id="toast-container"></div>
 
 <script src="asset/js/jquery-3.7.1.min.js"></script>
+    <script src="asset/js/nijac-csrf.js"></script>
 <script src="asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';

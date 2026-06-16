@@ -1,4 +1,4 @@
-<?php $statusInitial ??= ''; ?>
+<?php if (!isset($statusInitial)) $statusInitial = ''; ?>
 <style>
 #page-footer {
     background: #e8eef7;
@@ -24,5 +24,5 @@
 </style>
 <div id="page-footer">
     <span id="status-bar"><?= $statusInitial ?></span>
-    <span class="footer-copyright">&copy; <?= date('Y') ?> NIJAC &mdash; Tous droits réservés &mdash; Ligue Normandie de Tennis de Table</span>
+    <span class="footer-copyright">&copy; <?= date('Y') ?> NIJAC &mdash; Tous droits réservés &mdash; Ligue Normandie de Tennis de Table &mdash; Version : <?= defined('APP_VERSION') ? APP_VERSION : '' ?></span>
 </div>

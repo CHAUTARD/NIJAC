@@ -9,11 +9,10 @@
  * Créé par : Patrick CHAUTARD
  * Date de création : 2026-06-11
  */
-session_unset();
 session_start();
-session_unset();
 
 require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/config/csrf.php';
 require_once __DIR__ . '/Classes/SecurePasswordHasher.php';
 
 // Si déjà connecté, rediriger selon le rôle
@@ -26,6 +25,7 @@ $status       = 'Prêt.';
 $statut_class = 'text-secondary';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrfVerify(false);
     $login    = trim($_POST['login']    ?? '');
     $password = trim($_POST['password'] ?? '');
 
@@ -48,8 +48,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 
             if ($row && (bool)$row['Actif'] && SecurePasswordHasher::verify($password, $row['Password'])) {
-                // Authentification réussie — on stocke les infos en session (jamais le mot de passe)
-                session_regenerate_id(true); // Protection fixation de session
+                // Authentification réussie — on purge et recrée la session proprement
+                session_unset();
+                session_regenerate_id(true);
 
                 $_SESSION['utilisateur'] = [
                     'id'             => $row['Id_Utilisateur'],
@@ -224,7 +225,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <!-- En-tête -->
     <div class="login-header">
-        <h5><i class="bi bi-person-badge me-2"></i>NIJAC &mdash; Nomination Informatisé des JA &mdash; Championnat <small class="opacity-75">(E001)</small></h5>
+        <h5><i class="bi bi-person-badge me-2"></i>NIJAC &mdash; Nomination Informatisée des JA &mdash; Championnat <small class="opacity-75">(E001)</small></h5>
     </div>
 
     <!-- Corps : formulaire + image -->
@@ -233,6 +234,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <!-- Formulaire -->
         <div class="form-panel">
             <form method="POST" action="index.php" id="form-login" novalidate>
+                <?= csrfField() ?>
 
                 <!-- Login -->
                 <div class="mb-3">
@@ -297,6 +299,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <!-- jQuery + Bootstrap JS (local) -->
 <script src="asset/js/jquery-3.7.1.min.js"></script>
+    <script src="asset/js/nijac-csrf.js"></script>
 <script src="asset/js/bootstrap.bundle.min.js"></script>
 
 <script>

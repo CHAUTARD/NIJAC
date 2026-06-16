@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * NIJAC – Convocation et frais JA (E023)
  *
@@ -11,7 +11,12 @@
  * Date de création : 2026-06-11
  */
 require __DIR__ . '/../config/db.php';
+require __DIR__ . '/../config/app_config.php';
 require __DIR__ . '/../Classes/Obfuscator.php';
+
+// Session nécessaire pour le token CSRF de la page de convocation publique
+if (session_status() === PHP_SESSION_NONE) session_start();
+require_once __DIR__ . '/../config/csrf.php';
 
 // DÃ©codage du paramÃ¨tre obfusquÃ© ?ja=TOKEN 
 if (isset($_GET['ja']) && $_GET['ja'] !== '') {
@@ -27,24 +32,71 @@ $idRencontre  = (int)($_GET['rencontre'] ?? 0);
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 if ($action === 'sauvegarder_frais') {
     header('Content-Type: application/json; charset=utf-8');
+    csrfVerify(true);
     try {
-        $idJaP   = (int)($_POST['id_ja']         ?? 0);
-        $idRencP = (int)($_POST['id_rencontre']   ?? 0);
-        $peages  = $_POST['peages']  !== '' ? (float)str_replace(',', '.', $_POST['peages']  ?? '') : null;
-        $km      = $_POST['km']      !== '' ? (int)$_POST['km']      : null;
-        $rapAcc  = trim($_POST['rapport_accueil']      ?? '');
-        $rapEq   = trim($_POST['rapport_equipements']  ?? '');
+        $idJaP   = (int)($_POST['id_ja']       ?? 0);
+        $idRencP = (int)($_POST['id_rencontre'] ?? 0);
+
         if (!$idJaP || !$idRencP) {
-            echo json_encode(['ok' => false, 'err' => 'ParamÃ¨tres manquants']); exit;
+            echo json_encode(['ok' => false, 'err' => 'Paramètres manquants.']); exit;
         }
+
+        // ── Parsing ──────────────────────────────────────────────────────────
+        $peagesRaw = trim($_POST['peages'] ?? '');
+        $kmRaw     = trim($_POST['km']     ?? '');
+        $rapAcc    = trim($_POST['rapport_accueil']     ?? '');
+        $rapEq     = trim($_POST['rapport_equipements'] ?? '');
+
+        $peages = $peagesRaw !== '' ? (float)str_replace(',', '.', $peagesRaw) : null;
+        $km     = $kmRaw     !== '' ? (int)$kmRaw : null;
+
+        // ── Validation ───────────────────────────────────────────────────────
+        $maxPeages = (float)getConfig('frais_max_peages', '80');
+        $maxKm     = (int)getConfig('frais_max_km', '200');
+        $erreurs   = [];
+
+        if ($peages !== null) {
+            if (!is_numeric(str_replace(',', '.', $peagesRaw))) {
+                $erreurs[] = 'Le montant des péages n\'est pas un nombre valide.';
+            } elseif ($peages < 0) {
+                $erreurs[] = 'Le montant des péages ne peut pas être négatif.';
+            } elseif ($peages > $maxPeages) {
+                $erreurs[] = "Le montant des péages semble aberrant (maximum {$maxPeages} €).";
+            }
+        }
+
+        if ($km !== null) {
+            if (!ctype_digit($kmRaw) && !(substr($kmRaw, 0, 1) === '-' && ctype_digit(substr($kmRaw, 1)))) {
+                $erreurs[] = 'Le nombre de kilomètres n\'est pas un entier valide.';
+            } elseif ($km < 0) {
+                $erreurs[] = 'Le nombre de kilomètres ne peut pas être négatif.';
+            } elseif ($km > $maxKm) {
+                $erreurs[] = "Le nombre de kilomètres semble aberrant (maximum {$maxKm} km).";
+            }
+        }
+
+        if (mb_strlen($rapAcc) > 2000) {
+            $erreurs[] = 'Le rapport d\'accueil ne doit pas dépasser 2 000 caractères.';
+        }
+        if (mb_strlen($rapEq) > 2000) {
+            $erreurs[] = 'Le rapport équipements ne doit pas dépasser 2 000 caractères.';
+        }
+
+        if ($erreurs) {
+            echo json_encode(['ok' => false, 'err' => implode(' ', $erreurs)]); exit;
+        }
+
+        // ── Enregistrement ───────────────────────────────────────────────────
         $pdo->prepare("
-            INSERT INTO nomination_frais (Id_JA, Id_Rencontre, Peages, Kilometres, RapportAccueil, RapportEquipements, DateSaisie)
-            VALUES (?, ?, ?, ?, ?, ?, CURDATE())
-            ON DUPLICATE KEY UPDATE
-                Peages=VALUES(Peages), Kilometres=VALUES(Kilometres),
-                RapportAccueil=VALUES(RapportAccueil), RapportEquipements=VALUES(RapportEquipements),
-                DateSaisie=CURDATE()
-        ")->execute([$idJaP, $idRencP, $peages, $km, $rapAcc ?: null, $rapEq ?: null]);
+            UPDATE `nomination` SET
+                Peages             = ?,
+                Kilometres         = ?,
+                RapportAccueil     = ?,
+                RapportEquipements = ?,
+                DateSaisie         = CURDATE()
+            WHERE Id_JA = ? AND Id_Rencontre = ?
+        ")->execute([$peages, $km, $rapAcc ?: null, $rapEq ?: null, $idJaP, $idRencP]);
+
         echo json_encode(['ok' => true]);
     } catch (PDOException $e) {
         echo json_encode(['ok' => false, 'err' => $e->getMessage()]);
@@ -143,7 +195,7 @@ if ($idJa && $idRencontre) {
         try {
             $stmtF = $pdo->prepare("
                 SELECT Peages, Kilometres, RapportAccueil, RapportEquipements
-                FROM nomination_frais WHERE Id_JA = ? AND Id_Rencontre = ?
+                FROM nomination WHERE Id_JA = ? AND Id_Rencontre = ?
             ");
             $stmtF->execute([$idJa, $idRencontre]);
             $frais = $stmtF->fetch();
@@ -655,6 +707,7 @@ $saisonAffich = $rencontre['Saison'] ?? '';
 <?php endif; ?>
 
 <script src="../asset/js/jquery-3.7.1.min.js"></script>
+    <script src="../asset/js/nijac-csrf.js"></script>
 <script>
 'use strict';
 const INDEM   = <?= json_encode((float)$indemniteForfait) ?>;
