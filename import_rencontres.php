@@ -27,6 +27,7 @@ try {
     getPDO()->exec("ALTER TABLE equipe ADD UNIQUE KEY uq_equipe_nom_div (Nom(80), Id_Division)");
 } catch (PDOException $e) { /* déjà existe */ }
 
+
 // ─── Fonctions de parsing ──────────────────────────────────────────────────
 
 /**
@@ -271,15 +272,100 @@ if (isset($_GET['action'])) {
 
     $action = $_GET['action'];
 
+    // ── Ajout d'un ou plusieurs fichiers ────────────────────────────────────
+    if ($action === 'upload') {
+        $dossier = __DIR__ . '/Importation/Rencontres/';
+        $resultats = [];
+
+        if (empty($_FILES['fichiers'])) {
+            echo json_encode(['ok' => false, 'err' => 'Aucun fichier reçu.']);
+            exit;
+        }
+
+        $noms  = $_FILES['fichiers']['name'];
+        $tmps  = $_FILES['fichiers']['tmp_name'];
+        $errs  = $_FILES['fichiers']['error'];
+
+        foreach ($noms as $i => $nomOriginal) {
+            $nom = basename($nomOriginal);
+
+            if ($errs[$i] !== UPLOAD_ERR_OK) {
+                $resultats[] = ['nom' => $nom, 'ok' => false, 'msg' => 'Erreur de téléversement.'];
+                continue;
+            }
+            if (strtolower(pathinfo($nom, PATHINFO_EXTENSION)) !== 'xls') {
+                $resultats[] = ['nom' => $nom, 'ok' => false, 'msg' => 'Seuls les fichiers .xls sont acceptés.'];
+                continue;
+            }
+
+            $cible = $dossier . $nom;
+            if (!move_uploaded_file($tmps[$i], $cible)) {
+                $resultats[] = ['nom' => $nom, 'ok' => false, 'msg' => 'Échec de l\'enregistrement sur le serveur.'];
+                continue;
+            }
+            $resultats[] = ['nom' => $nom, 'ok' => true];
+        }
+
+        echo json_encode(['ok' => true, 'resultats' => $resultats]);
+        exit;
+    }
+
+    // ── Suppression d'un fichier ────────────────────────────────────────────
+    if ($action === 'supprimer') {
+        $nom = basename($_POST['fichier'] ?? '');
+        $fichier = __DIR__ . '/Importation/Rencontres/' . $nom;
+        if ($nom === '' || !file_exists($fichier)) {
+            echo json_encode(['ok' => false, 'err' => 'Fichier introuvable']);
+            exit;
+        }
+        if (!unlink($fichier)) {
+            echo json_encode(['ok' => false, 'err' => 'Impossible de supprimer le fichier.']);
+            exit;
+        }
+        echo json_encode(['ok' => true]);
+        exit;
+    }
+
     // ── Liste des fichiers XLS disponibles ─────────────────────────────────
     if ($action === 'liste') {
         $dossier = __DIR__ . '/Importation/Rencontres/';
+        $pdo     = getPDO();
+        $stmtExiste = $pdo->prepare(
+            'SELECT 1 FROM rencontre r
+             JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom AND ed.Id_Division = ?
+             JOIN equipe ee ON ee.Id_Equipe = r.Id_EquipeExt
+             WHERE r.Date = ? AND ed.Nom = ? AND ee.Nom = ? LIMIT 1'
+        );
+
         $fichiers = [];
         foreach (glob($dossier . '*.xls') as $f) {
-            $sp = IOFactory::load($f);
+            $nom = basename($f);
+            $sp  = IOFactory::load($f);
+
+            // Récupère la première rencontre du fichier (toutes feuilles confondues)
+            $premiere = null;
+            for ($s = 0; $s < $sp->getSheetCount() && !$premiere; $s++) {
+                $data = parseSheet($sp->getSheet($s));
+                if (!$data['id_division'] || empty($data['rencontres'])) continue;
+                $r = $data['rencontres'][0];
+                $premiere = [
+                    'id_division' => $data['id_division'],
+                    'date'        => $r['date'],
+                    'dom'         => $r['equipe_dom'],
+                    'ext'         => $r['equipe_ext'],
+                ];
+            }
+
+            $importe = false;
+            if ($premiere) {
+                $stmtExiste->execute([$premiere['id_division'], $premiere['date'], $premiere['dom'], $premiere['ext']]);
+                $importe = (bool)$stmtExiste->fetchColumn();
+            }
+
             $fichiers[] = [
-                'nom'    => basename($f),
+                'nom'      => $nom,
                 'feuilles' => $sp->getSheetCount(),
+                'importe'  => $importe,
             ];
         }
         echo json_encode(['ok' => true, 'fichiers' => $fichiers]);
@@ -427,6 +513,14 @@ $isAdmin     = !empty($u['is_admin']);
             background: #1a3a6b; color: #fff;
             border-radius: 12px; padding: .15rem .55rem; font-size: .78rem;
         }
+        .fichier-card.fc-importe {
+            background: #f0f7f1; border-color: #9fcdab;
+        }
+        .fichier-card .fc-importe-badge {
+            background: #1a7f4b; color: #fff;
+            border-radius: 12px; padding: .15rem .55rem; font-size: .76rem;
+            white-space: nowrap;
+        }
         /* Aperçu */
         #apercu-zone { display: none; margin-top: 1rem; }
         .poule-header {
@@ -457,6 +551,19 @@ $isAdmin     = !empty($u['is_admin']);
         }
         .stat-box .sv { font-size: 1.6rem; font-weight: 700; color: #1a3a6b; }
         .stat-box .sl { font-size: .75rem; color: #555; }
+        /* Zone d'ajout de fichiers */
+        #dropzone {
+            border: 2px dashed #b0bcd0; border-radius: 8px;
+            padding: 1rem; text-align: center; color: #6b7280;
+            background: #fff; margin-bottom: 1rem; cursor: pointer;
+            transition: background .15s, border-color .15s;
+        }
+        #dropzone:hover, #dropzone.dz-over { background: #eef3fb; border-color: #1a3a6b; }
+        .fc-btn-supprimer {
+            color: #b02a37; background: none; border: none;
+            font-size: 1.05rem; line-height: 1; padding: .15rem .3rem;
+        }
+        .fc-btn-supprimer:hover { color: #fff; background: #dc3545; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -481,10 +588,23 @@ $isAdmin     = !empty($u['is_admin']);
         </button>
         <span class="text-muted" style="font-size:.82rem;">
             <i class="bi bi-folder2-open me-1"></i>
-            <code><?= htmlspecialchars(str_replace('/', DIRECTORY_SEPARATOR, __DIR__ . '/Importation/Rencontres/')) ?></code>
+<?php
+                $cheminComplet = str_replace('\\', '/', __DIR__ . '/Importation/Rencontres/');
+                $posNijac      = strripos($cheminComplet, '/nijac/');
+                $cheminAffiche = $posNijac !== false ? substr($cheminComplet, $posNijac + 1) : $cheminComplet;
+            ?>
+            <code><?= htmlspecialchars($cheminAffiche) ?></code>
             &mdash; fichiers <code>*.xls</code>
         </span>
     </div>
+    <!-- Zone d'ajout de fichiers -->
+    <div id="dropzone">
+        <i class="bi bi-cloud-arrow-up fs-3 d-block mb-1"></i>
+        Cliquez ou déposez ici des fichiers <code>.xls</code> à ajouter
+        <input type="file" id="input-upload" accept=".xls" multiple hidden>
+    </div>
+    <div id="upload-status" class="mb-3"></div>
+
     <p class="text-muted mb-3" style="font-size:.82rem;">
         <i class="bi bi-info-circle me-1"></i>
         Les fichiers PDF de base ont été convertis en Excel grâce à
@@ -517,7 +637,6 @@ $isAdmin     = !empty($u['is_admin']);
 
 </div>
 
-<?php $statusInitial = 'Les fichiers PDF de base ont été convertis en Excel grâce à <a href="https://www.pdfgear.com/fr/" target="_blank" rel="noopener" style="color:#1a3a6b;">PDFGear</a>'; ?>
 <?php require __DIR__ . '/includes/footer.php'; ?>
 
 <script src="asset/js/jquery-3.7.1.min.js"></script>
@@ -539,18 +658,86 @@ function chargerListe() {
         }
         let html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.65rem;">';
         r.fichiers.forEach(function (f) {
-            html += `<div class="fichier-card">
+            const importeBadge = f.importe
+                ? `<span class="fc-importe-badge">
+                       <i class="bi bi-check-circle-fill me-1"></i>Déjà importé
+                   </span>`
+                : '';
+            html += `<div class="fichier-card${f.importe ? ' fc-importe' : ''}">
                 <i class="bi bi-file-earmark-excel text-success fs-4"></i>
                 <span class="fc-nom">${f.nom}</span>
                 <span class="fc-badge">${f.feuilles} poule${f.feuilles > 1 ? 's' : ''}</span>
+                ${importeBadge}
                 <button class="btn btn-sm btn-outline-primary btn-apercu" data-nom="${f.nom}">
                     <i class="bi bi-eye me-1"></i>Aperçu
+                </button>
+                <button class="fc-btn-supprimer btn-supprimer-fichier" data-nom="${f.nom}" title="Supprimer le fichier">
+                    <i class="bi bi-trash3"></i>
                 </button>
             </div>`;
         });
         html += '</div>';
         $('#liste-fichiers').html(html);
     });
+}
+
+// ── Ajout de fichiers ─────────────────────────────────────────────────────
+$('#dropzone').on('click', () => $('#input-upload').trigger('click'));
+$('#dropzone').on('dragover', function (e) { e.preventDefault(); $(this).addClass('dz-over'); });
+$('#dropzone').on('dragleave', function () { $(this).removeClass('dz-over'); });
+$('#dropzone').on('drop', function (e) {
+    e.preventDefault();
+    $(this).removeClass('dz-over');
+    televerser(e.originalEvent.dataTransfer.files);
+});
+$('#input-upload').on('change', function () {
+    televerser(this.files);
+    this.value = '';
+});
+
+function televerser(fileList) {
+    if (!fileList || !fileList.length) return;
+    const fd = new FormData();
+    for (const f of fileList) fd.append('fichiers[]', f);
+
+    $('#upload-status').html('<span class="text-muted"><i class="bi bi-hourglass-split me-1"></i>Envoi en cours…</span>');
+
+    $.ajax({
+        url: 'import_rencontres.php?action=upload',
+        type: 'POST',
+        data: fd,
+        processData: false,
+        contentType: false,
+    }).done(function (r) {
+        if (!r.ok) { $('#upload-status').html('<div class="text-danger">' + (r.err || 'Erreur') + '</div>'); return; }
+        let html = '';
+        r.resultats.forEach(function (res) {
+            html += res.ok
+                ? `<div class="text-success"><i class="bi bi-check-circle me-1"></i>${res.nom} ajouté.</div>`
+                : `<div class="text-danger"><i class="bi bi-x-circle me-1"></i>${res.nom} — ${res.msg}</div>`;
+        });
+        $('#upload-status').html(html);
+        chargerListe();
+    }).fail(function () {
+        $('#upload-status').html('<div class="text-danger">Erreur réseau lors de l\'envoi.</div>');
+    });
+}
+
+// ── Suppression d'un fichier ─────────────────────────────────────────────
+$(document).on('click', '.btn-supprimer-fichier', function () {
+    const nom = $(this).data('nom');
+    if (!confirm('Supprimer le fichier "' + nom + '" ?\n(Cette action est irréversible.)')) return;
+
+    $.post('import_rencontres.php?action=supprimer', { fichier: nom }, function (r) {
+        if (!r.ok) { toast_err(r.err || 'Erreur lors de la suppression.'); return; }
+        chargerListe();
+    }, 'json').fail(function () {
+        toast_err('Erreur réseau lors de la suppression.');
+    });
+});
+
+function toast_err(msg) {
+    $('#upload-status').html('<div class="text-danger"><i class="bi bi-x-circle me-1"></i>' + msg + '</div>');
 }
 
 // ── Aperçu ─────────────────────────────────────────────────────────────────
@@ -628,6 +815,7 @@ $('#btn-importer').on('click', function () {
             html += '<div class="alert alert-success">Import terminé sans erreur.</div>';
         }
         $('#result-content').html(html);
+        chargerListe();
     }, 'json').fail(function () {
         $('#apercu-spinner').addClass('d-none');
         $('#btn-importer').prop('disabled', false);

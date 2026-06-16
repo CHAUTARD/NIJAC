@@ -23,6 +23,7 @@ require_once __DIR__ . '/../config/csrf.php';
 $u           = $_SESSION['utilisateur'];
 $nomComplet  = htmlspecialchars(($u['nom'] ?? '') . ' ' . ($u['prenom'] ?? ''));
 $departement = htmlspecialchars($u['id_departement'] ?? '');
+$changeLogin = !empty($u['change_login']);
 $isAdmin     = !empty($u['is_admin']);
 
 // ── Tableau de bord ──────────────────────────────────────────────────────────

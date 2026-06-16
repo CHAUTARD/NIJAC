@@ -209,13 +209,15 @@ $isAdmin      = !empty($u['is_admin']);
         <span class="ts-user">
             <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= $nomComplet ?><?= $departement ? " ($departement)" : '' ?>
         </span>
-        <a class="ts-pwd-warning" href="changer_mot_de_passe.php" id="lnk-chg-pwd">
+        <a class="ts-pwd-warning" href="changer_mot_de_passe.php" id="lnk-chg-pwd" data-base="changer_mot_de_passe.php">
             <i class="bi bi-key-fill"></i>Mot de passe à modifier
         </a>
         <a id="btn-switch-nominateur" href="Nominateur/menu.php" title="Basculer vers le menu nominateur">
             <i class="bi bi-people-fill"></i>Menu nominateur
         </a>
     </div>
+
+    <?php require __DIR__ . '/includes/modal_mdp.php'; ?>
 
     <!-- En-tête -->
     <div id="page-header">

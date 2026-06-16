@@ -37478,6 +37478,7 @@ CREATE TABLE IF NOT EXISTS `utilisateur` (
   `Actif` tinyint(1) DEFAULT 1,
   `Id_Departement` int(11) DEFAULT NULL,
   `ChangeLogin` tinyint(1) NOT NULL DEFAULT 1,
+  `Email_LNTT` varchar(150) DEFAULT NULL,
   PRIMARY KEY (`Id_Utilisateur`),
   KEY `fk_utilisateur_departement` (`Id_Departement`) USING BTREE
 ) ENGINE=MyISAM AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

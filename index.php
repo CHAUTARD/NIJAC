@@ -17,7 +17,7 @@ require_once __DIR__ . '/Classes/SecurePasswordHasher.php';
 
 // Si déjà connecté, rediriger selon le rôle
 if (isset($_SESSION['utilisateur'])) {
-    header('Location: ' . (($_SESSION['utilisateur']['role'] === 'Administrateur') ? 'admin_menu.php' : 'menu.php'));
+    header('Location: ' . (($_SESSION['utilisateur']['role'] === 'Administrateur') ? 'admin_menu.php' : 'Nominateur/menu.php'));
     exit;
 }
 
@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Récupération du hash et des infos utilisateur en une seule requête paramétrée
             $stmt = $pdo->prepare(
-                'SELECT Id_Utilisateur, Password, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin
+                'SELECT Id_Utilisateur, Password, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin, Email_LNTT
                  FROM Utilisateur
                  WHERE Login = :login
                  LIMIT 1'
@@ -61,9 +61,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'id_departement' => $row['Id_Departement'],
                     'change_login'   => (bool)$row['ChangeLogin'],
                     'is_admin'       => ($row['Role'] === 'Administrateur'),
+                    'email_lntt'     => $row['Email_LNTT'],
                 ];
 
-                header('Location: ' . ($row['Role'] === 'Administrateur' ? 'admin_menu.php' : 'menu.php'));
+                header('Location: ' . ($row['Role'] === 'Administrateur' ? 'admin_menu.php' : 'Nominateur/menu.php'));
                 exit;
             } else {
                 $status       = 'Échec : Identifiants invalides.';

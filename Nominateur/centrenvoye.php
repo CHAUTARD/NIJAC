@@ -316,6 +316,9 @@ if ($action !== '') {
                 $mail = getNijacMailer();
                 $mail->isHTML(true);
                 $mail->addAddress($dest, $ja['Prenom'] . ' ' . $ja['Nom']);
+                if (!empty($moi['email_lntt'])) {
+                    $mail->addReplyTo($moi['email_lntt'], $moi['nom'] . ' ' . $moi['prenom']);
+                }
                 $mail->Subject = ($modeDev && $dest !== $ja['Email'])
                     ? "[DEV → {$ja['Email']}] $sujet"
                     : $sujet;

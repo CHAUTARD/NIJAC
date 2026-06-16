@@ -162,6 +162,12 @@ if ($action !== '') {
             $jaDesactives = $pdo->exec("UPDATE `ja` SET Actif = 0");
             $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
 
+            // Suppression des fichiers d'import de la saison précédente
+            $xlsSupprimes = 0;
+            foreach (glob(__DIR__ . '/Importation/Rencontres/*.xls') as $f) {
+                if (unlink($f)) $xlsSupprimes++;
+            }
+
             ob_end_clean();
             echo json_encode([
                 'ok'            => true,
@@ -169,6 +175,7 @@ if ($action !== '') {
                 'fichier'       => $filename,
                 'lignes'        => substr_count($sql, "\n") + 1,
                 'ja_desactives' => $jaDesactives,
+                'xls_supprimes' => $xlsSupprimes,
             ]);
             exit;
         }
@@ -770,7 +777,8 @@ $('#btn-executer').on('click', function () {
     if (!confirm(
         'DERNIÈRE CONFIRMATION\n\n' +
         '• Les tables Disponible, Equipe, Rencontre et Nomination seront vidées.\n' +
-        '• Tous les JA seront désactivés (Actif = 0) mais conservés.\n\n' +
+        '• Tous les JA seront désactivés (Actif = 0) mais conservés.\n' +
+        '• Les fichiers .xls du dossier Importation/Rencontres seront supprimés.\n\n' +
         'Une sauvegarde sera effectuée avant le nettoyage.\n\n' +
         'Cette opération est IRRÉVERSIBLE.\n\nConfirmer ?'
     )) return;
@@ -788,7 +796,8 @@ $('#btn-executer').on('click', function () {
                    ✅ <strong>Nouvelle saison démarrée !</strong><br>
                    Sauvegarde&nbsp;: <code>${res.fichier}</code> (${res.lignes} lignes)<br>
                    Tables Disponible, Equipe, Rencontre, Nomination vidées.<br>
-                   ${res.ja_desactives} JA désactivé(s) (conservés en base).
+                   ${res.ja_desactives} JA désactivé(s) (conservés en base).<br>
+                   ${res.xls_supprimes} fichier(s) .xls supprimé(s) de Importation/Rencontres.
                  </div>`
             );
             $('#section-clean').hide();
