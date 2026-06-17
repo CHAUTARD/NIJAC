@@ -194,6 +194,7 @@ $isAdmin      = !empty($u['is_admin']);
         .btn-salle        { background-color: #e0f2f1; }
         .btn-saison       { background-color: #fff8e1; }
         .btn-division     { background-color: #fbe9e7; }
+        .btn-r34          { background-color: #ede7f6; }
         .btn-utilisateur  { background-color: #e3f2fd; }
         .btn-correspondant{ background-color: #f3e5f5; }
         .btn-communes     { background-color: #e0f7fa; }
@@ -280,6 +281,12 @@ $isAdmin      = !empty($u['is_admin']);
             <span class="btn-desc">Importer les rencontres depuis un fichier FFTT</span>
         </a>
 
+        <a href="JA_R3R4.php" class="menu-btn btn-r34">
+            <div class="btn-icon"><img src="img/R3_4.png" alt="Import Rencontres"></div>
+            <span>R3 R4 ayant demandé un JA</span>
+            <span class="btn-desc">Une R3 ou R4 demande un JA</span>
+        </a>
+
         <a href="logout.php" class="menu-btn" style="background:#f8d7da; grid-column: 5;">
             <div class="btn-icon"><i class="bi bi-box-arrow-right" style="color:#842029;"></i></div>
             <span style="color:#842029;">Se déconnecter</span>
@@ -287,6 +294,7 @@ $isAdmin      = !empty($u['is_admin']);
         </a>
 
     </div>
+
 
     <!-- Pied de page -->
     <?php require __DIR__ . '/includes/footer.php'; ?>

@@ -18,6 +18,7 @@ if (!isset($_SESSION['utilisateur'])) {
 
 require __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/csrf.php';
+require_once __DIR__ . '/../config/app_config.php';
 
 $pdo = getPDO();
 
@@ -70,6 +71,7 @@ $nomComplet  = htmlspecialchars(($u['nom'] ?? '') . ' ' . ($u['prenom'] ?? ''));
 $departement = htmlspecialchars($u['id_departement'] ?? '');
 $changeLogin = !empty($u['change_login']);
 $isAdmin     = !empty($u['is_admin']);
+$deptActifs  = getDeptActifs();
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -82,7 +84,7 @@ $isAdmin     = !empty($u['is_admin']);
 <style>
 :root { --nijac-blue:#1a3a6b; --col-dispo:#2e7d32; }
 
-body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-height:100vh; display:flex; flex-direction:column; }
+body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-height:100vh; display:flex; flex-direction:column; overflow-x:hidden; }
 
 /* ── Toolbar ── */
 .ts-user { color:#1a3a6b; font-weight:600; }
@@ -97,7 +99,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 #info-dept { font-size:.8rem; color:#888; font-style:italic; }
 
 /* ── Corps ── */
-#corps { flex:1; padding:1.25rem; max-width:960px; margin:0 auto; width:100%; }
+#corps { flex:1; padding:1.25rem clamp(1rem, 4vw, 4rem); width:100%; box-sizing:border-box; }
 
 /* ── Titre section département ── */
 .dept-titre {
@@ -115,7 +117,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 .dept-titre .dept-nb { font-size:.8rem; color:#888; font-weight:400; }
 
 /* ── Grille JA ── */
-.ja-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(230px,1fr)); gap:.65rem; margin-bottom:1.5rem; }
+.ja-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:.65rem; margin-bottom:1.5rem; }
 
 /* ── Couleurs par grade ── */
 .ja-card.grade-ja1 { background:#e3f2fd; border-color:#90caf9; }
@@ -170,7 +172,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 <div id="page-header">
     <i class="bi bi-calendar2-check fs-5"></i>
     <span>Saisie des disponibilités JA <small class="opacity-75">(E021)</small></span>
-    <a href="menu.php" class="ms-auto btn btn-sm btn-outline-light"><i class="bi bi-arrow-left me-1"></i>Retour au menu</a>
+    <a href="menu.php" class="btn btn-sm btn-light float-end py-0"><i class="bi bi-arrow-left me-1"></i>Retour menu</a>
 </div>
 
 <!-- Bandeau département -->
@@ -178,11 +180,9 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
     <label for="sel-dept"><i class="bi bi-map me-1"></i>Département</label>
     <select id="sel-dept" class="form-select form-select-sm w-auto">
         <option value="">— Choisir un département —</option>
-        <option value="14">14 — Calvados</option>
-        <option value="27">27 — Eure</option>
-        <option value="50">50 — Manche</option>
-        <option value="61">61 — Orne</option>
-        <option value="76">76 — Seine-Maritime</option>
+        <?php foreach ($deptActifs as $d): ?>
+        <option value="<?= (int)$d['code'] ?>"><?= (int)$d['code'] ?> — <?= htmlspecialchars($d['nom']) ?></option>
+        <?php endforeach; ?>
     </select>
     <span id="info-dept"></span>
     <div id="spinner-dept" class="spinner-border spinner-border-sm text-secondary" role="status">
@@ -209,13 +209,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 'use strict';
 
 // Libellés des départements
-const DEPT_NOMS = {
-    '14': 'Calvados',
-    '27': 'Eure',
-    '50': 'Manche',
-    '61': 'Orne',
-    '76': 'Seine-Maritime'
-};
+const DEPT_NOMS = <?= json_encode(array_column($deptActifs, 'nom', 'code'), JSON_UNESCAPED_UNICODE) ?>;
 
 $(function () {
     $('#sel-dept').on('change', function () {

@@ -14,6 +14,7 @@
 session_start();
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/csrf.php';
+require_once __DIR__ . '/../config/app_config.php';
 
 // ── Sécurité ──────────────────────────────────────────────────────────────────
 if (!isset($_SESSION['utilisateur'])) {
@@ -438,6 +439,7 @@ $departement = htmlspecialchars($moi['id_departement'] ?? '');
 $changeLogin = !empty($moi['change_login']);
 $isAdminJs   = $isAdmin ? 'true' : 'false';
 $deptUserJs  = $isAdmin ? "''" : "'" . addslashes($moi['id_departement'] ?? '') . "'";
+$deptActifs  = getDeptActifs();
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -628,11 +630,9 @@ $deptUserJs  = $isAdmin ? "''" : "'" . addslashes($moi['id_departement'] ?? '') 
     </label>
     <select id="sel-dept" class="form-select form-select-sm w-auto">
         <option value="">— Tous —</option>
-        <option value="14">14 — Calvados</option>
-        <option value="27">27 — Eure</option>
-        <option value="50">50 — Manche</option>
-        <option value="61">61 — Orne</option>
-        <option value="76">76 — Seine-Maritime</option>
+        <?php foreach ($deptActifs as $d): ?>
+        <option value="<?= (int)$d['code'] ?>"><?= (int)$d['code'] ?> — <?= htmlspecialchars($d['nom']) ?></option>
+        <?php endforeach; ?>
     </select>
     <?php endif; ?>
     <input type="search" id="search-input" placeholder="🔍 Rechercher…">

@@ -12,7 +12,7 @@
  *  - Priorité au JA ayant le moins d'arbitrages sur la phase en cours
  *
  * Créé par : Patrick CHAUTARD
- * Date de création : 2026-06-11
+ * Date de création : 2026-06-17
  */
 session_start();
 if (!isset($_SESSION['utilisateur'])) {

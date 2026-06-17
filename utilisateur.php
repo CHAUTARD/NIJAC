@@ -13,6 +13,7 @@
 session_start();
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/csrf.php';
+require_once __DIR__ . '/config/app_config.php';
 require_once __DIR__ . '/Classes/SecurePasswordHasher.php';
 
 // ── Sécurité : accès admin uniquement ────────────────────────────────────────
@@ -119,6 +120,8 @@ if ($action !== '') {
                 echo json_encode(['ok' => false, 'msg' => 'Vous ne pouvez pas supprimer votre propre compte.']);
                 exit;
             }
+            $stmt = $pdo->prepare('DELETE FROM Messagerie WHERE Id_Utilisateur = ?');
+            $stmt->execute([$id]);
             $stmt = $pdo->prepare('DELETE FROM Utilisateur WHERE Id_Utilisateur = ?');
             $stmt->execute([$id]);
             echo json_encode(['ok' => true, 'msg' => 'Utilisateur supprimé.']);
@@ -139,6 +142,7 @@ if ($action !== '') {
 $nomComplet  = htmlspecialchars($moi['nom'] . ' ' . $moi['prenom']);
 $departement = htmlspecialchars($moi['id_departement'] ?? '');
 $changeLogin = !empty($moi['change_login']);
+$deptActifs  = getDeptActifs();
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -353,11 +357,9 @@ $changeLogin = !empty($moi['change_login']);
             <label class="form-label" for="cbo-dept">Département :</label>
             <select id="cbo-dept" class="form-select form-select-sm" style="max-width:280px">
                 <option value="0">— Tous les départements —</option>
-                <option value="14">14 — Calvados</option>
-                <option value="27">27 — Eure</option>
-                <option value="50">50 — Manche</option>
-                <option value="61">61 — Orne</option>
-                <option value="76">76 — Seine-Maritime</option>
+                <?php foreach ($deptActifs as $d): ?>
+                <option value="<?= (int)$d['code'] ?>"><?= (int)$d['code'] ?> — <?= htmlspecialchars($d['nom']) ?></option>
+                <?php endforeach; ?>
             </select>
         </div>
 

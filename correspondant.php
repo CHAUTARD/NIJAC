@@ -13,6 +13,7 @@
 session_start();
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/csrf.php';
+require_once __DIR__ . '/config/app_config.php';
 require_once __DIR__ . '/vendor/autoload.php';
 
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -213,6 +214,7 @@ if ($action !== '') {
 $nomComplet  = htmlspecialchars($moi['nom'] . ' ' . $moi['prenom']);
 $departement = htmlspecialchars($moi['id_departement'] ?? '');
 $changeLogin = !empty($moi['change_login']);
+$deptActifs  = getDeptActifs();
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -360,11 +362,9 @@ $changeLogin = !empty($moi['change_login']);
     </label>
     <select id="sel-dept" class="form-select form-select-sm w-auto">
         <option value="">— Tous —</option>
-        <option value="14">14 — Calvados</option>
-        <option value="27">27 — Eure</option>
-        <option value="50">50 — Manche</option>
-        <option value="61">61 — Orne</option>
-        <option value="76">76 — Seine-Maritime</option>
+        <?php foreach ($deptActifs as $d): ?>
+        <option value="<?= (int)$d['code'] ?>"><?= (int)$d['code'] ?> — <?= htmlspecialchars($d['nom']) ?></option>
+        <?php endforeach; ?>
     </select>
     <input type="search" id="search-input" placeholder="🔍 Rechercher…">
 </div>

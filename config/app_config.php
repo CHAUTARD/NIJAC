@@ -15,13 +15,16 @@ function initTableConfiguration(\PDO $pdo): void
         CREATE TABLE IF NOT EXISTS `configuration` (
             `cle`         VARCHAR(50)  NOT NULL,
             `valeur`      TEXT         NOT NULL,
-            `libelle`     VARCHAR(255) NOT NULL DEFAULT '',
             `description` TEXT         DEFAULT NULL,
             PRIMARY KEY (`cle`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
     // Migration : élargir valeur si elle est encore VARCHAR(255)
     $pdo->exec("ALTER TABLE `configuration` MODIFY `valeur` TEXT NOT NULL");
+    // Migration : supprimer la colonne libelle devenue inutile
+    try {
+        $pdo->exec("ALTER TABLE `configuration` DROP COLUMN `libelle`");
+    } catch (\Throwable $e) { /* colonne déjà absente */ }
 
     // ── Table messagerie ───────────────────────────────────────────────────
     $pdo->exec("
@@ -68,43 +71,43 @@ function initTableConfiguration(\PDO $pdo): void
     } catch (\Throwable $e) { /* table déjà supprimée */ }
 
     $pdo->exec("
-        INSERT IGNORE INTO `configuration` (`cle`, `valeur`, `libelle`, `description`) VALUES
-        ('etat_logiciel', 'Developpement', 'État du logiciel',
+        INSERT IGNORE INTO `configuration` (`cle`, `valeur`, `description`) VALUES
+        ('etat_logiciel', 'Developpement',
          'Opérationnel : emails envoyés aux destinataires réels.\nDéveloppement : emails redirigés vers l''adresse de développement.'),
-        ('email_developpement', 'patrick.chautard@free.fr', 'Email de développement',
+        ('email_developpement', 'patrick.chautard@free.fr',
          'Adresse email vers laquelle tous les envois sont redirigés en mode Développement.'),
-        ('departements_actifs', '14,27,50,61,76', 'Départements concernés',
+        ('departements_actifs', '14,27,50,61,76',
          'Liste des numéros de départements gérés par la ligue, séparés par des virgules.'),
-        ('frais_max_peages',    '80',  'Plafond péages (€)',          'Montant maximum accepté pour les péages d''un JA (en euros).'),
-        ('frais_max_km',        '200', 'Plafond kilométrage',          'Nombre de kilomètres maximum accepté pour un déplacement JA.'),
-        ('rate_limit_max',      '100', 'Limite emails par fenêtre',    'Nombre maximum d''emails envoyables sur la fenêtre glissante.'),
-        ('rate_limit_fenetre',  '10',  'Fenêtre rate limit (minutes)', 'Durée en minutes de la fenêtre glissante pour le rate limiting.'),
-        ('regles_departements', '{\"76\":[\"27\"]}', 'Règles d\'association entre départements',
+        ('frais_max_peages',    '80',  'Montant maximum accepté pour les péages d''un JA (en euros).'),
+        ('frais_max_km',        '200', 'Nombre de kilomètres maximum accepté pour un déplacement JA.'),
+        ('rate_limit_max',      '100', 'Nombre maximum d''emails envoyables sur la fenêtre glissante.'),
+        ('rate_limit_fenetre',  '10',  'Durée en minutes de la fenêtre glissante pour le rate limiting.'),
+        ('regles_departements', '{\"76\":[\"27\"]}',
          'JSON : pour chaque département source, liste des départements automatiquement inclus.'),
-        ('url_ligue', 'https://www.ligue-normandie-tt.fr', 'Site de la ligue', 'Adresse du serveur de la Ligue de Normandie de Tennis de Table.'),
-        ('indemnite_forfaitaire', '25.00', 'Indemnité forfaitaire (€)', 'Indemnité forfaitaire versée au JA pour une rencontre (anciennement table Competition).'),
-        ('frais_kilometrique', '0.30', 'Frais kilométriques (€/km)', 'Barème kilométrique appliqué aux frais de déplacement du JA (anciennement table Competition).'),
-        ('smtp_host',     'smtp.free.fr',                 'Serveur SMTP',         'Adresse du serveur SMTP sortant.'),
-        ('smtp_port',     '587',                          'Port SMTP',            '587 pour STARTTLS, 465 pour SSL, 25 sans chiffrement.'),
-        ('smtp_secure',   'tls',                          'Chiffrement SMTP',     'tls (STARTTLS), ssl ou vide.'),
-        ('smtp_auth',     '1',                            'Authentification SMTP', '1 = authentification requise, 0 = anonyme.'),
-        ('smtp_user',     'patrick.chautard@free.fr',     'Utilisateur SMTP',     'Login du compte SMTP.'),
-        ('smtp_password', '#Henri.1957',                  'Mot de passe SMTP',    'Mot de passe du compte SMTP.'),
-        ('smtp_from',     'patrick.chautard@free.fr',     'Email expéditeur',     'Adresse From des emails envoyés.'),
-        ('smtp_from_name','NIJAC – Arbitrage Normandie',  'Nom expéditeur',       'Nom affiché dans le champ From.')
+        ('url_ligue', 'https://www.ligue-normandie-tt.fr', 'Adresse du serveur de la Ligue de Normandie de Tennis de Table.'),
+        ('indemnite_forfaitaire', '25.00', 'Indemnité forfaitaire versée au JA pour une rencontre (anciennement table Competition).'),
+        ('frais_kilometrique', '0.30', 'Barème kilométrique appliqué aux frais de déplacement du JA (anciennement table Competition).'),
+        ('smtp_host',     'smtp.free.fr',                 'Adresse du serveur SMTP sortant.'),
+        ('smtp_port',     '587',                          '587 pour STARTTLS, 465 pour SSL, 25 sans chiffrement.'),
+        ('smtp_secure',   'tls',                          'tls (STARTTLS), ssl ou vide.'),
+        ('smtp_auth',     '1',                            '1 = authentification requise, 0 = anonyme.'),
+        ('smtp_user',     'patrick.chautard@free.fr',     'Login du compte SMTP.'),
+        ('smtp_password', '#Henri.1957',                  'Mot de passe du compte SMTP.'),
+        ('smtp_from',     'patrick.chautard@free.fr',     'Adresse From des emails envoyés.'),
+        ('smtp_from_name','NIJAC – Arbitrage Normandie',  'Nom affiché dans le champ From.')
     ");
 
     // Forcer la mise à jour des paramètres SMTP (INSERT IGNORE ne met pas à jour les lignes existantes)
     $pdo->exec("
-        INSERT INTO `configuration` (`cle`, `valeur`, `libelle`, `description`) VALUES
-        ('smtp_host',     'smtp.free.fr',                 'Serveur SMTP',          'Adresse du serveur SMTP sortant.'),
-        ('smtp_port',     '587',                          'Port SMTP',             '587 pour STARTTLS, 465 pour SSL, 25 sans chiffrement.'),
-        ('smtp_secure',   'tls',                          'Chiffrement SMTP',      'tls (STARTTLS), ssl ou vide.'),
-        ('smtp_auth',     '1',                            'Authentification SMTP',  '1 = authentification requise, 0 = anonyme.'),
-        ('smtp_user',     'patrick.chautard@free.fr',     'Utilisateur SMTP',      'Login du compte SMTP.'),
-        ('smtp_password', '#Henri.1957',                  'Mot de passe SMTP',     'Mot de passe du compte SMTP.'),
-        ('smtp_from',     'patrick.chautard@free.fr',     'Email expéditeur',      'Adresse From des emails envoyés.'),
-        ('smtp_from_name','NIJAC – Arbitrage Normandie',  'Nom expéditeur',        'Nom affiché dans le champ From.')
+        INSERT INTO `configuration` (`cle`, `valeur`, `description`) VALUES
+        ('smtp_host',     'smtp.free.fr',                 'Adresse du serveur SMTP sortant.'),
+        ('smtp_port',     '587',                          '587 pour STARTTLS, 465 pour SSL, 25 sans chiffrement.'),
+        ('smtp_secure',   'tls',                          'tls (STARTTLS), ssl ou vide.'),
+        ('smtp_auth',     '1',                            '1 = authentification requise, 0 = anonyme.'),
+        ('smtp_user',     'patrick.chautard@free.fr',     'Login du compte SMTP.'),
+        ('smtp_password', '#Henri.1957',                  'Mot de passe du compte SMTP.'),
+        ('smtp_from',     'patrick.chautard@free.fr',     'Adresse From des emails envoyés.'),
+        ('smtp_from_name','NIJAC – Arbitrage Normandie',  'Nom affiché dans le champ From.')
         ON DUPLICATE KEY UPDATE valeur = VALUES(valeur)
     ");
     // Note : ON DUPLICATE KEY UPDATE ne s'applique qu'aux clés smtp_* — les autres params métier
@@ -208,6 +211,30 @@ function getDepartementsAutorises(?string $deptUtilisateur): array
         $autorises = array_merge($autorises, $regles[$deptUtilisateur]);
     }
     return array_values(array_unique($autorises));
+}
+
+/**
+ * Retourne les départements actifs (depuis departements_actifs en configuration)
+ * avec leur nom (depuis la table departement), triés par code numérique.
+ * Chaque entrée : ['code' => '14', 'nom' => 'Calvados']
+ */
+function getDeptActifs(): array
+{
+    $codesActifs = array_filter(array_map('trim', explode(',', getConfig('departements_actifs', ''))));
+    if (!$codesActifs) return [];
+    try {
+        $pdo = getPDO();
+        $ph  = implode(',', array_fill(0, count($codesActifs), '?'));
+        $stmt = $pdo->prepare(
+            "SELECT code, nom FROM departement
+             WHERE CAST(code AS UNSIGNED) IN ($ph)
+             ORDER BY CAST(code AS UNSIGNED)"
+        );
+        $stmt->execute(array_map('intval', $codesActifs));
+        return $stmt->fetchAll();
+    } catch (PDOException $e) {
+        return [];
+    }
 }
 
 /**

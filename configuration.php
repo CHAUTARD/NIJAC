@@ -36,7 +36,7 @@ if ($action !== '') {
         // ── Lire tous les paramètres ──────────────────────────────────────────
         if ($action === 'lire') {
             $rows = $pdo->query(
-                'SELECT cle, valeur, libelle, description FROM configuration ORDER BY cle'
+                'SELECT cle, valeur, description FROM configuration ORDER BY cle'
             )->fetchAll();
             ob_end_clean();
             echo json_encode(['ok' => true, 'params' => $rows]);
@@ -128,7 +128,6 @@ if ($action !== '') {
         if ($action === 'table_creer') {
             $cle         = trim($_POST['cle']         ?? '');
             $valeur      = (string)($_POST['valeur']      ?? '');
-            $libelle     = trim($_POST['libelle']     ?? '');
             $description = (string)($_POST['description'] ?? '');
 
             if ($cle === '') {
@@ -150,8 +149,8 @@ if ($action !== '') {
                 exit;
             }
 
-            $pdo->prepare('INSERT INTO configuration (cle, valeur, libelle, description) VALUES (?, ?, ?, ?)')
-                ->execute([$cle, $valeur, $libelle, $description ?: null]);
+            $pdo->prepare('INSERT INTO configuration (cle, valeur, description) VALUES (?, ?, ?)')
+                ->execute([$cle, $valeur, $description ?: null]);
 
             ob_end_clean();
             echo json_encode(['ok' => true, 'msg' => 'Ligne créée.']);
@@ -163,7 +162,6 @@ if ($action !== '') {
             $cleOriginale = trim($_POST['cle_originale'] ?? '');
             $cle          = trim($_POST['cle']           ?? '');
             $valeur       = (string)($_POST['valeur']       ?? '');
-            $libelle      = trim($_POST['libelle']       ?? '');
             $description  = (string)($_POST['description']  ?? '');
 
             if ($cleOriginale === '' || $cle === '') {
@@ -187,8 +185,8 @@ if ($action !== '') {
                 }
             }
 
-            $pdo->prepare('UPDATE configuration SET cle = ?, valeur = ?, libelle = ?, description = ? WHERE cle = ?')
-                ->execute([$cle, $valeur, $libelle, $description ?: null, $cleOriginale]);
+            $pdo->prepare('UPDATE configuration SET cle = ?, valeur = ?, description = ? WHERE cle = ?')
+                ->execute([$cle, $valeur, $description ?: null, $cleOriginale]);
 
             ob_end_clean();
             echo json_encode(['ok' => true, 'msg' => 'Ligne modifiée.']);
@@ -415,19 +413,16 @@ $changeLogin = !empty($moi['change_login']);
         #btn-sauvegarder-email:disabled { opacity: .5; cursor: default; }
         #msg-result-email { font-size: .82rem; margin-top: .4rem; min-height: 18px; }
 
-        /* ── Bouton départements & règle 76 ── */
-        #btn-sauvegarder-depts, #btn-sauvegarder-regle76 {
+        /* ── Bouton départements ── */
+        #btn-sauvegarder-depts {
             padding: .42rem 1.4rem;
             font-size: .88rem; font-weight: 700;
             background: var(--nijac-blue); color: #fff;
             border: none; border-radius: 6px; cursor: pointer;
             white-space: nowrap; transition: background .2s;
         }
-        #btn-sauvegarder-depts:hover:not(:disabled),
-        #btn-sauvegarder-regle76:hover:not(:disabled) { background: #2557a7; }
-        #btn-sauvegarder-depts:disabled,
-        #btn-sauvegarder-regle76:disabled { opacity: .5; cursor: default; }
-        #textarea-regle76:focus { outline: none; border-color: #1a3a6b; }
+        #btn-sauvegarder-depts:hover:not(:disabled) { background: #2557a7; }
+        #btn-sauvegarder-depts:disabled { opacity: .5; cursor: default; }
 
         /* ── Onglets ── */
         #config-tabs .nav-link {
@@ -717,13 +712,13 @@ $changeLogin = !empty($moi['change_login']);
         </div>
     </div>
 
-    <!-- ── Paramètre : Départements & règle 76 ── -->
+    <!-- ── Paramètre : Départements & règles d'association ── -->
     <div class="param-card">
         <div class="param-card-head">
             <i class="bi bi-map-fill param-icon"></i>
             <div>
                 <h2>Départements concernés &amp; règle particulière</h2>
-                <small>Départements gérés par la ligue et règle spécifique au 76</small>
+                <small>Départements gérés par la ligue et règles d'association entre départements</small>
             </div>
         </div>
         <div class="param-card-body">
@@ -819,7 +814,6 @@ $changeLogin = !empty($moi['change_login']);
                 <tr>
                     <th style="width:220px" data-field="cle">Clé<span class="sort-icon"></span></th>
                     <th data-field="valeur">Valeur<span class="sort-icon"></span></th>
-                    <th style="width:220px" data-field="libelle">Libellé<span class="sort-icon"></span></th>
                     <th data-field="description">Description<span class="sort-icon"></span></th>
                     <th style="width:90px">Actions</th>
                 </tr>
@@ -1299,7 +1293,6 @@ function lignesConfigFiltreesTriees() {
         ? configRows.filter(r =>
             String(r.cle         ?? '').toLowerCase().includes(term) ||
             String(r.valeur      ?? '').toLowerCase().includes(term) ||
-            String(r.libelle     ?? '').toLowerCase().includes(term) ||
             String(r.description ?? '').toLowerCase().includes(term))
         : [...configRows];
 
@@ -1338,7 +1331,6 @@ function renderTableConfig() {
 
         $tr.append(makeTdConfig(r.cle,         idx, 'cle'));
         $tr.append(makeTdConfig(r.valeur,      idx, 'valeur'));
-        $tr.append(makeTdConfig(r.libelle,     idx, 'libelle'));
         $tr.append(makeTdConfig(r.description, idx, 'description'));
 
         const $actions = $('<div class="row-actions">').append(
@@ -1422,7 +1414,7 @@ function sauvegarderLigneConfig(idx) {
 
     spinner(true);
     const action = r._nouveau ? 'table_creer' : 'table_modifier';
-    const data = { action, cle, valeur: r.valeur ?? '', libelle: r.libelle ?? '', description: r.description ?? '' };
+    const data = { action, cle, valeur: r.valeur ?? '', description: r.description ?? '' };
     if (!r._nouveau) data.cle_originale = r.cle_originale ?? r.cle;
 
     $.post('configuration.php', data, function (res) {
@@ -1446,7 +1438,7 @@ function supprimerLigneConfig(idx) {
 }
 
 $('#btn-table-ajouter').on('click', function () {
-    configRows.push({ cle: '', valeur: '', libelle: '', description: '', _nouveau: true });
+    configRows.push({ cle: '', valeur: '', description: '', _nouveau: true });
     renderTableConfig();
 });
 

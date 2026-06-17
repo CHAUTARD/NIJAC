@@ -279,6 +279,8 @@ $departement    = htmlspecialchars($moi['id_departement'] ?? '');
 $changeLogin    = !empty($moi['change_login']);
 $isAdminJs      = $isAdmin ? 'true' : 'false';
 $deptUserJs     = json_encode($moi['id_departement'] ?? null);
+
+$deptActifs = getDeptActifs();
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -434,11 +436,9 @@ $deptUserJs     = json_encode($moi['id_departement'] ?? null);
     </label>
     <select id="sel-dept" class="form-select form-select-sm w-auto">
         <option value="">— Tous —</option>
-        <option value="14">14 — Calvados</option>
-        <option value="27">27 — Eure</option>
-        <option value="50">50 — Manche</option>
-        <option value="61">61 — Orne</option>
-        <option value="76">76 — Seine-Maritime</option>
+        <?php foreach ($deptActifs as $d): ?>
+        <option value="<?= (int)$d['code'] ?>"><?= (int)$d['code'] ?> — <?= htmlspecialchars($d['nom']) ?></option>
+        <?php endforeach; ?>
     </select>
 <?php else: ?>
     <span style="padding:.2rem .6rem; background:#fff3cd; border:1px solid #ffc107; border-radius:4px; font-size:.82rem; color:#856404;">
