@@ -12,8 +12,10 @@
  * Date de création : 2026-06-11
  * Déplacé dans Nominateur/ : 2026-06-12
  */
+if (session_status() === PHP_SESSION_NONE) session_start();
 require __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/csrf.php';
+require_once __DIR__ . '/../config/app_config.php';
 require __DIR__ . '/../Classes/Obfuscator.php';
 
 // ── Décodage du paramètre obfusqué ?ja=TOKEN ─────────────────────────────────
@@ -187,6 +189,33 @@ if ($action !== '') {
             exit;
         }
 
+        // Déterminer le(s) département(s) du JA pour filtrer les rencontres (mode Partiel)
+        $jaCols2  = array_column($pdo->query('DESCRIBE ja')->fetchAll(), 'Field');
+        $hasCp2   = in_array('Cp', $jaCols2);
+        $cpExpr2  = $hasCp2 ? 'COALESCE(lp2.CodePostal, ja.Cp)' : 'lp2.CodePostal';
+        $jaRow    = $pdo->prepare("SELECT LEFT($cpExpr2, 2) AS Dept FROM ja LEFT JOIN laposte lp2 ON lp2.Id_LaPoste = ja.Id_LaPoste WHERE ja.Id_JA = ?");
+        $jaRow->execute([$idJa]);
+        $jaDept   = $jaRow->fetchColumn() ?: '';
+
+        // Départements à inclure : si 76, ajouter ceux définis dans la config
+        $depts = $jaDept ? [$jaDept] : [];
+        if ($jaDept === '76') {
+            $extra = trim(getConfig('dept_76_includes', '27'));
+            foreach (array_filter(array_map('trim', explode(',', $extra))) as $d) {
+                if (!in_array($d, $depts)) $depts[] = $d;
+            }
+        }
+
+        // Clause de filtre sur le CP de la salle (optionnel si aucun dept trouvé)
+        $deptClause = '';
+        if ($depts) {
+            $ph = implode(',', array_fill(0, count($depts), '?'));
+            $deptClause = "AND LEFT(COALESCE(lp_r.CodePostal, lp_c.CodePostal), 2) IN ($ph)";
+        }
+
+        $params = [$idJa, $idJa, $saison, $journee, $date];
+        if ($depts) $params = array_merge($params, $depts);
+
         $stmt = $pdo->prepare("
             SELECT
                 r.Id_Rencontre,
@@ -238,9 +267,11 @@ if ($action !== '') {
             WHERE r.Saison = ? AND r.Journee = ? AND r.Date = ?
               -- Exclure les rencontres dont l'équipe domicile appartient au club du JA
               AND (lp_ja.JaClub IS NULL OR ed.Id_Club != lp_ja.JaClub)
+              -- Filtrer sur le département du JA
+              $deptClause
             ORDER BY r.Heure, d.Ord
         ");
-        $stmt->execute([$idJa, $idJa, $saison, $journee, $date]);
+        $stmt->execute($params);
         echo json_encode(['ok' => true, 'data' => $stmt->fetchAll()]);
         exit;
     }
@@ -383,6 +414,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?= htmlspecialchars(csrfToken()) ?>">
     <title>NIJAC – Disponibilités JA (E012)</title>
     <link rel="stylesheet" href="../asset/css/bootstrap.min.css">
     <link rel="stylesheet" href="../asset/css/bootstrap-icons.min.css">
@@ -1522,6 +1554,11 @@ $('#mj-btns').on('click', '.btn-statut', function (e) {
 
     majRecapSave();
     sauvegarderJournee(journee, date, saison);
+
+    // Fermer automatiquement la modale pour Disponible et Non disponible
+    if (statut === 'O' || statut === 'N') {
+        modalJournee.hide();
+    }
 
     // Mettre à jour la cellule du calendrier
     const $cellule = $(`.cal-jour.jour-journee`).filter(function () {

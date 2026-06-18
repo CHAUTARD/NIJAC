@@ -4,6 +4,7 @@
  *
  * Suppression de la colonne `libelle` de la table `configuration`
  * (champ jugé redondant avec la clé, remplacé par `description`).
+ * Ajout de la colonne `JAdemande` (tinyint, défaut 0) dans la table `equipe`.
  *
  * Script idempotent : vérifie l'état actuel avant d'agir,
  * peut être exécuté plusieurs fois sans risque.
@@ -37,6 +38,15 @@ try {
     } else {
         $pdo->exec("DELETE FROM `configuration` WHERE `cle` = 'regle_dept_76'");
         echo "[2/2] configuration.regle_dept_76 : ligne supprimée.\n";
+    }
+
+    // ── Ajout equipe.JAdemande ──────────────────────────────────────────────
+    $cols = $pdo->query("SHOW COLUMNS FROM `equipe` LIKE 'JAdemande'")->fetchAll();
+    if (count($cols) > 0) {
+        echo "[3/3] equipe.JAdemande : déjà présente, rien à faire.\n";
+    } else {
+        $pdo->exec("ALTER TABLE `equipe` ADD COLUMN `JAdemande` tinyint(1) NOT NULL DEFAULT 0");
+        echo "[3/3] equipe.JAdemande : colonne ajoutée.\n";
     }
 
     echo "\nMigration terminée avec succès.\n";

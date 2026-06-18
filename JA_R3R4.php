@@ -1,6 +1,6 @@
 <?php
 /**
- * NIJAC – Demandes de JA pour équipes R3 / R4 (E022)
+ * NIJAC – Demandes de JA pour équipes R3 / R4 (E025)
  *
  * Permet de signaler qu'une équipe R3 ou R4 demande un Juge-Arbitre.
  * Quand JAdemande = 1, toutes les rencontres à domicile de cette équipe
@@ -266,8 +266,8 @@ $isAdmin     = !empty($moi['is_admin']);
 <!-- En-tête -->
 <div id="page-header">
     <i class="bi bi-person-badge me-2"></i>Demandes JA pour équipes R3 / R4
-    <small class="opacity-75 ms-2">(E022)</small>
-    <a href="<?= $isAdmin ? 'admin_menu.php' : 'Nominateur/menu.php' ?>" class="btn btn-sm btn-light float-end py-0">
+    <small class="opacity-75 ms-2">(E025)</small>
+    <a href="<?= $isAdmin ? 'admin_menu.php' : 'Nominateur/menu.php' ?>" class="ms-auto btn btn-sm btn-outline-light">
         <i class="bi bi-arrow-left me-1"></i>Retour menu
     </a>
 </div>

@@ -10,9 +10,10 @@
  *  - Priorité aux choix de rencontres du JA déclarés dans ses disponibilités
  *  - Choix de la rencontre la plus proche du domicile du JA
  *  - Priorité au JA ayant le moins d'arbitrages sur la phase en cours
+ *  - Attibution automatique d'une deuxiéme rencontre à arbiter dans la même salle
  *
  * Créé par : Patrick CHAUTARD
- * Date de création : 2026-06-17
+ * Date de création : 2026-06-18
  */
 session_start();
 if (!isset($_SESSION['utilisateur'])) {
@@ -281,10 +282,44 @@ if ($action !== '') {
         ")->execute([$idRenc, $idJa]);
 
         // Récupérer le nom du JA pour affichage
-        $jaInfo = $pdo->prepare("SELECT Nom, Prenom, Grade FROM ja WHERE Id_JA = ?");
+        $jaInfo = $pdo->prepare("SELECT Nom, Prenom, Grade, Id_Club FROM ja WHERE Id_JA = ?");
         $jaInfo->execute([$idJa]);
         $ja = $jaInfo->fetch();
-        echo json_encode(['ok' => true, 'ja' => $ja]);
+        $jaClub = $ja['Id_Club'] ?? null;
+
+        // Affectation automatique aux autres rencontres dans la même salle le même jour
+        $autoAffectes = [];
+        $salleStmt = $pdo->prepare("SELECT id_Salle FROM rencontre WHERE Id_Rencontre = ?");
+        $salleStmt->execute([$idRenc]);
+        $idSalle = $salleStmt->fetchColumn();
+
+        if ($idSalle) {
+            $autresStmt = $pdo->prepare("
+                SELECT r.Id_Rencontre, ed.Id_Club AS IdClubDom, ee.Id_Club AS IdClubExt
+                FROM rencontre r
+                JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
+                LEFT JOIN equipe ee ON ee.Id_Equipe = r.Id_EquipeExt
+                LEFT JOIN nomination n ON n.Id_Rencontre = r.Id_Rencontre
+                WHERE r.id_Salle = ?
+                  AND r.Date = ?
+                  AND r.Id_Rencontre != ?
+                  AND n.Id_Rencontre IS NULL
+            ");
+            $autresStmt->execute([$idSalle, $ri['Date'], $idRenc]);
+            foreach ($autresStmt->fetchAll() as $autre) {
+                // Ne pas affecter si le club du JA joue dans cette rencontre
+                if ($jaClub && ($jaClub == $autre['IdClubDom'] || $jaClub == $autre['IdClubExt'])) continue;
+                $pdo->prepare("
+                    INSERT INTO nomination (Id_Rencontre, Id_JA, DateNomination, Valide, EmailEnvoye)
+                    VALUES (?, ?, CURDATE(), 0, 0)
+                    ON DUPLICATE KEY UPDATE Id_JA = VALUES(Id_JA), DateNomination = CURDATE(), Valide = 0, EmailEnvoye = 0
+                ")->execute([$autre['Id_Rencontre'], $idJa]);
+                $autoAffectes[] = $autre['Id_Rencontre'];
+                break; // une seule deuxième rencontre automatique
+            }
+        }
+
+        echo json_encode(['ok' => true, 'ja' => $ja, 'autoAffectes' => $autoAffectes]);
         exit;
     }
 
@@ -967,6 +1002,16 @@ function affecterJa(idRenc, idJa, nom, prenom) {
     }).done(function (r) {
         if (!r.ok) { alert('Erreur : ' + r.err); return; }
         nominations[idRenc] = { Id_JA: idJa, Nom: nom, Prenom: prenom };
+
+        // Affectations automatiques dans la même salle
+        const auto = r.autoAffectes || [];
+        auto.forEach(function (idAuto) {
+            nominations[idAuto] = { Id_JA: idJa, Nom: nom, Prenom: prenom };
+        });
+        if (auto.length > 0) {
+            alert(`Affectation automatique : ${escHtml(prenom)} ${escHtml(nom)} a également été affecté(e) à ${auto.length} autre(s) rencontre(s) dans la même salle.`);
+        }
+
         renderRencontres();
         mettreAJourBoutons();
         mettreAJourInfoJournee();

@@ -84,13 +84,14 @@ $deptActifs  = getDeptActifs();
 <style>
 :root { --nijac-blue:#1a3a6b; --col-dispo:#2e7d32; }
 
-body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-height:100vh; display:flex; flex-direction:column; overflow-x:hidden; }
+body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
 
 /* ── Toolbar ── */
 .ts-user { color:#1a3a6b; font-weight:600; }
 .ts-pwd-warning { display:<?= $changeLogin ? 'inline-flex' : 'none' ?>; align-items:center; gap:.35rem; color:#c00; font-weight:700; cursor:pointer; text-decoration:underline dotted; }
 /* ── En-tête ── */
 #page-header { background:var(--nijac-blue); color:#fff; padding:.65rem 1.25rem; display:flex; align-items:center; gap:.75rem; font-size:.9rem; font-weight:600; }
+#page-header .btn-retour { margin-left:auto; }
 
 /* ── Bandeau département ── */
 #barre-dept { background:#fff; border-bottom:2px solid #dee2e6; padding:.65rem 1.25rem; display:flex; align-items:center; gap:1.25rem; flex-wrap:wrap; }
@@ -99,7 +100,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 #info-dept { font-size:.8rem; color:#888; font-style:italic; }
 
 /* ── Corps ── */
-#corps { flex:1; padding:1.25rem clamp(1rem, 4vw, 4rem); width:100%; box-sizing:border-box; }
+#corps { flex:1; overflow-y:auto; padding:1.25rem clamp(1rem, 4vw, 4rem); width:100%; box-sizing:border-box; }
 
 /* ── Titre section département ── */
 .dept-titre {
@@ -172,7 +173,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 <div id="page-header">
     <i class="bi bi-calendar2-check fs-5"></i>
     <span>Saisie des disponibilités JA <small class="opacity-75">(E021)</small></span>
-    <a href="menu.php" class="btn btn-sm btn-light float-end py-0"><i class="bi bi-arrow-left me-1"></i>Retour menu</a>
+    <a href="menu.php" class="btn btn-sm btn-light py-0 btn-retour"><i class="bi bi-arrow-left me-1"></i>Retour menu</a>
 </div>
 
 <!-- Bandeau département -->
@@ -187,6 +188,10 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
     <span id="info-dept"></span>
     <div id="spinner-dept" class="spinner-border spinner-border-sm text-secondary" role="status">
         <span class="visually-hidden">Chargement…</span>
+    </div>
+    <div class="input-group input-group-sm ms-auto" style="max-width:240px; display:none" id="wrap-filtre-ja">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input type="search" id="filtre-ja" class="form-control" placeholder="Filtrer par nom / prénom…" autocomplete="off">
     </div>
 </div>
 
@@ -214,13 +219,19 @@ const DEPT_NOMS = <?= json_encode(array_column($deptActifs, 'nom', 'code'), JSON
 $(function () {
     $('#sel-dept').on('change', function () {
         const dept = this.value;
+        $('#filtre-ja').val('');
         if (!dept) {
             $('#liste-ja').hide().empty();
             $('#placeholder').show();
             $('#info-dept').text('');
+            $('#wrap-filtre-ja').hide();
             return;
         }
         chargerJA(dept);
+    });
+
+    $('#filtre-ja').on('input', function () {
+        filtrerJA($(this).val().trim().toLowerCase());
     });
 });
 
@@ -312,9 +323,28 @@ function chargerJA(dept) {
         });
 
         $liste.show();
+        $('#wrap-filtre-ja').show();
     }).fail(function () {
         $('#spinner-dept').hide();
         $('#liste-ja').html('<div class="alert alert-danger">Erreur de chargement.</div>').show();
+    });
+}
+
+function filtrerJA(terme) {
+    $('#liste-ja .ja-grid').each(function () {
+        let visibles = 0;
+        $(this).find('.ja-card').each(function () {
+            const texte = $(this).text().toLowerCase();
+            const ok = !terme || texte.includes(terme);
+            $(this).toggle(ok);
+            if (ok) visibles++;
+        });
+        // Mettre à jour le compteur dans le titre de section
+        const $titre = $(this).prev('.dept-titre');
+        $titre.find('.dept-nb').text(visibles + ' JA');
+        // Masquer la section entière si aucun résultat
+        $titre.toggle(visibles > 0);
+        $(this).toggle(visibles > 0);
     });
 }
 
