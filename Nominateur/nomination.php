@@ -197,6 +197,7 @@ if ($action !== '') {
                 ja.Nom,
                 ja.Prenom,
                 ja.Grade,
+                COALESCE(ja.Nationale, 0) AS Nationale,
                 $cpExpr    AS Cp,
                 $villeExpr AS Ville,
                 $noteExpr  AS Note,
@@ -495,6 +496,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 .cand-card .cand-rang { width:24px; height:24px; border-radius:50%; background:var(--nom-green); color:#fff; font-size:.75rem; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .cand-card .cand-nom { font-weight:700; font-size:.9rem; flex:1; }
 .cand-card .cand-grade { font-size:.72rem; background:#1a3a6b; color:#fff; padding:.1rem .35rem; border-radius:3px; }
+.cand-card .cand-nationale { font-size:.72rem; color:#555; margin-left:.2rem; }
 .cand-card .cand-body { padding:.45rem .7rem; display:flex; align-items:center; gap:1rem; }
 .cand-card .cand-loc { font-size:.78rem; color:#555; flex:1; }
 .cand-card .cand-stats { font-size:.75rem; color:#888; text-align:right; }
@@ -936,6 +938,7 @@ function chargerCandidats(idRenc) {
                     <div class="cand-header">
                         <span class="cand-rang">${rang}</span>
                         <span class="cand-nom">${escHtml(ja.Prenom)} ${escHtml(ja.Nom)}</span>
+                        <span class="cand-nationale">${ja.Nationale == 1 ? 'Nationale : <b>Oui</b>' : 'Nationale : Non'}</span>
                         ${noteBtn}
                         ${ja.Grade ? `<span class="cand-grade">${escHtml(ja.Grade)}</span>` : ''}
                     </div>
