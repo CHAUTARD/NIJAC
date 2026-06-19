@@ -204,6 +204,8 @@ $isAdmin      = !empty($u['is_admin']);
 </head>
 <body>
 
+    <?php $pageIcon = 'bi-grid-3x3-gap-fill'; $pageTitle = 'Menu pour les paramètres'; $pageCode = 'E002'; $backUrl = null; require __DIR__ . '/includes/page_header.php'; ?>
+
     <!-- ToolStrip -->
     <div id="toolbar">
         <span class="ts-user">
@@ -218,11 +220,6 @@ $isAdmin      = !empty($u['is_admin']);
     </div>
 
     <?php require __DIR__ . '/includes/modal_mdp.php'; ?>
-
-    <!-- En-tête -->
-    <div id="page-header">
-        <i class="bi bi-grid-3x3-gap-fill me-2"></i>Menu pour les paramètres &nbsp;<small class="opacity-75">(E002)</small>
-    </div>
 
     <!-- Grille de boutons -->
     <div id="menu-grid">

@@ -584,6 +584,10 @@ $changeLogin = !empty($moi['change_login']);
 </head>
 <body>
 
+<?php $pageIcon = 'bi-mailbox2'; $pageTitle = 'Gestion des communes (La Poste)'; $pageCode = 'E006'; $backUrl = 'admin_menu.php'; require __DIR__ . '/includes/page_header.php'; ?>
+
+<?php require __DIR__ . '/includes/toolbar.php'; ?>
+
 <!-- Spinner -->
 <div id="spinner">
     <div class="spinner-border text-light" style="width:3rem;height:3rem;"></div>
@@ -600,8 +604,6 @@ $changeLogin = !empty($moi['change_login']);
         <small id="import-detail" class="text-muted"></small>
     </div>
 </div>
-
-<?php require __DIR__ . '/includes/toolbar.php'; ?>
 
 <!-- MenuStrip -->
 <div id="menu-strip">
@@ -813,15 +815,6 @@ $changeLogin = !empty($moi['change_login']);
             </div>
         </div>
     </div>
-</div>
-
-<!-- En-tête -->
-<div id="page-header">
-    <i class="bi bi-mailbox2 me-2"></i>Gestion des communes (La Poste)
-    <small class="opacity-75 ms-2">(E006)</small>
-    <a href="admin_menu.php" class="btn btn-sm btn-light float-end py-0">
-        <i class="bi bi-arrow-left me-1"></i>Retour menu
-    </a>
 </div>
 
 <!-- Grille -->

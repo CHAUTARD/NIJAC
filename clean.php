@@ -559,20 +559,13 @@ $changeLogin = !empty($moi['change_login']);
 </head>
 <body>
 
-<!-- Spinner -->
-<div id="spinner">
-    <div class="spinner-border text-light" style="width:3rem;height:3rem;"></div>
-</div>
+<?php $pageIcon = 'bi-database-fill-gear'; $pageTitle = 'Nettoyage / Restauration de saison'; $pageCode = 'E016'; $backUrl = 'admin_menu.php'; require __DIR__ . '/includes/page_header.php'; ?>
 
 <?php require __DIR__ . '/includes/toolbar.php'; ?>
 
-<!-- En-tête -->
-<div id="page-header">
-    <i class="bi bi-database-fill-gear me-2"></i>Nettoyage / Restauration de saison
-    <small class="opacity-75 ms-2">(E016)</small>
-    <a href="admin_menu.php" class="btn btn-sm btn-light float-end py-0">
-        <i class="bi bi-arrow-left me-1"></i>Retour menu
-    </a>
+<!-- Spinner -->
+<div id="spinner">
+    <div class="spinner-border text-light" style="width:3rem;height:3rem;"></div>
 </div>
 
 <!-- ════════════════════════ CONTENU PRINCIPAL ════════════════════════ -->

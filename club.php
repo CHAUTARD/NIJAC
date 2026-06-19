@@ -295,12 +295,14 @@ $deptActifs  = getDeptActifs();
 </head>
 <body>
 
+<?php $pageIcon = 'bi-building'; $pageTitle = 'Gestion des clubs et Associations'; $pageCode = 'E008'; $backUrl = 'admin_menu.php'; require __DIR__ . '/includes/page_header.php'; ?>
+
+<?php require __DIR__ . '/includes/toolbar.php'; ?>
+
 <!-- Spinner -->
 <div id="spinner">
     <div class="spinner-border text-light" style="width:3rem;height:3rem;"></div>
 </div>
-
-<?php require __DIR__ . '/includes/toolbar.php'; ?>
 
 <!-- MenuStrip -->
 <div id="menu-strip">
@@ -327,15 +329,6 @@ $deptActifs  = getDeptActifs();
         <i class="bi bi-door-open me-1"></i>Plusieurs salles
     </button>
     <input type="search" id="search-input" placeholder="🔍 Rechercher…">
-</div>
-
-<!-- En-tête -->
-<div id="page-header">
-    <i class="bi bi-building me-2"></i>Gestion des clubs et Associations
-    <small class="opacity-75 ms-2">(E008)</small>
-    <a href="admin_menu.php" class="btn btn-sm btn-light float-end py-0">
-        <i class="bi bi-arrow-left me-1"></i>Retour menu
-    </a>
 </div>
 
 <!-- Grille -->

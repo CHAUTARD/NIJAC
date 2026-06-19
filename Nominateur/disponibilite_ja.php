@@ -91,23 +91,12 @@ if ($action !== '') {
         exit;
     }
 
-    // ── Saisons disponibles ───────────────────────────────────────────────
-    if ($action === 'saisons') {
-        $rows = $pdo->query(
-            "SELECT DISTINCT Saison FROM rencontre WHERE Saison IS NOT NULL ORDER BY Saison DESC"
-        )->fetchAll(PDO::FETCH_COLUMN);
-        echo json_encode(['ok' => true, 'data' => $rows]);
-        exit;
-    }
-
-    // ── Journées d'une saison (niveau 1 du calendrier) ───────────────────
+    // ── Journées (niveau 1 du calendrier) ───────────────────────────────
     // Chaque (Journee, Date) donne un cartouche indépendant (ex: sam. + dim.)
     // Statut lu dans disponible : DateCompetition = Date exacte, Id_Rencontre IS NULL
     if ($action === 'journees') {
         $idJa   = (int)($_GET['id_ja']  ?? 0);
-        $saison = trim($_GET['saison']  ?? '');
-        if (!$idJa)  { echo json_encode(['ok' => false, 'err' => 'JA manquant']);     exit; }
-        if (!$saison){ echo json_encode(['ok' => false, 'err' => 'Saison manquante']); exit; }
+        if (!$idJa)  { echo json_encode(['ok' => false, 'err' => 'JA manquant']); exit; }
 
         // Formule Haversine (km) entre le JA et la salle principale du club domicile
         $haversine = "
@@ -132,8 +121,7 @@ if ($action !== '') {
                 SELECT r.Journee, r.Date, COUNT(*) AS NbRencontres
                 FROM rencontre r
                 JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
-                WHERE r.Saison = ?
-                  AND NOT EXISTS (
+                WHERE NOT EXISTS (
                       SELECT 1 FROM ja ja0
                       WHERE ja0.Id_JA = ? AND ja0.Id_Club IS NOT NULL AND ja0.Id_Club = ed.Id_Club
                   )
@@ -149,7 +137,6 @@ if ($action !== '') {
                 JOIN disponible d2
                     ON  d2.Id_Rencontre = r2.Id_Rencontre
                     AND d2.Id_JA        = ?
-                WHERE r2.Saison = ?
                 GROUP BY r2.Journee, r2.Date
             ) sel ON sel.Journee = j.Journee AND sel.Date = j.Date
             LEFT JOIN (
@@ -165,15 +152,14 @@ if ($action !== '') {
                     FROM ja LEFT JOIN laposte lp2 ON lp2.Id_LaPoste = ja.Id_LaPoste
                     WHERE ja.Id_JA = ?
                 ) lp_ja
-                WHERE r3.Saison = ?
-                  AND lp_v.Latitude  IS NOT NULL
+                WHERE lp_v.Latitude  IS NOT NULL
                   AND lp_ja.Latitude IS NOT NULL
                   AND (lp_ja.JaClub IS NULL OR ed3.Id_Club != lp_ja.JaClub)
                 GROUP BY r3.Journee, r3.Date
             ) dist ON dist.Journee = j.Journee AND dist.Date = j.Date
             ORDER BY j.Journee, j.Date
         ");
-        $stmt->execute([$saison, $idJa, $idJa, $idJa, $saison, $idJa, $saison]);
+        $stmt->execute([$idJa, $idJa, $idJa, $idJa]);
         echo json_encode(['ok' => true, 'data' => $stmt->fetchAll()]);
         exit;
     }
@@ -181,10 +167,9 @@ if ($action !== '') {
     // ── Rencontres d'une journée (niveau 2 — Partiel) ────────────────────
     if ($action === 'rencontres_journee') {
         $idJa   = (int)($_GET['id_ja']  ?? 0);
-        $saison  = trim($_GET['saison'] ?? '');
         $journee = (int)($_GET['journee'] ?? 0);
         $date    = trim($_GET['date'] ?? '');
-        if (!$idJa || !$saison || !$journee || !$date) {
+        if (!$idJa || !$journee || !$date) {
             echo json_encode(['ok' => false, 'err' => 'Paramètres manquants']);
             exit;
         }
@@ -213,7 +198,7 @@ if ($action !== '') {
             $deptClause = "AND LEFT(COALESCE(lp_r.CodePostal, lp_c.CodePostal), 2) IN ($ph)";
         }
 
-        $params = [$idJa, $idJa, $saison, $journee, $date];
+        $params = [$idJa, $idJa, $journee, $date];
         if ($depts) $params = array_merge($params, $depts);
 
         $stmt = $pdo->prepare("
@@ -264,7 +249,7 @@ if ($action !== '') {
             ) lp_ja
             LEFT JOIN disponible disp
                 ON disp.Id_Rencontre = r.Id_Rencontre AND disp.Id_JA = ?
-            WHERE r.Saison = ? AND r.Journee = ? AND r.Date = ?
+            WHERE r.Journee = ? AND r.Date = ?
               -- Exclure les rencontres dont l'équipe domicile appartient au club du JA
               AND (lp_ja.JaClub IS NULL OR ed.Id_Club != lp_ja.JaClub)
               -- Filtrer sur le département du JA
@@ -283,11 +268,10 @@ if ($action !== '') {
     //   Niveau rencontre: DateCompetition = Date match,               Id_Rencontre = id,   Reponse = O
     if ($action === 'sauvegarder_dispo_journee') {
         $idJa        = (int)($_POST['id_ja']    ?? 0);
-        $saison      = trim($_POST['saison']    ?? '');
         $journee     = (int)($_POST['journee']  ?? 0);
         $dateJournee = trim($_POST['date']      ?? '');
         $statut      = strtoupper(trim($_POST['statut'] ?? ''));
-        if (!$idJa || !$saison || !$journee || !$dateJournee || !in_array($statut, ['O','P','N'])) {
+        if (!$idJa || !$journee || !$dateJournee || !in_array($statut, ['O','P','N'])) {
             echo json_encode(['ok' => false, 'err' => 'Paramètres invalides']);
             exit;
         }
@@ -303,8 +287,8 @@ if ($action !== '') {
             ->execute([$idJa, $dateJournee, $statut]);
 
         // 2. Rencontres de ce cartouche (journée + date exacte)
-        $stmtIds = $pdo->prepare("SELECT Id_Rencontre, Date FROM rencontre WHERE Saison = ? AND Journee = ? AND Date = ?");
-        $stmtIds->execute([$saison, $journee, $dateJournee]);
+        $stmtIds = $pdo->prepare("SELECT Id_Rencontre, Date FROM rencontre WHERE Journee = ? AND Date = ?");
+        $stmtIds->execute([$journee, $dateJournee]);
         $tousRencontres = $stmtIds->fetchAll(); // [Id_Rencontre, Date]
         $tousIds = array_column($tousRencontres, 'Id_Rencontre');
 
@@ -402,12 +386,6 @@ if ($action !== '') {
     exit;
 }
 
-// ── Saison courante par défaut ────────────────────────────────────────────────
-$saisonDefaut = '';
-try {
-    $row = $pdo->query("SELECT Saison FROM rencontre WHERE Saison IS NOT NULL ORDER BY Saison DESC LIMIT 1")->fetch();
-    if ($row) $saisonDefaut = $row['Saison'];
-} catch (PDOException $e) {}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -757,6 +735,8 @@ try {
 </head>
 <body>
 
+<?php require __DIR__ . '/includes/toolbar.php'; ?>
+
 <!-- ── En-tête unifié ─────────────────────────────────────────────────────── -->
 <div id="page-header">
     <i class="bi bi-calendar2-check fs-5 flex-shrink-0"></i>
@@ -867,11 +847,8 @@ try {
     Aucun identifiant JA fourni. Veuillez utiliser le lien personnalisé qui vous a été communiqué.
 </div>
 
-<!-- ── Barre saison (après sélection JA) ─────────────────────────────────── -->
-<div id="barre-saison">
-    <i class="bi bi-funnel me-1 text-secondary"></i>
-    <label class="fw-bold me-1" style="font-size:.85rem">Saison :</label>
-    <select id="sel-saison" class="form-select form-select-sm" style="width:140px"></select>
+<!-- ── Barre spin ─────────────────────────────────────────────────────────── -->
+<div id="barre-saison" style="display:none">
     <span id="barre-spin" style="display:none"><span class="spin-sm"></span></span>
 </div>
 
@@ -909,7 +886,6 @@ try {
 
 let idJaCourant  = null;
 let nomJaCourant = '';
-let saisonCourante = '<?= htmlspecialchars($saisonDefaut) ?>';
 
 // Etat local : { "saison_journee": { statut:'O'|'P'|'N', rencontres:[ids selec] } }
 let etatJournees = {};
@@ -1037,24 +1013,10 @@ $('#btn-save-note').on('click', function () {
     });
 });
 
-function chargerSaisons() {
-    $.getJSON('disponibilite_ja.php?action=saisons', function (r) {
-        const $s = $('#sel-saison').empty();
-        if (r.ok && r.data.length) {
-            r.data.forEach(s => $s.append(`<option value="${s}"${s===saisonCourante?' selected':''}>${s}</option>`));
-            if (!r.data.includes(saisonCourante) && r.data.length)
-                saisonCourante = r.data[0];
-        }
-        // Afficher le calendrier
-        $('#barre-save').css('display','flex');
-        chargerJournees();
-    });
-}
-
 // ── Chargement des journées (niveau 1) ───────────────────────────────────────
 function chargerJournees() {
-    const saison = $('#sel-saison').val() || saisonCourante;
-    if (!idJaCourant || !saison) return;
+    if (!idJaCourant) return;
+    $('#barre-save').css('display','flex');
     $('#barre-spin').show();
     $('#section-calendrier').show().html(
         '<div class="text-muted text-center py-5"><span class="spin-sm me-2"></span>Chargement des journées…</div>'
@@ -1063,7 +1025,6 @@ function chargerJournees() {
     $.getJSON('disponibilite_ja.php', {
         action: 'journees',
         id_ja:  idJaCourant,
-        saison: saison,
     }, function (r) {
         $('#barre-spin').hide();
         if (!r.ok) {
@@ -1077,6 +1038,7 @@ function chargerJournees() {
             return;
         }
         // Initialiser l'état depuis la BDD (un cartouche par Journee+Date)
+        const saison = 'courante';
         r.data.forEach(function (j) {
             const k = cle(saison, j.Journee, j.Date);
             if (!etatJournees[k]) {
@@ -1088,7 +1050,7 @@ function chargerJournees() {
                 };
             }
         });
-        renderCalendrier(r.data, saison);
+        renderCalendrier(r.data, 'courante');
         majRecapSave();
         renderCalendrierMensuel();
         afficherVueInitiale();
@@ -1222,7 +1184,6 @@ function chargerRencontresJournee(journee, date, saison) {
     $.getJSON('disponibilite_ja.php', {
         action:   'rencontres_journee',
         id_ja:    idJaCourant,
-        saison:   saison,
         journee:  journee,
         date:     date,
     }, function (r) {
@@ -1374,7 +1335,6 @@ function sauvegarderJournee(journee, date, saison) {
     $.post('disponibilite_ja.php', {
         action:     'sauvegarder_dispo_journee',
         id_ja:      idJaCourant,
-        saison:     saison,
         journee:    journee,
         date:       date,
         statut:     e.statut,
@@ -1392,14 +1352,6 @@ $('#btn-tout-sauvegarder').on('click', function () {
     toast(`✓ ${nb} journée${nb>1?'s':''} enregistrée${nb>1?'s':''}. Merci !`);
 });
 
-// ── Changer de saison ─────────────────────────────────────────────────────────
-$('#sel-saison').on('change', function () {
-    saisonCourante = $(this).val();
-    etatJournees   = {};
-    chargerJournees();
-});
-
-
 // ── Vue calendrier ────────────────────────────────────────────────────────────
 const MOIS_NOMS = ['Janvier','Février','Mars','Avril','Mai','Juin',
                    'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
@@ -1409,7 +1361,7 @@ const JOURS_COURTS = ['L','M','M','J','V','S','D'];
 let jourDetailMap = {};
 
 function renderCalendrierMensuel() {
-    const saison = $('#sel-saison').val() || saisonCourante;
+    const saison = 'courante';
 
     // Reconstruire jourDetailMap depuis etatJournees
     // Clé format : "saison_J<n>_YYYY-MM-DD"
@@ -1581,7 +1533,7 @@ function chargerRencontresModale(journee, date, saison, k) {
     $.getJSON('disponibilite_ja.php', {
         action: 'rencontres_journee',
         id_ja:  idJaCourant,
-        saison, journee, date,
+        journee, date,
     }, function (r) {
         if (!r.ok) {
             $('#mj-renc-body').html(`<div class="alert alert-danger m-2">${r.err}</div>`);
@@ -1703,7 +1655,7 @@ $(function () {
     if (idJaUrl > 0) {
         idJaCourant = idJaUrl;
         chargerInfosJA();
-        chargerSaisons(); // enchaîne → chargerJournees()
+        chargerJournees();
     } else {
         $('#section-erreur').show();
     }

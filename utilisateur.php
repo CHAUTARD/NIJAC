@@ -283,16 +283,9 @@ $deptActifs  = getDeptActifs();
 </head>
 <body>
 
-<?php require __DIR__ . '/includes/toolbar.php'; ?>
+<?php $pageIcon = 'bi-people-fill'; $pageTitle = 'Gestion des utilisateurs'; $pageCode = 'E009'; $backUrl = 'admin_menu.php'; require __DIR__ . '/includes/page_header.php'; ?>
 
-<!-- En-tête -->
-<div id="page-header">
-    <i class="bi bi-people-fill me-2"></i>Gestion des utilisateurs
-    <small class="opacity-75 ms-2">(E009)</small>
-    <a href="admin_menu.php" class="btn btn-sm btn-light float-end py-0">
-        <i class="bi bi-arrow-left me-1"></i>Retour menu
-    </a>
-</div>
+<?php require __DIR__ . '/includes/toolbar.php'; ?>
 
 <!-- Split -->
 <div id="split-container">

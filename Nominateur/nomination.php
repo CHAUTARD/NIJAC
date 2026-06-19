@@ -13,7 +13,7 @@
  *  - Attibution automatique d'une deuxiéme rencontre à arbiter dans la même salle
  *
  * Créé par : Patrick CHAUTARD
- * Date de création : 2026-06-18
+ * Date de création : 2026-06-19
  */
 session_start();
 if (!isset($_SESSION['utilisateur'])) {
@@ -24,10 +24,7 @@ if (!isset($_SESSION['utilisateur'])) {
 require __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/csrf.php';
 require_once __DIR__ . '/../config/app_config.php';
-require __DIR__ . '/../Classes/Obfuscator.php';
-
 $pdo = getPDO();
-$_obf = new Obfuscator(OBFUSCATOR_SEED);
 
 // ── Départements visibles pour l'utilisateur connecté ────────────────────────
 $deptsAutorises = getDepartementsAutorises($_SESSION['utilisateur']['id_departement'] ?? null);
@@ -41,21 +38,9 @@ if ($action !== '') {
 
     try {
 
-    // ── Saisons ──────────────────────────────────────────────────────────
-    if ($action === 'saisons') {
-        $rows = $pdo->query(
-            "SELECT DISTINCT Saison FROM rencontre WHERE Saison IS NOT NULL ORDER BY Saison DESC"
-        )->fetchAll(PDO::FETCH_COLUMN);
-        echo json_encode(['ok' => true, 'data' => $rows]);
-        exit;
-    }
-
     // ── Journées avec compteurs ──────────────────────────────────────────
     // Retourne: Journee, Date, NbRencontres, NbAttribues, NbDispo (JA disponibles)
     if ($action === 'journees') {
-        $saison = trim($_GET['saison'] ?? '');
-        if (!$saison) { echo json_encode(['ok' => false, 'err' => 'Saison manquante']); exit; }
-
         if (!$deptsAutorises) {
             echo json_encode(['ok' => true, 'data' => []]);
             exit;
@@ -78,21 +63,21 @@ if ($action !== '') {
             FROM rencontre r
             JOIN  equipe ed         ON ed.Id_Equipe = r.Id_EquipeDom
             LEFT JOIN nomination n  ON n.Id_Rencontre = r.Id_Rencontre
-            WHERE r.Saison = ? AND SUBSTRING(ed.Id_Club, 2, 2) IN ($deptPh)
+            WHERE SUBSTRING(ed.Id_Club, 2, 2) IN ($deptPh)
+              AND (r.Id_Division NOT IN (1,10) OR ed.JAdemande = 1)
             GROUP BY r.Journee, r.Date
             ORDER BY r.Journee, r.Date
         ");
-        $stmt->execute(array_merge([$saison], $deptsAutorises));
+        $stmt->execute($deptsAutorises);
         echo json_encode(['ok' => true, 'data' => $stmt->fetchAll()]);
         exit;
     }
 
     // ── Rencontres d'une journée (panneau gauche) ────────────────────────
     if ($action === 'rencontres_journee') {
-        $saison  = trim($_GET['saison']  ?? '');
         $journee = (int)($_GET['journee'] ?? 0);
         $date    = trim($_GET['date']    ?? '');
-        if (!$saison || !$journee || !$date) {
+        if (!$journee || !$date) {
             echo json_encode(['ok' => false, 'err' => 'Paramètres manquants']); exit;
         }
         if (!$deptsAutorises) {
@@ -131,11 +116,12 @@ if ($action !== '') {
             LEFT JOIN laposte lp_c ON lp_c.Id_LaPoste = s_c.Id_Laposte
             LEFT JOIN nomination n  ON n.Id_Rencontre  = r.Id_Rencontre
             LEFT JOIN ja ja_n       ON ja_n.Id_JA       = n.Id_JA
-            WHERE r.Saison = ? AND r.Journee = ? AND r.Date = ?
+            WHERE r.Journee = ? AND r.Date = ?
               AND SUBSTRING(ed.Id_Club, 2, 2) IN ($deptPh)
-            ORDER BY dv.Division, r.Poule, r.Id_Rencontre
+              AND (r.Id_Division NOT IN (1,10) OR ed.JAdemande = 1)
+            ORDER BY dv.Ord, r.Poule, r.Id_Rencontre
         ");
-        $stmt->execute(array_merge([$saison, $journee, $date], $deptsAutorises));
+        $stmt->execute(array_merge([$journee, $date], $deptsAutorises));
         echo json_encode(['ok' => true, 'data' => $stmt->fetchAll()]);
         exit;
     }
@@ -145,19 +131,20 @@ if ($action !== '') {
     // Tri final : score DESC, NbNominations ASC, RAND()
     if ($action === 'candidats_ja') {
         $idRenc  = (int)($_GET['id_rencontre'] ?? 0);
-        $saison  = trim($_GET['saison'] ?? '');
-        if (!$idRenc || !$saison) {
+        if (!$idRenc) {
             echo json_encode(['ok' => false, 'err' => 'Paramètres manquants']); exit;
         }
 
-        // Infos de la rencontre (date, club domicile, coords salle)
+        // Infos de la rencontre (date, club domicile, coords salle, division)
         $renc = $pdo->prepare("
-            SELECT r.Date, r.Saison, r.Journee,
+            SELECT r.Date, r.Journee,
                    ed.Id_Club AS IdClubDom,
                    COALESCE(lp_r.Latitude,  lp_c.Latitude)  AS VenueLat,
-                   COALESCE(lp_r.Longitude, lp_c.Longitude) AS VenueLon
+                   COALESCE(lp_r.Longitude, lp_c.Longitude) AS VenueLon,
+                   dv.Division AS DivisionCode
             FROM rencontre r
-            JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
+            JOIN equipe ed   ON ed.Id_Equipe   = r.Id_EquipeDom
+            JOIN division dv ON dv.Id_Division = r.Id_Division
             LEFT JOIN salle   s_r  ON s_r.Id_Salle   = r.id_Salle
             LEFT JOIN laposte lp_r ON lp_r.Id_LaPoste = s_r.Id_Laposte
             LEFT JOIN salle   s_c  ON s_c.Id_Club     = ed.Id_Club AND s_c.EstPrincipale = 1
@@ -172,7 +159,9 @@ if ($action !== '') {
         $idClubDom  = $ri['IdClubDom'];
         $venueLat   = $ri['VenueLat'];
         $venueLon   = $ri['VenueLon'];
-        $saisonRenc = $ri['Saison'];
+        $orderNationale = (strncmp($ri['DivisionCode'] ?? '', 'N', 1) === 0)
+            ? 'COALESCE(ja.Nationale, 0) DESC, '
+            : '';
 
         // Formule Haversine inline
         $distExpr = ($venueLat && $venueLon)
@@ -217,8 +206,6 @@ if ($action !== '') {
             LEFT JOIN (
                 SELECT n2.Id_JA, COUNT(*) AS NbNominations
                 FROM nomination n2
-                JOIN rencontre r2 ON r2.Id_Rencontre = n2.Id_Rencontre
-                WHERE r2.Saison = ?
                 GROUP BY n2.Id_JA
             ) nbnom ON nbnom.Id_JA = ja.Id_JA
             WHERE ja.Actif = 1
@@ -236,13 +223,12 @@ if ($action !== '') {
                   WHERE nn.Id_JA = ja.Id_JA AND rn.Date = ?
               )
             GROUP BY ja.Id_JA
-            ORDER BY Score DESC, NbNominations ASC, RAND()
+            ORDER BY {$orderNationale}Score DESC, NbNominations ASC, RAND()
             LIMIT 5
         ");
         $stmt->execute([
             $idRenc,   // PrefereRenc
             $idRenc,   // Score IF(pref)
-            $saisonRenc,
             $dateRenc,
             $idRenc,
             $idClubDom,
@@ -261,7 +247,7 @@ if ($action !== '') {
         }
 
         // Vérification règle : pas déjà affecté ce jour-là
-        $dateRenc = $pdo->prepare("SELECT Date, Saison FROM rencontre WHERE Id_Rencontre = ?");
+        $dateRenc = $pdo->prepare("SELECT Date FROM rencontre WHERE Id_Rencontre = ?");
         $dateRenc->execute([$idRenc]);
         $ri = $dateRenc->fetch();
         if (!$ri) { echo json_encode(['ok' => false, 'err' => 'Rencontre introuvable']); exit; }
@@ -335,34 +321,32 @@ if ($action !== '') {
 
     // ── Valider toutes les nominations d'une journée ─────────────────────
     if ($action === 'valider_nominations') {
-        $saison  = trim($_POST['saison']  ?? '');
         $journee = (int)($_POST['journee'] ?? 0);
         $date    = trim($_POST['date']    ?? '');
-        if (!$saison || !$journee || !$date) {
+        if (!$journee || !$date) {
             echo json_encode(['ok' => false, 'err' => 'Paramètres manquants']); exit;
         }
         $pdo->prepare("
             UPDATE nomination n
             JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
             SET n.Valide = 1
-            WHERE r.Saison = ? AND r.Journee = ? AND r.Date = ?
-        ")->execute([$saison, $journee, $date]);
+            WHERE r.Journee = ? AND r.Date = ?
+        ")->execute([$journee, $date]);
         echo json_encode(['ok' => true]);
         exit;
     }
 
     // ── Envoyer les convocations (lien par email) ─────────────────────────
     if ($action === 'envoyer_convocations') {
-        $saison  = trim($_POST['saison']  ?? '');
         $journee = (int)($_POST['journee'] ?? 0);
         $date    = trim($_POST['date']    ?? '');
-        if (!$saison || !$journee || !$date) {
+        if (!$journee || !$date) {
             echo json_encode(['ok' => false, 'err' => 'Paramètres manquants']); exit;
         }
 
         // Récupérer les nominations + email JA
         $stmt = $pdo->prepare("
-            SELECT n.Id_Rencontre, n.Id_JA, ja.Nom, ja.Prenom, ja.Email,
+            SELECT n.Id_Nomination, n.Id_Rencontre, n.Id_JA, ja.Nom, ja.Prenom, ja.Email,
                    ed.Nom AS NomDom, ee.Nom AS NomExt,
                    r.Date, r.Heure, dv.Division
             FROM nomination n
@@ -371,10 +355,10 @@ if ($action !== '') {
             JOIN equipe  ed   ON ed.Id_Equipe     = r.Id_EquipeDom
             LEFT JOIN equipe ee ON ee.Id_Equipe   = r.Id_EquipeExt
             JOIN division dv  ON dv.Id_Division   = r.Id_Division
-            WHERE r.Saison = ? AND r.Journee = ? AND r.Date = ?
+            WHERE r.Journee = ? AND r.Date = ?
               AND n.Valide = 1
         ");
-        $stmt->execute([$saison, $journee, $date]);
+        $stmt->execute([$journee, $date]);
         $nominations = $stmt->fetchAll();
 
         $base = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http')
@@ -384,8 +368,7 @@ if ($action !== '') {
 
         $envoyes = 0; $erreurs = []; $liens = [];
         foreach ($nominations as $nom) {
-            $token = $_obf->obfuscate((int)$nom['Id_JA']);
-            $lien  = "$base/Nominateur/convocation_ja.php?ja=$token&rencontre={$nom['Id_Rencontre']}";
+            $lien  = "$base/Nominateur/convocation_ja.php?nomination={$nom['Id_Nomination']}";
             $liens[] = [
                 'nom'     => "{$nom['Prenom']} {$nom['Nom']}",
                 'email'   => $nom['Email'] ?? '',
@@ -394,24 +377,54 @@ if ($action !== '') {
             ];
 
             if (!empty($nom['Email'])) {
-                $sujet  = "Nomination JA — {$nom['Division']} — {$nom['Date']}";
-                $corps  = "Bonjour {$nom['Prenom']},\r\n\r\n"
-                        . "Vous êtes nominé(e) comme Juge-Arbitre pour la rencontre :\r\n"
-                        . "{$nom['NomDom']} vs {$nom['NomExt']}\r\n"
-                        . "Date : {$nom['Date']} à {$nom['Heure']}\r\n\r\n"
-                        . "Veuillez consulter votre convocation et saisir vos frais via le lien :\r\n"
-                        . "$lien\r\n\r\n"
-                        . "Site de la ligue : " . getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr') . "\r\n\r\n"
-                        . "Cordialement,\r\nLe Comité d'Arbitrage";
-                if (@mail($nom['Email'], $sujet, $corps,
-                    'From: noreply@nijac.fr' . "\r\n" .
-                    'Content-Type: text/plain; charset=utf-8'
-                )) {
+                // Charger le template 'Convocation' depuis messagerie
+                static $tplConv = null;
+                if ($tplConv === null) {
+                    $r = $pdo->query("SELECT Sujet, Message FROM messagerie WHERE Type='Convocation' ORDER BY Id_Messagerie LIMIT 1")->fetch();
+                    $tplConv = $r ?: ['Sujet' => "Convocation — {DIVISION} — {DATE}", 'Message' => ''];
+                }
+
+                $markers  = ['{NOM}','{PRENOM}','{NOM_COMPLET}','{ID_JA}',
+                             '{DATE}','{HEURE}','{JOURNEE}','{DIVISION}','{DOM}','{EXT}',
+                             '{LIEN_CONVOCATION}','{LIEN_LIGUE}'];
+                $values   = [$nom['Nom'],$nom['Prenom'],$nom['Prenom'].' '.$nom['Nom'],$token,
+                             $nom['Date'] ? date('d/m/Y', strtotime($nom['Date'])) : '',$nom['Heure']??'',
+                             $nom['Journee']??'',$nom['Division'],
+                             $nom['NomDom'],$nom['NomExt']??'',
+                             $lien, getConfig('url_ligue','https://www.ligue-normandie-tt.fr')];
+
+                $sujet = str_replace($markers, $values, $tplConv['Sujet']);
+                $corps = str_replace($markers, $values, $tplConv['Message']);
+
+                if ($corps === '') {
+                    $corps = "Bonjour {$nom['Prenom']},\r\n\r\nVous êtes nominé(e) pour la rencontre {$nom['NomDom']} vs {$nom['NomExt']} le {$nom['Date']}.\r\n\r\nConsultez votre convocation : $lien";
+                }
+
+                // Retirer les images base64 (antispam)
+                if (str_contains($corps, 'data:image/')) {
+                    $corps = preg_replace('/src="data:image\/[^;]+;base64,[^"]*"/', 'src=""', $corps);
+                }
+
+                $modeDev = isModeDeveloppement();
+                $dest    = getEmailDestinataire($nom['Email']);
+                try {
+                    $mail = getNijacMailer();
+                    $mail->isHTML(strip_tags($corps) !== $corps);
+                    $mail->addAddress($dest, $nom['Prenom'] . ' ' . $nom['Nom']);
+                    $mail->Subject = ($modeDev && $dest !== $nom['Email'])
+                        ? "[DEV → {$nom['Email']}] $sujet" : $sujet;
+                    if ($mail->ContentType === 'text/html') {
+                        $mail->Body    = $corps;
+                        $mail->AltBody = strip_tags(str_replace(['<br>','<br/>','<br />'], "\n", $corps));
+                    } else {
+                        $mail->Body = nl2br(htmlspecialchars($corps, ENT_NOQUOTES, 'UTF-8'));
+                    }
+                    $mail->send();
                     $envoyes++;
                     $pdo->prepare("UPDATE nomination SET EmailEnvoye = 1 WHERE Id_Rencontre = ?")
                         ->execute([$nom['Id_Rencontre']]);
-                } else {
-                    $erreurs[] = $nom['Email'];
+                } catch (\Exception $e) {
+                    $erreurs[] = $nom['Email'] . ' (' . $e->getMessage() . ')';
                 }
             }
         }
@@ -539,24 +552,15 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 </head>
 <body>
 
-<?php require __DIR__ . '/includes/toolbar.php'; ?>
+<?php $pageIcon = 'bi-person-check-fill'; $pageIconClass = 'fs-5'; $pageTitle = 'Nomination des Juges-Arbitres'; $pageCode = 'E022'; $backUrl = 'menu.php'; $backBtnClass = 'ms-auto btn btn-sm btn-outline-light'; require __DIR__ . '/../includes/page_header.php'; ?>
 
-<!-- En-tête -->
-<div id="page-header">
-    <i class="bi bi-person-check-fill fs-5"></i>
-    <span>Nomination des Juges-Arbitres <small class="opacity-75">(E022)</small></span>
-    <a href="menu.php" class="ms-auto btn btn-sm btn-outline-light"><i class="bi bi-arrow-left me-1"></i>Retour au menu</a>
-</div>
+<?php require __DIR__ . '/includes/toolbar.php'; ?>
 
 <!-- Barre de sélection -->
 <div id="barre-selection">
-    <label for="sel-saison"><i class="bi bi-calendar3 me-1"></i>Saison</label>
-    <select id="sel-saison" class="form-select form-select-sm w-auto">
-        <option value="">— chargement —</option>
-    </select>
     <label for="sel-journee"><i class="bi bi-calendar-event me-1"></i>Journée</label>
     <select id="sel-journee" class="form-select form-select-sm w-auto" disabled>
-        <option value="">— sélectionner une saison —</option>
+        <option value="">— chargement —</option>
     </select>
     <div id="spinner-barre" class="spinner-border spinner-sm text-secondary ms-2" role="status" style="display:none"><span class="visually-hidden">Chargement…</span></div>
 </div>
@@ -691,7 +695,6 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 'use strict';
 
 // ── État ─────────────────────────────────────────────────────────────────────
-let saisonCourante  = '';
 let journeeCourante = null;  // {Journee, Date, NbRencontres, NbAttribues, NbDispo}
 let rencontres      = [];    // tableau rencontres de la journée
 let nominations     = {};    // {Id_Rencontre: {Id_JA, Nom, Prenom}} — état local
@@ -716,12 +719,7 @@ function formatDate(s) {
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 $(function () {
-    chargerSaisons();
-
-    $('#sel-saison').on('change', function () {
-        saisonCourante = this.value;
-        chargerJournees();
-    });
+    chargerJournees();
 
     $('#sel-journee').on('change', function () {
         const val = this.value;
@@ -745,29 +743,11 @@ $(function () {
     $('#btn-envoyer').on('click', envoyerConvocations);
 });
 
-// ── Saisons ──────────────────────────────────────────────────────────────────
-function chargerSaisons() {
-    spin(true);
-    ajax({ method: 'GET', data: { action: 'saisons' } })
-        .done(function (r) {
-            if (!r.ok) return;
-            const $sel = $('#sel-saison').empty().append('<option value="">— Saison —</option>');
-            r.data.forEach(s => $sel.append(`<option value="${s}">${s}</option>`));
-            if (r.data.length) {
-                $sel.val(r.data[0]);
-                saisonCourante = r.data[0];
-                chargerJournees();
-            }
-        })
-        .always(() => spin(false));
-}
-
 // ── Journées ─────────────────────────────────────────────────────────────────
 function chargerJournees() {
-    if (!saisonCourante) return;
     spin(true);
     $('#sel-journee').prop('disabled', true).empty().append('<option value="">Chargement…</option>');
-    ajax({ method: 'GET', data: { action: 'journees', saison: saisonCourante } })
+    ajax({ method: 'GET', data: { action: 'journees' } })
         .done(function (r) {
             const $sel = $('#sel-journee').empty().append('<option value="">— Journée —</option>');
             if (!r.ok || !r.data.length) {
@@ -812,7 +792,6 @@ function chargerRencontres() {
         method: 'GET',
         data: {
             action:  'rencontres_journee',
-            saison:  saisonCourante,
             journee: journeeCourante.Journee,
             date:    journeeCourante.Date
         }
@@ -904,7 +883,7 @@ function chargerCandidats(idRenc) {
 
     ajax({
         method: 'GET',
-        data: { action: 'candidats_ja', id_rencontre: idRenc, saison: saisonCourante }
+        data: { action: 'candidats_ja', id_rencontre: idRenc }
     }).done(function (r) {
         $('#liste-candidats').empty();
         if (!r.ok) {
@@ -1098,7 +1077,6 @@ function validerNominations() {
         method: 'POST',
         data: {
             action:  'valider_nominations',
-            saison:  saisonCourante,
             journee: journeeCourante.Journee,
             date:    journeeCourante.Date
         }
@@ -1117,7 +1095,6 @@ function envoyerConvocations() {
         method: 'POST',
         data: {
             action:  'envoyer_convocations',
-            saison:  saisonCourante,
             journee: journeeCourante.Journee,
             date:    journeeCourante.Date
         }

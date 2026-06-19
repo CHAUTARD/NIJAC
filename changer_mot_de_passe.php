@@ -202,6 +202,8 @@ if ($isAjax) {
 </head>
 <body>
 
+<?php require __DIR__ . '/includes/toolbar.php'; ?>
+
 <div class="pwd-card card">
 
     <div class="pwd-header">

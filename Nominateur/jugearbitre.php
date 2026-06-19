@@ -102,10 +102,6 @@ if ($action !== '') {
                         COALESCE(lp.Nom,        j.Ville) AS VilleJA,
                         (SELECT COUNT(*) FROM disponible d
                          WHERE d.Id_JA = j.Id_JA
-                           AND d.DateCompetition >= (
-                               SELECT MIN(r2.Date) FROM rencontre r2
-                               WHERE r2.Saison = (SELECT Saison FROM rencontre ORDER BY Saison DESC LIMIT 1)
-                           )
                         ) AS NbDispo
                  FROM ja j
                  LEFT JOIN Club    cl ON cl.Id_Club    = j.Id_Club
@@ -603,12 +599,14 @@ $deptActifs  = getDeptActifs();
 </head>
 <body>
 
+<?php $pageIcon = 'bi-person-badge-fill'; $pageTitle = 'Gestion des Juges-Arbitres'; $pageCode = 'E007'; $backUrl = 'menu.php'; require __DIR__ . '/../includes/page_header.php'; ?>
+
+<?php require __DIR__ . '/includes/toolbar.php'; ?>
+
 <!-- Spinner -->
 <div id="spinner">
     <div class="spinner-border text-light" style="width:3rem;height:3rem;"></div>
 </div>
-
-<?php require __DIR__ . '/includes/toolbar.php'; ?>
 
 <!-- MenuStrip -->
 <div id="menu-strip">
@@ -623,8 +621,8 @@ $deptActifs  = getDeptActifs();
     <?php endif; ?>
     <span id="lbl-count">0 JA</span>
     <div id="toggle-actif" style="margin-left:.5rem">
-        <button id="btn-tous"         class="active">Tous</button>
-        <button id="btn-actifs">Actifs seulement</button>
+        <button id="btn-tous">Tous</button>
+        <button id="btn-actifs"       class="active">Actifs seulement</button>
         <button id="btn-erreurs-cp">⚠ Erreurs CP/Ville</button>
     </div>
     &nbsp;Site utile : <a href="https://www.dcode.fr/code-postal" target="_blank" class="text-decoration-none">dCode code-postal</a>
@@ -641,15 +639,6 @@ $deptActifs  = getDeptActifs();
     </select>
     <?php endif; ?>
     <input type="search" id="search-input" placeholder="🔍 Rechercher…">
-</div>
-
-<!-- En-tête -->
-<div id="page-header">
-    <i class="bi bi-person-badge-fill me-2"></i>Gestion des Juges-Arbitres
-    <small class="opacity-75 ms-2">(E007)</small>
-    <a href="menu.php" class="btn btn-sm btn-light float-end py-0">
-        <i class="bi bi-arrow-left me-1"></i>Retour au menu
-    </a>
 </div>
 
 <!-- Grille -->
@@ -692,7 +681,7 @@ $deptActifs  = getDeptActifs();
 'use strict';
 
 let lignes     = [];
-let filtreActif   = false;  // false = tous, true = actifs seulement
+let filtreActif   = true;   // false = tous, true = actifs seulement
 let filtreErreursCp = false; // true = uniquement les lignes sans id_laposte
 let cellActive = null;
 let sortField  = 'nom';

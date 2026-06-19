@@ -8,7 +8,7 @@
  * dans une nouvelle fenêtre pour la saisie détaillée par journée.
  *
  * Créé par : Patrick CHAUTARD
- * Date de création : 2026-06-11
+ * Date de création : 2026-06-19
  */
 session_start();
 if (!isset($_SESSION['utilisateur'])) {
@@ -167,14 +167,9 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 </head>
 <body>
 
-<?php require __DIR__ . '/includes/toolbar.php'; ?>
+<?php $pageIcon = 'bi-calendar2-check'; $pageIconClass = 'fs-5'; $pageTitle = 'Saisie des disponibilités JA'; $pageCode = 'E021'; $backUrl = 'menu.php'; $backBtnClass = 'btn btn-sm btn-light py-0 btn-retour'; require __DIR__ . '/../includes/page_header.php'; ?>
 
-<!-- En-tête -->
-<div id="page-header">
-    <i class="bi bi-calendar2-check fs-5"></i>
-    <span>Saisie des disponibilités JA <small class="opacity-75">(E021)</small></span>
-    <a href="menu.php" class="btn btn-sm btn-light py-0 btn-retour"><i class="bi bi-arrow-left me-1"></i>Retour menu</a>
-</div>
+<?php require __DIR__ . '/includes/toolbar.php'; ?>
 
 <!-- Bandeau département -->
 <div id="barre-dept">
@@ -182,7 +177,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
     <select id="sel-dept" class="form-select form-select-sm w-auto">
         <option value="">— Choisir un département —</option>
         <?php foreach ($deptActifs as $d): ?>
-        <option value="<?= (int)$d['code'] ?>"><?= (int)$d['code'] ?> — <?= htmlspecialchars($d['nom']) ?></option>
+        <option value="<?= (int)$d['code'] ?>" <?= (string)$d['code'] === $departement ? 'selected' : '' ?>><?= (int)$d['code'] ?> — <?= htmlspecialchars($d['nom']) ?></option>
         <?php endforeach; ?>
     </select>
     <span id="info-dept"></span>
@@ -217,6 +212,9 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 const DEPT_NOMS = <?= json_encode(array_column($deptActifs, 'nom', 'code'), JSON_UNESCAPED_UNICODE) ?>;
 
 $(function () {
+    const deptInitial = $('#sel-dept').val();
+    if (deptInitial) chargerJA(deptInitial);
+
     $('#sel-dept').on('change', function () {
         const dept = this.value;
         $('#filtre-ja').val('');

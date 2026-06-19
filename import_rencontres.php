@@ -400,6 +400,7 @@ if (isset($_GET['action'])) {
         $sp = IOFactory::load($fichier);
         $pdo = getPDO();
         $stats = ['equipes_creees' => 0, 'rencontres_creees' => 0, 'doublons' => 0, 'erreurs' => []];
+        $saisonImport = '';
 
         $stmtEqCheck = $pdo->prepare('SELECT Id_Equipe FROM equipe WHERE Nom = ? AND Id_Division = ?');
         $stmtEqIns   = $pdo->prepare('INSERT IGNORE INTO equipe (Nom, Id_Division, Id_Club) VALUES (?,?,?)');
@@ -408,8 +409,8 @@ if (isset($_GET['action'])) {
         );
         $stmtRencIns = $pdo->prepare(
             'INSERT INTO rencontre (Date, Heure, Id_Division, Poule, Id_EquipeDom, Id_EquipeExt,
-                                    Phase, Saison, Journee, ArbitrageObligatoire)
-             VALUES (?,?,?,?,?,?,?,?,?,?)'
+                                    Phase, Journee, ArbitrageObligatoire)
+             VALUES (?,?,?,?,?,?,?,?,?)'
         );
         // Cache ArbitrageObligatoire par division
         $stmtArbitrage = $pdo->prepare('SELECT ArbitrageObligatoire FROM division WHERE Id_Division = ?');
@@ -417,6 +418,9 @@ if (isset($_GET['action'])) {
 
         for ($s = 0; $s < $sp->getSheetCount(); $s++) {
             $data = parseSheet($sp->getSheet($s));
+            if ($data['saison'] && !$saisonImport) {
+                $saisonImport = $data['saison'];
+            }
             if (!$data['id_division']) {
                 $stats['erreurs'][] = "Feuille " . ($s+1) . " : division introuvable ({$data['division']})";
                 continue;
@@ -459,11 +463,15 @@ if (isset($_GET['action'])) {
                 }
                 $stmtRencIns->execute([
                     $r['date'], $r['heure'], $idDiv, $data['poule'],
-                    $idDom, $idExt, $data['phase'], $data['saison'], $r['journee'],
+                    $idDom, $idExt, $data['phase'], $r['journee'],
                     $arbitrageObligatoire
                 ]);
                 $stats['rencontres_creees']++;
             }
+        }
+
+        if ($saisonImport) {
+            $pdo->prepare("UPDATE configuration SET valeur=? WHERE cle='saison'")->execute([$saisonImport]);
         }
 
         echo json_encode(['ok' => true, 'stats' => $stats]);
@@ -568,16 +576,9 @@ $isAdmin     = !empty($u['is_admin']);
 </head>
 <body>
 
-<?php require __DIR__ . '/includes/toolbar.php'; ?>
+<?php $pageIcon = 'bi-file-earmark-spreadsheet'; $pageTitle = 'Import des rencontres (XLS)'; $pageCode = 'E011'; $backUrl = $isAdmin ? 'admin_menu.php' : 'Nominateur/menu.php'; require __DIR__ . '/includes/page_header.php'; ?>
 
-<!-- En-tête -->
-<div id="page-header">
-    <i class="bi bi-file-earmark-spreadsheet me-2"></i>Import des rencontres (XLS)
-    <small class="opacity-75 ms-2">(E011)</small>
-    <a href="<?= $isAdmin ? 'admin_menu.php' : 'Nominateur/menu.php' ?>" class="btn btn-sm btn-light float-end py-0">
-        <i class="bi bi-arrow-left me-1"></i>Retour menu
-    </a>
-</div>
+<?php require __DIR__ . '/includes/toolbar.php'; ?>
 
 <div id="content">
 

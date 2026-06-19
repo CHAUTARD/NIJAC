@@ -18,7 +18,9 @@ if (!isset($_SESSION['utilisateur'])) {
     header('Location: ../index.php');
     exit;
 }
-$moi = $_SESSION['utilisateur'];
+$moi           = $_SESSION['utilisateur'];
+$isAdmin       = !empty($moi['is_admin']);
+$idCurrentUser = (int)($moi['id_utilisateur'] ?? 0);
 
 // ── Points d'API AJAX ────────────────────────────────────────────────────────
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
@@ -30,15 +32,32 @@ if ($action !== '') {
     try {
         $pdo = getPDO();
 
+        // Auto-ajout colonne Id_Utilisateur (NULL = message système)
+        $cols = array_column($pdo->query('DESCRIBE messagerie')->fetchAll(), 'Field');
+        if (!in_array('Id_Utilisateur', $cols)) {
+            $pdo->exec('ALTER TABLE messagerie ADD COLUMN Id_Utilisateur INT NULL DEFAULT NULL');
+        }
+
         // ── Liste ──────────────────────────────────────────────────────────
         if ($action === 'liste') {
-            $rows = $pdo->query(
-                'SELECT m.Id_Messagerie, m.Id_Utilisateur, m.Type, m.Sujet, m.Message,
-                        CONCAT(u.Nom, \' \', u.Prenom) AS NomUtilisateur
-                 FROM messagerie m
-                 LEFT JOIN Utilisateur u ON u.Id_Utilisateur = m.Id_Utilisateur
-                 ORDER BY m.Type, m.Sujet'
-            )->fetchAll();
+            if ($isAdmin) {
+                $rows = $pdo->query(
+                    'SELECT m.Id_Messagerie, m.Type, m.Sujet, m.Message, m.Id_Utilisateur,
+                            CONCAT(u.Nom, \' \', u.Prenom) AS NomUtilisateur
+                     FROM messagerie m
+                     LEFT JOIN Utilisateur u ON u.Id_Utilisateur = m.Id_Utilisateur
+                     ORDER BY m.Type, m.Sujet'
+                )->fetchAll();
+            } else {
+                $stmt = $pdo->prepare(
+                    'SELECT Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, NULL AS NomUtilisateur
+                     FROM messagerie
+                     WHERE Id_Utilisateur IS NULL OR Id_Utilisateur = ?
+                     ORDER BY Type, Sujet'
+                );
+                $stmt->execute([$idCurrentUser]);
+                $rows = $stmt->fetchAll();
+            }
             echo json_encode(['ok' => true, 'data' => $rows]);
             exit;
         }
@@ -47,7 +66,7 @@ if ($action !== '') {
         if ($action === 'charger') {
             $id   = (int)($_GET['id'] ?? 0);
             $stmt = $pdo->prepare(
-                'SELECT Id_Messagerie, Id_Utilisateur, Type, Sujet, Message
+                'SELECT Id_Messagerie, Type, Sujet, Message
                  FROM messagerie WHERE Id_Messagerie = ?'
             );
             $stmt->execute([$id]);
@@ -59,10 +78,9 @@ if ($action !== '') {
         // ── Enregistrer (INSERT ou UPDATE) ─────────────────────────────────
         if ($action === 'enregistrer') {
             $id      = (int)($_POST['id']  ?? 0);
-            $idUser  = (int)$moi['id'];
             $type    = trim($_POST['type'] ?? '');
-            $sujet   = trim($_POST['sujet']          ?? '');
-            $message = trim($_POST['message']        ?? '');
+            $sujet   = trim($_POST['sujet']   ?? '');
+            $message = trim($_POST['message'] ?? '');
 
             // Lire les valeurs ENUM autorisées directement depuis la BDD
             $colEnum = $pdo->query("SHOW COLUMNS FROM messagerie WHERE Field = 'Type'")->fetch();
@@ -73,40 +91,63 @@ if ($action !== '') {
                 }
             }
 
-            if ($sujet === '') {
-                echo json_encode(['ok' => false, 'msg' => 'Le sujet ne peut pas être vide.']);
-                exit;
-            }
-            if ($message === '') {
-                echo json_encode(['ok' => false, 'msg' => 'Le message ne peut pas être vide.']);
-                exit;
-            }
-            if (!in_array($type, $typesValides, true)) {
-                echo json_encode(['ok' => false, 'msg' => 'Type invalide.']);
-                exit;
-            }
+            if ($sujet === '') { echo json_encode(['ok' => false, 'msg' => 'Le sujet ne peut pas être vide.']); exit; }
+            if ($message === '') { echo json_encode(['ok' => false, 'msg' => 'Le message ne peut pas être vide.']); exit; }
+            if (!in_array($type, $typesValides, true)) { echo json_encode(['ok' => false, 'msg' => 'Type invalide.']); exit; }
 
             if ($id > 0) {
-                $stmt = $pdo->prepare(
-                    'UPDATE messagerie SET Id_Utilisateur=?, Type=?, Sujet=?, Message=?
-                     WHERE Id_Messagerie=?'
-                );
-                $stmt->execute([$idUser, $type, $sujet, $message, $id]);
+                // Vérifier si c'est un message système
+                $row = $pdo->prepare('SELECT Id_Utilisateur FROM messagerie WHERE Id_Messagerie = ?');
+                $row->execute([$id]);
+                $existing = $row->fetch();
+                if ($existing && $existing['Id_Utilisateur'] === null && !$isAdmin) {
+                    echo json_encode(['ok' => false, 'msg' => 'Ce message système ne peut être modifié que par un administrateur.']);
+                    exit;
+                }
+                if ($existing && $existing['Id_Utilisateur'] !== null && !$isAdmin && (int)$existing['Id_Utilisateur'] !== $idCurrentUser) {
+                    echo json_encode(['ok' => false, 'msg' => 'Vous ne pouvez modifier que vos propres messages.']);
+                    exit;
+                }
+                $stmt = $pdo->prepare('UPDATE messagerie SET Type=?, Sujet=?, Message=? WHERE Id_Messagerie=?');
+                $stmt->execute([$type, $sujet, $message, $id]);
                 echo json_encode(['ok' => true, 'msg' => 'Message mis à jour.', 'id' => $id]);
             } else {
-                $stmt = $pdo->prepare(
-                    'INSERT INTO messagerie (Id_Utilisateur, Type, Sujet, Message)
-                     VALUES (?, ?, ?, ?)'
-                );
+                // Nouvel INSERT : message système si admin, personnel si nominateur
+                $idUser = $isAdmin ? null : $idCurrentUser;
+                $stmt = $pdo->prepare('INSERT INTO messagerie (Id_Utilisateur, Type, Sujet, Message) VALUES (?, ?, ?, ?)');
                 $stmt->execute([$idUser, $type, $sujet, $message]);
                 echo json_encode(['ok' => true, 'msg' => 'Message créé.', 'id' => (int)$pdo->lastInsertId()]);
             }
             exit;
         }
 
+        // ── Dupliquer (nominateur copie un message système) ────────────────
+        if ($action === 'dupliquer') {
+            $id = (int)($_POST['id'] ?? 0);
+            $src = $pdo->prepare('SELECT Type, Sujet, Message FROM messagerie WHERE Id_Messagerie = ?');
+            $src->execute([$id]);
+            $orig = $src->fetch();
+            if (!$orig) { echo json_encode(['ok' => false, 'msg' => 'Message introuvable.']); exit; }
+            $stmt = $pdo->prepare('INSERT INTO messagerie (Id_Utilisateur, Type, Sujet, Message) VALUES (?, ?, ?, ?)');
+            $stmt->execute([$idCurrentUser, $orig['Type'], $orig['Sujet'], $orig['Message']]);
+            echo json_encode(['ok' => true, 'msg' => 'Message copié. Vous pouvez maintenant le personnaliser.', 'id' => (int)$pdo->lastInsertId()]);
+            exit;
+        }
+
         // ── Supprimer ──────────────────────────────────────────────────────
         if ($action === 'supprimer') {
             $id = (int)($_POST['id'] ?? 0);
+            $row = $pdo->prepare('SELECT Id_Utilisateur FROM messagerie WHERE Id_Messagerie = ?');
+            $row->execute([$id]);
+            $existing = $row->fetch();
+            if ($existing && $existing['Id_Utilisateur'] === null && !$isAdmin) {
+                echo json_encode(['ok' => false, 'msg' => 'Les messages système ne peuvent pas être supprimés.']);
+                exit;
+            }
+            if ($existing && $existing['Id_Utilisateur'] !== null && !$isAdmin && (int)$existing['Id_Utilisateur'] !== $idCurrentUser) {
+                echo json_encode(['ok' => false, 'msg' => 'Vous ne pouvez supprimer que vos propres messages.']);
+                exit;
+            }
             $stmt = $pdo->prepare('DELETE FROM messagerie WHERE Id_Messagerie = ?');
             $stmt->execute([$id]);
             echo json_encode(['ok' => true, 'msg' => 'Message supprimé.']);
@@ -127,6 +168,7 @@ if ($action !== '') {
 $nomComplet  = htmlspecialchars($moi['nom'] . ' ' . $moi['prenom']);
 $departement = htmlspecialchars($moi['id_departement'] ?? '');
 $changeLogin = !empty($moi['change_login']);
+// $isAdmin et $idCurrentUser déjà définis plus haut
 
 // ── Lire les valeurs ENUM du champ Type ──────────────────────────────────────
 $enumTypes = [];
@@ -301,16 +343,9 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
 </head>
 <body>
 
-<?php require __DIR__ . '/../includes/toolbar.php'; ?>
+<?php $pageIcon = 'bi-envelope-fill'; $pageTitle = 'Gestion des messages'; $pageCode = 'E016'; $backUrl = 'menu.php'; require __DIR__ . '/../includes/page_header.php'; ?>
 
-<!-- En-tête -->
-<div id="page-header">
-    <i class="bi bi-envelope-fill me-2"></i>Gestion des messages
-    <small class="opacity-75 ms-2">(E016)</small>
-    <a href="menu.php" class="btn btn-sm btn-light float-end py-0">
-        <i class="bi bi-arrow-left me-1"></i>Retour menu
-    </a>
-</div>
+<?php require __DIR__ . '/../includes/toolbar.php'; ?>
 
 <!-- Split -->
 <div id="split-container">
@@ -324,7 +359,7 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
                     <tr>
                         <th>Type</th>
                         <th>Sujet</th>
-                        <th>Utilisateur</th>
+                        <th>Source</th>
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
@@ -372,6 +407,16 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
             <button class="btn btn-sm btn-supprimer px-3" id="btn-supprimer" disabled>
                 <i class="bi bi-trash3 me-1"></i>Supprimer
             </button>
+            <?php if (!$isAdmin): ?>
+            <button class="btn btn-sm px-3" id="btn-dupliquer" disabled
+                    style="background:#fff3cd;border:1px solid #ffc107;font-weight:600;"
+                    title="Copier ce message système pour le personnaliser">
+                <i class="bi bi-copy me-1"></i>Copier pour personnaliser
+            </button>
+            <?php endif; ?>
+        </div>
+        <div id="msg-systeme-info" class="mt-2 small text-warning d-none">
+            <i class="bi bi-lock-fill me-1"></i>Message système — lecture seule. Utilisez <strong>Copier pour personnaliser</strong> pour créer votre propre version.
         </div>
 
         <!-- Cartouche des marqueurs disponibles -->
@@ -405,6 +450,8 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
                 <code data-marqueur="{CORR_NOM}" class="me-2">{CORR_NOM}</code>
                 <code data-marqueur="{CORR_EMAIL}" class="me-2">{CORR_EMAIL}</code>
                 <code data-marqueur="{CORR_TEL}" class="me-2">{CORR_TEL}</code>
+                <code data-marqueur="{ID_CONVOCATION}" class="me-2">{ID_CONVOCATION}</code>
+                <code data-marqueur="{SEXE}" class="me-2">{SEXE}</code>
             </div>
             <div>
                 <span class="badge me-1 fw-normal" style="background:#6f42c1;">Liste nomination</span>
@@ -418,6 +465,7 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
     </div><!-- /panel-form -->
 </div><!-- /split-container -->
 
+
 <!-- Toast notifications -->
 <div id="toast-container"></div>
 
@@ -427,7 +475,11 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
 <script>
 'use strict';
 
-let currentId = null;
+const IS_ADMIN       = <?= $isAdmin ? 'true' : 'false' ?>;
+const ID_CURRENT_USER = <?= $idCurrentUser ?>;
+
+let currentId       = null;
+let currentEstSys   = false; // true si message système (Id_Utilisateur === null)
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
 function toast(msg, ok = true) {
@@ -457,12 +509,22 @@ function chargerListe(selectId = null) {
             return;
         }
         res.data.forEach(m => {
+            const estSys = (m.Id_Utilisateur === null || m.Id_Utilisateur === '');
+            let sourceLabel;
+            if (estSys) {
+                sourceLabel = '<span class="badge bg-secondary">Défaut</span>';
+            } else if (IS_ADMIN && m.NomUtilisateur) {
+                sourceLabel = `<span class="badge" style="background:#1a7f4b">${escHtml(m.NomUtilisateur)}</span>`;
+            } else {
+                sourceLabel = '<span class="badge" style="background:#1a7f4b">Personnalisé</span>';
+            }
             const $tr = $('<tr>')
                 .attr('data-id', m.Id_Messagerie)
+                .attr('data-sys', estSys ? '1' : '0')
                 .append(
                     $('<td>').text(m.Type),
                     $('<td>').text(m.Sujet),
-                    $('<td>').text(m.NomUtilisateur ?? '')
+                    $('<td>').html(sourceLabel)
                 )
                 .on('click', function () { selectionnerLigne($(this)); });
             $body.append($tr);
@@ -478,30 +540,56 @@ function chargerListe(selectId = null) {
 function selectionnerLigne($tr) {
     $('#tbody-liste tr').removeClass('selected');
     $tr.addClass('selected');
-    const id = $tr.data('id');
+    const id    = $tr.data('id');
+    const estSys = $tr.data('sys') === 1 || $tr.data('sys') === '1';
     $.get('messagerie.php', { action: 'charger', id: id }, function (res) {
         if (!res.ok) return;
         const m = res.data;
-        currentId = parseInt(m.Id_Messagerie);
+        currentId     = parseInt(m.Id_Messagerie);
+        currentEstSys = estSys;
         $('#txt-id').val(currentId);
         $('#cbo-type').val(m.Type);
         $('#txt-sujet').val(m.Sujet);
-        $('#txt-message').val(m.Message);
-        $('#btn-supprimer').prop('disabled', false);
+        $('#txt-message').val(m.Message || '');
+
+        const locked = estSys && !IS_ADMIN;
+        $('#cbo-type, #txt-sujet, #txt-message').prop('readonly', locked);
+        $('#cbo-type').prop('disabled', locked);
+        $('#btn-enregistrer').prop('disabled', locked);
+        $('#btn-supprimer').prop('disabled', locked);
+        $('#btn-dupliquer').prop('disabled', !estSys);
+        $('#msg-systeme-info').toggleClass('d-none', !locked);
         setStatus('');
     }, 'json');
 }
 
 // ── Nouveau ───────────────────────────────────────────────────────────────────
 $('#btn-nouveau').on('click', function () {
-    currentId = null;
+    currentId     = null;
+    currentEstSys = false;
     $('#tbody-liste tr').removeClass('selected');
     $('#txt-id').val('');
-    $('#cbo-type').val('Disponibilites');
-    $('#txt-sujet').val('').trigger('focus');
-    $('#txt-message').val('');
+    $('#cbo-type').prop('disabled', false).val('Disponibilites');
+    $('#txt-sujet').prop('readonly', false).val('').trigger('focus');
+    $('#txt-message').prop('readonly', false).val('');
+    $('#btn-enregistrer').prop('disabled', false);
     $('#btn-supprimer').prop('disabled', true);
+    $('#btn-dupliquer').prop('disabled', true);
+    $('#msg-systeme-info').addClass('d-none');
     setStatus('');
+});
+
+// ── Dupliquer ─────────────────────────────────────────────────────────────────
+$('#btn-dupliquer').on('click', function () {
+    if (!currentId) return;
+    $.post('messagerie.php', { action: 'dupliquer', id: currentId }, function (res) {
+        if (res.ok) {
+            toast(res.msg);
+            chargerListe(res.id);
+        } else {
+            toast(res.msg, false);
+        }
+    }, 'json');
 });
 
 // ── Enregistrer ───────────────────────────────────────────────────────────────
@@ -543,13 +631,14 @@ $('#btn-supprimer').on('click', function () {
 
 // ── Clic sur un marqueur : insérer à la position du curseur ──────────────────
 $(document).on('click', '[data-marqueur]', function () {
-    const ta     = document.getElementById('txt-message');
-    const texte  = $(this).data('marqueur');
-    const debut  = ta.selectionStart ?? ta.value.length;
-    const fin    = ta.selectionEnd   ?? debut;
+    const ta    = document.getElementById('txt-message');
+    const texte = $(this).data('marqueur');
+    const debut = ta.selectionStart ?? ta.value.length;
+    const fin   = ta.selectionEnd   ?? debut;
     ta.setRangeText(texte, debut, fin, 'end');
     ta.focus();
 });
+
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 $(function () {

@@ -261,16 +261,9 @@ $isAdmin     = !empty($moi['is_admin']);
 </head>
 <body>
 
-<?php require __DIR__ . '/includes/toolbar.php'; ?>
+<?php $pageIcon = 'bi-person-badge'; $pageTitle = 'Demandes JA pour équipes R3 / R4'; $pageCode = 'E025'; $backUrl = $isAdmin ? 'admin_menu.php' : 'Nominateur/menu.php'; $backBtnClass = 'ms-auto btn btn-sm btn-outline-light'; require __DIR__ . '/includes/page_header.php'; ?>
 
-<!-- En-tête -->
-<div id="page-header">
-    <i class="bi bi-person-badge me-2"></i>Demandes JA pour équipes R3 / R4
-    <small class="opacity-75 ms-2">(E025)</small>
-    <a href="<?= $isAdmin ? 'admin_menu.php' : 'Nominateur/menu.php' ?>" class="ms-auto btn btn-sm btn-outline-light">
-        <i class="bi bi-arrow-left me-1"></i>Retour menu
-    </a>
-</div>
+<?php require __DIR__ . '/includes/toolbar.php'; ?>
 
 <!-- Barre de filtres -->
 <div id="filter-bar">

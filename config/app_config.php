@@ -44,13 +44,19 @@ function initTableConfiguration(\PDO $pdo): void
         MODIFY `Type` ENUM('Disponibilites','Convocation','Rappel dispo','Liste nomination') NOT NULL DEFAULT 'Disponibilites'
     ");
 
+    // ── Migration : ajouter Id_Nomination comme PK auto-increment ──────────
+    try {
+        $pdo->exec("ALTER TABLE `nomination` ADD COLUMN `Id_Nomination` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY FIRST");
+    } catch (\Throwable $e) { /* colonne déjà présente */ }
+
     // ── Migration : fusionner nomination_frais dans nomination ─────────────
     $pdo->exec("ALTER TABLE `nomination`
-        ADD COLUMN IF NOT EXISTS `Peages`             decimal(8,2) DEFAULT NULL,
-        ADD COLUMN IF NOT EXISTS `Kilometres`         int(11)      DEFAULT NULL,
+        ADD COLUMN IF NOT EXISTS `Peage`             decimal(8,2) DEFAULT NULL,
+        ADD COLUMN IF NOT EXISTS `Kilometre`         int(11)      DEFAULT NULL,
         ADD COLUMN IF NOT EXISTS `RapportAccueil`     text         DEFAULT NULL,
         ADD COLUMN IF NOT EXISTS `RapportEquipements` text         DEFAULT NULL,
-        ADD COLUMN IF NOT EXISTS `DateSaisie`         date         DEFAULT NULL
+        ADD COLUMN IF NOT EXISTS `DateSaisie`         date         DEFAULT NULL,
+        MODIFY COLUMN `DateSaisie`                    date         DEFAULT NULL
     ");
     try {
         $pdo->exec("ALTER TABLE `nomination` ADD UNIQUE KEY `uq_ja_renc` (`Id_JA`,`Id_Rencontre`)");
@@ -60,12 +66,12 @@ function initTableConfiguration(\PDO $pdo): void
         $pdo->exec("
             UPDATE `nomination` n
             JOIN `nomination_frais` nf ON nf.Id_JA = n.Id_JA AND nf.Id_Rencontre = n.Id_Rencontre
-            SET n.Peages             = nf.Peages,
-                n.Kilometres         = nf.Kilometres,
+            SET n.Peage             = nf.Peage,
+                n.Kilometre         = nf.Kilometre,
                 n.RapportAccueil     = nf.RapportAccueil,
                 n.RapportEquipements = nf.RapportEquipements,
                 n.DateSaisie         = nf.DateSaisie
-            WHERE n.Peages IS NULL
+            WHERE n.Peage IS NULL
         ");
         $pdo->exec("DROP TABLE IF EXISTS `nomination_frais`");
     } catch (\Throwable $e) { /* table déjà supprimée */ }
@@ -94,7 +100,9 @@ function initTableConfiguration(\PDO $pdo): void
         ('smtp_user',     'patrick.chautard@free.fr',     'Login du compte SMTP.'),
         ('smtp_password', '#Henri.1957',                  'Mot de passe du compte SMTP.'),
         ('smtp_from',     'patrick.chautard@free.fr',     'Adresse From des emails envoyés.'),
-        ('smtp_from_name','NIJAC – Arbitrage Normandie',  'Nom affiché dans le champ From.')
+        ('smtp_from_name','NIJAC Arbitrage Normandie',    'Nom affiché dans le champ From.'),
+        ('smtp_debug',    '0',                            '0 = silence, 1 = erreurs, 2 = conversation SMTP complète.'),
+        ('saison', '2024/2025', 'Saison sportive en cours (ex: 2024/2025).')
     ");
 
     // Forcer la mise à jour des paramètres SMTP (INSERT IGNORE ne met pas à jour les lignes existantes)
@@ -107,11 +115,16 @@ function initTableConfiguration(\PDO $pdo): void
         ('smtp_user',     'patrick.chautard@free.fr',     'Login du compte SMTP.'),
         ('smtp_password', '#Henri.1957',                  'Mot de passe du compte SMTP.'),
         ('smtp_from',     'patrick.chautard@free.fr',     'Adresse From des emails envoyés.'),
-        ('smtp_from_name','NIJAC – Arbitrage Normandie',  'Nom affiché dans le champ From.')
+        ('smtp_from_name','NIJAC Arbitrage Normandie',    'Nom affiché dans le champ From.')
         ON DUPLICATE KEY UPDATE valeur = VALUES(valeur)
     ");
     // Note : ON DUPLICATE KEY UPDATE ne s'applique qu'aux clés smtp_* — les autres params métier
     // utilisent INSERT IGNORE pour ne pas écraser les valeurs modifiées par l'utilisateur.
+
+    // Migration : supprimer la colonne Saison de la table rencontre (gérée dans configuration)
+    try {
+        $pdo->exec("ALTER TABLE rencontre DROP COLUMN IF EXISTS Saison");
+    } catch (\Throwable $e) { /* colonne déjà supprimée */ }
 }
 
 /**
@@ -254,8 +267,18 @@ function getNijacMailer(): \PHPMailer\PHPMailer\PHPMailer
     require_once __DIR__ . '/../vendor/autoload.php';
 
     $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
-    $mail->CharSet  = 'UTF-8';
-    $mail->SMTPDebug = 0;
+    $mail->CharSet   = 'UTF-8';
+    $mail->Encoding  = 'base64';
+    $debugLevel = (int)getConfig('smtp_debug', '0');
+    $mail->SMTPDebug = $debugLevel;
+    if ($debugLevel > 0) {
+        $logFile = __DIR__ . '/../logs/smtp_debug.log';
+        @mkdir(dirname($logFile), 0755, true);
+        $mail->Debugoutput = function (string $str, int $level) use ($logFile) {
+            file_put_contents($logFile, date('[Y-m-d H:i:s] ') . $str . PHP_EOL, FILE_APPEND);
+        };
+    }
+    $mail->Hostname  = gethostname() ?: 'nijac.ligue-normandie-tt.fr';
 
     $host   = getConfig('smtp_host', '');
     $secure = getConfig('smtp_secure', 'tls');
@@ -275,7 +298,7 @@ function getNijacMailer(): \PHPMailer\PHPMailer\PHPMailer
             $mail->Password = getConfig('smtp_password', '');
         }
     } else {
-        $mail->isMail(); // fallback mail()
+        throw new \RuntimeException('SMTP non configuré. Veuillez renseigner les paramètres SMTP dans la configuration.');
     }
 
     $mail->setFrom(

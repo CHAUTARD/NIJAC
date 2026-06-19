@@ -44,57 +44,41 @@ try {
     // JA actifs
     $stats['ja_actifs'] = (int)$pdo->query("SELECT COUNT(*) FROM ja WHERE Actif = 1")->fetchColumn();
 
-    // Saison la plus récente avec des rencontres à venir
-    $saisonRow = $pdo->query("
-        SELECT Saison FROM rencontre
+    $saison = getConfig('saison', '');
+
+    // Prochaine journée
+    $row = $pdo->query("
+        SELECT MIN(Date) AS d, Journee FROM rencontre
         WHERE Date >= CURDATE()
         ORDER BY Date ASC LIMIT 1
     ")->fetch();
-    $saison = $saisonRow['Saison'] ?? null;
+    $stats['prochaine_date']    = $row['d']       ?? null;
+    $stats['prochaine_journee'] = $row['Journee'] ?? null;
+    $stats['prochaine_saison']  = $saison;
 
-    if ($saison) {
-        // Prochaine journée
-        $row = $pdo->prepare("
-            SELECT MIN(Date) AS d, Journee FROM rencontre
-            WHERE Saison = ? AND Date >= CURDATE()
-            ORDER BY Date ASC LIMIT 1
-        ");
-        $row->execute([$saison]);
-        $next = $row->fetch();
-        $stats['prochaine_date']    = $next['d']       ?? null;
-        $stats['prochaine_journee'] = $next['Journee'] ?? null;
-        $stats['prochaine_saison']  = $saison;
+    // Nominations à valider (créées mais pas encore validées)
+    $stats['nominations_valider'] = (int)$pdo->query("
+        SELECT COUNT(*) FROM nomination n
+        JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
+        WHERE n.Valide = 0 AND r.Date >= CURDATE()
+    ")->fetchColumn();
 
-        // Nominations à valider (créées mais pas encore validées)
-        $stmp = $pdo->prepare("
-            SELECT COUNT(*) FROM nomination n
-            JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
-            WHERE n.Valide = 0 AND r.Saison = ? AND r.Date >= CURDATE()
-        ");
-        $stmp->execute([$saison]);
-        $stats['nominations_valider'] = (int)$stmp->fetchColumn();
+    // Convocations validées mais email non envoyé
+    $stats['convocations_envoyer'] = (int)$pdo->query("
+        SELECT COUNT(*) FROM nomination n
+        JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
+        WHERE n.Valide = 1 AND n.EmailEnvoye = 0 AND r.Date >= CURDATE()
+    ")->fetchColumn();
 
-        // Convocations validées mais email non envoyé
-        $stmp2 = $pdo->prepare("
-            SELECT COUNT(*) FROM nomination n
-            JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
-            WHERE n.Valide = 1 AND n.EmailEnvoye = 0 AND r.Saison = ? AND r.Date >= CURDATE()
-        ");
-        $stmp2->execute([$saison]);
-        $stats['convocations_envoyer'] = (int)$stmp2->fetchColumn();
-
-        // Rencontres à venir sans aucun JA nominé (validé)
-        $stmp3 = $pdo->prepare("
-            SELECT COUNT(*) FROM rencontre r
-            WHERE r.Saison = ? AND r.Date >= CURDATE()
-              AND NOT EXISTS (
-                  SELECT 1 FROM nomination n
-                  WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
-              )
-        ");
-        $stmp3->execute([$saison]);
-        $stats['rencontres_sans_ja'] = (int)$stmp3->fetchColumn();
-    }
+    // Rencontres à venir sans aucun JA nominé (validé)
+    $stats['rencontres_sans_ja'] = (int)$pdo->query("
+        SELECT COUNT(*) FROM rencontre r
+        WHERE r.Date >= CURDATE()
+          AND NOT EXISTS (
+              SELECT 1 FROM nomination n
+              WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
+          )
+    ")->fetchColumn();
 
 } catch (\Throwable $e) {
     // Tableau de bord non disponible — on continue sans bloquer
@@ -306,12 +290,9 @@ if ($stats['prochaine_date']) {
 </head>
 <body>
 
-    <?php require __DIR__ . '/includes/toolbar.php'; ?>
+    <?php $pageIcon = 'bi-grid-3x3-gap-fill'; $pageTitle = 'Menu nominateur'; $pageCode = 'E020'; $backUrl = null; require __DIR__ . '/../includes/page_header.php'; ?>
 
-    <!-- En-tête -->
-    <div id="page-header">
-        <i class="bi bi-grid-3x3-gap-fill me-2"></i>Menu nominateur &nbsp;<small class="opacity-75">(E020)</small>
-    </div>
+    <?php require __DIR__ . '/includes/toolbar.php'; ?>
 
     <!-- ── Tableau de bord ── -->
     <div id="dashboard">

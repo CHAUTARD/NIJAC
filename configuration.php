@@ -501,20 +501,13 @@ $changeLogin = !empty($moi['change_login']);
 </head>
 <body>
 
-<!-- Spinner -->
-<div id="spinner">
-    <div class="spinner-border text-light" style="width:3rem;height:3rem;"></div>
-</div>
+<?php $pageIcon = 'bi-gear-fill'; $pageTitle = 'Configuration générale'; $pageCode = 'E015'; $backUrl = 'admin_menu.php'; require __DIR__ . '/includes/page_header.php'; ?>
 
 <?php require __DIR__ . '/includes/toolbar.php'; ?>
 
-<!-- En-tête -->
-<div id="page-header">
-    <i class="bi bi-gear-fill me-2"></i>Configuration générale
-    <small class="opacity-75 ms-2">(E015)</small>
-    <a href="admin_menu.php" class="btn btn-sm btn-light float-end py-0">
-        <i class="bi bi-arrow-left me-1"></i>Retour menu
-    </a>
+<!-- Spinner -->
+<div id="spinner">
+    <div class="spinner-border text-light" style="width:3rem;height:3rem;"></div>
 </div>
 
 <!-- Onglets -->

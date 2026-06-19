@@ -34,24 +34,19 @@ if ($action !== '') {
         $dept = str_pad((string)($moi['id_departement'] ?? '76'), 2, '0', STR_PAD_LEFT);
 
         // Saison courante
-        $saisonRow = $pdo->query("SELECT Saison FROM rencontre ORDER BY Saison DESC LIMIT 1")->fetch();
-        $saison    = $saisonRow['Saison'] ?? null;
+        $saison = getConfig('saison') ?: null;
 
         // ── Liste des journées (pour onglet Nomination) ─────────────────────
         if ($action === 'liste_journees') {
             if (!$saison) { echo json_encode(['ok' => true, 'data' => []]); exit; }
-            $rows = $pdo->prepare("
-                SELECT r.Journee,
-                       MIN(r.Date) AS DateMin,
-                       MAX(r.Date) AS DateMax,
+            $rows = $pdo->query("
+                SELECT r.Journee, r.Date,
                        COUNT(DISTINCT n.Id_JA) AS NbJA
                 FROM rencontre r
                 LEFT JOIN nomination n ON n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
-                WHERE r.Saison = ?
-                GROUP BY r.Journee
-                ORDER BY r.Journee
+                GROUP BY r.Journee, r.Date
+                ORDER BY r.Date, r.Journee
             ");
-            $rows->execute([$saison]);
             echo json_encode(['ok' => true, 'data' => $rows->fetchAll(), 'saison' => $saison]);
             exit;
         }
@@ -60,6 +55,7 @@ if ($action !== '') {
         if ($action === 'liste_ja') {
             $type    = $_POST['type']    ?? 'Disponibilites';
             $journee = (int)($_POST['journee'] ?? 0);
+            $date    = trim($_POST['date'] ?? '');
 
             switch ($type) {
 
@@ -80,7 +76,6 @@ if ($action !== '') {
 
                 // ── Rappel dispo : JA sans dispo dans la saison courante ────
                 case 'Rappel dispo':
-                    if (!$saison) { $rows = []; break; }
                     $stmt = $pdo->prepare("
                         SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
                                COALESCE(lp.CodePostal, j.Cp) AS CP
@@ -90,70 +85,61 @@ if ($action !== '') {
                           AND LEFT(COALESCE(lp.CodePostal, j.Cp, ''), 2) = ?
                           AND NOT EXISTS (
                               SELECT 1 FROM disponible d
-                              JOIN rencontre r ON r.Date = d.DateCompetition
-                              WHERE d.Id_JA = j.Id_JA AND r.Saison = ?
+                              WHERE d.Id_JA = j.Id_JA
                           )
                         ORDER BY j.Nom, j.Prenom
                     ");
-                    $stmt->execute([$dept, $saison]);
+                    $stmt->execute([$dept]);
                     $rows = $stmt->fetchAll();
                     break;
 
                 // ── Convocation : JA nominés pour une journée ───────────────
                 case 'Convocation':
-                    if (!$saison || !$journee) { $rows = []; break; }
+                    if (!$journee || !$date) { $rows = []; break; }
                     $stmt = $pdo->prepare("
-                        SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
+                        SELECT n.Id_Nomination, j.Id_JA, j.Nom, j.Prenom, j.Email,
                                r.Date, r.Heure, r.Journee, r.Poule,
-                               dv.Division,
+                               dv.Division, RIGHT(dv.Division, 1) AS SexeCode,
                                ed.Nom AS NomDom, ee.Nom AS NomExt,
                                n.Id_Rencontre,
-                               s.Nom        AS SalleNom,
-                               s.Adresse    AS SalleAdresse,
+                               s.Nom          AS SalleNom,
+                               s.Adresse      AS SalleAdresse,
                                lps.CodePostal AS SalleCP,
-                               lps.Nom      AS SalleVille,
-                               co.Nom       AS CorrNom,
-                               co.Email     AS CorrEmail,
-                               co.Telephone AS CorrTel
+                               lps.Nom        AS SalleVille,
+                               co.Nom         AS CorrNom,
+                               co.Email       AS CorrEmail,
+                               co.Telephone   AS CorrTel
                         FROM nomination n
-                        JOIN ja j              ON j.Id_JA         = n.Id_JA
-                        JOIN rencontre r        ON r.Id_Rencontre  = n.Id_Rencontre
-                        JOIN equipe ed          ON ed.Id_Equipe    = r.Id_EquipeDom
-                        LEFT JOIN equipe ee     ON ee.Id_Equipe    = r.Id_EquipeExt
-                        JOIN division dv        ON dv.Id_Division  = r.Id_Division
-                        LEFT JOIN salle s           ON s.Id_Salle      = r.id_Salle
-                        LEFT JOIN laposte lps       ON lps.Id_LaPoste  = s.Id_Laposte
-                        LEFT JOIN correspondant co ON co.Id_Correspondant = (
-                            SELECT c2.Id_Correspondant
-                            FROM correspondant c2
-                            WHERE c2.Id_Club = j.Id_Club
-                            ORDER BY c2.Id_Correspondant
-                            LIMIT 1
-                        )
-                        WHERE r.Saison = ? AND r.Journee = ? AND n.Valide = 1 AND j.Actif = 1
-                        ORDER BY j.Nom, j.Prenom, r.Date
+                        JOIN ja j              ON j.Id_JA        = n.Id_JA
+                        JOIN rencontre r        ON r.Id_Rencontre = n.Id_Rencontre
+                        JOIN equipe ed          ON ed.Id_Equipe   = r.Id_EquipeDom
+                        LEFT JOIN equipe ee     ON ee.Id_Equipe   = r.Id_EquipeExt
+                        JOIN division dv        ON dv.Id_Division = r.Id_Division
+                        LEFT JOIN salle s       ON s.Id_Salle     = r.id_Salle
+                        LEFT JOIN laposte lps   ON lps.Id_LaPoste = s.Id_Laposte
+                        LEFT JOIN (SELECT MIN(Id_Correspondant) AS Id_Min, Id_Club FROM correspondant GROUP BY Id_Club) co_sel ON co_sel.Id_Club = ed.Id_Club
+                        LEFT JOIN correspondant co ON co.Id_Correspondant = co_sel.Id_Min
+                        WHERE r.Journee = ? AND r.Date = ? AND n.Valide = 1 AND j.Actif = 1
+                        ORDER BY j.Nom, j.Prenom
                     ");
-                    $stmt->execute([$saison, $journee]);
+                    $stmt->execute([$journee, $date]);
                     $rows = $stmt->fetchAll();
                     break;
 
                 // ── Liste nomination : JA ayant des nominations dans la phase ─
                 case 'Liste nomination':
-                    if (!$saison) { $rows = []; break; }
                     $stmt = $pdo->prepare("
                         SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
                                COUNT(n.Id_JA) AS NbNominations
                         FROM ja j
                         LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
                         JOIN nomination n ON n.Id_JA = j.Id_JA
-                        JOIN rencontre r  ON r.Id_Rencontre = n.Id_Rencontre
-                        WHERE r.Saison = ?
-                          AND j.Actif = 1
+                        WHERE j.Actif = 1
                           AND LEFT(COALESCE(lp.CodePostal, j.Cp, ''), 2) = ?
                         GROUP BY j.Id_JA, j.Nom, j.Prenom, j.Email
                         ORDER BY j.Nom, j.Prenom
                     ");
-                    $stmt->execute([$saison, $dept]);
+                    $stmt->execute([$dept]);
                     $rows = $stmt->fetchAll();
                     break;
 
@@ -199,15 +185,78 @@ if ($action !== '') {
             exit;
         }
 
+        // ── Aperçu de l'email pour une convocation ─────────────────────────────
+        if ($action === 'apercu_email') {
+            $idNomination = (int)($_POST['id_nomination'] ?? 0);
+            $message      = trim($_POST['message'] ?? '');
+            $sujet        = trim($_POST['sujet']   ?? '');
+            if (!$idNomination) { echo json_encode(['ok' => false, 'msg' => 'Paramètre manquant.']); exit; }
+
+            $stmtA = $pdo->prepare("
+                SELECT n.Id_Nomination, j.Id_JA, j.Nom, j.Prenom, j.Email,
+                       n.Id_Rencontre,
+                       r.Date, r.Heure, r.Journee, r.Poule,
+                       dv.Division, RIGHT(dv.Division, 1) AS SexeCode,
+                       ed.Nom AS NomDom, ee.Nom AS NomExt,
+                       s.Nom AS SalleNom, s.Adresse AS SalleAdresse,
+                       lps.CodePostal AS SalleCP, lps.Nom AS SalleVille,
+                       co.Nom AS CorrNom, co.Email AS CorrEmail, co.Telephone AS CorrTel
+                FROM nomination n
+                JOIN ja j              ON j.Id_JA        = n.Id_JA
+                JOIN rencontre r        ON r.Id_Rencontre = n.Id_Rencontre
+                JOIN equipe ed          ON ed.Id_Equipe   = r.Id_EquipeDom
+                LEFT JOIN equipe ee     ON ee.Id_Equipe   = r.Id_EquipeExt
+                JOIN division dv        ON dv.Id_Division = r.Id_Division
+                LEFT JOIN salle s       ON s.Id_Salle     = r.id_Salle
+                LEFT JOIN laposte lps   ON lps.Id_LaPoste = s.Id_Laposte
+                LEFT JOIN correspondant co ON co.Id_Correspondant = (
+                    SELECT c2.Id_Correspondant FROM correspondant c2
+                    WHERE c2.Id_Club = ed.Id_Club ORDER BY c2.Id_Correspondant LIMIT 1
+                )
+                WHERE n.Id_Nomination = ?
+            ");
+            $stmtA->execute([$idNomination]);
+            $ja = $stmtA->fetch();
+            if (!$ja) { echo json_encode(['ok' => false, 'msg' => 'Nomination introuvable.']); exit; }
+
+            $token = $_obf->obfuscate((int)$ja['Id_JA']);
+            $sexe  = ($ja['SexeCode'] ?? '') === 'F' ? 'Féminin' : (($ja['SexeCode'] ?? '') === 'M' ? 'Mixte' : '');
+            $corps = str_replace(
+                ['{NOM}','{PRENOM}','{NOM_COMPLET}','{ID_JA}','{ID_CONVOCATION}','{SEXE}',
+                 '{UTI_NOM}','{UTI_PRENOM}','{LIEN_LIGUE}',
+                 '{DATE}','{HEURE}','{JOURNEE}','{POULE}','{DIVISION}','{DOM}','{EXT}',
+                 '{SALLE_NOM}','{SALLE_ADRESSE}','{SALLE_CP}','{SALLE_VILLE}',
+                 '{CORR_NOM}','{CORR_EMAIL}','{CORR_TEL}'],
+                [$ja['Nom'],$ja['Prenom'],$ja['Prenom'].' '.$ja['Nom'],$token,(string)$ja['Id_Nomination'],$sexe,
+                 $moi['nom']??'',$moi['prenom']??'',getConfig('url_ligue','https://www.ligue-normandie-tt.fr'),
+                 $ja['Date'] ? date('d/m/Y', strtotime($ja['Date'])) : '',$ja['Heure']??'',
+                 $ja['Journee']??'',$ja['Poule']??'',$ja['Division']??'',
+                 $ja['NomDom']??'',$ja['NomExt']??'',
+                 $ja['SalleNom']??'',$ja['SalleAdresse']??'',$ja['SalleCP']??'',$ja['SalleVille']??'',
+                 $ja['CorrNom']??'',$ja['CorrEmail']??'',$ja['CorrTel']??''],
+                $message
+            );
+            $sujetRendu = str_replace(
+                ['{NOM}','{PRENOM}','{NOM_COMPLET}','{ID_CONVOCATION}','{DATE}','{JOURNEE}','{DIVISION}'],
+                [$ja['Nom'],$ja['Prenom'],$ja['Prenom'].' '.$ja['Nom'],(string)$ja['Id_Nomination'],
+                 $ja['Date'] ? date('d/m/Y', strtotime($ja['Date'])) : '',$ja['Journee']??'',$ja['Division']??''],
+                $sujet
+            );
+            echo json_encode(['ok' => true, 'sujet' => $sujetRendu, 'corps' => $corps]);
+            exit;
+        }
+
         // ── Envoi d'un seul email (appelé séquentiellement par le JS) ──────────
         if ($action === 'envoyer_un') {
-            $type    = trim($_POST['type']    ?? 'Disponibilites');
-            $sujet   = trim($_POST['sujet']   ?? '');
-            $message = trim($_POST['message'] ?? '');
-            $idJa    = (int)($_POST['id_ja']  ?? 0);
-            $saison  = trim($_POST['saison']  ?? ($saison ?? ''));
+            $type         = trim($_POST['type']         ?? 'Disponibilites');
+            $sujet        = trim($_POST['sujet']        ?? '');
+            $message      = trim($_POST['message']      ?? '');
+            $idJa         = (int)($_POST['id_ja']       ?? 0);
+            $idNomination = (int)($_POST['id_nomination'] ?? 0);
+            $saison       = trim($_POST['saison']       ?? ($saison ?? ''));
 
-            if (!$idJa || $sujet === '' || $message === '') {
+            $identifiant = ($type === 'Convocation') ? $idNomination : $idJa;
+            if (!$identifiant || $sujet === '' || $message === '') {
                 echo json_encode(['ok' => false, 'msg' => 'Paramètres manquants.']); exit;
             }
 
@@ -217,40 +266,49 @@ if ($action !== '') {
                 echo json_encode(['ok' => false, 'msg' => $errRl]); exit;
             }
 
-            $ja = $pdo->prepare("
-                SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
-                       n.Id_Rencontre,
-                       r.Date, r.Heure, r.Journee, r.Poule,
-                       dv.Division,
-                       ed.Nom AS NomDom, ee.Nom AS NomExt,
-                       s.Nom          AS SalleNom,
-                       s.Adresse      AS SalleAdresse,
-                       lps.CodePostal AS SalleCP,
-                       lps.Nom        AS SalleVille,
-                       co.Nom         AS CorrNom,
-                       co.Email       AS CorrEmail,
-                       co.Telephone   AS CorrTel
-                FROM ja j
-                LEFT JOIN nomination n     ON n.Id_JA = j.Id_JA AND n.Valide = 1
-                LEFT JOIN rencontre r      ON r.Id_Rencontre = n.Id_Rencontre
-                LEFT JOIN equipe ed        ON ed.Id_Equipe   = r.Id_EquipeDom
-                LEFT JOIN equipe ee        ON ee.Id_Equipe   = r.Id_EquipeExt
-                LEFT JOIN division dv      ON dv.Id_Division = r.Id_Division
-                LEFT JOIN salle s          ON s.Id_Salle     = r.id_Salle
-                LEFT JOIN laposte lps      ON lps.Id_LaPoste = s.Id_Laposte
-                LEFT JOIN correspondant co ON co.Id_Correspondant = (
-                    SELECT c2.Id_Correspondant FROM correspondant c2
-                    WHERE c2.Id_Club = j.Id_Club ORDER BY c2.Id_Correspondant LIMIT 1
-                )
-                WHERE j.Id_JA = ? AND j.Actif = 1
-                GROUP BY j.Id_JA, j.Nom, j.Prenom, j.Email,
-                         n.Id_Rencontre, r.Date, r.Heure, r.Journee, r.Poule,
-                         dv.Division, ed.Nom, ee.Nom,
-                         s.Nom, s.Adresse, lps.CodePostal, lps.Nom,
-                         co.Nom, co.Email, co.Telephone
-            ");
-            $ja->execute([$idJa]);
-            $ja = $ja->fetch();
+            if ($type === 'Convocation') {
+                $stmtJa = $pdo->prepare("
+                    SELECT n.Id_Nomination, j.Id_JA, j.Nom, j.Prenom, j.Email,
+                           n.Id_Rencontre,
+                           r.Date, r.Heure, r.Journee, r.Poule,
+                           dv.Division, RIGHT(dv.Division, 1) AS SexeCode,
+                           ed.Nom AS NomDom, ee.Nom AS NomExt,
+                           s.Nom          AS SalleNom,
+                           s.Adresse      AS SalleAdresse,
+                           lps.CodePostal AS SalleCP,
+                           lps.Nom        AS SalleVille,
+                           co.Nom         AS CorrNom,
+                           co.Email       AS CorrEmail,
+                           co.Telephone   AS CorrTel
+                    FROM nomination n
+                    JOIN ja j              ON j.Id_JA        = n.Id_JA
+                    JOIN rencontre r        ON r.Id_Rencontre = n.Id_Rencontre
+                    JOIN equipe ed          ON ed.Id_Equipe   = r.Id_EquipeDom
+                    LEFT JOIN equipe ee     ON ee.Id_Equipe   = r.Id_EquipeExt
+                    JOIN division dv        ON dv.Id_Division = r.Id_Division
+                    LEFT JOIN salle s       ON s.Id_Salle     = r.id_Salle
+                    LEFT JOIN laposte lps   ON lps.Id_LaPoste = s.Id_Laposte
+                    LEFT JOIN correspondant co ON co.Id_Correspondant = (
+                        SELECT c2.Id_Correspondant FROM correspondant c2
+                        WHERE c2.Id_Club = ed.Id_Club ORDER BY c2.Id_Correspondant LIMIT 1
+                    )
+                    WHERE n.Id_Nomination = ?
+                ");
+                $stmtJa->execute([$idNomination]);
+            } else {
+                $stmtJa = $pdo->prepare("
+                    SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
+                           NULL AS Id_Nomination, NULL AS Id_Rencontre,
+                           NULL AS Date, NULL AS Heure, NULL AS Journee, NULL AS Poule,
+                           NULL AS Division, NULL AS SexeCode, NULL AS NomDom, NULL AS NomExt,
+                           NULL AS SalleNom, NULL AS SalleAdresse, NULL AS SalleCP, NULL AS SalleVille,
+                           NULL AS CorrNom, NULL AS CorrEmail, NULL AS CorrTel
+                    FROM ja j
+                    WHERE j.Id_JA = ? AND j.Actif = 1
+                ");
+                $stmtJa->execute([$idJa]);
+            }
+            $ja = $stmtJa->fetch();
 
             if (!$ja || empty($ja['Email'])) {
                 echo json_encode(['ok' => false, 'skip' => true, 'msg' => 'Pas d\'email.']); exit;
@@ -266,9 +324,9 @@ if ($action !== '') {
                     JOIN equipe ed      ON ed.Id_Equipe   = r.Id_EquipeDom
                     LEFT JOIN equipe ee ON ee.Id_Equipe   = r.Id_EquipeExt
                     JOIN division dv    ON dv.Id_Division = r.Id_Division
-                    WHERE n.Id_JA = ? AND r.Saison = ? ORDER BY r.Date, r.Heure
+                    WHERE n.Id_JA = ? ORDER BY r.Date, r.Heure
                 ");
-                $stmtNoms->execute([$idJa, $saison]);
+                $stmtNoms->execute([$idJa]);
                 $noms = $stmtNoms->fetchAll();
                 if ($noms) {
                     $listeNoms = '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;">'
@@ -292,13 +350,14 @@ if ($action !== '') {
             }
 
             $token = $_obf->obfuscate((int)$ja['Id_JA']);
+            $sexe  = ($ja['SexeCode'] ?? '') === 'F' ? 'Féminin' : (($ja['SexeCode'] ?? '') === 'M' ? 'Mixte' : '');
             $corps = str_replace(
-                ['{NOM}','{PRENOM}','{NOM_COMPLET}','{ID_JA}',
+                ['{NOM}','{PRENOM}','{NOM_COMPLET}','{ID_JA}','{ID_CONVOCATION}','{SEXE}',
                  '{UTI_NOM}','{UTI_PRENOM}','{LIEN_LIGUE}',
                  '{DATE}','{HEURE}','{JOURNEE}','{POULE}','{DIVISION}','{DOM}','{EXT}',
                  '{SALLE_NOM}','{SALLE_ADRESSE}','{SALLE_CP}','{SALLE_VILLE}',
                  '{CORR_NOM}','{CORR_EMAIL}','{CORR_TEL}'],
-                [$ja['Nom'],$ja['Prenom'],$ja['Prenom'].' '.$ja['Nom'],$token,
+                [$ja['Nom'],$ja['Prenom'],$ja['Prenom'].' '.$ja['Nom'],$token,(string)($ja['Id_Nomination']??''),$sexe,
                  $moi['nom']??'',$moi['prenom']??'',getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),
                  $ja['Date'] ? date('d/m/Y', strtotime($ja['Date'])) : '',$ja['Heure']??'',
                  $ja['Journee']??'',$ja['Poule']??'',$ja['Division']??'',
@@ -307,14 +366,26 @@ if ($action !== '') {
                  $ja['CorrNom']??'',$ja['CorrEmail']??'',$ja['CorrTel']??''],
                 $message
             );
-            $corps = nl2br(htmlspecialchars($corps, ENT_NOQUOTES, 'UTF-8'));
             $corps = str_replace('{LISTE_NOMINATIONS}', $listeNoms, $corps);
 
-            $modeDev = isModeDeveloppement();
-            $dest    = getEmailDestinataire($ja['Email']);
+            // Les filtres antispam (Free.fr, etc.) rejettent les emails contenant des images
+            // encodées en base64 inline (data:image/...). On les remplace par l'URL hébergée.
+            if (str_contains($corps, 'data:image/')) {
+                $proto   = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                $baseUrl = $proto . '://' . $_SERVER['HTTP_HOST'] . '/NIJAC';
+                $corps = preg_replace(
+                    '/src="data:image\/[^;]+;base64,[^"]*"/',
+                    'src="' . $baseUrl . '/img/logo_FFTT.png"',
+                    $corps
+                );
+            }
+
+            $modeDev  = isModeDeveloppement();
+            $dest     = getEmailDestinataire($ja['Email']);
+            $isHtml   = strip_tags($corps) !== $corps;
             try {
                 $mail = getNijacMailer();
-                $mail->isHTML(true);
+                $mail->isHTML($isHtml);
                 $mail->addAddress($dest, $ja['Prenom'] . ' ' . $ja['Nom']);
                 if (!empty($moi['email_lntt'])) {
                     $mail->addReplyTo($moi['email_lntt'], $moi['nom'] . ' ' . $moi['prenom']);
@@ -322,8 +393,10 @@ if ($action !== '') {
                 $mail->Subject = ($modeDev && $dest !== $ja['Email'])
                     ? "[DEV → {$ja['Email']}] $sujet"
                     : $sujet;
-                $mail->Body    = $corps;
-                $mail->AltBody = strip_tags(str_replace(['<br>','<br/>','<br />'], "\n", $corps));
+                $mail->Body = $corps;
+                if ($isHtml) {
+                    $mail->AltBody = strip_tags(str_replace(['<br>','<br/>','<br />'], "\n", $corps));
+                }
                 $mail->send();
                 enregistrerEnvois(1);
                 echo json_encode(['ok' => true, 'nom' => $ja['Prenom'] . ' ' . $ja['Nom']]);
@@ -601,15 +674,9 @@ $modeleJson = json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS);
 </head>
 <body>
 
-<?php require __DIR__ . '/../includes/toolbar.php'; ?>
+<?php $pageIcon = 'bi-send-fill'; $pageTitle = "Centre d'envoi"; $pageCode = 'E024'; $backUrl = 'menu.php'; require __DIR__ . '/../includes/page_header.php'; ?>
 
-<div id="page-header">
-    <i class="bi bi-send-fill me-2"></i>Centre d'envoi
-    <small class="opacity-75 ms-2">(E024)</small>
-    <a href="menu.php" class="btn btn-sm btn-light float-end py-0">
-        <i class="bi bi-arrow-left me-1"></i>Retour menu
-    </a>
-</div>
+<?php require __DIR__ . '/../includes/toolbar.php'; ?>
 
 <div id="split-container">
 
@@ -673,6 +740,8 @@ $modeleJson = json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS);
                     <code data-cible="message" data-marqueur="{CORR_NOM}">{CORR_NOM}</code>
                     <code data-cible="message" data-marqueur="{CORR_EMAIL}">{CORR_EMAIL}</code>
                     <code data-cible="message" data-marqueur="{CORR_TEL}">{CORR_TEL}</code>
+                    <code data-cible="message" data-marqueur="{ID_CONVOCATION}">{ID_CONVOCATION}</code>
+                    <code data-cible="message" data-marqueur="{SEXE}">{SEXE}</code>
                 </div>
                 <div id="cart-liste-nom" style="display:none;margin-top:.2rem;">
                     <span class="badge me-1 fw-normal" style="font-size:.68rem;background:#6f42c1;">Liste nomination</span>
@@ -753,6 +822,25 @@ $modeleJson = json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS);
             </table>
         </div>
 
+    </div>
+</div>
+
+<!-- Modal aperçu email convocation -->
+<div class="modal fade" id="modal-apercu" tabindex="-1" aria-labelledby="modal-apercu-label" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title" id="modal-apercu-label"><i class="bi bi-envelope me-2"></i>Aperçu de l'email</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="px-3 py-2 border-bottom bg-light" style="font-size:.82rem;">
+                    <span class="text-muted me-1">Sujet :</span>
+                    <strong id="apercu-sujet"></strong>
+                </div>
+                <div id="apercu-corps" class="p-3" style="white-space:pre-wrap;font-size:.88rem;line-height:1.6;"></div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -839,8 +927,9 @@ function chargerJournees() {
         if (res.ok) {
             saisonCourante = res.saison;
             res.data.forEach(j => {
-                $cbo.append($('<option>').val(j.Journee).text(
-                    `J${j.Journee}  (${j.DateMin} → ${j.DateMax})  — ${j.NbJA} JA`
+                const dateFr = j.Date ? j.Date.split('-').reverse().join('/') : '';
+                $cbo.append($('<option>').val(`${j.Journee}|${j.Date}`).text(
+                    `J${j.Journee} — ${dateFr} — ${j.NbJA} JA nominé(s)`
                 ));
             });
         }
@@ -857,8 +946,11 @@ $('#cbo-journee').on('change', function () {
 function chargerJA() {
     const data = { action: 'liste_ja', type: typeActif };
     if (typeActif === 'Convocation') {
-        data.journee = $('#cbo-journee').val();
-        if (!data.journee) return;
+        const val = $('#cbo-journee').val();
+        if (!val) return;
+        const [journee, date] = val.split('|');
+        data.journee = journee;
+        data.date    = date;
     }
 
     const colSpan = typeActif === 'Convocation' ? 8 : (typeActif === 'Liste nomination' ? 5 : 4);
@@ -879,7 +971,8 @@ function chargerJA() {
             const emailCell = aEmail ? `<span>${ja.Email}</span>`
                 : `<span class="no-email"><i class="bi bi-exclamation-triangle me-1"></i>Pas d'email</span>`;
 
-            const $tr = $('<tr>').attr('data-id', ja.Id_JA).append(
+            const rowId = (typeActif === 'Convocation') ? ja.Id_Nomination : ja.Id_JA;
+            const $tr = $('<tr>').attr('data-id', rowId).append(
                 $('<td>').append($('<input type="checkbox">').prop('checked', aEmail).prop('disabled', !aEmail).addClass('chk-ja')),
                 $('<td>').text(ja.Nom),
                 $('<td>').text(ja.Prenom),
@@ -901,6 +994,22 @@ function chargerJA() {
         $('#nb-ja').text(`${res.data.length} JA — ${nbEmail} avec email`);
     }, 'json');
 }
+
+// ── Aperçu email convocation au clic sur une ligne ────────────────────────────
+$(document).on('click', '#tbody-ja tr', function (e) {
+    if (typeActif !== 'Convocation') return;
+    if ($(e.target).is('input, label')) return;
+    const idNomination = $(this).data('id');
+    const sujet   = $('#txt-sujet').val().trim();
+    const message = $('#txt-message').val().trim();
+    if (!sujet && !message) { toast('Saisissez un sujet et un message avant de prévisualiser.', false); return; }
+    $.post('centrenvoye.php', { action: 'apercu_email', id_nomination: idNomination, sujet, message }, function (r) {
+        if (!r.ok) { toast(r.msg, false); return; }
+        $('#apercu-sujet').text(r.sujet);
+        $('#apercu-corps').text(r.corps);
+        new bootstrap.Modal(document.getElementById('modal-apercu')).show();
+    }, 'json');
+});
 
 // ── Clic sur un marqueur : insérer à la position du curseur ──────────────────
 let dernierChamp = 'message'; // 'sujet' ou 'message'
@@ -1037,13 +1146,18 @@ $('#btn-envoyer').on('click', function () {
         function envoyerSuivant() {
             if (idx >= ids.length) { terminerProgress(); return; }
             const id = ids[idx++];
-            $.post('centrenvoye.php', {
+            const postData = {
                 action:  'envoyer_un',
                 type:    typeActif,
                 sujet, message,
-                id_ja:   id,
                 saison:  saisonCourante ?? '',
-            }, function (r) {
+            };
+            if (typeActif === 'Convocation') {
+                postData.id_nomination = id;
+            } else {
+                postData.id_ja = id;
+            }
+            $.post('centrenvoye.php', postData, function (r) {
                 if (r.ok) {
                     envoyes++;
                 } else if (r.skip) {

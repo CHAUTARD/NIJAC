@@ -8,25 +8,26 @@
  * Accessible via un lien tokenisé (obfusqué) ou en accès direct interne.
  *
  * Créé par : Patrick CHAUTARD
- * Date de création : 2026-06-11
+ * Date de création : 2026-06-19
  */
 require __DIR__ . '/../config/db.php';
 require __DIR__ . '/../config/app_config.php';
-require __DIR__ . '/../Classes/Obfuscator.php';
 
 // Session nécessaire pour le token CSRF de la page de convocation publique
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../config/csrf.php';
 
-// DÃ©codage du paramÃ¨tre obfusquÃ© ?ja=TOKEN 
-if (isset($_GET['ja']) && $_GET['ja'] !== '') {
-    $decoded = $_obf->deobfuscate(trim($_GET['ja']));
-    if ($decoded > 0) $_GET['id_ja'] = $decoded;
-}
-
 $pdo          = getPDO();
-$idJa         = (int)($_GET['id_ja']     ?? 0);
-$idRencontre  = (int)($_GET['rencontre'] ?? 0);
+$idNomination = (int)($_GET['nomination'] ?? 0);
+$idJa         = 0;
+$idRencontre  = 0;
+
+if ($idNomination > 0) {
+    $row = $pdo->prepare("SELECT Id_JA, Id_Rencontre FROM nomination WHERE Id_Nomination = ?");
+    $row->execute([$idNomination]);
+    $row = $row->fetch();
+    if ($row) { $idJa = (int)$row['Id_JA']; $idRencontre = (int)$row['Id_Rencontre']; }
+}
 
 // Action AJAX : sauvegarder les frais
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
@@ -34,12 +35,18 @@ if ($action === 'sauvegarder_frais') {
     header('Content-Type: application/json; charset=utf-8');
     csrfVerify(true);
     try {
-        $idJaP   = (int)($_POST['id_ja']       ?? 0);
-        $idRencP = (int)($_POST['id_rencontre'] ?? 0);
-
-        if (!$idJaP || !$idRencP) {
-            echo json_encode(['ok' => false, 'err' => 'Paramètres manquants.']); exit;
+        $idNomP = (int)($_POST['id_nomination'] ?? 0);
+        if (!$idNomP) {
+            echo json_encode(['ok' => false, 'err' => 'Paramètre id_nomination manquant.']); exit;
         }
+        $rowNom = $pdo->prepare("SELECT Id_JA, Id_Rencontre FROM nomination WHERE Id_Nomination = ?");
+        $rowNom->execute([$idNomP]);
+        $rowNom = $rowNom->fetch();
+        if (!$rowNom) {
+            echo json_encode(['ok' => false, 'err' => 'Nomination introuvable.']); exit;
+        }
+        $idJaP   = (int)$rowNom['Id_JA'];
+        $idRencP = (int)$rowNom['Id_Rencontre'];
 
         // ── Parsing ──────────────────────────────────────────────────────────
         $peagesRaw = trim($_POST['peages'] ?? '');
@@ -51,7 +58,7 @@ if ($action === 'sauvegarder_frais') {
         $km     = $kmRaw     !== '' ? (int)$kmRaw : null;
 
         // ── Validation ───────────────────────────────────────────────────────
-        $maxPeages = (float)getConfig('frais_max_peages', '80');
+        $maxPeage = (float)getConfig('frais_max_peages', '80');
         $maxKm     = (int)getConfig('frais_max_km', '200');
         $erreurs   = [];
 
@@ -60,8 +67,8 @@ if ($action === 'sauvegarder_frais') {
                 $erreurs[] = 'Le montant des péages n\'est pas un nombre valide.';
             } elseif ($peages < 0) {
                 $erreurs[] = 'Le montant des péages ne peut pas être négatif.';
-            } elseif ($peages > $maxPeages) {
-                $erreurs[] = "Le montant des péages semble aberrant (maximum {$maxPeages} €).";
+            } elseif ($peages > $maxPeage) {
+                $erreurs[] = "Le montant des péages semble aberrant (maximum {$maxPeage} €).";
             }
         }
 
@@ -75,36 +82,47 @@ if ($action === 'sauvegarder_frais') {
             }
         }
 
-        if (mb_strlen($rapAcc) > 2000) {
-            $erreurs[] = 'Le rapport d\'accueil ne doit pas dépasser 2 000 caractères.';
-        }
-        if (mb_strlen($rapEq) > 2000) {
-            $erreurs[] = 'Le rapport équipements ne doit pas dépasser 2 000 caractères.';
-        }
-
         if ($erreurs) {
             echo json_encode(['ok' => false, 'err' => implode(' ', $erreurs)]); exit;
         }
 
         // ── Enregistrement ───────────────────────────────────────────────────
-        $pdo->prepare("
+        $params = [$peages, $km, $rapAcc ?: null, $rapEq ?: null, $idNomP];
+        $logFile = __DIR__ . '/../logs/convocation_debug.log';
+        @mkdir(dirname($logFile), 0755, true);
+        file_put_contents($logFile,
+            date('[Y-m-d H:i:s] ') .
+            "UPDATE nomination SET Peage=$params[0], Kilometre=$params[1], " .
+            "RapportAccueil=" . var_export($params[2], true) . ", " .
+            "RapportEquipements=" . var_export($params[3], true) . ", DateSaisie=CURDATE() " .
+            "WHERE Id_Nomination=$idNomP" . PHP_EOL,
+            FILE_APPEND
+        );
+
+        $stmt = $pdo->prepare("
             UPDATE `nomination` SET
-                Peages             = ?,
-                Kilometres         = ?,
+                Peage             = ?,
+                Kilometre         = ?,
                 RapportAccueil     = ?,
                 RapportEquipements = ?,
                 DateSaisie         = CURDATE()
-            WHERE Id_JA = ? AND Id_Rencontre = ?
-        ")->execute([$peages, $km, $rapAcc ?: null, $rapEq ?: null, $idJaP, $idRencP]);
+            WHERE Id_Nomination = ?
+        ");
+        $stmt->execute($params);
+        $affected = $stmt->rowCount();
+        file_put_contents($logFile,
+            date('[Y-m-d H:i:s] ') . "=> Lignes modifiées : $affected" . PHP_EOL,
+            FILE_APPEND
+        );
 
-        echo json_encode(['ok' => true]);
+        echo json_encode(['ok' => true, 'affected' => $affected]);
     } catch (PDOException $e) {
         echo json_encode(['ok' => false, 'err' => $e->getMessage()]);
     }
     exit;
 }
 
-// Chargement des donnÃ©es 
+// Chargement des données 
 $erreur = '';
 
 if ($idJa && $idRencontre) {
@@ -134,14 +152,14 @@ if ($idJa && $idRencontre) {
 
         //  Rencontre
         $rencCols = array_column($pdo->query('DESCRIBE rencontre')->fetchAll(), 'Field');
-        // NumÃ©ro de convocation (ref PDF : 457)
+        // Numéro de convocation (ref PDF : 457)
         $convNum  = in_array('NumConvocation', $rencCols) ? 'r.NumConvocation' : 'r.Id_Rencontre';
         $hasPhase = in_array('Phase', $rencCols);
         $phaseSel = $hasPhase ? 'r.Phase,' : 'NULL AS Phase,';
         $hasIdJa  = in_array('Id_JA', $rencCols);
 
         $stmtR = $pdo->prepare("
-            SELECT r.Id_Rencontre, r.Saison, r.Journee, r.Date, r.Heure, r.Poule,
+            SELECT r.Id_Rencontre, r.Journee, r.Date, r.Heure, r.Poule,
                    $convNum  AS NumConvocation,
                    $phaseSel
                    d.Division AS DivisionCode, d.Nom AS DivisionNom,
@@ -173,21 +191,21 @@ if ($idJa && $idRencontre) {
         $correspondant = null;
         if ($rencontre) {
             $stmtC = $pdo->prepare("
-                SELECT Nom, Telephone FROM Correspondant
+                SELECT Nom, Email, Telephone FROM Correspondant
                 WHERE Id_Club = ?
                 ORDER BY Id_Correspondant LIMIT 1
             ");
             $stmtC->execute([$rencontre['IdClubDom']]);
-            $correspondant = $stmtC->fetch();
+            $correspondant = $stmtC->fetch() ?: null;
         }
 
-        //  Frais dÃ©jÃ  saisis 
+        //  Frais déjà saisis 
         try {
             $stmtF = $pdo->prepare("
-                SELECT Peages, Kilometres, RapportAccueil, RapportEquipements
-                FROM nomination WHERE Id_JA = ? AND Id_Rencontre = ?
+                SELECT Peage, Kilometre, RapportAccueil, RapportEquipements
+                FROM nomination WHERE Id_Nomination = ?
             ");
-            $stmtF->execute([$idJa, $idRencontre]);
+            $stmtF->execute([$idNomination]);
             $frais = $stmtF->fetch();
         } catch (PDOException $e) { /* ignore */ }
 
@@ -206,34 +224,37 @@ if ($idJa && $idRencontre) {
     } catch (PDOException $e) {
         $erreur = 'Erreur BDD : ' . $e->getMessage();
     }
-} elseif (!$idJa || !$idRencontre) {
-    $erreur = 'ParamÃ¨tres manquants (id_ja et rencontre requis).';
+} elseif (!$idNomination) {
+    $erreur = 'Paramètre nomination manquant.';
 }
 
 //  Valeurs d'affichage 
 $indemniteForfait = (float)getConfig('indemnite_forfaitaire', '25.00');
 $tauxKm           = (float)getConfig('frais_kilometrique', '0.30');
-$peages           = $frais['Peages']      ?? 0;
-$km               = $frais['Kilometres']  ?? $kmCalc ?? 0;
+$peages           = $frais['Peage']      ?? 0;
+$km               = $frais['Kilometre']  ?? $kmCalc ?? 0;
 $total            = $indemniteForfait + $peages + ($km * $tauxKm);
 
 // Formater les dates
 $dateFormatee = '';
 if ($rencontre && $rencontre['Date']) {
     $jours = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
-    $mois  = ['','janvier','fÃ©vrier','mars','avril','mai','juin','juillet','aoÃ»t','septembre','octobre','novembre','dÃ©cembre'];
+    $mois  = ['','janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
     $d = new DateTime($rencontre['Date']);
     $dateFormatee = $jours[(int)$d->format('w')] . ' ' . (int)$d->format('j') . ' ' . $mois[(int)$d->format('n')] . ' ' . $d->format('Y');
 }
 $heure = $rencontre ? substr($rencontre['Heure'] ?? '09:00', 0, 5) : '';
 
-$saisonAffich = $rencontre['Saison'] ?? '';
+$saisonAffich = getConfig('saison', '');
+
+$logoUrl = '../img/logo_FFTT.png';
 ?>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="<?= htmlspecialchars(csrfToken()) ?>">
 <title>Convocation JA (E023)<?= $ja ? ' – ' . htmlspecialchars($ja['Nom'] . ' ' . $ja['Prenom']) : '' ?></title>
 <link rel="stylesheet" href="../asset/css/bootstrap.min.css">
 <link rel="stylesheet" href="../asset/css/bootstrap-icons.min.css">
@@ -249,7 +270,7 @@ $saisonAffich = $rencontre['Saison'] ?? '';
 
     body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; background: #f5f5f5; }
 
-    /*  Barre d'actions (masquÃ©e Ã  l'impression)  */
+    /*  Barre d'actions (masquée à l'impression)  */
     #action-bar {
         background: var(--fftt-blue);
         color: #fff;
@@ -273,7 +294,7 @@ $saisonAffich = $rencontre['Saison'] ?? '';
         position: relative;
     }
 
-    /*  EncadrÃ© numÃ©ro + phase (coin haut droit) */
+    /*  Encadré numéro + phase (coin haut droit) */
     .num-phase {
         position: absolute;
         top: 10mm;
@@ -284,12 +305,10 @@ $saisonAffich = $rencontre['Saison'] ?? '';
     .num-phase .conv-num { font-size: 20px; font-weight: 900; }
     .num-phase .phase-line { font-size: 10px; color: #444; }
 
-    /* En-tÃªte : logo + titre */
+    /* En-tête : logo + titre */
     .conv-header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
         margin-bottom: 6mm;
+        border-collapse: collapse;
     }
     .conv-header .fftt-logo {
         width: 90px;
@@ -312,7 +331,7 @@ $saisonAffich = $rencontre['Saison'] ?? '';
         padding: 3px 0;
     }
 
-    /* IdentitÃ© JA  */
+    /* Identité JA  */
     table.tbl-ja {
         width: 100%;
         border-collapse: collapse;
@@ -364,7 +383,7 @@ $saisonAffich = $rencontre['Saison'] ?? '';
     .correspondant-bloc .corr-lbl { font-weight: 700; }
     .correspondant-bloc .corr-val { font-size: 12px; font-weight: 700; }
 
-    /*  Tableau indemnitÃ©s  */
+    /*  Tableau indemnités  */
     table.tbl-indem {
         width: 100%;
         border-collapse: collapse;
@@ -386,7 +405,7 @@ $saisonAffich = $rencontre['Saison'] ?? '';
         color: #1b5e20;
         border: 2px solid #333;
     }
-    /* Champs Ã©ditables */
+    /* Champs éditables */
     table.tbl-indem input[type="number"],
     table.tbl-indem input[type="text"] {
         width: 100%;
@@ -445,14 +464,14 @@ $saisonAffich = $rencontre['Saison'] ?? '';
 
     /*  Bande info bas  */
     .conv-bas {
-        background: #1a1a1a;
+        background: var(--fftt-blue);
         color: #fff;
         font-size: 10px;
         padding: 4px 8px;
         line-height: 1.6;
     }
 
-    /*  Date Ã©mission  */
+    /*  Date émission  */
     .conv-date-emission {
         text-align: right;
         font-size: 10px;
@@ -506,49 +525,53 @@ $saisonAffich = $rencontre['Saison'] ?? '';
 <?php elseif (!$ja || !$rencontre): ?>
 <div class="alert alert-warning m-3">
     <i class="bi bi-info-circle me-2"></i>
-    Veuillez fournir les paramÃ¨tres <code>id_ja</code> (ou <code>ja</code>) et <code>rencontre</code>.
+    Paramètre <code>nomination</code> manquant dans l'URL.
 </div>
 <?php else: ?>
 
 <!--  Page A4  -->
 <div class="page">
 
-    <!-- NumÃ©ro convocation + phase -->
+    <!-- Numéro convocation + phase -->
     <div class="num-phase">
         <div class="conv-num"><?= htmlspecialchars($rencontre['NumConvocation'] ?? $idRencontre) ?></div>
         <?php if ($rencontre['Phase']): ?>
         <div class="phase-line"><?= htmlspecialchars($rencontre['Phase']) ?></div>
-        <div class="phase-line">ARB 2.4</div>
+        <div class="phase-line"></div>
         <?php endif; ?>
     </div>
 
-    <!-- En-tÃªte FFTT -->
-    <div class="conv-header">
-        <img src="../img/JA.png" class="fftt-logo" alt="FFTT" onerror="this.style.display='none'">
-        <div class="fftt-adresse">
-            <strong>FÃ‰DÃ‰RATION FRANÃ‡AISE DE TENNIS DE TABLE</strong>
-            3, rue DieudonnÃ© Costes â€“ BP 40348<br>
-            75625 PARIS Cedex 13<br>
-            TÃ©l : 01 53 94 50 00
-        </div>
-    </div>
+    <!-- En-tête FFTT -->
+    <table class=”conv-header” width=”100%”>
+        <tr>
+            <td class=”fftt-adresse”>
+                <strong>FÉDÉRATION FRANÇAISE<br/>DE TENNIS DE TABLE</strong><br/>
+                3, rue Dieudonné Costes – BP 40348<br>
+                75625 PARIS Cedex 13<br>
+                Tél : 01.53.94.50.00
+            </td>
+            <td style=”width:100px;text-align:right;vertical-align:middle;”>
+                <img src='<?= $logoUrl ?>' class=”fftt-logo” alt=”FFTT” onerror=”this.style.display='none'”>
+            </td>
+        </tr>
+    </table>
 
     <!-- Titre -->
     <div class="conv-title">CONVOCATION</div>
 
-    <!-- IdentitÃ© JA -->
+    <!-- Identité JA -->
     <table class="tbl-ja">
         <tr>
             <td class="lbl">NOM DU JUGE-ARBITRE :</td>
             <td class="val"><?= htmlspecialchars(strtoupper($ja['Nom']) . ' ' . $ja['Prenom']) ?></td>
         </tr>
         <tr>
-            <td class="lbl">NÂ° de licence :</td>
+            <td class="lbl">N° de licence :</td>
             <td class="val"><?= htmlspecialchars($idJa) ?></td>
         </tr>
         <tr>
             <td class="lbl">ASSOCIATION :</td>
-            <td class="val"><?= htmlspecialchars($ja['Association'] ?? 'â€”') ?></td>
+            <td class="val"><?= htmlspecialchars($ja['Association'] ?? '–') ?></td>
         </tr>
         <tr>
             <td class="lbl">LIGUE :</td>
@@ -558,32 +581,32 @@ $saisonAffich = $rencontre['Saison'] ?? '';
 
     <!-- Texte intro -->
     <div class="conv-body-text">
-        J'ai l'avantage de vous informer que vous Ãªtes dÃ©signÃ©(e) pour diriger la rencontre suivante du<br>
+        J'ai l'avantage de vous informer que vous êtes désigné(e) pour diriger la rencontre suivante du<br>
         <strong>CHAMPIONNAT DE FRANCE PAR ÉQUIPES</strong>
     </div>
 
     <!-- Tableau rencontre -->
     <table class="tbl-renc">
         <tr>
-            <th>JournÃ©e nÂ°</th>
+            <th>Journée n°</th>
             <th colspan="2">Division :</th>
             <th>Poule :</th>
         </tr>
         <tr>
-            <td class="val-center"><?= htmlspecialchars($rencontre['Journee'] ?? 'â€”') ?></td>
-            <td class="val-center" colspan="2"><?= htmlspecialchars($rencontre['DivisionCode'] ?? 'â€”') ?></td>
-            <td class="val-center"><?= htmlspecialchars($rencontre['Poule'] ?? 'â€”') ?></td>
+            <td class="val-center"><?= htmlspecialchars($rencontre['Journee'] ?? '–') ?></td>
+            <td class="val-center" colspan="2"><?= htmlspecialchars($rencontre['DivisionCode'] ?? '–') ?></td>
+            <td class="val-center"><?= htmlspecialchars($rencontre['Poule'] ?? '–') ?></td>
         </tr>
         <tr>
             <th>Opposant</th>
-            <td class="val-bold" style="width:38%"><?= htmlspecialchars($rencontre['NomDom'] ?? 'â€”') ?></td>
-            <td style="text-align:center;font-size:10px;width:4%">Ã </td>
-            <td class="val-bold"><?= htmlspecialchars($rencontre['NomExt'] ?? 'â€”') ?></td>
+            <td class="val-bold" style="width:38%"><?= htmlspecialchars($rencontre['NomDom'] ?? '–') ?></td>
+            <td style="text-align:center;font-size:10px;width:4%">à</td>
+            <td class="val-bold"><?= htmlspecialchars($rencontre['NomExt'] ?? '–') ?></td>
         </tr>
         <tr>
             <th>le</th>
             <td class="val-bold" colspan="2"><?= htmlspecialchars($dateFormatee) ?></td>
-            <td class="val-center">Ã  <?= htmlspecialchars($heure) ?></td>
+            <td class="val-center">à <?= htmlspecialchars($heure) ?></td>
         </tr>
     </table>
 
@@ -598,44 +621,48 @@ $saisonAffich = $rencontre['Saison'] ?? '';
                 $rencontre['CpSalle']     ?? null,
                 $rencontre['VilleSalle']  ?? null,
             ]));
-            echo htmlspecialchars($salleText ?: 'â€”');
+            echo htmlspecialchars($salleText ?: '–');
             ?>
         </span>
     </div>
 
     <!-- Correspondant -->
     <div class="correspondant-bloc">
-        <span class="corr-lbl">NOM â€“ PRÃ‰NOM et ADRESSE du CORRESPONDANT du CLUB RECEVANT :</span><br>
+        <span class="corr-lbl">NOM – PRÉNOM et ADRESSE du CORRESPONDANT du CLUB RECEVANT :</span><br>
         <span class="corr-val"><?= htmlspecialchars($correspondant['Nom'] ?? '') ?></span>
         <?php if ($correspondant && $correspondant['Telephone']): ?>
         &nbsp;&nbsp;&nbsp;
-        <span style="font-size:11px;">TÃ©l : <strong><?= htmlspecialchars($correspondant['Telephone']) ?></strong></span>
+        <span style="font-size:11px;">Tél : <strong><?= htmlspecialchars($correspondant['Telephone']) ?></strong></span>
         <?php else: ?>
-        &nbsp;&nbsp;&nbsp;<span style="font-size:11px; color:#999">TÃ©l : â€”</span>
+        &nbsp;&nbsp;&nbsp;<span style="font-size:11px; color:#999">Tél : –</span>
         <?php endif; ?>
     </div>
 
-    <!--  Tableau indemnitÃ©s / frais  -->
+    <!--  Tableau indemnités / frais  -->
     <table class="tbl-indem" id="tbl-frais">
         <thead>
             <tr>
-                <th>INDEMNITÃ‰ FIXE</th>
+                <th>INDEMNITÉ FIXE</th>
                 <th class="sep"></th>
-                <th>PÃ‰AGES</th>
+                <th>PÉAGES</th>
                 <th style="width:8mm"></th>
-                <th colspan="2">DÃ‰PLACEMENT</th>
+                <th colspan="2">DÉPLACEMENT</th>
                 <th style="width:8mm"></th>
                 <th>TOTAL</th>
             </tr>
         </thead>
         <tbody>
             <tr>
-                <td class="val-money" id="td-indem"><?= number_format($indemniteForfait, 2, ',', ' ') ?> â‚¬</td>
+                <td class="val-money" id="td-indem"><?= number_format($indemniteForfait, 2, ',', ' ') ?> €</td>
                 <td class="sep">+</td>
                 <td>
-                    <input type="number" id="inp-peages" min="0" step="0.01"
-                           value="<?= htmlspecialchars(number_format($peages, 2, '.', '')) ?>"
-                           placeholder="0,00"> â‚¬
+                    <div class="input-group input-group-sm" style="width:80px">
+                        <input type="number" id="inp-peages" class="form-control" min="0" step="0.01"
+                               style="min-width:0;width:50px"
+                               value="<?= htmlspecialchars(number_format($peages, 2, '.', '')) ?>"
+                               placeholder="0">
+                        <span class="input-group-text">€</span>
+                    </div>
                 </td>
                 <td class="sep">+</td>
                 <td>
@@ -644,10 +671,10 @@ $saisonAffich = $rencontre['Saison'] ?? '';
                            placeholder="0">
                 </td>
                 <td style="white-space:nowrap;padding-left:2px;">
-                    km &nbsp;Ã—&nbsp; <?= number_format($tauxKm, 2, ',', ' ') ?> â‚¬
+                    km &nbsp;×&nbsp; <?= number_format($tauxKm, 2, ',', ' ') ?> €
                 </td>
                 <td class="sep">=</td>
-                <td class="total-cell" id="td-total"><?= number_format($total, 2, ',', ' ') ?> â‚¬</td>
+                <td class="total-cell" id="td-total"><?= number_format($total, 2, ',', ' ') ?> €</td>
             </tr>
         </tbody>
     </table>
@@ -656,32 +683,32 @@ $saisonAffich = $rencontre['Saison'] ?? '';
     <table class="tbl-rapport">
         <tr>
             <th>Rapport de Juge-Arbitre</th>
-            <td class="rapport-titre-cell">remplir si vous rencontrez des problÃ¨mes</td>
+            <td class="rapport-titre-cell">remplir si vous rencontrez des problèmes</td>
         </tr>
         <tr>
             <th>Accueil, ambiance</th>
             <td><textarea id="inp-rapport-accueil" rows="2"><?= htmlspecialchars($frais['RapportAccueil'] ?? '') ?></textarea></td>
         </tr>
         <tr>
-            <th>Ã‰quipements, salleâ€¦</th>
+            <th>Équipements, salle…</th>
             <td><textarea id="inp-rapport-eq" rows="2"><?= htmlspecialchars($frais['RapportEquipements'] ?? '') ?></textarea></td>
         </tr>
     </table>
 
     <!-- Formule de politesse -->
-    <div class="conv-footer-text">Veuillez agrÃ©er mes meilleurs sentiments.</div>
+    <div class="conv-footer-text">Veuillez agréer mes meilleurs sentiments.</div>
     <div class="conv-signature">
-        Pour le PrÃ©sident de la Commission<br>
-        RÃ©gionale d'Arbitrage
+        Pour le Président de la Commission<br>
+        Régionale d'Arbitrage
     </div>
 
     <!-- Bande basse -->
     <div class="conv-bas">
-        Vos indemnitÃ©s de juge-arbitrage vous seront payÃ©es en fin de phase directement par la ligue.<br>
-        Pensez Ã  transmettre un RIB Ã  la ligue.
+        Vos indemnités de juge-arbitrage vous seront payées en fin de phase directement par la ligue.<br>
+        Pensez à transmettre un RIB à la ligue.
     </div>
 
-    <!-- Date Ã©mission -->
+    <!-- Date émission -->
     <div class="conv-date-emission"><?= date('d/m/Y') ?></div>
 
 </div><!-- /.page -->
@@ -691,7 +718,7 @@ $saisonAffich = $rencontre['Saison'] ?? '';
     <button id="btn-save-frais" class="btn btn-success btn-lg">
         <i class="bi bi-floppy me-1"></i>Enregistrer les frais
     </button>
-    <span id="save-status"><i class="bi bi-check-circle-fill me-1"></i>EnregistrÃ© !</span>
+    <span id="save-status"><i class="bi bi-check-circle-fill me-1"></i>Enregistré !</span>
 </div>
 
 <?php endif; ?>
@@ -702,14 +729,13 @@ $saisonAffich = $rencontre['Saison'] ?? '';
 'use strict';
 const INDEM   = <?= json_encode((float)$indemniteForfait) ?>;
 const TAUX_KM = <?= json_encode((float)$tauxKm) ?>;
-const ID_JA         = <?= (int)$idJa ?>;
-const ID_RENCONTRE  = <?= (int)$idRencontre ?>;
+const ID_NOMINATION = <?= (int)$idNomination ?>;
 
 function recalcTotal() {
     const peages = parseFloat($('#inp-peages').val()) || 0;
     const km     = parseInt($('#inp-km').val())       || 0;
     const total  = INDEM + peages + km * TAUX_KM;
-    $('#td-total').text(total.toLocaleString('fr-FR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' â‚¬');
+    $('#td-total').text(total.toLocaleString('fr-FR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €');
 }
 
 $('#inp-peages, #inp-km').on('input', recalcTotal);
@@ -718,8 +744,7 @@ $('#btn-save-frais').on('click', function () {
     const $btn = $(this).prop('disabled', true);
     $.post('convocation_ja.php', {
         action:              'sauvegarder_frais',
-        id_ja:               ID_JA,
-        id_rencontre:        ID_RENCONTRE,
+        id_nomination:       ID_NOMINATION,
         peages:              $('#inp-peages').val(),
         km:                  $('#inp-km').val(),
         rapport_accueil:     $('#inp-rapport-accueil').val(),
@@ -733,7 +758,7 @@ $('#btn-save-frais').on('click', function () {
         }
     }, 'json').fail(function () {
         $btn.prop('disabled', false);
-        alert('Erreur rÃ©seau.');
+        alert('Erreur réseau.');
     });
 });
 
