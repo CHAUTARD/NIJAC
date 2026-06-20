@@ -95,7 +95,7 @@ if ($action !== '') {
 
             $stmt = $pdo->prepare(
                 'SELECT j.Id_JA, j.Nom, j.Prenom, j.Email, j.Telephone,
-                        j.Grade, j.Actif, j.Id_Club, j.DistanceMaxKm, j.Id_LaPoste,
+                        j.Grade, j.Actif, j.Id_Club, j.Id_LaPoste,
                         j.Defiscalisation, j.Nationale,
                         cl.Nom AS NomClub,
                         COALESCE(lp.CodePostal, j.Cp)   AS CodePostalJA,
@@ -132,7 +132,6 @@ if ($action !== '') {
                     'Grade'          => $find($r, 'Grade'),
                     'Actif'          => $find($r, 'Actif'),
                     'Id_Club'        => $find($r, 'Id_Club'),
-                    'DistanceMaxKm'  => $find($r, 'DistanceMaxKm'),
                     'Id_LaPoste'     => $find($r, 'Id_LaPoste'),
                     'Defiscalisation'=> $find($r, 'Defiscalisation'),
                     'Nationale'      => $find($r, 'Nationale'),
@@ -308,7 +307,6 @@ if ($action !== '') {
                     'actif'           => $actif,
                     'id_club'         => $idClub !== '' ? (int)$idClub : null,
                     'nom_club'        => $idClub !== '' ? ($clubsMap[(int)$idClub] ?? '') : '',
-                    'distance_max_km' => 999,
                     'id_laposte'      => $idLaPoste,
                     'cp'              => $cp,
                     'ville'           => $ville,
@@ -354,12 +352,12 @@ if ($action !== '') {
             $stmtCheck  = $pdo->prepare('SELECT COUNT(*) FROM ja WHERE Id_JA = ?');
             $stmtInsert = $pdo->prepare(
                 'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Telephone, Grade, Actif,
-                                 Id_Club, DistanceMaxKm, Id_LaPoste, Cp, Ville, Defiscalisation, Nationale)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                                 Id_Club, Id_LaPoste, Cp, Ville, Defiscalisation, Nationale)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmtUpdate = $pdo->prepare(
                 'UPDATE ja SET Nom=?, Prenom=?, Email=?, Telephone=?, Grade=?,
-                               Actif=?, Id_Club=?, DistanceMaxKm=?, Id_LaPoste=?, Cp=?, Ville=?,
+                               Actif=?, Id_Club=?, Id_LaPoste=?, Cp=?, Ville=?,
                                Defiscalisation=?, Nationale=?
                  WHERE Id_JA=?'
             );
@@ -375,7 +373,6 @@ if ($action !== '') {
                 $defisc    = !empty($l['defiscalisation']) ? 1 : 0;
                 $nationale = !empty($l['nationale']) ? 1 : 0;
                 $idClub  = $l['id_club'] !== '' && $l['id_club'] !== null ? (int)$l['id_club'] : null;
-                $distMax = $l['distance_max_km'] !== '' && $l['distance_max_km'] !== null ? (int)$l['distance_max_km'] : 999;
                 $idLap   = $l['id_laposte'] !== '' && $l['id_laposte'] !== null ? (int)$l['id_laposte'] : null;
                 $cpVal   = $l['cp']    !== '' && $l['cp']    !== null ? trim($l['cp'])    : null;
                 $villeVal= $l['ville'] !== '' && $l['ville'] !== null ? trim($l['ville']) : null;
@@ -386,19 +383,19 @@ if ($action !== '') {
                     if ($id > 0) {
                         $stmtCheck->execute([$id]);
                         if ((int)$stmtCheck->fetchColumn() > 0) {
-                            $stmtUpdate->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $distMax, $idLap, $cpVal, $villeVal, $defisc, $nationale, $id]);
+                            $stmtUpdate->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $cpVal, $villeVal, $defisc, $nationale, $id]);
                             $updates++;
                         } else {
-                            $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $distMax, $idLap, $cpVal, $villeVal, $defisc, $nationale]);
+                            $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $cpVal, $villeVal, $defisc, $nationale]);
                             $inserts++;
                         }
                     } else {
                         // Pas d'Id_JA → INSERT auto-increment
                         $pdo->prepare(
                             'INSERT INTO ja (Nom, Prenom, Email, Telephone, Grade, Actif,
-                                             Id_Club, DistanceMaxKm, Id_LaPoste, Cp, Ville, Defiscalisation, Nationale)
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                        )->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $distMax, $idLap, $cpVal, $villeVal, $defisc, $nationale]);
+                                             Id_Club, Id_LaPoste, Cp, Ville, Defiscalisation, Nationale)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                        )->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $cpVal, $villeVal, $defisc, $nationale]);
                         $inserts++;
                     }
                 } catch (PDOException $ex) {
@@ -657,7 +654,6 @@ $deptActifs  = getDeptActifs();
                 <th style="width:200px" data-field="nom_club">Nom du club<span class="sort-icon"></span></th>
                 <th style="width:90px"  data-field="defiscalisation">Défiscalisation<span class="sort-icon"></span></th>
                 <th style="width:85px"  data-field="nationale">Nationale<span class="sort-icon"></span></th>
-                <th style="width:80px"  data-field="distance_max_km">Dist. max<span class="sort-icon"></span></th>
                 <th style="width:75px"  data-field="cp">CP<span class="sort-icon"></span></th>
                 <th style="width:160px" data-field="ville">Ville<span class="sort-icon"></span></th>
                 <th style="width:75px"  class="no-sort">Lien dispo</th>
@@ -731,7 +727,7 @@ function lignesFiltreesTriees() {
             String(l.ville           ?? '').toLowerCase().includes(term))
         : source;
 
-    const numFields = ['id', 'id_club', 'distance_max_km'];
+    const numFields = ['id', 'id_club'];
     result.sort((a, b) => {
         if (numFields.includes(sortField)) {
             return sortDir === 'asc' ? (+a[sortField]) - (+b[sortField]) : (+b[sortField]) - (+a[sortField]);
@@ -789,7 +785,6 @@ function renderGrille() {
             $tr.append(makeTd(l.nom_club,         idx, 'nom_club',        true));
             $tr.append(makeTdHtml(defiscHtml,     idx, 'defiscalisation'));
             $tr.append(makeTdHtml(nationaleHtml,  idx, 'nationale'));
-            $tr.append(makeTd(l.distance_max_km,  idx, 'distance_max_km', false));
             $tr.append(makeTdLaPoste(l.cp,        idx, 'cp'));
             $tr.append(makeTdLaPoste(l.ville,     idx, 'ville'));
             // Bouton lien disponibilité
@@ -813,7 +808,7 @@ function renderGrille() {
     $('#lbl-count').text(lblTxt);
 }
 
-const CHAMPS_NUMERIQUES = ['distance_max_km'];
+const CHAMPS_NUMERIQUES = [];
 
 function makeTd(val, idx, field, readonly) {
     const $td  = $('<td>').addClass(readonly ? 'col-readonly' : '').attr('data-idx', idx).attr('data-field', field);
@@ -1055,7 +1050,6 @@ function chargerListe() {
             actif:           +r.Actif,
             id_club:         r.Id_Club,
             nom_club:        r.NomClub ?? '',
-            distance_max_km: r.DistanceMaxKm,
             id_laposte:       r.Id_LaPoste,
             defiscalisation:  +r.Defiscalisation,
             nationale:        +r.Nationale,

@@ -254,7 +254,7 @@ if ($action !== '') {
               AND (lp_ja.JaClub IS NULL OR ed.Id_Club != lp_ja.JaClub)
               -- Filtrer sur le département du JA
               $deptClause
-            ORDER BY r.Heure, d.Ord
+            ORDER BY DistanceKm IS NULL, DistanceKm ASC, r.Heure, d.Ord
         ");
         $stmt->execute($params);
         echo json_encode(['ok' => true, 'data' => $stmt->fetchAll()]);
@@ -735,8 +735,6 @@ if ($action !== '') {
 </head>
 <body>
 
-<?php require __DIR__ . '/includes/toolbar.php'; ?>
-
 <!-- ── En-tête unifié ─────────────────────────────────────────────────────── -->
 <div id="page-header">
     <i class="bi bi-calendar2-check fs-5 flex-shrink-0"></i>
@@ -772,6 +770,15 @@ if ($action !== '') {
         <i class="bi bi-sticky-fill me-1"></i>Note
     </button>
 </div>
+
+<?php
+// Variables requises par toolbar.php — page publique, session optionnelle
+$u           = $_SESSION['utilisateur'] ?? [];
+$nomComplet  = isset($u['prenom'], $u['nom']) ? $u['prenom'] . ' ' . $u['nom'] : '';
+$departement = $u['id_departement'] ?? '';
+$changeLogin = !empty($u['change_login']);
+$isAdmin     = !empty($u['is_admin']);
+require __DIR__ . '/includes/toolbar.php'; ?>
 
 <!-- ── Modale Note ─────────────────────────────────────────────────────────── -->
 <div class="modal fade" id="modal-note" tabindex="-1" aria-labelledby="modal-note-label" aria-hidden="true">

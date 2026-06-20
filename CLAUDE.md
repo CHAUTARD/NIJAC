@@ -32,6 +32,7 @@ Every PHP page is self-contained and dual-mode: it handles AJAX actions at the t
 | `config/csrf.php` | `csrfToken()`, `csrfField()`, `csrfVerify(bool $json)` — every POST endpoint must call `csrfVerify(true)` |
 | `config/app_config.php` | DB migrations, all config helpers (`getConfig()`, `getDeptActifs()`, `getDepartementsAutorises()`), PHPMailer factory (`getNijacMailer()`), rate-limit helpers |
 | `Classes/Obfuscator.php` | Bi-directional integer ↔ 8-char token (bcmath + Knuth multiplicative hash, seed = `OBFUSCATOR_SEED = 167`) — used to expose JA IDs in public URLs without leaking real PKs |
+| `includes/page_header.php` | Mutualized page header component — requires `$pageIcon`, `$pageTitle`, `$pageCode`, `$backUrl` to be set before include |
 
 ### AJAX pattern
 

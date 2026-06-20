@@ -7,7 +7,7 @@
  * interface de nomination et consultation des convocations.
  *
  * Créé par : Patrick CHAUTARD
- * Date de création : 2026-06-11
+ * Date de création : 2026-06-20
  */
 session_start();
 
@@ -39,46 +39,86 @@ $stats = [
 ];
 try {
     $pdo = getPDO();
-    initTableConfiguration($pdo);
+    try { initTableConfiguration($pdo); } catch (\Throwable $ignored) {}
 
-    // JA actifs
-    $stats['ja_actifs'] = (int)$pdo->query("SELECT COUNT(*) FROM ja WHERE Actif = 1")->fetchColumn();
+    $deptsAutorises = getDepartementsAutorises($u['id_departement'] ?? null);
+    $deptPh = $deptsAutorises ? implode(',', array_fill(0, count($deptsAutorises), '?')) : '\'\'';
+
+    // JA actifs du département
+    if ($deptsAutorises) {
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM ja j
+            LEFT JOIN Club    cl ON cl.Id_Club    = j.Id_Club
+            LEFT JOIN Salle   s  ON s.Id_Club     = cl.Id_Club AND s.EstPrincipale = 1
+            LEFT JOIN laposte lp ON lp.Id_LaPoste = s.Id_Laposte
+            WHERE j.Actif = 1
+              AND LEFT(lp.CodePostal, 2) IN ($deptPh)
+        ");
+        $stmt->execute($deptsAutorises);
+        $stats['ja_actifs'] = (int)$stmt->fetchColumn();
+    }
 
     $saison = getConfig('saison', '');
 
-    // Prochaine journée
-    $row = $pdo->query("
-        SELECT MIN(Date) AS d, Journee FROM rencontre
-        WHERE Date >= CURDATE()
-        ORDER BY Date ASC LIMIT 1
-    ")->fetch();
+    // Prochaine journée du département
+    if ($deptsAutorises) {
+        $stmt = $pdo->prepare("
+            SELECT r.Date AS d, r.Journee FROM rencontre r
+            JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
+            WHERE r.Date >= CURDATE()
+              AND SUBSTRING(ed.Id_Club, 2, 2) IN ($deptPh)
+            ORDER BY r.Date ASC LIMIT 1
+        ");
+        $stmt->execute($deptsAutorises);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    } else {
+        $row = [];
+    }
     $stats['prochaine_date']    = $row['d']       ?? null;
     $stats['prochaine_journee'] = $row['Journee'] ?? null;
     $stats['prochaine_saison']  = $saison;
 
-    // Nominations à valider (créées mais pas encore validées)
-    $stats['nominations_valider'] = (int)$pdo->query("
-        SELECT COUNT(*) FROM nomination n
-        JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
-        WHERE n.Valide = 0 AND r.Date >= CURDATE()
-    ")->fetchColumn();
+    // Nominations à valider du département
+    if ($deptsAutorises) {
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM nomination n
+            JOIN rencontre r  ON r.Id_Rencontre = n.Id_Rencontre
+            JOIN equipe ed    ON ed.Id_Equipe   = r.Id_EquipeDom
+            WHERE n.Valide = 0 AND r.Date >= CURDATE()
+              AND SUBSTRING(ed.Id_Club, 2, 2) IN ($deptPh)
+        ");
+        $stmt->execute($deptsAutorises);
+        $stats['nominations_valider'] = (int)$stmt->fetchColumn();
+    }
 
-    // Convocations validées mais email non envoyé
-    $stats['convocations_envoyer'] = (int)$pdo->query("
-        SELECT COUNT(*) FROM nomination n
-        JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
-        WHERE n.Valide = 1 AND n.EmailEnvoye = 0 AND r.Date >= CURDATE()
-    ")->fetchColumn();
+    // Convocations validées mais email non envoyé du département
+    if ($deptsAutorises) {
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM nomination n
+            JOIN rencontre r  ON r.Id_Rencontre = n.Id_Rencontre
+            JOIN equipe ed    ON ed.Id_Equipe   = r.Id_EquipeDom
+            WHERE n.Valide = 1 AND n.EmailEnvoye = 0 AND r.Date >= CURDATE()
+              AND SUBSTRING(ed.Id_Club, 2, 2) IN ($deptPh)
+        ");
+        $stmt->execute($deptsAutorises);
+        $stats['convocations_envoyer'] = (int)$stmt->fetchColumn();
+    }
 
-    // Rencontres à venir sans aucun JA nominé (validé)
-    $stats['rencontres_sans_ja'] = (int)$pdo->query("
-        SELECT COUNT(*) FROM rencontre r
-        WHERE r.Date >= CURDATE()
-          AND NOT EXISTS (
-              SELECT 1 FROM nomination n
-              WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
-          )
-    ")->fetchColumn();
+    // Rencontres à venir sans JA nominé du département
+    if ($deptsAutorises) {
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM rencontre r
+            JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
+            WHERE r.Date >= CURDATE()
+              AND SUBSTRING(ed.Id_Club, 2, 2) IN ($deptPh)
+              AND NOT EXISTS (
+                  SELECT 1 FROM nomination n
+                  WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
+              )
+        ");
+        $stmt->execute($deptsAutorises);
+        $stats['rencontres_sans_ja'] = (int)$stmt->fetchColumn();
+    }
 
 } catch (\Throwable $e) {
     // Tableau de bord non disponible — on continue sans bloquer
@@ -369,7 +409,7 @@ if ($stats['prochaine_date']) {
 
         <div class="menu-btn-wrap">
             <a href="nomination.php" class="menu-btn btn-nomination">
-                <div class="btn-icon"><img src="../img/Nomination.png" alt="Nomination JA"></div>
+                <div class="btn-icon"><img src="../img/Nomination.png" alt="Nomination JA" style="max-width:220px;max-height:220px;width:220px;height:220px;"></div>
                 <span>Nomination JA</span>
                 <span class="btn-desc">Affecter les JA aux rencontres et valider les nominations</span>
             </a>
@@ -421,6 +461,7 @@ if ($stats['prochaine_date']) {
         }
     });
     </script>
+
 
 </body>
 </html>

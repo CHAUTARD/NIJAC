@@ -11,13 +11,13 @@ Elle couvre l'ensemble du cycle de vie d'une nomination : import des JA depuis u
 | Écran | Code | Description |
 |---|---|---|
 | Connexion | E001 | Authentification avec gestion du premier changement de mot de passe |
-| Juges-Arbitres | E007 | Import Excel FFTT, fiche JA (grade, club, commune, défiscalisation, nationale) |
+| Juges-Arbitres | E007 | Import Excel FFTT, fiche JA (grade, club, commune, défiscalisation, nationale Oui/Non) |
 | Disponibilités | E021 | Saisie par département avec règle 76 → 27 automatique |
 | Nomination | E011 | Affectation des JA aux rencontres par journée / division |
+| Convocation JA | E023 | Page de convocation officielle d'un JA : détail rencontre, saisie frais (km, péages, indemnité) |
 | Convocations | E013 | Génération et envoi email des convocations |
 | Messagerie | E016 | Modèles de messages (disponibilités, convocations, rappels) |
-| Frais | — | Saisie des péages et kilomètres par nomination |
-| JA R3/R4 | — | Vue des JA en rencontres régionales |
+| JA R3/R4 | E025 | Signalement des équipes R3/R4 demandant un JA ; active ArbitrageObligatoire automatiquement |
 
 ---
 
@@ -75,16 +75,18 @@ NIJAC/
 │   ├── Obfuscator.php      # Obfuscation entier ↔ token 8 chars (bcmath + Knuth hash)
 │   ├── Distance.php        # Calcul de distance GPS
 │   └── SecurePasswordHasher.php
+├── JA_R3R4.php             # Demandes JA équipes R3/R4 — admin seul (E025)
 ├── Nominateur/             # Espace nominateur
 │   ├── menu.php            # Tableau de bord (E020)
 │   ├── jugearbitre.php     # Gestion JA — import Excel + grille éditable (E007)
 │   ├── disponibilites.php  # Vue par département (E021)
 │   ├── disponibilite_ja.php# Saisie détaillée par JA (lien tokenisé)
 │   ├── nomination.php      # Affectation JA ↔ rencontres (E011)
-│   ├── convocation_ja.php  # Génération / envoi convocations (E013)
+│   ├── convocation_ja.php  # Convocation officielle + saisie frais JA (E023)
+│   ├── centrenvoye.php     # Centre d'envoi des convocations (E013)
 │   ├── messagerie.php      # Modèles de messages (E016)
 │   └── includes/toolbar.php
-├── includes/               # Composants partagés (footer, modal mdp…)
+├── includes/               # Composants partagés (page_header.php, footer, modal mdp…)
 ├── asset/                  # Bootstrap, Bootstrap Icons, jQuery, CSS/JS propres
 └── vendor/                 # Dépendances Composer
 ```
@@ -97,7 +99,7 @@ ja ─── disponible ─── rencontre ─── nomination
  └── Club                 └── Salle ─── laposte
 ```
 
-- **`ja`** : fiche JA (Grade, Actif, Defiscalisation, Nationale, Id_LaPoste, Cp, Ville, DistanceMaxKm)
+- **`ja`** : fiche JA (Grade, Actif, Defiscalisation, Nationale [Oui/Non], Id_LaPoste, Cp, Ville)
 - **`disponible`** : réponse d'un JA pour une rencontre (O/P/N)
 - **`rencontre`** : matchs à arbitrer (Saison, Journee, Division, Id_Salle)
 - **`nomination`** : affectation JA ↔ rencontre + frais (Peages, Kilometres)

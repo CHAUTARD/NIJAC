@@ -32,28 +32,24 @@ if ($action !== '') {
     try {
         $pdo = getPDO();
 
-        // Auto-ajout colonne Id_Utilisateur (NULL = message système)
-        $cols = array_column($pdo->query('DESCRIBE messagerie')->fetchAll(), 'Field');
-        if (!in_array('Id_Utilisateur', $cols)) {
-            $pdo->exec('ALTER TABLE messagerie ADD COLUMN Id_Utilisateur INT NULL DEFAULT NULL');
-        }
-
         // ── Liste ──────────────────────────────────────────────────────────
         if ($action === 'liste') {
             if ($isAdmin) {
                 $rows = $pdo->query(
                     'SELECT m.Id_Messagerie, m.Type, m.Sujet, m.Message, m.Id_Utilisateur,
-                            CONCAT(u.Nom, \' \', u.Prenom) AS NomUtilisateur
+                            CONCAT(u.Nom, \' \', u.Prenom) AS NomUtilisateur,
+                            (m.Id_Messagerie BETWEEN 1 AND 4) AS EstSysteme
                      FROM messagerie m
                      LEFT JOIN Utilisateur u ON u.Id_Utilisateur = m.Id_Utilisateur
-                     ORDER BY m.Type, m.Sujet'
+                     ORDER BY (m.Id_Messagerie BETWEEN 1 AND 4) DESC, m.Id_Messagerie * (m.Id_Messagerie BETWEEN 1 AND 4), m.Type, m.Sujet'
                 )->fetchAll();
             } else {
                 $stmt = $pdo->prepare(
-                    'SELECT Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, NULL AS NomUtilisateur
+                    'SELECT Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, NULL AS NomUtilisateur,
+                            (Id_Messagerie BETWEEN 1 AND 4) AS EstSysteme
                      FROM messagerie
-                     WHERE Id_Utilisateur IS NULL OR Id_Utilisateur = ?
-                     ORDER BY Type, Sujet'
+                     WHERE Id_Messagerie BETWEEN 1 AND 4 OR Id_Utilisateur IS NULL OR Id_Utilisateur = ?
+                     ORDER BY (Id_Messagerie BETWEEN 1 AND 4) DESC, Id_Messagerie * (Id_Messagerie BETWEEN 1 AND 4), Type, Sujet'
                 );
                 $stmt->execute([$idCurrentUser]);
                 $rows = $stmt->fetchAll();
@@ -100,7 +96,7 @@ if ($action !== '') {
                 $row = $pdo->prepare('SELECT Id_Utilisateur FROM messagerie WHERE Id_Messagerie = ?');
                 $row->execute([$id]);
                 $existing = $row->fetch();
-                if ($existing && $existing['Id_Utilisateur'] === null && !$isAdmin) {
+                if ($existing && ($existing['Id_Utilisateur'] === null || ($id >= 1 && $id <= 4)) && !$isAdmin) {
                     echo json_encode(['ok' => false, 'msg' => 'Ce message système ne peut être modifié que par un administrateur.']);
                     exit;
                 }
@@ -140,7 +136,7 @@ if ($action !== '') {
             $row = $pdo->prepare('SELECT Id_Utilisateur FROM messagerie WHERE Id_Messagerie = ?');
             $row->execute([$id]);
             $existing = $row->fetch();
-            if ($existing && $existing['Id_Utilisateur'] === null && !$isAdmin) {
+            if ($existing && ($existing['Id_Utilisateur'] === null || ($id >= 1 && $id <= 4)) && !$isAdmin) {
                 echo json_encode(['ok' => false, 'msg' => 'Les messages système ne peuvent pas être supprimés.']);
                 exit;
             }
@@ -239,6 +235,7 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
         #table-wrapper {
             flex: 1;
             overflow-y: auto;
+            min-height: 9rem; /* garantit 4 lignes toujours visibles (~thead + 4 × ~1.8rem) */
         }
 
         #tbl-messagerie {
@@ -509,7 +506,7 @@ function chargerListe(selectId = null) {
             return;
         }
         res.data.forEach(m => {
-            const estSys = (m.Id_Utilisateur === null || m.Id_Utilisateur === '');
+            const estSys = !!parseInt(m.EstSysteme) || m.Id_Utilisateur === null || m.Id_Utilisateur === '';
             let sourceLabel;
             if (estSys) {
                 sourceLabel = '<span class="badge bg-secondary">Défaut</span>';
