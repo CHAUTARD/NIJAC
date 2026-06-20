@@ -153,14 +153,17 @@ function isModeDeveloppement(): bool
  * Retourne une instance PHPMailer préconfigurée avec les paramètres SMTP de la table configuration.
  * Lance une exception en cas d'erreur de configuration.
  */
-function getNijacMailer(): \PHPMailer\PHPMailer\PHPMailer
+function getNijacMailer(string $forcedPrefix = null): \PHPMailer\PHPMailer\PHPMailer
 {
     require_once __DIR__ . '/../vendor/autoload.php';
 
     $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
     $mail->CharSet   = 'UTF-8';
     $mail->Encoding  = 'base64';
-    $debugLevel = (int)getConfig('smtp_debug', '0');
+
+    $p = $forcedPrefix ?? (IS_PRODUCTION ? 'smtp_' : 'smtp_local_');
+
+    $debugLevel = (int)getConfig($p . 'debug', '0');
     $mail->SMTPDebug = $debugLevel;
     if ($debugLevel > 0) {
         $logFile = __DIR__ . '/../logs/smtp_debug.log';
@@ -171,10 +174,10 @@ function getNijacMailer(): \PHPMailer\PHPMailer\PHPMailer
     }
     $mail->Hostname  = gethostname() ?: 'nijac.ligue-normandie-tt.fr';
 
-    $host   = getConfig('smtp_host', '');
-    $secure = getConfig('smtp_secure', 'tls');
-    $port   = (int)getConfig('smtp_port', '587');
-    $auth   = getConfig('smtp_auth', '1') === '1';
+    $host   = getConfig($p . 'host', '');
+    $secure = getConfig($p . 'secure', 'tls');
+    $port   = (int)getConfig($p . 'port', '587');
+    $auth   = getConfig($p . 'auth', '1') === '1';
 
     if ($host !== '') {
         $mail->isSMTP();
@@ -185,16 +188,16 @@ function getNijacMailer(): \PHPMailer\PHPMailer\PHPMailer
             ? \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS
             : ($secure === 'tls' ? \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS : '');
         if ($auth) {
-            $mail->Username = getConfig('smtp_user', '');
-            $mail->Password = getConfig('smtp_password', '');
+            $mail->Username = getConfig($p . 'user', '');
+            $mail->Password = getConfig($p . 'password', '');
         }
     } else {
         throw new \RuntimeException('SMTP non configuré. Veuillez renseigner les paramètres SMTP dans la configuration.');
     }
 
     $mail->setFrom(
-        getConfig('smtp_from', 'patric.chautard@free.fr'),
-        getConfig('smtp_from_name', 'Patrick C.')
+        getConfig($p . 'from', 'patrick.chautard@free.fr'),
+        getConfig($p . 'from_name', 'NIJAC')
     );
 
     return $mail;

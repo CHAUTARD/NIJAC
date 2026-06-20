@@ -125,6 +125,25 @@ if ($action !== '') {
             exit;
         }
 
+        // ── Test SMTP production ──────────────────────────────────────────────
+        if ($action === 'smtp_test_prod') {
+            $destinataire = trim($_POST['destinataire'] ?? '');
+            if ($destinataire === '' || !filter_var($destinataire, FILTER_VALIDATE_EMAIL)) {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => 'Adresse destinataire invalide.']);
+                exit;
+            }
+            $mail = getNijacMailer('smtp_');
+            $mail->addAddress($destinataire);
+            $mail->Subject = '[NIJAC] Test SMTP production';
+            $mail->isHTML(false);
+            $mail->Body = "Cet email confirme que la configuration SMTP de production est opérationnelle.\n\nEnvoyé depuis " . gethostname();
+            $mail->send();
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'msg' => "Email de test envoyé à $destinataire."]);
+            exit;
+        }
+
         // ── Gestion complète : créer une ligne ─────────────────────────────
         if ($action === 'table_creer') {
             $cle         = trim($_POST['cle']         ?? '');
@@ -243,6 +262,24 @@ try {
     $phase1Fin         = getConfig('phase1_fin',   '01-31');
     $phase2Debut       = getConfig('phase2_debut', '02-01');
     $phase2Fin         = getConfig('phase2_fin',   '06-30');
+    // SMTP local
+    $smtpLocalHost     = getConfig('smtp_local_host',      '');
+    $smtpLocalPort     = getConfig('smtp_local_port',      '587');
+    $smtpLocalSecure   = getConfig('smtp_local_secure',    'tls');
+    $smtpLocalAuth     = getConfig('smtp_local_auth',      '1');
+    $smtpLocalUser     = getConfig('smtp_local_user',      '');
+    $smtpLocalPassword = getConfig('smtp_local_password',  '');
+    $smtpLocalFrom     = getConfig('smtp_local_from',      '');
+    $smtpLocalFromName = getConfig('smtp_local_from_name', '');
+    // SMTP production
+    $smtpProdHost      = getConfig('smtp_host',      '');
+    $smtpProdPort      = getConfig('smtp_port',      '587');
+    $smtpProdSecure    = getConfig('smtp_secure',    'tls');
+    $smtpProdAuth      = getConfig('smtp_auth',      '1');
+    $smtpProdUser      = getConfig('smtp_user',      '');
+    $smtpProdPassword  = getConfig('smtp_password',  '');
+    $smtpProdFrom      = getConfig('smtp_from',      '');
+    $smtpProdFromName  = getConfig('smtp_from_name', '');
 } catch (\Throwable $e) {
     $etatCourant      = 'Developpement';
     $emailDev         = 'patrick.chautard@free.fr';
@@ -258,6 +295,10 @@ try {
     $phase1Fin        = '01-31';
     $phase2Debut      = '02-01';
     $phase2Fin        = '06-30';
+    $smtpLocalHost     = $smtpLocalPort = $smtpLocalUser = $smtpLocalPassword = $smtpLocalFrom = $smtpLocalFromName = '';
+    $smtpLocalSecure   = 'tls'; $smtpLocalAuth = '1';
+    $smtpProdHost      = $smtpProdPort = $smtpProdUser = $smtpProdPassword = $smtpProdFrom = $smtpProdFromName = '';
+    $smtpProdSecure    = 'tls'; $smtpProdAuth = '1';
 }
 $deptsActifsArray = array_map('trim', explode(',', $deptsActifs));
 
@@ -504,6 +545,48 @@ $changeLogin = !empty($moi['change_login']);
         .table-config .row-actions .btn-save { color: #1565c0; }
         .table-config .row-actions .btn-del  { color: #c0392b; }
         .table-config .row-actions button:hover { background: #e8eef7; }
+
+        /* ── Carte SMTP ── */
+        .smtp-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+        }
+        .smtp-panel {
+            border: 2px solid #c8d4e8;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .smtp-panel-head {
+            padding: .55rem 1rem;
+            font-size: .88rem; font-weight: 700;
+            display: flex; align-items: center; gap: .5rem;
+        }
+        .smtp-panel-head.local { background: #fffbe6; color: #78350f; border-bottom: 2px solid #f59e0b; }
+        .smtp-panel-head.prod  { background: #f0fdf4; color: #065f46; border-bottom: 2px solid #22c55e; }
+        .smtp-panel-body { padding: 1rem; }
+        .smtp-field { margin-bottom: .85rem; }
+        .smtp-field:last-child { margin-bottom: 0; }
+        .smtp-field label { font-size: .82rem; font-weight: 600; color: #374151; display: block; margin-bottom: .25rem; }
+        .smtp-field input, .smtp-field select {
+            width: 100%; border: 2px solid #c8d4e8; border-radius: 6px;
+            padding: .38rem .65rem; font-size: .88rem;
+            transition: border-color .2s;
+        }
+        .smtp-field input:focus, .smtp-field select:focus { outline: none; border-color: #1a3a6b; }
+        .smtp-field input.is-invalid { border-color: #dc2626; }
+        .smtp-save-row { display: flex; align-items: center; gap: .75rem; margin-top: 1rem; }
+        .smtp-save-row button {
+            padding: .42rem 1.4rem; font-size: .88rem; font-weight: 700;
+            color: #fff; border: none; border-radius: 6px; cursor: pointer;
+            white-space: nowrap; transition: background .2s;
+        }
+        .smtp-save-row button.local { background: #d97706; }
+        .smtp-save-row button.local:hover:not(:disabled) { background: #b45309; }
+        .smtp-save-row button.prod  { background: #16a34a; }
+        .smtp-save-row button.prod:hover:not(:disabled)  { background: #15803d; }
+        .smtp-save-row button:disabled { opacity: .5; cursor: default; }
+        .smtp-msg { font-size: .82rem; min-height: 18px; }
 
         /* ── Spinner ── */
         #spinner {
@@ -894,6 +977,137 @@ $changeLogin = !empty($moi['change_login']);
                 <div id="msg-result-regles" style="font-size:.82rem;min-height:18px;"></div>
             </div>
 
+        </div>
+    </div>
+
+    <!-- ── Paramètre : Configuration SMTP ── -->
+    <div class="param-card" style="grid-column:1 / -1">
+        <div class="param-card-head">
+            <i class="bi bi-send-fill param-icon"></i>
+            <div>
+                <h2>Configuration SMTP</h2>
+                <small>Serveurs d'envoi d'emails — local (développement) et distant (production)</small>
+            </div>
+        </div>
+        <div class="param-card-body">
+
+            <p style="font-size:.85rem;color:#374151;margin-bottom:1.25rem;">
+                Le serveur utilisé est sélectionné automatiquement selon l'environnement d'exécution
+                (présence du fichier <code>.env.production</code> ou variable <code>NIJAC_ENV=production</code>).
+            </p>
+
+            <div class="smtp-grid">
+
+                <!-- Local -->
+                <div class="smtp-panel">
+                    <div class="smtp-panel-head local">
+                        <i class="bi bi-pc-display-horizontal"></i>Local (développement)
+                    </div>
+                    <div class="smtp-panel-body">
+                        <div class="smtp-field">
+                            <label for="smtp-local-host"><i class="bi bi-hdd-network me-1"></i>Serveur SMTP (host)</label>
+                            <input type="text" id="smtp-local-host" value="<?= htmlspecialchars($smtpLocalHost) ?>" placeholder="ex : smtp.free.fr">
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;">
+                            <div class="smtp-field">
+                                <label for="smtp-local-port"><i class="bi bi-plug me-1"></i>Port</label>
+                                <input type="number" id="smtp-local-port" value="<?= htmlspecialchars($smtpLocalPort) ?>" min="1" max="65535" placeholder="587">
+                            </div>
+                            <div class="smtp-field">
+                                <label for="smtp-local-secure"><i class="bi bi-shield-lock me-1"></i>Sécurité</label>
+                                <select id="smtp-local-secure">
+                                    <option value="tls"  <?= $smtpLocalSecure === 'tls'  ? 'selected' : '' ?>>STARTTLS</option>
+                                    <option value="ssl"  <?= $smtpLocalSecure === 'ssl'  ? 'selected' : '' ?>>SSL/TLS</option>
+                                    <option value=""     <?= $smtpLocalSecure === ''     ? 'selected' : '' ?>>Aucune</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="smtp-field">
+                            <label for="smtp-local-user"><i class="bi bi-person me-1"></i>Utilisateur</label>
+                            <input type="text" id="smtp-local-user" value="<?= htmlspecialchars($smtpLocalUser) ?>" autocomplete="off">
+                        </div>
+                        <div class="smtp-field">
+                            <label for="smtp-local-password"><i class="bi bi-key me-1"></i>Mot de passe</label>
+                            <input type="password" id="smtp-local-password" value="<?= htmlspecialchars($smtpLocalPassword) ?>" autocomplete="new-password">
+                        </div>
+                        <div class="smtp-field">
+                            <label for="smtp-local-from"><i class="bi bi-envelope me-1"></i>Adresse expéditeur (From)</label>
+                            <input type="email" id="smtp-local-from" value="<?= htmlspecialchars($smtpLocalFrom) ?>" placeholder="noreply@domaine.fr">
+                        </div>
+                        <div class="smtp-field">
+                            <label for="smtp-local-from-name"><i class="bi bi-person-badge me-1"></i>Nom expéditeur</label>
+                            <input type="text" id="smtp-local-from-name" value="<?= htmlspecialchars($smtpLocalFromName) ?>" placeholder="NIJAC">
+                        </div>
+                        <div class="smtp-save-row">
+                            <button class="local" id="btn-smtp-local"><i class="bi bi-floppy-fill me-1"></i>Enregistrer (local)</button>
+                            <span class="smtp-msg" id="msg-smtp-local"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Production -->
+                <div class="smtp-panel">
+                    <div class="smtp-panel-head prod">
+                        <i class="bi bi-cloud-upload-fill"></i>Distant (production)
+                    </div>
+                    <div class="smtp-panel-body">
+                        <div class="smtp-field">
+                            <label for="smtp-prod-host"><i class="bi bi-hdd-network me-1"></i>Serveur SMTP (host)</label>
+                            <input type="text" id="smtp-prod-host" value="<?= htmlspecialchars($smtpProdHost) ?>" placeholder="ex : mail.ligue-normandie-tt.fr">
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;">
+                            <div class="smtp-field">
+                                <label for="smtp-prod-port"><i class="bi bi-plug me-1"></i>Port</label>
+                                <input type="number" id="smtp-prod-port" value="<?= htmlspecialchars($smtpProdPort) ?>" min="1" max="65535" placeholder="587">
+                            </div>
+                            <div class="smtp-field">
+                                <label for="smtp-prod-secure"><i class="bi bi-shield-lock me-1"></i>Sécurité</label>
+                                <select id="smtp-prod-secure">
+                                    <option value="tls"  <?= $smtpProdSecure === 'tls'  ? 'selected' : '' ?>>STARTTLS</option>
+                                    <option value="ssl"  <?= $smtpProdSecure === 'ssl'  ? 'selected' : '' ?>>SSL/TLS</option>
+                                    <option value=""     <?= $smtpProdSecure === ''     ? 'selected' : '' ?>>Aucune</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="smtp-field">
+                            <label for="smtp-prod-user"><i class="bi bi-person me-1"></i>Utilisateur</label>
+                            <input type="text" id="smtp-prod-user" value="<?= htmlspecialchars($smtpProdUser) ?>" autocomplete="off">
+                        </div>
+                        <div class="smtp-field">
+                            <label for="smtp-prod-password"><i class="bi bi-key me-1"></i>Mot de passe</label>
+                            <input type="password" id="smtp-prod-password" value="<?= htmlspecialchars($smtpProdPassword) ?>" autocomplete="new-password">
+                        </div>
+                        <div class="smtp-field">
+                            <label for="smtp-prod-from"><i class="bi bi-envelope me-1"></i>Adresse expéditeur (From)</label>
+                            <input type="email" id="smtp-prod-from" value="<?= htmlspecialchars($smtpProdFrom) ?>" placeholder="noreply@domaine.fr">
+                        </div>
+                        <div class="smtp-field">
+                            <label for="smtp-prod-from-name"><i class="bi bi-person-badge me-1"></i>Nom expéditeur</label>
+                            <input type="text" id="smtp-prod-from-name" value="<?= htmlspecialchars($smtpProdFromName) ?>" placeholder="NIJAC">
+                        </div>
+                        <div class="smtp-save-row">
+                            <button class="prod" id="btn-smtp-prod"><i class="bi bi-floppy-fill me-1"></i>Enregistrer (distant)</button>
+                            <span class="smtp-msg" id="msg-smtp-prod"></span>
+                        </div>
+
+                        <hr style="margin:.9rem 0;border-color:#e0e8f0;">
+
+                        <div class="smtp-field" style="margin-bottom:.6rem;">
+                            <label for="smtp-test-dest"><i class="bi bi-send-check me-1"></i>Destinataire du test</label>
+                            <input type="email" id="smtp-test-dest"
+                                   value="<?= htmlspecialchars($emailDev) ?>"
+                                   placeholder="test@domaine.fr">
+                        </div>
+                        <div class="smtp-save-row">
+                            <button class="prod" id="btn-smtp-test-prod" style="background:#1a3a6b;">
+                                <i class="bi bi-envelope-check me-1"></i>Envoyer un email de test
+                            </button>
+                            <span class="smtp-msg" id="msg-smtp-test-prod"></span>
+                        </div>
+                    </div>
+                </div>
+
+            </div><!-- /smtp-grid -->
         </div>
     </div>
 
@@ -1626,6 +1840,109 @@ $('#search-input-config').on('input', function () {
 
 $('#tab-table-btn').on('shown.bs.tab', function () {
     if (!tableChargee) { tableChargee = true; chargerTableConfig(); }
+});
+
+// ── Enregistrement SMTP (local / production) ──────────────────────────────────
+function sauvegarderSmtp(env) {
+    const isLocal = env === 'local';
+    const p       = isLocal ? 'smtp_local_' : 'smtp_';
+    const $btn    = $('#btn-smtp-' + env);
+    const $msg    = $('#msg-smtp-' + env);
+
+    const host     = $('#smtp-' + env + '-host').val().trim();
+    const port     = $('#smtp-' + env + '-port').val().trim();
+    const secure   = $('#smtp-' + env + '-secure').val();
+    const user     = $('#smtp-' + env + '-user').val().trim();
+    const password = $('#smtp-' + env + '-password').val();
+    const from     = $('#smtp-' + env + '-from').val().trim();
+    const fromName = $('#smtp-' + env + '-from-name').val().trim();
+
+    if (host === '') {
+        $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Le serveur SMTP est obligatoire.</span>');
+        return;
+    }
+    if (!port || isNaN(port) || +port < 1 || +port > 65535) {
+        $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Port invalide (1–65535).</span>');
+        return;
+    }
+    if (from !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) {
+        $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Adresse expéditeur invalide.</span>');
+        return;
+    }
+
+    spinner(true);
+    $btn.prop('disabled', true);
+    $msg.text('');
+
+    const champs = [
+        [p + 'host',      host],
+        [p + 'port',      port],
+        [p + 'secure',    secure],
+        [p + 'auth',      user !== '' ? '1' : '0'],
+        [p + 'user',      user],
+        [p + 'password',  password],
+        [p + 'from',      from],
+        [p + 'from_name', fromName],
+    ];
+
+    let remaining = champs.length;
+    let hasError  = false;
+
+    champs.forEach(([cle, valeur]) => {
+        $.post('configuration.php', { action: 'enregistrer', cle, valeur }, function (res) {
+            if (!res.ok) hasError = true;
+            remaining--;
+            if (remaining === 0) {
+                spinner(false);
+                $btn.prop('disabled', false);
+                if (hasError) {
+                    $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Erreur lors de l\'enregistrement.</span>');
+                } else {
+                    $msg.html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>Configuration SMTP enregistrée.</span>');
+                }
+            }
+        }, 'json').fail(() => {
+            hasError = true;
+            remaining--;
+            if (remaining === 0) {
+                spinner(false);
+                $btn.prop('disabled', false);
+                $msg.html('<span class="text-danger">Erreur réseau.</span>');
+            }
+        });
+    });
+}
+
+$('#btn-smtp-local').on('click', () => sauvegarderSmtp('local'));
+$('#btn-smtp-prod').on('click',  () => sauvegarderSmtp('prod'));
+
+// ── Test SMTP production ──────────────────────────────────────────────────────
+$('#btn-smtp-test-prod').on('click', function () {
+    const dest = $('#smtp-test-dest').val().trim();
+    const $msg = $('#msg-smtp-test-prod');
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(dest)) {
+        $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Adresse destinataire invalide.</span>');
+        return;
+    }
+
+    spinner(true);
+    $(this).prop('disabled', true);
+    $msg.text('');
+
+    $.post('configuration.php', { action: 'smtp_test_prod', destinataire: dest }, function (res) {
+        spinner(false);
+        $('#btn-smtp-test-prod').prop('disabled', false);
+        if (res.ok) {
+            $msg.html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+        } else {
+            $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+        }
+    }, 'json').fail(() => {
+        spinner(false);
+        $('#btn-smtp-test-prod').prop('disabled', false);
+        $msg.html('<span class="text-danger">Erreur réseau.</span>');
+    });
 });
 </script>
 <?php require __DIR__ . '/includes/footer.php'; ?>

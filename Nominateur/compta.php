@@ -136,14 +136,12 @@ if ($action !== '') {
                         'virement', $libelle, $codeAnalytique,
                     ]);
                 }
-                if ($total > 0 && $cpteJA !== '') {
+                if ($total > 0) {
                     $lignes[] = implode(',', [
-                        'AC', $dateFin, $cpteJA, 'C',
+                        'AC', $dateFin, $cpteJA ?: '?????', 'C',
                         number_format($total, 2, '.', ''),
                         'virement', $libelle,
                     ]);
-                }
-                if ($total > 0) {
                     $lignes[] = ''; // ligne vide entre chaque JA
                 }
             }

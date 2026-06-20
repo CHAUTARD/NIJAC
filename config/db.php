@@ -4,6 +4,7 @@
 // ou créer un fichier .env.production à la racine pour basculer automatiquement.
 $isProduction = (getenv('NIJAC_ENV') === 'production')
              || file_exists(__DIR__ . '/../.env.production');
+define('IS_PRODUCTION', $isProduction);
 
 // ── Configuration locale (WAMP / développement) ───────────────────────────────
 if (!$isProduction) {
@@ -26,7 +27,7 @@ if (!$isProduction) {
 
 // ── Constantes communes ───────────────────────────────────────────────────────
 define('DB_CHARSET',   'utf8mb4');
-define('APP_VERSION',  '0.0.21');
+define('APP_VERSION',  '0.0.22');
 
 // Seed secret pour l'obfuscation des identifiants JA dans les URL publiques
 // (doit rester identique entre génération et décodage)
