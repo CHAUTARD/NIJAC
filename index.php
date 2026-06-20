@@ -263,7 +263,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             autocomplete="current-password"
                         >
                         <button class="btn btn-outline-secondary" type="button" id="btn-toggle-pwd" tabindex="-1" title="Afficher / masquer le mot de passe">
-                            <img id="eye-icon" src="img/Oeil_Cache_32.png" alt="" width="20" height="20" class="me-1">
+                            <i id="eye-icon" class="bi bi-eye-slash"></i>
                         </button>
                     </div>
                 </div>
@@ -314,10 +314,10 @@ $(function () {
         const $icon = $('#eye-icon');
         if ($pwd.attr('type') === 'password') {
             $pwd.attr('type', 'text');
-            $icon.attr('src', 'img/Oeil_32.png');
+            $icon.removeClass('bi-eye-slash').addClass('bi-eye');
         } else {
             $pwd.attr('type', 'password');
-            $icon.attr('src', 'img/Oeil_Cache_32.png');
+            $icon.removeClass('bi-eye').addClass('bi-eye-slash');
         }
     });
 

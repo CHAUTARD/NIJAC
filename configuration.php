@@ -1028,7 +1028,12 @@ $changeLogin = !empty($moi['change_login']);
                         </div>
                         <div class="smtp-field">
                             <label for="smtp-local-password"><i class="bi bi-key me-1"></i>Mot de passe</label>
-                            <input type="password" id="smtp-local-password" value="<?= htmlspecialchars($smtpLocalPassword) ?>" autocomplete="new-password">
+                            <div class="input-group">
+                                <input type="password" id="smtp-local-password" class="form-control" value="<?= htmlspecialchars($smtpLocalPassword) ?>" autocomplete="new-password">
+                                <button type="button" class="btn btn-outline-secondary btn-toggle-pwd" data-target="smtp-local-password" tabindex="-1">
+                                    <i class="bi bi-eye-slash"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="smtp-field">
                             <label for="smtp-local-from"><i class="bi bi-envelope me-1"></i>Adresse expéditeur (From)</label>
@@ -1075,7 +1080,12 @@ $changeLogin = !empty($moi['change_login']);
                         </div>
                         <div class="smtp-field">
                             <label for="smtp-prod-password"><i class="bi bi-key me-1"></i>Mot de passe</label>
-                            <input type="password" id="smtp-prod-password" value="<?= htmlspecialchars($smtpProdPassword) ?>" autocomplete="new-password">
+                            <div class="input-group">
+                                <input type="password" id="smtp-prod-password" class="form-control" value="<?= htmlspecialchars($smtpProdPassword) ?>" autocomplete="new-password">
+                                <button type="button" class="btn btn-outline-secondary btn-toggle-pwd" data-target="smtp-prod-password" tabindex="-1">
+                                    <i class="bi bi-eye-slash"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="smtp-field">
                             <label for="smtp-prod-from"><i class="bi bi-envelope me-1"></i>Adresse expéditeur (From)</label>
@@ -1726,11 +1736,43 @@ function renderTableConfig() {
         : `${configRows.length} paramètre(s)`);
 }
 
+const PWD_KEYS = ['smtp_local_password', 'smtp_password'];
+
 function makeTdConfig(val, idx, field) {
     const $td  = $('<td>').addClass(field === 'cle' ? 'col-cle' : '').attr('data-idx', idx).attr('data-field', field);
-    const $div = $('<div class="cell-inner">').text(val ?? '').attr('contenteditable', 'false');
-    $td.append($div);
-    $td.on('click', function () { selectionnerCelluleConfig($(this)); });
+    const cle  = configRows[idx]?.cle ?? '';
+
+    if (field === 'valeur' && PWD_KEYS.includes(cle)) {
+        const $wrap = $('<div>').css({ display: 'flex', alignItems: 'center', gap: '.35rem', padding: '.28rem .5rem' });
+        const $div  = $('<div class="cell-inner">').text('••••••••').attr('contenteditable', 'false')
+                        .attr('data-real', val ?? '').attr('data-masked', '1')
+                        .css({ flex: '1', padding: '0' });
+        const $btn  = $('<button type="button" title="Afficher / masquer">')
+                        .css({ background: 'none', border: 'none', cursor: 'pointer', padding: '0', lineHeight: '1', color: '#6b7280' })
+                        .html('<i class="bi bi-eye-slash"></i>')
+                        .on('click', function (e) {
+                            e.stopPropagation();
+                            const $i = $(this).find('i');
+                            const masked = $div.attr('data-masked') === '1';
+                            if (masked) {
+                                $div.text($div.attr('data-real')).attr('data-masked', '0');
+                                $i.removeClass('bi-eye-slash').addClass('bi-eye');
+                            } else {
+                                $div.text('••••••••').attr('data-masked', '1');
+                                $i.removeClass('bi-eye').addClass('bi-eye-slash');
+                            }
+                        });
+        $wrap.append($div, $btn);
+        $td.append($wrap);
+        $td.on('click', function (e) {
+            if (!$(e.target).closest('button').length) selectionnerCelluleConfig($(this));
+        });
+    } else {
+        const $div = $('<div class="cell-inner">').text(val ?? '').attr('contenteditable', 'false');
+        $td.append($div);
+        $td.on('click', function () { selectionnerCelluleConfig($(this)); });
+    }
+
     return $td;
 }
 
@@ -1762,7 +1804,13 @@ $(document).on('keydown', function (e) {
     } else if (e.key === 'Escape') {
         const idx   = +cellActiveConfig.attr('data-idx');
         const field = cellActiveConfig.attr('data-field');
-        $inner.text(configRows[idx]?.[field] ?? '').attr('contenteditable', 'false');
+        const orig  = configRows[idx]?.[field] ?? '';
+        if ($inner.attr('data-masked') !== undefined) {
+            $inner.text('••••••••').attr('data-real', orig).attr('data-masked', '1').attr('contenteditable', 'false');
+            cellActiveConfig.find('i').removeClass('bi-eye').addClass('bi-eye-slash');
+        } else {
+            $inner.text(orig).attr('contenteditable', 'false');
+        }
         tableMsg('Modification annulée.');
 
     } else if (e.key === 'Enter' && $inner.attr('contenteditable') === 'true') {
@@ -1779,7 +1827,11 @@ function validerCelluleConfig($inner, $td) {
     $inner.attr('contenteditable', 'false');
     const idx   = +$td.attr('data-idx');
     const field = $td.attr('data-field');
-    if (configRows[idx]) configRows[idx][field] = $inner.text();
+    if (configRows[idx]) {
+        const val = $inner.attr('data-masked') === '1' ? $inner.attr('data-real') : $inner.text();
+        configRows[idx][field] = val;
+        if ($inner.attr('data-real') !== undefined) $inner.attr('data-real', val);
+    }
     tableMsg('Modification locale. Cliquez sur ✓ pour enregistrer cette ligne.');
 }
 
@@ -1912,6 +1964,15 @@ function sauvegarderSmtp(env) {
         });
     });
 }
+
+// ── Afficher / masquer les mots de passe SMTP ────────────────────────────────
+$(document).on('click', '.btn-toggle-pwd', function () {
+    const $input = $('#' + $(this).data('target'));
+    const $icon  = $(this).find('i');
+    const isHidden = $input.attr('type') === 'password';
+    $input.attr('type', isHidden ? 'text' : 'password');
+    $icon.toggleClass('bi-eye-slash', !isHidden).toggleClass('bi-eye', isHidden);
+});
 
 $('#btn-smtp-local').on('click', () => sauvegarderSmtp('local'));
 $('#btn-smtp-prod').on('click',  () => sauvegarderSmtp('prod'));

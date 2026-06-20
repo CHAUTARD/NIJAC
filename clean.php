@@ -600,7 +600,7 @@ $changeLogin = !empty($moi['change_login']);
 >
                     <button class="btn btn-outline-secondary" type="button" id="clean-toggle-pwd"
                             tabindex="-1" title="Afficher / masquer le mot de passe">
-                        <img id="clean-eye" src="img/Oeil_Cache_32.png" alt="" width="20" height="20">
+                        <i id="clean-eye" class="bi bi-eye-slash"></i>
                     </button>
                 </div>
                 <div id="clean-msg-pwd" class="pwd-msg text-danger"></div>
@@ -659,7 +659,7 @@ $changeLogin = !empty($moi['change_login']);
     >
                         <button class="btn btn-outline-secondary" type="button" id="restore-toggle-pwd"
                                 tabindex="-1" title="Afficher / masquer le mot de passe">
-                            <img id="restore-eye" src="img/Oeil_Cache_32.png" alt="" width="20" height="20">
+                            <i id="restore-eye" class="bi bi-eye-slash"></i>
                         </button>
                     </div>
                     <div id="restore-msg-pwd" class="pwd-msg text-danger"></div>
@@ -701,7 +701,7 @@ $changeLogin = !empty($moi['change_login']);
                            autocomplete="current-password" placeholder="Entrez votre mot de passe…">
                     <button class="btn btn-outline-secondary" type="button" id="full-toggle-pwd"
                             tabindex="-1" title="Afficher / masquer le mot de passe">
-                        <img id="full-eye" src="img/Oeil_Cache_32.png" alt="" width="20" height="20">
+                        <i id="full-eye" class="bi bi-eye-slash"></i>
                     </button>
                 </div>
                 <div id="full-msg-pwd" class="pwd-msg text-danger"></div>
@@ -1020,7 +1020,7 @@ function togglePwd(inputId, imgId) {
     const $i = $('#' + inputId);
     const isHidden = $i.attr('type') === 'password';
     $i.attr('type', isHidden ? 'text' : 'password');
-    $('#' + imgId).attr('src', isHidden ? 'img/Oeil_32.png' : 'img/Oeil_Cache_32.png');
+    $('#' + imgId).toggleClass('bi-eye-slash', !isHidden).toggleClass('bi-eye', isHidden);
 }
 $('#clean-toggle-pwd').on('click',   () => togglePwd('clean-password',   'clean-eye'));
 $('#restore-toggle-pwd').on('click', () => togglePwd('restore-password', 'restore-eye'));
