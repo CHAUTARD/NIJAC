@@ -11,6 +11,11 @@
  */
 function initTableConfiguration(\PDO $pdo): void
 {
+    // Ajout NumCompteEBP sur ja si absent
+    $cols = array_column($pdo->query('SHOW COLUMNS FROM ja')->fetchAll(\PDO::FETCH_ASSOC), 'Field');
+    if (!in_array('NumCompteEBP', $cols)) {
+        $pdo->exec("ALTER TABLE ja ADD COLUMN NumCompteEBP VARCHAR(20) NULL AFTER Nationale");
+    }
 }
 
 /**

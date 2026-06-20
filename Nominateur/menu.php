@@ -439,6 +439,14 @@ if ($stats['prochaine_date']) {
             <?php endif; ?>
         </div>
 
+        <div class="menu-btn-wrap">
+            <a href="compta.php" class="menu-btn btn-envoi">
+                <div class="btn-icon"><img src="../img/Compta.png" alt="Comptabilite"></div>
+                <span>Comptabilité</span>
+                <span class="btn-desc">Génération des pièces pour la comptabilité</span>
+            </a>
+        </div>
+
         <!-- Déconnexion -->
         <a href="../logout.php" class="menu-btn" style="background:#f8d7da; grid-column: 4;">
             <div class="btn-icon"><i class="bi bi-box-arrow-right" style="color:#842029;"></i></div>

@@ -115,9 +115,10 @@ if ($action !== '') {
             }
 
             $stmt = $pdo->prepare(
-                'UPDATE configuration SET valeur = ? WHERE cle = ?'
+                'INSERT INTO configuration (cle, valeur) VALUES (?, ?)
+                 ON DUPLICATE KEY UPDATE valeur = VALUES(valeur)'
             );
-            $stmt->execute([$valeur, $cle]);
+            $stmt->execute([$cle, $valeur]);
 
             ob_end_clean();
             echo json_encode(['ok' => true, 'msg' => 'Paramètre enregistré.', 'cle' => $cle, 'valeur' => $valeur]);
@@ -233,8 +234,15 @@ try {
     $deptsActifs      = getConfig('departements_actifs', '14,27,50,61,76');
     $reglesDepts      = getConfig('regles_departements', '{"76":["27"]}');
     $urlLigue         = getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr');
-    $indemniteForfait = getConfig('indemnite_forfaitaire', '25.00');
-    $fraisKm          = getConfig('frais_kilometrique', '0.30');
+    $indemniteForfait  = getConfig('indemnite_forfaitaire', '25.00');
+    $fraisKm           = getConfig('frais_kilometrique', '0.30');
+    $cpteFreisKm       = getConfig('compte_frais_km', '62511');
+    $cptePrestations   = getConfig('compte_prestations', '62261');
+    $codeAnalytique    = getConfig('code_analytique_compta', '04EPR232');
+    $phase1Debut       = getConfig('phase1_debut', '09-01');
+    $phase1Fin         = getConfig('phase1_fin',   '01-31');
+    $phase2Debut       = getConfig('phase2_debut', '02-01');
+    $phase2Fin         = getConfig('phase2_fin',   '06-30');
 } catch (\Throwable $e) {
     $etatCourant      = 'Developpement';
     $emailDev         = 'patrick.chautard@free.fr';
@@ -243,6 +251,13 @@ try {
     $urlLigue         = 'https://www.ligue-normandie-tt.fr';
     $indemniteForfait = '25.00';
     $fraisKm          = '0.30';
+    $cpteFreisKm      = '62511';
+    $cptePrestations  = '62261';
+    $codeAnalytique   = '04EPR232';
+    $phase1Debut      = '09-01';
+    $phase1Fin        = '01-31';
+    $phase2Debut      = '02-01';
+    $phase2Fin        = '06-30';
 }
 $deptsActifsArray = array_map('trim', explode(',', $deptsActifs));
 
@@ -702,6 +717,100 @@ $changeLogin = !empty($moi['change_login']);
                 <div id="msg-result-frais-km"></div>
             </div>
 
+            <hr style="margin:1.2rem 0;">
+            <p style="font-size:.85rem;color:#374151;margin-bottom:1rem;">
+                <i class="bi bi-journal-text me-1"></i><strong>Paramètres comptables EBP</strong> — utilisés pour l'export du journal AC (E025).
+            </p>
+
+            <div class="email-dev-group mb-3">
+                <label for="input-cpte-frais-km">
+                    <i class="bi bi-hash me-1"></i>N° compte frais km + péages (62511)
+                </label>
+                <div class="email-dev-row">
+                    <input type="text" id="input-cpte-frais-km" maxlength="20"
+                           value="<?= htmlspecialchars($cpteFreisKm) ?>"
+                           autocomplete="off">
+                    <button id="btn-sauvegarder-cpte-frais-km">
+                        <i class="bi bi-floppy-fill me-1"></i>Enregistrer
+                    </button>
+                </div>
+                <div id="msg-result-cpte-frais-km"></div>
+            </div>
+
+            <div class="email-dev-group mb-3">
+                <label for="input-cpte-prestations">
+                    <i class="bi bi-hash me-1"></i>N° compte prestations / indemnités (62261)
+                </label>
+                <div class="email-dev-row">
+                    <input type="text" id="input-cpte-prestations" maxlength="20"
+                           value="<?= htmlspecialchars($cptePrestations) ?>"
+                           autocomplete="off">
+                    <button id="btn-sauvegarder-cpte-prestations">
+                        <i class="bi bi-floppy-fill me-1"></i>Enregistrer
+                    </button>
+                </div>
+                <div id="msg-result-cpte-prestations"></div>
+            </div>
+
+            <div class="email-dev-group">
+                <label for="input-code-analytique">
+                    <i class="bi bi-tag me-1"></i>Code analytique (poste analytique dépenses)
+                </label>
+                <div class="email-dev-row">
+                    <input type="text" id="input-code-analytique" maxlength="20"
+                           value="<?= htmlspecialchars($codeAnalytique) ?>"
+                           autocomplete="off">
+                    <button id="btn-sauvegarder-code-analytique">
+                        <i class="bi bi-floppy-fill me-1"></i>Enregistrer
+                    </button>
+                </div>
+                <div id="msg-result-code-analytique"></div>
+            </div>
+
+            <hr style="margin:1.2rem 0;">
+            <p style="font-size:.85rem;color:#374151;margin-bottom:1rem;">
+                <i class="bi bi-calendar2-range me-1"></i><strong>Phases de saison</strong> — bornes utilisées pour le filtre rapide dans E025 (format MM-JJ).
+            </p>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                <div class="email-dev-group">
+                    <label><i class="bi bi-1-circle me-1"></i>Phase 1 — début (ex. MM-JJ)</label>
+                    <div class="email-dev-row">
+                        <input type="text" id="input-phase1-debut" maxlength="5" placeholder="MM-JJ"
+                               value="<?= htmlspecialchars($phase1Debut) ?>" autocomplete="off">
+                        <button id="btn-phase1-debut"><i class="bi bi-floppy-fill me-1"></i>Enregistrer</button>
+                    </div>
+                    <div id="msg-phase1-debut"></div>
+                </div>
+                <div class="email-dev-group">
+                    <label><i class="bi bi-1-circle me-1"></i>Phase 1 — fin (ex. MM-JJ)</label>
+                    <div class="email-dev-row">
+                        <input type="text" id="input-phase1-fin" maxlength="5" placeholder="MM-JJ"
+                               value="<?= htmlspecialchars($phase1Fin) ?>" autocomplete="off">
+                        <button id="btn-phase1-fin"><i class="bi bi-floppy-fill me-1"></i>Enregistrer</button>
+                    </div>
+                    <div id="msg-phase1-fin"></div>
+                </div>
+                <div class="email-dev-group">
+                    <label><i class="bi bi-2-circle me-1"></i>Phase 2 — début (ex. MM-JJ)</label>
+                    <div class="email-dev-row">
+                        <input type="text" id="input-phase2-debut" maxlength="5" placeholder="MM-JJ"
+                               value="<?= htmlspecialchars($phase2Debut) ?>" autocomplete="off">
+                        <button id="btn-phase2-debut"><i class="bi bi-floppy-fill me-1"></i>Enregistrer</button>
+                    </div>
+                    <div id="msg-phase2-debut"></div>
+                </div>
+                <div class="email-dev-group">
+                    <label><i class="bi bi-2-circle me-1"></i>Phase 2 — fin (ex. MM-JJ)</label>
+                    <div class="email-dev-row">
+                        <input type="text" id="input-phase2-fin" maxlength="5" placeholder="MM-JJ"
+                               value="<?= htmlspecialchars($phase2Fin) ?>" autocomplete="off">
+                        <button id="btn-phase2-fin"><i class="bi bi-floppy-fill me-1"></i>Enregistrer</button>
+                    </div>
+                    <div id="msg-phase2-fin"></div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -1012,6 +1121,68 @@ $('#btn-sauvegarder-frais-km').on('click', function () {
 $('#input-indemnite, #input-frais-km').on('input', function () {
     $(this).removeClass('is-invalid');
     $(this).closest('.email-dev-group').find('[id^=msg-result]').text('');
+});
+
+function sauvegarderTexte(cle, $input, $msg, $btn) {
+    const val = $input.val().trim();
+    if (val === '') {
+        $input.addClass('is-invalid');
+        $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Valeur obligatoire.</span>');
+        return;
+    }
+    $input.removeClass('is-invalid');
+    spinner(true);
+    $btn.prop('disabled', true);
+    $msg.text('');
+    $.post('configuration.php', { action: 'enregistrer', cle, valeur: val }, function (res) {
+        spinner(false);
+        $btn.prop('disabled', false);
+        if (res.ok) {
+            $msg.html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+            $input.val(res.valeur);
+        } else {
+            $input.addClass('is-invalid');
+            $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+        }
+    }, 'json').fail(() => {
+        spinner(false);
+        $btn.prop('disabled', false);
+        $msg.html('<span class="text-danger">Erreur réseau.</span>');
+    });
+}
+
+$('#btn-sauvegarder-cpte-frais-km').on('click', function () {
+    sauvegarderTexte('compte_frais_km', $('#input-cpte-frais-km'), $('#msg-result-cpte-frais-km'), $(this));
+});
+$('#btn-sauvegarder-cpte-prestations').on('click', function () {
+    sauvegarderTexte('compte_prestations', $('#input-cpte-prestations'), $('#msg-result-cpte-prestations'), $(this));
+});
+$('#btn-sauvegarder-code-analytique').on('click', function () {
+    sauvegarderTexte('code_analytique_compta', $('#input-code-analytique'), $('#msg-result-code-analytique'), $(this));
+});
+
+function validerPhaseMD($input, $msg) {
+    const val = $input.val().trim();
+    if (!/^\d{2}-\d{2}$/.test(val)) {
+        $input.addClass('is-invalid');
+        $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Format MM-JJ attendu (ex. 09-01).</span>');
+        return false;
+    }
+    $input.removeClass('is-invalid');
+    return true;
+}
+[
+    ['btn-phase1-debut', 'phase1_debut', 'input-phase1-debut', 'msg-phase1-debut'],
+    ['btn-phase1-fin',   'phase1_fin',   'input-phase1-fin',   'msg-phase1-fin'],
+    ['btn-phase2-debut', 'phase2_debut', 'input-phase2-debut', 'msg-phase2-debut'],
+    ['btn-phase2-fin',   'phase2_fin',   'input-phase2-fin',   'msg-phase2-fin'],
+].forEach(([btnId, cle, inputId, msgId]) => {
+    $(`#${btnId}`).on('click', function () {
+        const $input = $(`#${inputId}`);
+        const $msg   = $(`#${msgId}`);
+        if (!validerPhaseMD($input, $msg)) return;
+        sauvegarderTexte(cle, $input, $msg, $(this));
+    });
 });
 
 // ── Référentiel complet départements ─────────────────────────────────────────

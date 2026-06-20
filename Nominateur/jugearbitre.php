@@ -96,7 +96,7 @@ if ($action !== '') {
             $stmt = $pdo->prepare(
                 'SELECT j.Id_JA, j.Nom, j.Prenom, j.Email, j.Telephone,
                         j.Grade, j.Actif, j.Id_Club, j.Id_LaPoste,
-                        j.Defiscalisation, j.Nationale,
+                        j.Defiscalisation, j.Nationale, j.NumCompteEBP,
                         cl.Nom AS NomClub,
                         COALESCE(lp.CodePostal, j.Cp)   AS CodePostalJA,
                         COALESCE(lp.Nom,        j.Ville) AS VilleJA,
@@ -133,6 +133,7 @@ if ($action !== '') {
                     'Actif'          => $find($r, 'Actif'),
                     'Id_Club'        => $find($r, 'Id_Club'),
                     'Id_LaPoste'     => $find($r, 'Id_LaPoste'),
+                    'NumCompteEBP'   => $find($r, 'NumCompteEBP'),
                     'Defiscalisation'=> $find($r, 'Defiscalisation'),
                     'Nationale'      => $find($r, 'Nationale'),
                     'NbDispo'        => $find($r, 'NbDispo'),
@@ -352,13 +353,13 @@ if ($action !== '') {
             $stmtCheck  = $pdo->prepare('SELECT COUNT(*) FROM ja WHERE Id_JA = ?');
             $stmtInsert = $pdo->prepare(
                 'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Telephone, Grade, Actif,
-                                 Id_Club, Id_LaPoste, Cp, Ville, Defiscalisation, Nationale)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                                 Id_Club, Id_LaPoste, Cp, Ville, Defiscalisation, Nationale, NumCompteEBP)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmtUpdate = $pdo->prepare(
                 'UPDATE ja SET Nom=?, Prenom=?, Email=?, Telephone=?, Grade=?,
                                Actif=?, Id_Club=?, Id_LaPoste=?, Cp=?, Ville=?,
-                               Defiscalisation=?, Nationale=?
+                               Defiscalisation=?, Nationale=?, NumCompteEBP=?
                  WHERE Id_JA=?'
             );
 
@@ -376,6 +377,7 @@ if ($action !== '') {
                 $idLap   = $l['id_laposte'] !== '' && $l['id_laposte'] !== null ? (int)$l['id_laposte'] : null;
                 $cpVal   = $l['cp']    !== '' && $l['cp']    !== null ? trim($l['cp'])    : null;
                 $villeVal= $l['ville'] !== '' && $l['ville'] !== null ? trim($l['ville']) : null;
+                $cpteEbp = $l['num_compte_ebp'] !== '' && $l['num_compte_ebp'] !== null ? trim($l['num_compte_ebp']) : null;
 
                 if ($nom === '') continue;
 
@@ -383,19 +385,19 @@ if ($action !== '') {
                     if ($id > 0) {
                         $stmtCheck->execute([$id]);
                         if ((int)$stmtCheck->fetchColumn() > 0) {
-                            $stmtUpdate->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $cpVal, $villeVal, $defisc, $nationale, $id]);
+                            $stmtUpdate->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $cpVal, $villeVal, $defisc, $nationale, $cpteEbp, $id]);
                             $updates++;
                         } else {
-                            $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $cpVal, $villeVal, $defisc, $nationale]);
+                            $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $cpVal, $villeVal, $defisc, $nationale, $cpteEbp]);
                             $inserts++;
                         }
                     } else {
                         // Pas d'Id_JA → INSERT auto-increment
                         $pdo->prepare(
                             'INSERT INTO ja (Nom, Prenom, Email, Telephone, Grade, Actif,
-                                             Id_Club, Id_LaPoste, Cp, Ville, Defiscalisation, Nationale)
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                        )->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $cpVal, $villeVal, $defisc, $nationale]);
+                                             Id_Club, Id_LaPoste, Cp, Ville, Defiscalisation, Nationale, NumCompteEBP)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                        )->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $cpVal, $villeVal, $defisc, $nationale, $cpteEbp]);
                         $inserts++;
                     }
                 } catch (PDOException $ex) {
@@ -654,6 +656,7 @@ $deptActifs  = getDeptActifs();
                 <th style="width:200px" data-field="nom_club">Nom du club<span class="sort-icon"></span></th>
                 <th style="width:90px"  data-field="defiscalisation">Défiscalisation<span class="sort-icon"></span></th>
                 <th style="width:85px"  data-field="nationale">Nationale<span class="sort-icon"></span></th>
+                <th style="width:110px" data-field="num_compte_ebp">Cpte EBP<span class="sort-icon"></span></th>
                 <th style="width:75px"  data-field="cp">CP<span class="sort-icon"></span></th>
                 <th style="width:160px" data-field="ville">Ville<span class="sort-icon"></span></th>
                 <th style="width:75px"  class="no-sort">Lien dispo</th>
@@ -784,8 +787,9 @@ function renderGrille() {
             $tr.append(makeTd(l.id_club,          idx, 'id_club',         true));
             $tr.append(makeTd(l.nom_club,         idx, 'nom_club',        true));
             $tr.append(makeTdHtml(defiscHtml,     idx, 'defiscalisation'));
-            $tr.append(makeTdHtml(nationaleHtml,  idx, 'nationale'));
-            $tr.append(makeTdLaPoste(l.cp,        idx, 'cp'));
+            $tr.append(makeTdHtml(nationaleHtml,   idx, 'nationale'));
+            $tr.append(makeTd(l.num_compte_ebp,    idx, 'num_compte_ebp', false));
+            $tr.append(makeTdLaPoste(l.cp,         idx, 'cp'));
             $tr.append(makeTdLaPoste(l.ville,     idx, 'ville'));
             // Bouton lien disponibilité
             const $tdLien = $('<td>').css({textAlign:'center', verticalAlign:'middle', padding:'.2rem'});
@@ -1051,6 +1055,7 @@ function chargerListe() {
             id_club:         r.Id_Club,
             nom_club:        r.NomClub ?? '',
             id_laposte:       r.Id_LaPoste,
+            num_compte_ebp:   r.NumCompteEBP ?? '',
             defiscalisation:  +r.Defiscalisation,
             nationale:        +r.Nationale,
             nb_dispo:         +r.NbDispo,
