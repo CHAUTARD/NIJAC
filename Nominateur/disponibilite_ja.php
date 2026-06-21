@@ -31,11 +31,6 @@ $pdo = getPDO();
 
 // ── Initialisation : colonnes optionnelles ────────────────────────────────────
 try {
-    // Colonne Preference dans disponible
-    $cols = array_column($pdo->query('DESCRIBE disponible')->fetchAll(), 'Field');
-    if (!in_array('Preference', $cols)) {
-        $pdo->exec("ALTER TABLE disponible ADD COLUMN Preference TINYINT NULL COMMENT '1=faible … 10=forte'");
-    }
     // Colonne Note dans JA
     $jaCols = array_column($pdo->query('DESCRIBE JA')->fetchAll(), 'Field');
     if (!in_array('Note', $jaCols)) {
@@ -112,7 +107,11 @@ if ($action !== '') {
                 j.Journee,
                 j.Date,
                 j.NbRencontres,
-                dj.Reponse          AS Statut,
+                CASE
+                    WHEN dj.Reponse IS NOT NULL THEN dj.Reponse
+                    WHEN COALESCE(sel.Nb, 0) > 0 THEN 'P'
+                    ELSE NULL
+                END                 AS Statut,
                 COALESCE(sel.Nb, 0) AS NbSelectionnes,
                 dist.MinKm,
                 dist.MaxKm
@@ -280,29 +279,19 @@ if ($action !== '') {
             echo json_encode(['ok' => false, 'err' => 'Date invalide']); exit;
         }
 
-        // 1. Entrée journée-niveau : DELETE + INSERT (Id_Rencontre IS NULL → pas de contrainte UNIQUE utilisable)
-        $pdo->prepare("DELETE FROM disponible WHERE Id_JA = ? AND DateCompetition = ? AND Id_Rencontre IS NULL")
-            ->execute([$idJa, $dateJournee]);
-        $pdo->prepare("INSERT INTO disponible (Id_JA, DateCompetition, Reponse, DateReponse) VALUES (?, ?, ?, CURDATE())")
-            ->execute([$idJa, $dateJournee, $statut]);
-
-        // 2. Rencontres de ce cartouche (journée + date exacte)
+        // Rencontres de ce cartouche (journée + date exacte)
         $stmtIds = $pdo->prepare("SELECT Id_Rencontre, Date FROM rencontre WHERE Journee = ? AND Date = ?");
         $stmtIds->execute([$journee, $dateJournee]);
-        $tousRencontres = $stmtIds->fetchAll(); // [Id_Rencontre, Date]
+        $tousRencontres = $stmtIds->fetchAll();
         $tousIds = array_column($tousRencontres, 'Id_Rencontre');
 
-        if ($statut === 'O') {
-            // Disponible → upsert toutes les rencontres Reponse='O'
-            $stmtUps = $pdo->prepare("
-                INSERT INTO disponible (Id_JA, Id_Rencontre, DateCompetition, Reponse, DateReponse)
-                VALUES (?, ?, ?, 'O', CURDATE())
-                ON DUPLICATE KEY UPDATE Reponse='O', DateCompetition=VALUES(DateCompetition), DateReponse=CURDATE()
-            ");
-            foreach ($tousRencontres as $r) $stmtUps->execute([$idJa, $r['Id_Rencontre'], $r['Date']]);
-
-        } elseif ($statut === 'N') {
-            // Non disponible → supprimer toutes les rencontres-niveau
+        if ($statut === 'O' || $statut === 'N') {
+            // Un seul enregistrement journée-niveau, aucun enregistrement rencontre
+            $pdo->prepare("DELETE FROM disponible WHERE Id_JA = ? AND DateCompetition = ? AND Id_Rencontre IS NULL")
+                ->execute([$idJa, $dateJournee]);
+            $pdo->prepare("INSERT INTO disponible (Id_JA, DateCompetition, Reponse, DateReponse) VALUES (?, ?, ?, CURDATE())")
+                ->execute([$idJa, $dateJournee, $statut]);
+            // Supprimer les éventuels enregistrements rencontre-niveau
             if ($tousIds) {
                 $in = implode(',', array_fill(0, count($tousIds), '?'));
                 $pdo->prepare("DELETE FROM disponible WHERE Id_JA = ? AND Id_Rencontre IN ($in)")
@@ -310,9 +299,10 @@ if ($action !== '') {
             }
 
         } elseif ($statut === 'P') {
-            // Partiel → upsert sélectionnées, supprimer les autres
+            // Pas d'enregistrement journée-niveau, uniquement les rencontres sélectionnées
+            $pdo->prepare("DELETE FROM disponible WHERE Id_JA = ? AND DateCompetition = ? AND Id_Rencontre IS NULL")
+                ->execute([$idJa, $dateJournee]);
             $selIds = array_map('intval', (array)($_POST['rencontres'] ?? []));
-            // Construire un map Id_Rencontre → Date pour les sélectionnées
             $mapDates = array_column($tousRencontres, 'Date', 'Id_Rencontre');
             $stmtUps = $pdo->prepare("
                 INSERT INTO disponible (Id_JA, Id_Rencontre, DateCompetition, Reponse, DateReponse)

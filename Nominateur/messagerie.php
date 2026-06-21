@@ -429,7 +429,7 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
                 <code data-marqueur="{ID_JA}" class="me-2">{ID_JA}</code>
                 <code data-marqueur="{UTI_NOM}" class="me-2">{UTI_NOM}</code>
                 <code data-marqueur="{UTI_PRENOM}" class="me-2">{UTI_PRENOM}</code>
-                <code data-marqueur="{LIEN_LIGUE}" class="me-2">{LIEN_LIGUE}</code>
+                <code data-marqueur="{URL_LIGUE}" class="me-2">{URL_LIGUE}</code>
             </div>
             <div class="mb-1">
                 <span class="badge me-1 fw-normal" style="background:#1a7f4b;">Convocation</span>

@@ -102,6 +102,7 @@ if ($action !== '') {
                                dv.Division, RIGHT(dv.Division, 1) AS SexeCode,
                                ed.Nom AS NomDom, ee.Nom AS NomExt,
                                n.Id_Rencontre,
+                               n.Kilometre,
                                s.Nom          AS SalleNom,
                                s.Adresse      AS SalleAdresse,
                                lps.CodePostal AS SalleCP,
@@ -119,7 +120,7 @@ if ($action !== '') {
                         LEFT JOIN laposte lps   ON lps.Id_LaPoste = s.Id_Laposte
                         LEFT JOIN (SELECT MIN(Id_Correspondant) AS Id_Min, Id_Club FROM correspondant GROUP BY Id_Club) co_sel ON co_sel.Id_Club = ed.Id_Club
                         LEFT JOIN correspondant co ON co.Id_Correspondant = co_sel.Id_Min
-                        WHERE r.Journee = ? AND r.Date = ? AND n.Valide = 1 AND j.Actif = 1
+                        WHERE r.Journee = ? AND r.Date = ? AND j.Actif = 1
                         ORDER BY j.Nom, j.Prenom
                     ");
                     $stmt->execute([$journee, $date]);
@@ -223,7 +224,7 @@ if ($action !== '') {
             $sexe  = ($ja['SexeCode'] ?? '') === 'F' ? 'Féminin' : (($ja['SexeCode'] ?? '') === 'M' ? 'Mixte' : '');
             $corps = str_replace(
                 ['{NOM}','{PRENOM}','{NOM_COMPLET}','{ID_JA}','{ID_CONVOCATION}','{SEXE}',
-                 '{UTI_NOM}','{UTI_PRENOM}','{LIEN_LIGUE}',
+                 '{UTI_NOM}','{UTI_PRENOM}','{URL_LIGUE}',
                  '{DATE}','{HEURE}','{JOURNEE}','{POULE}','{DIVISION}','{DOM}','{EXT}',
                  '{SALLE_NOM}','{SALLE_ADRESSE}','{SALLE_CP}','{SALLE_VILLE}',
                  '{CORR_NOM}','{CORR_EMAIL}','{CORR_TEL}'],
@@ -237,9 +238,14 @@ if ($action !== '') {
                 $message
             );
             $sujetRendu = str_replace(
-                ['{NOM}','{PRENOM}','{NOM_COMPLET}','{ID_CONVOCATION}','{DATE}','{JOURNEE}','{DIVISION}'],
-                [$ja['Nom'],$ja['Prenom'],$ja['Prenom'].' '.$ja['Nom'],(string)$ja['Id_Nomination'],
-                 $ja['Date'] ? date('d/m/Y', strtotime($ja['Date'])) : '',$ja['Journee']??'',$ja['Division']??''],
+                ['{NOM}','{PRENOM}','{NOM_COMPLET}','{ID_JA}','{ID_CONVOCATION}','{SEXE}',
+                 '{UTI_NOM}','{UTI_PRENOM}','{URL_LIGUE}',
+                 '{DATE}','{HEURE}','{JOURNEE}','{POULE}','{DIVISION}','{DOM}','{EXT}'],
+                [$ja['Nom'],$ja['Prenom'],$ja['Prenom'].' '.$ja['Nom'],$token,(string)$ja['Id_Nomination'],$sexe,
+                 $moi['nom']??'',$moi['prenom']??'',getConfig('url_ligue','https://www.ligue-normandie-tt.fr'),
+                 $ja['Date'] ? date('d/m/Y', strtotime($ja['Date'])) : '',$ja['Heure']??'',
+                 $ja['Journee']??'',$ja['Poule']??'',$ja['Division']??'',
+                 $ja['NomDom']??'',$ja['NomExt']??''],
                 $sujet
             );
             echo json_encode(['ok' => true, 'sujet' => $sujetRendu, 'corps' => $corps]);
@@ -353,7 +359,7 @@ if ($action !== '') {
             $sexe  = ($ja['SexeCode'] ?? '') === 'F' ? 'Féminin' : (($ja['SexeCode'] ?? '') === 'M' ? 'Mixte' : '');
             $corps = str_replace(
                 ['{NOM}','{PRENOM}','{NOM_COMPLET}','{ID_JA}','{ID_CONVOCATION}','{SEXE}',
-                 '{UTI_NOM}','{UTI_PRENOM}','{LIEN_LIGUE}',
+                 '{UTI_NOM}','{UTI_PRENOM}','{URL_LIGUE}',
                  '{DATE}','{HEURE}','{JOURNEE}','{POULE}','{DIVISION}','{DOM}','{EXT}',
                  '{SALLE_NOM}','{SALLE_ADRESSE}','{SALLE_CP}','{SALLE_VILLE}',
                  '{CORR_NOM}','{CORR_EMAIL}','{CORR_TEL}'],
@@ -368,13 +374,18 @@ if ($action !== '') {
             );
             $corps = str_replace('{LISTE_NOMINATIONS}', $listeNoms, $corps);
 
+            // Réduire les suites d'espaces (>2) en un seul espace — les plages d'espaces
+            // déclenchent les filtres antispam (Free.fr, OVH…)
+            $corps = preg_replace('/ {3,}/', ' ', $corps);
+
             // Les filtres antispam (Free.fr, etc.) rejettent les emails contenant des images
             // encodées en base64 inline (data:image/...). On les remplace par l'URL hébergée.
             if (str_contains($corps, 'data:image/')) {
                 $proto   = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
                 $baseUrl = $proto . '://' . $_SERVER['HTTP_HOST'] . '/NIJAC';
+                // Couvre les deux types de quotes et les chaînes base64 multi-lignes
                 $corps = preg_replace(
-                    '/src="data:image\/[^;]+;base64,[^"]*"/',
+                    '/src=["\']data:image\/[^;]+;base64,[^"\']*["\']/s',
                     'src="' . $baseUrl . '/img/logo_FFTT.png"',
                     $corps
                 );
@@ -390,17 +401,41 @@ if ($action !== '') {
                 if (!empty($moi['email_lntt'])) {
                     $mail->addReplyTo($moi['email_lntt'], $moi['nom'] . ' ' . $moi['prenom']);
                 }
+                $sujetRendu = str_replace(
+                    ['{NOM}','{PRENOM}','{NOM_COMPLET}','{ID_JA}','{ID_CONVOCATION}','{SEXE}',
+                     '{UTI_NOM}','{UTI_PRENOM}','{URL_LIGUE}',
+                     '{DATE}','{HEURE}','{JOURNEE}','{POULE}','{DIVISION}','{DOM}','{EXT}'],
+                    [$ja['Nom'],$ja['Prenom'],$ja['Prenom'].' '.$ja['Nom'],$token,(string)($ja['Id_Nomination']??''),$sexe,
+                     $moi['nom']??'',$moi['prenom']??'',getConfig('url_ligue','https://www.ligue-normandie-tt.fr'),
+                     $ja['Date'] ? date('d/m/Y', strtotime($ja['Date'])) : '',$ja['Heure']??'',
+                     $ja['Journee']??'',$ja['Poule']??'',$ja['Division']??'',
+                     $ja['NomDom']??'',$ja['NomExt']??''],
+                    $sujet
+                );
                 $mail->Subject = ($modeDev && $dest !== $ja['Email'])
-                    ? "[DEV → {$ja['Email']}] $sujet"
-                    : $sujet;
+                    ? "[DEV] $sujetRendu"
+                    : $sujetRendu;
                 $mail->Body = $corps;
                 if ($isHtml) {
                     $mail->AltBody = strip_tags(str_replace(['<br>','<br/>','<br />'], "\n", $corps));
                 }
                 $mail->send();
                 enregistrerEnvois(1);
+                if ($type === 'Convocation' && $idNomination) {
+                    $pdo->prepare("UPDATE nomination SET Valide = 1, EmailEnvoye = 1 WHERE Id_Nomination = ?")
+                        ->execute([$idNomination]);
+                }
                 echo json_encode(['ok' => true, 'nom' => $ja['Prenom'] . ' ' . $ja['Nom']]);
             } catch (\Exception $e) {
+                // Log du corps pour diagnostiquer les rejets SMTP
+                $logDir = __DIR__ . '/../logs';
+                @mkdir($logDir, 0755, true);
+                $snippet = substr(preg_replace('/\s+/', ' ', $corps), 0, 500);
+                file_put_contents($logDir . '/smtp_error.log',
+                    date('[Y-m-d H:i:s] ') . 'ERREUR: ' . $e->getMessage() . "\n" .
+                    'Taille corps: ' . strlen($corps) . " octets\n" .
+                    'Corps (500 premiers car): ' . $snippet . "\n\n",
+                    FILE_APPEND);
                 error_log('[NIJAC] centrenvoye mail error : ' . $e->getMessage());
                 echo json_encode(['ok' => false, 'nom' => $ja['Prenom'] . ' ' . $ja['Nom'], 'msg' => $e->getMessage()]);
             }
@@ -723,6 +758,7 @@ $modeleJson = json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS);
                     <code data-cible="message" data-marqueur="{ID_JA}">{ID_JA}</code>
                     <code data-cible="message" data-marqueur="{UTI_NOM}">{UTI_NOM}</code>
                     <code data-cible="message" data-marqueur="{UTI_PRENOM}">{UTI_PRENOM}</code>
+                    <code data-cible="message" data-marqueur="{URL_LIGUE}">{URL_LIGUE}</code>
                 </div>
                 <div id="cart-convocation" style="display:none;margin-top:.2rem;">
                     <span class="badge me-1 fw-normal" style="font-size:.68rem;background:#1a7f4b;">Convocation</span>
@@ -910,14 +946,15 @@ function chargerModele(type) {
 
 function majColonnesJA(type) {
     const $thead = $('#tbl-ja-thead tr');
-    $thead.find('th:gt(3)').remove(); // supprimer colonnes extra
+    $thead.find('th:gt(3)').remove();
     if (type === 'Convocation') {
         $thead.append(
-            '<th>Date</th><th>Heure</th><th>Division</th><th>Dom vs Ext</th>'
+            '<th>Date</th><th>Heure</th><th>Division</th><th>Dom vs Ext</th><th class="text-center">Km</th>'
         );
     } else if (type === 'Liste nomination') {
         $thead.append('<th class="text-center">Nominations</th>');
     }
+    $('#alerte-sans-km').remove();
 }
 
 // ── Journées (Convocation) ───────────────────────────────────────────────────
@@ -965,6 +1002,7 @@ function chargerJA() {
             return;
         }
         let nbEmail = 0;
+        const sansKm = [];
         res.data.forEach(ja => {
             const aEmail = ja.Email && ja.Email.trim() !== '';
             if (aEmail) nbEmail++;
@@ -980,17 +1018,39 @@ function chargerJA() {
             );
 
             if (typeActif === 'Convocation') {
+                const km = parseInt(ja.Kilometre ?? 0);
+                const kmCell = km > 0
+                    ? $('<td class="text-center fw-semibold text-success">').text(km + ' km')
+                    : $('<td class="text-center">').html('<span class="badge bg-warning text-dark" style="font-size:.7rem;"><i class="bi bi-exclamation-triangle me-1"></i>—</span>');
+                if (km === 0) sansKm.push(`${ja.Prenom} ${ja.Nom}`);
                 $tr.append(
                     $('<td>').text(ja.Date ?? ''),
                     $('<td>').text(ja.Heure ?? ''),
                     $('<td>').text(ja.Division ?? ''),
-                    $('<td>').text((ja.NomDom ?? '') + (ja.NomExt ? ' vs ' + ja.NomExt : ''))
+                    $('<td>').text((ja.NomDom ?? '') + (ja.NomExt ? ' vs ' + ja.NomExt : '')),
+                    kmCell
                 );
             } else if (typeActif === 'Liste nomination') {
                 $tr.append($('<td class="text-center">').text(ja.NbNominations ?? ''));
             }
             $body.append($tr);
         });
+
+        // Bandeau d'alerte JA sans kilométrage (Convocation uniquement)
+        $('#alerte-sans-km').remove();
+        if (typeActif === 'Convocation' && sansKm.length > 0) {
+            const $alerte = $(`
+                <div id="alerte-sans-km" class="mx-0 px-3 py-2 border-bottom"
+                     style="background:#fff8e1;border-left:4px solid #f59e0b!important;font-size:.8rem;flex-shrink:0;">
+                    <span style="font-weight:700;color:#92400e;">
+                        <i class="bi bi-exclamation-triangle-fill me-1 text-warning"></i>${sansKm.length} JA sans kilométrage :
+                    </span>
+                    <span class="text-muted">${sansKm.join(', ')}</span>
+                </div>
+            `);
+            $('#ja-list-wrapper').before($alerte);
+        }
+
         $('#nb-ja').text(`${res.data.length} JA — ${nbEmail} avec email`);
     }, 'json');
 }

@@ -159,7 +159,7 @@ function getNijacMailer(string $forcedPrefix = null): \PHPMailer\PHPMailer\PHPMa
 
     $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
     $mail->CharSet   = 'UTF-8';
-    $mail->Encoding  = 'base64';
+    $mail->Encoding  = 'quoted-printable';
 
     $p = $forcedPrefix ?? (IS_PRODUCTION ? 'smtp_' : 'smtp_local_');
 

@@ -38,8 +38,7 @@ if ($action !== '') {
 
     try {
 
-    // ── Journées avec compteurs ──────────────────────────────────────────
-    // Retourne: Journee, Date, NbRencontres, NbAttribues, NbDispo (JA disponibles)
+    // ── Journées pour la combobox (Journée) ───────────────────────────────
     if ($action === 'journees') {
         if (!$deptsAutorises) {
             echo json_encode(['ok' => true, 'data' => []]);
@@ -48,24 +47,13 @@ if ($action !== '') {
         $deptPh = implode(',', array_fill(0, count($deptsAutorises), '?'));
 
         $stmt = $pdo->prepare("
-            SELECT
-                r.Journee,
-                r.Date,
-                COUNT(DISTINCT r.Id_Rencontre)  AS NbRencontres,
-                COUNT(DISTINCT n.Id_Rencontre)  AS NbAttribues,
-                (
-                    SELECT COUNT(DISTINCT d2.Id_JA)
-                    FROM disponible d2
-                    WHERE d2.DateCompetition = r.Date
-                      AND d2.Id_Rencontre IS NULL
-                      AND d2.Reponse IN ('O','P')
-                ) AS NbDispo
+            SELECT DISTINCT r.Journee, r.Date
             FROM rencontre r
-            JOIN  equipe ed         ON ed.Id_Equipe = r.Id_EquipeDom
-            LEFT JOIN nomination n  ON n.Id_Rencontre = r.Id_Rencontre
-            WHERE SUBSTRING(ed.Id_Club, 2, 2) IN ($deptPh)
-              AND (r.Id_Division NOT IN (1,10) OR ed.JAdemande = 1)
-            GROUP BY r.Journee, r.Date
+            JOIN division dv ON dv.Id_Division = r.Id_Division
+            JOIN equipe eq ON eq.Id_Equipe = r.Id_EquipeDom
+            WHERE SUBSTRING(eq.Id_Club, 2, 2) IN ($deptPh)
+              AND (dv.ArbitrageObligatoire = 1 OR eq.JAdemande = 1)
+              AND r.Date >= CURDATE()
             ORDER BY r.Journee, r.Date
         ");
         $stmt->execute($deptsAutorises);
@@ -102,6 +90,8 @@ if ($action !== '') {
                 COALESCE(lp_r.CodePostal, lp_c.CodePostal) AS CpSalle,
                 COALESCE(lp_r.Nom,        lp_c.Nom)        AS VilleSalle,
                 COALESCE(s_r.Nom,         s_c.Nom)         AS NomSalle,
+                COALESCE(lp_r.Latitude,  lp_c.Latitude)  AS VenueLat,
+                COALESCE(lp_r.Longitude, lp_c.Longitude) AS VenueLon,
                 n.Id_JA      AS IdJaAffecte,
                 CONCAT(ja_n.Prenom, ' ', ja_n.Nom) AS NomJaAffecte,
                 n.Valide,
@@ -116,69 +106,28 @@ if ($action !== '') {
             LEFT JOIN laposte lp_c ON lp_c.Id_LaPoste = s_c.Id_Laposte
             LEFT JOIN nomination n  ON n.Id_Rencontre  = r.Id_Rencontre
             LEFT JOIN ja ja_n       ON ja_n.Id_JA       = n.Id_JA
-            WHERE r.Journee = ? AND r.Date = ?
+            WHERE r.Date = ?
               AND SUBSTRING(ed.Id_Club, 2, 2) IN ($deptPh)
-              AND (r.Id_Division NOT IN (1,10) OR ed.JAdemande = 1)
+              AND (dv.ArbitrageObligatoire = 1 OR ed.JAdemande = 1)
             ORDER BY dv.Ord, r.Poule, r.Id_Rencontre
         ");
-        $stmt->execute(array_merge([$journee, $date], $deptsAutorises));
+        $stmt->execute(array_merge([$date], $deptsAutorises));
         echo json_encode(['ok' => true, 'data' => $stmt->fetchAll()]);
         exit;
     }
 
-    // ── Candidats JA pour une rencontre (panneau droit) ──────────────────
-    // Score = 300 si préférence exacte + 100 si dispo 'O' + 50 si ≤20 km
-    // Tri final : score DESC, NbNominations ASC, RAND()
-    if ($action === 'candidats_ja') {
-        $idRenc  = (int)($_GET['id_rencontre'] ?? 0);
-        if (!$idRenc) {
-            echo json_encode(['ok' => false, 'err' => 'Paramètres manquants']); exit;
-        }
+    // ── Tous les JA disponibles pour une journée (coordonnées + dispos — distance calculée côté client)
+    if ($action === 'candidats_journee') {
+        $date = trim($_GET['date'] ?? '');
+        if (!$date) { echo json_encode(['ok' => false, 'err' => 'Date manquante']); exit; }
 
-        // Infos de la rencontre (date, club domicile, coords salle, division)
-        $renc = $pdo->prepare("
-            SELECT r.Date, r.Journee,
-                   ed.Id_Club AS IdClubDom,
-                   COALESCE(lp_r.Latitude,  lp_c.Latitude)  AS VenueLat,
-                   COALESCE(lp_r.Longitude, lp_c.Longitude) AS VenueLon,
-                   dv.Division AS DivisionCode
-            FROM rencontre r
-            JOIN equipe ed   ON ed.Id_Equipe   = r.Id_EquipeDom
-            JOIN division dv ON dv.Id_Division = r.Id_Division
-            LEFT JOIN salle   s_r  ON s_r.Id_Salle   = r.id_Salle
-            LEFT JOIN laposte lp_r ON lp_r.Id_LaPoste = s_r.Id_Laposte
-            LEFT JOIN salle   s_c  ON s_c.Id_Club     = ed.Id_Club AND s_c.EstPrincipale = 1
-            LEFT JOIN laposte lp_c ON lp_c.Id_LaPoste = s_c.Id_Laposte
-            WHERE r.Id_Rencontre = ?
-        ");
-        $renc->execute([$idRenc]);
-        $ri = $renc->fetch();
-        if (!$ri) { echo json_encode(['ok' => false, 'err' => 'Rencontre introuvable']); exit; }
-
-        $dateRenc   = $ri['Date'];
-        $idClubDom  = $ri['IdClubDom'];
-        $venueLat   = $ri['VenueLat'];
-        $venueLon   = $ri['VenueLon'];
-        $orderNationale = (strncmp($ri['DivisionCode'] ?? '', 'N', 1) === 0)
-            ? 'COALESCE(ja.Nationale, 0) DESC, '
-            : '';
-
-        // Formule Haversine inline
-        $distExpr = ($venueLat && $venueLon)
-            ? "ROUND(6371 * ACOS(GREATEST(-1, LEAST(1,
-                  COS(RADIANS(lp_ja.Latitude)) * COS(RADIANS($venueLat))
-                * COS(RADIANS($venueLon) - RADIANS(lp_ja.Longitude))
-                + SIN(RADIANS(lp_ja.Latitude)) * SIN(RADIANS($venueLat))
-               ))))"
-            : "NULL";
-
-        $jaCols = array_column($pdo->query('DESCRIBE ja')->fetchAll(), 'Field');
-        $hasCp    = in_array('Cp',    $jaCols);
-        $hasVille = in_array('Ville', $jaCols);
-        $hasNote  = in_array('Note',  $jaCols);
-        $cpExpr    = $hasCp    ? 'COALESCE(lp_ja.CodePostal, ja.Cp)'    : 'lp_ja.CodePostal';
-        $villeExpr = $hasVille ? 'COALESCE(lp_ja.Nom, ja.Ville)'        : 'lp_ja.Nom';
-        $noteExpr  = $hasNote  ? 'ja.Note'                               : 'NULL';
+        $jaCols    = array_column($pdo->query('DESCRIBE ja')->fetchAll(), 'Field');
+        $hasCp     = in_array('Cp',    $jaCols);
+        $hasVille  = in_array('Ville', $jaCols);
+        $hasNote   = in_array('Note',  $jaCols);
+        $cpExpr    = $hasCp    ? 'COALESCE(lp_ja.CodePostal, ja.Cp)'  : 'lp_ja.CodePostal';
+        $villeExpr = $hasVille ? 'COALESCE(lp_ja.Nom, ja.Ville)'      : 'lp_ja.Nom';
+        $noteExpr  = $hasNote  ? 'ja.Note'                             : 'NULL';
 
         $stmt = $pdo->prepare("
             SELECT
@@ -186,54 +135,44 @@ if ($action !== '') {
                 ja.Nom,
                 ja.Prenom,
                 ja.Grade,
-                COALESCE(ja.Nationale, 0) AS Nationale,
-                $cpExpr    AS Cp,
-                $villeExpr AS Ville,
-                $noteExpr  AS Note,
-                d.Reponse  AS Disponibilite,
-                (d.Id_Rencontre = ?)             AS PrefereRenc,
-                $distExpr                         AS DistanceKm,
-                COALESCE(nbnom.NbNominations, 0)  AS NbNominations,
-                -- Score de priorité
-                (
-                    IF(d.Id_Rencontre = ?, 300, 0)
-                  + IF(d.Reponse = 'O', 100, 50)
-                  + IF($distExpr IS NOT NULL AND $distExpr <= 20, 50, 0)
-                ) AS Score
+                COALESCE(ja.Nationale, 0)        AS Nationale,
+                ja.Id_Club,
+                $cpExpr                          AS Cp,
+                $villeExpr                       AS Ville,
+                $noteExpr                        AS Note,
+                lp_ja.Latitude                   AS JaLat,
+                lp_ja.Longitude                  AS JaLon,
+                CASE WHEN dj.Id_JA IS NOT NULL THEN 1 ELSE 0 END AS DispoJournee,
+                (SELECT GROUP_CONCAT(dr2.Id_Rencontre ORDER BY dr2.Id_Rencontre)
+                 FROM disponible dr2
+                 WHERE dr2.Id_JA = ja.Id_JA
+                   AND dr2.DateCompetition = ?
+                   AND dr2.Id_Rencontre IS NOT NULL
+                   AND dr2.Reponse = 'O') AS DispoRencontres,
+                COALESCE(nbnom.NbNominations, 0) AS NbNominations
             FROM ja
-            JOIN disponible d ON d.Id_JA = ja.Id_JA
             LEFT JOIN laposte lp_ja ON lp_ja.Id_LaPoste = ja.Id_LaPoste
+            LEFT JOIN disponible dj
+                ON  dj.Id_JA           = ja.Id_JA
+                AND dj.DateCompetition = ?
+                AND dj.Id_Rencontre    IS NULL
+                AND dj.Reponse         = 'O'
+            LEFT JOIN disponible dr
+                ON  dr.Id_JA           = ja.Id_JA
+                AND dr.DateCompetition = ?
+                AND dr.Id_Rencontre    IS NOT NULL
+                AND dr.Reponse         = 'O'
             LEFT JOIN (
                 SELECT n2.Id_JA, COUNT(*) AS NbNominations
                 FROM nomination n2
                 GROUP BY n2.Id_JA
             ) nbnom ON nbnom.Id_JA = ja.Id_JA
             WHERE ja.Actif = 1
-              -- Disponible sur cette date (journée entière ou préférence pour cette rencontre)
-              AND (
-                    (d.DateCompetition = ? AND d.Id_Rencontre IS NULL AND d.Reponse IN ('O','P'))
-                 OR (d.Id_Rencontre = ? AND d.Reponse IN ('O','P'))
-              )
-              -- Pas le club domicile
-              AND (ja.Id_Club IS NULL OR ja.Id_Club != ?)
-              -- Pas déjà affecté ce jour-là
-              AND NOT EXISTS (
-                  SELECT 1 FROM nomination nn
-                  JOIN rencontre rn ON rn.Id_Rencontre = nn.Id_Rencontre
-                  WHERE nn.Id_JA = ja.Id_JA AND rn.Date = ?
-              )
+              AND (dj.Id_JA IS NOT NULL OR dr.Id_JA IS NOT NULL)
             GROUP BY ja.Id_JA
-            ORDER BY {$orderNationale}Score DESC, NbNominations ASC, RAND()
-            LIMIT 5
+            ORDER BY ja.Nom, ja.Prenom
         ");
-        $stmt->execute([
-            $idRenc,   // PrefereRenc
-            $idRenc,   // Score IF(pref)
-            $dateRenc,
-            $idRenc,
-            $idClubDom,
-            $dateRenc
-        ]);
+        $stmt->execute([$date, $date, $date]);
         echo json_encode(['ok' => true, 'data' => $stmt->fetchAll()]);
         exit;
     }
@@ -494,12 +433,9 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 .renc-item:not(.attribue) .renc-ico { color:#bbb; }
 
 /* ── Colonne droite — candidats JA ── */
-#col-candidats { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
+#col-candidats { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+#liste-candidats { flex:1; overflow-y:auto; }
 #col-candidats .col-titre { background:#f8f9fa; border-bottom:1px solid #dee2e6; padding:.55rem .85rem; font-size:.82rem; font-weight:700; color:#444; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:5; }
-
-#rencontre-detail { padding:.65rem .85rem; background:#fff9c4; border-bottom:1px solid #f0e080; font-size:.82rem; display:none; }
-#rencontre-detail .rd-titre { font-weight:700; font-size:.9rem; margin-bottom:.25rem; }
-#rencontre-detail .rd-meta { color:#666; }
 
 #placeholder-candid { display:flex; flex-direction:column; align-items:center; justify-content:center; height:200px; color:#aaa; font-size:.9rem; gap:.5rem; }
 
@@ -570,8 +506,6 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
     <i class="bi bi-info-circle-fill"></i>
     <span id="info-nb-renc"></span>
     <span class="text-muted">|</span>
-    <span id="info-nb-dispo"></span>
-    <span class="text-muted">|</span>
     <span id="info-nb-attribues"></span>
 </div>
 
@@ -582,6 +516,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
     <div id="col-rencontres">
         <div class="col-titre">
             <span><i class="bi bi-list-ul me-1"></i>Rencontres</span>
+            <span id="renc-sel-titre" class="fw-normal text-muted flex-grow-1 text-center" style="font-size:.78rem"></span>
             <span id="compteur-renc" class="text-muted fw-normal" style="font-size:.75rem"></span>
         </div>
         <div id="liste-rencontres">
@@ -595,11 +530,6 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
     <div id="col-candidats">
         <div class="col-titre">
             <span><i class="bi bi-people-fill me-1"></i>Candidats JA</span>
-            <span id="renc-sel-titre" class="text-muted fw-normal" style="font-size:.75rem"></span>
-        </div>
-        <div id="rencontre-detail" style="display:none">
-            <div class="rd-titre" id="rd-equipes"></div>
-            <div class="rd-meta" id="rd-meta"></div>
         </div>
         <div id="placeholder-candid">
             <i class="bi bi-arrow-left-circle fs-2"></i>
@@ -695,8 +625,9 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 'use strict';
 
 // ── État ─────────────────────────────────────────────────────────────────────
-let journeeCourante = null;  // {Journee, Date, NbRencontres, NbAttribues, NbDispo}
-let rencontres      = [];    // tableau rencontres de la journée
+let journeeCourante = null;  // {Journee, Date}
+let rencontres      = [];    // tableau rencontres de la journée (avec VenueLat/VenueLon)
+let jaList          = [];    // tous les JA disponibles pour la journée (chargé une fois)
 let nominations     = {};    // {Id_Rencontre: {Id_JA, Nom, Prenom}} — état local
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -725,15 +656,7 @@ $(function () {
         const val = this.value;
         if (!val) return;
         const [journee, date] = val.split('|');
-        // Trouver l'objet journée dans les options
-        const opt = this.options[this.selectedIndex];
-        journeeCourante = {
-            Journee:       parseInt(journee),
-            Date:          date,
-            NbRencontres:  parseInt(opt.dataset.nb    || 0),
-            NbAttribues:   parseInt(opt.dataset.attr  || 0),
-            NbDispo:       parseInt(opt.dataset.dispo || 0)
-        };
+        journeeCourante = { Journee: parseInt(journee), Date: date };
         chargerRencontres();
     });
 
@@ -754,24 +677,15 @@ function chargerJournees() {
                 $sel.append('<option value="" disabled>Aucune journée</option>');
             } else {
                 r.data.forEach(j => {
-                    const all  = parseInt(j.NbRencontres);
-                    const attr = parseInt(j.NbAttribues);
-                    const txt  = `J${j.Journee} — ${formatDate(j.Date)}`;
-                    const badge = attr === all
-                        ? ` ✓ ${attr}/${all}`
-                        : ` ${attr}/${all}`;
                     $sel.append(
                         $('<option>')
                             .val(`${j.Journee}|${j.Date}`)
-                            .text(txt + badge)
-                            .attr('data-nb',    j.NbRencontres)
-                            .attr('data-attr',  j.NbAttribues)
-                            .attr('data-dispo', j.NbDispo)
+                            .text(`J${j.Journee} — ${formatDate(j.Date)}`)
                     );
                 });
             }
             $sel.prop('disabled', false);
-            // Sélectionner la première journée non totalement attribuée
+            // Sélectionner la première journée (toutes sont à venir)
             const $first = $sel.find('option').not('[value=""]').first();
             if ($first.length) {
                 $sel.val($first.val()).trigger('change');
@@ -780,45 +694,47 @@ function chargerJournees() {
         .always(() => spin(false));
 }
 
-// ── Rencontres ───────────────────────────────────────────────────────────────
+// ── Rencontres + JA chargés en parallèle ─────────────────────────────────────
 function chargerRencontres() {
     if (!journeeCourante) return;
     spin(true);
     nominations = {};
+    jaList      = [];
     $('#liste-rencontres').html('<div class="text-center py-4"><div class="spinner-border spinner-border-sm text-success"></div></div>');
     viderCandidats();
 
-    ajax({
+    const ajaxRencontres = ajax({
         method: 'GET',
-        data: {
-            action:  'rencontres_journee',
-            journee: journeeCourante.Journee,
-            date:    journeeCourante.Date
-        }
-    }).done(function (r) {
-        if (!r.ok) {
-            $('#liste-rencontres').html(`<div class="text-danger p-3">${r.err}</div>`);
-            return;
-        }
-        rencontres = r.data;
-        // Pré-charger les nominations existantes
-        rencontres.forEach(rc => {
-            if (rc.IdJaAffecte) {
-                nominations[rc.Id_Rencontre] = {
-                    Id_JA:  rc.IdJaAffecte,
-                    Nom:    rc.NomJaAffecte || '',
-                    Prenom: ''
-                };
+        data: { action: 'rencontres_journee', journee: journeeCourante.Journee, date: journeeCourante.Date }
+    });
+    const ajaxJa = ajax({
+        method: 'GET',
+        data: { action: 'candidats_journee', date: journeeCourante.Date }
+    });
+
+    $.when(ajaxRencontres, ajaxJa)
+        .done(function (rRenc, rJa) {
+            const r = rRenc[0];
+            const j = rJa[0];
+            if (!r.ok) {
+                $('#liste-rencontres').html(`<div class="text-danger p-3">${r.err}</div>`);
+                return;
             }
-        });
-        renderRencontres();
-        mettreAJourInfoJournee();
-        mettreAJourBoutons();
-        // Sélectionner la première rencontre non attribuée
-        const nonAttr = rencontres.find(rc => !nominations[rc.Id_Rencontre]);
-        const premier = nonAttr || rencontres[0];
-        if (premier) selectionnerRencontre(premier.Id_Rencontre);
-    }).always(() => spin(false));
+            rencontres = r.data;
+            rencontres.forEach(rc => {
+                if (rc.IdJaAffecte) {
+                    nominations[rc.Id_Rencontre] = { Id_JA: rc.IdJaAffecte, Nom: rc.NomJaAffecte || '', Prenom: '' };
+                }
+            });
+            if (j.ok) jaList = j.data;
+            renderRencontres();
+            mettreAJourInfoJournee();
+            mettreAJourBoutons();
+            // Sélectionner automatiquement la première rencontre non attribuée, sinon la première
+            const premiereRenc = rencontres.find(rc => !nominations[rc.Id_Rencontre]) || rencontres[0];
+            if (premiereRenc) selectionnerRencontre(premiereRenc.Id_Rencontre);
+        })
+        .always(() => spin(false));
 }
 
 function renderRencontres() {
@@ -828,16 +744,23 @@ function renderRencontres() {
         return;
     }
     rencontres.forEach(rc => {
-        const attr = !!nominations[rc.Id_Rencontre];
-        const nomJa = attr ? (nominations[rc.Id_Rencontre].Prenom + ' ' + nominations[rc.Id_Rencontre].Nom).trim() : '';
-        const lieu  = [rc.CpSalle, rc.VilleSalle].filter(Boolean).join(' ');
+        const attr     = !!nominations[rc.Id_Rencontre];
+        const nomJa    = attr ? (nominations[rc.Id_Rencontre].Prenom + ' ' + nominations[rc.Id_Rencontre].Nom).trim() : '';
         const divColor = rc.DivisionColor || '#1a3a6b';
+        const heure    = rc.Heure ? rc.Heure.substring(0, 5) : '';
+        const poule    = rc.Poule ? `Poule ${escHtml(rc.Poule)}` : '';
+        const salle    = rc.NomSalle ? escHtml(rc.NomSalle) + ' — ' : '';
+        const lieu     = salle + [rc.CpSalle, rc.VilleSalle].filter(Boolean).map(escHtml).join(' ');
         $liste.append(`
             <div class="renc-item ${attr ? 'attribue' : ''}" data-id="${rc.Id_Rencontre}">
                 <span class="renc-div" style="background:${escHtml(divColor)}">${escHtml(rc.DivisionCode || '')}</span>
                 <div class="renc-corps">
                     <div class="renc-equipes">${escHtml(rc.NomDom)} vs ${escHtml(rc.NomExt || '?')}</div>
-                    ${lieu ? `<div class="renc-lieu"><i class="bi bi-geo-alt" style="font-size:.68rem"></i> ${escHtml(lieu)}</div>` : ''}
+                    <div class="renc-lieu">
+                        ${heure ? `<i class="bi bi-clock" style="font-size:.68rem"></i> ${heure}` : ''}
+                        ${poule ? `<span class="ms-2">${poule}</span>` : ''}
+                        ${lieu  ? `<span class="ms-2"><i class="bi bi-geo-alt" style="font-size:.68rem"></i> ${lieu}</span>` : ''}
+                    </div>
                     ${attr ? `<div class="renc-ja"><i class="bi bi-person-check me-1"></i>${escHtml(nomJa)}</div>` : ''}
                 </div>
                 <i class="bi ${attr ? 'bi-person-check-fill' : 'bi-person-dash'} renc-ico"></i>
@@ -864,42 +787,79 @@ function selectionnerRencontre(idRenc) {
 
     const rc = rencontres.find(r => r.Id_Rencontre == idRenc);
     if (rc) {
-        $('#rd-equipes').text(`${rc.NomDom} vs ${rc.NomExt || '?'}`);
-        const heure = rc.Heure ? rc.Heure.substring(0,5) : '';
-        const lieu  = [rc.CpSalle, rc.VilleSalle, rc.NomSalle].filter(Boolean).join(' — ');
-        $('#rd-meta').text(`${rc.DivisionNom || rc.DivisionCode} • Poule ${rc.Poule} • ${heure} • ${lieu}`);
-        $('#rencontre-detail').show();
-        $('#renc-sel-titre').text(`${rc.NomDom}`);
+        $('#renc-sel-titre').text(`${rc.NomDom} vs ${rc.NomExt || '?'}`);
     }
 
-    chargerCandidats(idRenc);
+    afficherCandidatsPourRencontre(idRenc);
 }
 
-// ── Candidats JA ──────────────────────────────────────────────────────────────
-function chargerCandidats(idRenc) {
-    $('#liste-candidats').empty();
+// ── Candidats JA pour une rencontre — filtrage et tri côté client ─────────────
+function afficherCandidatsPourRencontre(idRenc) {
+    const rc = rencontres.find(r => r.Id_Rencontre == idRenc);
     $('#placeholder-candid').hide();
-    $('#liste-candidats').html('<div class="text-center py-4"><div class="spinner-border spinner-border-sm text-success"></div></div>');
 
-    ajax({
-        method: 'GET',
-        data: { action: 'candidats_ja', id_rencontre: idRenc }
-    }).done(function (r) {
-        $('#liste-candidats').empty();
-        if (!r.ok) {
-            $('#liste-candidats').html(`<div class="text-danger p-3">${r.err}</div>`);
-            return;
-        }
-        if (!r.data.length) {
-            $('#liste-candidats').html('<div class="text-center text-muted py-4" style="font-size:.85rem"><i class="bi bi-person-x fs-2 d-block mb-2"></i>Aucun JA disponible pour cette rencontre</div>');
-            return;
-        }
+    if (!rc || !jaList.length) {
+        $('#liste-candidats').html('<div class="text-center text-muted py-4" style="font-size:.85rem"><i class="bi bi-person-x fs-2 d-block mb-2"></i>Aucun JA disponible pour cette journée</div>');
+        return;
+    }
 
-        // Afficher les 5 premiers candidats
-        r.data.forEach((ja, idx) => {
-            const rang = idx + 1;
-            const estAffecter = !!(nominations[idRenc] && nominations[idRenc].Id_JA == ja.Id_JA);
-            const loc = [ja.Cp, ja.Ville].filter(Boolean).join(' ');
+    const venueLat = rc.VenueLat != null ? parseFloat(rc.VenueLat) : null;
+    const venueLon = rc.VenueLon != null ? parseFloat(rc.VenueLon) : null;
+    const clubDom  = rc.IdClubDom;
+    const divNat   = (rc.DivisionCode || '').startsWith('N');
+
+    const candidats = [];
+    jaList.forEach(ja => {
+        const dispoJournee = ja.DispoJournee == 1;
+        const dispoRencs   = ja.DispoRencontres
+            ? ja.DispoRencontres.split(',').map(Number)
+            : [];
+        const prefereRenc  = dispoRencs.includes(idRenc);
+        if (!dispoJournee && !prefereRenc) return;
+
+        if (ja.Id_Club && ja.Id_Club === clubDom) return;
+
+        const dejaAffecte = Object.entries(nominations).some(
+            ([rid, nom]) => parseInt(rid) !== idRenc && nom.Id_JA == ja.Id_JA
+        );
+        if (dejaAffecte) return;
+
+        const dist  = haversineKm(ja.JaLat, ja.JaLon, venueLat, venueLon);
+        const score = (prefereRenc ? 300 : 0)
+            + (dispoJournee ? 100 : 50)
+            + (dist != null && dist <= 20 ? 50 : 0)
+            + (divNat && ja.Nationale == 1 ? 200 : 0);
+
+        candidats.push({
+            ...ja,
+            DistanceKm:    dist,
+            PrefereRenc:   prefereRenc ? 1 : 0,
+            Disponibilite: dispoJournee ? 'O' : 'P',
+            Score:         score
+        });
+    });
+
+    candidats.sort((a, b) =>
+        b.Score - a.Score || a.NbNominations - b.NbNominations || a.Nom.localeCompare(b.Nom)
+    );
+
+    const jaAffecteId = nominations[idRenc] ? nominations[idRenc].Id_JA : null;
+
+    // JA affecté toujours en tête, indépendamment du score
+    if (jaAffecteId != null) {
+        const idx = candidats.findIndex(c => c.Id_JA == jaAffecteId);
+        if (idx > 0) candidats.unshift(candidats.splice(idx, 1)[0]);
+    }
+
+    const top5 = candidats.slice(0, 15);
+    $('#liste-candidats').empty();
+
+    if (!top5.length) {
+        $('#liste-candidats').html('<div class="text-center text-muted py-4" style="font-size:.85rem"><i class="bi bi-person-x fs-2 d-block mb-2"></i>Aucun JA disponible pour cette rencontre</div>');
+    } else {
+        top5.forEach((ja, idx) => {
+            const estAffecte = (jaAffecteId != null && ja.Id_JA == jaAffecteId);
+            const loc     = [ja.Cp, ja.Ville].filter(Boolean).join(' ');
             const distTxt = ja.DistanceKm != null ? `${ja.DistanceKm} km` : '';
             const nomMin  = ja.NbNominations > 0 ? `${ja.NbNominations} arb.` : '0 arb.';
 
@@ -908,70 +868,64 @@ function chargerCandidats(idRenc) {
             if (ja.DistanceKm != null && ja.DistanceKm <= 20) badges += '<span class="badge badge-prox rounded-pill me-1"><i class="bi bi-geo-alt-fill me-1"></i>Proche</span>';
             badges += `<span class="badge ${ja.Disponibilite === 'O' ? 'badge-dispo-O' : 'badge-dispo-P'} rounded-pill">${ja.Disponibilite === 'O' ? 'Disponible' : 'Partiel'}</span>`;
 
-            const btnLabel = estAffecter ? 'Affecter' : 'Affecter';
             const noteBtn = ja.Note
                 ? `<button class="btn btn-note-ja btn-note-ja-trigger" data-note="${escHtml(ja.Note)}" data-nom="${escHtml(ja.Prenom + ' ' + ja.Nom)}"><i class="bi bi-sticky-fill me-1"></i>Note</button>`
                 : '';
+
+            const headerStyle = estAffecte
+                ? 'background:#2e7d32;color:#fff;'
+                : '';
+            const rangStyle = estAffecte
+                ? 'background:#fff;color:#2e7d32;'
+                : '';
+            const actionBtn = estAffecte
+                ? `<button class="btn btn-danger btn-retirer btn-sm px-3" data-renc="${idRenc}" style="font-size:.8rem;font-weight:700;"><i class="bi bi-x-lg me-1"></i>Retirer</button>`
+                : `<button class="btn btn-success btn-affecter btn-sm" data-renc="${idRenc}"><i class="bi bi-person-check me-1"></i>Affecter</button>`;
+
+            const cardBorder = estAffecte ? 'border:2px solid #2e7d32;' : '';
+            const bodyBg     = estAffecte ? 'background:#f1f8f1;' : '';
+
             const card = $(`
-                <div class="cand-card" data-ja="${ja.Id_JA}" data-nom="${escHtml(ja.Nom)}" data-prenom="${escHtml(ja.Prenom)}">
-                    <div class="cand-header">
-                        <span class="cand-rang">${rang}</span>
+                <div class="cand-card" data-ja="${ja.Id_JA}" data-nom="${escHtml(ja.Nom)}" data-prenom="${escHtml(ja.Prenom)}" style="${cardBorder}">
+                    <div class="cand-header" style="${headerStyle}">
+                        <span class="cand-rang" style="${rangStyle}">${idx + 1}</span>
                         <span class="cand-nom">${escHtml(ja.Prenom)} ${escHtml(ja.Nom)}</span>
                         <span class="cand-nationale">${ja.Nationale == 1 ? 'Nationale : <b>Oui</b>' : 'Nationale : Non'}</span>
                         ${noteBtn}
                         ${ja.Grade ? `<span class="cand-grade">${escHtml(ja.Grade)}</span>` : ''}
                     </div>
-                    <div class="cand-body">
+                    <div class="cand-body" style="${bodyBg}">
                         <div class="cand-loc">
                             ${loc ? `<i class="bi bi-geo-alt me-1" style="font-size:.75rem"></i>${escHtml(loc)}` : ''}
                             ${distTxt ? `<span class="ms-2 text-success fw-semibold" style="font-size:.75rem"><i class="bi bi-car-front me-1"></i>${distTxt}</span>` : ''}
                         </div>
                         <div class="cand-stats">${nomMin} cette saison</div>
                     </div>
-                    <div style="padding:.35rem .7rem .5rem; display:flex; align-items:center; justify-content:space-between;">
+                    <div style="padding:.35rem .7rem .5rem; display:flex; align-items:center; justify-content:space-between;${bodyBg}">
                         <div class="cand-badges">${badges}</div>
-                        <button class="btn btn-success btn-affecter btn-sm" data-renc="${idRenc}">
-                            <i class="bi bi-person-check me-1"></i>${btnLabel}
-                        </button>
+                        ${actionBtn}
                     </div>
                 </div>
             `);
             $('#liste-candidats').append(card);
         });
+    }
 
-        // Bouton retirer si déjà affecté
-        if (nominations[idRenc]) {
-            $('#liste-candidats').prepend(`
-                <div class="mx-3 mb-1 mt-2">
-                    <div class="alert alert-info py-2 px-3 d-flex align-items:center gap-2" style="font-size:.82rem">
-                        <i class="bi bi-person-check-fill me-2 text-success"></i>
-                        Affecté : <strong class="ms-1">${escHtml((nominations[idRenc].Prenom + ' ' + nominations[idRenc].Nom).trim())}</strong>
-                        <button class="btn btn-outline-danger btn-sm ms-auto" id="btn-retirer" data-renc="${idRenc}">
-                            <i class="bi bi-x-circle me-1"></i>Retirer
-                        </button>
-                    </div>
-                </div>
-            `);
-        }
+    $('#liste-candidats').off('click', '.btn-affecter').on('click', '.btn-affecter', function () {
+        const idJa   = parseInt($(this).closest('.cand-card').data('ja'));
+        const nom    = $(this).closest('.cand-card').data('nom');
+        const prenom = $(this).closest('.cand-card').data('prenom');
+        affecterJa(idRenc, idJa, nom, prenom);
+    });
 
-        // Handlers
-        $('#liste-candidats').off('click', '.btn-affecter').on('click', '.btn-affecter', function () {
-            const idJa   = parseInt($(this).closest('.cand-card').data('ja'));
-            const nom    = $(this).closest('.cand-card').data('nom');
-            const prenom = $(this).closest('.cand-card').data('prenom');
-            affecterJa(idRenc, idJa, nom, prenom);
-        });
-
-        $('#liste-candidats').off('click', '#btn-retirer').on('click', '#btn-retirer', function () {
-            retirerJa(idRenc);
-        });
+    $('#liste-candidats').off('click', '.btn-retirer').on('click', '.btn-retirer', function () {
+        retirerJa(idRenc);
     });
 }
 
 function viderCandidats() {
     $('#liste-candidats').empty();
     $('#placeholder-candid').show();
-    $('#rencontre-detail').hide();
     $('#renc-sel-titre').text('');
     rencSelectionnee = null;
 }
@@ -1000,7 +954,7 @@ function affecterJa(idRenc, idJa, nom, prenom) {
         // Passer à la rencontre suivante non attribuée
         const nonAttr = rencontres.find(rc => !nominations[rc.Id_Rencontre]);
         if (nonAttr) selectionnerRencontre(nonAttr.Id_Rencontre);
-        else         chargerCandidats(idRenc); // rester sur celle-ci, rafraîchir
+        else         afficherCandidatsPourRencontre(idRenc);
     });
 }
 
@@ -1014,7 +968,7 @@ function retirerJa(idRenc) {
         renderRencontres();
         mettreAJourBoutons();
         mettreAJourInfoJournee();
-        chargerCandidats(idRenc);
+        afficherCandidatsPourRencontre(idRenc);
     });
 }
 
@@ -1044,9 +998,7 @@ function mettreAJourInfoJournee() {
     if (!journeeCourante) { $('#info-journee').hide(); return; }
     const total  = rencontres.length;
     const attrib = Object.keys(nominations).length;
-    const dispo  = journeeCourante.NbDispo || '?';
     $('#info-nb-renc').html(`<strong>${total}</strong> rencontre${total > 1 ? 's' : ''}`);
-    $('#info-nb-dispo').html(`<strong>${dispo}</strong> JA disponible${dispo > 1 ? 's' : ''}`);
     $('#info-nb-attribues').html(`<strong>${attrib}/${total}</strong> attribué${attrib > 1 ? 's' : ''}`);
     $('#info-journee').css('display', 'flex');
 }
@@ -1133,6 +1085,17 @@ $(document).on('click', '.btn-note-ja-trigger', function (e) {
 });
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
+function haversineKm(lat1, lon1, lat2, lon2) {
+    if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return null;
+    lat1 = parseFloat(lat1); lon1 = parseFloat(lon1);
+    lat2 = parseFloat(lat2); lon2 = parseFloat(lon2);
+    if (isNaN(lat1) || isNaN(lon1) || isNaN(lat2) || isNaN(lon2)) return null;
+    const R = 6371, rad = Math.PI / 180;
+    const dLat = (lat2 - lat1) * rad, dLon = (lon2 - lon1) * rad;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
+    return Math.round(R * 2 * Math.asin(Math.sqrt(Math.min(1, a))));
+}
+
 function escHtml(s) {
     return String(s || '')
         .replace(/&/g, '&amp;')
