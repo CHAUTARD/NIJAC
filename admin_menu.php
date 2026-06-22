@@ -199,6 +199,7 @@ $isAdmin      = !empty($u['is_admin']);
         .btn-correspondant{ background-color: #f3e5f5; }
         .btn-communes     { background-color: #e0f7fa; }
         .btn-configuration{ background-color: #eceff1; }
+        .btn-dbadmin      { background-color: #fce4ec; }
 
     </style>
 </head>
@@ -282,6 +283,12 @@ $isAdmin      = !empty($u['is_admin']);
             <div class="btn-icon"><img src="img/R3_4.png" alt="Import Rencontres"></div>
             <span>R3 R4 ayant demandé un JA</span>
             <span class="btn-desc">Une R3 ou R4 demande un JA</span>
+        </a>
+
+        <a href="db-admin.php" class="menu-btn btn-dbadmin" target="_blank">
+            <div class="btn-icon"><i class="bi bi-database-gear" style="font-size:2.5rem;color:#c62828;"></i></div>
+            <span>Base de données</span>
+            <span class="btn-desc">Administration directe de la base de données</span>
         </a>
 
         <a href="logout.php" class="menu-btn" style="background:#f8d7da; grid-column: 5;">

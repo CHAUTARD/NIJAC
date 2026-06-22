@@ -262,15 +262,6 @@ try {
     $phase1Fin         = getConfig('phase1_fin',   '01-31');
     $phase2Debut       = getConfig('phase2_debut', '02-01');
     $phase2Fin         = getConfig('phase2_fin',   '06-30');
-    // SMTP local
-    $smtpLocalHost     = getConfig('smtp_local_host',      '');
-    $smtpLocalPort     = getConfig('smtp_local_port',      '587');
-    $smtpLocalSecure   = getConfig('smtp_local_secure',    'tls');
-    $smtpLocalAuth     = getConfig('smtp_local_auth',      '1');
-    $smtpLocalUser     = getConfig('smtp_local_user',      '');
-    $smtpLocalPassword = getConfig('smtp_local_password',  '');
-    $smtpLocalFrom     = getConfig('smtp_local_from',      '');
-    $smtpLocalFromName = getConfig('smtp_local_from_name', '');
     // SMTP production
     $smtpProdHost      = getConfig('smtp_host',      '');
     $smtpProdPort      = getConfig('smtp_port',      '587');
@@ -295,8 +286,6 @@ try {
     $phase1Fin        = '01-31';
     $phase2Debut      = '02-01';
     $phase2Fin        = '06-30';
-    $smtpLocalHost     = $smtpLocalPort = $smtpLocalUser = $smtpLocalPassword = $smtpLocalFrom = $smtpLocalFromName = '';
-    $smtpLocalSecure   = 'tls'; $smtpLocalAuth = '1';
     $smtpProdHost      = $smtpProdPort = $smtpProdUser = $smtpProdPassword = $smtpProdFrom = $smtpProdFromName = '';
     $smtpProdSecure    = 'tls'; $smtpProdAuth = '1';
 }
@@ -998,58 +987,6 @@ $changeLogin = !empty($moi['change_login']);
 
             <div class="smtp-grid">
 
-                <!-- Local -->
-                <div class="smtp-panel">
-                    <div class="smtp-panel-head local">
-                        <i class="bi bi-pc-display-horizontal"></i>Local (développement)
-                    </div>
-                    <div class="smtp-panel-body">
-                        <div class="smtp-field">
-                            <label for="smtp-local-host"><i class="bi bi-hdd-network me-1"></i>Serveur SMTP (host)</label>
-                            <input type="text" id="smtp-local-host" value="<?= htmlspecialchars($smtpLocalHost) ?>" placeholder="ex : smtp.free.fr">
-                        </div>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;">
-                            <div class="smtp-field">
-                                <label for="smtp-local-port"><i class="bi bi-plug me-1"></i>Port</label>
-                                <input type="number" id="smtp-local-port" value="<?= htmlspecialchars($smtpLocalPort) ?>" min="1" max="65535" placeholder="587">
-                            </div>
-                            <div class="smtp-field">
-                                <label for="smtp-local-secure"><i class="bi bi-shield-lock me-1"></i>Sécurité</label>
-                                <select id="smtp-local-secure">
-                                    <option value="tls"  <?= $smtpLocalSecure === 'tls'  ? 'selected' : '' ?>>STARTTLS</option>
-                                    <option value="ssl"  <?= $smtpLocalSecure === 'ssl'  ? 'selected' : '' ?>>SSL/TLS</option>
-                                    <option value=""     <?= $smtpLocalSecure === ''     ? 'selected' : '' ?>>Aucune</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="smtp-field">
-                            <label for="smtp-local-user"><i class="bi bi-person me-1"></i>Utilisateur</label>
-                            <input type="text" id="smtp-local-user" value="<?= htmlspecialchars($smtpLocalUser) ?>" autocomplete="off">
-                        </div>
-                        <div class="smtp-field">
-                            <label for="smtp-local-password"><i class="bi bi-key me-1"></i>Mot de passe</label>
-                            <div class="input-group">
-                                <input type="password" id="smtp-local-password" class="form-control" value="<?= htmlspecialchars($smtpLocalPassword) ?>" autocomplete="new-password">
-                                <button type="button" class="btn btn-outline-secondary btn-toggle-pwd" data-target="smtp-local-password" tabindex="-1">
-                                    <i class="bi bi-eye-slash"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="smtp-field">
-                            <label for="smtp-local-from"><i class="bi bi-envelope me-1"></i>Adresse expéditeur (From)</label>
-                            <input type="email" id="smtp-local-from" value="<?= htmlspecialchars($smtpLocalFrom) ?>" placeholder="noreply@domaine.fr">
-                        </div>
-                        <div class="smtp-field">
-                            <label for="smtp-local-from-name"><i class="bi bi-person-badge me-1"></i>Nom expéditeur</label>
-                            <input type="text" id="smtp-local-from-name" value="<?= htmlspecialchars($smtpLocalFromName) ?>" placeholder="NIJAC">
-                        </div>
-                        <div class="smtp-save-row">
-                            <button class="local" id="btn-smtp-local"><i class="bi bi-floppy-fill me-1"></i>Enregistrer (local)</button>
-                            <span class="smtp-msg" id="msg-smtp-local"></span>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Production -->
                 <div class="smtp-panel">
                     <div class="smtp-panel-head prod">
@@ -1736,7 +1673,7 @@ function renderTableConfig() {
         : `${configRows.length} paramètre(s)`);
 }
 
-const PWD_KEYS = ['smtp_local_password', 'smtp_password'];
+const PWD_KEYS = ['smtp_password'];
 
 function makeTdConfig(val, idx, field) {
     const $td  = $('<td>').addClass(field === 'cle' ? 'col-cle' : '').attr('data-idx', idx).attr('data-field', field);
@@ -1894,10 +1831,9 @@ $('#tab-table-btn').on('shown.bs.tab', function () {
     if (!tableChargee) { tableChargee = true; chargerTableConfig(); }
 });
 
-// ── Enregistrement SMTP (local / production) ──────────────────────────────────
+// ── Enregistrement SMTP ────────────────────────────────────────────────────────
 function sauvegarderSmtp(env) {
-    const isLocal = env === 'local';
-    const p       = isLocal ? 'smtp_local_' : 'smtp_';
+    const p = 'smtp_';
     const $btn    = $('#btn-smtp-' + env);
     const $msg    = $('#msg-smtp-' + env);
 
@@ -1974,7 +1910,6 @@ $(document).on('click', '.btn-toggle-pwd', function () {
     $icon.toggleClass('bi-eye-slash', !isHidden).toggleClass('bi-eye', isHidden);
 });
 
-$('#btn-smtp-local').on('click', () => sauvegarderSmtp('local'));
 $('#btn-smtp-prod').on('click',  () => sauvegarderSmtp('prod'));
 
 // ── Test SMTP production ──────────────────────────────────────────────────────

@@ -404,13 +404,11 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
             <button class="btn btn-sm btn-supprimer px-3" id="btn-supprimer" disabled>
                 <i class="bi bi-trash3 me-1"></i>Supprimer
             </button>
-            <?php if (!$isAdmin): ?>
             <button class="btn btn-sm px-3" id="btn-dupliquer" disabled
                     style="background:#fff3cd;border:1px solid #ffc107;font-weight:600;"
-                    title="Copier ce message système pour le personnaliser">
+                    title="Copier ce message pour le personnaliser">
                 <i class="bi bi-copy me-1"></i>Copier pour personnaliser
             </button>
-            <?php endif; ?>
         </div>
         <div id="msg-systeme-info" class="mt-2 small text-warning d-none">
             <i class="bi bi-lock-fill me-1"></i>Message système — lecture seule. Utilisez <strong>Copier pour personnaliser</strong> pour créer votre propre version.
@@ -473,6 +471,10 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
 'use strict';
 
 const IS_ADMIN       = <?= $isAdmin ? 'true' : 'false' ?>;
+
+function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 const ID_CURRENT_USER = <?= $idCurrentUser ?>;
 
 let currentId       = null;
@@ -554,7 +556,9 @@ function selectionnerLigne($tr) {
         $('#cbo-type').prop('disabled', locked);
         $('#btn-enregistrer').prop('disabled', locked);
         $('#btn-supprimer').prop('disabled', locked);
-        $('#btn-dupliquer').prop('disabled', !estSys);
+        // Actif si message système (pour tous) ou message d'un autre utilisateur (admin)
+        const peutDupliquer = estSys || (IS_ADMIN && currentId !== null);
+        $('#btn-dupliquer').prop('disabled', !peutDupliquer);
         $('#msg-systeme-info').toggleClass('d-none', !locked);
         setStatus('');
     }, 'json');
