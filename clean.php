@@ -1,6 +1,6 @@
 <?php
 /**
- * NIJAC – Nettoyage / Restauration de saison (E016)
+ * NIJAC – Nettoyage / Restauration de phase (E016)
  *
  * Deux fonctions :
  *   1. Sauvegarde + désactivation des JA (Actif=0) + vidage des tables
@@ -10,7 +10,7 @@
  *      après confirmation par mot de passe admin.
  *
  * Créé par : Patrick CHAUTARD
- * Date de création : 2026-06-11
+ * Date de création : 2026-06-22
  */
 session_start();
 require_once __DIR__ . '/config/db.php';
@@ -117,7 +117,7 @@ if ($action !== '') {
 
             // Génération du dump SQL
             $lines = [];
-            $lines[] = '-- NIJAC sauvegarde saison';
+            $lines[] = '-- NIJAC sauvegarde phase';
             $lines[] = '-- Fichier  : ' . $filename;
             $lines[] = '-- Date     : ' . date('d/m/Y H:i');
             $lines[] = '-- Opérateur: ' . $moi['nom'] . ' ' . $moi['prenom'];
@@ -162,10 +162,10 @@ if ($action !== '') {
             $jaDesactives = $pdo->exec("UPDATE `ja` SET Actif = 0");
             $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
 
-            // Suppression des fichiers d'import de la saison précédente
-            $xlsSupprimes = 0;
-            foreach (glob(__DIR__ . '/Importation/Rencontres/*.xls') as $f) {
-                if (unlink($f)) $xlsSupprimes++;
+            // Suppression des fichiers d'import de la phase précédente
+            $xlsxSupprimes = 0;
+            foreach (glob(__DIR__ . '/Importation/Rencontres/*.xlsx') as $f) {
+                if (unlink($f)) $xlsxSupprimes++;
             }
 
             ob_end_clean();
@@ -175,7 +175,7 @@ if ($action !== '') {
                 'fichier'       => $filename,
                 'lignes'        => substr_count($sql, "\n") + 1,
                 'ja_desactives' => $jaDesactives,
-                'xls_supprimes' => $xlsSupprimes,
+                'xlsx_supprimes' => $xlsxSupprimes,
             ]);
             exit;
         }
@@ -559,7 +559,7 @@ $changeLogin = !empty($moi['change_login']);
 </head>
 <body>
 
-<?php $pageIcon = 'bi-database-fill-gear'; $pageTitle = 'Nettoyage / Restauration de saison'; $pageCode = 'E016'; $backUrl = 'admin_menu.php'; require __DIR__ . '/includes/page_header.php'; ?>
+<?php $pageIcon = 'bi-database-fill-gear'; $pageTitle = 'Nettoyage / Restauration de phase'; $pageCode = 'E016'; $backUrl = 'admin_menu.php'; require __DIR__ . '/includes/page_header.php'; ?>
 
 <?php require __DIR__ . '/includes/toolbar.php'; ?>
 
@@ -576,10 +576,10 @@ $changeLogin = !empty($moi['change_login']);
         <div class="card-head">
             <h2>
                 <i class="bi bi-exclamation-triangle-fill warn-icon"></i>
-                Nettoyage — Nouvelle saison
+                Nettoyage — Nouvelle phase
             </h2>
             <ul class="warn-list">
-                <li>Supprime <strong>définitivement</strong> les données de la saison en cours.</li>
+                <li>Supprime <strong>définitivement</strong> les données de la phase en cours.</li>
                 <li>Un fichier SQL est créé dans <code>/SQL/</code> avant toute suppression.</li>
                 <li>Si la sauvegarde échoue, <strong>aucune suppression</strong> n'est effectuée.</li>
             </ul>
@@ -607,7 +607,7 @@ $changeLogin = !empty($moi['change_login']);
             </div>
 
             <button id="btn-executer" class="btn-action btn-clean" disabled>
-                <i class="bi bi-calendar2-plus-fill me-2"></i>Sauvegarder et démarrer nouvelle saison
+                <i class="bi bi-calendar2-plus-fill me-2"></i>Sauvegarder et démarrer nouvelle phase
             </button>
         </div>
 
@@ -771,7 +771,7 @@ $('#btn-executer').on('click', function () {
         'DERNIÈRE CONFIRMATION\n\n' +
         '• Les tables Disponible, Equipe, Rencontre et Nomination seront vidées.\n' +
         '• Tous les JA seront désactivés (Actif = 0) mais conservés.\n' +
-        '• Les fichiers .xls du dossier Importation/Rencontres seront supprimés.\n\n' +
+        '• Les fichiers .xlsx du dossier Importation/Rencontres seront supprimés.\n\n' +
         'Une sauvegarde sera effectuée avant le nettoyage.\n\n' +
         'Cette opération est IRRÉVERSIBLE.\n\nConfirmer ?'
     )) return;
@@ -786,11 +786,11 @@ $('#btn-executer').on('click', function () {
         if (res.ok) {
             $box.html(
                 `<div class="result-ok">
-                   ✅ <strong>Nouvelle saison démarrée !</strong><br>
+                   ✅ <strong>Nouvelle phase démarrée !</strong><br>
                    Sauvegarde&nbsp;: <code>${res.fichier}</code> (${res.lignes} lignes)<br>
                    Tables Disponible, Equipe, Rencontre, Nomination vidées.<br>
                    ${res.ja_desactives} JA désactivé(s) (conservés en base).<br>
-                   ${res.xls_supprimes} fichier(s) .xls supprimé(s) de Importation/Rencontres.
+                   ${res.xlsx_supprimes} fichier(s) .xlsx supprimé(s) de Importation/Rencontres.
                  </div>`
             );
             $('#section-clean').hide();

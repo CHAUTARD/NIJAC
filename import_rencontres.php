@@ -8,7 +8,7 @@
  * les données manquantes (salles, clubs) sont signalées.
  *
  * Créé par : Patrick CHAUTARD
- * Date de création : 2026-06-11
+ * Date de création : 2026-06-22
  */
 session_start();
 if (!isset($_SESSION['utilisateur']) || empty($_SESSION['utilisateur']['is_admin'])) {
@@ -76,20 +76,32 @@ function parsePhase(string $s): int
     return 1;
 }
 
-/** Retourne Id_Division depuis code division + catégorie */
+/** Retourne Id_Division depuis code division + catégorie en interrogeant la table division */
 function getDivisionId(string $div, string $cat): ?int
 {
-    static $mapM = ['R1'=>3,'R2'=>2,'R3'=>1,'R4'=>10,'PN'=>4,'N3'=>5,'N2'=>6,'N1'=>7];
-    static $mapF = ['R1'=>8,'PN'=>9];
+    static $cache = [];
     $div = strtoupper(trim($div));
     $catNorm = mb_strtolower(strtr($cat, ['É'=>'E','È'=>'E','é'=>'e','è'=>'e']));
     $female = str_contains($catNorm, 'fem') || str_contains($catNorm, 'dame');
-    $map = $female ? $mapF : $mapM;
-    return $map[$div] ?? null;
+    $key = $div . ($female ? 'F' : 'M');
+    if (array_key_exists($key, $cache)) return $cache[$key];
+
+    $pdo = getPDO();
+    // Essai 1 : code exact avec suffixe de sexe (ex. "R1F", "R1M")
+    $stmt = $pdo->prepare('SELECT Id_Division FROM division WHERE Division = ? LIMIT 1');
+    $stmt->execute([$key]);
+    $id = $stmt->fetchColumn();
+    if ($id === false) {
+        // Essai 2 : code sans suffixe (ex. "N1", "N2", "N3" non genrées)
+        $stmt->execute([$div]);
+        $id = $stmt->fetchColumn();
+    }
+    $cache[$key] = $id !== false ? (int)$id : null;
+    return $cache[$key];
 }
 
 /**
- * Parse une feuille XLS et retourne les données structurées.
+ * Parse une feuille xlsx et retourne les données structurées.
  * @return array{saison:string, categorie:string, secteur:string, division:string,
  *               poule:int, phase:int, id_division:int|null,
  *               clubs:array, rencontres:array}
@@ -293,8 +305,8 @@ if (isset($_GET['action'])) {
                 $resultats[] = ['nom' => $nom, 'ok' => false, 'msg' => 'Erreur de téléversement.'];
                 continue;
             }
-            if (strtolower(pathinfo($nom, PATHINFO_EXTENSION)) !== 'xls') {
-                $resultats[] = ['nom' => $nom, 'ok' => false, 'msg' => 'Seuls les fichiers .xls sont acceptés.'];
+            if (strtolower(pathinfo($nom, PATHINFO_EXTENSION)) !== 'xlsx') {
+                $resultats[] = ['nom' => $nom, 'ok' => false, 'msg' => 'Seuls les fichiers .xlsx sont acceptés.'];
                 continue;
             }
 
@@ -326,7 +338,7 @@ if (isset($_GET['action'])) {
         exit;
     }
 
-    // ── Liste des fichiers XLS disponibles ─────────────────────────────────
+    // ── Liste des fichiers xlsx disponibles ─────────────────────────────────
     if ($action === 'liste') {
         $dossier = __DIR__ . '/Importation/Rencontres/';
         $pdo     = getPDO();
@@ -338,7 +350,7 @@ if (isset($_GET['action'])) {
         );
 
         $fichiers = [];
-        foreach (glob($dossier . '*.xls') as $f) {
+        foreach (glob($dossier . '*.xlsx') as $f) {
             $nom = basename($f);
             $sp  = IOFactory::load($f);
 
@@ -576,7 +588,7 @@ $isAdmin     = !empty($u['is_admin']);
 </head>
 <body>
 
-<?php $pageIcon = 'bi-file-earmark-spreadsheet'; $pageTitle = 'Import des rencontres (XLS)'; $pageCode = 'E011'; $backUrl = $isAdmin ? 'admin_menu.php' : 'Nominateur/menu.php'; require __DIR__ . '/includes/page_header.php'; ?>
+<?php $pageIcon = 'bi-file-earmark-spreadsheet'; $pageTitle = 'Import des rencontres (xlsx)'; $pageCode = 'E011'; $backUrl = $isAdmin ? 'admin_menu.php' : 'Nominateur/menu.php'; require __DIR__ . '/includes/page_header.php'; ?>
 
 <?php require __DIR__ . '/includes/toolbar.php'; ?>
 
@@ -595,14 +607,14 @@ $isAdmin     = !empty($u['is_admin']);
                 $cheminAffiche = $posNijac !== false ? substr($cheminComplet, $posNijac + 1) : $cheminComplet;
             ?>
             <code><?= htmlspecialchars($cheminAffiche) ?></code>
-            &mdash; fichiers <code>*.xls</code>
+            &mdash; fichiers <code>*.xlsx</code>
         </span>
     </div>
     <!-- Zone d'ajout de fichiers -->
     <div id="dropzone">
         <i class="bi bi-cloud-arrow-up fs-3 d-block mb-1"></i>
-        Cliquez ou déposez ici des fichiers <code>.xls</code> à ajouter
-        <input type="file" id="input-upload" accept=".xls" multiple hidden>
+        Cliquez ou déposez ici des fichiers <code>.xlsx</code> à ajouter
+        <input type="file" id="input-upload" accept=".xlsx" multiple hidden>
     </div>
     <div id="upload-status" class="mb-3"></div>
 
@@ -654,7 +666,7 @@ function chargerListe() {
     $.getJSON('import_rencontres.php?action=liste', function (r) {
         if (!r.ok) { $('#liste-fichiers').html('<div class="text-danger">Erreur chargement</div>'); return; }
         if (!r.fichiers.length) {
-            $('#liste-fichiers').html('<div class="text-muted">Aucun fichier XLS trouvé dans Importation/Rencontres/</div>');
+            $('#liste-fichiers').html('<div class="text-muted">Aucun fichier xlsx trouvé dans Importation/Rencontres/</div>');
             return;
         }
         let html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.65rem;">';

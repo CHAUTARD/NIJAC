@@ -34,6 +34,27 @@ function normaliserVille(string $ville): string
     return trim($v);
 }
 
+/** Rang du grade : J3=3, J2=2, JA1=1 — plus c'est haut, plus c'est prioritaire */
+function gradeRank(string $grade): int
+{
+    if (preg_match('/3/', $grade)) return 3;
+    if (preg_match('/2/', $grade)) return 2;
+    return 1;
+}
+
+/** Déduplique un tableau de JA (clé Nom+Prénom) en gardant le grade le plus haut */
+function deduplicateJA(array $rows, string $nomKey, string $prenomKey, string $gradeKey): array
+{
+    $byPerson = [];
+    foreach ($rows as $r) {
+        $key = mb_strtoupper($r[$nomKey] . '|' . $r[$prenomKey]);
+        if (!isset($byPerson[$key]) || gradeRank((string)$r[$gradeKey]) > gradeRank((string)$byPerson[$key][$gradeKey])) {
+            $byPerson[$key] = $r;
+        }
+    }
+    return array_values($byPerson);
+}
+
 function formaterTelephone(?string $tel): ?string
 {
     if ($tel === null || $tel === '') return null;
@@ -97,20 +118,17 @@ if ($action !== '') {
                 'SELECT j.Id_JA, j.Nom, j.Prenom, j.Email, j.Telephone,
                         j.Grade, j.Actif, j.Id_Club, j.Id_LaPoste,
                         j.Defiscalisation, j.Nationale, j.NumCompteEBP,
-                        cl.Nom AS NomClub,
-                        COALESCE(lp.CodePostal, j.Cp)   AS CodePostalJA,
-                        COALESCE(lp.Nom,        j.Ville) AS VilleJA,
-                        (SELECT COUNT(*) FROM disponible d
-                         WHERE d.Id_JA = j.Id_JA
-                        ) AS NbDispo
+                        (SELECT cl.Nom FROM Club cl WHERE cl.Id_Club = j.Id_Club LIMIT 1) AS NomClub,
+                        COALESCE((SELECT lp.CodePostal FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1), j.Cp)  AS CodePostalJA,
+                        COALESCE((SELECT lp.Nom        FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1), j.Ville) AS VilleJA,
+                        (SELECT COUNT(*) FROM disponible d WHERE d.Id_JA = j.Id_JA) AS NbDispo
                  FROM ja j
-                 LEFT JOIN Club    cl ON cl.Id_Club    = j.Id_Club
-                 LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
                  ' . $whereDept . '
                  ORDER BY j.Nom, j.Prenom'
             );
             $stmt->execute($dept !== null ? [str_pad((string)$dept, 2, '0', STR_PAD_LEFT)] : []);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $rows = deduplicateJA($rows, 'Nom', 'Prenom', 'Grade');
 
             // Normalisation des clés pour éviter les problèmes de casse PDO
             $rows = array_map(function($r) {
@@ -314,6 +332,7 @@ if ($action !== '') {
                 ];
             }
 
+            $lignes = deduplicateJA($lignes, 'nom', 'prenom', 'grade');
             ob_end_clean();
             echo json_encode(['ok' => true, 'data' => $lignes, 'count' => count($lignes)]);
             exit;
@@ -416,10 +435,6 @@ if ($action !== '') {
         error_log('[NIJAC] jugearbitre.php PDO : ' . $e->getMessage());
         ob_end_clean();
         echo json_encode(['ok' => false, 'msg' => 'Erreur BDD : ' . $e->getMessage()]);
-        exit;
-    } catch (\Throwable $e) {
-        ob_end_clean();
-        echo json_encode(['ok' => false, 'msg' => 'Erreur Excel : ' . $e->getMessage()]);
         exit;
     } catch (\Throwable $e) {
         error_log('[NIJAC] jugearbitre.php : ' . $e->getMessage());
@@ -611,7 +626,7 @@ $deptActifs  = getDeptActifs();
 <div id="menu-strip">
     <?php if ($isAdmin): ?>
     <button class="menu-item" id="btn-importer">
-        <i class="bi bi-file-earmark-arrow-up"></i>Importer Excel
+        <i class="bi bi-file-earmark-arrow-up"></i>Importer Excel 102_*.xlsx
     </button>
     <button class="menu-item" id="btn-maj-bdd">
         <i class="bi bi-database-fill-up"></i>Mettre à jour la Base de données
