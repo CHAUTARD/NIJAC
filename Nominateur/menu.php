@@ -447,6 +447,14 @@ if ($stats['prochaine_date']) {
             </a>
         </div>
 
+        <div class="menu-btn-wrap">
+            <a href="JA_R3R4.php" class="menu-btn btn-r34">
+                <div class="btn-icon"><img src="img/R3_4.png" alt="Import Rencontres"></div>
+                <span>R3 R4 ayant demandé un JA</span>
+                <span class="btn-desc">Une R3 ou R4 demande un JA</span>
+            </a>
+        </div>
+
         <!-- Déconnexion -->
         <a href="../logout.php" class="menu-btn" style="background:#f8d7da; grid-column: 4;">
             <div class="btn-icon"><i class="bi bi-box-arrow-right" style="color:#842029;"></i></div>

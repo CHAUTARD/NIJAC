@@ -10,12 +10,12 @@
  * Date de création : 2026-06-17
  */
 session_start();
-require_once __DIR__ . '/config/db.php';
-require_once __DIR__ . '/config/csrf.php';
+require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/csrf.php';
 
 // ── Sécurité : accès admin uniquement ────────────────────────────────────────
 if (!isset($_SESSION['utilisateur']) || empty($_SESSION['utilisateur']['is_admin'])) {
-    header('Location: index.php');
+    header('Location: ../index.php');
     exit;
 }
 $moi = $_SESSION['utilisateur'];
@@ -145,8 +145,8 @@ $isAdmin     = !empty($moi['is_admin']);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NIJAC – Demandes JA R3/R4</title>
 
-    <link rel="stylesheet" href="asset/css/bootstrap.min.css">
-    <link rel="stylesheet" href="asset/css/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="../asset/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../asset/css/bootstrap-icons.min.css">
 
     <style>
         :root { --nijac-blue: #1a3a6b; --r34-color: #ede7f6; }
@@ -261,7 +261,7 @@ $isAdmin     = !empty($moi['is_admin']);
 </head>
 <body>
 
-<?php $pageIcon = 'bi-person-badge'; $pageTitle = 'Demandes JA pour équipes R3 / R4'; $pageCode = 'E025'; $backUrl = $isAdmin ? 'admin_menu.php' : 'Nominateur/menu.php'; $backBtnClass = 'ms-auto btn btn-sm btn-outline-light'; require __DIR__ . '/includes/page_header.php'; ?>
+<?php $pageIcon = 'bi-person-badge'; $pageTitle = 'Demandes JA pour équipes R3 / R4'; $pageCode = 'E025'; $backUrl = $isAdmin ? '../admin_menu.php' : 'menu.php'; $backBtnClass = 'ms-auto btn btn-sm btn-outline-light'; require __DIR__ . '/../includes/page_header.php'; ?>
 
 <?php require __DIR__ . '/includes/toolbar.php'; ?>
 

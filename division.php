@@ -185,6 +185,7 @@ $changeLogin = !empty($moi['change_login']);
             cursor: pointer;
             border-bottom: 1px solid #e0e8f0;
         }
+        #tbl-divisions tbody tr:nth-child(even) { background: #f0f5fb; }
         #tbl-divisions tbody tr:hover   { background: #dce8f8; }
         #tbl-divisions tbody tr.selected { background: #b8d0f0 !important; }
         #tbl-divisions tbody td { padding: .3rem .5rem; }

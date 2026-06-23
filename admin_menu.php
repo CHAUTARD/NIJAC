@@ -279,11 +279,12 @@ $isAdmin      = !empty($u['is_admin']);
             <span class="btn-desc">Importer les rencontres depuis un fichier FFTT</span>
         </a>
 
-        <a href="JA_R3R4.php" class="menu-btn btn-r34">
-            <div class="btn-icon"><img src="img/R3_4.png" alt="Import Rencontres"></div>
-            <span>R3 R4 ayant demandé un JA</span>
-            <span class="btn-desc">Une R3 ou R4 demande un JA</span>
+        <a href="import_rencontres_nat.php" class="menu-btn btn-club">
+            <div class="btn-icon"><img src="img/ImportExcel_32.png" alt="Import Nationales"></div>
+            <span>Import Rencontres Nationales</span>
+            <span class="btn-desc">Importer les rencontres de divisions Nationales</span>
         </a>
+
 
         <a href="db-admin.php" class="menu-btn btn-dbadmin" target="_blank">
             <div class="btn-icon"><i class="bi bi-database-gear" style="font-size:2.5rem;color:#c62828;"></i></div>

@@ -307,6 +307,61 @@ if ($action !== '') {
             exit;
         }
 
+        // ── Restauration totale ───────────────────────────────────────────────
+        if ($action === 'restaurer_total') {
+            $nomFichier = basename(trim($_POST['fichier'] ?? ''));
+
+            if (!preg_match('/^Full_\d{12}\.sql$/', $nomFichier)) {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => 'Nom de fichier invalide.']);
+                exit;
+            }
+            $filepath = realpath($sqlDir . '/' . $nomFichier);
+            if ($filepath === false || dirname($filepath) !== realpath($sqlDir)) {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => 'Fichier introuvable.']);
+                exit;
+            }
+
+            $sql = file_get_contents($filepath);
+            if ($sql === false) {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => 'Impossible de lire le fichier.']);
+                exit;
+            }
+
+            // Découpage multi-lignes : accumule jusqu'au ; terminal (CREATE TABLE peut couvrir plusieurs lignes)
+            $statements = [];
+            $current    = '';
+            foreach (explode("\n", $sql) as $line) {
+                $trimmed = rtrim($line);
+                if ($trimmed === '' || str_starts_with($trimmed, '--')) continue;
+                $current .= $trimmed . "\n";
+                if (str_ends_with(rtrim($trimmed), ';')) {
+                    $s = trim($current);
+                    if ($s !== '') $statements[] = $s;
+                    $current = '';
+                }
+            }
+
+            $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+            $executed = 0;
+            foreach ($statements as $stmt) {
+                $pdo->exec($stmt);
+                $executed++;
+            }
+            $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+
+            ob_end_clean();
+            echo json_encode([
+                'ok'       => true,
+                'msg'      => 'Restauration totale effectuée avec succès.',
+                'fichier'  => $nomFichier,
+                'executed' => $executed,
+            ]);
+            exit;
+        }
+
     } catch (\PDOException $e) {
         error_log('[NIJAC] clean.php PDO : ' . $e->getMessage());
         ob_end_clean();
@@ -547,6 +602,12 @@ $changeLogin = !empty($moi['change_login']);
         #spinner.show { display: flex; }
 
 
+        /* ── Restauration totale : fond rouge foncé ── */
+        .card-full-restore .card-head  { background: #fee2e2; border-color: #ef4444; }
+        .card-full-restore .card-head h2 { color: #7f1d1d; }
+        .btn-restore-total { background: #dc2626; color: #fff; }
+        .btn-restore-total:hover:not(:disabled) { background: #b91c1c; }
+
         /* ── Aucune sauvegarde ── */
         .no-backup {
             text-align: center;
@@ -716,6 +777,62 @@ $changeLogin = !empty($moi['change_login']);
         </div>
 
         <div id="full-result" class="result-zone"></div>
+    </div>
+
+    <!-- ── CARTE 4 : Restauration totale ── -->
+    <div class="op-card card-full-restore">
+        <div class="card-head">
+            <h2>
+                <i class="bi bi-database-fill-up warn-icon"></i>
+                Restauration totale de la base
+            </h2>
+            <ul class="warn-list" style="color:#7c2d12;">
+                <li>Restaure <strong>toutes les tables</strong> (structure + données) depuis un fichier <code>Full_*.sql</code>.</li>
+                <li>Chaque table est <strong>supprimée puis recréée</strong> — opération <strong>irréversible</strong>.</li>
+                <li>Utilisez uniquement pour repartir d'une sauvegarde complète validée.</li>
+            </ul>
+            <div class="tables-badge" id="full-restore-tables-badge">
+                <span style="background:#fecaca;border-color:#ef4444;color:#7f1d1d;">Toutes les tables</span>
+            </div>
+        </div>
+
+        <div class="card-body-custom" id="section-full-restore">
+
+            <div id="full-restore-file-zone">
+                <div class="no-backup" id="full-restore-loading">
+                    <i class="bi bi-hourglass-split"></i>Chargement des sauvegardes totales…
+                </div>
+            </div>
+
+            <div id="full-restore-form" style="display:none">
+                <div style="margin-bottom:.8rem;">
+                    <label for="select-full-fichier" style="font-size:.82rem;font-weight:600;color:#374151;display:block;margin-bottom:.25rem;">
+                        <i class="bi bi-file-earmark-code me-1"></i>Fichier de sauvegarde totale
+                    </label>
+                    <select id="select-full-fichier" style="width:100%;border:2px solid #c8d4e8;border-radius:6px;padding:.4rem .7rem;font-size:.85rem;margin-bottom:1rem;background:#fff;"></select>
+                    <div id="full-fichier-meta" class="fichier-meta"></div>
+                </div>
+
+                <div class="pwd-group">
+                    <label for="full-restore-password"><i class="bi bi-key-fill me-1"></i>Mot de passe administrateur</label>
+                    <div class="input-group">
+                        <input type="password" id="full-restore-password" class="pwd-input"
+                               autocomplete="current-password" placeholder="Entrez votre mot de passe…">
+                        <button class="btn btn-outline-secondary" type="button" id="full-restore-toggle-pwd"
+                                tabindex="-1" title="Afficher / masquer le mot de passe">
+                            <i id="full-restore-eye" class="bi bi-eye-slash"></i>
+                        </button>
+                    </div>
+                    <div id="full-restore-msg-pwd" class="pwd-msg text-danger"></div>
+                </div>
+
+                <button id="btn-restaurer-total" class="btn-action" style="background:#dc2626;color:#fff;" disabled>
+                    <i class="bi bi-database-fill-up me-2"></i>Restaurer toute la base de données
+                </button>
+            </div>
+        </div>
+
+        <div id="full-restore-result" class="result-zone"></div>
     </div>
 
 </div><!-- /main-content -->
@@ -1015,6 +1132,118 @@ $('#btn-full').on('click', function () {
     });
 });
 
+// ═══════════════════════════════════════════════════════════════════
+//  Bloc RESTAURATION TOTALE
+// ═══════════════════════════════════════════════════════════════════
+let fullRestorePwdOk = false;
+let fullRestoreTimer = null;
+let fullFichiers     = [];
+
+function chargerListeSauvegardesTotal2() {
+    $.get('clean.php', { action: 'liste_sauvegardes_total' }, res => {
+        fullFichiers = res.fichiers || [];
+        const $zone  = $('#full-restore-file-zone');
+
+        if (!fullFichiers.length) {
+            $zone.html('<div class="no-backup"><i class="bi bi-inbox"></i>Aucune sauvegarde totale disponible dans <code>/SQL/</code></div>');
+            $('#full-restore-form').hide();
+            return;
+        }
+
+        $zone.html('');
+        const $sel = $('#select-full-fichier').empty();
+        fullFichiers.forEach(f => {
+            $sel.append(new Option(`${f.nom}  (${f.taille} Ko — ${f.date})`, f.nom));
+        });
+        majFullFichierMeta();
+        $('#full-restore-loading').hide();
+        $('#full-restore-form').show();
+    }, 'json').fail(() => {
+        $('#full-restore-file-zone').html('<div class="no-backup"><i class="bi bi-wifi-off"></i>Erreur lors du chargement des sauvegardes.</div>');
+    });
+}
+
+function majFullFichierMeta() {
+    const nom = $('#select-full-fichier').val();
+    const f   = fullFichiers.find(x => x.nom === nom);
+    if (f) $('#full-fichier-meta').text(`Taille : ${f.taille} Ko — Créé le ${f.date}`);
+}
+
+$('#select-full-fichier').on('change', majFullFichierMeta);
+
+$('#full-restore-password').on('input', function () {
+    const val = $(this).val();
+    fullRestorePwdOk = false;
+    $('#btn-restaurer-total').prop('disabled', true);
+    $('#full-restore-msg-pwd').text('').removeClass('text-danger text-success');
+
+    clearTimeout(fullRestoreTimer);
+    if (val.length < 3) return;
+
+    fullRestoreTimer = setTimeout(() => {
+        $.post('clean.php', { action: 'verifier_mdp', password: val }, res => {
+            if (res.ok) {
+                fullRestorePwdOk = true;
+                $('#full-restore-password').removeClass('is-invalid');
+                $('#full-restore-msg-pwd').text('✔ Mot de passe correct.').addClass('text-success').removeClass('text-danger');
+                $('#btn-restaurer-total').prop('disabled', false);
+            } else {
+                $('#full-restore-password').addClass('is-invalid');
+                $('#full-restore-msg-pwd').text('✖ ' + res.msg).addClass('text-danger').removeClass('text-success');
+            }
+        }, 'json');
+    }, 600);
+});
+
+$('#full-restore-password').on('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); if (fullRestorePwdOk) $('#btn-restaurer-total').trigger('click'); }
+});
+
+$('#btn-restaurer-total').on('click', function () {
+    if (!fullRestorePwdOk) return;
+    const fichier = $('#select-full-fichier').val();
+    if (!fichier) return;
+
+    if (!confirm(
+        'RESTAURATION TOTALE DE LA BASE\n\n' +
+        'Le fichier « ' + fichier + ' » va être rejoué.\n' +
+        'TOUTES les tables seront supprimées puis recréées\n' +
+        'à partir de ce fichier.\n\n' +
+        'Cette opération est IRRÉVERSIBLE.\n\nConfirmer ?'
+    )) return;
+
+    spinner(true);
+    setStatus('Restauration totale en cours : ' + fichier + ' …');
+    $(this).prop('disabled', true);
+
+    $.post('clean.php', {
+        action:   'restaurer_total',
+        fichier:  fichier,
+        password: $('#full-restore-password').val()
+    }, res => {
+        spinner(false);
+        const $box = $('#full-restore-result').addClass('show');
+        if (res.ok) {
+            $box.html(
+                `<div class="result-ok">
+                   ✅ <strong>Restauration totale réussie !</strong><br>
+                   Fichier&nbsp;: <code>${res.fichier}</code> — ${res.executed} instruction(s) exécutée(s).
+                 </div>`
+            );
+            $('#section-full-restore').hide();
+            setStatus('Restauration totale terminée — ' + res.fichier);
+        } else {
+            $box.html(`<div class="result-err"><strong>Erreur :</strong> ${res.msg}</div>`);
+            $('#btn-restaurer-total').prop('disabled', !fullRestorePwdOk);
+            setStatus('Erreur restauration totale : ' + res.msg);
+        }
+    }, 'json').fail(() => {
+        spinner(false);
+        $('#full-restore-result').addClass('show').html('<div class="result-err"><strong>Erreur réseau.</strong></div>');
+        $('#btn-restaurer-total').prop('disabled', !fullRestorePwdOk);
+    });
+});
+
 // ── Afficher / masquer les mots de passe ─────────────────────────
 function togglePwd(inputId, imgId) {
     const $i = $('#' + inputId);
@@ -1022,14 +1251,16 @@ function togglePwd(inputId, imgId) {
     $i.attr('type', isHidden ? 'text' : 'password');
     $('#' + imgId).toggleClass('bi-eye-slash', !isHidden).toggleClass('bi-eye', isHidden);
 }
-$('#clean-toggle-pwd').on('click',   () => togglePwd('clean-password',   'clean-eye'));
-$('#restore-toggle-pwd').on('click', () => togglePwd('restore-password', 'restore-eye'));
-$('#full-toggle-pwd').on('click',    () => togglePwd('full-password',    'full-eye'));
+$('#clean-toggle-pwd').on('click',        () => togglePwd('clean-password',        'clean-eye'));
+$('#restore-toggle-pwd').on('click',      () => togglePwd('restore-password',      'restore-eye'));
+$('#full-toggle-pwd').on('click',         () => togglePwd('full-password',         'full-eye'));
+$('#full-restore-toggle-pwd').on('click', () => togglePwd('full-restore-password', 'full-restore-eye'));
 
 // ── Initialisation ────────────────────────────────────────────────
 $(function () {
     chargerListeSauvegardes();
     chargerListeSauvegardesTotal();
+    chargerListeSauvegardesTotal2();
 });
 </script>
 <?php require __DIR__ . '/includes/footer.php'; ?>
