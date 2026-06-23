@@ -851,6 +851,16 @@ require __DIR__ . '/includes/toolbar.php'; ?>
 
 <!-- ── Vue calendrier mensuelle ───────────────────────────────────────── -->
 <div id="section-cal-grille">
+    <!-- Barre de navigation saison -->
+    <div id="nav-saison" style="display:flex;align-items:center;gap:.75rem;padding:.5rem 0 .6rem;flex-wrap:wrap;">
+        <button id="btn-saison-prev" class="btn btn-sm btn-outline-secondary" style="font-size:.82rem;font-weight:600;">
+            <i class="bi bi-chevron-left"></i> Saison précédente
+        </button>
+        <span id="lbl-saison-cal" style="font-size:.92rem;font-weight:700;color:var(--nijac-blue);flex:1;text-align:center;"></span>
+        <button id="btn-saison-next" class="btn btn-sm btn-outline-secondary" style="font-size:.82rem;font-weight:600;">
+            Saison suivante <i class="bi bi-chevron-right"></i>
+        </button>
+    </div>
     <div class="cal-legende">
         <span class="cal-legende-item"><span class="cal-dot dot-O"></span>Disponible</span>
         <span class="cal-legende-item"><span class="cal-dot dot-P"></span>Partiel</span>
@@ -880,6 +890,21 @@ require __DIR__ . '/includes/toolbar.php'; ?>
 <script src="../asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';
+
+// Saison courante lue depuis la configuration (ex : "2026/2027")
+const CONFIG_SAISON = <?= json_encode(getConfig('saison') ?: '') ?>;
+
+// Année de début de la saison config (ex : 2026 pour "2026/2027")
+// Fallback : septembre courant si config vide
+(function () {
+    const m = CONFIG_SAISON.match(/(\d{4})/);
+    window._yrDebutConfig = m ? +m[1] : (function () {
+        const n = new Date(); return n.getMonth() >= 8 ? n.getFullYear() : n.getFullYear() - 1;
+    })();
+})();
+
+// Offset de navigation : 0 = saison config, -1 = précédente, +1 = suivante
+let saisonOffset = 0;
 
 let idJaCourant  = null;
 let nomJaCourant = '';
@@ -1371,29 +1396,44 @@ function renderCalendrierMensuel() {
         jourDetailMap[date] = { journee: +jn, saison: s, statut: e.statut || 'vide' };
     });
 
-    if (!Object.keys(jourDetailMap).length) {
-        $('#cal-mois-grille').html('<div class="text-muted text-center py-4">Aucune journée disponible pour cette saison.</div>');
-        return;
-    }
-
-    const dates = Object.keys(jourDetailMap).sort();
-    const debut = new Date(dates[0] + 'T00:00:00');
-    const fin   = new Date(dates[dates.length - 1] + 'T00:00:00');
-
     const today = new Date();
     today.setHours(0,0,0,0);
 
-    const $grille = $('#cal-mois-grille').empty();
-    let cur = new Date(debut.getFullYear(), debut.getMonth(), 1);
-    const finMois = new Date(fin.getFullYear(), fin.getMonth() + 1, 1);
+    // Année de début de la saison affichée (config + offset de navigation)
+    const yrDebut = window._yrDebutConfig + saisonOffset;
 
-    while (cur < finMois) {
-        const annee = cur.getFullYear();
-        const mois  = cur.getMonth();
+    // Libellé de la saison dans la barre de navigation
+    $('#lbl-saison-cal').text(`Saison ${yrDebut} / ${yrDebut + 1}`);
+
+    // Plage fixe : septembre → juin de la saison
+    const moisSaison = [
+        [yrDebut,     8],  // Septembre
+        [yrDebut,     9],  // Octobre
+        [yrDebut,    10],  // Novembre
+        [yrDebut,    11],  // Décembre
+        [yrDebut + 1, 0],  // Janvier
+        [yrDebut + 1, 1],  // Février
+        [yrDebut + 1, 2],  // Mars
+        [yrDebut + 1, 3],  // Avril
+        [yrDebut + 1, 4],  // Mai
+        [yrDebut + 1, 5],  // Juin
+    ];
+
+    const $grille = $('#cal-mois-grille').empty();
+    moisSaison.forEach(([annee, mois]) => {
         $grille.append(buildMonthGrid(annee, mois, today));
-        cur = new Date(annee, mois + 1, 1);
-    }
+    });
 }
+
+// ── Navigation saison ─────────────────────────────────────────────────────────
+$('#btn-saison-prev').on('click', function () {
+    saisonOffset--;
+    renderCalendrierMensuel();
+});
+$('#btn-saison-next').on('click', function () {
+    saisonOffset++;
+    renderCalendrierMensuel();
+});
 
 function buildMonthGrid(annee, mois, today) {
     const $wrap = $('<div class="cal-mois">');

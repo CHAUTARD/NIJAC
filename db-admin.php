@@ -318,6 +318,7 @@ $nomComplet = htmlspecialchars(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? ''));
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="<?= htmlspecialchars(csrfToken()) ?>">
 <title>NIJAC – Administration BDD (E099)</title>
 <link rel="stylesheet" href="asset/css/bootstrap.min.css">
 <link rel="stylesheet" href="asset/css/bootstrap-icons.min.css">
@@ -579,6 +580,12 @@ body {
 </head>
 <body>
 
+<!-- En-tête -->
+<div id="page-header">
+    <i class="bi bi-database-gear me-2"></i>Administration base de données
+    <small class="opacity-75 ms-2">(E099)</small>
+</div>
+
 <!-- ToolStrip -->
 <div id="toolbar">
     <span class="ts-user"><i class="bi bi-person-fill me-1"></i><?= $nomComplet ?></span>
@@ -586,12 +593,6 @@ body {
     <a href="admin_menu.php" class="btn btn-sm btn-light py-0 ms-auto">
         <i class="bi bi-arrow-left me-1"></i>Retour menu
     </a>
-</div>
-
-<!-- En-tête -->
-<div id="page-header">
-    <i class="bi bi-database-gear me-2"></i>Administration base de données
-    <small class="opacity-75 ms-2">(E099)</small>
 </div>
 
 <!-- Layout -->
@@ -691,13 +692,18 @@ body {
             <div class="tab-pane" id="pane-sql">
                 <div class="d-flex flex-column" style="flex:1;overflow:hidden;gap:.5rem;">
                     <div class="flex-shrink-0">
-                        <textarea id="sql-editor" spellcheck="false" placeholder="SELECT * FROM ja LIMIT 10 ;"></textarea>
-                        <div class="d-flex gap-2 mt-1">
+                        <textarea id="sql-editor" spellcheck="false" placeholder="SELECT * FROM ja LIMIT 10 ;">SELECT * FROM ja LIMIT 10 ;</textarea>
+                        <div class="d-flex gap-2 mt-1 align-items-center">
                             <button class="btn btn-sm btn-primary" id="btn-run-sql">
-                                <i class="bi bi-play-fill me-1"></i>Exécuter <kbd class="ms-1" style="background:rgba(255,255,255,.2);font-size:.7rem;">Ctrl+Entrée</kbd>
+                                <i class="bi bi-play-fill me-1"></i>Exécuter
                             </button>
-                            <button class="btn btn-sm btn-outline-secondary" id="btn-clear-sql">
-                                <i class="bi bi-x-lg"></i>
+                            <button class="btn btn-sm btn-outline-secondary" id="btn-clear-sql"
+                                    title="Effacer la requête et le résultat">
+                                <i class="bi bi-x-lg me-1"></i>Effacer
+                            </button>
+                            <button class="btn btn-sm btn-outline-success d-none" id="btn-export-csv"
+                                    title="Télécharger le résultat en CSV">
+                                <i class="bi bi-filetype-csv me-1"></i>Exporter CSV
                             </button>
                             <div id="sql-meta" class="ms-auto align-self-center"></div>
                         </div>
@@ -1247,12 +1253,16 @@ $(document).on('click', '.btn-drop-col', function () {
 /* ─────────────────────────────────────────────────────────────────────────────
    Onglet Requêteur SQL
 ───────────────────────────────────────────────────────────────────────────── */
+let lastSqlResult = null; // { cols, rows } du dernier SELECT
+
 function runSql() {
     const sql = $('#sql-editor').val().trim();
     if (!sql) return;
 
     $('#sql-result').html('<div class="text-muted p-2">Exécution…</div>');
     $('#sql-meta').text('');
+    $('#btn-export-csv').addClass('d-none');
+    lastSqlResult = null;
 
     api({ action: 'sql', sql }).done(r => {
         if (!r.ok) {
@@ -1267,6 +1277,8 @@ function runSql() {
             if (r.rows.length === 0) {
                 $('#sql-result').html('<div class="text-muted p-2">Aucun résultat.</div>');
             } else {
+                lastSqlResult = { cols: r.cols, rows: r.rows };
+                $('#btn-export-csv').removeClass('d-none');
                 const ths = r.cols.map(c => `<th>${escHtml(c)}</th>`).join('');
                 const trs = r.rows.map(row => {
                     const tds = r.cols.map(c => {
@@ -1283,18 +1295,46 @@ function runSql() {
         } else {
             $('#sql-result').html(`<div class="alert alert-success p-2 m-1" style="font-size:.82rem;"><i class="bi bi-check-circle me-1"></i><strong>${r.affected}</strong> ligne(s) affectée(s)</div>`);
             $('#sql-meta').html(meta);
-            loadTables(); // Rafraîchit la liste en cas de DDL
+            loadTables();
         }
     }).fail(() => {
         $('#sql-result').html('<div class="alert alert-danger p-2 m-1">Erreur de communication avec le serveur.</div>');
     });
 }
 
+function exportCsv() {
+    if (!lastSqlResult) return;
+    const { cols, rows } = lastSqlResult;
+    const escape = v => {
+        if (v === null || v === undefined) return '';
+        const s = String(v);
+        return s.includes(';') || s.includes('"') || s.includes('\n')
+            ? '"' + s.replace(/"/g, '""') + '"'
+            : s;
+    };
+    const lines = [cols.map(escape).join(';')];
+    rows.forEach(row => lines.push(cols.map(c => escape(row[c])).join(';')));
+    const bom  = '﻿'; // BOM UTF-8 pour Excel
+    const blob = new Blob([bom + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'export_' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
 $('#btn-run-sql').on('click', runSql);
-$('#btn-clear-sql').on('click', () => { $('#sql-editor').val(''); $('#sql-result').empty(); $('#sql-meta').text(''); });
+$('#btn-export-csv').on('click', exportCsv);
+$('#btn-clear-sql').on('click', () => {
+    $('#sql-editor').val('');
+    $('#sql-result').empty();
+    $('#sql-meta').text('');
+    $('#btn-export-csv').addClass('d-none');
+    lastSqlResult = null;
+});
 
 $('#sql-editor').on('keydown', function (e) {
-    if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); runSql(); }
     // Tab → 4 espaces
     if (e.key === 'Tab') {
         e.preventDefault();

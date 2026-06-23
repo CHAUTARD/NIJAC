@@ -152,9 +152,28 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 .ja-arrow { color:#bbb; font-size:.9rem; flex-shrink:0; }
 .ja-card:hover .ja-arrow { color:var(--nijac-blue); }
 
-/* ── Avatar rouge : JA sans disponibilité saisie ── */
+/* ── JA sans disponibilité saisie ── */
 .ja-card.no-dispo .ja-avatar { background:#c62828 !important; color:#fff !important; }
-.ja-card.no-dispo { border-color:#ef9a9a; }
+.ja-card.no-dispo { border-color:#ef9a9a; background:#fff5f5 !important; }
+.ja-card.no-dispo .ja-nom { color:#c62828; }
+
+/* ── JA avec disponibilité saisie ── */
+.ja-dispo-badge {
+    width:18px; height:18px; border-radius:50%;
+    background:#2e7d32; color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    font-size:.65rem; flex-shrink:0;
+}
+
+/* ── Légende ── */
+#legende-dispo {
+    display:none; align-items:center; gap:1.1rem;
+    font-size:.78rem; color:#555; margin-left:auto;
+}
+.leg-item { display:flex; align-items:center; gap:.35rem; }
+.leg-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+.leg-dot-ok  { background:#2e7d32; }
+.leg-dot-ko  { background:#c62828; }
 
 /* ── Placeholder ── */
 #placeholder { text-align:center; color:#bbb; padding:3rem 1rem; }
@@ -184,7 +203,19 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
     <div id="spinner-dept" class="spinner-border spinner-border-sm text-secondary" role="status">
         <span class="visually-hidden">Chargement…</span>
     </div>
-    <div class="input-group input-group-sm ms-auto" style="max-width:240px; display:none" id="wrap-filtre-ja">
+    <div id="legende-dispo">
+        <span class="leg-item"><span class="leg-dot leg-dot-ok"></span>Disponibilités saisies</span>
+        <span class="leg-item"><span class="leg-dot leg-dot-ko"></span>Aucune disponibilité</span>
+    </div>
+    <div class="input-group input-group-sm" style="max-width:200px; display:none" id="wrap-filtre-dispo">
+        <label class="input-group-text" for="sel-filtre-dispo"><i class="bi bi-funnel-fill"></i></label>
+        <select id="sel-filtre-dispo" class="form-select form-select-sm">
+            <option value="">Tous les JA</option>
+            <option value="ok">Avec disponibilités</option>
+            <option value="ko">Sans disponibilités</option>
+        </select>
+    </div>
+    <div class="input-group input-group-sm ms-2" style="max-width:240px; display:none" id="wrap-filtre-ja">
         <span class="input-group-text"><i class="bi bi-search"></i></span>
         <input type="search" id="filtre-ja" class="form-control" placeholder="Filtrer par nom / prénom…" autocomplete="off">
     </div>
@@ -203,7 +234,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 <?php require __DIR__ . '/../includes/footer.php'; ?>
 
 <script src="../asset/js/jquery-3.7.1.min.js"></script>
-    <script src="../asset/js/nijac-csrf.js"></script>
+<script src="../asset/js/nijac-csrf.js"></script>
 <script src="../asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';
@@ -222,15 +253,17 @@ $(function () {
             $('#liste-ja').hide().empty();
             $('#placeholder').show();
             $('#info-dept').text('');
+            $('#wrap-filtre-dispo').hide();
             $('#wrap-filtre-ja').hide();
+            $('#legende-dispo').hide();
+            $('#sel-filtre-dispo').val('');
             return;
         }
         chargerJA(dept);
     });
 
-    $('#filtre-ja').on('input', function () {
-        filtrerJA($(this).val().trim().toLowerCase());
-    });
+    $('#filtre-ja').on('input', filtrerJA);
+    $('#sel-filtre-dispo').on('change', filtrerJA);
 });
 
 function chargerJA(dept) {
@@ -277,11 +310,15 @@ function chargerJA(dept) {
             const jas = groupes[d];
             if (!jas || !jas.length) return;
 
+            const nbDispo   = jas.filter(j => parseInt(j.HasDispo, 10) > 0).length;
+            const nbSansDispo = jas.length - nbDispo;
             $liste.append(`
                 <div class="dept-titre">
                     <span class="dept-badge">${escHtml(d)}</span>
                     <span>${escHtml(DEPT_NOMS[d] || d)}</span>
-                    <span class="dept-nb">${jas.length} JA</span>
+                    <span class="dept-nb" data-total="${jas.length}">${jas.length} JA</span>
+                    <span style="font-size:.75rem;color:#2e7d32;font-weight:600;"><i class="bi bi-check-circle-fill me-1"></i>${nbDispo} avec dispo</span>
+                    ${nbSansDispo > 0 ? `<span style="font-size:.75rem;color:#c62828;font-weight:600;"><i class="bi bi-exclamation-circle-fill me-1"></i>${nbSansDispo} sans dispo</span>` : ''}
                 </div>
                 <div class="ja-grid" id="grid-${escHtml(d)}"></div>
             `);
@@ -296,15 +333,19 @@ function chargerJA(dept) {
                 const lieu = [ja.Cp, ja.Ville].filter(Boolean).join(' ');
 
                 // Classe CSS selon le grade (JA1, JA2, JA3)
-                const gradeClass = gradeToClass(ja.Grade);
-                const noDispoClass = (parseInt(ja.HasDispo, 10) === 0) ? 'no-dispo' : '';
+                const gradeClass  = gradeToClass(ja.Grade);
+                const hasDispo    = parseInt(ja.HasDispo, 10) > 0;
+                const noDispoClass = hasDispo ? '' : 'no-dispo';
+                const dispoBadge  = hasDispo
+                    ? `<div class="ja-dispo-badge" title="Disponibilités saisies"><i class="bi bi-check-lg"></i></div>`
+                    : `<div class="ja-dispo-badge" style="background:#c62828;" title="Aucune disponibilité saisie"><i class="bi bi-x-lg"></i></div>`;
 
                 // Lien vers disponibilite_ja.php dans une nouvelle fenêtre
                 $grid.append(`
                     <a class="ja-card ${gradeClass} ${noDispoClass}"
                        href="disponibilite_ja.php?id_ja=${ja.Id_JA}"
                        target="_blank"
-                       title="Ouvrir les disponibilités de ${escHtml(ja.Prenom)} ${escHtml(ja.Nom)}">
+                       title="${hasDispo ? 'Disponibilités saisies — ' : 'Aucune disponibilité — '}${escHtml(ja.Prenom)} ${escHtml(ja.Nom)}">
                         <div class="ja-avatar">${escHtml(initiales)}</div>
                         <div class="ja-corps">
                             <div class="ja-nom">${escHtml(ja.Prenom)} ${escHtml(ja.Nom)}</div>
@@ -314,27 +355,40 @@ function chargerJA(dept) {
                                 ${lieu ? escHtml(lieu) : ''}
                             </div>
                         </div>
-                        <i class="bi bi-box-arrow-up-right ja-arrow"></i>
+                        ${dispoBadge}
                     </a>
                 `);
             });
         });
 
         $liste.show();
+        $('#wrap-filtre-dispo').show();
         $('#wrap-filtre-ja').show();
+        $('#legende-dispo').css('display', 'flex');
     }).fail(function () {
         $('#spinner-dept').hide();
         $('#liste-ja').html('<div class="alert alert-danger">Erreur de chargement.</div>').show();
     });
 }
 
-function filtrerJA(terme) {
+function filtrerJA() {
+    const terme  = $('#filtre-ja').val().trim().toLowerCase();
+    const dispo  = $('#sel-filtre-dispo').val(); // '' | 'ok' | 'ko'
+
     $('#liste-ja .ja-grid').each(function () {
         let visibles = 0;
         $(this).find('.ja-card').each(function () {
-            const texte = $(this).text().toLowerCase();
-            const ok = !terme || texte.includes(terme);
-            $(this).toggle(ok);
+            const $card   = $(this);
+            const texte   = $card.text().toLowerCase();
+            const hasDispo = !$card.hasClass('no-dispo');
+
+            const okTexte = !terme || texte.includes(terme);
+            const okDispo = !dispo
+                || (dispo === 'ok' &&  hasDispo)
+                || (dispo === 'ko' && !hasDispo);
+
+            const ok = okTexte && okDispo;
+            $card.toggle(ok);
             if (ok) visibles++;
         });
         // Mettre à jour le compteur dans le titre de section

@@ -8,7 +8,7 @@
  * Permet également de forcer le changement de mot de passe à la prochaine connexion.
  *
  * Créé par : Patrick CHAUTARD
- * Date de création : 2026-06-11
+ * Date de création : 2026-06-23
  */
 session_start();
 require_once __DIR__ . '/config/db.php';
@@ -366,7 +366,12 @@ $deptActifs  = getDeptActifs();
                 Mot de passe :
                 <small class="fw-normal text-muted" id="mdp-hint">(laisser vide = inchangé)</small>
             </label>
-            <input type="password" id="txt-mdp" class="form-control form-control-sm" maxlength="100" autocomplete="new-password" style="max-width:320px">
+            <div class="input-group" style="max-width:320px">
+                <input type="password" id="txt-mdp" class="form-control form-control-sm" maxlength="100" autocomplete="new-password">
+                <button class="btn btn-sm btn-outline-secondary" type="button" id="btn-toggle-mdp" tabindex="-1" title="Afficher / masquer le mot de passe">
+                    <i id="eye-mdp" class="bi bi-eye-slash"></i>
+                </button>
+            </div>
         </div>
 
         <div class="mb-2">
@@ -500,7 +505,7 @@ $('#btn-nouveau').on('click', function () {
     $('#cbo-role').val('Utilisateur');
     $('#cbo-dept').val(0);
     $('#txt-email-lntt').val('');
-    $('#txt-mdp').val('');
+    $('#txt-mdp').val('Change_On_Install');
     $('#chk-actif').prop('checked', true);
     $('#chk-change-login').prop('checked', true);
     $('#mdp-hint').hide();
@@ -550,6 +555,14 @@ $('#btn-supprimer').on('click', function () {
             toast(res.msg, false);
         }
     }, 'json');
+});
+
+// ── Afficher / masquer le mot de passe ───────────────────────────────────────
+$('#btn-toggle-mdp').on('click', function () {
+    const $input = $('#txt-mdp');
+    const hidden = $input.attr('type') === 'password';
+    $input.attr('type', hidden ? 'text' : 'password');
+    $('#eye-mdp').toggleClass('bi-eye-slash', !hidden).toggleClass('bi-eye', hidden);
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────

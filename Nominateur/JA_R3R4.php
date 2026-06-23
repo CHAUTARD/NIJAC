@@ -14,7 +14,7 @@ require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/csrf.php';
 
 // ── Sécurité : accès admin uniquement ────────────────────────────────────────
-if (!isset($_SESSION['utilisateur']) || empty($_SESSION['utilisateur']['is_admin'])) {
+if (!isset($_SESSION['utilisateur']) ) {
     header('Location: ../index.php');
     exit;
 }
@@ -211,7 +211,13 @@ $isAdmin     = !empty($moi['is_admin']);
             position: sticky;
             top: 0;
             z-index: 1;
+            cursor: pointer;
+            user-select: none;
         }
+        #tbl-equipes thead th:hover { background: #d8e4f4; }
+        #tbl-equipes thead th.sort-asc  .sort-icon::after { content: ' ▲'; font-size: .7rem; color: var(--nijac-blue); }
+        #tbl-equipes thead th.sort-desc .sort-icon::after { content: ' ▼'; font-size: .7rem; color: var(--nijac-blue); }
+        #tbl-equipes thead th:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: ' ⇅'; font-size: .65rem; color: #aaa; }
 
         #tbl-equipes tbody tr { border-bottom: 1px solid #e0e8f0; }
         #tbl-equipes tbody tr:hover { background: #f3effe; }
@@ -286,8 +292,9 @@ $isAdmin     = !empty($moi['is_admin']);
     <span id="lbl-count" class="ms-3 text-muted" style="font-size:.82rem;"></span>
 
     <div class="ms-auto d-flex align-items-center gap-2">
-        <span style="font-size:.8rem; color:#555;">
-            <i class="bi bi-square-fill text-success me-1"></i>Vert = JA demandé
+        <span style="font-size:.8rem; color:#555; display:flex; align-items:center; gap:.35rem;">
+            <span style="display:inline-block;width:14px;height:14px;background:#e8f5e9;border:2px solid #2e7d32;border-radius:2px;flex-shrink:0;"></span>
+            Vert = JA demandé
         </span>
     </div>
 </div>
@@ -297,11 +304,11 @@ $isAdmin     = !empty($moi['is_admin']);
     <table id="tbl-equipes">
         <thead>
             <tr>
-                <th style="width:3rem;">Dépt</th>
-                <th>Club</th>
-                <th>Équipe</th>
-                <th style="width:5rem;">Division</th>
-                <th style="width:8rem; text-align:center;">JA demandé</th>
+                <th style="width:3rem;"   data-col="0">Dépt<span class="sort-icon"></span></th>
+                <th                       data-col="1">Club<span class="sort-icon"></span></th>
+                <th                       data-col="2">Équipe<span class="sort-icon"></span></th>
+                <th style="width:5rem;"   data-col="3">Division<span class="sort-icon"></span></th>
+                <th style="width:8rem; text-align:center;" data-col="4">JA demandé<span class="sort-icon"></span></th>
             </tr>
         </thead>
         <tbody id="tbody-equipes">
@@ -348,8 +355,10 @@ async function apiPost(data) {
     return r.json();
 }
 
-// ── Données brutes ────────────────────────────────────────────────────────────
+// ── Données brutes + état de tri ─────────────────────────────────────────────
 let tousEquipes = [];
+let sortCol = 1;   // colonne active (0=Dépt, 1=Club, 2=Équipe, 3=Division, 4=JAdemande)
+let sortAsc = true;
 
 // ── Charger les départements disponibles ─────────────────────────────────────
 async function chargerDepartements() {
@@ -375,6 +384,18 @@ async function chargerListe() {
     filtrerEtAfficher();
 }
 
+// ── Valeur de tri pour une colonne ───────────────────────────────────────────
+function valTri(e, col) {
+    switch (col) {
+        case 0: return +e.Departement;
+        case 1: return (e.NomClub   || '').toLowerCase();
+        case 2: return (e.NomEquipe || '').toLowerCase();
+        case 3: return (e.Division  || '').toLowerCase();
+        case 4: return +e.JAdemande;
+        default: return '';
+    }
+}
+
 // ── Filtrer et afficher ───────────────────────────────────────────────────────
 function filtrerEtAfficher() {
     const divFilter  = document.getElementById('sel-division').value;
@@ -388,6 +409,20 @@ function filtrerEtAfficher() {
             if (!inClub && !inEquipe) return false;
         }
         return true;
+    });
+
+    // Tri
+    data.sort((a, b) => {
+        const va = valTri(a, sortCol), vb = valTri(b, sortCol);
+        const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+        return sortAsc ? cmp : -cmp;
+    });
+
+    // Indicateurs visuels dans les en-têtes
+    document.querySelectorAll('#tbl-equipes thead th').forEach(th => {
+        const col = +th.dataset.col;
+        th.classList.toggle('sort-asc',  col === sortCol &&  sortAsc);
+        th.classList.toggle('sort-desc', col === sortCol && !sortAsc);
     });
 
     const tbody = document.getElementById('tbody-equipes');
@@ -467,6 +502,16 @@ document.getElementById('tbody-equipes').addEventListener('change', async ev => 
         `${data.length} équipe(s) — dont ${nbJA} avec JA demandé`;
 
     toast(res.msg, 'ok');
+});
+
+// ── Tri par clic sur en-tête ─────────────────────────────────────────────────
+document.querySelectorAll('#tbl-equipes thead th[data-col]').forEach(th => {
+    th.addEventListener('click', () => {
+        const col = +th.dataset.col;
+        if (sortCol === col) { sortAsc = !sortAsc; }
+        else { sortCol = col; sortAsc = true; }
+        filtrerEtAfficher();
+    });
 });
 
 // ── Filtres ──────────────────────────────────────────────────────────────────
