@@ -237,12 +237,6 @@ $isAdmin      = !empty($u['is_admin']);
             <span class="btn-desc">Référencer les salles de compétition et leur adresse</span>
         </a>
 
-        <a href="clean.php" class="menu-btn btn-saison">
-            <div class="btn-icon"><img src="img/Nettoyage.png" alt="Saison"></div>
-            <span>Saison</span>
-            <span class="btn-desc">Suppression des informations sur la saison dernière</span>
-        </a>
-
         <a href="utilisateur.php" class="menu-btn btn-utilisateur">
             <div class="btn-icon"><img src="img/Utilisateur.png" alt="Utilisateur"></div>
             <span>Utilisateur</span>
@@ -267,12 +261,6 @@ $isAdmin      = !empty($u['is_admin']);
             <span class="btn-desc">Définir les divisions et leur niveau</span>
         </a>
 
-        <a href="configuration.php" class="menu-btn btn-configuration">
-            <div class="btn-icon"><img src="img/Parametres.png" alt="Configuration"></div>
-            <span>Configuration</span>
-            <span class="btn-desc">Paramètres généraux de l'application</span>
-        </a>
-
         <a href="import_rencontres.php" class="menu-btn btn-club">
             <div class="btn-icon"><img src="img/Competition.png" alt="Import Rencontres"></div>
             <span>Import Rencontres</span>
@@ -285,12 +273,25 @@ $isAdmin      = !empty($u['is_admin']);
             <span class="btn-desc">Importer les rencontres de divisions Nationales</span>
         </a>
 
+        <a href="clean.php" class="menu-btn btn-saison" style="grid-column: 1;">
+            <div class="btn-icon"><img src="img/Nettoyage.png" alt="Saison"></div>
+            <span>Saison</span>
+            <span class="btn-desc">Suppression des informations sur la saison dernière</span>
+        </a>
 
-        <a href="db-admin.php" class="menu-btn btn-dbadmin" target="_blank">
-            <div class="btn-icon"><i class="bi bi-database-gear" style="font-size:2.5rem;color:#c62828;"></i></div>
+        <a href="configuration.php" class="menu-btn btn-configuration">
+            <div class="btn-icon"><img src="img/Parametres.png" alt="Configuration"></div>
+            <span>Configuration</span>
+            <span class="btn-desc">Paramètres généraux de l'application</span>
+        </a>
+
+        <?php if (($_SESSION['utilisateur']['nom'] ?? '') === 'CHAUTARD') : ?>
+        <a href="db-admin.php" class="menu-btn btn-dbadmin" target="_blank" style="background: repeating-linear-gradient(45deg, #fce4ec, #fce4ec 10px, #ffcdd2 10px, #ffcdd2 20px); border: 2px solid #c62828;">
+            <div class="btn-icon"><img src="img/database.png" alt="Base de données"></div>
             <span>Base de données</span>
             <span class="btn-desc">Administration directe de la base de données</span>
         </a>
+        <?php endif; ?>
 
         <a href="logout.php" class="menu-btn" style="background:#f8d7da; grid-column: 5;">
             <div class="btn-icon"><i class="bi bi-box-arrow-right" style="color:#842029;"></i></div>
