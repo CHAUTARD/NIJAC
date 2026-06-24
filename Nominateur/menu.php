@@ -66,7 +66,7 @@ try {
             SELECT r.Date AS d, r.Journee FROM rencontre r
             JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
             WHERE r.Date >= CURDATE()
-              AND SUBSTRING(ed.Id_Club, 2, 2) IN ($deptPh)
+              AND SUBSTRING(ed.Id_Club, 3, 2) IN ($deptPh)
             ORDER BY r.Date ASC LIMIT 1
         ");
         $stmt->execute($deptsAutorises);
@@ -85,7 +85,7 @@ try {
             JOIN rencontre r  ON r.Id_Rencontre = n.Id_Rencontre
             JOIN equipe ed    ON ed.Id_Equipe   = r.Id_EquipeDom
             WHERE n.Valide = 0 AND r.Date >= CURDATE()
-              AND SUBSTRING(ed.Id_Club, 2, 2) IN ($deptPh)
+              AND SUBSTRING(ed.Id_Club, 3, 2) IN ($deptPh)
         ");
         $stmt->execute($deptsAutorises);
         $stats['nominations_valider'] = (int)$stmt->fetchColumn();
@@ -98,7 +98,7 @@ try {
             JOIN rencontre r  ON r.Id_Rencontre = n.Id_Rencontre
             JOIN equipe ed    ON ed.Id_Equipe   = r.Id_EquipeDom
             WHERE n.Valide = 1 AND n.EmailEnvoye = 0 AND r.Date >= CURDATE()
-              AND SUBSTRING(ed.Id_Club, 2, 2) IN ($deptPh)
+              AND SUBSTRING(ed.Id_Club, 3, 2) IN ($deptPh)
         ");
         $stmt->execute($deptsAutorises);
         $stats['convocations_envoyer'] = (int)$stmt->fetchColumn();
@@ -110,7 +110,7 @@ try {
             SELECT COUNT(*) FROM rencontre r
             JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
             WHERE r.Date >= CURDATE()
-              AND SUBSTRING(ed.Id_Club, 2, 2) IN ($deptPh)
+              AND SUBSTRING(ed.Id_Club, 3, 2) IN ($deptPh)
               AND NOT EXISTS (
                   SELECT 1 FROM nomination n
                   WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1

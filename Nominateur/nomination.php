@@ -51,7 +51,7 @@ if ($action !== '') {
             FROM rencontre r
             JOIN division dv ON dv.Id_Division = r.Id_Division
             JOIN equipe eq ON eq.Id_Equipe = r.Id_EquipeDom
-            WHERE SUBSTRING(eq.Id_Club, 2, 2) IN ($deptPh)
+            WHERE SUBSTRING(eq.Id_Club, 3, 2) IN ($deptPh)
               AND (dv.ArbitrageObligatoire = 1 OR eq.JAdemande = 1)
               AND r.Date >= CURDATE()
             ORDER BY r.Journee, r.Date
@@ -107,7 +107,7 @@ if ($action !== '') {
             LEFT JOIN nomination n  ON n.Id_Rencontre  = r.Id_Rencontre
             LEFT JOIN ja ja_n       ON ja_n.Id_JA       = n.Id_JA
             WHERE r.Date = ?
-              AND SUBSTRING(ed.Id_Club, 2, 2) IN ($deptPh)
+              AND SUBSTRING(ed.Id_Club, 3, 2) IN ($deptPh)
               AND (dv.ArbitrageObligatoire = 1 OR ed.JAdemande = 1)
             ORDER BY dv.Ord, r.Poule, r.Id_Rencontre
         ");

@@ -34,7 +34,7 @@ try {
             Poule        TINYINT UNSIGNED NOT NULL DEFAULT 0,
             Rang         TINYINT UNSIGNED NOT NULL DEFAULT 0,
             CodeDept     CHAR(2)          NULL,
-            Id_Club      INT              NULL,
+            Id_Club      CHAR(8)          NULL,
             Id_Equipe    INT              NULL,
             UNIQUE KEY uq_nom_div (Nom(150), Division)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -277,7 +277,7 @@ if (isset($_GET['action'])) {
         if ($action === 'sauvegarder_assoc') {
             $idEn    = (int)($_POST['id_equipe_nat'] ?? 0);
             $codeDept = trim($_POST['code_dept'] ?? '') ?: null;
-            $idClub  = ($_POST['id_club'] ?? '') !== '' ? (int)$_POST['id_club'] : null;
+            $idClub  = ($_POST['id_club'] ?? '') !== '' ? trim($_POST['id_club']) : null;
             if ($idEn <= 0) { ob_end_clean(); echo json_encode(['ok' => false, 'err' => 'Id invalide.']); exit; }
             $pdo->prepare("UPDATE equipe_nationale SET CodeDept = ?, Id_Club = ? WHERE Id_EquipeNat = ?")
                 ->execute([$codeDept, $idClub, $idEn]);
@@ -346,7 +346,7 @@ if (isset($_GET['action'])) {
             ")->fetchAll(PDO::FETCH_ASSOC);
             $assocMap = [];
             foreach ($assocRows as $r) {
-                $assocMap[$r['Division']][$r['Poule']][$r['Rang']] = (int)$r['Id_Club'];
+                $assocMap[$r['Division']][$r['Poule']][$r['Rang']] = $r['Id_Club'];
             }
 
             // Charger divisions : essai code exact (N1M, N2M…)

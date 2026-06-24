@@ -271,7 +271,7 @@ if ($action !== '') {
             // Charger tous les clubs pour enrichir nom_club
             $clubsMap = [];
             foreach ($pdo->query('SELECT Id_Club, Nom FROM Club')->fetchAll() as $c) {
-                $clubsMap[(int)$c['Id_Club']] = $c['Nom'];
+                $clubsMap[$c['Id_Club']] = $c['Nom'];
             }
 
             // Charger la table laposte : clé = "CP|VILLE_NORMALISEE" → Id_LaPoste
@@ -324,8 +324,8 @@ if ($action !== '') {
                     'telephone'       => formaterTelephone($tel !== '' ? $tel : null),
                     'grade'           => $grade,
                     'actif'           => $actif,
-                    'id_club'         => $idClub !== '' ? (int)$idClub : null,
-                    'nom_club'        => $idClub !== '' ? ($clubsMap[(int)$idClub] ?? '') : '',
+                    'id_club'         => $idClub !== '' ? $idClub : null,
+                    'nom_club'        => $idClub !== '' ? ($clubsMap[$idClub] ?? '') : '',
                     'id_laposte'      => $idLaPoste,
                     'cp'              => $cp,
                     'ville'           => $ville,
@@ -415,7 +415,7 @@ if ($action !== '') {
                 $actif     = !empty($l['actif']) ? 1 : 0;
                 $defisc    = !empty($l['defiscalisation']) ? 1 : 0;
                 $nationale = !empty($l['nationale']) ? 1 : 0;
-                $idClub  = $l['id_club'] !== '' && $l['id_club'] !== null ? (int)$l['id_club'] : null;
+                $idClub  = ($l['id_club'] ?? '') !== '' ? trim($l['id_club']) : null;
                 $idLap   = $l['id_laposte'] !== '' && $l['id_laposte'] !== null ? (int)$l['id_laposte'] : null;
                 $cpVal   = $l['cp']    !== '' && $l['cp']    !== null ? trim($l['cp'])    : null;
                 $villeVal= $l['ville'] !== '' && $l['ville'] !== null ? trim($l['ville']) : null;
@@ -867,7 +867,7 @@ function lignesFiltreesTriees() {
             String(l.ville           ?? '').toLowerCase().includes(term))
         : source;
 
-    const numFields = ['id', 'id_club'];
+    const numFields = ['id'];
     result.sort((a, b) => {
         if (numFields.includes(sortField)) {
             return sortDir === 'asc' ? (+a[sortField]) - (+b[sortField]) : (+b[sortField]) - (+a[sortField]);

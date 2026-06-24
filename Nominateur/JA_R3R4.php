@@ -37,14 +37,14 @@ if ($action !== '') {
             $sql = "SELECT e.Id_Equipe, e.Nom AS NomEquipe, e.JAdemande,
                            c.Id_Club, c.Nom AS NomClub,
                            d.Division, d.Nom AS NomDivision,
-                           FLOOR(c.Id_Club / 10000) % 100 AS Departement
+                           SUBSTRING(c.Id_Club, 3, 2) AS Departement
                     FROM equipe e
                     JOIN club c ON c.Id_Club = e.Id_Club
                     JOIN division d ON d.Id_Division = e.Id_Division
                     WHERE e.Id_Division IN (1, 10)";
             $params = [];
             if ($dept > 0) {
-                $sql .= " AND FLOOR(c.Id_Club / 10000) % 100 = ?";
+                $sql .= " AND SUBSTRING(c.Id_Club, 3, 2) = ?";
                 $params[] = $dept;
             }
             $sql .= " ORDER BY d.Ord DESC, c.Nom, e.Nom";

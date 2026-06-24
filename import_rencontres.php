@@ -218,7 +218,7 @@ function parseSheet(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet): array
                     $tel = preg_replace('/\s/', '', $mt[1]);
             }
             $result['clubs'][$nom] = [
-                'id_club' => (int)$numClub,
+                'id_club' => $numClub,
                 'nom'     => $nom,
                 'tel'     => $tel,
                 'email'   => $email,

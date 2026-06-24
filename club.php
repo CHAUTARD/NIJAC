@@ -14,10 +14,6 @@ session_start();
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/csrf.php';
 require_once __DIR__ . '/config/app_config.php';
-require_once __DIR__ . '/vendor/autoload.php';
-
-use PhpOffice\PhpSpreadsheet\IOFactory;
-
 // ── Sécurité ──────────────────────────────────────────────────────────────────
 if (!isset($_SESSION['utilisateur']) || empty($_SESSION['utilisateur']['is_admin'])) {
     header('Location: index.php');
@@ -38,75 +34,18 @@ if ($action !== '') {
 
         // ── Charger la liste ───────────────────────────────────────────────
         if ($action === 'liste') {
-            $dept = isset($_POST['dept']) && $_POST['dept'] !== '' ? $_POST['dept'] : null;
-
-            // CP/Ville proviennent toujours de la salle principale (EstPrincipale=1)
-            $selectPrincipale = 'SELECT c.Id_Club, c.Nom,
-                                        lp.CodePostal,
-                                        lp.Nom AS Ville,
-                                        (SELECT COUNT(*) FROM Salle s2 WHERE s2.Id_Club = c.Id_Club) AS NbSalles
-                                 FROM Club c
-                                 LEFT JOIN Salle   sp ON sp.Id_Club    = c.Id_Club
-                                                     AND sp.EstPrincipale = 1
-                                 LEFT JOIN laposte lp ON lp.Id_LaPoste = sp.Id_Laposte';
-
-            if ($dept !== null) {
-                $deptPad = str_pad((string)$dept, 2, '0', STR_PAD_LEFT);
-                $stmt = $pdo->prepare(
-                    $selectPrincipale . '
-                     WHERE c.Id_Club IN (
-                         SELECT s.Id_Club
-                         FROM Salle   s
-                         JOIN laposte lf ON lf.Id_LaPoste = s.Id_Laposte
-                         WHERE LEFT(lf.CodePostal, 2) = ?
-                     )
-                     ORDER BY c.Nom'
-                );
-                $stmt->execute([$deptPad]);
-                $rows = $stmt->fetchAll();
-            } else {
-                $rows = $pdo->query($selectPrincipale . ' ORDER BY c.Nom')->fetchAll();
-            }
+            $rows = $pdo->query(
+                'SELECT c.Id_Club, c.Nom,
+                        lp.CodePostal,
+                        lp.Nom AS Ville,
+                        (SELECT COUNT(*) FROM Salle s2 WHERE s2.Id_Club = c.Id_Club) AS NbSalles
+                 FROM Club c
+                 LEFT JOIN Salle   sp ON sp.Id_Club    = c.Id_Club
+                                     AND sp.EstPrincipale = 1
+                 LEFT JOIN laposte lp ON lp.Id_LaPoste = sp.Id_Laposte
+                 ORDER BY c.Nom'
+            )->fetchAll();
             echo json_encode(['ok' => true, 'data' => $rows]);
-            exit;
-        }
-
-        // ── Importer Excel ─────────────────────────────────────────────────
-        if ($action === 'importer_excel') {
-            if (empty($_FILES['fichier']) || $_FILES['fichier']['error'] !== UPLOAD_ERR_OK) {
-                ob_end_clean();
-                echo json_encode(['ok' => false, 'msg' => 'Aucun fichier reçu.']);
-                exit;
-            }
-            if (strtolower(pathinfo($_FILES['fichier']['name'], PATHINFO_EXTENSION)) !== 'xlsx') {
-                ob_end_clean();
-                echo json_encode(['ok' => false, 'msg' => 'Seul le format .xlsx est accepté.']);
-                exit;
-            }
-
-            $spreadsheet = IOFactory::load($_FILES['fichier']['tmp_name']);
-            $sheet       = $spreadsheet->getActiveSheet();
-            $maxRow      = $sheet->getHighestRow();
-
-            $lignes = [];
-            for ($row = 3; $row <= $maxRow; $row++) {
-                $col1 = trim((string)$sheet->getCell('A' . $row)->getValue());
-                $col3 = trim((string)$sheet->getCell('B' . $row)->getValue());
-                if ($col1 === '' && $col3 === '') continue;
-
-                $idClub = $col1 !== '' ? (int)$col1 : null;
-                $nom    = $col3 !== '' ? mb_strtoupper($col3, 'UTF-8') : null;
-
-                if ($idClub === null) continue;
-
-                $lignes[] = [
-                    'id_club' => $idClub,
-                    'nom'     => $nom !== '' ? $nom : null,
-                ];
-            }
-
-            ob_end_clean();
-            echo json_encode(['ok' => true, 'data' => $lignes, 'count' => count($lignes)]);
             exit;
         }
 
@@ -128,14 +67,14 @@ if ($action !== '') {
             $stmtInsert  = $pdo->prepare('INSERT INTO Club (Id_Club, Nom) VALUES (?, ?)');
 
             foreach ($lignes as $l) {
-                $id     = (int)($l['id_club']      ?? 0);
-                $idOrig = (int)($l['id_club_orig'] ?? $id);
+                $id     = trim($l['id_club']      ?? '');
+                $idOrig = trim($l['id_club_orig'] ?? $id);
                 $nom    = trim($l['nom'] ?? '') ?: null;
-                if ($id === 0) continue;
+                if ($id === '') continue;
 
                 try {
                     // Renommage du N° FFTT : l'UPDATE CASCADE propage aux tables liées
-                    if ($idOrig !== $id && $idOrig !== 0) {
+                    if ($idOrig !== $id && $idOrig !== '') {
                         $stmtCheck->execute([$idOrig]);
                         if ((int)$stmtCheck->fetchColumn() > 0) {
                             $stmtRename->execute([$id, $idOrig]);
@@ -164,10 +103,6 @@ if ($action !== '') {
     } catch (PDOException $e) {
         error_log('[NIJAC] club.php PDO : ' . $e->getMessage());
         echo json_encode(['ok' => false, 'msg' => 'Erreur BDD : ' . $e->getMessage()]);
-        exit;
-    } catch (\PhpOffice\PhpSpreadsheet\Exception $e) {
-        ob_end_clean();
-        echo json_encode(['ok' => false, 'msg' => 'Erreur Excel : ' . $e->getMessage()]);
         exit;
     } catch (\Throwable $e) {
         ob_end_clean();
@@ -326,15 +261,10 @@ $deptActifs  = getDeptActifs();
 
 <!-- MenuStrip -->
 <div id="menu-strip">
-    <button class="menu-item" id="btn-importer" title="Edition 203 FFTT : Liste des clubs du comité D76 - SEINE MARITIME">
-        <i class="bi bi-file-earmark-arrow-up"></i>Importation Excel (xlsx)
-    </button>
     <button class="menu-item" id="btn-maj-bdd">
         <i class="bi bi-database-fill-up"></i>Mettre à jour la Base de données
     </button>
-    <input type="file" id="file-input" accept=".xlsx" style="display:none">
     <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 club(s)</span>
-    &nbsp;&nbsp;&nbsp;Fichier d'origine : édition 204 FFTT - comité D76.
     <span style="flex:1"></span>
     <label for="sel-dept" style="font-size:.85rem;font-weight:700;color:#444;white-space:nowrap;margin:0;">
         <i class="bi bi-map me-1"></i>Département
@@ -342,7 +272,7 @@ $deptActifs  = getDeptActifs();
     <select id="sel-dept" class="form-select form-select-sm w-auto">
         <option value="">— Tous —</option>
         <?php foreach ($deptActifs as $d): ?>
-        <option value="<?= (int)$d['code'] ?>"><?= (int)$d['code'] ?> — <?= htmlspecialchars($d['nom']) ?></option>
+        <option value="<?= htmlspecialchars($d['code']) ?>"><?= htmlspecialchars($d['code']) ?> — <?= htmlspecialchars($d['nom']) ?></option>
         <?php endforeach; ?>
     </select>
     <button class="menu-item" id="btn-plusieurs-salles" title="Afficher uniquement les clubs ayant plusieurs salles" style="border-color:transparent;">
@@ -385,8 +315,8 @@ $deptActifs  = getDeptActifs();
 const DEPTS_REGION = new Set(<?= json_encode(array_column($deptActifs, 'code')) ?>);
 
 function deptDeClub(idClub) {
-    // Format : 9[dept2chiffres][4chiffres] — ex. 9140007 → '14'
-    return String(idClub ?? '').substring(1, 3);
+    // Format : 0[9][dept 2 chiffres][4 chiffres] — ex. 09760442 → '76'
+    return String(idClub ?? '').substring(2, 4);
 }
 
 let lignes           = [];
@@ -394,7 +324,7 @@ let cellActive       = null;
 let sortField        = 'id_club';
 let sortDir          = 'asc';
 let searchTerm       = '';
-let deptFiltre       = '';
+let deptFiltre       = '';   // filtré côté JS
 let filtreMultiSalle = false;
 let filtreHorsRegion = false;
 
@@ -423,6 +353,7 @@ function toast(msg, ok = true) {
 function lignesFiltreesTriees() {
     const term = searchTerm.toLowerCase();
     let result = [...lignes];
+    if (deptFiltre)      result = result.filter(l => deptDeClub(l.id_club) === deptFiltre);
     if (filtreMultiSalle) result = result.filter(l => (l.nb_salles ?? 0) > 1);
     if (filtreHorsRegion) result = result.filter(l => !DEPTS_REGION.has(deptDeClub(l.id_club)));
     if (term) result = result.filter(l =>
@@ -435,7 +366,7 @@ function lignesFiltreesTriees() {
         const va = String(a[sortField] ?? '').toLowerCase();
         const vb = String(b[sortField] ?? '').toLowerCase();
         if (sortField === 'id_club') {
-            return sortDir === 'asc' ? (+a.id_club) - (+b.id_club) : (+b.id_club) - (+a.id_club);
+            return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
         }
         return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
     });
@@ -564,7 +495,7 @@ function validerCellule($inner, $td) {
 // ── Charger depuis la BDD ─────────────────────────────────────────────────────
 function chargerListe() {
     spinner(true);
-    $.post('club.php', { action: 'liste', dept: deptFiltre }, function (res) {
+    $.post('club.php', { action: 'liste' }, function (res) {
         spinner(false);
         if (!res.ok) { toast(res.msg, false); return; }
         lignes = res.data.map(r => ({
@@ -584,34 +515,6 @@ function chargerListe() {
         renderGrille();
     }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
 }
-
-// ── Importer Excel ────────────────────────────────────────────────────────────
-$('#btn-importer').on('click', () => $('#file-input').trigger('click'));
-
-$('#file-input').on('change', function () {
-    const file = this.files[0];
-    if (!file) return;
-
-    const fd = new FormData();
-    fd.append('action', 'importer_excel');
-    fd.append('fichier', file);
-
-    spinner(true);
-    $.ajax({
-        url: 'club.php', type: 'POST',
-        data: fd, processData: false, contentType: false, dataType: 'json',
-        success(res) {
-            spinner(false);
-            if (!res.ok) { toast(res.msg, false); return; }
-            lignes = res.data;
-            renderGrille();
-            toast(`${res.count} club(s) importé(s) depuis Excel.`);
-            setStatus(`${res.count} club(s) importé(s). Vérifiez les données puis cliquez sur « Mettre à jour la BDD ».`);
-        },
-        error() { spinner(false); toast("Erreur lors de l'import.", false); }
-    });
-    this.value = '';
-});
 
 // ── Mettre à jour la BDD ──────────────────────────────────────────────────────
 $('#btn-maj-bdd').on('click', function () {
@@ -668,7 +571,7 @@ $('#btn-hors-region').on('click', function () {
 // ── Filtre département ────────────────────────────────────────────────────────
 $('#sel-dept').on('change', function () {
     deptFiltre = $(this).val();
-    chargerListe();
+    renderGrille();
 });
 
 // ── Recherche ─────────────────────────────────────────────────────────────────

@@ -210,7 +210,7 @@ if ($action !== '') {
                 $nom           = trim($l['nom']            ?? '');
                 $adresse       = trim($l['adresse']        ?? '') ?: null;
                 $idLaposte     = $l['id_laposte']  !== '' && $l['id_laposte'] !== null ? (int)$l['id_laposte'] : null;
-                $idClub        = $l['id_club']     !== '' && $l['id_club']    !== null ? (int)$l['id_club']    : null;
+                $idClub        = ($l['id_club'] ?? '') !== '' ? trim($l['id_club']) : null;
                 $estPrincipale = !empty($l['est_principale']) ? 1 : 0;
 
                 if ($nom === '') {
@@ -529,7 +529,7 @@ function lignesFiltreesTriees() {
             String(l.nom_club       ?? '').toLowerCase().includes(term))
         : [...lignes];
 
-    const numFields = ['id_salle', 'id_club', 'id_laposte'];
+    const numFields = ['id_salle', 'id_laposte'];
     result.sort((a, b) => {
         if (numFields.includes(sortField)) {
             return sortDir === 'asc' ? (+a[sortField]) - (+b[sortField]) : (+b[sortField]) - (+a[sortField]);
@@ -698,7 +698,7 @@ $('#file-input').on('change', function () {
                 res.data.forEach(l => {
                     l._nouveau = true;        // marque ligne non encore en BDD
                     l.id_salle = ++seq;       // ID provisoire pour affichage
-                    const c = clubs.find(c => +c.id_club === +l.id_club);
+                    const c = clubs.find(c => c.id_club === l.id_club);
                     l.nom_club = c ? c.nom : '';
                 });
 

@@ -116,7 +116,7 @@ if ($action !== '') {
                     'email'     => $email !== '' ? $email : null,
                     'telephone' => formaterTelephone($telephone !== '' ? $telephone : null),
                     'fonction'  => 'Correspondant',
-                    'id_club'   => $idClub !== '' ? (int)$idClub : null,
+                    'id_club'   => $idClub !== '' ? $idClub : null,
                     'nom_club'  => '',
                 ];
             }
@@ -144,7 +144,7 @@ if ($action !== '') {
                 $email     = $l['email']     !== '' ? $l['email']     : null;
                 $telephone = formaterTelephone($l['telephone'] !== '' ? $l['telephone'] : null);
                 $fonction  = trim($l['fonction']  ?? 'Correspondant');
-                $idClub    = (int)($l['id_club']   ?? 0) ?: null;
+                $idClub    = ($l['id_club'] ?? '') !== '' ? trim($l['id_club']) : null;
 
                 // Vérifier/créer le club référencé
                 if ($idClub !== null) {
@@ -449,7 +449,7 @@ function lignesFiltreesTriees() {
             String(l.ville       ?? '').toLowerCase().includes(term))
         : [...lignes];
 
-    const numFields = ['id', 'id_club'];
+    const numFields = ['id'];
     result.sort((a, b) => {
         if (numFields.includes(sortField)) {
             return sortDir === 'asc' ? (+a[sortField]) - (+b[sortField]) : (+b[sortField]) - (+a[sortField]);
