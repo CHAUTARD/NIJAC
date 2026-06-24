@@ -694,8 +694,8 @@ body {
                     <div class="flex-shrink-0">
                         <textarea id="sql-editor" spellcheck="false" placeholder="SELECT * FROM ja LIMIT 10 ;">SELECT * FROM ja LIMIT 10 ;</textarea>
                         <div class="d-flex gap-2 mt-1 align-items-center">
-                            <button class="btn btn-sm btn-primary" id="btn-run-sql">
-                                <i class="bi bi-play-fill me-1"></i>Exécuter
+                            <button class="btn btn-sm btn-primary" id="btn-run-sql" title="Exécuter (Ctrl+Entrée)">
+                                <i class="bi bi-play-fill me-1"></i>Exécuter <kbd style="font-size:.7rem;opacity:.8;">Ctrl+↵</kbd>
                             </button>
                             <button class="btn btn-sm btn-outline-secondary" id="btn-clear-sql"
                                     title="Effacer la requête et le résultat">
@@ -1335,12 +1335,50 @@ $('#btn-clear-sql').on('click', () => {
 });
 
 $('#sql-editor').on('keydown', function (e) {
-    // Tab → 4 espaces
+
+    // Ctrl+Entrée → exécuter
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        runSql();
+        return;
+    }
+
+    // Tab / Shift+Tab → indenter / désindenter le bloc sélectionné
     if (e.key === 'Tab') {
         e.preventDefault();
-        const s = this.selectionStart, end = this.selectionEnd;
-        this.value = this.value.substring(0, s) + '    ' + this.value.substring(end);
-        this.selectionStart = this.selectionEnd = s + 4;
+        const el  = this;
+        const s   = el.selectionStart;
+        const end = el.selectionEnd;
+        const val = el.value;
+
+        if (s === end) {
+            // Pas de sélection : insérer 4 espaces au curseur
+            el.value = val.substring(0, s) + '    ' + val.substring(end);
+            el.selectionStart = el.selectionEnd = s + 4;
+        } else {
+            // Sélection multi-ligne : indenter ou désindenter chaque ligne
+            const before   = val.substring(0, s);
+            const selected = val.substring(s, end);
+            const after    = val.substring(end);
+            const lineStart = before.lastIndexOf('\n') + 1;
+            const block     = val.substring(lineStart, end);
+
+            if (e.shiftKey) {
+                // Désindenter : retirer jusqu'à 4 espaces en début de chaque ligne
+                const newBlock = block.replace(/^( {1,4})/gm, '');
+                const diff     = block.length - newBlock.length;
+                el.value = val.substring(0, lineStart) + newBlock + after;
+                el.selectionStart = Math.max(lineStart, s - Math.min(4, s - lineStart));
+                el.selectionEnd   = end - diff;
+            } else {
+                // Indenter : ajouter 4 espaces en début de chaque ligne
+                const newBlock = block.replace(/^/gm, '    ');
+                const diff     = newBlock.length - block.length;
+                el.value = val.substring(0, lineStart) + newBlock + after;
+                el.selectionStart = s + (s === lineStart ? 4 : 4);
+                el.selectionEnd   = end + diff;
+            }
+        }
     }
 });
 

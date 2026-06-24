@@ -122,16 +122,26 @@ if ($action !== '') {
             $updates = 0;
             $erreurs = [];
 
-            $stmtCheck  = $pdo->prepare('SELECT COUNT(*) FROM Club WHERE Id_Club = ?');
-            $stmtUpdate = $pdo->prepare('UPDATE Club SET Nom = ? WHERE Id_Club = ?');
-            $stmtInsert = $pdo->prepare('INSERT INTO Club (Id_Club, Nom) VALUES (?, ?)');
+            $stmtCheck   = $pdo->prepare('SELECT COUNT(*) FROM Club WHERE Id_Club = ?');
+            $stmtRename  = $pdo->prepare('UPDATE Club SET Id_Club = ? WHERE Id_Club = ?');
+            $stmtUpdate  = $pdo->prepare('UPDATE Club SET Nom = ? WHERE Id_Club = ?');
+            $stmtInsert  = $pdo->prepare('INSERT INTO Club (Id_Club, Nom) VALUES (?, ?)');
 
             foreach ($lignes as $l) {
-                $id  = (int)($l['id_club'] ?? 0);
-                $nom = trim($l['nom'] ?? '') ?: null;
+                $id     = (int)($l['id_club']      ?? 0);
+                $idOrig = (int)($l['id_club_orig'] ?? $id);
+                $nom    = trim($l['nom'] ?? '') ?: null;
                 if ($id === 0) continue;
 
                 try {
+                    // Renommage du N° FFTT : l'UPDATE CASCADE propage aux tables liées
+                    if ($idOrig !== $id && $idOrig !== 0) {
+                        $stmtCheck->execute([$idOrig]);
+                        if ((int)$stmtCheck->fetchColumn() > 0) {
+                            $stmtRename->execute([$id, $idOrig]);
+                        }
+                    }
+
                     $stmtCheck->execute([$id]);
                     if ((int)$stmtCheck->fetchColumn() > 0) {
                         $stmtUpdate->execute([$nom, $id]);
@@ -236,6 +246,10 @@ $deptActifs  = getDeptActifs();
         #tbl-clubs tbody tr:nth-child(even) { background: #f7faff; }
         #tbl-clubs tbody tr:hover   { background: #dce8f8; }
         #tbl-clubs tbody tr.selected { background: #b8d0f0 !important; }
+        #tbl-clubs tbody tr.hors-region { background: #ffe4e6; }
+        #tbl-clubs tbody tr.hors-region:nth-child(even) { background: #fecdd3; }
+        #tbl-clubs tbody tr.hors-region:hover { background: #fda4af; }
+        #tbl-clubs tbody tr.hors-region.selected { background: #b8d0f0 !important; }
         #tbl-clubs tbody td { border: 1px solid #e0e8f0; padding: 0; }
 
         /* Cellule éditable */
@@ -257,6 +271,12 @@ $deptActifs  = getDeptActifs();
             color: #6b7280;
             font-style: italic;
             background: #f0f4fa;
+        }
+        td.col-id.id-modifie .cell-inner {
+            color: #b45309;
+            font-style: normal;
+            font-weight: 700;
+            background: #fef3c7;
         }
 
 
@@ -328,6 +348,9 @@ $deptActifs  = getDeptActifs();
     <button class="menu-item" id="btn-plusieurs-salles" title="Afficher uniquement les clubs ayant plusieurs salles" style="border-color:transparent;">
         <i class="bi bi-door-open me-1"></i>Plusieurs salles
     </button>
+    <button class="menu-item" id="btn-hors-region" title="Afficher uniquement les clubs hors région" style="border-color:transparent;">
+        <i class="bi bi-geo-alt me-1"></i>Hors région
+    </button>
     <input type="search" id="search-input" placeholder="🔍 Rechercher…">
 </div>
 
@@ -359,6 +382,13 @@ $deptActifs  = getDeptActifs();
 <script>
 'use strict';
 
+const DEPTS_REGION = new Set(<?= json_encode(array_column($deptActifs, 'code')) ?>);
+
+function deptDeClub(idClub) {
+    // Format : 9[dept2chiffres][4chiffres] — ex. 9140007 → '14'
+    return String(idClub ?? '').substring(1, 3);
+}
+
 let lignes           = [];
 let cellActive       = null;
 let sortField        = 'id_club';
@@ -366,6 +396,7 @@ let sortDir          = 'asc';
 let searchTerm       = '';
 let deptFiltre       = '';
 let filtreMultiSalle = false;
+let filtreHorsRegion = false;
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
 function spinner(show) { $('#spinner').toggleClass('show', show); }
@@ -393,6 +424,7 @@ function lignesFiltreesTriees() {
     const term = searchTerm.toLowerCase();
     let result = [...lignes];
     if (filtreMultiSalle) result = result.filter(l => (l.nb_salles ?? 0) > 1);
+    if (filtreHorsRegion) result = result.filter(l => !DEPTS_REGION.has(deptDeClub(l.id_club)));
     if (term) result = result.filter(l =>
         String(l.id_club     ?? '').toLowerCase().includes(term) ||
         String(l.nom         ?? '').toLowerCase().includes(term) ||
@@ -433,9 +465,11 @@ function renderGrille() {
     }
 
     affichees.forEach((l) => {
-        const idx = lignes.indexOf(l);
-        const $tr = $('<tr>').attr('data-idx', idx);
-        $tr.append(makeTd(l.id_club,     idx, 'id_club',     true));
+        const idx  = lignes.indexOf(l);
+        const dept = deptDeClub(l.id_club);
+        const $tr  = $('<tr>').attr('data-idx', idx);
+        if (dept && !DEPTS_REGION.has(dept)) $tr.addClass('hors-region').attr('title', `Département ${dept} hors région`);
+        $tr.append(makeTd(l.id_club,     idx, 'id_club',     false));
         $tr.append(makeTd(l.nom,         idx, 'nom',         false));
         $tr.append(makeTd(l.code_postal, idx, 'code_postal', true));
         $tr.append(makeTd(l.ville,       idx, 'ville',       true));
@@ -449,6 +483,13 @@ function renderGrille() {
 
 function makeTd(val, idx, field, readonly) {
     const $td  = $('<td>').addClass(readonly ? 'col-id' : '').attr('data-idx', idx).attr('data-field', field);
+    if (field === 'id_club') {
+        $td.addClass('col-id');
+        const l = lignes[idx];
+        if (l && l.id_club_orig !== undefined && String(val) !== String(l.id_club_orig)) {
+            $td.addClass('id-modifie').attr('title', `Ancien N° : ${l.id_club_orig}`);
+        }
+    }
     const $div = $('<div class="cell-inner">').text(val ?? '').attr('contenteditable', 'false');
     $td.append($div);
     if (!readonly) {
@@ -501,7 +542,22 @@ function validerCellule($inner, $td) {
     $inner.attr('contenteditable', 'false');
     const idx   = +$td.attr('data-idx');
     const field = $td.attr('data-field');
-    if (lignes[idx]) lignes[idx][field] = $inner.text().trim() || null;
+    const newVal = $inner.text().trim() || null;
+
+    if (field === 'id_club' && lignes[idx]) {
+        const oldId = lignes[idx].id_club_orig ?? lignes[idx].id_club;
+        const newId = newVal ? +newVal : 0;
+        if (newId && newId !== +oldId) {
+            if (!confirm(`Modifier le N° FFTT ${oldId} → ${newId} ?\n\nCette modification mettra également à jour toutes les tables liées (salles, correspondants, équipes, JA).`)) {
+                $inner.text(lignes[idx].id_club ?? '');
+                setStatus('Modification annulée.');
+                return;
+            }
+        }
+    }
+
+    if (lignes[idx]) lignes[idx][field] = newVal;
+    renderGrille();
     setStatus('Modification locale. Cliquez sur « Mettre à jour la BDD » pour sauvegarder.');
 }
 
@@ -512,11 +568,12 @@ function chargerListe() {
         spinner(false);
         if (!res.ok) { toast(res.msg, false); return; }
         lignes = res.data.map(r => ({
-            id_club:     r.Id_Club,
-            nom:         r.Nom,
-            code_postal: r.CodePostal ?? '',
-            ville:       r.Ville      ?? '',
-            nb_salles:   +(r.NbSalles ?? 0),
+            id_club:      r.Id_Club,
+            id_club_orig: r.Id_Club,
+            nom:          r.Nom,
+            code_postal:  r.CodePostal ?? '',
+            ville:        r.Ville      ?? '',
+            nb_salles:    +(r.NbSalles ?? 0),
         }));
         const aMultiSalles = lignes.some(l => l.nb_salles > 1);
         $('#btn-plusieurs-salles').toggle(aMultiSalles);
@@ -592,6 +649,18 @@ $('#btn-plusieurs-salles').on('click', function () {
                background:   filtreMultiSalle ? '#1a3a6b' : '',
                color:        filtreMultiSalle ? '#fff'    : '',
                borderColor:  filtreMultiSalle ? '#1a3a6b' : 'transparent',
+           });
+    renderGrille();
+});
+
+// ── Filtre hors région ────────────────────────────────────────────────────────
+$('#btn-hors-region').on('click', function () {
+    filtreHorsRegion = !filtreHorsRegion;
+    $(this).toggleClass('active', filtreHorsRegion)
+           .css({
+               background:   filtreHorsRegion ? '#be123c' : '',
+               color:        filtreHorsRegion ? '#fff'    : '',
+               borderColor:  filtreHorsRegion ? '#be123c' : 'transparent',
            });
     renderGrille();
 });
