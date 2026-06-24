@@ -314,7 +314,8 @@ $changeLogin = !empty($moi['change_login']);
             background: #f0f4fa;
             display: flex;
             flex-direction: column;
-            min-height: 100vh;
+            height: 100vh;
+            overflow: hidden;
         }
 
 /* ── En-tête ── */

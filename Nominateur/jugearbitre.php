@@ -338,6 +338,29 @@ if ($action !== '') {
             exit;
         }
 
+        // ── Clubs filtrés par département ─────────────────────────────────
+        if ($action === 'clubs_par_dept') {
+            $dept = trim($_POST['dept'] ?? '');
+            if ($dept === '') {
+                $stmt = $pdo->query('SELECT Id_Club, Nom FROM Club ORDER BY Nom');
+            } else {
+                $deptPad = str_pad($dept, 2, '0', STR_PAD_LEFT);
+                $stmt = $pdo->prepare(
+                    'SELECT cl.Id_Club, cl.Nom
+                     FROM Club cl
+                     JOIN Salle s  ON s.Id_Club   = cl.Id_Club AND s.EstPrincipale = 1
+                     JOIN laposte lp ON lp.Id_LaPoste = s.Id_Laposte
+                     WHERE LEFT(lp.CodePostal, 2) = ?
+                     ORDER BY cl.Nom'
+                );
+                $stmt->execute([$deptPad]);
+            }
+            $clubs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'clubs' => $clubs]);
+            exit;
+        }
+
         // ── Mise à jour immédiate Id_LaPoste ───────────────────────────────
         if ($action === 'maj_laposte') {
             $idJA      = (int)($_POST['id_ja'] ?? 0);
@@ -631,6 +654,9 @@ $deptActifs  = getDeptActifs();
     <button class="menu-item" id="btn-maj-bdd">
         <i class="bi bi-database-fill-up"></i>Mettre à jour la Base de données
     </button>
+    <button class="menu-item" id="btn-nouveau-ja" style="background:#1a6b2b;color:#fff;">
+        <i class="bi bi-person-plus-fill"></i>Nouveau JA
+    </button>
     <input type="file" id="file-input" accept=".xlsx" style="display:none">
     <?php endif; ?>
     <span id="lbl-count">0 JA</span>
@@ -687,6 +713,102 @@ $deptActifs  = getDeptActifs();
 
 <!-- Toast -->
 <div id="toast-container"></div>
+
+<!-- Modale Nouveau JA -->
+<div class="modal fade" id="modal-nouveau-ja" tabindex="-1" aria-labelledby="modal-nouveau-ja-titre" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#1a3a6b;color:#fff;">
+        <h5 class="modal-title" id="modal-nouveau-ja-titre"><i class="bi bi-person-plus-fill me-2"></i>Créer un nouveau Juge-Arbitre</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="form-nouveau-ja" novalidate>
+          <div class="row g-3">
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">Grade <span class="text-danger">*</span></label>
+              <select class="form-select form-select-sm" id="nja-grade" required>
+                <option value="">— Choisir —</option>
+                <option value="JA1">JA1</option>
+                <option value="JA2">JA2</option>
+                <option value="JA3">JA3</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Nom <span class="text-danger">*</span></label>
+              <input type="text" class="form-control form-control-sm text-uppercase" id="nja-nom" required placeholder="NOM">
+            </div>
+            <div class="col-md-5">
+              <label class="form-label fw-semibold">Prénom <span class="text-danger">*</span></label>
+              <input type="text" class="form-control form-control-sm" id="nja-prenom" required placeholder="Prénom">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Email</label>
+              <input type="email" class="form-control form-control-sm" id="nja-email" placeholder="adresse@email.fr">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">Téléphone</label>
+              <input type="text" class="form-control form-control-sm" id="nja-telephone" placeholder="06.12.34.56.78">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Département / Club</label>
+              <div class="input-group input-group-sm">
+                <select class="form-select" id="nja-dept" style="max-width:200px">
+                  <option value="">— Tous —</option>
+                  <?php foreach ($deptActifs as $d): ?>
+                  <option value="<?= (int)$d['code'] ?>"><?= (int)$d['code'] ?> — <?= htmlspecialchars($d['nom']) ?></option>
+                  <?php endforeach; ?>
+                </select>
+                <select class="form-select" id="nja-id-club">
+                  <option value="">— Sélectionnez d'abord un département —</option>
+                </select>
+              </div>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label fw-semibold">Code postal / Ville</label>
+              <div class="input-group input-group-sm">
+                <input type="text" class="form-control" id="nja-cp" placeholder="76000" maxlength="10" style="max-width:90px">
+                <input type="text" class="form-control text-uppercase" id="nja-ville" placeholder="ROUEN">
+              </div>
+              <div id="nja-laposte-msg" class="form-text" style="min-height:1.2em;"></div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">N° Compte EBP</label>
+              <input type="text" class="form-control form-control-sm" id="nja-cpte-ebp" placeholder="">
+            </div>
+            <div class="col-12">
+              <div class="d-flex gap-4 mt-1">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="nja-actif" checked>
+                  <label class="form-check-label" for="nja-actif">Actif</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="nja-defisc">
+                  <label class="form-check-label" for="nja-defisc">Défiscalisation</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="nja-nationale">
+                  <label class="form-check-label" for="nja-nationale">Nationale</label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </form>
+        <!-- Zone suggestions laposte -->
+        <div id="nja-suggestions" class="mt-2" style="display:none;">
+          <div class="fw-semibold text-primary mb-1">Plusieurs communes trouvées — choisissez :</div>
+          <div id="nja-suggestions-list" class="d-flex flex-wrap gap-1"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+        <button type="button" class="btn btn-success btn-sm" id="btn-enregistrer-ja">
+          <i class="bi bi-check-lg me-1"></i>Créer le JA
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script src="../asset/js/jquery-3.7.1.min.js"></script>
     <script src="../asset/js/nijac-csrf.js"></script>
@@ -1185,6 +1307,126 @@ $(document).on('click', '.btn-lien-dispo', function (e) {
         if (!r.ok) { alert('Erreur lors de la génération du lien.'); return; }
         window.open(r.url, '_blank');
     });
+});
+
+// ── Modale Nouveau JA ─────────────────────────────────────────────────────────
+let njaIdLaPoste = null;
+
+$('#btn-nouveau-ja').on('click', function () {
+    // Réinitialiser le formulaire
+    $('#form-nouveau-ja')[0].reset();
+    $('#nja-actif').prop('checked', true);
+    njaIdLaPoste = null;
+    $('#nja-laposte-msg').text('').css('color', '');
+    $('#nja-suggestions').hide();
+    $('#nja-suggestions-list').empty();
+    $('#nja-id-club').html('<option value="">— Sélectionnez d\'abord un département —</option>').prop('disabled', false);
+    new bootstrap.Modal('#modal-nouveau-ja').show();
+});
+
+// Recherche laposte dans la modale
+function njaRechercherLaPoste() {
+    const cp    = $('#nja-cp').val().trim();
+    const ville = $('#nja-ville').val().trim();
+    if (cp === '' && ville === '') { njaIdLaPoste = null; return; }
+
+    $.post('jugearbitre.php', { action: 'recherche_laposte', cp, ville }, function (res) {
+        $('#nja-suggestions').hide();
+        $('#nja-suggestions-list').empty();
+        if (!res.ok && !res.multi) {
+            njaIdLaPoste = null;
+            $('#nja-laposte-msg').text('Commune non trouvée.').css('color', '#c00');
+            return;
+        }
+        if (res.multi) {
+            $('#nja-laposte-msg').text('').css('color', '');
+            const $list = $('#nja-suggestions-list').empty();
+            res.suggestions.forEach(s => {
+                $('<button>').addClass('btn btn-sm btn-outline-primary')
+                    .text(`${s.cp} ${s.ville}`)
+                    .on('click', function () {
+                        njaIdLaPoste = s.id_laposte;
+                        $('#nja-cp').val(s.cp);
+                        $('#nja-ville').val(s.ville);
+                        $('#nja-laposte-msg').text(`✓ ${s.cp} ${s.ville}`).css('color', '#065f46');
+                        $('#nja-suggestions').hide();
+                    })
+                    .appendTo($list);
+            });
+            $('#nja-suggestions').show();
+            return;
+        }
+        njaIdLaPoste = res.id_laposte;
+        $('#nja-cp').val(res.cp);
+        $('#nja-ville').val(res.ville);
+        $('#nja-laposte-msg').text(`✓ ${res.cp} ${res.ville}`).css('color', '#065f46');
+    }, 'json').fail(() => { njaIdLaPoste = null; $('#nja-laposte-msg').text('Erreur réseau.').css('color', '#c00'); });
+}
+
+// Chargement des clubs selon le département sélectionné
+function njaChargerClubs(dept) {
+    const $sel = $('#nja-id-club');
+    $sel.html('<option value="">Chargement…</option>').prop('disabled', true);
+    $.post('jugearbitre.php', { action: 'clubs_par_dept', dept }, function (res) {
+        $sel.prop('disabled', false);
+        if (!res.ok || !res.clubs.length) {
+            $sel.html('<option value="">— Aucun club trouvé —</option>');
+            return;
+        }
+        let opts = '<option value="">— Choisir un club —</option>';
+        res.clubs.forEach(c => {
+            opts += `<option value="${c.Id_Club}">${c.Id_Club} — ${$('<span>').text(c.Nom).html()}</option>`;
+        });
+        $sel.html(opts);
+    }, 'json').fail(() => {
+        $sel.prop('disabled', false).html('<option value="">— Erreur chargement —</option>');
+    });
+}
+
+$('#nja-dept').on('change', function () {
+    njaChargerClubs($(this).val());
+});
+
+$('#nja-cp, #nja-ville').on('blur', function () { njaRechercherLaPoste(); });
+$('#nja-nom').on('input', function () { $(this).val($(this).val().toUpperCase()); });
+
+// Enregistrer
+$('#btn-enregistrer-ja').on('click', function () {
+    const grade  = $('#nja-grade').val().trim();
+    const nom    = $('#nja-nom').val().trim().toUpperCase();
+    const prenom = $('#nja-prenom').val().trim();
+
+    if (!grade || !nom || !prenom) {
+        toast('Grade, Nom et Prénom sont obligatoires.', false);
+        return;
+    }
+
+    const record = {
+        id:              0,
+        grade,
+        nom,
+        prenom,
+        email:           $('#nja-email').val().trim() || null,
+        telephone:       $('#nja-telephone').val().trim() || null,
+        id_club:         $('#nja-id-club').val() || null,
+        cp:              $('#nja-cp').val().trim() || null,
+        ville:           $('#nja-ville').val().trim() || null,
+        id_laposte:      njaIdLaPoste,
+        num_compte_ebp:  $('#nja-cpte-ebp').val().trim() || null,
+        actif:           $('#nja-actif').is(':checked') ? 1 : 0,
+        defiscalisation: $('#nja-defisc').is(':checked') ? 1 : 0,
+        nationale:       $('#nja-nationale').is(':checked') ? 1 : 0,
+    };
+
+    spinner(true);
+    $.post('jugearbitre.php', { action: 'maj_bdd', lignes: JSON.stringify([record]) }, function (res) {
+        spinner(false);
+        toast(res.msg, res.ok);
+        if (res.ok) {
+            bootstrap.Modal.getInstance('#modal-nouveau-ja')?.hide();
+            chargerListe();
+        }
+    }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
