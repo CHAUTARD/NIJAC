@@ -30,12 +30,8 @@ if ($action === 'ja_dept') {
         $depts = array_filter(array_map('trim', explode(',', $_GET['depts'] ?? '')));
         if (!$depts) { echo json_encode(['ok' => false, 'err' => 'Aucun département']); exit; }
 
-        // Filtrage sur les 2 premiers chiffres du CP (ja.Cp ou laposte.CodePostal)
-        $jaCols = array_column($pdo->query('DESCRIBE ja')->fetchAll(), 'Field');
-        $hasCp    = in_array('Cp',    $jaCols);
-        $hasVille = in_array('Ville', $jaCols);
-        $cpExpr    = $hasCp    ? 'COALESCE(lp.CodePostal, ja.Cp)'    : 'lp.CodePostal';
-        $villeExpr = $hasVille ? 'COALESCE(lp.Nom, ja.Ville)'        : 'lp.Nom';
+        $cpExpr    = 'lp.CodePostal';
+        $villeExpr = 'lp.Nom';
 
         // Construire la clause IN pour les préfixes de CP
         $placeholders = implode(',', array_fill(0, count($depts), '?'));
@@ -47,14 +43,14 @@ if ($action === 'ja_dept') {
                    cl.Nom      AS Club,
                    $cpExpr    AS Cp,
                    $villeExpr AS Ville,
-                   LEFT(COALESCE(lp.CodePostal, ja.Cp), 2) AS Dept,
+                   LEFT(lp.CodePostal, 2) AS Dept,
                    (SELECT COUNT(*) FROM disponible d WHERE d.Id_JA = ja.Id_JA) AS HasDispo
             FROM ja
             LEFT JOIN Club    cl ON cl.Id_Club    = ja.Id_Club
             LEFT JOIN laposte lp ON lp.Id_LaPoste = ja.Id_LaPoste
             WHERE ja.Actif = 1
-              AND LEFT(COALESCE(lp.CodePostal, ja.Cp), 2) IN ($placeholders)
-            ORDER BY LEFT(COALESCE(lp.CodePostal, ja.Cp), 2), ja.Nom, ja.Prenom
+              AND LEFT(lp.CodePostal, 2) IN ($placeholders)
+            ORDER BY LEFT(lp.CodePostal, 2), ja.Nom, ja.Prenom
         ");
         $stmt->execute(array_values($depts));
         $rows = $stmt->fetchAll();

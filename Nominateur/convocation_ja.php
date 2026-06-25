@@ -128,11 +128,8 @@ $erreur = '';
 if ($idJa && $idRencontre) {
     try {
         //  JA 
-        $jaCols   = array_column($pdo->query('DESCRIBE ja')->fetchAll(), 'Field');
-        $hasCp    = in_array('Cp',    $jaCols);
-        $hasVille = in_array('Ville', $jaCols);
-        $cpExpr    = $hasCp    ? 'COALESCE(lp.CodePostal, ja.Cp)'    : 'lp.CodePostal';
-        $villeExpr = $hasVille ? 'COALESCE(lp.Nom, ja.Ville)'        : 'lp.Nom';
+        $cpExpr    = 'lp.CodePostal';
+        $villeExpr = 'lp.Nom';
 
         $stmtJa = $pdo->prepare("
             SELECT ja.Id_JA, ja.Nom, ja.Prenom, ja.Grade,

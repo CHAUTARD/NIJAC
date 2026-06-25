@@ -181,9 +181,13 @@ $deptActifs  = getDeptActifs();
         #tbl-clubs tbody tr:nth-child(even) { background: #f7faff; }
         #tbl-clubs tbody tr:hover   { background: #dce8f8; }
         #tbl-clubs tbody tr.selected { background: #b8d0f0 !important; }
-        #tbl-clubs tbody tr.hors-region { background: #ffe4e6; }
-        #tbl-clubs tbody tr.hors-region:nth-child(even) { background: #fecdd3; }
-        #tbl-clubs tbody tr.hors-region:hover { background: #fda4af; }
+        #tbl-clubs tbody tr.en-region { background: #d1fae5; }
+        #tbl-clubs tbody tr.en-region:nth-child(even) { background: #a7f3d0; }
+        #tbl-clubs tbody tr.en-region:hover { background: #6ee7b7; }
+        #tbl-clubs tbody tr.en-region.selected { background: #b8d0f0 !important; }
+        #tbl-clubs tbody tr.hors-region { background: #e5e7eb; }
+        #tbl-clubs tbody tr.hors-region:nth-child(even) { background: #d1d5db; }
+        #tbl-clubs tbody tr.hors-region:hover { background: #9ca3af; }
         #tbl-clubs tbody tr.hors-region.selected { background: #b8d0f0 !important; }
         #tbl-clubs tbody td { border: 1px solid #e0e8f0; padding: 0; }
 
@@ -400,6 +404,7 @@ function renderGrille() {
         const dept = deptDeClub(l.id_club);
         const $tr  = $('<tr>').attr('data-idx', idx);
         if (dept && !DEPTS_REGION.has(dept)) $tr.addClass('hors-region').attr('title', `Département ${dept} hors région`);
+        else if (dept) $tr.addClass('en-region');
         $tr.append(makeTd(l.id_club,     idx, 'id_club',     false));
         $tr.append(makeTd(l.nom,         idx, 'nom',         false));
         $tr.append(makeTd(l.code_postal, idx, 'code_postal', true));

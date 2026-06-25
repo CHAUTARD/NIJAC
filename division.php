@@ -268,11 +268,11 @@ $changeLogin = !empty($moi['change_login']);
             <input type="text" id="txt-nom" class="form-control form-control-sm" maxlength="100">
         </div>
 
+
         <div class="mb-2">
             <label class="form-label" for="num-ord">Ordre :</label>
             <input type="number" id="num-ord" class="form-control form-control-sm" min="1" max="300" value="1" style="width:120px">
         </div>
-
         <div class="mb-2">
             <label class="form-label" for="txt-nom-long">Nom :</label>
             <input type="text" id="txt-nom-long" class="form-control form-control-sm" maxlength="255">

@@ -83,34 +83,22 @@ if ($action !== '') {
     try {
         $pdo = getPDO();
 
-        // Ajout automatique des colonnes Cp / Ville si elles n'existent pas encore
         $cols = array_column($pdo->query('SHOW COLUMNS FROM ja')->fetchAll(PDO::FETCH_ASSOC), 'Field');
-        if (!in_array('Cp', $cols)) {
-            $pdo->exec("ALTER TABLE ja ADD COLUMN Cp VARCHAR(10) NULL, ADD COLUMN Ville VARCHAR(100) NULL");
-        }
         if (!in_array('Defiscalisation', $cols)) {
             $pdo->exec("ALTER TABLE ja ADD COLUMN Defiscalisation TINYINT(1) NOT NULL DEFAULT 0");
         }
         if (!in_array('Nationale', $cols)) {
             $pdo->exec("ALTER TABLE ja ADD COLUMN Nationale TINYINT(1) NOT NULL DEFAULT 0");
         }
-        // Backfill : remplir Cp/Ville depuis laposte pour les lignes qui ont Id_LaPoste mais pas encore Cp
-        $pdo->exec("UPDATE ja j
-                    JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
-                    SET j.Cp = lp.CodePostal, j.Ville = lp.Nom
-                    WHERE j.Cp IS NULL AND j.Id_LaPoste IS NOT NULL");
-
         // ── Charger la liste ───────────────────────────────────────────────
         if ($action === 'liste') {
             $dept = isset($_POST['dept']) && $_POST['dept'] !== '' ? $_POST['dept'] : null;
 
+            $deptPad   = $dept !== null ? str_pad((string)$dept, 2, '0', STR_PAD_LEFT) : null;
             $whereDept = $dept !== null
-                ? 'WHERE j.Id_Club IN (
-                       SELECT s.Id_Club
-                       FROM Salle   s
-                       JOIN laposte lf ON lf.Id_LaPoste = s.Id_Laposte
-                       WHERE s.EstPrincipale = 1
-                         AND LEFT(lf.CodePostal, 2) = ?
+                ? 'WHERE (
+                       SUBSTRING(j.Id_Club, 3, 2) = ?
+                       OR ((j.Id_Club IS NULL OR j.Id_Club = \'\') AND LEFT((SELECT lp2.CodePostal FROM laposte lp2 WHERE lp2.Id_LaPoste = j.Id_LaPoste LIMIT 1), 2) = ?)
                    )'
                 : '';
 
@@ -119,14 +107,14 @@ if ($action !== '') {
                         j.Grade, j.Actif, j.Id_Club, j.Id_LaPoste,
                         j.Defiscalisation, j.Nationale, j.NumCompteEBP,
                         (SELECT cl.Nom FROM Club cl WHERE cl.Id_Club = j.Id_Club LIMIT 1) AS NomClub,
-                        COALESCE((SELECT lp.CodePostal FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1), j.Cp)  AS CodePostalJA,
-                        COALESCE((SELECT lp.Nom        FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1), j.Ville) AS VilleJA,
+                        (SELECT lp.CodePostal FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1) AS CodePostalJA,
+                        (SELECT lp.Nom        FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1) AS VilleJA,
                         (SELECT COUNT(*) FROM disponible d WHERE d.Id_JA = j.Id_JA) AS NbDispo
                  FROM ja j
                  ' . $whereDept . '
                  ORDER BY j.Nom, j.Prenom'
             );
-            $stmt->execute($dept !== null ? [str_pad((string)$dept, 2, '0', STR_PAD_LEFT)] : []);
+            $stmt->execute($dept !== null ? [$deptPad, $deptPad] : []);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
             $rows = deduplicateJA($rows, 'Nom', 'Prenom', 'Grade');
 

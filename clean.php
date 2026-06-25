@@ -94,6 +94,34 @@ if ($action !== '') {
             exit;
         }
 
+        // ── Suppression des anciennes sauvegardes (sauf la dernière) ─────────
+        if ($action === 'supprimer_anciennes') {
+            $type = $_POST['type'] ?? '';
+            if (!in_array($type, ['sauve', 'full'], true)) {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => 'Type invalide.']);
+                exit;
+            }
+            $pattern = $type === 'sauve'
+                ? $sqlDir . '/Sauve_*.sql'
+                : $sqlDir . '/Full_*.sql';
+            $files = glob($pattern) ?: [];
+            if (count($files) <= 1) {
+                ob_end_clean();
+                echo json_encode(['ok' => true, 'msg' => 'Aucune ancienne sauvegarde à supprimer.', 'supprimes' => 0]);
+                exit;
+            }
+            usort($files, fn($a, $b) => filemtime($b) - filemtime($a));
+            $aSupprimer = array_slice($files, 1);
+            $supprimes  = 0;
+            foreach ($aSupprimer as $f) {
+                if (unlink($f)) $supprimes++;
+            }
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'msg' => "$supprimes ancienne(s) sauvegarde(s) supprimée(s).", 'supprimes' => $supprimes]);
+            exit;
+        }
+
         // ── Vérification seule ────────────────────────────────────────────────
         if ($action === 'verifier_mdp') {
             ob_end_clean();
@@ -889,6 +917,9 @@ try {
                 <button id="btn-restaurer" class="btn-action btn-restore" disabled>
                     <i class="bi bi-arrow-counterclockwise me-2"></i>Restaurer ce fichier
                 </button>
+                <button id="btn-suppr-sauve" class="btn-action" style="display:none;background:#6b7280;color:#fff;margin-top:.5rem;font-size:.8rem;padding:.3rem .7rem;">
+                    <i class="bi bi-trash me-1"></i>
+                </button>
             </div>
         </div>
 
@@ -1152,6 +1183,11 @@ function chargerListeSauvegardes() {
         $('#restore-loading').hide();
         $('#restore-form').show();
         $('#btn-restaurer').prop('disabled', !pwdOk);
+        if (fichiers.length > 1) {
+            $('#btn-suppr-sauve').show().text(`Supprimer les ${fichiers.length - 1} ancienne(s) sauvegarde(s)`);
+        } else {
+            $('#btn-suppr-sauve').hide();
+        }
     }, 'json').fail(() => {
         $('#restore-file-zone').html('<div class="no-backup"><i class="bi bi-wifi-off"></i>Erreur lors du chargement des sauvegardes.</div>');
     });
@@ -1227,6 +1263,11 @@ function chargerListeSauvegardesTotal() {
             html += `<li><code>${f.nom}</code> &mdash; ${f.taille} Ko &mdash; ${f.date}</li>`;
         });
         html += '</ul>';
+        if (res.fichiers.length > 1) {
+            html += `<button id="btn-suppr-full" class="btn-action" style="background:#6b7280;color:#fff;margin-top:.6rem;font-size:.8rem;padding:.3rem .7rem;width:auto;">
+                       <i class="bi bi-trash me-1"></i>Supprimer les ${res.fichiers.length - 1} ancienne(s) sauvegarde(s)
+                     </button>`;
+        }
         $zone.html(html);
     }, 'json');
 }
@@ -1441,6 +1482,41 @@ $('#btn-restaurer-table').on('click', function () {
         $('#table-restore-result').addClass('show').html('<div class="result-err"><strong>Erreur réseau.</strong></div>');
         majTableRestoreMeta();
     });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  Suppression des anciennes sauvegardes
+// ═══════════════════════════════════════════════════════════════════
+$('#btn-suppr-sauve').on('click', function () {
+    if (!pwdOk) { alert('Mot de passe requis.'); return; }
+    if (!confirm('Supprimer toutes les sauvegardes Sauve_*.sql sauf la plus récente ?\n\nCette opération est irréversible.')) return;
+    spinner(true);
+    $.post('clean.php', { action: 'supprimer_anciennes', type: 'sauve', password: $('#pwd-global').val() }, res => {
+        spinner(false);
+        if (res.ok) {
+            setStatus(res.msg);
+            chargerListeSauvegardes();
+        } else {
+            alert('Erreur : ' + res.msg);
+        }
+    }, 'json').fail(() => { spinner(false); alert('Erreur réseau.'); });
+});
+
+$(document).on('click', '#btn-suppr-full', function () {
+    if (!pwdOk) { alert('Mot de passe requis.'); return; }
+    if (!confirm('Supprimer toutes les sauvegardes Full_*.sql sauf la plus récente ?\n\nCette opération est irréversible.')) return;
+    spinner(true);
+    $.post('clean.php', { action: 'supprimer_anciennes', type: 'full', password: $('#pwd-global').val() }, res => {
+        spinner(false);
+        if (res.ok) {
+            setStatus(res.msg);
+            chargerListeSauvegardesTotal();
+            chargerListeSauvegardesTotal2();
+            chargerFichiersTableRestore();
+        } else {
+            alert('Erreur : ' + res.msg);
+        }
+    }, 'json').fail(() => { spinner(false); alert('Erreur réseau.'); });
 });
 
 // ── Initialisation ────────────────────────────────────────────────

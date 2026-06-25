@@ -63,11 +63,11 @@ if ($action !== '') {
                 case 'Disponibilites':
                     $stmt = $pdo->prepare("
                         SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
-                               COALESCE(lp.CodePostal, j.Cp) AS CP
+                               lp.CodePostal AS CP
                         FROM ja j
                         LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
                         WHERE j.Actif = 1
-                          AND LEFT(COALESCE(lp.CodePostal, j.Cp, ''), 2) = ?
+                          AND LEFT(lp.CodePostal, 2) = ?
                         ORDER BY j.Nom, j.Prenom
                     ");
                     $stmt->execute([$dept]);
@@ -78,11 +78,11 @@ if ($action !== '') {
                 case 'Rappel dispo':
                     $stmt = $pdo->prepare("
                         SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
-                               COALESCE(lp.CodePostal, j.Cp) AS CP
+                               lp.CodePostal AS CP
                         FROM ja j
                         LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
                         WHERE j.Actif = 1
-                          AND LEFT(COALESCE(lp.CodePostal, j.Cp, ''), 2) = ?
+                          AND LEFT(lp.CodePostal, 2) = ?
                           AND NOT EXISTS (
                               SELECT 1 FROM disponible d
                               WHERE d.Id_JA = j.Id_JA
@@ -136,7 +136,7 @@ if ($action !== '') {
                         LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
                         JOIN nomination n ON n.Id_JA = j.Id_JA
                         WHERE j.Actif = 1
-                          AND LEFT(COALESCE(lp.CodePostal, j.Cp, ''), 2) = ?
+                          AND LEFT(lp.CodePostal, 2) = ?
                         GROUP BY j.Id_JA, j.Nom, j.Prenom, j.Email
                         ORDER BY j.Nom, j.Prenom
                     ");

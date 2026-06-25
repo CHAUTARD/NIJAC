@@ -122,12 +122,10 @@ if ($action !== '') {
         if (!$date) { echo json_encode(['ok' => false, 'err' => 'Date manquante']); exit; }
 
         $jaCols    = array_column($pdo->query('DESCRIBE ja')->fetchAll(), 'Field');
-        $hasCp     = in_array('Cp',    $jaCols);
-        $hasVille  = in_array('Ville', $jaCols);
         $hasNote   = in_array('Note',  $jaCols);
-        $cpExpr    = $hasCp    ? 'COALESCE(lp_ja.CodePostal, ja.Cp)'  : 'lp_ja.CodePostal';
-        $villeExpr = $hasVille ? 'COALESCE(lp_ja.Nom, ja.Ville)'      : 'lp_ja.Nom';
-        $noteExpr  = $hasNote  ? 'ja.Note'                             : 'NULL';
+        $cpExpr    = 'lp_ja.CodePostal';
+        $villeExpr = 'lp_ja.Nom';
+        $noteExpr  = $hasNote  ? 'ja.Note' : 'NULL';
 
         $stmt = $pdo->prepare("
             SELECT

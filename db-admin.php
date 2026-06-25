@@ -389,17 +389,6 @@ body {
     align-items: center;
     justify-content: space-between;
 }
-#table-search {
-    padding: .4rem .5rem;
-    border-bottom: 1px solid #eee;
-}
-#table-search input {
-    width: 100%;
-    font-size: .8rem;
-    padding: .2rem .4rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-}
 #table-list {
     flex: 1;
     overflow-y: auto;
@@ -603,9 +592,6 @@ body {
         <div id="sidebar-header">
             <span><i class="bi bi-table me-1"></i>Tables</span>
             <span id="table-count" class="opacity-75"></span>
-        </div>
-        <div id="table-search">
-            <input type="text" id="tbl-filter" placeholder="Filtrer…" autocomplete="off">
         </div>
         <div id="table-list"></div>
     </div>
@@ -890,8 +876,7 @@ function loadTables() {
 
 function renderTableList(tables) {
     $('#table-count').text(tables.length);
-    const filter = $('#tbl-filter').val().toLowerCase();
-    const filtered = filter ? tables.filter(t => t.name.toLowerCase().includes(filter)) : tables;
+    const filtered = tables;
 
     const html = filtered.map(t => `
         <div class="tbl-item${state.currentTable === t.name ? ' active' : ''}" data-table="${escHtml(t.name)}">
@@ -902,7 +887,6 @@ function renderTableList(tables) {
     $('#table-list').html(html || '<div class="p-2 text-muted" style="font-size:.78rem;">Aucune table</div>');
 }
 
-$('#tbl-filter').on('input', () => renderTableList(state.allTables));
 
 $('#table-list').on('click', '.tbl-item', function () {
     const table = $(this).data('table');
@@ -949,7 +933,8 @@ function loadBrowse() {
         const thCells = r.cols.map(c => {
             let cls = '';
             if (c === state.browseOrder) cls = state.browseDir === 'ASC' ? 'sorted-asc' : 'sorted-desc';
-            return `<th class="${cls}" data-col="${escHtml(c)}">${escHtml(c)}</th>`;
+            const center = /^id_/i.test(c) ? ' style="text-align:center;"' : '';
+            return `<th class="${cls}" data-col="${escHtml(c)}"${center}>${escHtml(c)}</th>`;
         });
         thCells.push('<th style="width:80px;">Actions</th>');
         $('#browse-thead').html('<tr>' + thCells.join('') + '</tr>');
@@ -962,9 +947,10 @@ function loadBrowse() {
             const rows = r.rows.map(row => {
                 const cells = r.cols.map(c => {
                     const v = row[c];
-                    if (v === null) return `<td class="null-val">NULL</td>`;
+                    const center = /^id_/i.test(c) ? 'text-align:center;' : '';
+                    if (v === null) return `<td class="null-val" style="${center}">NULL</td>`;
                     const isNum = !isNaN(v) && v !== '';
-                    return `<td class="${isNum ? 'num-val' : ''}" title="${escHtml(v)}">${escHtml(String(v).substring(0,100))}${String(v).length > 100 ? '…' : ''}</td>`;
+                    return `<td class="${isNum ? 'num-val' : ''}" style="${center}" title="${escHtml(v)}">${escHtml(String(v).substring(0,100))}${String(v).length > 100 ? '…' : ''}</td>`;
                 });
                 const pk  = state.pkCol;
                 const pkv = pk ? escHtml(row[pk]) : '';

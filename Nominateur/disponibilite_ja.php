@@ -64,12 +64,8 @@ if ($action !== '') {
     // ── Infos JA ─────────────────────────────────────────────────────────
     if ($action === 'ja') {
         $id = (int)($_GET['id'] ?? 0);
-        // Détecter si ja.Cp existe (ajoutée par jugearbitre.php)
-        $jaCols = array_column($pdo->query('DESCRIBE ja')->fetchAll(), 'Field');
-        $hasCp    = in_array('Cp',    $jaCols);
-        $hasVille = in_array('Ville', $jaCols);
-        $cpExpr    = $hasCp    ? 'COALESCE(lp.CodePostal, ja.Cp)'    : 'lp.CodePostal';
-        $villeExpr = $hasVille ? 'COALESCE(lp.Nom,        ja.Ville)' : 'lp.Nom';
+        $cpExpr    = 'lp.CodePostal';
+        $villeExpr = 'lp.Nom';
         $hasDefisc = in_array('Defiscalisation', $jaCols);
         $stmt = $pdo->prepare("
             SELECT ja.Id_JA, ja.Nom, ja.Prenom, ja.Grade,
@@ -174,10 +170,7 @@ if ($action !== '') {
         }
 
         // Déterminer le(s) département(s) du JA pour filtrer les rencontres (mode Partiel)
-        $jaCols2  = array_column($pdo->query('DESCRIBE ja')->fetchAll(), 'Field');
-        $hasCp2   = in_array('Cp', $jaCols2);
-        $cpExpr2  = $hasCp2 ? 'COALESCE(lp2.CodePostal, ja.Cp)' : 'lp2.CodePostal';
-        $jaRow    = $pdo->prepare("SELECT LEFT($cpExpr2, 2) AS Dept FROM ja LEFT JOIN laposte lp2 ON lp2.Id_LaPoste = ja.Id_LaPoste WHERE ja.Id_JA = ?");
+        $jaRow    = $pdo->prepare("SELECT LEFT(lp2.CodePostal, 2) AS Dept FROM ja LEFT JOIN laposte lp2 ON lp2.Id_LaPoste = ja.Id_LaPoste WHERE ja.Id_JA = ?");
         $jaRow->execute([$idJa]);
         $jaDept   = $jaRow->fetchColumn() ?: '';
 
