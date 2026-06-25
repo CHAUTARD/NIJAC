@@ -353,15 +353,13 @@ if ($action !== '') {
         if ($action === 'maj_laposte') {
             $idJA      = (int)($_POST['id_ja'] ?? 0);
             $idLaPoste = ($_POST['id_laposte'] ?? '') !== '' ? (int)$_POST['id_laposte'] : null;
-            $cpVal     = trim($_POST['cp']    ?? '') ?: null;
-            $villeVal  = trim($_POST['ville'] ?? '') ?: null;
             if ($idJA <= 0) {
                 ob_end_clean();
                 echo json_encode(['ok' => false, 'msg' => 'Id_JA invalide.']);
                 exit;
             }
-            $stmt = $pdo->prepare('UPDATE ja SET Id_LaPoste = ?, Cp = ?, Ville = ? WHERE Id_JA = ?');
-            $stmt->execute([$idLaPoste, $cpVal, $villeVal, $idJA]);
+            $stmt = $pdo->prepare('UPDATE ja SET Id_LaPoste = ? WHERE Id_JA = ?');
+            $stmt->execute([$idLaPoste, $idJA]);
             ob_end_clean();
             echo json_encode(['ok' => true]);
             exit;
@@ -383,12 +381,12 @@ if ($action !== '') {
             $stmtCheck  = $pdo->prepare('SELECT COUNT(*) FROM ja WHERE Id_JA = ?');
             $stmtInsert = $pdo->prepare(
                 'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Telephone, Grade, Actif,
-                                 Id_Club, Id_LaPoste, Cp, Ville, Defiscalisation, Nationale, NumCompteEBP)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                                 Id_Club, Id_LaPoste, Defiscalisation, Nationale, NumCompteEBP)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmtUpdate = $pdo->prepare(
                 'UPDATE ja SET Nom=?, Prenom=?, Email=?, Telephone=?, Grade=?,
-                               Actif=?, Id_Club=?, Id_LaPoste=?, Cp=?, Ville=?,
+                               Actif=?, Id_Club=?, Id_LaPoste=?,
                                Defiscalisation=?, Nationale=?, NumCompteEBP=?
                  WHERE Id_JA=?'
             );
@@ -405,8 +403,6 @@ if ($action !== '') {
                 $nationale = !empty($l['nationale']) ? 1 : 0;
                 $idClub  = ($l['id_club'] ?? '') !== '' ? trim($l['id_club']) : null;
                 $idLap   = $l['id_laposte'] !== '' && $l['id_laposte'] !== null ? (int)$l['id_laposte'] : null;
-                $cpVal   = $l['cp']    !== '' && $l['cp']    !== null ? trim($l['cp'])    : null;
-                $villeVal= $l['ville'] !== '' && $l['ville'] !== null ? trim($l['ville']) : null;
                 $cpteEbp = $l['num_compte_ebp'] !== '' && $l['num_compte_ebp'] !== null ? trim($l['num_compte_ebp']) : null;
 
                 if ($nom === '') continue;
@@ -415,19 +411,19 @@ if ($action !== '') {
                     if ($id > 0) {
                         $stmtCheck->execute([$id]);
                         if ((int)$stmtCheck->fetchColumn() > 0) {
-                            $stmtUpdate->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $cpVal, $villeVal, $defisc, $nationale, $cpteEbp, $id]);
+                            $stmtUpdate->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $id]);
                             $updates++;
                         } else {
-                            $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $cpVal, $villeVal, $defisc, $nationale, $cpteEbp]);
+                            $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp]);
                             $inserts++;
                         }
                     } else {
                         // Pas d'Id_JA → INSERT auto-increment
                         $pdo->prepare(
                             'INSERT INTO ja (Nom, Prenom, Email, Telephone, Grade, Actif,
-                                             Id_Club, Id_LaPoste, Cp, Ville, Defiscalisation, Nationale, NumCompteEBP)
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                        )->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $cpVal, $villeVal, $defisc, $nationale, $cpteEbp]);
+                                             Id_Club, Id_LaPoste, Defiscalisation, Nationale, NumCompteEBP)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                        )->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp]);
                         $inserts++;
                     }
                 } catch (PDOException $ex) {
