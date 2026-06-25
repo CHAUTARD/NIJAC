@@ -618,6 +618,60 @@ $deptActifs  = getDeptActifs();
         #btn-erreurs-cp:hover { background: #fef3c7; }
         #btn-erreurs-cp.active { background: #d97706; color: #fff; }
 
+        /* ── Menu déroulant style Windows ── */
+        .win-menu-wrap { position: relative; }
+        .win-menu-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            padding: .25rem .75rem;
+            background: #fff;
+            border: 1px solid #c8d4e8;
+            border-radius: 4px;
+            font-size: .83rem;
+            cursor: pointer;
+            white-space: nowrap;
+            color: #212529;
+            user-select: none;
+        }
+        .win-menu-btn:hover,
+        .win-menu-btn.open { background: #e8eef7; border-color: #a0b4d0; }
+        .win-menu-btn i.caret { font-size: .7rem; margin-left: .15rem; }
+        .win-menu-drop {
+            display: none;
+            position: absolute;
+            top: calc(100% + 2px);
+            left: 0;
+            min-width: 230px;
+            background: #fff;
+            border: 1px solid #c8d4e8;
+            border-radius: 4px;
+            box-shadow: 2px 4px 12px rgba(0,0,0,.15);
+            z-index: 9000;
+            padding: .25rem 0;
+        }
+        .win-menu-drop.open { display: block; }
+        .win-menu-drop .drop-item {
+            display: flex;
+            align-items: center;
+            gap: .55rem;
+            padding: .35rem 1rem;
+            font-size: .84rem;
+            color: #212529;
+            cursor: pointer;
+            white-space: nowrap;
+            text-decoration: none;
+            background: none;
+            border: none;
+            width: 100%;
+            text-align: left;
+        }
+        .win-menu-drop .drop-item:hover { background: #e8eef7; color: #1a3a6b; }
+        .win-menu-drop .drop-item i { font-size: 1rem; width: 1.1rem; text-align: center; }
+        .win-menu-drop .drop-sep { border: none; border-top: 1px solid #dee2e6; margin: .25rem 0; }
+        .win-menu-drop .drop-item.green { color: #1a6b2b; font-weight: 600; }
+        .win-menu-drop .drop-item.green:hover { background: #d1fae5; }
+
         /* ── Toast ── */
         #toast-container { position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; }
 
@@ -648,15 +702,29 @@ $deptActifs  = getDeptActifs();
 <!-- MenuStrip -->
 <div id="menu-strip">
     <?php if ($isAdmin): ?>
-    <button class="menu-item" id="btn-importer">
-        <i class="bi bi-file-earmark-arrow-up"></i>Importer Excel 102_*.xlsx
-    </button>
-    <button class="menu-item" id="btn-maj-bdd">
-        <i class="bi bi-database-fill-up"></i>Mettre à jour la Base de données
-    </button>
-    <button class="menu-item" id="btn-nouveau-ja" style="background:#1a6b2b;color:#fff;">
-        <i class="bi bi-person-plus-fill"></i>Nouveau JA
-    </button>
+    <!-- Menu déroulant style Windows -->
+    <div class="win-menu-wrap">
+        <button class="win-menu-btn" id="win-menu-trigger">
+            <i class="bi bi-grid-3x3-gap-fill"></i>Actions
+            <i class="bi bi-chevron-down caret"></i>
+        </button>
+        <div class="win-menu-drop" id="win-menu-drop">
+            <button class="drop-item" id="btn-importer">
+                <i class="bi bi-file-earmark-arrow-up"></i>Importer Excel 102_*.xlsx
+            </button>
+            <button class="drop-item" id="btn-maj-bdd">
+                <i class="bi bi-database-fill-up"></i>Mettre à jour la Base de données
+            </button>
+            <hr class="drop-sep">
+            <button class="drop-item green" id="btn-nouveau-ja">
+                <i class="bi bi-person-plus-fill"></i>Nouveau JA
+            </button>
+            <hr class="drop-sep">
+            <a class="drop-item" href="https://www.dcode.fr/code-postal" target="_blank">
+                <i class="bi bi-globe2"></i>dCode code-postal
+            </a>
+        </div>
+    </div>
     <input type="file" id="file-input" accept=".xlsx" style="display:none">
     <?php endif; ?>
     <span id="lbl-count">0 JA</span>
@@ -665,7 +733,6 @@ $deptActifs  = getDeptActifs();
         <button id="btn-actifs"       class="active">Actifs seulement</button>
         <button id="btn-erreurs-cp">⚠ Erreurs CP/Ville</button>
     </div>
-    &nbsp;Site utile : <a href="https://www.dcode.fr/code-postal" target="_blank" class="text-decoration-none">dCode code-postal</a>
     <span style="flex:1"></span>
     <?php if ($isAdmin): ?>
     <label for="sel-dept" style="font-size:.85rem;font-weight:700;color:#444;white-space:nowrap;margin:0;">
@@ -1202,6 +1269,21 @@ function chargerListe() {
         renderGrille();
     }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
 }
+
+// ── Menu déroulant Windows ────────────────────────────────────────────────────
+$('#win-menu-trigger').on('click', function (e) {
+    e.stopPropagation();
+    const open = $('#win-menu-drop').toggleClass('open').hasClass('open');
+    $(this).toggleClass('open', open);
+});
+$(document).on('click', function () {
+    $('#win-menu-drop').removeClass('open');
+    $('#win-menu-trigger').removeClass('open');
+});
+$('#win-menu-drop').on('click', '.drop-item', function () {
+    $('#win-menu-drop').removeClass('open');
+    $('#win-menu-trigger').removeClass('open');
+});
 
 // ── Importer Excel ────────────────────────────────────────────────────────────
 $('#btn-importer').on('click', () => $('#file-input').trigger('click'));
