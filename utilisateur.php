@@ -36,7 +36,7 @@ if ($action !== '') {
         // ── Liste ──────────────────────────────────────────────────────────
         if ($action === 'liste') {
             $rows = $pdo->query(
-                'SELECT Id_Utilisateur, Login, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin, Email_LNTT
+                'SELECT Id_Utilisateur, Login, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin
                  FROM Utilisateur ORDER BY Nom, Prenom'
             )->fetchAll();
             echo json_encode(['ok' => true, 'data' => $rows]);
@@ -47,7 +47,7 @@ if ($action !== '') {
         if ($action === 'charger') {
             $id   = (int)($_GET['id'] ?? 0);
             $stmt = $pdo->prepare(
-                'SELECT Id_Utilisateur, Login, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin, Email_LNTT
+                'SELECT Id_Utilisateur, Login, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin
                  FROM Utilisateur WHERE Id_Utilisateur = ?'
             );
             $stmt->execute([$id]);
@@ -67,8 +67,6 @@ if ($action !== '') {
             $mdp     = $_POST['mdp']           ?? '';
             $actif   = ($_POST['actif']        ?? '0') === '1' ? 1 : 0;
             $chgLogin= ($_POST['change_login'] ?? '0') === '1' ? 1 : 0;
-            $emailLntt = trim($_POST['email_lntt'] ?? '');
-            $emailLntt = $emailLntt !== '' ? $emailLntt : null;
 
             if ($login === '') {
                 echo json_encode(['ok' => false, 'msg' => 'Le login ne peut pas être vide.']);
@@ -90,24 +88,24 @@ if ($action !== '') {
                 if ($hashMdp !== null) {
                     $stmt = $pdo->prepare(
                         'UPDATE Utilisateur SET Login=?, Password=?, Nom=?, Prenom=?, Role=?,
-                         Id_Departement=?, Actif=?, ChangeLogin=?, Email_LNTT=? WHERE Id_Utilisateur=?'
+                         Id_Departement=?, Actif=?, ChangeLogin=? WHERE Id_Utilisateur=?'
                     );
-                    $stmt->execute([$login, $hashMdp, $nom, $prenom, $role, $dept, $actif, $chgLogin, $emailLntt, $id]);
+                    $stmt->execute([$login, $hashMdp, $nom, $prenom, $role, $dept, $actif, $chgLogin, $id]);
                 } else {
                     $stmt = $pdo->prepare(
                         'UPDATE Utilisateur SET Login=?, Nom=?, Prenom=?, Role=?,
-                         Id_Departement=?, Actif=?, ChangeLogin=?, Email_LNTT=? WHERE Id_Utilisateur=?'
+                         Id_Departement=?, Actif=?, ChangeLogin=? WHERE Id_Utilisateur=?'
                     );
-                    $stmt->execute([$login, $nom, $prenom, $role, $dept, $actif, $chgLogin, $emailLntt, $id]);
+                    $stmt->execute([$login, $nom, $prenom, $role, $dept, $actif, $chgLogin, $id]);
                 }
                 echo json_encode(['ok' => true, 'msg' => 'Utilisateur mis à jour.', 'id' => $id]);
             } else {
                 // INSERT
                 $stmt = $pdo->prepare(
-                    'INSERT INTO Utilisateur (Login, Password, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin, Email_LNTT)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                    'INSERT INTO Utilisateur (Login, Password, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
                 );
-                $stmt->execute([$login, $hashMdp, $nom, $prenom, $role, $dept, $actif, $chgLogin, $emailLntt]);
+                $stmt->execute([$login, $hashMdp, $nom, $prenom, $role, $dept, $actif, $chgLogin]);
                 echo json_encode(['ok' => true, 'msg' => 'Utilisateur créé.', 'id' => (int)$pdo->lastInsertId()]);
             }
             exit;
@@ -357,11 +355,6 @@ $deptActifs  = getDeptActifs();
         </div>
 
         <div class="mb-2">
-            <label class="form-label" for="txt-email-lntt">Email LNTT :</label>
-            <input type="email" id="txt-email-lntt" class="form-control form-control-sm" maxlength="150" style="max-width:320px">
-        </div>
-
-        <div class="mb-2">
             <label class="form-label" for="txt-mdp">
                 Mot de passe :
                 <small class="fw-normal text-muted" id="mdp-hint">(laisser vide = inchangé)</small>
@@ -484,7 +477,6 @@ function selectionnerLigne($tr) {
         $('#txt-prenom').val(u.Prenom);
         $('#cbo-role').val(u.Role);
         $('#cbo-dept').val(u.Id_Departement);
-        $('#txt-email-lntt').val(u.Email_LNTT || '');
         $('#txt-mdp').val('');
         $('#chk-actif').prop('checked', parseInt(u.Actif) === 1);
         $('#chk-change-login').prop('checked', parseInt(u.ChangeLogin) === 1);
@@ -504,7 +496,6 @@ $('#btn-nouveau').on('click', function () {
     $('#txt-prenom').val('');
     $('#cbo-role').val('Utilisateur');
     $('#cbo-dept').val(0);
-    $('#txt-email-lntt').val('');
     $('#txt-mdp').val('Change_On_Install');
     $('#chk-actif').prop('checked', true);
     $('#chk-change-login').prop('checked', true);
@@ -523,7 +514,6 @@ $('#btn-enregistrer').on('click', function () {
         prenom:       $('#txt-prenom').val().trim(),
         role:         $('#cbo-role').val(),
         dept:         $('#cbo-dept').val(),
-        email_lntt:   $('#txt-email-lntt').val().trim(),
         mdp:          $('#txt-mdp').val(),
         actif:        $('#chk-actif').is(':checked') ? '1' : '0',
         change_login: $('#chk-change-login').is(':checked') ? '1' : '0',
