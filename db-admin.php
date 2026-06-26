@@ -298,6 +298,78 @@ if ($action !== '') {
             exit;
         }
 
+        // ── Export CSV table entière ──────────────────────────────────────────
+        if ($action === 'export_csv') {
+            $table = $_GET['table'] ?? '';
+            if (!preg_match('/^\w+$/', $table)) {
+                echo json_encode(['ok' => false, 'msg' => 'Table invalide.']); exit;
+            }
+            $cols = $pdo->query("DESCRIBE `$table`")->fetchAll(PDO::FETCH_COLUMN);
+            $rows = $pdo->query("SELECT * FROM `$table`")->fetchAll(PDO::FETCH_ASSOC);
+            header('Content-Type: text/csv; charset=utf-8');
+            header('Content-Disposition: attachment; filename="' . $table . '_' . date('Ymd_His') . '.csv"');
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF"); // BOM UTF-8
+            fputcsv($out, $cols, ';');
+            foreach ($rows as $row) fputcsv($out, array_values($row), ';');
+            fclose($out);
+            exit;
+        }
+
+        // ── Vider une table (TRUNCATE) ────────────────────────────────────────
+        if ($action === 'truncate') {
+            $table = $_POST['table'] ?? '';
+            if (!preg_match('/^\w+$/', $table)) {
+                echo json_encode(['ok' => false, 'msg' => 'Table invalide.']); exit;
+            }
+            $pdo->exec("TRUNCATE TABLE `$table`");
+            echo json_encode(['ok' => true]);
+            exit;
+        }
+
+        // ── Ajouter un index ──────────────────────────────────────────────────
+        if ($action === 'add_index') {
+            $table  = $_POST['table']   ?? '';
+            $name   = $_POST['idxname'] ?? '';
+            $cols   = $_POST['cols']    ?? '';
+            $unique = ($_POST['unique'] ?? '0') === '1';
+            if (!preg_match('/^\w+$/', $table) || !preg_match('/^\w+$/', $name)) {
+                echo json_encode(['ok' => false, 'msg' => 'Paramètres invalides.']); exit;
+            }
+            $colArr = array_values(array_filter(array_map('trim', explode(',', $cols)), fn($c) => preg_match('/^\w+$/', $c)));
+            if (empty($colArr)) { echo json_encode(['ok' => false, 'msg' => 'Colonnes invalides.']); exit; }
+            $colsDef = '`' . implode('`,`', $colArr) . '`';
+            $type    = $unique ? 'UNIQUE INDEX' : 'INDEX';
+            $pdo->exec("ALTER TABLE `$table` ADD $type `$name` ($colsDef)");
+            echo json_encode(['ok' => true]);
+            exit;
+        }
+
+        // ── Supprimer un index ────────────────────────────────────────────────
+        if ($action === 'drop_index') {
+            $table = $_POST['table']   ?? '';
+            $name  = $_POST['idxname'] ?? '';
+            if (!preg_match('/^\w+$/', $table) || !preg_match('/^\w+$/', $name)) {
+                echo json_encode(['ok' => false, 'msg' => 'Paramètres invalides.']); exit;
+            }
+            $pdo->exec("ALTER TABLE `$table` DROP INDEX `$name`");
+            echo json_encode(['ok' => true]);
+            exit;
+        }
+
+        // ── Renommer une colonne ──────────────────────────────────────────────
+        if ($action === 'rename_column') {
+            $table   = $_POST['table']   ?? '';
+            $oldName = $_POST['oldname'] ?? '';
+            $newName = $_POST['newname'] ?? '';
+            if (!preg_match('/^\w+$/', $table) || !preg_match('/^\w+$/', $oldName) || !preg_match('/^\w+$/', $newName)) {
+                echo json_encode(['ok' => false, 'msg' => 'Paramètres invalides.']); exit;
+            }
+            $pdo->exec("ALTER TABLE `$table` RENAME COLUMN `$oldName` TO `$newName`");
+            echo json_encode(['ok' => true]);
+            exit;
+        }
+
         echo json_encode(['ok' => false, 'msg' => 'Action inconnue.']);
 
     } catch (Throwable $e) {
@@ -628,6 +700,12 @@ body {
                         <button class="btn btn-sm btn-outline-secondary ms-auto" id="btn-refresh-browse">
                             <i class="bi bi-arrow-clockwise"></i>
                         </button>
+                        <button class="btn btn-sm btn-outline-success" id="btn-export-table-csv" title="Télécharger toute la table en CSV">
+                            <i class="bi bi-filetype-csv me-1"></i>Export CSV
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" id="btn-truncate" title="Vider la table (TRUNCATE)">
+                            <i class="bi bi-trash3 me-1"></i>Vider
+                        </button>
                     </div>
                     <div class="data-table-wrap">
                         <table class="data-table" id="browse-table">
@@ -650,6 +728,9 @@ body {
                         <button class="btn btn-sm btn-success ms-auto" id="btn-add-col">
                             <i class="bi bi-plus-lg me-1"></i>Ajouter une colonne
                         </button>
+                        <button class="btn btn-sm btn-outline-primary" id="btn-add-idx">
+                            <i class="bi bi-lightning-charge me-1"></i>Ajouter un index
+                        </button>
                     </div>
                     <div class="data-table-wrap">
                         <table class="data-table" id="struct-table">
@@ -661,7 +742,7 @@ body {
                                     <th>Clé</th>
                                     <th>Défaut</th>
                                     <th>Extra</th>
-                                    <th style="width:90px;">Actions</th>
+                                    <th style="width:120px;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="struct-tbody"></tbody>
@@ -800,6 +881,62 @@ body {
             <div class="modal-footer">
                 <button class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
                 <button class="btn btn-warning" id="btn-save-modcol"><i class="bi bi-pencil me-1"></i>Modifier</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal Renommer Colonne ────────────────────────────────────────────────── -->
+<div class="modal fade" id="modal-rename-col" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Renommer une colonne</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">Nom actuel</label>
+                    <input type="text" class="form-control form-control-sm" id="ren-old" readonly>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">Nouveau nom</label>
+                    <input type="text" class="form-control form-control-sm" id="ren-new" required pattern="\w+" placeholder="ex: date_creation">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button class="btn btn-primary" id="btn-save-rename"><i class="bi bi-fonts me-1"></i>Renommer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal Ajouter Index ───────────────────────────────────────────────────── -->
+<div class="modal fade" id="modal-add-idx" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="idx-modal-title">Ajouter un index</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">Nom de l'index</label>
+                    <input type="text" class="form-control form-control-sm" id="idx-name" required pattern="\w+" placeholder="ex: idx_nom_prenom">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">Colonnes <span class="text-muted fw-normal">(séparées par des virgules)</span></label>
+                    <input type="text" class="form-control form-control-sm" id="idx-cols" required placeholder="ex: Nom, Prenom">
+                </div>
+                <div class="mb-2 form-check">
+                    <input type="checkbox" class="form-check-input" id="idx-unique">
+                    <label class="form-check-label small" for="idx-unique">Index UNIQUE</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button class="btn btn-primary" id="btn-save-idx"><i class="bi bi-lightning-charge me-1"></i>Créer</button>
             </div>
         </div>
     </div>
@@ -1144,7 +1281,8 @@ function loadStructure(table) {
                 <td>${col.Default !== null ? escHtml(col.Default) : '<span class="null-val">NULL</span>'}</td>
                 <td><small class="text-muted">${escHtml(col.Extra)}</small></td>
                 <td><div class="actions">
-                    <button class="btn btn-xs btn-outline-warning btn-mod-col" style="padding:0 .3rem;font-size:.72rem;" data-col="${escHtml(col.Field)}" data-type="${escHtml(col.Type)}" data-null="${col.Null}" data-default="${escHtml(col.Default??'')}" title="Modifier"><i class="bi bi-pencil"></i></button>
+                    <button class="btn btn-xs btn-outline-secondary btn-rename-col" style="padding:0 .3rem;font-size:.72rem;font-weight:700;line-height:1.4;" data-col="${escHtml(col.Field)}" title="Renommer">R</button>
+                    <button class="btn btn-xs btn-outline-warning btn-mod-col" style="padding:0 .3rem;font-size:.72rem;" data-col="${escHtml(col.Field)}" data-type="${escHtml(col.Type)}" data-null="${col.Null}" data-default="${escHtml(col.Default??'')}" title="Modifier le type"><i class="bi bi-pencil"></i></button>
                     <button class="btn btn-xs btn-outline-danger btn-drop-col" style="padding:0 .3rem;font-size:.72rem;" data-col="${escHtml(col.Field)}" ${col.Key==='PRI'?'disabled':''} title="Supprimer"><i class="bi bi-trash"></i></button>
                 </div></td>
             </tr>`;
@@ -1154,12 +1292,16 @@ function loadStructure(table) {
         // Index
         if (r.indexes.length > 0) {
             const idxHtml = r.indexes.map(idx => {
-                const type = idx.name === 'PRIMARY' ? 'PRIMARY' : (idx.unique ? 'UNIQUE' : 'INDEX');
-                return `<span class="badge ${idx.name==='PRIMARY'?'bg-warning text-dark':idx.unique?'bg-success':'bg-secondary'} me-1">${escHtml(type)}: ${escHtml(idx.name)} (${escHtml(idx.columns.join(', '))})</span>`;
+                const type    = idx.name === 'PRIMARY' ? 'PRIMARY' : (idx.unique ? 'UNIQUE' : 'INDEX');
+                const badgeCls = idx.name === 'PRIMARY' ? 'bg-warning text-dark' : idx.unique ? 'bg-success' : 'bg-secondary';
+                const dropBtn  = idx.name !== 'PRIMARY'
+                    ? ` <button class="btn btn-xs btn-outline-danger btn-drop-idx" style="padding:0 .25rem;font-size:.65rem;vertical-align:middle;" data-idx="${escHtml(idx.name)}" title="Supprimer l'index"><i class="bi bi-x-lg"></i></button>`
+                    : '';
+                return `<span class="me-2 d-inline-flex align-items-center gap-1"><span class="badge ${badgeCls}">${escHtml(type)}: ${escHtml(idx.name)} (${escHtml(idx.columns.join(', '))})</span>${dropBtn}</span>`;
             }).join('');
             $('#struct-indexes').html('<div class="mt-1"><strong style="font-size:.78rem;">Index :</strong> ' + idxHtml + '</div>');
         } else {
-            $('#struct-indexes').empty();
+            $('#struct-indexes').html('<div class="mt-1 text-muted" style="font-size:.78rem;">Aucun index secondaire.</div>');
         }
     });
 }
@@ -1363,6 +1505,83 @@ $('#sql-editor').on('keydown', function (e) {
             }
         }
     }
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Export CSV table entière
+───────────────────────────────────────────────────────────────────────────── */
+$('#btn-export-table-csv').on('click', function () {
+    if (!state.currentTable) return;
+    window.open('db-admin.php?action=export_csv&table=' + encodeURIComponent(state.currentTable), '_blank');
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   TRUNCATE table
+───────────────────────────────────────────────────────────────────────────── */
+$('#btn-truncate').on('click', function () {
+    if (!state.currentTable) return;
+    if (!confirm(`Vider entièrement la table "${state.currentTable}" ?\n\nToutes les lignes seront supprimées. Cette action est IRRÉVERSIBLE.`)) return;
+    api({ action: 'truncate', table: state.currentTable }).done(r => {
+        if (!r.ok) { alert('Erreur : ' + r.msg); return; }
+        loadBrowse();
+        loadTables();
+    });
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Renommer une colonne
+───────────────────────────────────────────────────────────────────────────── */
+$(document).on('click', '.btn-rename-col', function () {
+    $('#ren-old').val($(this).data('col'));
+    $('#ren-new').val('');
+    new bootstrap.Modal('#modal-rename-col').show();
+    setTimeout(() => $('#ren-new').focus(), 400);
+});
+
+$('#btn-save-rename').on('click', function () {
+    const oldName = $('#ren-old').val();
+    const newName = $('#ren-new').val().trim();
+    if (!newName || !/^\w+$/.test(newName)) { alert('Nom invalide.'); return; }
+    api({ action: 'rename_column', table: state.currentTable, oldname: oldName, newname: newName }).done(r => {
+        if (!r.ok) { alert('Erreur : ' + r.msg); return; }
+        bootstrap.Modal.getInstance('#modal-rename-col').hide();
+        loadStructure(state.currentTable);
+    });
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Ajouter / Supprimer un index
+───────────────────────────────────────────────────────────────────────────── */
+$('#btn-add-idx').on('click', function () {
+    if (!state.currentTable) return;
+    $('#idx-modal-title').text('Ajouter un index — ' + state.currentTable);
+    $('#idx-name, #idx-cols').val('');
+    $('#idx-unique').prop('checked', false);
+    new bootstrap.Modal('#modal-add-idx').show();
+    setTimeout(() => $('#idx-name').focus(), 400);
+});
+
+$('#btn-save-idx').on('click', function () {
+    api({
+        action  : 'add_index',
+        table   : state.currentTable,
+        idxname : $('#idx-name').val().trim(),
+        cols    : $('#idx-cols').val().trim(),
+        unique  : $('#idx-unique').is(':checked') ? '1' : '0',
+    }).done(r => {
+        if (!r.ok) { alert('Erreur : ' + r.msg); return; }
+        bootstrap.Modal.getInstance('#modal-add-idx').hide();
+        loadStructure(state.currentTable);
+    });
+});
+
+$(document).on('click', '.btn-drop-idx', function () {
+    const name = $(this).data('idx');
+    if (!confirm(`Supprimer l'index "${name}" de "${state.currentTable}" ?`)) return;
+    api({ action: 'drop_index', table: state.currentTable, idxname: name }).done(r => {
+        if (!r.ok) { alert('Erreur : ' + r.msg); return; }
+        loadStructure(state.currentTable);
+    });
 });
 
 /* ─────────────────────────────────────────────────────────────────────────────

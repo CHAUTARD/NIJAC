@@ -190,6 +190,19 @@ $isAdmin      = !empty($u['is_admin']);
         .btn-configuration{ background-color: #eceff1; }
         .btn-dbadmin      { background-color: #fce4ec; }
 
+        /* Code écran en haut à droite de chaque bouton */
+        .menu-btn { position: relative; }
+        .btn-code {
+            position: absolute;
+            top: 6px;
+            right: 8px;
+            font-size: .62rem;
+            font-weight: 600;
+            color: rgba(0,0,0,.32);
+            letter-spacing: .03em;
+            pointer-events: none;
+        }
+
     </style>
 </head>
 <body>
@@ -215,60 +228,70 @@ $isAdmin      = !empty($u['is_admin']);
     <div id="menu-grid">
 
         <a href="club.php" class="menu-btn btn-club">
+            <span class="btn-code">E008</span>
             <div class="btn-icon"><img src="img/Association.png" alt="Club / Association"></div>
             <span>Club / Association</span>
             <span class="btn-desc">Gérer les clubs et associations affiliés</span>
         </a>
 
         <a href="salle.php" class="menu-btn btn-salle">
+            <span class="btn-code">E005</span>
             <div class="btn-icon"><img src="img/Salle.png" alt="Salle"></div>
             <span>Salle</span>
             <span class="btn-desc">Référencer les salles de compétition et leur adresse</span>
         </a>
 
         <a href="utilisateur.php" class="menu-btn btn-utilisateur">
+            <span class="btn-code">E009</span>
             <div class="btn-icon"><img src="img/Utilisateur.png" alt="Utilisateur"></div>
             <span>Utilisateur</span>
             <span class="btn-desc">Gérer les comptes et droits d'accès</span>
         </a>
 
         <a href="correspondant.php" class="menu-btn btn-correspondant">
+            <span class="btn-code">E004</span>
             <div class="btn-icon"><img src="img/Correspondant.png" alt="Correspondant Club"></div>
             <span>Correspondant Club</span>
             <span class="btn-desc">Contacts référents de chaque club</span>
         </a>
 
         <a href="communes.php" class="menu-btn btn-communes">
+            <span class="btn-code">E006</span>
             <div class="btn-icon"><img src="img/La_Poste.png" alt="Communes"></div>
             <span>Communes</span>
             <span class="btn-desc">Base des codes postaux et coordonnées GPS</span>
         </a>
 
         <a href="division.php" class="menu-btn btn-division">
+            <span class="btn-code">E010</span>
             <div class="btn-icon"><img src="img/podium.png" alt="Division"></div>
             <span>Division</span>
             <span class="btn-desc">Définir les divisions et leur niveau</span>
         </a>
 
         <a href="import_rencontres.php" class="menu-btn btn-club">
+            <span class="btn-code">E011</span>
             <div class="btn-icon"><img src="img/Competition.png" alt="Import Rencontres"></div>
             <span>Import Rencontres</span>
             <span class="btn-desc">Importer les rencontres depuis un fichier FFTT</span>
         </a>
 
         <a href="import_rencontres_nat.php" class="menu-btn btn-club">
+            <span class="btn-code">E017</span>
             <div class="btn-icon"><img src="img/ImportExcel_32.png" alt="Import Nationales"></div>
             <span>Import Rencontres Nationales</span>
             <span class="btn-desc">Importer les rencontres de divisions Nationales</span>
         </a>
 
         <a href="clean.php" class="menu-btn btn-saison" style="grid-column: 1;">
+            <span class="btn-code">E016</span>
             <div class="btn-icon"><img src="img/Nettoyage.png" alt="Saison"></div>
             <span>Saison</span>
             <span class="btn-desc">Suppression des informations sur la saison dernière</span>
         </a>
 
         <a href="configuration.php" class="menu-btn btn-configuration">
+            <span class="btn-code">E015</span>
             <div class="btn-icon"><img src="img/Parametres.png" alt="Configuration"></div>
             <span>Configuration</span>
             <span class="btn-desc">Paramètres généraux de l'application</span>
@@ -276,6 +299,7 @@ $isAdmin      = !empty($u['is_admin']);
 
         <?php if (($_SESSION['utilisateur']['nom'] ?? '') === 'CHAUTARD') : ?>
         <a href="db-admin.php" class="menu-btn btn-dbadmin" target="_blank" style="background: repeating-linear-gradient(45deg, #fce4ec, #fce4ec 10px, #ffcdd2 10px, #ffcdd2 20px); border: 2px solid #c62828;">
+            <span class="btn-code">E099</span>
             <div class="btn-icon"><img src="img/database.png" alt="Base de données"></div>
             <span>Base de données</span>
             <span class="btn-desc">Administration directe de la base de données</span>

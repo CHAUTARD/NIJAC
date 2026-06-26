@@ -102,8 +102,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-start;
+            padding-top: 1.5rem;
             font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        #bandeau-fftt {
+            width: 560px;
+            margin-bottom: 5rem;
+        }
+        #bandeau-fftt img {
+            width: 100%;
+            display: block;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(26,58,107,.2);
         }
 
         .login-card {
@@ -230,6 +242,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </style>
 </head>
 <body>
+
+<div id="bandeau-fftt">
+    <img src="img/FFTT_LIGUE.png" alt="FFTT – Ligue de Normandie">
+</div>
 
 <div class="login-card card">
 

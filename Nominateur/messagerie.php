@@ -338,7 +338,7 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
 </head>
 <body>
 
-<?php $pageIcon = 'bi-envelope-fill'; $pageTitle = 'Gestion des messages'; $pageCode = 'E016'; $backUrl = 'menu.php'; require __DIR__ . '/../includes/page_header.php'; ?>
+<?php $pageIcon = 'bi-envelope-fill'; $pageTitle = 'Gestion des messages'; $pageCode = 'E026'; $backUrl = 'menu.php'; require __DIR__ . '/../includes/page_header.php'; ?>
 
 <?php require __DIR__ . '/../includes/toolbar.php'; ?>
 

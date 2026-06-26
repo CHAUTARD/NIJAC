@@ -308,6 +308,19 @@ if ($stats['prochaine_date']) {
         .btn-messagerie    { background-color: #fff8e1; }
         .btn-envoi         { background-color: #e0f7fa; }
 
+        /* Code écran en haut à droite de chaque bouton */
+        .menu-btn { position: relative; }
+        .btn-code {
+            position: absolute;
+            top: 6px;
+            right: 8px;
+            font-size: .62rem;
+            font-weight: 600;
+            color: rgba(0,0,0,.32);
+            letter-spacing: .03em;
+            pointer-events: none;
+        }
+
         /* Badge sur bouton */
         .btn-badge {
             position: absolute;
@@ -391,6 +404,7 @@ if ($stats['prochaine_date']) {
         <!-- Ligne 1 -->
         <div class="menu-btn-wrap">
             <a href="jugearbitre.php" class="menu-btn btn-ja">
+                <span class="btn-code">E007</span>
                 <div class="btn-icon"><img src="../img/Arbitre_filet.png" alt="Juge-Arbitre"></div>
                 <span>Juge-Arbitre</span>
                 <span class="btn-desc">Gérer la liste des juges-arbitres, grades et coordonnées</span>
@@ -399,6 +413,7 @@ if ($stats['prochaine_date']) {
 
         <div class="menu-btn-wrap">
             <a href="disponibilites.php" class="menu-btn btn-correspondant">
+                <span class="btn-code">E021</span>
                 <div class="btn-icon"><img src="../img/Dispo.png" alt="Disponibilités JA"></div>
                 <span>Disponibilités JA</span>
                 <span class="btn-desc">Saisir ou modifier les disponibilités d'un JA par département</span>
@@ -407,6 +422,7 @@ if ($stats['prochaine_date']) {
 
         <div class="menu-btn-wrap">
             <a href="nomination.php" class="menu-btn btn-nomination">
+                <span class="btn-code">E022</span>
                 <div class="btn-icon"><img src="../img/Nomination.png" alt="Nomination JA" style="max-width:220px;max-height:220px;width:220px;height:220px;"></div>
                 <span>Nomination JA</span>
                 <span class="btn-desc">Affecter les JA aux rencontres et valider les nominations</span>
@@ -418,6 +434,7 @@ if ($stats['prochaine_date']) {
 
         <div class="menu-btn-wrap">
             <a href="messagerie.php" class="menu-btn btn-messagerie">
+                <span class="btn-code">E026</span>
                 <div class="btn-icon"><img src="../img/Correspondant.png" alt="Messagerie"></div>
                 <span>Messagerie</span>
                 <span class="btn-desc">Préparer les messages pour JA et correspondants de club</span>
@@ -428,6 +445,7 @@ if ($stats['prochaine_date']) {
 
         <div class="menu-btn-wrap">
             <a href="centrenvoye.php" class="menu-btn btn-envoi">
+                <span class="btn-code">E024</span>
                 <div class="btn-icon"><img src="../img/Centrenvoye.png" alt="Centre d'envoi"></div>
                 <span>Centre d'envoi</span>
                 <span class="btn-desc">Envoyer les messages aux JA et correspondants</span>
@@ -439,6 +457,7 @@ if ($stats['prochaine_date']) {
 
         <div class="menu-btn-wrap">
             <a href="compta.php" class="menu-btn btn-envoi">
+                <span class="btn-code">E025</span>
                 <div class="btn-icon"><img src="../img/Compta.png" alt="Comptabilite"></div>
                 <span>Comptabilité</span>
                 <span class="btn-desc">Génération des pièces pour la comptabilité</span>
@@ -447,6 +466,7 @@ if ($stats['prochaine_date']) {
 
         <div class="menu-btn-wrap">
             <a href="JA_R3R4.php" class="menu-btn btn-r34">
+                <span class="btn-code">E027</span>
                 <div class="btn-icon"><img src="../img/R3_4.png" alt="Import Rencontres"></div>
                 <span>R3 R4 ayant demandé un JA</span>
                 <span class="btn-desc">Une R3 ou R4 demande un JA</span>

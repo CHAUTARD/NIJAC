@@ -265,7 +265,7 @@ $isAdmin     = !empty($moi['is_admin']);
 </head>
 <body>
 
-<?php $pageIcon = 'bi-person-badge'; $pageTitle = 'Demandes JA pour équipes R3 / R4'; $pageCode = 'E025'; $backUrl = $isAdmin ? '../admin_menu.php' : 'menu.php'; $backBtnClass = 'ms-auto btn btn-sm btn-outline-light'; require __DIR__ . '/../includes/page_header.php'; ?>
+<?php $pageIcon = 'bi-person-badge'; $pageTitle = 'Demandes JA pour équipes R3 / R4'; $pageCode = 'E027'; $backUrl = $isAdmin ? '../admin_menu.php' : 'menu.php'; $backBtnClass = 'ms-auto btn btn-sm btn-outline-light'; require __DIR__ . '/../includes/page_header.php'; ?>
 
 <?php require __DIR__ . '/includes/toolbar.php'; ?>
 
