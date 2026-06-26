@@ -19,10 +19,7 @@ require_once __DIR__ . '/vendor/autoload.php';
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
 // ── Sécurité ──────────────────────────────────────────────────────────────────
-if (!isset($_SESSION['utilisateur']) || empty($_SESSION['utilisateur']['is_admin'])) {
-    header('Location: index.php');
-    exit;
-}
+require __DIR__ . '/includes/admin_required.php';
 $moi = $_SESSION['utilisateur'];
 
 // ── Formater un numéro de téléphone (06 12345678 → 06.12.34.56.78) ───────────
@@ -665,5 +662,3 @@ $('#search-input').on('input', function () {
 $(function () { chargerListe(); });
 </script>
 <?php require __DIR__ . '/includes/footer.php'; ?>
-</body>
-</html>

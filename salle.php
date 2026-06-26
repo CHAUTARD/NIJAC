@@ -18,10 +18,7 @@ require_once __DIR__ . '/vendor/autoload.php';
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
 // ── Sécurité ──────────────────────────────────────────────────────────────────
-if (!isset($_SESSION['utilisateur'])) {
-    header('Location: index.php');
-    exit;
-}
+require __DIR__ . '/includes/auth_required.php';
 $moi     = $_SESSION['utilisateur'];
 $isAdmin = !empty($moi['is_admin']);
 
@@ -836,5 +833,3 @@ $('#sel-dept').on('change', function () {
 $(function () { chargerListe(); });
 </script>
 <?php require __DIR__ . '/includes/footer.php'; ?>
-</body>
-</html>

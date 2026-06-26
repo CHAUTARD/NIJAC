@@ -763,6 +763,4 @@ $('#btn-save-frais').on('click', function () {
 recalcTotal();
 </script>
 <?php require __DIR__ . '/../includes/footer.php'; ?>
-</body>
-</html>
 

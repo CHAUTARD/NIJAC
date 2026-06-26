@@ -14,10 +14,8 @@ require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/csrf.php';
 
 // ── Sécurité : accès admin uniquement ────────────────────────────────────────
-if (!isset($_SESSION['utilisateur']) ) {
-    header('Location: ../index.php');
-    exit;
-}
+$authRedirect = '../index.php';
+require __DIR__ . '/../includes/auth_required.php';
 $moi = $_SESSION['utilisateur'];
 
 // ── Points d'API AJAX ────────────────────────────────────────────────────────
@@ -525,5 +523,4 @@ document.getElementById('txt-recherche').addEventListener('input', filtrerEtAffi
     await chargerListe();
 })();
 </script>
-</body>
-</html>
+<?php require __DIR__ . '/../includes/footer.php'; ?>

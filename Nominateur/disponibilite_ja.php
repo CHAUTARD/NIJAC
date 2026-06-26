@@ -9,8 +9,7 @@
  * Accessible via un lien direct ou via un token obfusqué envoyé par email.
  *
  * Créé par : Patrick CHAUTARD
- * Date de création : 2026-06-11
- * Déplacé dans Nominateur/ : 2026-06-12
+ * Date de création : 2026-06-26
  */
 if (session_status() === PHP_SESSION_NONE) session_start();
 require __DIR__ . '/../config/db.php';
@@ -1692,5 +1691,3 @@ $(function () {
 });
 </script>
 <?php require __DIR__ . '/../includes/footer.php'; ?>
-</body>
-</html>

@@ -15,10 +15,7 @@ require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/csrf.php';
 
 // ── Sécurité ──────────────────────────────────────────────────────────────────
-if (empty($_SESSION['utilisateur']['is_admin'])) {
-    header('Location: index.php');
-    exit;
-}
+require __DIR__ . '/includes/admin_required.php';
 
 // ── Points d'API AJAX ────────────────────────────────────────────────────────
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
@@ -1373,5 +1370,4 @@ $('#sql-editor').on('keydown', function (e) {
 ───────────────────────────────────────────────────────────────────────────── */
 loadTables();
 </script>
-</body>
-</html>
+<?php require __DIR__ . '/includes/footer.php'; ?>

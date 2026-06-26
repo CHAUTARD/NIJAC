@@ -14,10 +14,8 @@ require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/csrf.php';
 
 // ── Sécurité : accès admin et nominateurs ────────────────────────────────────
-if (!isset($_SESSION['utilisateur'])) {
-    header('Location: ../index.php');
-    exit;
-}
+$authRedirect = '../index.php';
+require __DIR__ . '/../includes/auth_required.php';
 $moi           = $_SESSION['utilisateur'];
 $isAdmin       = !empty($moi['is_admin']);
 $idCurrentUser = (int)($moi['id_utilisateur'] ?? 0);
@@ -647,5 +645,3 @@ $(function () {
 });
 </script>
 <?php require __DIR__ . '/../includes/footer.php'; ?>
-</body>
-</html>

@@ -6,6 +6,23 @@
  * Cache statique : la BDD n'est interrogée qu'une seule fois par requête.
  */
 
+/** Termine une action AJAX avec succès. */
+function jsonOk(array $data = []): never
+{
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['ok' => true] + $data);
+    exit;
+}
+
+/** Termine une action AJAX avec une erreur. */
+function jsonError(string $msg, int $httpCode = 200): never
+{
+    header('Content-Type: application/json; charset=utf-8');
+    if ($httpCode !== 200) http_response_code($httpCode);
+    echo json_encode(['ok' => false, 'msg' => $msg]);
+    exit;
+}
+
 /**
  * Crée la table configuration si absente et insère les paramètres par défaut.
  */

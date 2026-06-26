@@ -12,19 +12,8 @@
  */
 session_start();
 
-// Accès réservé aux administrateurs connectés
-if (!isset($_SESSION['utilisateur'])) {
-    header('Location: index.php');
-    exit;
-}
-
+require __DIR__ . '/includes/admin_required.php';
 $u = $_SESSION['utilisateur'];
-
-// Vérification du rôle administrateur (adapter selon votre modèle)
-if (empty($u['is_admin'])) {
-    header('Location: index.php');
-    exit;
-}
 
 $nomComplet   = htmlspecialchars(($u['nom'] ?? '') . ' ' . ($u['prenom'] ?? ''));
 $departement  = htmlspecialchars($u['id_departement'] ?? '');
@@ -303,7 +292,6 @@ $isAdmin      = !empty($u['is_admin']);
 
 
     <!-- Pied de page -->
-    <?php require __DIR__ . '/includes/footer.php'; ?>
 
     <!-- jQuery + Bootstrap JS (local) -->
     <script src="asset/js/jquery-3.7.1.min.js"></script>
@@ -319,6 +307,4 @@ $isAdmin      = !empty($u['is_admin']);
         }
     });
     </script>
-
-</body>
-</html>
+    <?php require __DIR__ . '/includes/footer.php'; ?>

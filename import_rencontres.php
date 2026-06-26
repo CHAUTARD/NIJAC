@@ -11,10 +11,7 @@
  * Date de création : 2026-06-22
  */
 session_start();
-if (!isset($_SESSION['utilisateur']) || empty($_SESSION['utilisateur']['is_admin'])) {
-    header('Location: index.php');
-    exit;
-}
+require __DIR__ . '/includes/admin_required.php';
 
 require __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/csrf.php';
@@ -528,7 +525,7 @@ $isAdmin     = !empty($u['is_admin']);
             border-radius: 8px; padding: .85rem 1rem; margin-bottom: .65rem;
             display: flex; align-items: center; gap: .75rem;
         }
-        .fichier-card .fc-nom { flex: 1; font-weight: 600; font-size: .95rem; }
+        .fichier-card .fc-nom { flex: 1; min-width: 0; font-weight: 600; font-size: .95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .fichier-card .fc-badge {
             background: #1a3a6b; color: #fff;
             border-radius: 12px; padding: .15rem .55rem; font-size: .78rem;
@@ -650,7 +647,6 @@ $isAdmin     = !empty($u['is_admin']);
 
 </div>
 
-<?php require __DIR__ . '/includes/footer.php'; ?>
 
 <script src="asset/js/jquery-3.7.1.min.js"></script>
     <script src="asset/js/nijac-csrf.js"></script>
@@ -669,7 +665,7 @@ function chargerListe() {
             $('#liste-fichiers').html('<div class="text-muted">Aucun fichier xlsx trouvé dans Importation/Rencontres/</div>');
             return;
         }
-        let html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.65rem;">';
+        let html = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.65rem;">';
         r.fichiers.forEach(function (f) {
             const importeBadge = f.importe
                 ? `<span class="fc-importe-badge">
@@ -842,5 +838,4 @@ $('#btn-refresh').on('click', chargerListe);
 // Init
 chargerListe();
 </script>
-</body>
-</html>
+<?php require __DIR__ . '/includes/footer.php'; ?>

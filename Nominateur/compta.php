@@ -10,10 +10,8 @@
  */
 session_start();
 
-if (!isset($_SESSION['utilisateur'])) {
-    header('Location: ../index.php');
-    exit;
-}
+$authRedirect = '../index.php';
+require __DIR__ . '/../includes/auth_required.php';
 
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/app_config.php';
@@ -657,6 +655,4 @@ $('#btn-export').on('click', function () {
         });
 });
 </script>
-
-</body>
-</html>
+<?php require __DIR__ . '/../includes/footer.php'; ?>

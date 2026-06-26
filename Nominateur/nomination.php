@@ -16,10 +16,8 @@
  * Date de création : 2026-06-19
  */
 session_start();
-if (!isset($_SESSION['utilisateur'])) {
-    header('Location: ../index.php');
-    exit;
-}
+$authRedirect = '../index.php';
+require __DIR__ . '/../includes/auth_required.php';
 
 require __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/csrf.php';
@@ -614,7 +612,6 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 </div>
 
 <!-- Pied de page -->
-<?php require __DIR__ . '/../includes/footer.php'; ?>
 
 <script src="../asset/js/jquery-3.7.1.min.js"></script>
     <script src="../asset/js/nijac-csrf.js"></script>
@@ -1102,5 +1099,4 @@ function escHtml(s) {
         .replace(/"/g, '&quot;');
 }
 </script>
-</body>
-</html>
+<?php require __DIR__ . '/../includes/footer.php'; ?>

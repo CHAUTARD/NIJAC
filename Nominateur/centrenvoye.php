@@ -15,10 +15,8 @@ require_once __DIR__ . '/../Classes/Obfuscator.php';
 
 $_obf = new Obfuscator(OBFUSCATOR_SEED);
 
-if (!isset($_SESSION['utilisateur'])) {
-    header('Location: ../index.php');
-    exit;
-}
+$authRedirect = '../index.php';
+require __DIR__ . '/../includes/auth_required.php';
 $moi     = $_SESSION['utilisateur'];
 $isAdmin = !empty($moi['is_admin']);
 
@@ -1249,5 +1247,3 @@ $(function () {
 });
 </script>
 <?php require __DIR__ . '/../includes/footer.php'; ?>
-</body>
-</html>

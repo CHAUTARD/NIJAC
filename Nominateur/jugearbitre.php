@@ -17,10 +17,9 @@ require_once __DIR__ . '/../config/csrf.php';
 require_once __DIR__ . '/../config/app_config.php';
 
 // ── Sécurité ──────────────────────────────────────────────────────────────────
-if (!isset($_SESSION['utilisateur'])) {
-    header('Location: ../index.php');
-    exit;
-}
+$authRedirect = '../index.php';
+require __DIR__ . '/../includes/auth_required.php';
+
 $moi     = $_SESSION['utilisateur'];
 $isAdmin = !empty($moi['is_admin']);
 
@@ -83,13 +82,6 @@ if ($action !== '') {
     try {
         $pdo = getPDO();
 
-        $cols = array_column($pdo->query('SHOW COLUMNS FROM ja')->fetchAll(PDO::FETCH_ASSOC), 'Field');
-        if (!in_array('Defiscalisation', $cols)) {
-            $pdo->exec("ALTER TABLE ja ADD COLUMN Defiscalisation TINYINT(1) NOT NULL DEFAULT 0");
-        }
-        if (!in_array('Nationale', $cols)) {
-            $pdo->exec("ALTER TABLE ja ADD COLUMN Nationale TINYINT(1) NOT NULL DEFAULT 0");
-        }
         // ── Charger la liste ───────────────────────────────────────────────
         if ($action === 'liste') {
             $dept = isset($_POST['dept']) && $_POST['dept'] !== '' ? $_POST['dept'] : null;
@@ -1499,5 +1491,3 @@ $('#btn-enregistrer-ja').on('click', function () {
 $(function () { chargerListe(); });
 </script>
 <?php require __DIR__ . '/../includes/footer.php'; ?>
-</body>
-</html>

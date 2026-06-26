@@ -100,6 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             background: linear-gradient(135deg, #e8eef7 0%, #c8d8f0 100%);
             min-height: 100vh;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             font-family: 'Segoe UI', system-ui, sans-serif;
@@ -146,6 +147,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             align-items: center;
             justify-content: center;
             overflow: hidden;
+            position: relative;
+        }
+        .img-panel .logo-normandie {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            height: 38px;
+            width: auto;
+            filter: drop-shadow(0 1px 2px rgba(0,0,0,.25));
         }
 
         .img-panel img {
@@ -288,12 +298,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <!-- Illustration droite -->
         <div class="img-panel">
             <img src="img/Arbitre_filet.png" alt="Arbitre">
+            <img src="img/logo_region.png" alt="Ligue Normandie de Tennis de Table" class="logo-normandie">
         </div>
 
     </div>
 
     <!-- Pied de page -->
-    <?php require __DIR__ . '/includes/footer.php'; ?>
+    <?php $footerBreak = true; require __DIR__ . '/includes/footer.php'; ?>
 
 </div>
 
@@ -371,6 +382,3 @@ $(function () {
 
 });
 </script>
-
-</body>
-</html>

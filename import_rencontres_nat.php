@@ -10,10 +10,7 @@
  * Date de création : 2026-06-22
  */
 session_start();
-if (!isset($_SESSION['utilisateur']) || empty($_SESSION['utilisateur']['is_admin'])) {
-    header('Location: index.php');
-    exit;
-}
+require __DIR__ . '/includes/admin_required.php';
 
 require __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/csrf.php';
@@ -183,7 +180,7 @@ if (isset($_GET['action'])) {
     try {
         // ── Liste des fichiers xlsx ──────────────────────────────────────────
         if ($action === 'liste_fichiers') {
-            $dossier  = __DIR__ . '/Importation/Rencontres/';
+            $dossier  = __DIR__ . '/Importation/Rencontres/Nationale/';
             $fichiers = [];
             foreach (glob($dossier . '*.xlsx') as $f) {
                 $fichiers[] = basename($f);
@@ -196,7 +193,7 @@ if (isset($_GET['action'])) {
         // ── Analyser + peupler equipe_nationale ─────────────────────────────
         if ($action === 'analyser') {
             $nom     = basename($_POST['fichier'] ?? '');
-            $fichier = __DIR__ . '/Importation/Rencontres/' . $nom;
+            $fichier = __DIR__ . '/Importation/Rencontres/Nationale/' . $nom;
             if (!file_exists($fichier)) {
                 ob_end_clean();
                 echo json_encode(['ok' => false, 'err' => 'Fichier introuvable.']);
@@ -330,7 +327,7 @@ if (isset($_GET['action'])) {
         // ── Import en base ───────────────────────────────────────────────────
         if ($action === 'importer') {
             $nom     = basename($_POST['fichier'] ?? '');
-            $fichier = __DIR__ . '/Importation/Rencontres/' . $nom;
+            $fichier = __DIR__ . '/Importation/Rencontres/Nationale/' . $nom;
             if (!file_exists($fichier)) {
                 ob_end_clean();
                 echo json_encode(['ok' => false, 'err' => 'Fichier introuvable.']);
@@ -417,7 +414,7 @@ if (isset($_GET['action'])) {
         // ── Remplir rencontres à domicile des clubs normands ─────────────────
         if ($action === 'remplir_rencontres') {
             $nom     = basename($_POST['fichier'] ?? '');
-            $fichier = __DIR__ . '/Importation/Rencontres/' . $nom;
+            $fichier = __DIR__ . '/Importation/Rencontres/Nationale/' . $nom;
             if (!file_exists($fichier)) {
                 ob_end_clean();
                 echo json_encode(['ok' => false, 'err' => 'Fichier introuvable.']);
@@ -1266,5 +1263,3 @@ $('#btn-importer').on('click', function () {
 </script>
 
 <?php require __DIR__ . '/includes/footer.php'; ?>
-</body>
-</html>

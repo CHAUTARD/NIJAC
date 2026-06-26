@@ -16,10 +16,7 @@ require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/csrf.php';
 require_once __DIR__ . '/Classes/SecurePasswordHasher.php';
 
-if (!isset($_SESSION['utilisateur'])) {
-    header('Location: index.php');
-    exit;
-}
+require __DIR__ . '/includes/auth_required.php';
 
 $moi      = $_SESSION['utilisateur'];
 $retour   = !empty($moi['is_admin']) ? 'admin_menu.php' : 'Nominateur/menu.php';
@@ -264,6 +261,4 @@ if ($isAjax) {
     </div>
 
 </div>
-
-</body>
-</html>
+<?php require __DIR__ . '/includes/footer.php'; ?>

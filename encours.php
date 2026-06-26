@@ -12,10 +12,7 @@
 session_start();
 require_once __DIR__ . '/config/db.php';
 
-if (!isset($_SESSION['utilisateur']) || empty($_SESSION['utilisateur']['is_admin'])) {
-    header('Location: index.php');
-    exit;
-}
+require __DIR__ . '/includes/admin_required.php';
 $moi = $_SESSION['utilisateur'];
 
 $nomComplet  = htmlspecialchars($moi['nom'] . ' ' . $moi['prenom']);
@@ -79,5 +76,3 @@ $changeLogin = !empty($moi['change_login']);
     <script src="asset/js/nijac-csrf.js"></script>
 <script src="asset/js/bootstrap.bundle.min.js"></script>
 <?php require __DIR__ . '/includes/footer.php'; ?>
-</body>
-</html>

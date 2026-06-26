@@ -14,10 +14,7 @@ require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/csrf.php';
 
 // ── Sécurité ──────────────────────────────────────────────────────────────────
-if (!isset($_SESSION['utilisateur']) || empty($_SESSION['utilisateur']['is_admin'])) {
-    header('Location: index.php');
-    exit;
-}
+require __DIR__ . '/includes/admin_required.php';
 $moi = $_SESSION['utilisateur'];
 
 // ── Points d'API AJAX ────────────────────────────────────────────────────────
@@ -1285,5 +1282,3 @@ $(function () {
 });
 </script>
 <?php require __DIR__ . '/includes/footer.php'; ?>
-</body>
-</html>
