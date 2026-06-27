@@ -73,7 +73,7 @@ if ($action !== '') {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfVerify(true);
 
     // Actions réservées aux administrateurs
-    $actionsAdmin = ['importer_excel', 'sauvegarder', 'supprimer', 'maj_laposte'];
+    $actionsAdmin = ['importer_excel', 'sauvegarder', 'supprimer', 'maj_laposte', 'enrichir_fftt', 'get_clubs_dept', 'import_fftt_club'];
     if (in_array($action, $actionsAdmin) && !$isAdmin) {
         echo json_encode(['ok' => false, 'err' => 'Accès refusé']);
         exit;
@@ -81,6 +81,18 @@ if ($action !== '') {
 
     try {
         $pdo = getPDO();
+
+        // ── Auto-migration : colonnes enrichissement FFTT ─────────────────
+        $colsJa = array_column($pdo->query('SHOW COLUMNS FROM ja')->fetchAll(), 'Field');
+        $ffttCols = [
+            'Classement'              => 'INT NULL DEFAULT NULL',
+            'DateValidationFFTT'      => 'VARCHAR(10) NULL DEFAULT NULL',
+            'GradeFFTT'               => "VARCHAR(20) NULL DEFAULT NULL COMMENT 'Grade arbitrage retourné par xml_licence_b'",
+            'DateEnrichissementFFTT'  => 'DATETIME NULL DEFAULT NULL',
+        ];
+        foreach ($ffttCols as $col => $def) {
+            if (!in_array($col, $colsJa)) $pdo->exec("ALTER TABLE ja ADD COLUMN $col $def");
+        }
 
         // ── Charger la liste ───────────────────────────────────────────────
         if ($action === 'liste') {
@@ -98,6 +110,7 @@ if ($action !== '') {
                 'SELECT j.Id_JA, j.Nom, j.Prenom, j.Email, j.Telephone,
                         j.Grade, j.Actif, j.Id_Club, j.Id_LaPoste,
                         j.Defiscalisation, j.Nationale, j.NumCompteEBP,
+                        j.Classement, j.DateValidationFFTT, j.GradeFFTT, j.DateEnrichissementFFTT,
                         (SELECT cl.Nom FROM Club cl WHERE cl.Id_Club = j.Id_Club LIMIT 1) AS NomClub,
                         (SELECT lp.CodePostal FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1) AS CodePostalJA,
                         (SELECT lp.Nom        FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1) AS VilleJA,
@@ -135,9 +148,13 @@ if ($action !== '') {
                     'Defiscalisation'=> $find($r, 'Defiscalisation'),
                     'Nationale'      => $find($r, 'Nationale'),
                     'NbDispo'        => $find($r, 'NbDispo'),
-                    'NomClub'        => $find($r, 'NomClub'),
-                    'CP'             => $find($r, 'CodePostalJA'),
-                    'Ville'          => $find($r, 'VilleJA'),
+                    'NomClub'                 => $find($r, 'NomClub'),
+                    'CP'                      => $find($r, 'CodePostalJA'),
+                    'Ville'                   => $find($r, 'VilleJA'),
+                    'Classement'              => $find($r, 'Classement'),
+                    'DateValidationFFTT'      => $find($r, 'DateValidationFFTT'),
+                    'GradeFFTT'               => $find($r, 'GradeFFTT'),
+                    'DateEnrichissementFFTT'  => $find($r, 'DateEnrichissementFFTT'),
                 ];
             }, $rows);
 
@@ -430,6 +447,118 @@ if ($action !== '') {
             exit;
         }
 
+        // ── Récupérer la liste des clubs d'un département ─────────────────
+        if ($action === 'get_clubs_dept') {
+            $dep = trim($_POST['dep'] ?? '');
+            if ($dep === '') { ob_end_clean(); echo json_encode(['ok' => false, 'msg' => 'Département manquant.']); exit; }
+            $api   = getFfttApi();
+            $clubs = $api->getClubsDepartement($dep);
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'clubs' => array_map(fn($c) => [
+                'numero' => $c['numero'] ?? $c['numclu'] ?? '',
+                'nom'    => $c['nom']    ?? $c['nomclub'] ?? '',
+            ], $clubs)]);
+            exit;
+        }
+
+        // ── Importer les JAs d'un club via l'API FFTT ──────────────────────
+        if ($action === 'import_fftt_club') {
+            $numClub = trim($_POST['num_club'] ?? '');
+            if ($numClub === '') { ob_end_clean(); echo json_encode(['ok' => false, 'msg' => 'Numéro de club manquant.']); exit; }
+
+            set_time_limit(180);
+            $api     = getFfttApi();
+            $membres = $api->getLicenciesClub($numClub);
+            $trouves = [];
+            $erreurs = 0;
+
+            foreach ($membres as $m) {
+                $licence = trim((string)($m['licence'] ?? ''));
+                if ($licence === '') continue;
+
+                try {
+                    $lb  = $api->getLicenceB($licence);
+                    if (!$lb) continue;
+
+                    $ja  = trim((string)($lb['ja']  ?? ''));
+                    $arb = trim((string)($lb['arb'] ?? ''));
+                    if ($ja === '' && $arb === '') continue;
+
+                    $grade = $ja ?: $arb;
+                    $nom   = mb_strtoupper(trim((string)($lb['nom']    ?? '')), 'UTF-8');
+                    $prenom = trim((string)($lb['prenom'] ?? ''));
+                    $email  = trim((string)($lb['email']  ?? ''));
+                    $idClub = trim((string)($lb['numclub'] ?? $numClub));
+
+                    // Seuls JA1, JA2, JA3 — les AR sont exclus
+                    if (!preg_match('/^JA[123]$/i', $grade)) continue;
+
+                    $gradeNorm = strtoupper($grade);
+
+                    // Upsert dans ja (Id_JA = numéro de licence)
+                    $exists = $pdo->prepare('SELECT Id_JA FROM ja WHERE Id_JA = ?');
+                    $exists->execute([$licence]);
+                    if ($exists->fetchColumn()) {
+                        // Mise à jour du grade FFTT seulement — CP/Ville préservés
+                        $pdo->prepare(
+                            'UPDATE ja SET GradeFFTT=?, DateEnrichissementFFTT=NOW() WHERE Id_JA=?'
+                        )->execute([$gradeNorm, $licence]);
+                        $trouves[] = ['licence' => $licence, 'nom' => $nom, 'prenom' => $prenom, 'grade' => $gradeNorm, 'statut' => 'mis_a_jour'];
+                    } else {
+                        // Insertion d'un nouveau JA
+                        $pdo->prepare(
+                            'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Grade, GradeFFTT, Actif, Id_Club, Defiscalisation, Nationale, DateEnrichissementFFTT)
+                             VALUES (?, ?, ?, ?, ?, ?, 1, ?, 0, 0, NOW())'
+                        )->execute([$licence, $nom, $prenom, $email ?: null, $gradeNorm, $gradeNorm, $idClub]);
+                        $trouves[] = ['licence' => $licence, 'nom' => $nom, 'prenom' => $prenom, 'grade' => $gradeNorm, 'statut' => 'nouveau'];
+                    }
+                } catch (RuntimeException) {
+                    $erreurs++;
+                }
+            }
+
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'trouves' => $trouves, 'total_membres' => count($membres), 'erreurs' => $erreurs]);
+            exit;
+        }
+
+        // ── Enrichir un JA via l'API FFTT ─────────────────────────────────
+        if ($action === 'enrichir_fftt') {
+            $idJa = trim($_POST['id_ja'] ?? '');
+            if ($idJa === '') {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => 'id_ja manquant.']);
+                exit;
+            }
+            $api = getFfttApi();
+            $lic = $api->getLicenceB($idJa);
+            if (!$lic) {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => "Licence $idJa introuvable dans l'API FFTT."]);
+                exit;
+            }
+            $classement = isset($lic['point']) && $lic['point'] !== '' ? (int)$lic['point'] : null;
+            $dateValid  = isset($lic['validation']) && $lic['validation'] !== '' ? (string)$lic['validation'] : null;
+            // Grades d'arbitrage : champs 'arb' et 'ja' retournés par xml_licence_b
+            $arb = isset($lic['arb'])  && $lic['arb']  !== '' ? trim((string)$lic['arb'])  : null;
+            $ja  = isset($lic['ja'])   && $lic['ja']   !== '' ? trim((string)$lic['ja'])   : null;
+            $gradeFFTT = $ja ?? $arb ?? null;
+            // CP, Ville et Id_LaPoste volontairement exclus : les données FFTT sont moins fiables que la BDD locale
+            $pdo->prepare(
+                'UPDATE ja SET Classement=?, DateValidationFFTT=?, GradeFFTT=?, DateEnrichissementFFTT=NOW() WHERE Id_JA=?'
+            )->execute([$classement, $dateValid, $gradeFFTT, $idJa]);
+            ob_end_clean();
+            echo json_encode([
+                'ok'         => true,
+                'classement' => $classement,
+                'date_valid' => $dateValid,
+                'grade_fftt' => $gradeFFTT,
+                'nom_fftt'   => ($lic['nom']    ?? '') . ' ' . ($lic['prenom'] ?? ''),
+                'club_fftt'  => $lic['nomclub'] ?? '',
+            ]);
+            exit;
+        }
+
     } catch (PDOException $e) {
         error_log('[NIJAC] jugearbitre.php PDO : ' . $e->getMessage());
         ob_end_clean();
@@ -453,7 +582,8 @@ $departement = htmlspecialchars($moi['id_departement'] ?? '');
 $changeLogin = !empty($moi['change_login']);
 $isAdminJs   = $isAdmin ? 'true' : 'false';
 $deptUserJs  = $isAdmin ? "''" : "'" . addslashes($moi['id_departement'] ?? '') . "'";
-$deptActifs  = getDeptActifs();
+$deptActifs       = getDeptActifs();
+$deptLimitrophes  = getDepartementsLimitrophes();
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -692,6 +822,13 @@ $deptActifs  = getDeptActifs();
                 <i class="bi bi-database-fill-up"></i>Mettre à jour la Base de données
             </button>
             <hr class="drop-sep">
+            <button class="drop-item" id="btn-enrichir-fftt">
+                <i class="bi bi-cloud-download"></i>Enrichir via FFTT (liste visible)
+            </button>
+            <button class="drop-item" id="btn-import-fftt-dept" data-bs-toggle="modal" data-bs-target="#modal-import-fftt">
+                <i class="bi bi-cloud-arrow-down-fill"></i>Importer JA1/JA2/JA3 depuis FFTT (par département)
+            </button>
+            <hr class="drop-sep">
             <button class="drop-item green" id="btn-nouveau-ja">
                 <i class="bi bi-person-plus-fill"></i>Nouveau JA
             </button>
@@ -719,6 +856,12 @@ $deptActifs  = getDeptActifs();
         <?php foreach ($deptActifs as $d): ?>
         <option value="<?= (int)$d['code'] ?>"><?= (int)$d['code'] ?> — <?= htmlspecialchars($d['nom']) ?></option>
         <?php endforeach; ?>
+        <?php if ($deptLimitrophes): ?>
+        <option disabled>── Limitrophes ──</option>
+        <?php foreach ($deptLimitrophes as $d): ?>
+        <option value="<?= (int)$d['code'] ?>"><?= (int)$d['code'] ?> — <?= htmlspecialchars($d['nom']) ?> (<?= htmlspecialchars($d['region']) ?>)</option>
+        <?php endforeach; ?>
+        <?php endif; ?>
     </select>
     <?php endif; ?>
     <input type="search" id="search-input" placeholder="🔍 Rechercher…">
@@ -743,11 +886,12 @@ $deptActifs  = getDeptActifs();
                 <th style="width:110px" data-field="num_compte_ebp">Cpte EBP<span class="sort-icon"></span></th>
                 <th style="width:75px"  data-field="cp">CP<span class="sort-icon"></span></th>
                 <th style="width:160px" data-field="ville">Ville<span class="sort-icon"></span></th>
+                <th style="width:110px" class="no-sort">FFTT</th>
                 <th style="width:75px"  class="no-sort">Lien dispo</th>
             </tr>
         </thead>
         <tbody id="tbody-grille">
-            <tr><td colspan="16" class="text-center text-muted py-3">Chargement…</td></tr>
+            <tr><td colspan="17" class="text-center text-muted py-3">Chargement…</td></tr>
         </tbody>
     </table>
 </div>
@@ -756,6 +900,89 @@ $deptActifs  = getDeptActifs();
 
 <!-- Toast -->
 <div id="toast-container"></div>
+
+<!-- Modale Import FFTT par département -->
+<div class="modal fade" id="modal-import-fftt" tabindex="-1" aria-labelledby="modal-import-fftt-titre" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#0d6efd;color:#fff;">
+        <h5 class="modal-title" id="modal-import-fftt-titre"><i class="bi bi-cloud-arrow-down-fill me-2"></i>Importer les JA1 / JA2 / JA3 depuis l'API FFTT</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" id="btn-fermer-import-fftt"></button>
+      </div>
+      <div class="modal-body">
+
+        <!-- Étape 1 : choix département -->
+        <div id="import-fftt-step1">
+          <p class="text-muted small mb-3">
+            Sélectionnez un département. L'import parcourt tous les clubs,
+            vérifie chaque licencié via <code>xml_licence_b</code> et insère ou met à jour
+            les JA1/JA2/JA3 trouvés. Les AR sont exclus. <strong>CP et Ville ne sont pas écrasés.</strong>
+          </p>
+          <div class="input-group mb-3" style="max-width:380px">
+            <label class="input-group-text" for="import-fftt-dept"><i class="bi bi-map me-1"></i>Département</label>
+            <select id="import-fftt-dept" class="form-select">
+              <option value="">— Choisir —</option>
+              <?php foreach ($deptActifs as $d): ?>
+              <option value="<?= (int)$d['code'] ?>"><?= (int)$d['code'] ?> — <?= htmlspecialchars($d['nom']) ?></option>
+              <?php endforeach; ?>
+              <?php if ($deptLimitrophes): ?>
+              <option disabled>── Limitrophes ──</option>
+              <?php foreach ($deptLimitrophes as $d): ?>
+              <option value="<?= (int)$d['code'] ?>"><?= (int)$d['code'] ?> — <?= htmlspecialchars($d['nom']) ?> (<?= htmlspecialchars($d['region']) ?>)</option>
+              <?php endforeach; ?>
+              <?php endif; ?>
+            </select>
+          </div>
+          <button class="btn btn-primary" id="btn-lancer-import-fftt">
+            <i class="bi bi-play-fill me-1"></i>Lancer l'import
+          </button>
+        </div>
+
+        <!-- Étape 2 : progression -->
+        <div id="import-fftt-step2" style="display:none;">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span id="import-fftt-label" class="fw-semibold small text-primary">Récupération des clubs…</span>
+            <span id="import-fftt-pct" class="small text-muted">0 %</span>
+          </div>
+          <div class="progress mb-3" style="height:18px;">
+            <div id="import-fftt-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                 style="width:0%" role="progressbar"></div>
+          </div>
+          <div class="row text-center mb-3">
+            <div class="col-3">
+              <div class="fw-bold fs-5 text-success" id="cnt-nouveaux">0</div>
+              <div class="small text-muted">Nouveaux JAs</div>
+            </div>
+            <div class="col-3">
+              <div class="fw-bold fs-5 text-info" id="cnt-maj">0</div>
+              <div class="small text-muted">Mis à jour</div>
+            </div>
+            <div class="col-3">
+              <div class="fw-bold fs-5 text-secondary" id="cnt-membres">0</div>
+              <div class="small text-muted">Membres vérifiés</div>
+            </div>
+            <div class="col-3">
+              <div class="fw-bold fs-5 text-warning" id="cnt-erreurs">0</div>
+              <div class="small text-muted">Erreurs API</div>
+            </div>
+          </div>
+          <!-- Log des JAs trouvés -->
+          <div id="import-fftt-log" style="max-height:200px;overflow-y:auto;font-size:.78rem;background:#f8fafc;border:1px solid #e0e8f0;border-radius:4px;padding:.5rem;font-family:monospace;"></div>
+        </div>
+
+        <!-- Étape 3 : résumé final -->
+        <div id="import-fftt-step3" style="display:none;">
+          <div class="alert alert-success mb-3" id="import-fftt-resume"></div>
+          <div id="import-fftt-log-final" style="max-height:250px;overflow-y:auto;font-size:.78rem;background:#f8fafc;border:1px solid #e0e8f0;border-radius:4px;padding:.5rem;font-family:monospace;"></div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fermer</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Modale Nouveau JA -->
 <div class="modal fade" id="modal-nouveau-ja" tabindex="-1" aria-labelledby="modal-nouveau-ja-titre" aria-hidden="true">
@@ -942,7 +1169,7 @@ function renderGrille() {
 
     if (!affichees.length) {
         const msg = searchTerm ? 'Aucun résultat pour cette recherche.' : 'Aucun juge-arbitre.';
-        $body.append(`<tr><td colspan="15" class="text-center text-muted py-3">${msg}</td></tr>`);
+        $body.append(`<tr><td colspan="17" class="text-center text-muted py-3">${msg}</td></tr>`);
     } else {
         affichees.forEach(l => {
             const idx  = l._idx;          // index stable, indépendant du filtre/tri
@@ -971,6 +1198,23 @@ function renderGrille() {
             $tr.append(makeTd(l.num_compte_ebp,    idx, 'num_compte_ebp', false));
             $tr.append(makeTdLaPoste(l.cp,         idx, 'cp'));
             $tr.append(makeTdLaPoste(l.ville,     idx, 'ville'));
+            // Colonne FFTT
+            const $tdFftt = $('<td>').css({textAlign:'center', verticalAlign:'middle', padding:'.2rem', whiteSpace:'nowrap'});
+            if (l.grade_fftt || l.classement || l.date_validation_fftt) {
+                const grade = l.grade_fftt          ? `<span class="badge bg-success me-1">${l.grade_fftt}</span>` : '';
+                const pts   = l.classement          ? `<span class="badge bg-info text-dark me-1">${l.classement}</span>` : '';
+                const valid = l.date_validation_fftt ? `<br><small class="text-muted">${l.date_validation_fftt}</small>` : '';
+                $tdFftt.html(`${grade}${pts}${valid}`);
+            }
+            if (isAdmin) {
+                const $btnRefresh = $('<button>')
+                    .addClass('btn btn-sm btn-outline-primary btn-enrichir-fftt ms-1')
+                    .attr({'data-id': l.id, 'data-idx': idx, title: 'Enrichir via FFTT'})
+                    .html('<i class="bi bi-cloud-download"></i>');
+                $tdFftt.append($btnRefresh);
+            }
+            $tr.append($tdFftt);
+
             // Bouton lien disponibilité
             const $tdLien = $('<td>').css({textAlign:'center', verticalAlign:'middle', padding:'.2rem'});
             const dispoCls   = l.nb_dispo > 0 ? 'btn-success'         : 'btn-outline-secondary';
@@ -1238,9 +1482,13 @@ function chargerListe() {
             num_compte_ebp:   r.NumCompteEBP ?? '',
             defiscalisation:  +r.Defiscalisation,
             nationale:        +r.Nationale,
-            nb_dispo:         +r.NbDispo,
-            cp:               r.CP    ?? '',
-            ville:            r.Ville ?? '',
+            nb_dispo:               +r.NbDispo,
+            cp:                     r.CP    ?? '',
+            ville:                  r.Ville ?? '',
+            classement:               r.Classement ?? null,
+            date_validation_fftt:     r.DateValidationFFTT ?? null,
+            grade_fftt:               r.GradeFFTT ?? null,
+            date_enrichissement_fftt: r.DateEnrichissementFFTT ?? null,
         }));
         renderGrille();
     }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
@@ -1311,6 +1559,174 @@ $('#btn-maj-bdd').on('click', function () {
         toast(res.msg, res.ok);
         if (res.ok) chargerListe();
     }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
+});
+
+// ── Enrichir un JA via FFTT (bouton par ligne) ───────────────────────────────
+function enrichirJaFftt(idJa, idx) {
+    $.post('jugearbitre.php', { action: 'enrichir_fftt', id_ja: idJa }, function (res) {
+        if (!res.ok) { toast('FFTT : ' + res.msg, false); return; }
+        lignes[idx].classement               = res.classement;
+        lignes[idx].date_validation_fftt     = res.date_valid;
+        lignes[idx].grade_fftt               = res.grade_fftt;
+        lignes[idx].date_enrichissement_fftt = new Date().toISOString();
+        renderGrille();
+        const grade = res.grade_fftt ? ` [${res.grade_fftt}]` : '';
+        const pts   = res.classement ? ` — ${res.classement} pts` : '';
+        const dt    = res.date_valid ? `, validité ${res.date_valid}` : '';
+        toast(`FFTT : ${res.nom_fftt}${grade}${pts}${dt}`);
+    }, 'json').fail(() => toast('Erreur réseau FFTT.', false));
+}
+
+$(document).on('click', '.btn-enrichir-fftt', function () {
+    const id  = $(this).data('id');
+    const idx = $(this).data('idx');
+    enrichirJaFftt(id, idx);
+});
+
+// ── Enrichir tous les JA visibles via FFTT ────────────────────────────────────
+$('#btn-enrichir-fftt').on('click', function () {
+    const visibles = lignesFiltreesTriees();
+    if (!visibles.length) { toast('Aucun JA visible.', false); return; }
+    if (!confirm(`Enrichir ${visibles.length} JA via l'API FFTT ? (${visibles.length} appels réseau)`)) return;
+
+    let done = 0;
+    let errors = 0;
+
+    function next() {
+        if (done + errors >= visibles.length) {
+            toast(`FFTT : ${done} enrichi(s)${errors ? ', ' + errors + ' erreur(s)' : ''}.`, errors === 0);
+            spinner(false);
+            return;
+        }
+        const l = visibles[done + errors];
+        $.post('jugearbitre.php', { action: 'enrichir_fftt', id_ja: l.id }, function (res) {
+            if (res.ok) {
+                lignes[l._idx].classement               = res.classement;
+                lignes[l._idx].date_validation_fftt     = res.date_valid;
+                lignes[l._idx].grade_fftt               = res.grade_fftt;
+                lignes[l._idx].date_enrichissement_fftt = new Date().toISOString();
+                done++;
+            } else {
+                errors++;
+            }
+            setStatus(`Enrichissement FFTT : ${done + errors}/${visibles.length}…`);
+            next();
+        }, 'json').fail(() => { errors++; next(); });
+    }
+
+    spinner(true);
+    next();
+});
+
+// ── Import FFTT par département ───────────────────────────────────────────────
+let importFfttEnCours = false;
+
+$('#modal-import-fftt').on('hidden.bs.modal', function () {
+    if (!importFfttEnCours) resetImportFftt();
+});
+
+function resetImportFftt() {
+    $('#import-fftt-step1').show();
+    $('#import-fftt-step2, #import-fftt-step3').hide();
+    $('#import-fftt-dept').val('');
+    $('#import-fftt-bar').css('width', '0%');
+    $('#import-fftt-label').text('Récupération des clubs…');
+    $('#import-fftt-pct').text('0 %');
+    ['cnt-nouveaux','cnt-maj','cnt-membres','cnt-erreurs'].forEach(id => $(`#${id}`).text('0'));
+    $('#import-fftt-log, #import-fftt-log-final').empty();
+    importFfttEnCours = false;
+}
+
+$('#btn-lancer-import-fftt').on('click', function () {
+    const dep = $('#import-fftt-dept').val();
+    if (!dep) { nijacToast('Sélectionnez un département.', 'warning'); return; }
+
+    importFfttEnCours = true;
+    $('#import-fftt-step1').hide();
+    $('#import-fftt-step2').show();
+    $('#btn-fermer-import-fftt').prop('disabled', true);
+
+    let totalNouveaux = 0, totalMaj = 0, totalMembres = 0, totalErreurs = 0;
+    const logLines = [];
+
+    // Étape 1 : récupérer la liste des clubs
+    $.post('jugearbitre.php', { action: 'get_clubs_dept', dep }, function (res) {
+        if (!res.ok) {
+            nijacToast('Erreur : ' + res.msg, 'danger');
+            resetImportFftt();
+            $('#import-fftt-step1').show();
+            $('#import-fftt-step2').hide();
+            $('#btn-fermer-import-fftt').prop('disabled', false);
+            return;
+        }
+
+        const clubs = res.clubs.filter(c => c.numero);
+        const total = clubs.length;
+        let done = 0;
+
+        $('#import-fftt-label').text(`0 / ${total} clubs traités…`);
+
+        function traiterClub() {
+            if (done >= total) {
+                // Terminé
+                importFfttEnCours = false;
+                $('#btn-fermer-import-fftt').prop('disabled', false);
+                $('#import-fftt-step2').hide();
+                $('#import-fftt-step3').show();
+                $('#import-fftt-resume').html(
+                    `<i class="bi bi-check-circle-fill me-2"></i>` +
+                    `Import terminé — <strong>${totalNouveaux}</strong> nouveau(x) JA, ` +
+                    `<strong>${totalMaj}</strong> mis à jour, ` +
+                    `<strong>${totalMembres}</strong> membres vérifiés` +
+                    (totalErreurs ? `, <strong>${totalErreurs}</strong> erreur(s) API` : '') + '.'
+                );
+                $('#import-fftt-log-final').html(logLines.join(''));
+                chargerListe();
+                return;
+            }
+
+            const club = clubs[done];
+            const pct  = Math.round(done / total * 100);
+            $('#import-fftt-bar').css('width', pct + '%');
+            $('#import-fftt-pct').text(pct + ' %');
+            $('#import-fftt-label').text(`${done + 1} / ${total} — ${club.nom}`);
+
+            $.post('jugearbitre.php', { action: 'import_fftt_club', num_club: club.numero }, function (r) {
+                if (r.ok) {
+                    totalMembres += r.total_membres;
+                    totalErreurs += r.erreurs;
+                    r.trouves.forEach(ja => {
+                        const cls   = ja.statut === 'nouveau' ? 'text-success' : 'text-info';
+                        const label = ja.statut === 'nouveau' ? '✚ NOUVEAU' : '↻ MAJ';
+                        const line  = `<div class="${cls}">[${label}] ${ja.grade} — ${ja.nom} ${ja.prenom} (${ja.licence})</div>`;
+                        logLines.push(line);
+                        $('#import-fftt-log').append(line).scrollTop(9999);
+                        if (ja.statut === 'nouveau') totalNouveaux++;
+                        else totalMaj++;
+                    });
+                    $('#cnt-nouveaux').text(totalNouveaux);
+                    $('#cnt-maj').text(totalMaj);
+                    $('#cnt-membres').text(totalMembres);
+                    $('#cnt-erreurs').text(totalErreurs);
+                }
+                done++;
+                traiterClub();
+            }, 'json').fail(() => {
+                totalErreurs++;
+                $('#cnt-erreurs').text(totalErreurs);
+                done++;
+                traiterClub();
+            });
+        }
+
+        traiterClub();
+    }, 'json').fail(() => {
+        nijacToast('Erreur réseau lors de la récupération des clubs.', 'danger');
+        resetImportFftt();
+        $('#import-fftt-step1').show();
+        $('#import-fftt-step2').hide();
+        $('#btn-fermer-import-fftt').prop('disabled', false);
+    });
 });
 
 // ── Tri sur clic en-tête ──────────────────────────────────────────────────────

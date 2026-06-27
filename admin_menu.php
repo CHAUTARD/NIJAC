@@ -248,13 +248,6 @@ $isAdmin      = !empty($u['is_admin']);
             <span class="btn-desc">Gérer les comptes et droits d'accès</span>
         </a>
 
-        <a href="correspondant.php" class="menu-btn btn-correspondant">
-            <span class="btn-code">E004</span>
-            <div class="btn-icon"><img src="img/Correspondant.png" alt="Correspondant Club"></div>
-            <span>Correspondant Club</span>
-            <span class="btn-desc">Contacts référents de chaque club</span>
-        </a>
-
         <a href="communes.php" class="menu-btn btn-communes">
             <span class="btn-code">E006</span>
             <div class="btn-icon"><img src="img/La_Poste.png" alt="Communes"></div>
@@ -298,6 +291,13 @@ $isAdmin      = !empty($u['is_admin']);
         </a>
 
         <?php if (($_SESSION['utilisateur']['nom'] ?? '') === 'CHAUTARD') : ?>
+        <a href="fftt_test.php" class="menu-btn btn-configuration">
+            <span class="btn-code">E018</span>
+            <div class="btn-icon"><i class="bi bi-plug-fill" style="font-size:2rem;color:#0d6efd;"></i></div>
+            <span>Test API FFTT</span>
+            <span class="btn-desc">Vérifier la connexion à l'API FFTT</span>
+        </a>
+
         <a href="db-admin.php" class="menu-btn btn-dbadmin" target="_blank" style="background: repeating-linear-gradient(45deg, #fce4ec, #fce4ec 10px, #ffcdd2 10px, #ffcdd2 20px); border: 2px solid #c62828;">
             <span class="btn-code">E099</span>
             <div class="btn-icon"><img src="img/database.png" alt="Base de données"></div>

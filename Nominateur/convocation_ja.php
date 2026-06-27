@@ -187,11 +187,10 @@ if ($idJa && $idRencontre) {
         //  Correspondant du club recevant 
         $correspondant = null;
         if ($rencontre) {
-            $stmtC = $pdo->prepare("
-                SELECT Nom, Email, Telephone FROM Correspondant
-                WHERE Id_Club = ?
-                ORDER BY Id_Correspondant LIMIT 1
-            ");
+            $stmtC = $pdo->prepare(
+                'SELECT CorNom AS Nom, CorEmail AS Email, CorTelephone AS Telephone
+                 FROM Club WHERE Id_Club = ? AND CorNom IS NOT NULL LIMIT 1'
+            );
             $stmtC->execute([$rencontre['IdClubDom']]);
             $correspondant = $stmtC->fetch() ?: null;
         }

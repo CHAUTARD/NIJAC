@@ -105,9 +105,9 @@ if ($action !== '') {
                                s.Adresse      AS SalleAdresse,
                                lps.CodePostal AS SalleCP,
                                lps.Nom        AS SalleVille,
-                               co.Nom         AS CorrNom,
-                               co.Email       AS CorrEmail,
-                               co.Telephone   AS CorrTel
+                               co.CorNom      AS CorrNom,
+                               co.CorEmail    AS CorrEmail,
+                               co.CorTelephone AS CorrTel
                         FROM nomination n
                         JOIN ja j              ON j.Id_JA        = n.Id_JA
                         JOIN rencontre r        ON r.Id_Rencontre = n.Id_Rencontre
@@ -116,8 +116,7 @@ if ($action !== '') {
                         JOIN division dv        ON dv.Id_Division = r.Id_Division
                         LEFT JOIN salle s       ON s.Id_Salle     = r.id_Salle
                         LEFT JOIN laposte lps   ON lps.Id_LaPoste = s.Id_Laposte
-                        LEFT JOIN (SELECT MIN(Id_Correspondant) AS Id_Min, Id_Club FROM correspondant GROUP BY Id_Club) co_sel ON co_sel.Id_Club = ed.Id_Club
-                        LEFT JOIN correspondant co ON co.Id_Correspondant = co_sel.Id_Min
+                        LEFT JOIN Club co ON co.Id_Club = ed.Id_Club
                         WHERE r.Journee = ? AND r.Date = ? AND j.Actif = 1
                         ORDER BY j.Nom, j.Prenom
                     ");

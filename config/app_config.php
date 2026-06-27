@@ -130,6 +130,31 @@ function getDepartementsAutorises(?string $deptUtilisateur): array
 }
 
 /**
+ * Retourne les départements limitrophes de la région (Normandie) configurés.
+ * Ces départements appartiennent aux régions voisines et peuvent être concernés
+ * par des rencontres inter-régionales.
+ * Chaque entrée : ['code' => '80', 'nom' => 'Somme', 'region' => 'Hauts-de-France']
+ */
+function getDepartementsLimitrophes(): array
+{
+    static $tous = [
+        ['code' => '60', 'nom' => 'Oise',          'region' => 'Hauts-de-France'],
+        ['code' => '80', 'nom' => 'Somme',          'region' => 'Hauts-de-France'],
+        ['code' => '95', 'nom' => "Val-d'Oise",     'region' => 'Île-de-France'],
+        ['code' => '78', 'nom' => 'Yvelines',       'region' => 'Île-de-France'],
+        ['code' => '28', 'nom' => 'Eure-et-Loir',   'region' => 'Centre-Val de Loire'],
+        ['code' => '53', 'nom' => 'Mayenne',         'region' => 'Pays de la Loire'],
+        ['code' => '72', 'nom' => 'Sarthe',          'region' => 'Pays de la Loire'],
+        ['code' => '35', 'nom' => 'Ille-et-Vilaine', 'region' => 'Bretagne'],
+    ];
+
+    $actifs = array_filter(array_map('trim', explode(',', getConfig('departements_limitrophes', ''))));
+    if (!$actifs) return [];
+
+    return array_values(array_filter($tous, fn($d) => in_array($d['code'], $actifs, true)));
+}
+
+/**
  * Retourne les départements actifs (depuis departements_actifs en configuration)
  * avec leur nom (depuis la table departement), triés par code numérique.
  * Chaque entrée : ['code' => '14', 'nom' => 'Calvados']
@@ -154,18 +179,39 @@ function getDeptActifs(): array
 }
 
 /**
- * Retourne une instance FfttApi configurée depuis db.php (credentials obfusqués).
+ * Retourne une instance FfttApi configurée depuis .env (credentials obfusqués ROT47).
+ * Le serial applicatif est généré une fois et stocké dans la table configuration.
  * Lance une exception si les credentials ne sont pas renseignés.
  */
 function getFfttApi(): \FfttApi
 {
     require_once __DIR__ . '/../Classes/FfttApi.php';
-    $serial   = getFfttSerial();
-    $password = getFfttPassword();
-    if ($serial === '' || $password === '') {
-        throw new \RuntimeException('API FFTT non configurée. Renseignez _FFTT_SERIAL et _FFTT_PASSWORD dans config/db.php.');
+
+    $appId  = getFfttAppId();
+    $appKey = getFfttAppKey();
+    if ($appId === '' || $appKey === '') {
+        throw new \RuntimeException('API FFTT non configurée. Renseignez FFTT_APP_ID et FFTT_APP_KEY dans .env.');
     }
-    return new \FfttApi($serial, $password);
+
+    // Serial applicatif : généré une fois, persisté en configuration
+    $serial    = getConfig('fftt_serial', '');
+    $nouveauSerial = ($serial === '');
+    if ($nouveauSerial) {
+        $chars  = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        $serial = '';
+        for ($i = 0; $i < 15; $i++) $serial .= $chars[random_int(0, 35)];
+        getPDO()->prepare('INSERT INTO configuration (cle, valeur, description) VALUES (?,?,?) ON DUPLICATE KEY UPDATE valeur=VALUES(valeur)')
+                ->execute(['fftt_serial', $serial, 'Numéro de série applicatif généré pour l\'API FFTT.']);
+    }
+
+    $api = new \FfttApi($appId, $appKey, $serial);
+
+    // Enregistrement du serial auprès de l'API FFTT lors de la première utilisation
+    if ($nouveauSerial) {
+        $api->initialize();
+    }
+
+    return $api;
 }
 
 /**

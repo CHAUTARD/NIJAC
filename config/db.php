@@ -56,8 +56,8 @@ define('APP_VERSION',  '0.0.35');
 // (doit rester identique entre génération et décodage)
 define('OBFUSCATOR_SEED', 167);
 
-function getFfttSerial(): string   { return rot47($_ENV['FFTT_SERIAL']   ?? ''); }
-function getFfttPassword(): string { return rot47($_ENV['FFTT_PASSWORD'] ?? ''); }
+function getFfttAppId(): string  { return rot47($_ENV['FFTT_APP_ID']  ?? ''); }
+function getFfttAppKey(): string { return rot47($_ENV['FFTT_APP_KEY'] ?? ''); }
 
 /**
  * Retourne une instance PDO partagée (singleton).

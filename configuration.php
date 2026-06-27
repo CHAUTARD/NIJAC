@@ -111,6 +111,20 @@ if ($action !== '') {
                 $valeur = implode(',', $depts);
             }
 
+            // Validation départements_limitrophes : liste de numéros séparés par virgule
+            if ($cle === 'departements_limitrophes') {
+                $deptsValides = ['28', '35', '53', '60', '72', '78', '80', '95'];
+                $depts = array_filter(array_map('trim', explode(',', $valeur)));
+                foreach ($depts as $d) {
+                    if (!in_array($d, $deptsValides, true)) {
+                        ob_end_clean();
+                        echo json_encode(['ok' => false, 'msg' => "Département limitrophe « $d » non reconnu."]);
+                        exit;
+                    }
+                }
+                $valeur = implode(',', $depts);
+            }
+
             $stmt = $pdo->prepare(
                 'INSERT INTO configuration (cle, valeur) VALUES (?, ?)
                  ON DUPLICATE KEY UPDATE valeur = VALUES(valeur)'
@@ -249,6 +263,7 @@ try {
     $emailDev      = getConfig('email_developpement', 'patrick.chautard@free.fr');
     $deptsActifs      = getConfig('departements_actifs', '14,27,50,61,76');
     $reglesDepts      = getConfig('regles_departements', '{"76":["27"]}');
+    $deptsLimitrophes = getConfig('departements_limitrophes', '60,80,95,78,28,53,72,35');
     $urlLigue         = getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr');
     $indemniteForfait  = getConfig('indemnite_forfaitaire', '25.00');
     $fraisKm           = getConfig('frais_kilometrique', '0.30');
@@ -967,6 +982,57 @@ $changeLogin = !empty($moi['change_login']);
         </div>
     </div>
 
+    <!-- ── Paramètre : Départements limitrophes ── -->
+    <div class="param-card" style="grid-column:1 / -1">
+        <div class="param-card-head">
+            <i class="bi bi-sign-intersection-fill param-icon"></i>
+            <div>
+                <h2>Départements limitrophes</h2>
+                <small>Départements des régions voisines concernés par les rencontres inter-régionales</small>
+            </div>
+        </div>
+        <div class="param-card-body">
+            <p style="font-size:.85rem;color:#374151;margin-bottom:1.1rem;">
+                Cochez les départements limitrophes à prendre en compte. Ces départements
+                appartiennent aux régions voisines de la Normandie et peuvent accueillir
+                des rencontres inter-régionales.
+            </p>
+
+            <?php
+            $limitrophesCoches = array_filter(array_map('trim', explode(',', $deptsLimitrophes)));
+            $groupes = [
+                'Hauts-de-France'       => [['60','Oise'], ['80','Somme']],
+                'Île-de-France / Centre'=> [['95',"Val-d'Oise"], ['78','Yvelines'], ['28','Eure-et-Loir']],
+                'Pays de la Loire'      => [['53','Mayenne'], ['72','Sarthe']],
+                'Bretagne'              => [['35','Ille-et-Vilaine']],
+            ];
+            foreach ($groupes as $region => $depts): ?>
+            <div style="margin-bottom:.85rem;">
+                <div style="font-size:.8rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem;">
+                    <?= htmlspecialchars($region) ?>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;">
+                    <?php foreach ($depts as [$code, $nom]): ?>
+                    <label style="display:flex;align-items:center;gap:.4rem;font-size:.88rem;cursor:pointer;user-select:none;">
+                        <input type="checkbox" class="limitrophe-check" value="<?= $code ?>"
+                               <?= in_array($code, $limitrophesCoches, true) ? 'checked' : '' ?>
+                               style="width:1rem;height:1rem;cursor:pointer;">
+                        <span><?= $code ?> — <?= htmlspecialchars($nom) ?></span>
+                    </label>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endforeach; ?>
+
+            <div class="d-flex align-items-center gap-3 mt-3">
+                <button id="btn-sauvegarder-limitrophes">
+                    <i class="bi bi-floppy-fill me-1"></i>Enregistrer les départements limitrophes
+                </button>
+                <div id="msg-result-limitrophes" style="font-size:.82rem;min-height:18px;"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- ── Paramètre : Configuration SMTP ── -->
     <div class="param-card" style="grid-column:1 / -1">
         <div class="param-card-head">
@@ -1584,6 +1650,34 @@ $('#btn-sauvegarder-regles').on('click', function () {
         spinner(false);
         $('#btn-sauvegarder-regles').prop('disabled', false);
         $('#msg-result-regles').html('<span class="text-danger">Erreur réseau.</span>');
+    });
+});
+
+// ── Enregistrement départements limitrophes ───────────────────────────────────
+$('#btn-sauvegarder-limitrophes').on('click', function () {
+    const depts = [];
+    $('.limitrophe-check:checked').each(function () { depts.push($(this).val()); });
+
+    spinner(true);
+    $(this).prop('disabled', true);
+    $('#msg-result-limitrophes').text('');
+
+    $.post('configuration.php', {
+        action: 'enregistrer',
+        cle:    'departements_limitrophes',
+        valeur: depts.join(',')
+    }, function (res) {
+        spinner(false);
+        $('#btn-sauvegarder-limitrophes').prop('disabled', false);
+        if (res.ok) {
+            $('#msg-result-limitrophes').html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+        } else {
+            $('#msg-result-limitrophes').html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+        }
+    }, 'json').fail(() => {
+        spinner(false);
+        $('#btn-sauvegarder-limitrophes').prop('disabled', false);
+        $('#msg-result-limitrophes').html('<span class="text-danger">Erreur réseau.</span>');
     });
 });
 

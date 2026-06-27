@@ -37,6 +37,9 @@ if (!empty($backUrl)) {
     }
 }
 ?>
+<?php if (function_exists('csrfToken')): ?>
+<meta name="csrf-token" content="<?= htmlspecialchars(csrfToken()) ?>">
+<?php endif; ?>
 <?php if (function_exists('getConfig') && !empty($_SESSION['utilisateur'])): ?>
 <script>
 const NIJAC_CFG = <?= json_encode([

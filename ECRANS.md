@@ -3,12 +3,11 @@
 | N° | Titre | Fichier | Fonctionnalités |
 |----|-------|---------|-----------------|
 | E001 | Page de connexion | `index.php` | Saisie login / mot de passe · Afficher/masquer le mot de passe · Vérification des identifiants en base · Redirection selon le rôle (Admin → E002, Nominateur → E020) · Forçage du changement de mot de passe à la première connexion |
-| E002 | Menu paramètres administrateur | `admin_menu.php` | Accès aux écrans de paramétrage (E004 à E017) · Bascule vers le menu nominateur (E020) · Alerte changement de mot de passe en attente |
-| E004 | Gestion des correspondants de clubs | `correspondant.php` | Liste des correspondants par club · Création / modification / suppression · Import depuis fichier Excel FFTT · Champs : nom, email, téléphone, fonction |
+| E002 | Menu paramètres administrateur | `admin_menu.php` | Accès aux écrans de paramétrage (E005 à E017) · Bascule vers le menu nominateur (E020) · Alerte changement de mot de passe en attente |
 | E005 | Gestion des salles | `salle.php` | Liste des salles de compétition · Création / modification / suppression · Rattachement à un club · Désignation de la salle principale · Coordonnées GPS issues de la table laposte |
 | E006 | Gestion des communes | `communes.php` | Référentiel codes postaux / communes (table laposte) · Coordonnées GPS (latitude / longitude) · Utilisé pour les calculs de distance domicile-salle lors des nominations |
 | E007 | Gestion des Juges-Arbitres | `Nominateur/jugearbitre.php` | Import depuis fichier Excel FFTT · Liste des JA avec grade et coordonnées · Activation / désactivation d'un JA · Normalisation automatique des villes via la table laposte · Modification des fiches JA |
-| E008 | Gestion des clubs et associations | `club.php` | Import depuis fichier Excel FFTT (upsert) · Liste des clubs affiliés · Création / modification · Champs : N° FFTT, nom du club |
+| E008 | Gestion des clubs et associations | `club.php` | Import depuis fichier Excel FFTT (upsert) · Liste des clubs affiliés · Création / modification · Champs : N° FFTT, nom du club · Coordonnées correspondant (nom, email, téléphone) · Synchronisation depuis l'API FFTT |
 | E009 | Gestion des utilisateurs | `utilisateur.php` | Création / modification / suppression de comptes · Rôles : Administrateur ou Nominateur · Affectation d'un département · Activation / désactivation · Forçage du changement de mot de passe |
 | E010 | Gestion des divisions | `division.php` | Définition des divisions sportives et de leur niveau hiérarchique · Utilisé pour classer les rencontres et orienter les règles de nomination |
 | E011 | Import des rencontres | `import_rencontres.php` | Import de fichiers Excel FFTT déposés dans `/Importation/` · Alimentation de la table rencontre (upsert) · Signalement des doublons et données manquantes (salles, clubs) |

@@ -35,9 +35,17 @@ if ($action !== '') {
 
         // ── Charger la liste ───────────────────────────────────────────────
         if ($action === 'liste') {
-            $sql = 'SELECT s.Id_Salle, s.Nom, s.Adresse, s.Id_Laposte, s.Id_Club,
-                           s.EstPrincipale, cl.Nom AS NomClub,
-                           CONCAT(lp.CodePostal, \' \', lp.Nom) AS CpVille
+            // Auto-migration colonnes Cp et Ville dans Salle
+            $colsSalle = array_column($pdo->query('SHOW COLUMNS FROM Salle')->fetchAll(), 'Field');
+            if (!in_array('Cp', $colsSalle))    $pdo->exec("ALTER TABLE Salle ADD COLUMN Cp VARCHAR(10) NULL AFTER Adresse");
+            if (!in_array('Ville', $colsSalle)) $pdo->exec("ALTER TABLE Salle ADD COLUMN Ville VARCHAR(100) NULL AFTER Cp");
+
+            $sql = 'SELECT s.Id_Salle, COALESCE(s.Nom, cl.Nom) AS Nom, s.Adresse, s.Id_Laposte, s.Id_Club,
+                           s.EstPrincipale, s.Cp, s.Ville, cl.Nom AS NomClub,
+                           COALESCE(
+                               NULLIF(CONCAT(lp.CodePostal, \' \', lp.Nom), \' \'),
+                               NULLIF(CONCAT(COALESCE(s.Cp,\'\'), \' \', COALESCE(s.Ville,\'\')), \' \')
+                           ) AS CpVille
                     FROM Salle s
                     LEFT JOIN Club    cl ON cl.Id_Club    = s.Id_Club
                     LEFT JOIN laposte lp ON lp.Id_LaPoste = s.Id_Laposte';
@@ -52,12 +60,14 @@ if ($action !== '') {
                     exit;
                 }
                 $deptPh = implode(',', array_fill(0, count($depts), '?'));
-                $sql .= " WHERE LEFT(lp.CodePostal, 2) IN ($deptPh)";
+                $sql .= " WHERE (LEFT(lp.CodePostal, 2) IN ($deptPh) OR LEFT(s.Cp, 2) IN ($deptPh))";
+                foreach ($depts as $d) $params[] = str_pad((string)$d, 2, '0', STR_PAD_LEFT);
                 foreach ($depts as $d) $params[] = str_pad((string)$d, 2, '0', STR_PAD_LEFT);
             } elseif (isset($_POST['dept']) && $_POST['dept'] !== '') {
                 // Administrateur avec filtre optionnel (département exact, sans association)
-                $sql .= ' WHERE LEFT(lp.CodePostal, 2) = ?';
-                $params[] = str_pad((string)$_POST['dept'], 2, '0', STR_PAD_LEFT);
+                $cp2 = str_pad((string)$_POST['dept'], 2, '0', STR_PAD_LEFT);
+                $sql .= ' WHERE (LEFT(lp.CodePostal, 2) = ? OR LEFT(s.Cp, 2) = ?)';
+                $params = [$cp2, $cp2];
             }
             $sql .= ' ORDER BY cl.Nom, s.Nom';
 
@@ -66,6 +76,60 @@ if ($action !== '') {
             $rows = $stmt->fetchAll();
             ob_end_clean();
             echo json_encode(['ok' => true, 'data' => $rows]);
+            exit;
+        }
+
+        // ── Résolution CP → laposte ───────────────────────────────────────
+        if ($action === 'recherche_laposte') {
+            $cp    = trim($_POST['cp']    ?? '');
+            $ville = mb_strtoupper(trim($_POST['ville'] ?? ''), 'UTF-8');
+            // Normalise : tirets et apostrophes → espace, espaces multiples réduits
+            $villeN = preg_replace('/\s+/', ' ', str_replace(['-', "'", "'"], ' ', $ville));
+
+            if ($cp === '' && $ville === '') {
+                ob_end_clean(); echo json_encode(['ok' => false, 'msg' => 'CP et ville vides.']); exit;
+            }
+            if ($cp !== '' && $ville !== '') {
+                $stmt = $pdo->prepare("SELECT Id_LaPoste, CodePostal, Nom FROM laposte WHERE CodePostal=? AND UPPER(REPLACE(REPLACE(REPLACE(Nom,'-',' '),''',' '),'\\'','  ')) LIKE ? LIMIT 1");
+                $stmt->execute([$cp, $villeN . '%']);
+                $row = $stmt->fetch();
+                if ($row) { ob_end_clean(); echo json_encode(['ok' => true, 'id_laposte' => $row['Id_LaPoste'], 'cp' => $row['CodePostal'], 'ville' => $row['Nom']]); exit; }
+            }
+            if ($cp !== '') {
+                $stmt = $pdo->prepare('SELECT Id_LaPoste, CodePostal, Nom FROM laposte WHERE CodePostal=? ORDER BY Nom');
+                $stmt->execute([$cp]);
+                $rows = $stmt->fetchAll();
+                if (count($rows) === 1) { ob_end_clean(); echo json_encode(['ok' => true, 'id_laposte' => $rows[0]['Id_LaPoste'], 'cp' => $rows[0]['CodePostal'], 'ville' => $rows[0]['Nom']]); exit; }
+                if (count($rows) > 1) {
+                    $sugg = array_map(fn($r) => ['id_laposte' => $r['Id_LaPoste'], 'cp' => $r['CodePostal'], 'ville' => $r['Nom']], $rows);
+                    ob_end_clean(); echo json_encode(['ok' => true, 'multi' => true, 'suggestions' => $sugg]); exit;
+                }
+            }
+            if ($ville !== '') {
+                $stmt = $pdo->prepare("SELECT Id_LaPoste, CodePostal, Nom FROM laposte WHERE UPPER(REPLACE(REPLACE(Nom,'-',' '),''',' ')) LIKE ? ORDER BY CodePostal, Nom LIMIT 20");
+                $stmt->execute([$villeN . '%']);
+                $rows = $stmt->fetchAll();
+                if (count($rows) === 1) { ob_end_clean(); echo json_encode(['ok' => true, 'id_laposte' => $rows[0]['Id_LaPoste'], 'cp' => $rows[0]['CodePostal'], 'ville' => $rows[0]['Nom']]); exit; }
+                if (count($rows) > 1) {
+                    $sugg = array_map(fn($r) => ['id_laposte' => $r['Id_LaPoste'], 'cp' => $r['CodePostal'], 'ville' => $r['Nom']], $rows);
+                    ob_end_clean(); echo json_encode(['ok' => true, 'multi' => true, 'suggestions' => $sugg]); exit;
+                }
+            }
+            ob_end_clean(); echo json_encode(['ok' => false, 'msg' => 'Commune non trouvée.']); exit;
+        }
+
+        if ($action === 'lookup_laposte') {
+            $cp = trim($_POST['cp'] ?? '');
+            if ($cp === '') { ob_end_clean(); echo json_encode(['ok' => false, 'msg' => 'CP vide.']); exit; }
+            $stmt = $pdo->prepare('SELECT Id_LaPoste, CodePostal, Nom FROM laposte WHERE CodePostal = ? ORDER BY Nom');
+            $stmt->execute([$cp]);
+            $rows = $stmt->fetchAll();
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'communes' => array_map(fn($r) => [
+                'id'  => $r['Id_LaPoste'],
+                'cp'  => $r['CodePostal'],
+                'nom' => $r['Nom'],
+            ], $rows)]);
             exit;
         }
 
@@ -194,11 +258,11 @@ if ($action !== '') {
             $erreurs = [];
 
             $stmtInsert = $pdo->prepare(
-                'INSERT INTO Salle (Nom, Adresse, Id_Laposte, Id_Club, EstPrincipale)
-                 VALUES (?, ?, ?, ?, ?)'
+                'INSERT INTO Salle (Nom, Adresse, Cp, Ville, Id_Laposte, Id_Club, EstPrincipale)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)'
             );
             $stmtUpdate = $pdo->prepare(
-                'UPDATE Salle SET Nom=?, Adresse=?, Id_Laposte=?, Id_Club=?, EstPrincipale=?
+                'UPDATE Salle SET Nom=?, Adresse=?, Cp=?, Ville=?, Id_Laposte=?, Id_Club=?, EstPrincipale=?
                  WHERE Id_Salle=?'
             );
 
@@ -206,6 +270,8 @@ if ($action !== '') {
                 $id            = (int)($l['id_salle']      ?? 0);
                 $nom           = trim($l['nom']            ?? '');
                 $adresse       = trim($l['adresse']        ?? '') ?: null;
+                $cp            = trim($l['cp']             ?? '') ?: null;
+                $ville         = trim($l['ville']          ?? '') ?: null;
                 $idLaposte     = $l['id_laposte']  !== '' && $l['id_laposte'] !== null ? (int)$l['id_laposte'] : null;
                 $idClub        = ($l['id_club'] ?? '') !== '' ? trim($l['id_club']) : null;
                 $estPrincipale = !empty($l['est_principale']) ? 1 : 0;
@@ -217,10 +283,10 @@ if ($action !== '') {
 
                 try {
                     if ($id === 0) {
-                        $stmtInsert->execute([$nom, $adresse, $idLaposte, $idClub, $estPrincipale]);
+                        $stmtInsert->execute([$nom, $adresse, $cp, $ville, $idLaposte, $idClub, $estPrincipale]);
                         $inserts++;
                     } else {
-                        $stmtUpdate->execute([$nom, $adresse, $idLaposte, $idClub, $estPrincipale, $id]);
+                        $stmtUpdate->execute([$nom, $adresse, $cp, $ville, $idLaposte, $idClub, $estPrincipale, $id]);
                         $updates++;
                     }
                 } catch (PDOException $ex) {
@@ -232,6 +298,154 @@ if ($action !== '') {
             if ($erreurs) $msg .= ' Erreurs : ' . implode(' | ', $erreurs);
             ob_end_clean();
             echo json_encode(['ok' => empty($erreurs), 'msg' => $msg]);
+            exit;
+        }
+
+        // ── Liste clubs FFTT d'un département (région uniquement) ─────────
+        if ($action === 'get_clubs_dept_fftt') {
+            if (!$isAdmin) { ob_end_clean(); echo json_encode(['ok' => false, 'msg' => 'Accès refusé.']); exit; }
+            $dep = trim($_POST['dep'] ?? '');
+            if ($dep === '') { ob_end_clean(); echo json_encode(['ok' => false, 'msg' => 'Département manquant.']); exit; }
+
+            $api   = getFfttApi();
+            $clubs = $api->getClubsDepartement($dep);
+
+            // Garder seulement les clubs déjà présents dans notre BDD
+            $numeros = array_values(array_filter(array_map(fn($c) => $c['numero'] ?? $c['numclu'] ?? '', $clubs)));
+            if ($numeros) {
+                $ph     = implode(',', array_fill(0, count($numeros), '?'));
+                $stmtEx = $pdo->prepare("SELECT Id_Club FROM Club WHERE Id_Club IN ($ph)");
+                $stmtEx->execute($numeros);
+                $existants = array_column($stmtEx->fetchAll(), 'Id_Club');
+            } else {
+                $existants = [];
+            }
+
+            $result = array_values(array_filter(
+                array_map(fn($c) => [
+                    'numero' => $c['numero'] ?? $c['numclu'] ?? '',
+                    'nom'    => $c['nom'] ?? '',
+                ], $clubs),
+                fn($c) => $c['numero'] !== '' && in_array($c['numero'], $existants, true)
+            ));
+
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'clubs' => $result]);
+            exit;
+        }
+
+        // ── Synchroniser salles d'un club depuis FFTT ────────────────────
+        if ($action === 'sync_fftt_salle') {
+            if (!$isAdmin) { ob_end_clean(); echo json_encode(['ok' => false, 'msg' => 'Accès refusé.']); exit; }
+            $numClub = trim($_POST['num_club'] ?? '');
+            if ($numClub === '') { ob_end_clean(); echo json_encode(['ok' => false, 'msg' => 'Numéro de club manquant.']); exit; }
+
+            set_time_limit(30);
+            $api    = getFfttApi();
+            $detail = $api->getClubDetail($numClub);
+            if (empty($detail)) {
+                ob_end_clean();
+                echo json_encode(['ok' => true, 'op' => null, 'msg' => "Club $numClub : aucune donnée FFTT"]);
+                exit;
+            }
+
+            // Normaliser : scalaire → tableau à 1 élément, tableau → tel quel, [] → tableau vide
+            $toArr = fn($v) => is_array($v) ? (isset($v[0]) ? $v : []) : ($v !== '' && $v !== null ? [(string)$v] : []);
+
+            $nomsalles  = $toArr($detail['nomsalle']      ?? '');
+            $adrs1      = $toArr($detail['adressesalle1'] ?? '');
+            $adrs2      = $toArr($detail['adressesalle2'] ?? '');
+            $adrs3      = $toArr($detail['adressesalle3'] ?? '');
+            $cps        = $toArr($detail['codepsalle']    ?? '');
+            $villes     = $toArr($detail['villesalle']    ?? '');
+
+            $nbSalles = count($nomsalles);
+            if ($nbSalles === 0) {
+                // Aucune salle dans l'API : vider les champs salle de l'enregistrement existant
+                $stmtChkP = $pdo->prepare('SELECT Id_Salle FROM Salle WHERE Id_Club=? AND EstPrincipale=1 LIMIT 1');
+                $stmtChkP->execute([$numClub]);
+                $idSalleExist = $stmtChkP->fetchColumn();
+                if ($idSalleExist) {
+                    $nomClubRow = $pdo->prepare('SELECT Nom FROM Club WHERE Id_Club=?');
+                    $nomClubRow->execute([$numClub]);
+                    $nomClub = $nomClubRow->fetchColumn() ?: null;
+                    $pdo->prepare('UPDATE Salle SET Nom=?, Adresse=NULL, Cp=NULL, Ville=NULL, Id_Laposte=NULL WHERE Id_Salle=?')
+                        ->execute([$nomClub, $idSalleExist]);
+                    ob_end_clean();
+                    echo json_encode(['ok' => true, 'op' => 'vide', 'msg' => "Club $numClub : aucune salle FFTT — champs vidés"]);
+                } else {
+                    ob_end_clean();
+                    echo json_encode(['ok' => true, 'op' => null, 'msg' => "Club $numClub : aucune salle dans FFTT"]);
+                }
+                exit;
+            }
+
+            $stmtExact  = $pdo->prepare("SELECT Id_LaPoste FROM laposte WHERE CodePostal=? AND UPPER(Nom)=? LIMIT 1");
+            $stmtCpOnly = $pdo->prepare('SELECT Id_LaPoste FROM laposte WHERE CodePostal=? LIMIT 2');
+            $stmtUpd    = $pdo->prepare('UPDATE Salle SET Nom=?, Adresse=COALESCE(?,Adresse), Cp=COALESCE(?,Cp), Ville=COALESCE(?,Ville), Id_Laposte=COALESCE(?,Id_Laposte), EstPrincipale=? WHERE Id_Salle=?');
+            $stmtIns    = $pdo->prepare('INSERT INTO Salle (Nom, Adresse, Cp, Ville, Id_Laposte, Id_Club, EstPrincipale) VALUES (?,?,?,?,?,?,?)');
+
+            // Récupérer les salles existantes du club triées par Id_Salle :
+            // index 0 = principale (EstPrincipale=1), puis secondaires dans l'ordre de création
+            $stmtExist = $pdo->prepare(
+                'SELECT Id_Salle FROM Salle WHERE Id_Club=? ORDER BY EstPrincipale DESC, Id_Salle ASC'
+            );
+            $stmtExist->execute([$numClub]);
+            $idsSallesExist = array_column($stmtExist->fetchAll(), 'Id_Salle');
+
+            $ops = []; $cntNew = 0; $cntMaj = 0;
+
+            for ($i = 0; $i < $nbSalles; $i++) {
+                $nom        = trim($nomsalles[$i] ?? '');
+                if ($nom === '') continue;
+                $adr1       = trim($adrs1[$i] ?? '');
+                $adr2Raw    = $adrs2[$i] ?? '';
+                $adr2       = is_array($adr2Raw) ? '' : trim((string)$adr2Raw);
+                $adr3Raw    = $adrs3[$i] ?? '';
+                $adr3       = is_array($adr3Raw) ? '' : trim((string)$adr3Raw);
+                $adresse    = trim(implode(' ', array_filter([$adr1, $adr2, $adr3]))) ?: null;
+                $cp         = trim($cps[$i]    ?? '');
+                $ville      = mb_strtoupper(trim($villes[$i] ?? ''), 'UTF-8');
+                $estPrinc   = ($i === 0) ? 1 : 0;
+
+                // Lookup Id_LaPoste
+                $idLaPoste = null;
+                if ($cp !== '') {
+                    $stmtExact->execute([$cp, $ville]);
+                    $idLaPoste = $stmtExact->fetchColumn() ?: null;
+                    if (!$idLaPoste) {
+                        $stmtCpOnly->execute([$cp]);
+                        $lpRows = $stmtCpOnly->fetchAll();
+                        if (count($lpRows) === 1) $idLaPoste = $lpRows[0]['Id_LaPoste'];
+                    }
+                }
+
+                // Chercher la salle existante par rang (évite le problème des anciens "Array")
+                $idSalle = $idsSallesExist[$i] ?? null;
+
+                if ($idSalle) {
+                    $stmtUpd->execute([$nom, $adresse, $cp ?: null, $ville ?: null, $idLaPoste, $estPrinc, $idSalle]);
+                    $ops[] = "Mise à jour : $nom ($cp $ville)" . ($estPrinc ? ' [principale]' : '');
+                    $cntMaj++;
+                } else {
+                    $stmtIns->execute([$nom, $adresse, $cp ?: null, $ville ?: null, $idLaPoste, $numClub, $estPrinc]);
+                    $ops[] = "Créée : $nom ($cp $ville)" . ($estPrinc ? ' [principale]' : '');
+                    $cntNew++;
+                }
+            }
+
+            ob_end_clean();
+            echo json_encode([
+                'ok'      => true,
+                'op'      => $cntNew > 0 ? 'new' : ($cntMaj > 0 ? 'maj' : null),
+                'cnt_new' => $cntNew,
+                'cnt_maj' => $cntMaj,
+                'nb'      => $nbSalles,
+                'nom_salle' => $nomsalles[0] ?? '',
+                'cp'        => $cps[0] ?? '',
+                'ville'     => $villes[0] ?? '',
+                'ops'       => $ops,
+            ]);
             exit;
         }
 
@@ -411,8 +625,8 @@ $deptActifs = getDeptActifs();
 <!-- MenuStrip -->
 <div id="menu-strip">
 <?php if ($isAdmin): ?>
-    <button class="menu-item" id="btn-importer">
-        <i class="bi bi-file-earmark-arrow-up"></i>Importation Excel (xlsx)
+    <button class="menu-item" id="btn-sync-fftt" data-bs-toggle="modal" data-bs-target="#modal-sync-fftt">
+        <i class="bi bi-cloud-arrow-down-fill"></i>Synchroniser depuis FFTT
     </button>
     <button class="menu-item" id="btn-ajouter">
         <i class="bi bi-plus-circle"></i>Ajouter
@@ -420,13 +634,9 @@ $deptActifs = getDeptActifs();
     <button class="menu-item danger" id="btn-supprimer">
         <i class="bi bi-trash3"></i>Supprimer
     </button>
-    <label style="display:inline-flex;align-items:center;gap:.3rem;font-size:.82rem;cursor:pointer;padding:.2rem .4rem;">
-        <input type="checkbox" id="chk-vider"> Vider avant enregistrement
-    </label>
     <button class="menu-item" id="btn-sauvegarder">
         <i class="bi bi-database-fill-up"></i>Enregistrer dans la Base de données
     </button>
-    <input type="file" id="file-input" accept=".xlsx" style="display:none">
     <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 salle(s)</span>
     <span style="flex:1"></span>
     <!-- Filtre département (admin uniquement) -->
@@ -455,16 +665,17 @@ $deptActifs = getDeptActifs();
         <thead>
             <tr>
                 <th style="width:70px"  data-field="id_salle">N°<span class="sort-icon"></span></th>
-                <th style="width:200px" data-field="nom">Nom<span class="sort-icon"></span></th>
-                <th style="width:260px" data-field="adresse">Adresse<span class="sort-icon"></span></th>
-                <th style="width:130px" data-field="id_laposte">CP / Ville<span class="sort-icon"></span></th>
                 <th style="width:80px"  data-field="id_club">N° Club<span class="sort-icon"></span></th>
                 <th style="width:210px" data-field="nom_club">Nom du club<span class="sort-icon"></span></th>
+                <th style="width:200px" data-field="nom">Nom<span class="sort-icon"></span></th>
+                <th style="width:260px" data-field="adresse">Adresse<span class="sort-icon"></span></th>
+                <th style="width:90px"  data-field="cp">Code postal<span class="sort-icon"></span></th>
+                <th style="width:170px" data-field="ville">Ville<span class="sort-icon"></span></th>
                 <th style="width:90px"  data-field="est_principale">Principale<span class="sort-icon"></span></th>
             </tr>
         </thead>
         <tbody id="tbody-grille">
-            <tr><td colspan="7" class="text-center text-muted py-3">Chargement…</td></tr>
+            <tr><td colspan="8" class="text-center text-muted py-3">Chargement…</td></tr>
         </tbody>
     </table>
 </div>
@@ -473,6 +684,109 @@ $deptActifs = getDeptActifs();
 
 <!-- Toast -->
 <div id="toast-container"></div>
+
+<!-- Modale saisie CP / Ville -->
+<div class="modal fade" id="modal-cp-ville" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2" style="background:#0d6efd;color:#fff;">
+        <h6 class="modal-title mb-0"><i class="bi bi-geo-alt-fill me-1"></i>Code postal / Ville</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pb-2">
+        <div class="input-group input-group-sm mb-1">
+          <span class="input-group-text">CP</span>
+          <input type="text" id="mcv-cp" class="form-control" placeholder="76000" maxlength="10" style="max-width:90px">
+          <input type="text" id="mcv-ville" class="form-control text-uppercase" placeholder="ROUEN">
+        </div>
+        <div id="mcv-msg" class="form-text" style="min-height:1.2em;"></div>
+        <div id="mcv-suggestions" style="display:none;">
+          <div class="fw-semibold text-primary small mb-1">Plusieurs communes — choisissez :</div>
+          <div id="mcv-suggestions-list" class="d-flex flex-wrap gap-1"></div>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+        <button type="button" class="btn btn-success btn-sm" id="btn-mcv-ok"><i class="bi bi-check-lg me-1"></i>Valider</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modale Synchronisation FFTT -->
+<div class="modal fade" id="modal-sync-fftt" tabindex="-1" aria-labelledby="modal-sync-fftt-titre" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#0d6efd;color:#fff;">
+        <h5 class="modal-title" id="modal-sync-fftt-titre"><i class="bi bi-cloud-arrow-down-fill me-2"></i>Synchroniser salles principales depuis FFTT</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" id="btn-fermer-sync-fftt"></button>
+      </div>
+      <div class="modal-body">
+
+        <!-- Étape 1 : choix département -->
+        <div id="sync-fftt-step1">
+          <p class="text-muted small mb-3">
+            Seuls les clubs <strong>déjà présents dans votre base</strong> et appartenant au département choisi
+            sont traités. Pour chaque club, la salle principale est créée ou mise à jour via <code>xml_club_detail</code>.
+          </p>
+          <div class="input-group mb-3" style="max-width:420px">
+            <label class="input-group-text" for="sync-fftt-dept"><i class="bi bi-map me-1"></i>Département</label>
+            <select id="sync-fftt-dept" class="form-select">
+              <option value="">— Choisir —</option>
+              <?php foreach ($deptActifs as $d): ?>
+              <option value="<?= (int)$d['code'] ?>"><?= (int)$d['code'] ?> — <?= htmlspecialchars($d['nom']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <button class="btn btn-primary" id="btn-lancer-sync-fftt">
+            <i class="bi bi-play-fill me-1"></i>Lancer la synchronisation
+          </button>
+        </div>
+
+        <!-- Étape 2 : progression -->
+        <div id="sync-fftt-step2" style="display:none;">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span id="sync-fftt-label" class="fw-semibold small text-primary">Récupération des clubs…</span>
+            <span id="sync-fftt-pct" class="small text-muted">0 %</span>
+          </div>
+          <div class="progress mb-3" style="height:18px;">
+            <div id="sync-fftt-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                 style="width:0%" role="progressbar"></div>
+          </div>
+          <div class="row text-center mb-3">
+            <div class="col-3">
+              <div class="fw-bold fs-5 text-primary"  id="sync-cnt-clubs">0</div>
+              <div class="small text-muted">Clubs traités</div>
+            </div>
+            <div class="col-3">
+              <div class="fw-bold fs-5 text-success"  id="sync-cnt-new">0</div>
+              <div class="small text-muted">Salles créées</div>
+            </div>
+            <div class="col-3">
+              <div class="fw-bold fs-5 text-info"     id="sync-cnt-maj">0</div>
+              <div class="small text-muted">Salles mises à jour</div>
+            </div>
+            <div class="col-3">
+              <div class="fw-bold fs-5 text-warning"  id="sync-cnt-erreurs">0</div>
+              <div class="small text-muted">Erreurs</div>
+            </div>
+          </div>
+          <div id="sync-fftt-log" style="max-height:200px;overflow-y:auto;font-size:.78rem;background:#f8fafc;border:1px solid #e0e8f0;border-radius:4px;padding:.5rem;font-family:monospace;"></div>
+        </div>
+
+        <!-- Étape 3 : résumé -->
+        <div id="sync-fftt-step3" style="display:none;">
+          <div class="alert alert-success mb-3" id="sync-fftt-resume"></div>
+          <div id="sync-fftt-log-final" style="max-height:260px;overflow-y:auto;font-size:.78rem;background:#f8fafc;border:1px solid #e0e8f0;border-radius:4px;padding:.5rem;font-family:monospace;"></div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fermer</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script src="asset/js/jquery-3.7.1.min.js"></script>
     <script src="asset/js/nijac-csrf.js"></script>
@@ -518,12 +832,13 @@ function lignesFiltreesTriees() {
     const term = searchTerm.toLowerCase();
     let result = term
         ? lignes.filter(l =>
-            String(l.id_salle       ?? '').toLowerCase().includes(term) ||
-            String(l.nom            ?? '').toLowerCase().includes(term) ||
-            String(l.adresse        ?? '').toLowerCase().includes(term) ||
-            String(l.id_laposte     ?? '').toLowerCase().includes(term) ||
-            String(l.id_club        ?? '').toLowerCase().includes(term) ||
-            String(l.nom_club       ?? '').toLowerCase().includes(term))
+            String(l.id_salle   ?? '').toLowerCase().includes(term) ||
+            String(l.nom        ?? '').toLowerCase().includes(term) ||
+            String(l.adresse    ?? '').toLowerCase().includes(term) ||
+            String(l.cp         ?? '').toLowerCase().includes(term) ||
+            String(l.ville      ?? '').toLowerCase().includes(term) ||
+            String(l.id_club    ?? '').toLowerCase().includes(term) ||
+            String(l.nom_club   ?? '').toLowerCase().includes(term))
         : [...lignes];
 
     const numFields = ['id_salle', 'id_laposte'];
@@ -558,7 +873,7 @@ function renderGrille() {
 
     if (!affichees.length) {
         const msg = searchTerm ? 'Aucun résultat.' : 'Aucune salle.';
-        $body.append(`<tr><td colspan="7" class="text-center text-muted py-3">${msg}</td></tr>`);
+        $body.append(`<tr><td colspan="8" class="text-center text-muted py-3">${msg}</td></tr>`);
         setStatus(searchTerm ? `0 résultat sur ${lignes.length} salle(s).` : 'Aucune salle enregistrée.');
         return;
     }
@@ -569,13 +884,12 @@ function renderGrille() {
         const $tr = $('<tr>').attr('data-idx', idx).toggleClass('new-row', isNew);
 
         $tr.append(makeTd(isNew ? '(nouveau)' : l.id_salle, idx, 'id_salle', true));
-        $tr.append(makeTd(l.nom,        idx, 'nom',        false));
-        $tr.append(makeTd(l.adresse,    idx, 'adresse',    false));
-        // Affiche CP+Ville si importé, sinon Id_Laposte
-        const cpAff = l.cp_ville || l.id_laposte || '';
-        $tr.append(makeTd(cpAff, idx, 'id_laposte', false));
         $tr.append(makeTd(l.id_club  ?? '', idx, 'id_club',  true));
         $tr.append(makeTd(l.nom_club ?? '', idx, 'nom_club', true));
+        $tr.append(makeTd(l.nom,        idx, 'nom',        false));
+        $tr.append(makeTd(l.adresse,    idx, 'adresse',    false));
+        $tr.append(makeCpTd(l, idx));
+        $tr.append(makeVilleTd(l, idx));
         $tr.append(makePrincipaleTd(l, idx));
 
         $tr.on('click', function () { selectionnerLigne(idx); });
@@ -597,6 +911,100 @@ function makeTd(val, idx, field, readonly) {
     return $td;
 }
 
+
+// ── Modal CP / Ville ──────────────────────────────────────────────────────────
+let mcvIdx = null;
+let mcvIdLaPoste = null;
+let _modalCpVille = null;
+function getModalCpVille() {
+    if (!_modalCpVille) _modalCpVille = new bootstrap.Modal(document.getElementById('modal-cp-ville'));
+    return _modalCpVille;
+}
+
+function ouvrirModalCpVille(idx) {
+    mcvIdx = idx;
+    mcvIdLaPoste = lignes[idx].id_laposte ?? null;
+    $('#mcv-cp').val(lignes[idx].cp ?? '');
+    $('#mcv-ville').val(lignes[idx].ville ?? '');
+    $('#mcv-msg').text('').css('color', '');
+    $('#mcv-suggestions').hide();
+    $('#mcv-suggestions-list').empty();
+    getModalCpVille().show();
+    setTimeout(() => $('#mcv-cp').trigger('focus'), 300);
+}
+
+function mcvRechercher() {
+    const cp    = $('#mcv-cp').val().trim();
+    const ville = $('#mcv-ville').val().trim();
+    if (!cp && !ville) return;
+    $('#mcv-suggestions').hide();
+    $('#mcv-suggestions-list').empty();
+    $.post('salle.php', { action: 'recherche_laposte', cp, ville }, function (res) {
+        if (!res.ok) {
+            $('#mcv-msg').text(res.msg ?? 'Commune non trouvée.').css('color', '#c00');
+            mcvIdLaPoste = null;
+            return;
+        }
+        if (res.multi) {
+            $('#mcv-msg').text('').css('color', '');
+            const $list = $('#mcv-suggestions-list').empty();
+            res.suggestions.forEach(s => {
+                $('<button class="btn btn-sm btn-outline-primary">')
+                    .text(`${s.cp} ${s.ville}`)
+                    .on('click', function () {
+                        $('#mcv-cp').val(s.cp);
+                        $('#mcv-ville').val(s.ville);
+                        mcvIdLaPoste = s.id_laposte;
+                        $('#mcv-msg').text(`✓ ${s.cp} ${s.ville}`).css('color', '#065f46');
+                        $('#mcv-suggestions').hide();
+                    }).appendTo($list);
+            });
+            $('#mcv-suggestions').show();
+            mcvIdLaPoste = null;
+        } else {
+            $('#mcv-cp').val(res.cp);
+            $('#mcv-ville').val(res.ville);
+            mcvIdLaPoste = res.id_laposte;
+            $('#mcv-msg').text(`✓ ${res.cp} ${res.ville}`).css('color', '#065f46');
+        }
+    }, 'json').fail(() => $('#mcv-msg').text('Erreur réseau.').css('color', '#c00'));
+}
+
+$('#mcv-cp, #mcv-ville').on('blur', function () { mcvRechercher(); });
+$('#mcv-cp').on('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#mcv-ville').trigger('focus'); } });
+$('#mcv-ville').on('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); mcvRechercher(); } });
+
+$('#btn-mcv-ok').on('click', function () {
+    if (mcvIdx === null) return;
+    const cp    = $('#mcv-cp').val().trim() || null;
+    const ville = $('#mcv-ville').val().trim().toUpperCase() || null;
+    lignes[mcvIdx].cp         = cp;
+    lignes[mcvIdx].ville      = ville;
+    lignes[mcvIdx].id_laposte = mcvIdLaPoste;
+    getModalCpVille().hide();
+    renderGrille();
+    setStatus(cp ? `CP/Ville mis à jour : ${cp} ${ville ?? ''}.` : 'CP/Ville effacés.');
+});
+
+function makeVilleTd(l, idx) {
+    const $td  = $('<td>').attr('data-idx', idx).attr('data-field', 'ville');
+    const $div = $('<div class="cell-inner">').text(l.ville ?? '');
+    $td.append($div);
+    if (IS_ADMIN) {
+        $td.css('cursor', 'pointer').on('click', function (e) { e.stopPropagation(); ouvrirModalCpVille(idx); });
+    }
+    return $td;
+}
+
+function makeCpTd(l, idx) {
+    const $td  = $('<td>').attr('data-idx', idx).attr('data-field', 'cp');
+    const $div = $('<div class="cell-inner">').text(l.cp ?? '');
+    $td.append($div);
+    if (IS_ADMIN) {
+        $td.css('cursor', 'pointer').on('click', function (e) { e.stopPropagation(); ouvrirModalCpVille(idx); });
+    }
+    return $td;
+}
 
 function makePrincipaleTd(l, idx) {
     const $td  = $('<td class="col-principale">').attr('data-idx', idx).attr('data-field', 'est_principale');
@@ -649,7 +1057,11 @@ $(document).on('keydown', function (e) {
 
     } else if (e.key === 'Enter' && $inner.attr('contenteditable') === 'true') {
         e.preventDefault();
-        validerCellule($inner, cellActive);
+        if (cellActive.attr('data-field') === 'cp') {
+            $inner.trigger('blur');
+        } else {
+            validerCellule($inner, cellActive);
+        }
     }
 });
 
@@ -667,48 +1079,6 @@ function validerCellule($inner, $td) {
     }
     setStatus('Modification locale. Cliquez sur « Enregistrer » pour sauvegarder.');
 }
-
-// ── Importer Excel ────────────────────────────────────────────────────────────
-$('#btn-importer').on('click', () => $('#file-input').trigger('click'));
-
-$('#file-input').on('change', function () {
-    const file = this.files[0];
-    if (!file) return;
-
-    const fd = new FormData();
-    fd.append('action',  'importer_excel');
-    fd.append('fichier', file);
-
-    spinner(true);
-    $.ajax({
-        url: 'salle.php', type: 'POST',
-        data: fd, processData: false, contentType: false, dataType: 'json',
-        success(res) {
-            spinner(false);
-            if (!res.ok) { toast(res.msg, false); return; }
-
-            // Récupérer le MAX actuel pour numéroter les futurs IDs
-            $.post('salle.php', { action: 'max_id' }, function(r) {
-                const base = r.ok ? r.max : 0;
-                let seq = base;
-
-                res.data.forEach(l => {
-                    l._nouveau = true;        // marque ligne non encore en BDD
-                    l.id_salle = ++seq;       // ID provisoire pour affichage
-                    const c = clubs.find(c => c.id_club === l.id_club);
-                    l.nom_club = c ? c.nom : '';
-                });
-
-                lignes = res.data;
-                renderGrille();
-                toast(`${res.count} salle(s) importée(s) depuis Excel.`);
-                setStatus(`${res.count} salle(s) importée(s). IDs provisoires à partir de ${base + 1}. Vérifiez puis cliquez sur « Enregistrer ».`);
-            }, 'json');
-        },
-        error() { spinner(false); toast("Erreur lors de l'import.", false); }
-    });
-    this.value = '';
-});
 
 // ── Charger ───────────────────────────────────────────────────────────────────
 function chargerClubs() {
@@ -728,6 +1098,8 @@ function chargerListe() {
                 nom:            r.Nom,
                 adresse:        r.Adresse,
                 id_laposte:     r.Id_Laposte,
+                cp:             r.Cp    ?? '',
+                ville:          r.Ville ?? '',
                 cp_ville:       r.CpVille ?? '',
                 id_club:        r.Id_Club,
                 nom_club:       r.NomClub ?? '',
@@ -790,14 +1162,10 @@ $('#btn-sauvegarder').on('click', function () {
     if (!modifiees.length) { toast('Aucune donnée à enregistrer.', false); return; }
     if (!confirm(`Enregistrer ${modifiees.length} salle(s) ?`)) return;
 
-    const vider = $('#chk-vider').is(':checked');
-    if (vider && !confirm('Vider toute la table Salle avant enregistrement ?\n\nCette opération est irréversible.')) return;
-
     spinner(true);
     $.post('salle.php', {
         action:  'sauvegarder',
         lignes:  JSON.stringify(modifiees),
-        vider:   vider ? '1' : '0',
     }, function (res) {
         spinner(false);
         toast(res.msg, res.ok);
@@ -827,6 +1195,135 @@ $('#search-input').on('input', function () {
 $('#sel-dept').on('change', function () {
     deptFiltre = $(this).val();
     chargerListe();
+});
+
+// ── Synchronisation FFTT ─────────────────────────────────────────────────────
+let syncEnCours = false;
+
+function resetSyncFftt() {
+    $('#sync-fftt-step1').show();
+    $('#sync-fftt-step2, #sync-fftt-step3').hide();
+    $('#sync-fftt-dept').val('');
+    $('#sync-fftt-bar').css('width', '0%');
+    $('#sync-fftt-label').text('Récupération des clubs…');
+    $('#sync-fftt-pct').text('0 %');
+    ['sync-cnt-clubs','sync-cnt-new','sync-cnt-maj','sync-cnt-erreurs'].forEach(id => $(`#${id}`).text('0'));
+    $('#sync-fftt-log, #sync-fftt-log-final').empty();
+    syncEnCours = false;
+}
+
+$('#modal-sync-fftt').on('hidden.bs.modal', function () {
+    if (!syncEnCours) resetSyncFftt();
+});
+
+$('#btn-lancer-sync-fftt').on('click', function () {
+    const dep = $('#sync-fftt-dept').val();
+    if (!dep) { alert('Sélectionnez un département.'); return; }
+
+    syncEnCours = true;
+    $('#sync-fftt-step1').hide();
+    $('#sync-fftt-step2').show();
+    $('#btn-fermer-sync-fftt').prop('disabled', true);
+
+    let cntClubs = 0, cntNew = 0, cntMaj = 0, cntErreurs = 0;
+    const logLines = [];
+
+    $.post('salle.php', { action: 'get_clubs_dept_fftt', dep }, function (res) {
+        if (!res.ok) {
+            alert('Erreur : ' + res.msg);
+            resetSyncFftt();
+            $('#sync-fftt-step1').show();
+            $('#sync-fftt-step2').hide();
+            $('#btn-fermer-sync-fftt').prop('disabled', false);
+            return;
+        }
+
+        const clubs = res.clubs;
+        const total = clubs.length;
+        let done = 0;
+
+        if (total === 0) {
+            syncEnCours = false;
+            $('#btn-fermer-sync-fftt').prop('disabled', false);
+            $('#sync-fftt-step2').hide();
+            $('#sync-fftt-step3').show();
+            $('#sync-fftt-resume').html('<i class="bi bi-info-circle-fill me-2"></i>Aucun club de ce département trouvé dans votre base.');
+            return;
+        }
+
+        $('#sync-fftt-label').text(`0 / ${total} clubs…`);
+
+        function traiterClub() {
+            if (done >= total) {
+                syncEnCours = false;
+                $('#btn-fermer-sync-fftt').prop('disabled', false);
+                $('#sync-fftt-step2').hide();
+                $('#sync-fftt-step3').show();
+                $('#sync-fftt-resume').html(
+                    `<i class="bi bi-check-circle-fill me-2"></i>` +
+                    `Synchronisation terminée — <strong>${cntClubs}</strong> club(s) traité(s), ` +
+                    `<strong>${cntNew}</strong> salle(s) créée(s), ` +
+                    `<strong>${cntMaj}</strong> mise(s) à jour` +
+                    (cntErreurs ? `, <strong>${cntErreurs}</strong> erreur(s)` : '') + '.'
+                );
+                $('#sync-fftt-log-final').html(logLines.join(''));
+                chargerListe();
+                return;
+            }
+
+            const club = clubs[done];
+            const pct  = Math.round(done / total * 100);
+            $('#sync-fftt-bar').css('width', pct + '%');
+            $('#sync-fftt-pct').text(pct + ' %');
+            $('#sync-fftt-label').text(`${done + 1} / ${total} — ${club.nom}`);
+
+            $.post('salle.php', { action: 'sync_fftt_salle', num_club: club.numero }, function (r) {
+                cntClubs++;
+                $(`#sync-cnt-clubs`).text(cntClubs);
+                if (r.ok && r.op) {
+                    cntNew += r.cnt_new ?? 0;
+                    cntMaj += r.cnt_maj ?? 0;
+                    $(`#sync-cnt-new`).text(cntNew);
+                    $(`#sync-cnt-maj`).text(cntMaj);
+                    (r.ops ?? []).forEach(op => {
+                        const cls  = op.includes('Créée') ? 'text-success' : 'text-info';
+                        const line = `<div class="${cls}">[${club.numero}] ${op}</div>`;
+                        logLines.push(line);
+                        $('#sync-fftt-log').append(line).scrollTop(9999);
+                    });
+                } else if (r.ok && r.op === 'vide') {
+                    const line = `<div class="text-warning">[${club.numero}] ${r.msg}</div>`;
+                    logLines.push(line);
+                    $('#sync-fftt-log').append(line).scrollTop(9999);
+                } else if (r.ok && !r.op) {
+                    const line = `<div class="text-secondary">[${club.numero}] ${r.msg ?? 'Ignoré'}</div>`;
+                    logLines.push(line);
+                    $('#sync-fftt-log').append(line).scrollTop(9999);
+                } else {
+                    cntErreurs++;
+                    $(`#sync-cnt-erreurs`).text(cntErreurs);
+                    const line = `<div class="text-danger">[${club.numero}] Erreur : ${r.msg ?? 'inconnue'}</div>`;
+                    logLines.push(line);
+                    $('#sync-fftt-log').append(line).scrollTop(9999);
+                }
+            }, 'json').fail(() => {
+                cntErreurs++;
+                $(`#sync-cnt-erreurs`).text(cntErreurs);
+            }).always(() => {
+                done++;
+                setTimeout(traiterClub, 0);
+            });
+        }
+
+        traiterClub();
+
+    }, 'json').fail(() => {
+        alert('Erreur réseau lors de la récupération des clubs.');
+        resetSyncFftt();
+        $('#sync-fftt-step1').show();
+        $('#sync-fftt-step2').hide();
+        $('#btn-fermer-sync-fftt').prop('disabled', false);
+    });
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
