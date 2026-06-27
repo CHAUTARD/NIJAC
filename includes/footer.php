@@ -39,5 +39,6 @@ $_logoBase = str_contains($_SERVER['SCRIPT_NAME'] ?? '', '/Nominateur/') ? '../'
         Ligue Normandie de Tennis de Table &mdash; Version&nbsp;: <?= defined('APP_VERSION') ? APP_VERSION : '' ?>
     </span>
 </div>
+<script src="<?= $_logoBase ?>asset/js/nijac-toast.js"></script>
 </body>
 </html>

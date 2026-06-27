@@ -473,6 +473,15 @@ if ($stats['prochaine_date']) {
             </a>
         </div>
 
+        <div class="menu-btn-wrap">
+            <a href="stats_ja.php" class="menu-btn btn-ja">
+                <span class="btn-code">E028</span>
+                <div class="btn-icon"><img src="../img/Stat_JA.png" alt="Statistiques JA"></div>
+                <span>Statistiques JA</span>
+                <span class="btn-desc">Arbitrages, kilomètres et frais par JA sur une période</span>
+            </a>
+        </div>
+
         <!-- Déconnexion -->
         <div class="menu-btn-wrap">
             <a href="../logout.php" class="menu-btn" style="background:#f8d7da;">

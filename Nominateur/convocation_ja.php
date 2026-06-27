@@ -486,20 +486,47 @@ $logoUrl = '../img/logo_FFTT.png';
     }
     #save-status { display: none; font-size: .8rem; color: #155724; margin-left: .5rem; }
 
-    /*  Impression  */
+    /*  Impression / Export PDF  */
     @media print {
-        body { background: #fff !important; font-size: 11px; }
-        #action-bar, #btn-save-frais { display: none !important; }
+        @page { size: A4 portrait; margin: 12mm 14mm; }
+
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+        body {
+            background: #fff !important;
+            font-size: 11px;
+            color: #000 !important;
+        }
+
+        /* Masquer tout l'UI non imprimable */
+        #action-bar,
+        #btn-save-frais,
+        .btn, .alert-info,
+        .modal, .modal-backdrop,
+        script, style { display: none !important; }
+
         .page {
             width: auto;
             margin: 0;
-            box-shadow: none;
-            padding: 8mm 12mm;
+            box-shadow: none !important;
+            border: none !important;
+            padding: 0;
         }
+
+        /* Forcer les bordures de tableau visibles */
+        table { border-collapse: collapse !important; }
+        table td, table th { border: 1px solid #555 !important; }
+
+        /* Champs de saisie : afficher la valeur saisie */
         table.tbl-indem input,
         table.tbl-rapport textarea {
-            border-bottom: 1px solid #aaa !important;
+            border: none !important;
+            border-bottom: 1px solid #333 !important;
+            background: transparent !important;
         }
+
+        /* Éviter les coupures dans les blocs importants */
+        .page > * { page-break-inside: avoid; }
     }
 </style>
 </head>
@@ -513,6 +540,9 @@ $logoUrl = '../img/logo_FFTT.png';
         <i class="bi bi-printer me-1"></i>Imprimer / PDF
     </button>
     <?php endif; ?>
+    <a href="javascript:history.back()" class="btn btn-sm btn-outline-light ms-auto">
+        <i class="bi bi-arrow-left me-1"></i>Retour
+    </a>
 </div>
 
 <?php if ($erreur): ?>

@@ -26,6 +26,17 @@ Access via `http://localhost/NIJAC/`. The DB schema and all migrations run autom
 
 No test suite exists in this project.
 
+## Shared JS utilities
+
+| Fichier | Chargé par | Fonctions |
+|---------|-----------|-----------|
+| `asset/js/nijac-csrf.js` | Chaque page | Préfiltre jQuery AJAX — injecte `X-CSRF-Token` |
+| `asset/js/nijac-toast.js` | `includes/footer.php` | `nijacToast(msg, type, duration)` · `nijacConfirm(msg, onConfirm, onCancel)` — remplaçants de `alert()` / `confirm()` |
+
+`nijacToast` types : `'success'` (vert) · `'danger'` (rouge) · `'warning'` (orange) · `'info'` (bleu).
+
+`nijacConfirm` ouvre une modale Bootstrap centrée à la place du `confirm()` natif bloquant.
+
 ## Screen numbering
 
 Every screen has a code `EXXXX` defined in `$pageCode` before the `page_header.php` include. The code appears in the page header and as a small badge (top-right) on every menu button. When creating a new screen, assign the next available code and add it to `Ecrans.md` and `SPECIFICATION.md`.
