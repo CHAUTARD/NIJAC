@@ -154,6 +154,21 @@ function getDeptActifs(): array
 }
 
 /**
+ * Retourne une instance FfttApi configurée depuis db.php (credentials obfusqués).
+ * Lance une exception si les credentials ne sont pas renseignés.
+ */
+function getFfttApi(): \FfttApi
+{
+    require_once __DIR__ . '/../Classes/FfttApi.php';
+    $serial   = getFfttSerial();
+    $password = getFfttPassword();
+    if ($serial === '' || $password === '') {
+        throw new \RuntimeException('API FFTT non configurée. Renseignez _FFTT_SERIAL et _FFTT_PASSWORD dans config/db.php.');
+    }
+    return new \FfttApi($serial, $password);
+}
+
+/**
  * Indique si le logiciel est en mode développement.
  */
 function isModeDeveloppement(): bool

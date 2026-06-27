@@ -244,7 +244,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
 
 <div id="bandeau-fftt">
-    <img src="img/FFTT_LIGUE.png" alt="FFTT – Ligue de Normandie">
+    <a href="https://www.ligue-normandie-tt.fr/" target="_blank" rel="noopener noreferrer">
+        <img src="img/FFTT_LIGUE.png" alt="FFTT – Ligue de Normandie">
+    </a>
 </div>
 
 <div class="login-card card">

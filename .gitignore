@@ -1,0 +1,17 @@
+# Credentials — ne jamais versionner
+.env
+
+# Dépendances Composer
+vendor/
+composer.phar
+
+# Fichiers de déploiement
+.env.production
+
+# Logs
+logs/
+
+# OS / éditeurs
+.DS_Store
+Thumbs.db
+*.swp
