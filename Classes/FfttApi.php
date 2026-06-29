@@ -1,12 +1,40 @@
 <?php
 /**
- * Client pour l'API XML de la FFTT (www.fftt.com/mobile/pxml/).
+ * Client pour l'API Smartping v2.0 de la FFTT.
  *
- * Authentification :
- *   - id  : identifiant applicatif (FFTT_APP_ID)
- *   - serie : numéro de série utilisateur (15 chars [A-Z0-9]), généré une fois par installation
- *   - tm  : timestamp format YmdHis + 3 chiffres microtime
- *   - tmc : hash_hmac('sha1', tm, md5(appKey))
+ * URL de base : https://apiv2.fftt.com/mobile/pxml/
+ *
+ * Authentification par requête :
+ *   - id    : identifiant applicatif (FFTT_APP_ID)
+ *   - serie : numéro de série 15 chars [A-Z0-9] (xml_initialisation.php)
+ *   - tm    : timestamp YmdHis + 3 chiffres microtime
+ *   - tmc   : hash_hmac('sha1', tm, md5(appKey))
+ *
+ * Endpoints disponibles :
+ *   xml_club_dep2          Liste des clubs d'un département            dep
+ *   xml_club_detail        Détail d'un club                           club
+ *   xml_club_b             Recherche clubs sur critères                critères libres
+ *   xml_organisme          Liste des organismes                        type, organisme
+ *   xml_epreuve            Liste des épreuves d'un organisme           organisme, type
+ *   xml_division           Liste des divisions d'une épreuve           organisme, epreuve, type
+ *   xml_result_equ         Résultats/poules d'un chpt équipes          D1, action, cx_poule, auto
+ *                          action=poule → liste des poules (avec lien contenant cx_poule réel)
+ *                          action vide  → rencontres (cx_poule optionnel, sinon première poule)
+ *   xml_rencontre_equ      Rencontres d'une ou plusieurs poules        poule=id1|id2|id3
+ *   xml_result_indiv       Résultats d'une division individuelle        epr, res_division, cx_tableau
+ *   xml_chp_renc           Détail d'une rencontre (params du champ lien de xml_result_equ)
+ *   xml_equipe             Équipes d'un club                           numclu, type
+ *   xml_liste_joueur       Joueurs base classement                     club, nom, prenom
+ *   xml_liste_joueur_o     Licenciés base SPID                         club, nom, prenom
+ *   xml_joueur             Détail joueur base classement               licence
+ *   xml_licence            Détail licencié base SPID                   licence
+ *   xml_licence_b          Détail licencié + classement                licence
+ *   xml_partie_mysql       Parties d'un joueur base classement         licence
+ *   xml_partie             Parties d'un joueur base SPID               licence
+ *   xml_histo_classement   Historique classements d'un licencié        licence
+ *   xml_res_cla            Classement général d'une division critérium D1
+ *
+ * Note : xml_poule et xml_rencontre N'EXISTENT PAS dans cette API.
  *
  * Usage :
  *   $api = getFfttApi();   // via app_config.php
@@ -14,12 +42,19 @@
  */
 class FfttApi
 {
-    private const BASE_URL = 'http://www.fftt.com/mobile/pxml/';
-    private const TIMEOUT  = 15;
+    private const BASE_URL = 'https://apiv2.fftt.com/mobile/pxml/';
+    private const TIMEOUT  = 20;
 
     private string $appId;
     private string $appKey;
     private string $serial;
+    private string $lastUrl   = '';
+    private int    $lastHttp  = 0;
+    private string $lastRaw   = '';
+
+    public function lastUrl(): string  { return $this->lastUrl; }
+    public function lastHttp(): int    { return $this->lastHttp; }
+    public function lastRaw(): string  { return $this->lastRaw; }
 
     public function __construct(string $appId, string $appKey, string $serial)
     {
@@ -66,7 +101,7 @@ class FfttApi
         return $this->getObject('xml_licence', ['licence' => $licence], 'licence');
     }
 
-    /** Détail étendu d'un licencié avec grades d'arbitrage (xml_licence_b). */
+    /** Détail étendu d'un licencié + classement (xml_licence_b). */
     public function getLicenceB(string $licence): ?array
     {
         return $this->getObject('xml_licence_b', ['licence' => $licence], 'licence');
@@ -163,8 +198,11 @@ class FfttApi
         ], $params);
 
         $url = self::BASE_URL . $action . '.php?' . http_build_query($query);
+        $this->lastUrl = $url;
 
-        return $this->parseXml($this->httpGet($url));
+        $raw = $this->httpGet($url);
+        $this->lastRaw = $raw;
+        return $this->parseXml($raw);
     }
 
     private function httpGet(string $url): string
@@ -174,7 +212,10 @@ class FfttApi
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT        => self::TIMEOUT,
             CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_ENCODING       => '',   // décompresse gzip/deflate automatiquement
+            CURLOPT_ENCODING       => '',        // décompresse gzip/deflate automatiquement
+            // SSL : désactivé en local (WAMP sans CA bundle) — le trafic reste chiffré HTTPS
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => 0,
             CURLOPT_HTTPHEADER     => [
                 'Accept:',
                 'User-Agent: Mozilla/4.0 (compatible; MSIE 6.0; Win32)',
@@ -189,8 +230,10 @@ class FfttApi
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
+        $this->lastHttp = $httpCode;
+
         if ($errno !== 0) throw new RuntimeException("FfttApi cURL ($errno): $error");
-        if ($httpCode !== 200) throw new RuntimeException("FfttApi HTTP $httpCode");
+        if ($httpCode !== 200) throw new RuntimeException("FfttApi HTTP $httpCode — URL : $this->lastUrl");
         if ($response === false || $response === '') throw new RuntimeException("FfttApi : réponse vide");
 
         return $response;
@@ -207,6 +250,10 @@ class FfttApi
             // Pas de déclaration d'encodage mais contenu non-UTF-8 : on suppose ISO-8859-1
             $xml = mb_convert_encoding($xml, 'UTF-8', 'ISO-8859-1');
         }
+
+        // L'API FFTT retourne des & non échappés dans certains champs (ex: lien="cx_poule=x&D1=y")
+        // ce qui est du XML invalide — on échappe les & orphelins avant le parsing
+        $xml = preg_replace('/&(?!(?:[a-zA-Z][a-zA-Z0-9]*|#\d+|#x[0-9a-fA-F]+);)/', '&amp;', $xml);
 
         libxml_use_internal_errors(true);
         $obj = simplexml_load_string($xml);

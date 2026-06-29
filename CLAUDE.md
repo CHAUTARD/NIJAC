@@ -35,7 +35,7 @@ No test suite exists in this project.
 
 `nijacToast` types : `'success'` (vert) · `'danger'` (rouge) · `'warning'` (orange) · `'info'` (bleu).
 
-`nijacConfirm` ouvre une modale Bootstrap centrée à la place du `confirm()` natif bloquant.
+`nijacConfirm(msg, onConfirm, onCancel, opts)` ouvre une modale Bootstrap centrée. `opts` : `{ type: 'question'|'danger'|'warning', title, confirmLabel, cancelLabel }`. Les suppressions passent `{type:'danger'}` (header rouge, bouton "Supprimer", icône poubelle).
 
 ## Screen numbering
 
@@ -66,7 +66,7 @@ Every PHP page is self-contained and dual-mode: it handles AJAX actions at the t
 | `includes/page_header.php` | Mutualized page header — set `$pageIcon`, `$pageTitle`, `$pageCode`, `$backUrl` before include; optional `$pageIconClass`, `$backBtnClass` |
 | `includes/admin_required.php` | Redirects to `index.php` if not authenticated or not admin |
 | `includes/auth_required.php` | Redirects to `$authRedirect` if not authenticated (any role) |
-| `db-admin.php` | BDD admin interface (E099) — access restricted to `$_SESSION['utilisateur']['nom'] === 'CHAUTARD'` |
+| `db-admin.php` | BDD admin interface (E099) — access restricted to `$_SESSION['utilisateur']['login'] === 'CHAUTARD'` |
 
 ### Page header usage
 
@@ -102,7 +102,7 @@ $_SESSION['utilisateur'] = [
 - Admin-only pages: use `require __DIR__ . '/includes/admin_required.php'`
 - Nominateur + admin pages: set `$authRedirect = '../index.php'` then `require __DIR__ . '/../includes/auth_required.php'`
 - Admin-only AJAX actions within a shared page: checked individually with `in_array($action, $actionsAdmin) && !$isAdmin`
-- E099 extra restriction: `$_SESSION['utilisateur']['nom'] === 'CHAUTARD'`
+- E018 et E099 extra restriction: `$_SESSION['utilisateur']['login'] === 'CHAUTARD'`
 
 ### Database conventions
 

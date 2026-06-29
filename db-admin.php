@@ -16,6 +16,10 @@ require_once __DIR__ . '/config/csrf.php';
 
 // ── Sécurité ──────────────────────────────────────────────────────────────────
 require __DIR__ . '/includes/admin_required.php';
+if (($_SESSION['utilisateur']['login'] ?? '') !== 'CHAUTARD') {
+    header('Location: admin_menu.php');
+    exit;
+}
 
 // ── Points d'API AJAX ────────────────────────────────────────────────────────
 $action = $_POST['action'] ?? $_GET['action'] ?? '';

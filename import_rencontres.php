@@ -1,841 +1,1125 @@
 <?php
 /**
- * NIJAC – Import des rencontres (E011)
+ * NIJAC – Import des rencontres depuis l'API FFTT (E011)
  *
- * Importe les rencontres de la saison depuis des fichiers Excel (format FFTT).
- * Les fichiers sont déposés dans le dossier Importation/ et traités pour
- * alimenter la table rencontre en base. Les doublons sont ignorés et
- * les données manquantes (salles, clubs) sont signalées.
+ * Flux : Ligue → Épreuves → Divisions → Poules → Rencontres → BDD
  *
  * Créé par : Patrick CHAUTARD
- * Date de création : 2026-06-22
+ * Date de création : 2026-06-28
  */
 session_start();
+require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/config/csrf.php';
+require_once __DIR__ . '/config/app_config.php';
+
 require __DIR__ . '/includes/admin_required.php';
 
-require __DIR__ . '/config/db.php';
-require_once __DIR__ . '/config/csrf.php';
-require __DIR__ . '/vendor/autoload.php';
-
-use PhpOffice\PhpSpreadsheet\IOFactory;
-
-// ─── Contrainte UNIQUE sur equipe (une seule fois) ────────────────────────
+// Garantit que la clé "region" existe en configuration
 try {
-    getPDO()->exec("ALTER TABLE equipe ADD UNIQUE KEY uq_equipe_nom_div (Nom(80), Id_Division)");
-} catch (PDOException $e) { /* déjà existe */ }
+    getPDO()->exec("INSERT IGNORE INTO configuration (cle, valeur) VALUES ('region', 'Normandie')");
+} catch (PDOException $e) {}
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-// ─── Fonctions de parsing ──────────────────────────────────────────────────
+/** Normalise une réponse FFTT (objet unique ou tableau) en tableau indexé. */
+function ffttItems(array $data, string $key): array
+{
+    $items = $data[$key] ?? [];
+    if (empty($items)) return [];
+    return isset($items[0]) ? $items : [$items];
+}
 
 /**
- * Convertit une chaîne de date (formats variés) en "YYYY-MM-DD".
- * Formats attendus :
- *   - "Dimanche 21/09/2025 09H00"
- *   - "28-sept-2025"
- *   - "12-oct-2025"
- *   - "11-janv-2026"
+ * Tente de deviner l'Id_Division NIJAC depuis le libellé FFTT d'une division.
+ * IDs hardcodés d'après la table division actuelle.
  */
-function parseDate(string $s): ?string
+function devinerIdDivision(string $libelle): ?int
 {
-    static $mois = [
-        'janv' => '01', 'fevr' => '02', 'mars' => '03', 'avr'  => '04',
-        'mai'  => '05', 'juin' => '06', 'juil' => '07', 'aout' => '08',
-        'sept' => '09', 'oct'  => '10', 'nov'  => '11', 'dec'  => '12',
+    // Supprimer le préfixe de ligue FFTT de la forme "L09_", "L17_", etc. (4 premiers caractères)
+    $libelle = preg_replace('/^[A-Z]\d{2}_/u', '', $libelle);
+
+    $l   = mb_strtolower($libelle, 'UTF-8');
+    $fem = str_contains($l, 'dame') || str_contains($l, 'féminin') || str_contains($l, 'feminin');
+
+    // Correspondance directe avec les codes NIJAC (ex. "R1M", "R2M", "PNF"…)
+    $map = [
+        'r1m' => 3, 'r2m' => 2, 'r3m' => 1, 'r4m' => 10,
+        'r1f' => 8, 'pnm' => 4, 'pnf' => 9,
+        'n1m' => 7, 'n2m' => 6, 'n3m' => 5,
+        'n1f' => 12, 'n2f' => 11,
     ];
-    // dd/mm/yyyy
+    if (isset($map[$l])) return $map[$l];
+
+    // Correspondance par mots-clés
+    if (str_contains($l, 'pré-nationale') || str_contains($l, 'pre-nationale')) {
+        return $fem ? 9 : 4;   // PNF=9, PNM=4
+    }
+    if (str_contains($l, 'régionale') || str_contains($l, 'regionale')) {
+        preg_match('/(\d+)/', $l, $m);
+        $n = (int)($m[1] ?? 0);
+        if ($fem) return $n === 1 ? 8 : null;       // R1F=8
+        return match($n) { 1=>3, 2=>2, 3=>1, 4=>10, default=>null };
+    }
+    return null;
+}
+
+/** Parse une date FFTT ("DD/MM/YYYY", "DD/MM/YYYY HHhMM", "YYYY-MM-DD") → "YYYY-MM-DD" ou null. */
+function parseDateFftt(string $s): ?string
+{
     if (preg_match('/(\d{1,2})\/(\d{2})\/(\d{4})/', $s, $m)) {
         return $m[3] . '-' . $m[2] . '-' . str_pad($m[1], 2, '0', STR_PAD_LEFT);
     }
-    // dd-mon-yyyy (French, accents supprimés)
-    $n = mb_strtolower(strtr($s, ['é'=>'e','è'=>'e','ê'=>'e','à'=>'a','â'=>'a','û'=>'u','î'=>'i','ô'=>'o']));
-    if (preg_match('/(\d{1,2})-([a-z]+)-(\d{4})/', $n, $m)) {
-        $num = $mois[$m[2]] ?? null;
-        if ($num) {
-            return $m[3] . '-' . $num . '-' . str_pad($m[1], 2, '0', STR_PAD_LEFT);
-        }
+    if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $s, $m)) {
+        return $m[0];
     }
     return null;
 }
 
-/** Extrait HH:MM:SS depuis "09H00" */
-function parseHeure(string $s): ?string
+/** Parse une heure FFTT ("09H00", "09:00", "09:00:00") → "HH:MM:SS". */
+function parseHeureFftt(string $s): string
 {
-    if (preg_match('/(\d{2})H(\d{2})/i', $s, $m)) {
-        return $m[1] . ':' . $m[2] . ':00';
-    }
-    return null;
+    if (preg_match('/(\d{1,2})[Hh](\d{2})/', $s, $m)) return str_pad($m[1],2,'0',STR_PAD_LEFT).':'.$m[2].':00';
+    if (preg_match('/(\d{2}):(\d{2})/', $s, $m))       return $m[1].':'.$m[2].':00';
+    return '09:00:00';
 }
 
-/** Retourne le numéro de phase depuis "1ere", "2eme", "2" … */
-function parsePhase(string $s): int
-{
-    if (preg_match('/(\d+)/', $s, $m)) return (int)$m[1];
-    return 1;
-}
+// ── AJAX ──────────────────────────────────────────────────────────────────────
+$action = $_POST['action'] ?? $_GET['action'] ?? '';
 
-/** Retourne Id_Division depuis code division + catégorie en interrogeant la table division */
-function getDivisionId(string $div, string $cat): ?int
-{
-    static $cache = [];
-    $div = strtoupper(trim($div));
-    $catNorm = mb_strtolower(strtr($cat, ['É'=>'E','È'=>'E','é'=>'e','è'=>'e']));
-    $female = str_contains($catNorm, 'fem') || str_contains($catNorm, 'dame');
-    $key = $div . ($female ? 'F' : 'M');
-    if (array_key_exists($key, $cache)) return $cache[$key];
-
-    $pdo = getPDO();
-    // Essai 1 : code exact avec suffixe de sexe (ex. "R1F", "R1M")
-    $stmt = $pdo->prepare('SELECT Id_Division FROM division WHERE Division = ? LIMIT 1');
-    $stmt->execute([$key]);
-    $id = $stmt->fetchColumn();
-    if ($id === false) {
-        // Essai 2 : code sans suffixe (ex. "N1", "N2", "N3" non genrées)
-        $stmt->execute([$div]);
-        $id = $stmt->fetchColumn();
-    }
-    $cache[$key] = $id !== false ? (int)$id : null;
-    return $cache[$key];
-}
-
-/**
- * Parse une feuille xlsx et retourne les données structurées.
- * @return array{saison:string, categorie:string, secteur:string, division:string,
- *               poule:int, phase:int, id_division:int|null,
- *               clubs:array, rencontres:array}
- */
-function parseSheet(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet): array
-{
-    $rows = $sheet->toArray(null, true, true, false);
-    $result = [
-        'saison' => '', 'categorie' => '', 'secteur' => '',
-        'division' => '', 'poule' => 0, 'phase' => 1,
-        'id_division' => null, 'clubs' => [], 'rencontres' => [],
-    ];
-
-    // ── 1. En-tête ─────────────────────────────────────────────────────────
-    // Saison dans les premières lignes (pattern xxxx/xxxx)
-    foreach (array_slice($rows, 0, 12) as $row) {
-        foreach ($row as $cell) {
-            if (preg_match('/(\d{4}\/\d{4})/', (string)$cell, $m)) {
-                $result['saison'] = $m[1];
-                break 2;
-            }
-        }
-    }
-
-    // ── Recherche robuste de Division/Poule/Phase/Catégorie/Secteur ────────
-    // Stratégie : balayer les lignes 3-12, collecter toutes les valeurs non vides
-    // en tenant compte des labels (DIVISION, POULE, PHASE) et des patterns directs.
-    foreach (array_slice($rows, 3, 10) as $row) {
-        // Valeurs non vides de la ligne, dans l'ordre
-        $vals = array_values(array_filter(
-            array_map(fn($v) => trim((string)$v), $row),
-            fn($v) => $v !== ''
-        ));
-        for ($i = 0; $i < count($vals); $i++) {
-            $v = $vals[$i];
-            $vu = strtoupper($v);
-            $next = $vals[$i + 1] ?? '';
-
-            // Catégorie
-            // Catégorie (normalisation accent pour Féminines/Féminins)
-            $vn = mb_strtolower(strtr($v, ['É'=>'E','È'=>'E','Ê'=>'E','é'=>'e','è'=>'e','ê'=>'e']));
-            if (preg_match('/^(messieurs|feminines?|dames?)$/', $vn) && $result['categorie'] === '') {
-                $result['categorie'] = $v;
-            }
-            // Secteur (ex "27-76", "14-50-61")
-            if (preg_match('/^\d{2}(-\d{2})+$/', $v) && $result['secteur'] === '') {
-                $result['secteur'] = $v;
-            }
-            // Division — soit après le label "DIVISION", soit seule (R1-R4, PN, N1-N3)
-            if ($vu === 'DIVISION') {
-                if (preg_match('/^(R[1-4]|PN[MF]?|N[1-3]|PR)$/i', $next)) {
-                    $result['division'] = strtoupper($next);
-                    $i++; // consomme la valeur suivante
-                    // Poule juste après ?
-                    $afterDiv = $vals[$i + 1] ?? '';
-                    // skip si c'est le label "POULE"
-                    if (strtoupper($afterDiv) === 'POULE') {
-                        $i++;
-                        $afterDiv = $vals[$i + 1] ?? '';
-                    }
-                    if (ctype_digit($afterDiv) && $result['poule'] === 0) {
-                        $result['poule'] = (int)$afterDiv;
-                        $i++;
-                    }
-                }
-            } elseif (preg_match('/^(R[1-4]|PN[MF]?|N[1-3])$/i', $v) && $result['division'] === '') {
-                $result['division'] = strtoupper($v);
-                // Poule juste après (chiffre seul) ?
-                if (ctype_digit($next) && $result['poule'] === 0) {
-                    $result['poule'] = (int)$next;
-                    $i++;
-                }
-            }
-            // Poule après label "POULE"
-            if ($vu === 'POULE' && ctype_digit($next) && $result['poule'] === 0) {
-                $result['poule'] = (int)$next;
-                $i++;
-            }
-            // Phase : "1ere", "2eme", ou après label "PHASE"
-            if ($vu === 'PHASE' && $next !== '' && $result['phase'] === 1) {
-                $result['phase'] = parsePhase($next);
-                $i++;
-            } elseif (preg_match('/^\d+(ere|eme|[eè]re|[eè]me)$/i', $v)) {
-                $result['phase'] = parsePhase($v);
-            }
-        }
-        // Stopper dès qu'on a tout
-        if ($result['division'] !== '' && $result['poule'] > 0 && $result['categorie'] !== '') break;
-    }
-
-    $result['id_division'] = getDivisionId($result['division'], $result['categorie']);
-
-    // ── 2. Clubs ────────────────────────────────────────────────────────────
-    // Le N° Club (6-9 chiffres) peut se trouver dans n'importe quelle colonne.
-    // On scanne toute la ligne pour le détecter, puis on prend la valeur non vide suivante comme nom.
-    foreach ($rows as $row) {
-        foreach ($row as $j => $cell) {
-            $numClub = trim((string)$cell);
-            if (!preg_match('/^\d{6,9}$/', $numClub)) continue;
-            // Chercher le nom : première cellule non vide après le N°Club
-            $nom = '';
-            for ($k = $j + 1; $k < count($row); $k++) {
-                $v = trim((string)($row[$k] ?? ''));
-                if ($v !== '' && !preg_match('/^\d+$/', $v)) { $nom = $v; break; }
-            }
-            if ($nom === '') break;
-            // Chercher email et téléphone dans les cellules suivantes
-            $tel = ''; $email = '';
-            foreach (array_slice($row, $j + 1) as $c) {
-                $cv = trim((string)$c);
-                if ($email === '' && preg_match('/([a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,})/i', $cv, $me))
-                    $email = $me[1];
-                if ($tel === '' && preg_match('/^(\d[\d\s\-\.]{8,13}\d)$/', $cv, $mt))
-                    $tel = preg_replace('/\s/', '', $mt[1]);
-            }
-            $result['clubs'][$nom] = [
-                'id_club' => $numClub,
-                'nom'     => $nom,
-                'tel'     => $tel,
-                'email'   => $email,
-            ];
-            break; // une seule détection par ligne
-        }
-    }
-
-    // ── 3. Rencontres ───────────────────────────────────────────────────────
-    // Ligne journée : contient "Journée N" dans n'importe quelle colonne
-    // Ligne rencontre : contient " Contre " dans n'importe quelle colonne ;
-    //                   la date/heure est toujours en col[0]
-    $journeeCourante = 0;
-    foreach ($rows as $row) {
-        $c0 = trim((string)($row[0] ?? ''));
-
-        // Détection du n° de journée (scan toute la ligne)
-        // Normalisation accent pour éviter les problèmes d'encodage UTF-8 sans flag /u
-        $foundJournee = false;
-        foreach ($row as $cell) {
-            $cellN = strtr((string)$cell, ['é'=>'e','è'=>'e','ê'=>'e','É'=>'E','È'=>'E']);
-            if (preg_match('/Journee\s+(\d+)/i', $cellN, $mj)) {
-                $journeeCourante = (int)$mj[1];
-                $foundJournee = true;
-                break;
-            }
-        }
-        if ($foundJournee) continue;
-
-        // Ligne de rencontre : chercher " Contre " dans n'importe quelle colonne
-        $cellContre = null;
-        foreach ($row as $cell) {
-            if (stripos((string)$cell, ' Contre ') !== false) {
-                $cellContre = trim((string)$cell);
-                break;
-            }
-        }
-        if ($cellContre !== null) {
-            $date  = parseDate($c0);
-            $heure = parseHeure($c0) ?? '09:00:00';
-            $parts = preg_split('/\s+Contre\s+/i', $cellContre, 2);
-            if (count($parts) === 2 && $date) {
-                $result['rencontres'][] = [
-                    'journee'   => $journeeCourante,
-                    'date'      => $date,
-                    'heure'     => $heure,
-                    'equipe_dom' => trim($parts[0]),
-                    'equipe_ext' => trim($parts[1]),
-                ];
-            }
-        }
-    }
-
-    return $result;
-}
-
-// ─── ACTIONS AJAX ──────────────────────────────────────────────────────────
-if (isset($_GET['action'])) {
+if ($action !== '') {
     ob_start();
-    ob_end_clean();
     header('Content-Type: application/json; charset=utf-8');
     if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfVerify(true);
 
-    $action = $_GET['action'];
-
-    // ── Ajout d'un ou plusieurs fichiers ────────────────────────────────────
-    if ($action === 'upload') {
-        $dossier = __DIR__ . '/Importation/Rencontres/';
-        $resultats = [];
-
-        if (empty($_FILES['fichiers'])) {
-            echo json_encode(['ok' => false, 'err' => 'Aucun fichier reçu.']);
-            exit;
-        }
-
-        $noms  = $_FILES['fichiers']['name'];
-        $tmps  = $_FILES['fichiers']['tmp_name'];
-        $errs  = $_FILES['fichiers']['error'];
-
-        foreach ($noms as $i => $nomOriginal) {
-            $nom = basename($nomOriginal);
-
-            if ($errs[$i] !== UPLOAD_ERR_OK) {
-                $resultats[] = ['nom' => $nom, 'ok' => false, 'msg' => 'Erreur de téléversement.'];
-                continue;
-            }
-            if (strtolower(pathinfo($nom, PATHINFO_EXTENSION)) !== 'xlsx') {
-                $resultats[] = ['nom' => $nom, 'ok' => false, 'msg' => 'Seuls les fichiers .xlsx sont acceptés.'];
-                continue;
-            }
-
-            $cible = $dossier . $nom;
-            if (!move_uploaded_file($tmps[$i], $cible)) {
-                $resultats[] = ['nom' => $nom, 'ok' => false, 'msg' => 'Échec de l\'enregistrement sur le serveur.'];
-                continue;
-            }
-            $resultats[] = ['nom' => $nom, 'ok' => true];
-        }
-
-        echo json_encode(['ok' => true, 'resultats' => $resultats]);
-        exit;
-    }
-
-    // ── Suppression d'un fichier ────────────────────────────────────────────
-    if ($action === 'supprimer') {
-        $nom = basename($_POST['fichier'] ?? '');
-        $fichier = __DIR__ . '/Importation/Rencontres/' . $nom;
-        if ($nom === '' || !file_exists($fichier)) {
-            echo json_encode(['ok' => false, 'err' => 'Fichier introuvable']);
-            exit;
-        }
-        if (!unlink($fichier)) {
-            echo json_encode(['ok' => false, 'err' => 'Impossible de supprimer le fichier.']);
-            exit;
-        }
-        echo json_encode(['ok' => true]);
-        exit;
-    }
-
-    // ── Liste des fichiers xlsx disponibles ─────────────────────────────────
-    if ($action === 'liste') {
-        $dossier = __DIR__ . '/Importation/Rencontres/';
-        $pdo     = getPDO();
-        $stmtExiste = $pdo->prepare(
-            'SELECT 1 FROM rencontre r
-             JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom AND ed.Id_Division = ?
-             JOIN equipe ee ON ee.Id_Equipe = r.Id_EquipeExt
-             WHERE r.Date = ? AND ed.Nom = ? AND ee.Nom = ? LIMIT 1'
-        );
-
-        $fichiers = [];
-        foreach (glob($dossier . '*.xlsx') as $f) {
-            $nom = basename($f);
-            $sp  = IOFactory::load($f);
-
-            // Récupère la première rencontre du fichier (toutes feuilles confondues)
-            $premiere = null;
-            for ($s = 0; $s < $sp->getSheetCount() && !$premiere; $s++) {
-                $data = parseSheet($sp->getSheet($s));
-                if (!$data['id_division'] || empty($data['rencontres'])) continue;
-                $r = $data['rencontres'][0];
-                $premiere = [
-                    'id_division' => $data['id_division'],
-                    'date'        => $r['date'],
-                    'dom'         => $r['equipe_dom'],
-                    'ext'         => $r['equipe_ext'],
-                ];
-            }
-
-            $importe = false;
-            if ($premiere) {
-                $stmtExiste->execute([$premiere['id_division'], $premiere['date'], $premiere['dom'], $premiere['ext']]);
-                $importe = (bool)$stmtExiste->fetchColumn();
-            }
-
-            $fichiers[] = [
-                'nom'      => $nom,
-                'feuilles' => $sp->getSheetCount(),
-                'importe'  => $importe,
-            ];
-        }
-        echo json_encode(['ok' => true, 'fichiers' => $fichiers]);
-        exit;
-    }
-
-    // ── Aperçu d'un fichier ────────────────────────────────────────────────
-    if ($action === 'apercu') {
-        $nom = basename($_GET['fichier'] ?? '');
-        $fichier = __DIR__ . '/Importation/Rencontres/' . $nom;
-        if (!file_exists($fichier)) {
-            echo json_encode(['ok' => false, 'err' => 'Fichier introuvable']);
-            exit;
-        }
-        $sp = IOFactory::load($fichier);
-        $poules = [];
-        for ($s = 0; $s < $sp->getSheetCount(); $s++) {
-            $poules[] = parseSheet($sp->getSheet($s));
-        }
-        echo json_encode(['ok' => true, 'poules' => $poules]);
-        exit;
-    }
-
-    // ── Import en base ─────────────────────────────────────────────────────
-    if ($action === 'importer') {
-        $nom = basename($_POST['fichier'] ?? '');
-        $fichier = __DIR__ . '/Importation/Rencontres/' . $nom;
-        if (!file_exists($fichier)) {
-            echo json_encode(['ok' => false, 'err' => 'Fichier introuvable']);
-            exit;
-        }
-        $sp = IOFactory::load($fichier);
+    try {
         $pdo = getPDO();
-        $stats = ['equipes_creees' => 0, 'rencontres_creees' => 0, 'doublons' => 0, 'erreurs' => []];
-        $saisonImport = '';
 
-        $stmtEqCheck = $pdo->prepare('SELECT Id_Equipe FROM equipe WHERE Nom = ? AND Id_Division = ?');
-        $stmtEqIns   = $pdo->prepare('INSERT IGNORE INTO equipe (Nom, Id_Division, Id_Club) VALUES (?,?,?)');
-        $stmtRencCheck = $pdo->prepare(
-            'SELECT Id_Rencontre FROM rencontre WHERE Date=? AND Id_EquipeDom=? AND Id_EquipeExt=?'
-        );
-        $stmtRencIns = $pdo->prepare(
-            'INSERT INTO rencontre (Date, Heure, Id_Division, Poule, Id_EquipeDom, Id_EquipeExt,
-                                    Phase, Journee, ArbitrageObligatoire)
-             VALUES (?,?,?,?,?,?,?,?,?)'
-        );
-        // Cache ArbitrageObligatoire par division
-        $stmtArbitrage = $pdo->prepare('SELECT ArbitrageObligatoire FROM division WHERE Id_Division = ?');
-        $cacheArbitrage = [];
+        // ── 1. Recherche de la ligue ──────────────────────────────────────────
+        if ($action === 'chercher_ligue') {
+            $region  = trim(getConfig('region', 'Normandie'));
+            $api     = getFfttApi();
+            $reponse = $api->request('xml_organisme', ['type' => 'L']);
+            $items   = ffttItems($reponse, 'organisme');
 
-        for ($s = 0; $s < $sp->getSheetCount(); $s++) {
-            $data = parseSheet($sp->getSheet($s));
-            if ($data['saison'] && !$saisonImport) {
-                $saisonImport = $data['saison'];
-            }
-            if (!$data['id_division']) {
-                $stats['erreurs'][] = "Feuille " . ($s+1) . " : division introuvable ({$data['division']})";
-                continue;
-            }
+            $regionN = mb_strtolower($region, 'UTF-8');
+            $trouve  = null;
+            // Champs possibles pour l'ID selon la version de l'API FFTT
+            $champId = function(array $org): string {
+                foreach (['id', 'ident', 'idorga', 'numero', 'numorg'] as $f) {
+                    if (isset($org[$f]) && (string)$org[$f] !== '') return (string)$org[$f];
+                }
+                return '';
+            };
 
-            // Récupérer ArbitrageObligatoire de la division (avec cache)
-            $idDiv = $data['id_division'];
-            if (!isset($cacheArbitrage[$idDiv])) {
-                $stmtArbitrage->execute([$idDiv]);
-                $cacheArbitrage[$idDiv] = (int)($stmtArbitrage->fetchColumn() ?? 1);
-            }
-            $arbitrageObligatoire = $cacheArbitrage[$idDiv];
-
-            // Créer les équipes
-            $equipeMap = []; // nom → Id_Equipe
-            foreach ($data['clubs'] as $club) {
-                $stmtEqCheck->execute([$club['nom'], $idDiv]);
-                $existing = $stmtEqCheck->fetchColumn();
-                if ($existing) {
-                    $equipeMap[$club['nom']] = (int)$existing;
-                } else {
-                    $stmtEqIns->execute([$club['nom'], $idDiv, $club['id_club']]);
-                    $equipeMap[$club['nom']] = (int)$pdo->lastInsertId();
-                    $stats['equipes_creees']++;
+            foreach ($items as $org) {
+                $libelle = (string)($org['libelle'] ?? '');
+                if (mb_strpos(mb_strtolower($libelle, 'UTF-8'), $regionN) !== false) {
+                    $trouve = ['id' => $champId($org), 'libelle' => $libelle];
+                    break;
                 }
             }
 
-            // Créer les rencontres
-            foreach ($data['rencontres'] as $r) {
-                $idDom = $equipeMap[$r['equipe_dom']] ?? null;
-                $idExt = $equipeMap[$r['equipe_ext']] ?? null;
-                if (!$idDom || !$idExt) {
-                    $stats['erreurs'][] = "Équipe inconnue : \"{$r['equipe_dom']}\" ou \"{$r['equipe_ext']}\"";
-                    continue;
-                }
-                $stmtRencCheck->execute([$r['date'], $idDom, $idExt]);
-                if ($stmtRencCheck->fetchColumn()) {
-                    $stats['doublons']++;
-                    continue;
-                }
-                $stmtRencIns->execute([
-                    $r['date'], $r['heure'], $idDiv, $data['poule'],
-                    $idDom, $idExt, $data['phase'], $r['journee'],
-                    $arbitrageObligatoire
+            // Debug : clés du premier organisme pour diagnostiquer les noms de champs
+            $clesPremier = !empty($items) ? array_keys($items[0]) : [];
+
+            ob_end_clean();
+            if ($trouve && $trouve['id'] !== '') {
+                echo json_encode(['ok' => true, 'ligue' => $trouve, 'total' => count($items)]);
+            } elseif ($trouve) {
+                // Ligue trouvée mais ID vide → retourner les clés pour diagnostic
+                echo json_encode([
+                    'ok'    => false,
+                    'msg'   => "Ligue « {$trouve['libelle']} » trouvée mais champ ID introuvable. Clés disponibles : " . implode(', ', $clesPremier),
+                    'ligues'=> array_column($items, 'libelle'),
+                    'debug' => $items[0] ?? [],
                 ]);
-                $stats['rencontres_creees']++;
+            } else {
+                echo json_encode([
+                    'ok'     => false,
+                    'msg'    => "Aucune ligue « $region » parmi " . count($items) . " ligues.",
+                    'ligues' => array_column($items, 'libelle'),
+                ]);
             }
+            exit;
         }
 
-        if ($saisonImport) {
-            $pdo->prepare("UPDATE configuration SET valeur=? WHERE cle='saison'")->execute([$saisonImport]);
+        // ── 2. Épreuves d'un organisme (type E = équipes) ─────────────────────
+        if ($action === 'charger_epreuves') {
+            $organisme = trim($_POST['organisme'] ?? '');
+            if ($organisme === '') { ob_end_clean(); echo json_encode(['ok'=>false,'msg'=>'Organisme manquant.']); exit; }
+
+            $api     = getFfttApi();
+            $reponse = $api->request('xml_epreuve', ['organisme' => $organisme, 'type' => 'E']);
+            $items   = ffttItems($reponse, 'epreuve');
+
+            // Pour les épreuves FED_ : dédoublonner par intitulé, garder le idepreuve le plus grand
+            $fed    = [];   // [intitule => item] avec le plus grand idepreuve
+            $autres = [];
+            foreach ($items as $ep) {
+                $intitule = (string)($ep['intitule'] ?? $ep['libelle'] ?? '');
+                $idEp     = (int)($ep['idepreuve'] ?? $ep['ident'] ?? 0);
+                if (stripos($intitule, 'FED_') === 0) {
+                    if (!isset($fed[$intitule]) || $idEp > (int)($fed[$intitule]['idepreuve'] ?? $fed[$intitule]['ident'] ?? 0)) {
+                        $fed[$intitule] = $ep;
+                    }
+                } else {
+                    $autres[] = $ep;
+                }
+            }
+            $items = array_merge(array_values($fed), $autres);
+
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'epreuves' => $items]);
+            exit;
         }
 
-        echo json_encode(['ok' => true, 'stats' => $stats]);
+        // ── 3. Divisions d'une épreuve ────────────────────────────────────────
+        // ── DEBUG : structure brute xml_result_equ ───────────────────────────
+        if ($action === 'debug_result_equ') {
+            $divFftt = trim($_POST['division_fftt'] ?? '');
+            if ($divFftt === '') { ob_end_clean(); echo json_encode(['ok'=>false,'msg'=>'division_fftt manquant']); exit; }
+            $api = getFfttApi();
+            $resultats = [];
+
+            // Test 1 : action=poule → liste des poules avec cx_poule si 'lien' disponible
+            $cxPoules   = [];
+            $pouleItems = [];
+            try {
+                $r          = $api->request('xml_result_equ', ['action'=>'poule','D1'=>$divFftt,'auto'=>'1','type'=>'E']);
+                $pouleItems = isset($r['poule']) ? (isset($r['poule'][0]) ? $r['poule'] : [$r['poule']]) : [];
+                foreach ($pouleItems as $i => $p) {
+                    $lienRaw = $p['lien'] ?? ''; $lienStr = is_array($lienRaw) ? '' : (string)$lienRaw;
+                    parse_str(html_entity_decode($lienStr), $lp);
+                    if (!empty($lp['cx_poule'])) $cxPoules[$i+1] = $lp['cx_poule'];
+                }
+                $resultats[] = ['test'=>'action=poule','url'=>$api->lastUrl(),'nb_poules'=>count($pouleItems),'cx_poules'=>$cxPoules,'apercu'=>$pouleItems];
+            } catch (\Throwable $e) { $resultats[] = ['test'=>'action=poule','erreur'=>$e->getMessage(),'url'=>$api->lastUrl()]; }
+
+            // Test 2 : si cx_poules disponibles → appel par poule individuelle
+            if (count($cxPoules) === count($pouleItems) && count($cxPoules) > 0) {
+                foreach ($cxPoules as $num => $cx) {
+                    try {
+                        $r    = $api->request('xml_result_equ', ['D1'=>$divFftt,'cx_poule'=>$cx,'auto'=>'1','type'=>'E']);
+                        $tours = isset($r['tour']) ? (isset($r['tour'][0]) ? $r['tour'] : [$r['tour']]) : [];
+                        $resultats[] = ['test'=>"poule $num (cx=$cx)",'url'=>$api->lastUrl(),'nb_tours'=>count($tours),'apercu'=>array_slice($tours,0,2)];
+                    } catch (\Throwable $e) { $resultats[] = ['test'=>"poule $num",'erreur'=>$e->getMessage(),'url'=>$api->lastUrl()]; }
+                }
+            } else {
+                // Test 3 : fallback global (lien vide → cx_poule non disponible)
+                try {
+                    $r    = $api->request('xml_result_equ', ['D1'=>$divFftt,'auto'=>'1','type'=>'E']);
+                    $tours = isset($r['tour']) ? (isset($r['tour'][0]) ? $r['tour'] : [$r['tour']]) : [];
+                    $resultats[] = ['test'=>'fallback global (lien vide)','url'=>$api->lastUrl(),'nb_tours'=>count($tours),'apercu'=>array_slice($tours,0,2)];
+                } catch (\Throwable $e) { $resultats[] = ['test'=>'fallback global','erreur'=>$e->getMessage(),'url'=>$api->lastUrl()]; }
+            }
+
+            ob_end_clean();
+            echo json_encode(['ok'=>true, 'resultats'=>$resultats]);
+            exit;
+        }
+
+        if ($action === 'charger_divisions') {
+            $organisme = trim($_POST['organisme'] ?? '');
+            $epreuve   = trim($_POST['epreuve']   ?? '');
+            if ($organisme === '' || $epreuve === '') {
+                ob_end_clean(); echo json_encode(['ok'=>false,'msg'=>'Paramètres manquants.']); exit;
+            }
+
+            $api     = getFfttApi();
+            $reponse = $api->request('xml_division', ['organisme'=>$organisme, 'epreuve'=>$epreuve, 'type'=>'E']);
+            $items   = ffttItems($reponse, 'division');
+
+            // Charger les divisions NIJAC disponibles pour le select
+            $divsNijac = $pdo->query('SELECT Id_Division, Division FROM division ORDER BY Division')
+                             ->fetchAll(PDO::FETCH_ASSOC);
+
+            // Enrichir chaque division avec la suggestion NIJAC auto-détectée
+            foreach ($items as &$div) {
+                $libelle = (string)($div['libelle'] ?? '');
+                $div['id_division_nijac_auto'] = devinerIdDivision($libelle);
+            }
+            unset($div);
+
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'divisions' => $items, 'divisions_nijac' => $divsNijac]);
+            exit;
+        }
+
+        // ── 4. Importer toutes les rencontres d'une division ─────────────────
+        if ($action === 'importer_division') {
+            set_time_limit(180);
+
+            $organisme  = trim($_POST['organisme']     ?? '');
+            $epreuve    = trim($_POST['epreuve']       ?? '');
+            $divFftt    = trim($_POST['division_fftt'] ?? '');
+            $idDivNijac = (int)($_POST['id_division']  ?? 0);
+            $phase      = (int)($_POST['phase']        ?? 1);
+
+            if ($organisme === '' || $epreuve === '' || $divFftt === '' || $idDivNijac <= 0) {
+                ob_end_clean(); echo json_encode(['ok'=>false,'msg'=>'Paramètres manquants.']); exit;
+            }
+
+            $stmtDiv = $pdo->prepare('SELECT ArbitrageObligatoire, Division FROM division WHERE Id_Division=?');
+            $stmtDiv->execute([$idDivNijac]);
+            $divInfo = $stmtDiv->fetch();
+            if (!$divInfo) { ob_end_clean(); echo json_encode(['ok'=>false,'msg'=>"Division NIJAC #$idDivNijac introuvable."]); exit; }
+            $arbitrage   = (int)$divInfo['ArbitrageObligatoire'];
+            $divCode     = (string)$divInfo['Division'];          // ex: "N1M", "R2M"
+            $isNationale = str_starts_with($divCode, 'N');        // N1M, N2M, N3M, N1F, N2F
+
+            $api = getFfttApi();
+
+            // Étape 1 : liste des poules (libellés + cx_poule via champ 'lien')
+            $rPoules    = $api->request('xml_result_equ', ['action' => 'poule', 'D1' => $divFftt, 'auto' => '1', 'type' => 'E']);
+            $pouleItems = ffttItems($rPoules, 'poule');
+
+            // Construire la map : numéro de poule (1,2,3…) → cx_poule réel si disponible dans 'lien'
+            $pouleLibelles = []; // [1 => 'Poule A', 2 => 'Poule B', ...]
+            $cxPoules      = []; // [1 => '12345', 2 => '12346', ...]  — vide si lien absent
+            foreach ($pouleItems as $i => $p) {
+                $num     = $i + 1;
+                $pouleLibelles[$num] = trim((string)($p['libelle'] ?? "Poule $num"));
+                $lienRaw = $p['lien'] ?? '';
+                $lienStr = is_array($lienRaw) ? '' : (string)$lienRaw;
+                if ($lienStr !== '') {
+                    parse_str(html_entity_decode($lienStr), $lp);
+                    if (!empty($lp['cx_poule'])) $cxPoules[$num] = $lp['cx_poule'];
+                }
+            }
+
+            // Étape 2 : récupérer les rencontres poule par poule (si cx_poule disponibles)
+            //           ou en un seul appel global (si 'lien' vide — cas constaté avec apiv2)
+            $rencontres = [];
+            if (count($cxPoules) === count($pouleItems) && count($cxPoules) > 0) {
+                // cx_poule connus : appel individuel par poule pour associer le numéro de poule
+                foreach ($cxPoules as $num => $cx) {
+                    $rP = $api->request('xml_result_equ', ['D1' => $divFftt, 'cx_poule' => $cx, 'auto' => '1', 'type' => 'E']);
+                    foreach (ffttItems($rP, 'tour') as $rc) {
+                        $rc['_poule_num'] = $num; // injecté pour éviter le parsing du libellé
+                        $rencontres[] = $rc;
+                    }
+                }
+            } else {
+                // Fallback : un seul appel global, numéro de poule extrait du libellé
+                $rAll       = $api->request('xml_result_equ', ['D1' => $divFftt, 'auto' => '1', 'type' => 'E']);
+                $rencontres = ffttItems($rAll, 'tour');
+            }
+
+            $stats = ['poules'=>[],'equipes_creees'=>0,'rencontres_creees'=>0,'doublons'=>0,'erreurs'=>[],'log'=>[]];
+
+            $stmtClubIns    = $pdo->prepare('INSERT IGNORE INTO club (Id_Club, Nom) VALUES (?,?)');
+            $stmtClubByNom  = $pdo->prepare('SELECT Id_Club FROM club WHERE Nom=? LIMIT 1');
+            $stmtClubById   = $pdo->prepare('SELECT Id_Club FROM club WHERE Id_Club=? LIMIT 1');
+            $stmtNatChk     = $pdo->prepare('SELECT 1 FROM equipe_nationale WHERE Nom=? AND Division=? LIMIT 1');
+            $stmtNatIns     = $pdo->prepare(
+                'INSERT INTO equipe_nationale (Nom, Division, Poule, Rang, Id_Club, Id_Equipe) VALUES (?,?,?,0,?,?)'
+            );
+            $stmtEqChk   = $pdo->prepare('SELECT Id_Equipe FROM equipe WHERE Nom=? AND Id_Division=? LIMIT 1');
+            $stmtEqIns   = $pdo->prepare('INSERT INTO equipe (Nom, Id_Division, Id_Club, JAdemande) VALUES (?,?,?,0)');
+            $stmtRcChk   = $pdo->prepare('SELECT 1 FROM rencontre WHERE Date=? AND Id_EquipeDom=? AND Id_EquipeExt=? LIMIT 1');
+            $stmtRcIns   = $pdo->prepare(
+                'INSERT INTO rencontre (Date,Heure,Id_Division,Poule,Id_EquipeDom,Id_EquipeExt,Phase,Journee,ArbitrageObligatoire)
+                 VALUES (?,?,?,?,?,?,?,?,?)'
+            );
+
+            foreach ($rencontres as $rc) {
+                // Champs confirmés : equa, equb, dateprevue, libelle ("Poule X - tour n°Y du …")
+                $libDom  = mb_substr(trim((string)($rc['equa'] ?? '')), 0, 100);
+                $libExt  = mb_substr(trim((string)($rc['equb'] ?? '')), 0, 100);
+                $dateStr = trim((string)($rc['dateprevue'] ?? ''));
+                $libelle = trim((string)($rc['libelle'] ?? ''));
+
+                // Numéro de poule : injecté directement si appel par poule, sinon extrait du libellé
+                $pouleNum = isset($rc['_poule_num']) ? (int)$rc['_poule_num'] : 0;
+                $journee  = 0;
+                if ($pouleNum === 0 && preg_match('/poule\s+(\d+)/i', $libelle, $m)) $pouleNum = (int)$m[1];
+                if (preg_match('/tour\s+n[°o]?\s*(\d+)/i', $libelle, $m)) $journee = (int)$m[1];
+
+                $date = parseDateFftt($dateStr);
+                if (!$date || $libDom === '' || $libExt === '') {
+                    $stats['erreurs'][] = "Rencontre ignorée : dom=\"$libDom\" ext=\"$libExt\" date=\"$dateStr\"";
+                    continue;
+                }
+                $heure = '00:00:00'; // xml_result_equ ne fournit pas l'heure
+
+                // Compter les poules distinctes rencontrées
+                if ($pouleNum > 0) $stats['poules'][$pouleNum] = true;
+
+                // xml_result_equ ne fournit pas de code équipe → club fictif basé sur nom
+                $nomClubDom = preg_replace('/\s+\d+$/', '', $libDom);
+                $nomClubExt = preg_replace('/\s+\d+$/', '', $libExt);
+                $clubDom = strtoupper(substr(preg_replace('/[^A-Z0-9]/i', '', $nomClubDom), 0, 8));
+                $clubExt = strtoupper(substr(preg_replace('/[^A-Z0-9]/i', '', $nomClubExt), 0, 8));
+                if ($clubDom === '') $clubDom = 'UNKNOWN1';
+                if ($clubExt === '') $clubExt = 'UNKNOWN2';
+
+                // Résoudre l'Id_Club réel pour dom et ext
+                // (INSERT IGNORE peut être ignoré si Nom UNIQUE déjà pris par un autre Id_Club)
+                foreach ([['dom', &$clubDom, $nomClubDom], ['ext', &$clubExt, $nomClubExt]] as [, &$idVar, $nom]) {
+                    $nomTronc = mb_substr($nom, 0, 100);
+                    $stmtClubIns->execute([$idVar, $nomTronc]);
+                    if ($pdo->lastInsertId()) {
+                        $stats['log'][] = ['type'=>'club','op'=>'créé','val'=>"$idVar — $nom"];
+                    } else {
+                        // INSERT ignoré : vérifier si notre Id_Club existe, sinon chercher par Nom
+                        $stmtClubById->execute([$idVar]);
+                        if (!$stmtClubById->fetchColumn()) {
+                            $stmtClubByNom->execute([$nomTronc]);
+                            $found = $stmtClubByNom->fetchColumn();
+                            if ($found) $idVar = $found;
+                        }
+                    }
+                }
+                unset($idVar);
+
+                foreach ([[$libDom,$clubDom,'idDom'], [$libExt,$clubExt,'idExt']] as [$lib,$club,$var]) {
+                    $stmtEqChk->execute([$lib, $idDivNijac]);
+                    $$var = $stmtEqChk->fetchColumn();
+                    if (!$$var) {
+                        $stmtEqIns->execute([$lib, $idDivNijac, $club]);
+                        $$var = (int)$pdo->lastInsertId();
+                        if ($$var) {
+                            $stats['equipes_creees']++;
+                            $stats['log'][] = ['type'=>'equipe','op'=>'créée','val'=>$lib];
+                        } else {
+                            $stmtEqChk->execute([$lib, $idDivNijac]);
+                            $$var = (int)$stmtEqChk->fetchColumn();
+                        }
+                    }
+                }
+
+                if (!$idDom || !$idExt) {
+                    $stats['erreurs'][] = "Équipe non créée : \"$libDom\" ou \"$libExt\"";
+                    $stats['log'][] = ['type'=>'erreur','op'=>'échec équipe','val'=>"$libDom / $libExt"];
+                    continue;
+                }
+
+                // Alimenter equipe_nationale si division Nationale (N1M, N2M…)
+                if ($isNationale) {
+                    foreach ([[$libDom,$clubDom,$idDom], [$libExt,$clubExt,$idExt]] as [$lib,$club,$idEq]) {
+                        $stmtNatChk->execute([$lib, $divCode]);
+                        if (!$stmtNatChk->fetchColumn()) {
+                            $stmtNatIns->execute([$lib, $divCode, $pouleNum, $club, $idEq]);
+                            $stats['log'][] = ['type'=>'nationale','op'=>'nat. ajoutée','val'=>"$divCode P$pouleNum — $lib"];
+                        }
+                    }
+                }
+
+                $stmtRcChk->execute([$date, $idDom, $idExt]);
+                if ($stmtRcChk->fetchColumn()) {
+                    $stats['doublons']++;
+                    $stats['log'][] = ['type'=>'doublon','op'=>'ignorée','val'=>"P$pouleNum J$journee — $libDom vs $libExt ($date)"];
+                    continue;
+                }
+
+                $stmtRcIns->execute([$date, $heure, $idDivNijac, $pouleNum, $idDom, $idExt, $phase, $journee, $arbitrage]);
+                $stats['rencontres_creees']++;
+                $stats['log'][] = ['type'=>'rencontre','op'=>'créée','val'=>"P$pouleNum J$journee — $libDom vs $libExt ($date)"];
+            }
+
+            $stats['poules'] = count($stats['poules']);
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'stats' => $stats, 'nb_rencontres' => count($rencontres)]);
+            exit;
+        }
+
+        // ── 5. Vider les tables de rencontres ────────────────────────────────
+        if ($action === 'compter_tables') {
+            $tables = ['equipe', 'equipe_nationale', 'rencontre', 'nomination', 'disponible'];
+            $counts = [];
+            foreach ($tables as $t) {
+                $counts[$t] = (int)$pdo->query("SELECT COUNT(*) FROM `$t`")->fetchColumn();
+            }
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'counts' => $counts]);
+            exit;
+        }
+
+        ob_end_clean();
+        echo json_encode(['ok' => false, 'msg' => 'Action inconnue.']);
+        exit;
+
+    } catch (PDOException $e) {
+        error_log('[NIJAC] import_rencontres.php PDO : ' . $e->getMessage());
+        ob_end_clean();
+        echo json_encode(['ok' => false, 'msg' => 'Erreur BDD : ' . $e->getMessage()]);
+        exit;
+    } catch (\Throwable $e) {
+        error_log('[NIJAC] import_rencontres.php : ' . $e->getMessage());
+        ob_end_clean();
+        echo json_encode(['ok' => false, 'msg' => 'Erreur : ' . $e->getMessage()]);
         exit;
     }
-
-    echo json_encode(['ok' => false, 'err' => 'Action inconnue']);
-    exit;
 }
 
-$u           = $_SESSION['utilisateur'];
-$nomComplet  = htmlspecialchars(($u['nom'] ?? '') . ' ' . ($u['prenom'] ?? ''));
-$departement = htmlspecialchars($u['id_departement'] ?? '');
-$changeLogin = !empty($u['change_login']);
-$isAdmin     = !empty($u['is_admin']);
+// ── Rendu HTML ────────────────────────────────────────────────────────────────
+$moi         = $_SESSION['utilisateur'];
+$nomComplet  = htmlspecialchars(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? ''));
+$departement = htmlspecialchars($moi['id_departement'] ?? '');
+$changeLogin = !empty($moi['change_login']);
+$region      = htmlspecialchars(getConfig('region', 'Normandie'));
+$ffttOk      = (getFfttAppId() !== '' && getFfttAppKey() !== '');
+
+// Calcul de la phase actuelle
+(function () use (&$phaseLabel, &$phaseKey, &$phaseOptions) {
+    $today   = new DateTime();
+    $md      = (int)$today->format('m') * 100 + (int)$today->format('d');
+    $toMd    = fn(string $s) => (int)substr($s, 0, 2) * 100 + (int)substr($s, 3, 2);
+
+    $p1FinMd = $toMd(getConfig('phase1_fin',   '01-31')); // 131
+    $p2DbtMd = $toMd(getConfig('phase2_debut', '02-01')); // 201
+    $p2FinMd = $toMd(getConfig('phase2_fin',   '06-30')); // 630
+    $p1DbtMd = $toMd(getConfig('phase1_debut', '09-01')); // 901
+
+    $saison  = getConfig('saison', date('Y') . '-' . (date('Y') + 1));
+    $parts   = explode('-', $saison);
+    $a1 = (int)($parts[0] ?? date('Y'));
+    $a2 = (int)($parts[1] ?? $a1 + 1);
+
+    $saisonSuivante = ($a1 + 1) . '-' . ($a2 + 1);
+    $phaseOptions = [
+        ['key' => 'p1',   'label' => "Phase 1 · saison $saison"],
+        ['key' => 'p2',   'label' => "Phase 2 · saison $saison"],
+        ['key' => 'prep', 'label' => "Phase 1 · saison $saison (à venir)"],
+    ];
+
+    if ($md >= $p1DbtMd || $md <= $p1FinMd) {
+        $phaseLabel = "Phase 1 · saison $saison";
+        $phaseKey   = 'p1';
+    } elseif ($md >= $p2DbtMd && $md <= $p2FinMd) {
+        $phaseLabel = "Phase 2 · saison $saison";
+        $phaseKey   = 'p2';
+    } else {
+        $phaseLabel = "Phase 1 · saison $saison (à venir)";
+        $phaseKey   = 'prep';
+    }
+})();
+
+// Divisions NIJAC pour le JS
+$divsNijac = getPDO()->query('SELECT Id_Division, Division FROM division ORDER BY Division')->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NIJAC – Import Rencontres (E011)</title>
+    <meta name="csrf-token" content="<?= htmlspecialchars(csrfToken()) ?>">
+    <title>NIJAC – Import Rencontres FFTT (E011)</title>
     <link rel="stylesheet" href="asset/css/bootstrap.min.css">
     <link rel="stylesheet" href="asset/css/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="asset/css/nijac.css">
     <style>
         :root { --nijac-blue: #1a3a6b; }
-
         body { background: #f0f4fa; font-family: 'Segoe UI', system-ui, sans-serif; }
+        #content { padding: 1.25rem 1.5rem; }
 
-
-        #page-header {
-            background: var(--nijac-blue);
-            color: #fff;
-            padding: .5rem 1.25rem;
-            font-size: .9rem;
-            font-weight: 600;
-            flex-shrink: 0;
+        /* ── Bouton FFTT ── */
+        #btn-fftt {
+            display: flex; align-items: center; gap: 1rem;
+            padding: .9rem 1.5rem; background: #fff;
+            border: 2px solid #1a3a6b; border-radius: 12px;
+            cursor: pointer; font-size: 1rem; font-weight: 600; color: #1a3a6b;
+            transition: background .15s, box-shadow .15s;
+            box-shadow: 0 2px 8px rgba(26,58,107,.12);
         }
-        #content { padding: 1.25rem; }
-        .fichier-card {
+        #btn-fftt:hover:not(:disabled) { background: #eef3fb; box-shadow: 0 4px 16px rgba(26,58,107,.2); }
+        #btn-fftt:disabled { opacity: .5; cursor: default; }
+        #btn-fftt img { height: 40px; }
+
+        /* ── Sections ── */
+        .section-box {
             background: #fff; border: 1px solid #d0d8e8;
-            border-radius: 8px; padding: .85rem 1rem; margin-bottom: .65rem;
+            border-radius: 10px; padding: 1rem 1.25rem; margin-top: 1.25rem;
+        }
+        .section-title {
+            font-size: .92rem; font-weight: 700; color: #1a3a6b;
+            display: flex; align-items: center; gap: .5rem; margin-bottom: .85rem;
+        }
+
+        /* ── Carte ligue ── */
+        .ligue-card {
+            display: flex; align-items: center; gap: 1rem;
+            background: #f0fdf4; border: 2px solid #86efac;
+            border-radius: 8px; padding: .75rem 1rem;
+        }
+        .ligue-id {
+            font-size: 1.3rem; font-weight: 800; color: #166534;
+            background: #dcfce7; border-radius: 6px; padding: .2rem .65rem;
+        }
+        .ligue-nom { font-size: 1rem; font-weight: 700; color: #14532d; }
+        .ligue-sub { font-size: .8rem; color: #4b5563; margin-top: .1rem; }
+
+        /* ── Liste épreuves ── */
+        #liste-epreuves {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
+            gap: .25rem .75rem;
+        }
+        .epreuve-item {
+            display: flex; align-items: flex-start; gap: .5rem;
+            padding: .35rem .4rem; border-radius: 5px;
+        }
+        .epreuve-item:hover { background: #f7faff; }
+        .epreuve-item label { cursor: pointer; font-size: .84rem; margin: 0; line-height: 1.3; }
+        .epreuve-item .intitule { font-weight: 600; }
+        .epreuve-item .ep-id    { font-size: .74rem; color: #6b7280; margin-left: .25rem; }
+
+        /* ── Table divisions ── */
+        #tbl-divisions { width: 100%; border-collapse: collapse; font-size: .85rem; }
+        #tbl-divisions thead th {
+            background: #e8eef7; border: 1px solid #c8d4e8;
+            padding: .3rem .6rem; white-space: nowrap;
+        }
+        #tbl-divisions tbody td { border: 1px solid #e0e8f0; padding: .35rem .6rem; vertical-align: middle; }
+        #tbl-divisions tbody tr:hover td { background: #f7faff; }
+        #tbl-divisions tbody tr.div-selected td { background: #eef6ff; border-color: #bfdbfe; }
+        #tbl-divisions tbody tr.div-selected:hover td { background: #dbeafe; }
+
+        /* ── Barre de progression import ── */
+        .div-progress {
             display: flex; align-items: center; gap: .75rem;
+            padding: .45rem .6rem; border-radius: 6px; margin-bottom: .4rem;
+            background: #f8faff; border: 1px solid #e0e8f0;
+            font-size: .85rem;
         }
-        .fichier-card .fc-nom { flex: 1; min-width: 0; font-weight: 600; font-size: .95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .fichier-card .fc-badge {
-            background: #1a3a6b; color: #fff;
-            border-radius: 12px; padding: .15rem .55rem; font-size: .78rem;
+        .div-progress .dp-nom { flex: 1; font-weight: 600; }
+        .dp-stats { font-size: .78rem; color: #4b5563; }
+        .dp-ok  { color: #15803d; }
+        .dp-err { color: #dc2626; }
+
+        /* ── Stat cards ── */
+        .stat-card {
+            display: inline-block; text-align: center; min-width: 100px;
+            background: #fff; border: 2px solid #d0d8e8; border-radius: 8px;
+            padding: .4rem .65rem; margin: 0 .4rem .4rem 0;
         }
-        .fichier-card.fc-importe {
-            background: #f0f7f1; border-color: #9fcdab;
-        }
-        .fichier-card .fc-importe-badge {
-            background: #1a7f4b; color: #fff;
-            border-radius: 12px; padding: .15rem .55rem; font-size: .76rem;
-            white-space: nowrap;
-        }
-        /* Aperçu */
-        #apercu-zone { display: none; margin-top: 1rem; }
-        .poule-header {
-            background: #1a3a6b; color: #fff;
-            padding: .4rem .75rem; border-radius: 6px 6px 0 0;
-            font-weight: 700; font-size: .88rem; margin-top: .75rem;
-        }
-        .poule-body {
-            border: 1px solid #b0bcd0; border-top: none;
-            border-radius: 0 0 6px 6px; padding: .5rem;
-            background: #fff; margin-bottom: .5rem;
-        }
-        .poule-clubs { display: flex; flex-wrap: wrap; gap: .3rem; margin-bottom: .4rem; }
-        .club-pill {
-            background: #e8f0fe; border: 1px solid #c5d0ec;
-            border-radius: 12px; padding: .1rem .55rem; font-size: .8rem;
-        }
-        table.tbl-renc { width: 100%; border-collapse: collapse; font-size: .82rem; }
-        table.tbl-renc th { background: #e8eef7; padding: .2rem .4rem; text-align: left; }
-        table.tbl-renc td { padding: .18rem .4rem; border-bottom: 1px solid #eee; }
-        /* Résultat import */
-        #result-zone { display: none; margin-top: 1rem; }
-        .stat-box {
-            display: inline-block; text-align: center;
-            min-width: 110px; background: #fff;
-            border: 2px solid #b0bcd0; border-radius: 8px;
-            padding: .5rem .75rem; margin-right: .5rem; margin-bottom: .5rem;
-        }
-        .stat-box .sv { font-size: 1.6rem; font-weight: 700; color: #1a3a6b; }
-        .stat-box .sl { font-size: .75rem; color: #555; }
-        /* Zone d'ajout de fichiers */
-        #dropzone {
-            border: 2px dashed #b0bcd0; border-radius: 8px;
-            padding: 1rem; text-align: center; color: #6b7280;
-            background: #fff; margin-bottom: 1rem; cursor: pointer;
-            transition: background .15s, border-color .15s;
-        }
-        #dropzone:hover, #dropzone.dz-over { background: #eef3fb; border-color: #1a3a6b; }
-        .fc-btn-supprimer {
-            color: #b02a37; background: none; border: none;
-            font-size: 1.05rem; line-height: 1; padding: .15rem .3rem;
-        }
-        .fc-btn-supprimer:hover { color: #fff; background: #dc3545; border-radius: 4px; }
+        .stat-card .sv { font-size: 1.5rem; font-weight: 700; color: #1a3a6b; }
+        .stat-card .sl { font-size: .72rem; color: #6b7280; }
+
+        #spinner-fftt { display:none; }
+        #spinner-fftt.show { display:inline-block; }
     </style>
 </head>
 <body>
 
-<?php $pageIcon = 'bi-file-earmark-spreadsheet'; $pageTitle = 'Import des rencontres (xlsx)'; $pageCode = 'E011'; $backUrl = $isAdmin ? 'admin_menu.php' : 'Nominateur/menu.php'; require __DIR__ . '/includes/page_header.php'; ?>
-
+<?php
+$pageIcon  = 'bi-trophy-fill';
+$pageTitle = 'Import des rencontres FFTT';
+$pageCode  = 'E011';
+$backUrl   = 'admin_menu.php';
+require __DIR__ . '/includes/page_header.php';
+?>
 <?php require __DIR__ . '/includes/toolbar.php'; ?>
 
 <div id="content">
 
-    <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-        <h5 class="mb-0">Fichiers disponibles</h5>
-        <button class="btn btn-sm btn-outline-primary" id="btn-refresh">
-            <i class="bi bi-arrow-clockwise"></i> Actualiser
+    <?php if (!$ffttOk): ?>
+    <div class="alert alert-danger d-flex align-items-center gap-2 mb-3">
+        <i class="bi bi-x-circle-fill"></i>
+        Credentials FFTT non configurés — renseignez <code>FFTT_APP_ID</code> et <code>FFTT_APP_KEY</code> dans <code>.env</code>.
+    </div>
+    <?php endif; ?>
+
+    <!-- ── Bouton + carte ligue (côte à côte) ── -->
+    <div class="d-flex align-items-center gap-3 flex-wrap mb-1">
+        <button id="btn-fftt" <?= $ffttOk ? '' : 'disabled' ?>>
+            <img src="img/FFTT_LIGUE.png" alt="FFTT">
+            <span>
+                Importer depuis la FFTT
+                <br>
+                <span style="font-size:.8rem;font-weight:400;color:#4b5563;">
+                    Ligue <strong><?= $region ?></strong> → épreuves → divisions → rencontres
+                </span>
+            </span>
+            <span id="spinner-fftt" class="spinner-border spinner-border-sm text-primary ms-2"></span>
         </button>
-        <span class="text-muted" style="font-size:.82rem;">
-            <i class="bi bi-folder2-open me-1"></i>
-<?php
-                $cheminComplet = str_replace('\\', '/', __DIR__ . '/Importation/Rencontres/');
-                $posNijac      = strripos($cheminComplet, '/nijac/');
-                $cheminAffiche = $posNijac !== false ? substr($cheminComplet, $posNijac + 1) : $cheminComplet;
-            ?>
-            <code><?= htmlspecialchars($cheminAffiche) ?></code>
-            &mdash; fichiers <code>*.xlsx</code>
-        </span>
-    </div>
-    <!-- Zone d'ajout de fichiers -->
-    <div id="dropzone">
-        <i class="bi bi-cloud-arrow-up fs-3 d-block mb-1"></i>
-        Cliquez ou déposez ici des fichiers <code>.xlsx</code> à ajouter
-        <input type="file" id="input-upload" accept=".xlsx" multiple hidden>
-    </div>
-    <div id="upload-status" class="mb-3"></div>
 
-    <p class="text-muted mb-3" style="font-size:.82rem;">
-        <i class="bi bi-info-circle me-1"></i>
-        Les fichiers PDF de base ont été convertis en Excel grâce à
-        <a href="https://www.pdfgear.com/fr/" target="_blank" rel="noopener">PDFGear</a>.
-    </p>
-
-    <div id="liste-fichiers">
-        <div class="text-muted"><i class="bi bi-hourglass-split me-1"></i>Chargement…</div>
-    </div>
-
-    <!-- Aperçu -->
-    <div id="apercu-zone">
-        <hr>
-        <div class="d-flex align-items-center gap-2 mb-2">
-            <h6 class="mb-0" id="apercu-titre">Aperçu</h6>
-            <button class="btn btn-success btn-sm" id="btn-importer">
-                <i class="bi bi-cloud-upload me-1"></i>Importer en base
-            </button>
-            <span id="apercu-spinner" class="spinner-border spinner-border-sm text-success d-none"></span>
+        <div id="sec-ligue" style="display:none;flex:1;min-width:0;">
+            <div id="ligue-card"></div>
         </div>
-        <div id="apercu-content"></div>
+
+        <div class="ms-auto flex-shrink-0 text-end">
+            <button id="btn-vider" class="btn btn-secondary text-white">
+                <i class="bi bi-table me-1"></i>État des tables
+            </button>
+            <div id="msg-vidage" class="mt-1" style="font-size:.82rem;display:none;"></div>
+        </div>
     </div>
 
-    <!-- Résultat -->
-    <div id="result-zone">
-        <hr>
-        <h6>Résultat de l'import</h6>
-        <div id="result-content"></div>
+    <!-- ── Section 2 : Épreuves ── -->
+    <div id="sec-epreuves" class="section-box" style="display:none;">
+        <div class="section-title">
+            <i class="bi bi-list-ul"></i>
+            Épreuves (type Équipes)
+            <span id="lbl-nb-epreuves" class="text-muted fw-normal ms-1" style="font-size:.82rem;"></span>
+        </div>
+
+        <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+            <input type="search" id="filtre-epreuves" class="form-control form-control-sm"
+                   placeholder="Filtrer par nom…" style="max-width:280px;">
+            <button class="btn btn-sm btn-success" id="btn-tout-cocher">
+                <i class="bi bi-check2-all me-1"></i>Tout sélectionner
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" id="btn-tout-decocher">
+                <i class="bi bi-x-lg me-1"></i>Tout désélectionner
+            </button>
+        </div>
+
+        <div style="max-height:380px;overflow-y:auto;border:1px solid #e0e8f0;border-radius:6px;padding:.5rem .6rem;">
+            <div id="liste-epreuves"></div>
+        </div>
+
+        <div class="mt-3 d-flex align-items-center gap-3 flex-wrap">
+            <button id="btn-importer" class="btn btn-success" disabled>
+                <i class="bi bi-cloud-upload me-1"></i>Importer les rencontres des épreuves cochées
+                <span id="spinner-div" class="spinner-border spinner-border-sm ms-2 d-none"></span>
+            </button>
+            <span class="text-muted" style="font-size:.82rem;">(Les doublons seront ignorés)</span>
+        </div>
     </div>
 
-</div>
+    <!-- ── Section 4 : Progression import ── -->
+    <div id="sec-progression" class="section-box" style="display:none;">
+        <div class="section-title"><i class="bi bi-arrow-repeat"></i>Progression de l'import</div>
+        <div id="liste-progression"></div>
+        <div id="bilan-import" class="mt-3" style="display:none;">
+            <hr>
+            <div class="section-title"><i class="bi bi-bar-chart-fill"></i>Bilan</div>
+            <div id="bilan-stats"></div>
+        </div>
+    </div>
 
+</div><!-- #content -->
 
 <script src="asset/js/jquery-3.7.1.min.js"></script>
-    <script src="asset/js/nijac-csrf.js"></script>
+<script src="asset/js/nijac-csrf.js"></script>
 <script src="asset/js/bootstrap.bundle.min.js"></script>
+<script src="asset/js/nijac-toast.js"></script>
 <script>
 'use strict';
 
-let fichierEnCours = null;
+/* ── Données PHP → JS ─────────────────────────────────────────────────────── */
+const DIVISIONS_NIJAC = <?= json_encode($divsNijac, JSON_UNESCAPED_UNICODE) ?>;
+const PHASE_OPTIONS   = <?= json_encode($phaseOptions, JSON_UNESCAPED_UNICODE) ?>;
+let   phaseKey        = <?= json_encode($phaseKey,    JSON_UNESCAPED_UNICODE) ?>;
+let   phaseLabel      = <?= json_encode($phaseLabel,  JSON_UNESCAPED_UNICODE) ?>;
 
-// ── Chargement de la liste ─────────────────────────────────────────────────
-function chargerListe() {
-    $('#liste-fichiers').html('<span class="text-muted"><i class="bi bi-hourglass-split me-1"></i>Chargement…</span>');
-    $.getJSON('import_rencontres.php?action=liste', function (r) {
-        if (!r.ok) { $('#liste-fichiers').html('<div class="text-danger">Erreur chargement</div>'); return; }
-        if (!r.fichiers.length) {
-            $('#liste-fichiers').html('<div class="text-muted">Aucun fichier xlsx trouvé dans Importation/Rencontres/</div>');
-            return;
-        }
-        let html = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.65rem;">';
-        r.fichiers.forEach(function (f) {
-            const importeBadge = f.importe
-                ? `<span class="fc-importe-badge">
-                       <i class="bi bi-check-circle-fill me-1"></i>Déjà importé
-                   </span>`
-                : '';
-            html += `<div class="fichier-card${f.importe ? ' fc-importe' : ''}">
-                <i class="bi bi-file-earmark-excel text-success fs-4"></i>
-                <span class="fc-nom">${f.nom}</span>
-                <span class="fc-badge">${f.feuilles} poule${f.feuilles > 1 ? 's' : ''}</span>
-                ${importeBadge}
-                <button class="btn btn-sm btn-outline-primary btn-apercu" data-nom="${f.nom}">
-                    <i class="bi bi-eye me-1"></i>Aperçu
-                </button>
-                <button class="fc-btn-supprimer btn-supprimer-fichier" data-nom="${f.nom}" title="Supprimer le fichier">
-                    <i class="bi bi-trash3"></i>
-                </button>
-            </div>`;
-        });
-        html += '</div>';
-        $('#liste-fichiers').html(html);
-    });
+/* ── Utilitaires ──────────────────────────────────────────────────────────── */
+function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+function spin(id, show) { $(`#${id}`).toggleClass('d-none', !show); }
 
-// ── Ajout de fichiers ─────────────────────────────────────────────────────
-$('#dropzone').on('click', () => $('#input-upload').trigger('click'));
-$('#dropzone').on('dragover', function (e) { e.preventDefault(); $(this).addClass('dz-over'); });
-$('#dropzone').on('dragleave', function () { $(this).removeClass('dz-over'); });
-$('#dropzone').on('drop', function (e) {
-    e.preventDefault();
-    $(this).removeClass('dz-over');
-    televerser(e.originalEvent.dataTransfer.files);
-});
-$('#input-upload').on('change', function () {
-    televerser(this.files);
-    this.value = '';
-});
+/* ── État global ──────────────────────────────────────────────────────────── */
+let ligueId   = null;
+let epreuves  = [];     // [{idepreuve, intitule, typepreuve, …}]
 
-function televerser(fileList) {
-    if (!fileList || !fileList.length) return;
-    const fd = new FormData();
-    for (const f of fileList) fd.append('fichiers[]', f);
+/* ── Carte ligue (avec sélecteur de phase) ────────────────────────────────── */
+let ligueInfo = null;
 
-    $('#upload-status').html('<span class="text-muted"><i class="bi bi-hourglass-split me-1"></i>Envoi en cours…</span>');
+function renderLigueCard(ligue) {
+    ligueInfo = ligue;
+    const btns = PHASE_OPTIONS.map(o => `
+        <button class="btn btn-sm btn-phase ${o.key === phaseKey ? 'btn-primary' : 'btn-outline-secondary'}"
+                data-key="${o.key}" data-label="${o.label}">
+            ${o.label}
+        </button>`).join('');
 
-    $.ajax({
-        url: 'import_rencontres.php?action=upload',
-        type: 'POST',
-        data: fd,
-        processData: false,
-        contentType: false,
-    }).done(function (r) {
-        if (!r.ok) { $('#upload-status').html('<div class="text-danger">' + (r.err || 'Erreur') + '</div>'); return; }
-        let html = '';
-        r.resultats.forEach(function (res) {
-            html += res.ok
-                ? `<div class="text-success"><i class="bi bi-check-circle me-1"></i>${res.nom} ajouté.</div>`
-                : `<div class="text-danger"><i class="bi bi-x-circle me-1"></i>${res.nom} — ${res.msg}</div>`;
-        });
-        $('#upload-status').html(html);
-        chargerListe();
-    }).fail(function () {
-        $('#upload-status').html('<div class="text-danger">Erreur réseau lors de l\'envoi.</div>');
-    });
-}
-
-// ── Suppression d'un fichier ─────────────────────────────────────────────
-$(document).on('click', '.btn-supprimer-fichier', function () {
-    const nom = $(this).data('nom');
-    if (!confirm('Supprimer le fichier "' + nom + '" ?\n(Cette action est irréversible.)')) return;
-
-    $.post('import_rencontres.php?action=supprimer', { fichier: nom }, function (r) {
-        if (!r.ok) { toast_err(r.err || 'Erreur lors de la suppression.'); return; }
-        chargerListe();
-    }, 'json').fail(function () {
-        toast_err('Erreur réseau lors de la suppression.');
-    });
-});
-
-function toast_err(msg) {
-    $('#upload-status').html('<div class="text-danger"><i class="bi bi-x-circle me-1"></i>' + msg + '</div>');
-}
-
-// ── Aperçu ─────────────────────────────────────────────────────────────────
-$(document).on('click', '.btn-apercu', function () {
-    fichierEnCours = $(this).data('nom');
-    $('#apercu-zone').hide();
-    $('#result-zone').hide();
-    $('#apercu-titre').text('Aperçu — ' + fichierEnCours);
-    $('#apercu-content').html('<span class="text-muted"><i class="bi bi-hourglass-split me-1"></i>Analyse…</span>');
-    $('#apercu-zone').show();
-    $('html, body').animate({ scrollTop: $('#apercu-zone').offset().top - 10 }, 200);
-
-    $.getJSON('import_rencontres.php?action=apercu&fichier=' + encodeURIComponent(fichierEnCours), function (r) {
-        if (!r.ok) { $('#apercu-content').html('<div class="text-danger">Erreur : ' + r.err + '</div>'); return; }
-        let html = '';
-        r.poules.forEach(function (p, i) {
-            const divLabel = p.id_division ? `Division ID ${p.id_division}` : '<span class="text-danger">Division inconnue !</span>';
-            html += `<div class="poule-header">
-                Feuille ${i+1} — ${p.categorie} ${p.division} Poule ${p.poule} Phase ${p.phase}
-                — ${p.saison} — Secteur ${p.secteur} — ${divLabel}
+    $('#ligue-card').html(`
+        <div class="ligue-card flex-column align-items-start gap-2">
+            <div class="d-flex align-items-center gap-3">
+                <div class="ligue-id">${esc(ligue.id)}</div>
+                <div>
+                    <div class="ligue-nom">
+                        <i class="bi bi-check-circle-fill text-success me-1"></i>${esc(ligue.libelle)}
+                    </div>
+                    <div class="ligue-sub">Identifiant FFTT : <code>${esc(ligue.id)}</code></div>
+                </div>
             </div>
-            <div class="poule-body">
-                <div class="poule-clubs">`;
-            Object.values(p.clubs).forEach(function (c) {
-                html += `<span class="club-pill" title="N°${c.id_club}">${c.nom}</span>`;
-            });
-            html += `</div>
-                <strong>${p.rencontres.length} rencontres</strong>
-                <table class="tbl-renc mt-1">
-                    <tr><th>J.</th><th>Date</th><th>Heure</th><th>Domicile</th><th>Extérieur</th></tr>`;
-            p.rencontres.forEach(function (r) {
-                html += `<tr>
-                    <td>${r.journee}</td>
-                    <td>${r.date}</td>
-                    <td>${r.heure}</td>
-                    <td>${r.equipe_dom}</td>
-                    <td>${r.equipe_ext}</td>
-                </tr>`;
-            });
-            html += `</table></div>`;
-        });
-        $('#apercu-content').html(html);
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="text-muted" style="font-size:.8rem;white-space:nowrap;">Phase :</span>
+                <div class="btn-group btn-group-sm" role="group">${btns}</div>
+            </div>
+        </div>`);
+}
+
+/**
+ * Retourne true si une division FFTT correspond à la phase sélectionnée.
+ * Phase 2 : libellé contient "ph2", "phase 2", "_p2" ou "finale".
+ * Phase 1 / Préparation : tout ce qui n'est pas Phase 2.
+ */
+function divisionMatchPhase(libelle, key) {
+    const isP2 = /ph\s*2|phase\s*2|_p2\b|finale/i.test(libelle);
+    return key === 'p2' ? isP2 : !isP2;
+}
+
+$(document).on('click', '.btn-phase', function () {
+    phaseKey   = $(this).data('key');
+    phaseLabel = $(this).data('label');
+    $('.btn-phase').removeClass('btn-primary').addClass('btn-outline-secondary');
+    $(this).removeClass('btn-outline-secondary').addClass('btn-primary');
+
+    // Mettre à jour les coches et couleurs des divisions selon la nouvelle phase
+    $('.chk-division').each(function () {
+        const idx     = +$(this).attr('data-idx');
+        const libelle = divisions[idx]?.libelle ?? '';
+        const cochee  = divisionMatchPhase(libelle, phaseKey);
+        $(this).prop('checked', cochee);
+        $(this).closest('tr').toggleClass('div-selected', cochee);
     });
+    majBtnImporter();
 });
 
-// ── Import ─────────────────────────────────────────────────────────────────
-$('#btn-importer').on('click', function () {
-    if (!fichierEnCours) return;
-    if (!confirm('Importer "' + fichierEnCours + '" en base de données ?\n(Les doublons seront ignorés.)')) return;
-    $('#apercu-spinner').removeClass('d-none');
-    $('#btn-importer').prop('disabled', true);
+/* ═══════════════════════════════════════════════════════════════════════════
+   ÉTAPE 1 — Recherche ligue
+   ═══════════════════════════════════════════════════════════════════════════ */
+$('#btn-fftt').on('click', function () {
+    $(this).prop('disabled', true);
+    $('#spinner-fftt').addClass('show');
+    ['sec-ligue','sec-epreuves','sec-divisions','sec-progression'].forEach(id => $(`#${id}`).hide());
 
-    $.post('import_rencontres.php?action=importer', { fichier: fichierEnCours }, function (r) {
-        $('#apercu-spinner').addClass('d-none');
-        $('#btn-importer').prop('disabled', false);
-        $('#result-zone').show();
-        $('html, body').animate({ scrollTop: $('#result-zone').offset().top - 10 }, 200);
+    $.post('import_rencontres.php', { action: 'chercher_ligue' }, function (r) {
+        $('#spinner-fftt').removeClass('show');
+        $('#btn-fftt').prop('disabled', false);
 
         if (!r.ok) {
-            $('#result-content').html('<div class="alert alert-danger">' + r.err + '</div>');
+            let html = `<div class="alert alert-danger mt-3">
+                <i class="bi bi-x-circle-fill me-2"></i><strong>Ligue non trouvée.</strong> ${esc(r.msg)}`;
+            if (r.ligues?.length) {
+                html += `<details class="mt-2"><summary style="cursor:pointer;font-size:.83rem;">
+                    ${r.ligues.length} ligues disponibles</summary>
+                    <ul class="mb-0 mt-1" style="font-size:.82rem;">`;
+                r.ligues.forEach(l => html += `<li>${esc(l)}</li>`);
+                html += '</ul></details>';
+            }
+            html += '</div>';
+            $('#sec-ligue').html(html).show();
             return;
         }
-        const s = r.stats;
-        let html = `
-            <div class="mb-2">
-                <div class="stat-box"><div class="sv text-success">${s.equipes_creees}</div><div class="sl">Équipes créées</div></div>
-                <div class="stat-box"><div class="sv text-primary">${s.rencontres_creees}</div><div class="sl">Rencontres créées</div></div>
-                <div class="stat-box"><div class="sv text-secondary">${s.doublons}</div><div class="sl">Doublons ignorés</div></div>
-            </div>`;
-        if (s.erreurs && s.erreurs.length) {
-            html += '<div class="alert alert-warning mt-2"><strong>Avertissements :</strong><ul class="mb-0">';
-            s.erreurs.forEach(e => html += '<li>' + e + '</li>');
-            html += '</ul></div>';
-        } else {
-            html += '<div class="alert alert-success">Import terminé sans erreur.</div>';
-        }
-        $('#result-content').html(html);
-        chargerListe();
+
+        ligueId = r.ligue.id;
+
+        renderLigueCard(r.ligue);
+        $('#sec-ligue').show();
+
+        chargerEpreuves();
     }, 'json').fail(function () {
-        $('#apercu-spinner').addClass('d-none');
-        $('#btn-importer').prop('disabled', false);
-        $('#result-content').html('<div class="alert alert-danger">Erreur serveur.</div>');
-        $('#result-zone').show();
+        $('#spinner-fftt').removeClass('show');
+        $('#btn-fftt').prop('disabled', false);
+        nijacToast('Erreur réseau lors de la recherche de la ligue.', 'danger');
     });
 });
 
-$('#btn-refresh').on('click', chargerListe);
+/* ═══════════════════════════════════════════════════════════════════════════
+   ÉTAPE 2 — Épreuves
+   ═══════════════════════════════════════════════════════════════════════════ */
+function chargerEpreuves() {
+    $('#sec-epreuves').show();
+    $('#liste-epreuves').html('<span class="text-muted"><i class="bi bi-hourglass-split me-1"></i>Chargement des épreuves…</span>');
+    $('#btn-charger-divisions').prop('disabled', true);
 
-// Init
-chargerListe();
+    $.post('import_rencontres.php', { action: 'charger_epreuves', organisme: ligueId }, function (r) {
+        if (!r.ok) {
+            $('#liste-epreuves').html(`<div class="text-danger">${esc(r.msg)}</div>`);
+            return;
+        }
+        epreuves = r.epreuves ?? [];
+        $('#lbl-nb-epreuves').text(`(${epreuves.length} épreuve(s))`);
+        renderEpreuves();
+        majBtnDivisions();
+    }, 'json').fail(function () {
+        $('#liste-epreuves').html('<div class="text-danger">Erreur réseau.</div>');
+    });
+}
+
+/** Retourne true si l'épreuve doit être cochée par défaut. */
+function epreuveParDefaut(intitule) {
+    const s = intitule.toUpperCase();
+    return s.startsWith('FED_') && !s.includes('ANTILLES') && !s.includes('GUYANE');
+}
+
+function renderEpreuves() {
+    const filtre = $('#filtre-epreuves').val().trim().toLowerCase();
+    const $list  = $('#liste-epreuves').empty();
+    let nb = 0;
+
+    epreuves.forEach((ep, i) => {
+        const intitule = (ep.intitule ?? ep.libelle ?? '');
+        if (filtre && !intitule.toLowerCase().includes(filtre)) return;
+        nb++;
+        const cochee = epreuveParDefaut(intitule);
+        const id = `chk-ep-${i}`;
+        $list.append(`
+            <div class="epreuve-item">
+                <input type="checkbox" class="chk-epreuve form-check-input flex-shrink-0"
+                       id="${id}" data-idx="${i}" ${cochee ? 'checked' : ''} style="margin-top:.15rem;">
+                <label for="${id}">
+                    <span class="intitule">${esc(intitule)}</span>
+                    <span class="ep-id">(${esc(ep.idepreuve ?? '')})</span>
+                </label>
+            </div>`);
+    });
+
+    if (!nb) $list.html('<div class="text-muted py-2 px-1">Aucune épreuve correspondante.</div>');
+}
+
+$('#filtre-epreuves').on('input', function () { renderEpreuves(); majBtnImportEpreuves(); });
+
+$('#btn-tout-cocher').on('click',   function () { $('.chk-epreuve').prop('checked', true);  majBtnImportEpreuves(); });
+$('#btn-tout-decocher').on('click', function () { $('.chk-epreuve').prop('checked', false); majBtnImportEpreuves(); });
+
+$(document).on('change', '.chk-epreuve', majBtnImportEpreuves);
+
+function majBtnImportEpreuves() {
+    const nb = $('.chk-epreuve:checked').length;
+    $('#btn-importer').prop('disabled', nb === 0).text(
+        nb > 0
+            ? `Importer les rencontres des ${nb} épreuve(s) cochée(s)`
+            : 'Importer les rencontres des épreuves cochées'
+    );
+    $('#btn-importer').append(
+        '<span id="spinner-div" class="spinner-border spinner-border-sm ms-2 d-none"></span>'
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ÉTAPE 3 — Import direct (épreuves → divisions auto → poules → rencontres)
+   ═══════════════════════════════════════════════════════════════════════════ */
+function nijacConfirmPromise(msg) {
+    return new Promise(resolve => nijacConfirm(msg, () => resolve(true), () => resolve(false)));
+}
+
+$('#btn-importer').on('click', async function () {
+    const checkedIdx = $('.chk-epreuve:checked').map(function () {
+        return +$(this).attr('data-idx');
+    }).get();
+    if (!checkedIdx.length) return;
+
+    const conf = await nijacConfirmPromise(
+        `Importer les rencontres de ${checkedIdx.length} épreuve(s) ?\n(Les doublons seront ignorés.)`
+    );
+    if (!conf) return;
+
+    $(this).prop('disabled', true);
+    spin('spinner-div', true);
+    $('#sec-progression').show();
+    $('#liste-progression').empty();
+    $('#bilan-import').hide();
+
+    const bilanTotal = { equipes: 0, rencontres: 0, doublons: 0, erreurs: 0 };
+
+    const phaseNum = phaseKey === 'p2' ? 2 : 1;
+
+    for (const idx of checkedIdx) {
+        const ep         = epreuves[idx];
+        const idEp       = (ep.idepreuve ?? ep.ident ?? '');
+        const intituleEp = (ep.intitule  ?? ep.libelle ?? '');
+
+        // ── 1. Divisions ──────────────────────────────────────────────────────
+        let divs;
+        try {
+            const r = await $.post('import_rencontres.php', {
+                action: 'charger_divisions', organisme: ligueId, epreuve: idEp,
+            });
+            if (!r.ok || !r.divisions?.length) {
+                ajouterLigneProgression(null, intituleEp, false, `Divisions introuvables : ${r.msg ?? ''}`);
+                bilanTotal.erreurs++;
+                continue;
+            }
+            divs = r.divisions;
+        } catch (e) {
+            ajouterLigneProgression(null, intituleEp, false, 'Erreur réseau (divisions)');
+            bilanTotal.erreurs++;
+            continue;
+        }
+
+        for (const div of divs) {
+            const libelle    = (div.libelle    ?? '');
+            const idDivFftt  = (div.iddivision ?? div.ident ?? '');
+            const idDivNijac = div.id_division_nijac_auto ?? null;
+
+            if (!divisionMatchPhase(libelle, phaseKey)) continue;
+            if (!idDivNijac) {
+                ajouterLigneProgression(libelle, intituleEp, false, 'Division non mappée (ignorée)');
+                continue;
+            }
+
+            const rowDiv = ajouterLigneProgression(libelle, intituleEp, null, 'Import en cours…');
+
+            try {
+                const rr = await $.post('import_rencontres.php', {
+                    action:        'importer_division',
+                    organisme:     ligueId,
+                    epreuve:       idEp,
+                    division_fftt: idDivFftt,
+                    id_division:   idDivNijac,
+                    phase:         phaseNum,
+                });
+
+                if (rr.ok) {
+                    const s = rr.stats;
+                    bilanTotal.equipes    += s.equipes_creees    ?? 0;
+                    bilanTotal.rencontres += s.rencontres_creees ?? 0;
+                    bilanTotal.doublons   += s.doublons          ?? 0;
+                    bilanTotal.erreurs    += s.erreurs?.length   ?? 0;
+
+                    let resume = `<span class="dp-ok">${s.rencontres_creees} renc. créées</span>`;
+                    if (s.poules)          resume += ` · ${s.poules} poule(s)`;
+                    if (s.doublons)        resume += ` · <span class="text-secondary">${s.doublons} doublon(s)</span>`;
+                    if (s.equipes_creees)  resume += ` · ${s.equipes_creees} éq. créées`;
+                    if (s.erreurs?.length) resume += ` · <span class="dp-err">${s.erreurs.length} err.</span>`;
+                    mettreAJourLigne(rowDiv, s.erreurs?.length === 0, resume);
+
+                    // Détail des opérations
+                    if (s.log?.length) {
+                        const icons = {rencontre:'bi-calendar-check text-success', equipe:'bi-people-fill text-primary',
+                                       club:'bi-building text-info', doublon:'bi-skip-forward text-secondary',
+                                       nationale:'bi-trophy-fill text-warning', erreur:'bi-x-circle text-danger'};
+                        const rows = s.log.map(l => {
+                            const ic = icons[l.type] ?? 'bi-dot';
+                            return `<div style="display:flex;gap:.4rem;align-items:baseline;">
+                                <i class="bi ${ic}" style="font-size:.7rem;flex-shrink:0;margin-top:.15rem;"></i>
+                                <span><strong>${esc(l.op)}</strong> ${esc(l.val)}</span>
+                            </div>`;
+                        }).join('');
+                        $(`#${rowDiv}`).after(`
+                            <div class="log-detail" style="font-size:.75rem;padding:.3rem .5rem .3rem 2rem;color:#374151;background:#f9fafb;border-left:3px solid #e5e7eb;margin-bottom:.2rem;">
+                                ${rows}
+                            </div>`);
+                    }
+                } else {
+                    mettreAJourLigne(rowDiv, false, esc(rr.msg));
+                    bilanTotal.erreurs++;
+                }
+            } catch (e) {
+                mettreAJourLigne(rowDiv, false, 'Erreur réseau');
+                bilanTotal.erreurs++;
+            }
+        }
+    }
+
+    spin('spinner-div', false);
+
+    // Bilan final
+    $('#bilan-stats').html(`
+        <div class="stat-card"><div class="sv text-success">${bilanTotal.rencontres}</div><div class="sl">Rencontres créées</div></div>
+        <div class="stat-card"><div class="sv text-primary">${bilanTotal.equipes}</div><div class="sl">Équipes créées</div></div>
+        <div class="stat-card"><div class="sv text-secondary">${bilanTotal.doublons}</div><div class="sl">Doublons ignorés</div></div>
+        <div class="stat-card"><div class="sv ${bilanTotal.erreurs ? 'text-danger' : 'text-success'}">${bilanTotal.erreurs}</div><div class="sl">Erreurs</div></div>
+        <div class="alert alert-${bilanTotal.erreurs ? 'warning' : 'success'} mt-2 py-2">
+            <i class="bi bi-${bilanTotal.erreurs ? 'exclamation-triangle' : 'check-circle'}-fill me-1"></i>
+            Import terminé${bilanTotal.erreurs ? ' avec des erreurs.' : ' sans erreur.'}
+        </div>
+    `);
+    $('#bilan-import').show();
+    $('#btn-importer').prop('disabled', false);
+    majBtnImportEpreuves();
+});
+
+/** Ajoute une ligne dans la section progression et retourne son ID. */
+function ajouterLigneProgression(libelle, epIntitule, ok, msg) {
+    const rowId = 'dp-' + Math.random().toString(36).slice(2);
+
+    const nom = libelle
+        ? `${esc(libelle)} <span class="text-muted fw-normal" style="font-size:.78rem;">(${esc(epIntitule)})</span>`
+        : `<span class="text-muted">${esc(epIntitule)}</span>`;
+
+    $('#liste-progression').append(`
+        <div class="div-progress" id="${rowId}">
+            ${iconeOk(ok)}
+            <span class="dp-nom">${nom}</span>
+            <span class="dp-stats">${esc(msg)}</span>
+        </div>`);
+    $('html,body').animate({ scrollTop: $(`#${rowId}`).offset().top - 20 }, 150);
+    return rowId;
+}
+
+function iconeOk(ok) {
+    if (ok === null) return '<span class="spinner-border spinner-border-sm text-primary dp-icone flex-shrink-0"></span>';
+    return ok
+        ? '<i class="bi bi-check-circle-fill text-success dp-icone flex-shrink-0"></i>'
+        : '<i class="bi bi-x-circle-fill text-danger dp-icone flex-shrink-0"></i>';
+}
+
+function mettreAJourLigne(rowId, ok, statsHtml) {
+    const $row = $(`#${rowId}`);
+    $row.find('.dp-icone, .spinner-border').replaceWith(iconeOk(ok));
+    $row.find('.dp-stats').html(statsHtml);
+}
+
+function ajouterSousLigne(parentId, label, ok, msg) {
+    const rowId = 'dp-' + Math.random().toString(36).slice(2);
+    $(`#${parentId}`).after(`
+        <div class="div-progress div-progress-sub" id="${rowId}" style="padding-left:2rem;font-size:.82rem;opacity:.9;">
+            ${iconeOk(ok)}
+            <span class="dp-nom">${label}</span>
+            <span class="dp-stats">${esc(msg)}</span>
+        </div>`);
+    return rowId;
+}
+
+/* ── Vider les tables ─────────────────────────────────────────────────────── */
+function rafraichirEtatTables(afficherMsg) {
+    const $btn = $('#btn-vider');
+    if (afficherMsg) $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Chargement…');
+
+    $.post('import_rencontres.php', { action: 'compter_tables' }, function (r) {
+        $btn.prop('disabled', false).html('<i class="bi bi-table me-1"></i>État des tables');
+        $btn.removeClass('btn-secondary btn-success btn-warning text-white text-dark');
+
+        if (!r.ok) {
+            $btn.addClass('btn-secondary text-white');
+            if (afficherMsg) $('#msg-vidage').stop(true).show().html(`<span class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>Erreur réseau</span>`);
+            return;
+        }
+
+        const counts = r.counts;
+        const totalNonVide = Object.values(counts).reduce((a, b) => a + b, 0);
+
+        if (totalNonVide > 0) {
+            $btn.addClass('btn-warning text-dark');
+        } else {
+            $btn.addClass('btn-success text-white');
+        }
+
+        if (!afficherMsg) return;
+
+        const $msg = $('#msg-vidage').stop(true).show();
+
+        let rows = Object.entries(counts).map(([t, n]) => {
+            const cls = n > 0 ? 'text-warning fw-semibold' : 'text-success';
+            return `<tr><td class="pe-3">${esc(t)}</td><td class="${cls} text-end">${n.toLocaleString('fr-FR')} enr.</td></tr>`;
+        }).join('');
+
+        let html = `<table class="mb-2" style="font-size:.82rem;">${rows}</table>`;
+
+        if (totalNonVide > 0) {
+            html += `<div class="alert alert-warning py-1 px-2 mb-0" style="font-size:.82rem;">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                <strong>Tables non vides.</strong> Avant le premier import de la saison, utilisez
+                <a href="clean.php" target="_blank" class="alert-link">Administrateur → Nouvelle saison (E016)</a>
+                pour vider et sauvegarder ces tables.
+            </div>`;
+        } else {
+            html += `<div class="text-success" style="font-size:.82rem;">
+                <i class="bi bi-check-circle-fill me-1"></i>Toutes les tables sont vides — vous pouvez importer.
+            </div>`;
+        }
+
+        $msg.html(html);
+    }, 'json').fail(function () {
+        $('#btn-vider').prop('disabled', false).html('<i class="bi bi-table me-1"></i>État des tables')
+            .removeClass('btn-secondary btn-success btn-warning text-white text-dark').addClass('btn-secondary text-white');
+        if (afficherMsg) $('#msg-vidage').show().html(`<span class="text-danger fw-semibold">
+            <i class="bi bi-x-circle-fill me-1"></i>Erreur réseau — vérifiez la console
+        </span>`);
+    });
+}
+
+$('#btn-vider').on('click', function () { rafraichirEtatTables(true); });
+
+// Couleur au chargement de la page
+rafraichirEtatTables(false);
 </script>
+
 <?php require __DIR__ . '/includes/footer.php'; ?>

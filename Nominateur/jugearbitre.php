@@ -163,70 +163,6 @@ if ($action !== '') {
             exit;
         }
 
-        // ── Recherche laposte par CP et/ou Ville ───────────────────────────
-        if ($action === 'recherche_laposte') {
-            $cp    = trim($_POST['cp']    ?? '');
-            $ville = normaliserVille($_POST['ville'] ?? '');
-
-            if ($cp === '' && $ville === '') {
-                ob_end_clean();
-                echo json_encode(['ok' => false, 'msg' => 'CP et Ville vides.']);
-                exit;
-            }
-
-            // 1) Correspondance exacte CP + Ville
-            if ($cp !== '' && $ville !== '') {
-                $stmt = $pdo->prepare("SELECT Id_LaPoste, CodePostal, Nom FROM laposte WHERE CodePostal = ? AND UPPER(REPLACE(REPLACE(Nom, '-', ' '), '''', ' ')) = ? LIMIT 1");
-                $stmt->execute([$cp, $ville]);
-                $row = $stmt->fetch();
-                if ($row) {
-                    ob_end_clean();
-                    echo json_encode(['ok' => true, 'id_laposte' => $row['Id_LaPoste'], 'cp' => $row['CodePostal'], 'ville' => $row['Nom']]);
-                    exit;
-                }
-            }
-
-            // 2) CP seul → toutes les villes correspondantes
-            if ($cp !== '') {
-                $stmt = $pdo->prepare('SELECT Id_LaPoste, CodePostal, Nom FROM laposte WHERE CodePostal = ? ORDER BY Nom');
-                $stmt->execute([$cp]);
-                $rows = $stmt->fetchAll();
-                if (count($rows) === 1) {
-                    ob_end_clean();
-                    echo json_encode(['ok' => true, 'id_laposte' => $rows[0]['Id_LaPoste'], 'cp' => $rows[0]['CodePostal'], 'ville' => $rows[0]['Nom']]);
-                    exit;
-                }
-                if (count($rows) > 1) {
-                    $sugg = array_map(function($r) { return ['id_laposte' => $r['Id_LaPoste'], 'cp' => $r['CodePostal'], 'ville' => $r['Nom']]; }, $rows);
-                    ob_end_clean();
-                    echo json_encode(['ok' => true, 'multi' => true, 'suggestions' => $sugg]);
-                    exit;
-                }
-            }
-
-            // 3) Ville seule → correspondance partielle
-            if ($ville !== '') {
-                $stmt = $pdo->prepare("SELECT Id_LaPoste, CodePostal, Nom FROM laposte WHERE UPPER(REPLACE(REPLACE(Nom, '-', ' '), '''', ' ')) LIKE ? ORDER BY CodePostal, Nom LIMIT 20");
-                $stmt->execute([$ville . '%']);
-                $rows = $stmt->fetchAll();
-                if (count($rows) === 1) {
-                    ob_end_clean();
-                    echo json_encode(['ok' => true, 'id_laposte' => $rows[0]['Id_LaPoste'], 'cp' => $rows[0]['CodePostal'], 'ville' => $rows[0]['Nom']]);
-                    exit;
-                }
-                if (count($rows) > 1) {
-                    $sugg = array_map(function($r) { return ['id_laposte' => $r['Id_LaPoste'], 'cp' => $r['CodePostal'], 'ville' => $r['Nom']]; }, $rows);
-                    ob_end_clean();
-                    echo json_encode(['ok' => true, 'multi' => true, 'suggestions' => $sugg]);
-                    exit;
-                }
-            }
-
-            ob_end_clean();
-            echo json_encode(['ok' => false, 'msg' => 'Aucune commune trouvée.']);
-            exit;
-        }
-
         // ── Importer Excel ─────────────────────────────────────────────────
         if ($action === 'importer_excel') {
             if (empty($_FILES['fichier'])) {
@@ -1331,7 +1267,7 @@ function rechercherLaPoste(idx) {
     const ville = String(lignes[idx].ville ?? '').trim();
     if (cp === '' && ville === '') return;
 
-    $.post('jugearbitre.php', { action: 'recherche_laposte', cp, ville }, function (res) {
+    $.post('../ajax/laposte.php', { action: 'recherche_laposte', cp, ville }, function (res) {
         if (!res.ok && !res.multi) {
             // Non trouvé : effacer id_laposte, garder les valeurs saisies, fond rouge
             lignes[idx].id_laposte = null;
@@ -1804,7 +1740,7 @@ function njaRechercherLaPoste() {
     const ville = $('#nja-ville').val().trim();
     if (cp === '' && ville === '') { njaIdLaPoste = null; return; }
 
-    $.post('jugearbitre.php', { action: 'recherche_laposte', cp, ville }, function (res) {
+    $.post('../ajax/laposte.php', { action: 'recherche_laposte', cp, ville }, function (res) {
         $('#nja-suggestions').hide();
         $('#nja-suggestions-list').empty();
         if (!res.ok && !res.multi) {

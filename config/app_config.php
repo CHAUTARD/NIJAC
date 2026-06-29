@@ -28,6 +28,52 @@ function jsonError(string $msg, int $httpCode = 200): never
  */
 function initTableConfiguration(\PDO $pdo): void
 {
+    // Ajout colonne Gentile sur table region (gentilé de la région, ex: "Normand(e)")
+    $cols = array_column($pdo->query('SHOW COLUMNS FROM region')->fetchAll(\PDO::FETCH_ASSOC), 'Field');
+    if (!in_array('Gentile', $cols)) {
+        $pdo->exec("ALTER TABLE region ADD COLUMN Gentile VARCHAR(100) NULL AFTER nom");
+        $pdo->exec("
+            UPDATE region SET Gentile = CASE nom
+                WHEN 'Normandie'              THEN 'Normand(e)'
+                WHEN 'Île-de-France'          THEN 'Francilien(ne)'
+                WHEN 'Bretagne'               THEN 'Breton(ne)'
+                WHEN 'Pays de la Loire'       THEN 'Ligérien(ne)'
+                WHEN 'Nouvelle-Aquitaine'     THEN 'Néo-Aquitain(e)'
+                WHEN 'Occitanie'              THEN 'Occitan(e)'
+                WHEN 'Auvergne-Rhône-Alpes'  THEN 'Auvergnat(e)-Rhônalpin(e)'
+                WHEN 'Provence-Alpes-Côte d''Azur' THEN 'Provençal(e)'
+                WHEN 'Grand Est'              THEN 'Grand-Estien(ne)'
+                WHEN 'Hauts-de-France'        THEN 'Haut-de-Français(e)'
+                WHEN 'Bourgogne-Franche-Comté' THEN 'Bourguignon(ne)-Franc-Comtois(e)'
+                WHEN 'Centre-Val de Loire'    THEN 'Centrevalloirien(ne)'
+                WHEN 'Corse'                  THEN 'Corse'
+                WHEN 'Guadeloupe'             THEN 'Guadeloupéen(ne)'
+                WHEN 'Martinique'             THEN 'Martiniquais(e)'
+                WHEN 'Guyane'                 THEN 'Guyanais(e)'
+                WHEN 'La Réunion'             THEN 'Réunionnais(e)'
+                WHEN 'Mayotte'                THEN 'Mahorais(e)'
+                ELSE nom
+            END
+        ");
+    }
+}
+
+/**
+ * Retourne le gentilé de la région configurée (clé 'region' dans configuration).
+ * Ex: "Normand(e)" pour "Normandie". Fallback sur le nom de la région.
+ */
+function getRegionGentile(): string
+{
+    $nom = getConfig('region', '');
+    if ($nom === '') return '';
+    try {
+        $stmt = getPDO()->prepare("SELECT COALESCE(Gentile, nom) FROM region WHERE nom = ? LIMIT 1");
+        $stmt->execute([$nom]);
+        $val = $stmt->fetchColumn();
+        return $val !== false ? (string)$val : $nom;
+    } catch (\Throwable $e) {
+        return $nom;
+    }
 }
 
 /**

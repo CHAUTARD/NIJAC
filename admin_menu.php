@@ -189,6 +189,8 @@ $isAdmin      = !empty($u['is_admin']);
         .btn-communes     { background-color: #e0f7fa; }
         .btn-configuration{ background-color: #eceff1; }
         .btn-dbadmin      { background-color: #fce4ec; }
+        .btn-region       { background-color: #e8eaf6; }
+        .btn-departement  { background-color: #e1f5fe; }
 
         /* Code écran en haut à droite de chaque bouton */
         .menu-btn { position: relative; }
@@ -276,6 +278,20 @@ $isAdmin      = !empty($u['is_admin']);
             <span class="btn-desc">Importer les rencontres de divisions Nationales</span>
         </a>
 
+        <a href="region.php" class="menu-btn btn-region">
+            <span class="btn-code">E012</span>
+            <div class="btn-icon"><i class="bi bi-map-fill" style="font-size:6rem;color:#3949ab;"></i></div>
+            <span>Régions</span>
+            <span class="btn-desc">Gérer les régions et leur gentilé</span>
+        </a>
+
+        <a href="departement.php" class="menu-btn btn-departement">
+            <span class="btn-code">E013</span>
+            <div class="btn-icon"><i class="bi bi-geo-alt-fill" style="font-size:6rem;color:#0277bd;"></i></div>
+            <span>Départements</span>
+            <span class="btn-desc">Gérer les départements et leur région</span>
+        </a>
+
         <a href="clean.php" class="menu-btn btn-saison" style="grid-column: 1;">
             <span class="btn-code">E016</span>
             <div class="btn-icon"><img src="img/Nettoyage.png" alt="Saison"></div>
@@ -290,14 +306,16 @@ $isAdmin      = !empty($u['is_admin']);
             <span class="btn-desc">Paramètres généraux de l'application</span>
         </a>
 
-        <?php if (($_SESSION['utilisateur']['nom'] ?? '') === 'CHAUTARD') : ?>
+        <?php if (($_SESSION['utilisateur']['login'] ?? '') === 'CHAUTARD') : ?>
         <a href="fftt_test.php" class="menu-btn btn-configuration">
             <span class="btn-code">E018</span>
             <div class="btn-icon"><i class="bi bi-plug-fill" style="font-size:2rem;color:#0d6efd;"></i></div>
             <span>Test API FFTT</span>
             <span class="btn-desc">Vérifier la connexion à l'API FFTT</span>
         </a>
+        <?php endif; ?>
 
+        <?php if (($_SESSION['utilisateur']['login'] ?? '') === 'CHAUTARD') : ?>
         <a href="db-admin.php" class="menu-btn btn-dbadmin" target="_blank" style="background: repeating-linear-gradient(45deg, #fce4ec, #fce4ec 10px, #ffcdd2 10px, #ffcdd2 20px); border: 2px solid #c62828;">
             <span class="btn-code">E099</span>
             <div class="btn-icon"><img src="img/database.png" alt="Base de données"></div>

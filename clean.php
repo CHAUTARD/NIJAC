@@ -180,7 +180,7 @@ if ($action !== '') {
 
             // Nettoyage dans l'ordre des dépendances FK
             $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
-            foreach (['Nomination', 'Disponible', 'Rencontre', 'Equipe'] as $t) {
+            foreach (['Nomination', 'Disponible', 'Rencontre', 'Equipe_Nationale', 'Equipe'] as $t) {
                 $pdo->exec("DELETE FROM `$t`");
             }
             // JA : désactivation plutôt que suppression
@@ -860,7 +860,7 @@ try {
             </ul>
             <div class="tables-badge">
                 <span>JA</span><span>Disponible</span><span>Equipe</span>
-                <span>Rencontre</span><span>Nomination</span>
+                <span>Equipe_Nationale</span><span>Rencontre</span><span>Nomination</span>
             </div>
         </div>
 
@@ -888,7 +888,7 @@ try {
             </ul>
             <div class="tables-badge">
                 <span>JA</span><span>Disponible</span><span>Equipe</span>
-                <span>Rencontre</span><span>Nomination</span>
+                <span>Equipe_Nationale</span><span>Rencontre</span><span>Nomination</span>
             </div>
         </div>
 
@@ -1114,7 +1114,7 @@ $('#btn-executer').on('click', function () {
     if (!pwdOk) return;
     if (!confirm(
         'DERNIÈRE CONFIRMATION\n\n' +
-        '• Les tables Disponible, Equipe, Rencontre et Nomination seront vidées.\n' +
+        '• Les tables Disponible, Equipe, Equipe_Nationale, Rencontre et Nomination seront vidées.\n' +
         '• Tous les JA seront désactivés (Actif = 0) mais conservés.\n' +
         '• Les fichiers .xlsx du dossier Importation/Rencontres seront supprimés.\n\n' +
         'Une sauvegarde sera effectuée avant le nettoyage.\n\n' +
@@ -1133,7 +1133,7 @@ $('#btn-executer').on('click', function () {
                 `<div class="result-ok">
                    ✅ <strong>Nouvelle phase démarrée !</strong><br>
                    Sauvegarde&nbsp;: <code>${res.fichier}</code> (${res.lignes} lignes)<br>
-                   Tables Disponible, Equipe, Rencontre, Nomination vidées.<br>
+                   Tables Disponible, Equipe, Equipe_Nationale, Rencontre, Nomination vidées.<br>
                    ${res.ja_desactives} JA désactivé(s) (conservés en base).<br>
                    ${res.xlsx_supprimes} fichier(s) .xlsx supprimé(s) de Importation/Rencontres.
                  </div>`

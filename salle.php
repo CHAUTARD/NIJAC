@@ -79,60 +79,6 @@ if ($action !== '') {
             exit;
         }
 
-        // ── Résolution CP → laposte ───────────────────────────────────────
-        if ($action === 'recherche_laposte') {
-            $cp    = trim($_POST['cp']    ?? '');
-            $ville = mb_strtoupper(trim($_POST['ville'] ?? ''), 'UTF-8');
-            // Normalise : tirets et apostrophes → espace, espaces multiples réduits
-            $villeN = preg_replace('/\s+/', ' ', str_replace(['-', "'", "'"], ' ', $ville));
-
-            if ($cp === '' && $ville === '') {
-                ob_end_clean(); echo json_encode(['ok' => false, 'msg' => 'CP et ville vides.']); exit;
-            }
-            if ($cp !== '' && $ville !== '') {
-                $stmt = $pdo->prepare("SELECT Id_LaPoste, CodePostal, Nom FROM laposte WHERE CodePostal=? AND UPPER(REPLACE(REPLACE(REPLACE(Nom,'-',' '),''',' '),'\\'','  ')) LIKE ? LIMIT 1");
-                $stmt->execute([$cp, $villeN . '%']);
-                $row = $stmt->fetch();
-                if ($row) { ob_end_clean(); echo json_encode(['ok' => true, 'id_laposte' => $row['Id_LaPoste'], 'cp' => $row['CodePostal'], 'ville' => $row['Nom']]); exit; }
-            }
-            if ($cp !== '') {
-                $stmt = $pdo->prepare('SELECT Id_LaPoste, CodePostal, Nom FROM laposte WHERE CodePostal=? ORDER BY Nom');
-                $stmt->execute([$cp]);
-                $rows = $stmt->fetchAll();
-                if (count($rows) === 1) { ob_end_clean(); echo json_encode(['ok' => true, 'id_laposte' => $rows[0]['Id_LaPoste'], 'cp' => $rows[0]['CodePostal'], 'ville' => $rows[0]['Nom']]); exit; }
-                if (count($rows) > 1) {
-                    $sugg = array_map(fn($r) => ['id_laposte' => $r['Id_LaPoste'], 'cp' => $r['CodePostal'], 'ville' => $r['Nom']], $rows);
-                    ob_end_clean(); echo json_encode(['ok' => true, 'multi' => true, 'suggestions' => $sugg]); exit;
-                }
-            }
-            if ($ville !== '') {
-                $stmt = $pdo->prepare("SELECT Id_LaPoste, CodePostal, Nom FROM laposte WHERE UPPER(REPLACE(REPLACE(Nom,'-',' '),''',' ')) LIKE ? ORDER BY CodePostal, Nom LIMIT 20");
-                $stmt->execute([$villeN . '%']);
-                $rows = $stmt->fetchAll();
-                if (count($rows) === 1) { ob_end_clean(); echo json_encode(['ok' => true, 'id_laposte' => $rows[0]['Id_LaPoste'], 'cp' => $rows[0]['CodePostal'], 'ville' => $rows[0]['Nom']]); exit; }
-                if (count($rows) > 1) {
-                    $sugg = array_map(fn($r) => ['id_laposte' => $r['Id_LaPoste'], 'cp' => $r['CodePostal'], 'ville' => $r['Nom']], $rows);
-                    ob_end_clean(); echo json_encode(['ok' => true, 'multi' => true, 'suggestions' => $sugg]); exit;
-                }
-            }
-            ob_end_clean(); echo json_encode(['ok' => false, 'msg' => 'Commune non trouvée.']); exit;
-        }
-
-        if ($action === 'lookup_laposte') {
-            $cp = trim($_POST['cp'] ?? '');
-            if ($cp === '') { ob_end_clean(); echo json_encode(['ok' => false, 'msg' => 'CP vide.']); exit; }
-            $stmt = $pdo->prepare('SELECT Id_LaPoste, CodePostal, Nom FROM laposte WHERE CodePostal = ? ORDER BY Nom');
-            $stmt->execute([$cp]);
-            $rows = $stmt->fetchAll();
-            ob_end_clean();
-            echo json_encode(['ok' => true, 'communes' => array_map(fn($r) => [
-                'id'  => $r['Id_LaPoste'],
-                'cp'  => $r['CodePostal'],
-                'nom' => $r['Nom'],
-            ], $rows)]);
-            exit;
-        }
-
         // ── Max Id_Salle actuel ────────────────────────────────────────────
         if ($action === 'max_id') {
             $max = (int)$pdo->query('SELECT COALESCE(MAX(Id_Salle), 0) FROM Salle')->fetchColumn();
@@ -939,7 +885,7 @@ function mcvRechercher() {
     if (!cp && !ville) return;
     $('#mcv-suggestions').hide();
     $('#mcv-suggestions-list').empty();
-    $.post('salle.php', { action: 'recherche_laposte', cp, ville }, function (res) {
+    $.post('ajax/laposte.php', { action: 'recherche_laposte', cp, ville }, function (res) {
         if (!res.ok) {
             $('#mcv-msg').text(res.msg ?? 'Commune non trouvée.').css('color', '#c00');
             mcvIdLaPoste = null;

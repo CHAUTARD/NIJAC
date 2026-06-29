@@ -11,6 +11,8 @@
 | E009 | Gestion des utilisateurs | `utilisateur.php` | Création / modification / suppression de comptes · Rôles : Administrateur ou Nominateur · Affectation d'un département · Activation / désactivation · Forçage du changement de mot de passe |
 | E010 | Gestion des divisions | `division.php` | Définition des divisions sportives et de leur niveau hiérarchique · Utilisé pour classer les rencontres et orienter les règles de nomination |
 | E011 | Import des rencontres | `import_rencontres.php` | Import de fichiers Excel FFTT déposés dans `/Importation/` · Alimentation de la table rencontre (upsert) · Signalement des doublons et données manquantes (salles, clubs) |
+| E012 | Régions | `region.php` | CRUD des régions (code, nom, gentilé, chef-lieu) · Utilisé pour la configuration régionale de l'application |
+| E013 | Départements | `departement.php` | CRUD des départements (code, nom, région) · Liaison FK vers la table region |
 | E015 | Configuration générale | `configuration.php` | Paramètres applicatifs stockés dans la table `configuration` · État du logiciel : Opérationnel / Développement · En mode Développement, tous les emails sont redirigés vers l'adresse de test |
 | E016 | Nettoyage / Saison | `clean.php` | Sauvegarde SQL de la saison (fichier dans `/SQL/`) · Désactivation des JA (Actif = 0) · Vidage des tables Disponible, Equipe, Rencontre, Nomination · Restauration depuis un fichier de sauvegarde avec confirmation par mot de passe admin |
 | E017 | Import Rencontres Nationales | `import_rencontres_nat.php` | Import fichier Excel FFTT à 6 feuilles (N1M, N2M, N3M, N1D, N2D) · Correspondance équipe nationale → club via la table `equipe_nationale` |

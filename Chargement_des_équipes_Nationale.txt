@@ -1,0 +1,27 @@
+Chargement des équipes Nationale
+--------------------------------
+
+Étape 0 — Scanner les clubs normands
+Cliquer sur "Scanner les clubs normands".
+
+Récupère tous les clubs de la région via l'API FFTT
+Pour chaque club, détecte les équipes en division nationale (N1M, N2M, N3M, N1F, N2F…)
+Les insère dans equipe_nationale avec leur CodeDept et Id_Club déjà renseignés
+C'est l'étape la plus longue (plusieurs centaines de clubs à parcourir un par un).
+
+Étape 1 — Charger depuis FFTT (optionnelle / complémentaire)
+Cliquer sur "Charger depuis FFTT".
+
+Récupère les équipes nationales via les épreuves de la ligue
+Complète la table pour les équipes hors Normandie qui seraient adversaires
+Étape 2 — Associer les équipes hors région
+Cliquer sur "Assigner Hors Région".
+
+Crée automatiquement des clubs fictifs (HR076, HR014…) pour les équipes dont le CodeDept n'est pas normand
+Utile si l'étape 1 a ramené des équipes sans club associé
+Étape 3 — Importer les rencontres
+Cliquer sur "Importer les rencontres".
+
+Ne fonctionne que si toutes les équipes recevantes normandes ont un Id_Club renseigné
+Importe uniquement les rencontres où l'équipe à domicile est un club normand
+En pratique, si vous ne voulez que les équipes normandes, l'étape 0 suffit — elle remplit equipe_nationale avec le club et le département déjà associés, sans avoir besoin des étapes 1 et 2.
