@@ -310,9 +310,9 @@ if ($action !== '') {
             $stmtClubIns    = $pdo->prepare('INSERT IGNORE INTO club (Id_Club, Nom) VALUES (?,?)');
             $stmtClubByNom  = $pdo->prepare('SELECT Id_Club FROM club WHERE Nom=? LIMIT 1');
             $stmtClubById   = $pdo->prepare('SELECT Id_Club FROM club WHERE Id_Club=? LIMIT 1');
-            $stmtNatChk     = $pdo->prepare('SELECT 1 FROM equipe_nationale WHERE Nom=? AND Division=? LIMIT 1');
+            $stmtNatChk     = $pdo->prepare('SELECT 1 FROM equipe_nationale WHERE Nom=? AND id_division=? LIMIT 1');
             $stmtNatIns     = $pdo->prepare(
-                'INSERT INTO equipe_nationale (Nom, Division, Poule, Rang, Id_Club, Id_Equipe) VALUES (?,?,?,0,?,?)'
+                'INSERT INTO equipe_nationale (Nom, id_division, Poule, Rang, Id_Club, Id_Equipe) VALUES (?,?,?,0,?,?)'
             );
             $stmtEqChk   = $pdo->prepare('SELECT Id_Equipe FROM equipe WHERE Nom=? AND Id_Division=? LIMIT 1');
             $stmtEqIns   = $pdo->prepare('INSERT INTO equipe (Nom, Id_Division, Id_Club, JAdemande) VALUES (?,?,?,0)');
@@ -397,9 +397,9 @@ if ($action !== '') {
                 // Alimenter equipe_nationale si division Nationale (N1M, N2M…)
                 if ($isNationale) {
                     foreach ([[$libDom,$clubDom,$idDom], [$libExt,$clubExt,$idExt]] as [$lib,$club,$idEq]) {
-                        $stmtNatChk->execute([$lib, $divCode]);
+                        $stmtNatChk->execute([$lib, $idDivNijac]);
                         if (!$stmtNatChk->fetchColumn()) {
-                            $stmtNatIns->execute([$lib, $divCode, $pouleNum, $club, $idEq]);
+                            $stmtNatIns->execute([$lib, $idDivNijac, $pouleNum, $club, $idEq]);
                             $stats['log'][] = ['type'=>'nationale','op'=>'nat. ajoutée','val'=>"$divCode P$pouleNum — $lib"];
                         }
                     }

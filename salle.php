@@ -13,6 +13,7 @@ session_start();
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/csrf.php';
 require_once __DIR__ . '/config/app_config.php';
+require_once __DIR__ . '/config/helpers.php';
 require_once __DIR__ . '/vendor/autoload.php';
 
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -119,16 +120,8 @@ if ($action !== '') {
             $sheet       = $spreadsheet->getActiveSheet();
             $maxRow      = $sheet->getHighestRow();
 
-            // Préparer le lookup LaPoste (CodePostal + Nom → Id_LaPoste)
-            $stmtLaposte = $pdo->prepare(
-                'SELECT Id_LaPoste FROM laposte WHERE CodePostal = ? AND Nom = ? LIMIT 1'
-            );
-            $stmtLaposteCp = $pdo->prepare(
-                'SELECT Id_LaPoste FROM laposte WHERE CodePostal = ? LIMIT 1'
-            );
-
-            $lignes      = [];
-            $clubsVus    = []; // suivi : premier club → salle principale
+            $lignes   = [];
+            $clubsVus = []; // suivi : premier club → salle principale
             // Colonnes : A=Id_Club, AN=Nom, AP+AQ=Adresse, AR=CodePostal, AS=Ville
             for ($row = 3; $row <= $maxRow; $row++) {
                 $idClub  = trim((string)$sheet->getCell('A'  . $row)->getValue());
@@ -138,23 +131,10 @@ if ($action !== '') {
                 $cp      = trim((string)$sheet->getCell('AR' . $row)->getValue());
                 $ville   = trim((string)$sheet->getCell('AS' . $row)->getValue());
 
-                // Pas d'enregistrement vide
                 if ($nom === '') continue;
 
-                // Concaténer adresse
-                $adresse = trim($adr1 . ($adr1 !== '' && $adr2 !== '' ? ' ' : '') . $adr2) ?: null;
-
-                // Résoudre Id_LaPoste
-                $idLaposte = null;
-                if ($cp !== '') {
-                    $stmtLaposte->execute([$cp, mb_strtoupper($ville, 'UTF-8')]);
-                    $found = $stmtLaposte->fetchColumn();
-                    if ($found === false) {
-                        $stmtLaposteCp->execute([$cp]);
-                        $found = $stmtLaposteCp->fetchColumn();
-                    }
-                    $idLaposte = $found !== false ? (int)$found : null;
-                }
+                $adresse   = trim($adr1 . ($adr1 !== '' && $adr2 !== '' ? ' ' : '') . $adr2) ?: null;
+                $idLaposte = trouverIdLaPoste($pdo, $cp, $ville);
 
                 $idClubInt = $idClub !== '' ? (int)$idClub : null;
 
@@ -326,8 +306,7 @@ if ($action !== '') {
                 exit;
             }
 
-            $stmtExact  = $pdo->prepare("SELECT Id_LaPoste FROM laposte WHERE CodePostal=? AND UPPER(Nom)=? LIMIT 1");
-            $stmtCpOnly = $pdo->prepare('SELECT Id_LaPoste FROM laposte WHERE CodePostal=? LIMIT 2');
+            // Lookup laposte mutualisé via trouverIdLaPoste() (config/helpers.php)
             $stmtUpd    = $pdo->prepare('UPDATE Salle SET Nom=?, Adresse=COALESCE(?,Adresse), Cp=COALESCE(?,Cp), Ville=COALESCE(?,Ville), Id_Laposte=COALESCE(?,Id_Laposte), EstPrincipale=? WHERE Id_Salle=?');
             $stmtIns    = $pdo->prepare('INSERT INTO Salle (Nom, Adresse, Cp, Ville, Id_Laposte, Id_Club, EstPrincipale) VALUES (?,?,?,?,?,?,?)');
 
@@ -354,17 +333,7 @@ if ($action !== '') {
                 $ville      = mb_strtoupper(trim($villes[$i] ?? ''), 'UTF-8');
                 $estPrinc   = ($i === 0) ? 1 : 0;
 
-                // Lookup Id_LaPoste
-                $idLaPoste = null;
-                if ($cp !== '') {
-                    $stmtExact->execute([$cp, $ville]);
-                    $idLaPoste = $stmtExact->fetchColumn() ?: null;
-                    if (!$idLaPoste) {
-                        $stmtCpOnly->execute([$cp]);
-                        $lpRows = $stmtCpOnly->fetchAll();
-                        if (count($lpRows) === 1) $idLaPoste = $lpRows[0]['Id_LaPoste'];
-                    }
-                }
+                $idLaPoste = trouverIdLaPoste($pdo, $cp, $ville);
 
                 // Chercher la salle existante par rang (évite le problème des anciens "Array")
                 $idSalle = $idsSallesExist[$i] ?? null;

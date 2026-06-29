@@ -65,7 +65,8 @@ $nomComplet  = htmlspecialchars(($u['nom'] ?? '') . ' ' . ($u['prenom'] ?? ''));
 $departement = htmlspecialchars($u['id_departement'] ?? '');
 $changeLogin = !empty($u['change_login']);
 $isAdmin     = !empty($u['is_admin']);
-$deptActifs  = getDeptActifs();
+$deptActifs      = getDeptActifs();
+$deptLimitrophes = getDepartementsLimitrophes();
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -180,7 +181,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 </head>
 <body>
 
-<?php $pageIcon = 'bi-calendar2-check'; $pageIconClass = 'fs-5'; $pageTitle = 'Saisie des disponibilités JA'; $pageCode = 'E021'; $backUrl = 'menu.php'; $backBtnClass = 'btn btn-sm btn-light py-0 btn-retour'; require __DIR__ . '/../includes/page_header.php'; ?>
+<?php $pageIcon = 'bi-calendar2-check'; $pageIconClass = 'fs-5 me-2'; $pageTitle = 'Saisie des disponibilités JA'; $pageCode = 'E021'; $backUrl = 'menu.php'; $backBtnClass = 'btn btn-sm btn-light py-0 btn-retour'; require __DIR__ . '/../includes/page_header.php'; ?>
 
 <?php require __DIR__ . '/includes/toolbar.php'; ?>
 
@@ -189,9 +190,18 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
     <label for="sel-dept"><i class="bi bi-map me-1"></i>Département</label>
     <select id="sel-dept" class="form-select form-select-sm w-auto">
         <option value="">— Choisir un département —</option>
+        <optgroup label="Normandie">
         <?php foreach ($deptActifs as $d): ?>
         <option value="<?= (int)$d['code'] ?>" <?= (string)$d['code'] === $departement ? 'selected' : '' ?>><?= (int)$d['code'] ?> — <?= htmlspecialchars($d['nom']) ?></option>
         <?php endforeach; ?>
+        </optgroup>
+        <?php if ($deptLimitrophes): ?>
+        <optgroup label="Départements limitrophes">
+        <?php foreach ($deptLimitrophes as $d): ?>
+        <option value="<?= (int)$d['code'] ?>"><?= (int)$d['code'] ?> — <?= htmlspecialchars($d['nom']) ?> (<?= htmlspecialchars($d['region']) ?>)</option>
+        <?php endforeach; ?>
+        </optgroup>
+        <?php endif; ?>
     </select>
     <span id="info-dept"></span>
     <div id="spinner-dept" class="spinner-border spinner-border-sm text-secondary" role="status">
@@ -233,7 +243,13 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 'use strict';
 
 // Libellés des départements
-const DEPT_NOMS = <?= json_encode(array_column($deptActifs, 'nom', 'code'), JSON_UNESCAPED_UNICODE) ?>;
+const DEPT_NOMS = <?= json_encode(
+    array_merge(
+        array_column($deptActifs, 'nom', 'code'),
+        array_column($deptLimitrophes, 'nom', 'code')
+    ),
+    JSON_UNESCAPED_UNICODE
+) ?>;
 
 $(function () {
     const deptInitial = $('#sel-dept').val();

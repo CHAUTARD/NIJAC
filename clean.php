@@ -461,9 +461,21 @@ if ($action !== '') {
 
             $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
             $executed = 0;
+            $log      = [];
             foreach ($statements as $stmt) {
                 $pdo->exec($stmt);
                 $executed++;
+                // Résumer le type d'instruction pour le log
+                if (preg_match('/^\s*(DROP TABLE[^;]*)/i', $stmt, $m))
+                    $log[] = ['type' => 'drop',   'label' => rtrim($m[1])];
+                elseif (preg_match('/^\s*CREATE TABLE\s+`?(\w+)`?/i', $stmt, $m))
+                    $log[] = ['type' => 'create', 'label' => 'CREATE TABLE ' . $m[1]];
+                elseif (preg_match('/^\s*INSERT INTO\s+`?(\w+)`?/i', $stmt, $m))
+                    $log[] = ['type' => 'insert', 'label' => 'INSERT INTO ' . $m[1]];
+                elseif (preg_match('/^\s*ALTER TABLE\s+`?(\w+)`?/i', $stmt, $m))
+                    $log[] = ['type' => 'alter',  'label' => 'ALTER TABLE ' . $m[1]];
+                else
+                    $log[] = ['type' => 'other',  'label' => mb_substr(trim($stmt), 0, 60)];
             }
             $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
 
@@ -474,6 +486,7 @@ if ($action !== '') {
                 'table'    => $table,
                 'fichier'  => $nomFichier,
                 'executed' => $executed,
+                'log'      => $log,
             ]);
             exit;
         }
@@ -1440,45 +1453,61 @@ $('#btn-restaurer-table').on('click', function () {
     const table   = $('#select-table-nom').val();
     if (!fichier || !table) return;
 
-    if (!confirm(
-        'RESTAURATION DE TABLE\n\n' +
-        'La table « ' + table + ' » va être\n' +
-        'supprimée puis recréée depuis le fichier\n' +
-        '« ' + fichier + ' ».\n\n' +
-        'Cette opération est IRRÉVERSIBLE.\n\nConfirmer ?'
-    )) return;
+    nijacConfirm(
+        'La table « ' + table + ' » va être supprimée puis recréée\n' +
+        'depuis le fichier « ' + fichier + ' ».\n\n' +
+        'Cette opération est IRRÉVERSIBLE.',
+        function () {
+            spinner(true);
+            setStatus('Restauration de la table ' + table + ' en cours…');
+            $('#btn-restaurer-table').prop('disabled', true);
+            $('#table-restore-result').removeClass('show').html('');
 
-    spinner(true);
-    setStatus('Restauration de la table ' + table + ' en cours…');
-    $(this).prop('disabled', true);
-
-    $.post('clean.php', {
-        action:   'restaurer_table_full',
-        fichier,
-        table,
-        password: $('#pwd-global').val()
-    }, res => {
-        spinner(false);
-        const $box = $('#table-restore-result').addClass('show');
-        if (res.ok) {
-            $box.html(
-                `<div class="result-ok">
-                   ✅ <strong>Table restaurée !</strong><br>
-                   Table&nbsp;: <code>${res.table}</code> — ${res.executed} instruction(s) exécutée(s).<br>
-                   Source&nbsp;: <code>${res.fichier}</code>
-                 </div>`
-            );
-            setStatus('Restauration de la table ' + res.table + ' terminée.');
-        } else {
-            $box.html(`<div class="result-err"><strong>Erreur :</strong> ${res.msg}</div>`);
-            majTableRestoreMeta();
-            setStatus('Erreur restauration table : ' + res.msg);
-        }
-    }, 'json').fail(() => {
-        spinner(false);
-        $('#table-restore-result').addClass('show').html('<div class="result-err"><strong>Erreur réseau.</strong></div>');
-        majTableRestoreMeta();
-    });
+            $.post('clean.php', {
+                action:   'restaurer_table_full',
+                fichier,
+                table,
+                password: $('#pwd-global').val()
+            }, function (res) {
+                spinner(false);
+                const $box = $('#table-restore-result').addClass('show');
+                if (res.ok) {
+                    const icons = { drop: '🗑️', create: '🏗️', insert: '➕', alter: '🔧', other: '▶️' };
+                    let logHtml = '';
+                    if (res.log && res.log.length) {
+                        const lignes = res.log.map(function (l) {
+                            return '<li style="font-family:monospace;font-size:.78rem;">' + (icons[l.type] || '▶️') + ' ' + l.label + '</li>';
+                        }).join('');
+                        logHtml =
+                            '<details style="margin-top:.6rem;">' +
+                            '<summary style="cursor:pointer;font-size:.78rem;color:#555;">Détail des ' + res.executed + ' instruction(s) exécutée(s)</summary>' +
+                            '<ul style="margin:.4rem 0 0 1rem;padding:0;list-style:none;">' + lignes + '</ul>' +
+                            '</details>';
+                    }
+                    $box.html(
+                        '<div class="result-ok">' +
+                        '✅ <strong>Table restaurée avec succès !</strong><br>' +
+                        'Table&nbsp;: <code>' + res.table + '</code> — ' + res.executed + ' instruction(s) exécutée(s).<br>' +
+                        'Source&nbsp;: <code>' + res.fichier + '</code>' +
+                        logHtml +
+                        '</div>'
+                    );
+                    setStatus('✅ Restauration de « ' + res.table + ' » terminée.');
+                    nijacToast('Table « ' + res.table + ' » restaurée avec succès.', 'success', 5000);
+                } else {
+                    $box.html('<div class="result-err"><strong>Erreur :</strong> ' + res.msg + '</div>');
+                    majTableRestoreMeta();
+                    setStatus('Erreur restauration table : ' + res.msg);
+                }
+            }, 'json').fail(function () {
+                spinner(false);
+                $('#table-restore-result').addClass('show').html('<div class="result-err"><strong>Erreur réseau.</strong></div>');
+                majTableRestoreMeta();
+            });
+        },
+        null,
+        { type: 'danger', title: 'Restauration de table', confirmLabel: 'Restaurer' }
+    );
 });
 
 // ═══════════════════════════════════════════════════════════════════

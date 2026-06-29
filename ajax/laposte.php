@@ -11,6 +11,7 @@
 session_start();
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/csrf.php';
+require_once __DIR__ . '/../config/helpers.php';
 
 $authRedirect = '../index.php';
 require __DIR__ . '/../includes/auth_required.php';
@@ -19,13 +20,6 @@ ob_start();
 header('Content-Type: application/json; charset=utf-8');
 csrfVerify(true);
 
-function normaliserVille(string $ville): string
-{
-    $v = mb_strtoupper(trim($ville), 'UTF-8');
-    $v = str_replace(['-', "'", "\u{2019}"], ' ', $v);
-    $v = preg_replace('/\s+/', ' ', $v);
-    return trim($v);
-}
 
 try {
     $pdo    = getPDO();
@@ -41,11 +35,12 @@ try {
         }
 
         // 1) Correspondance CP + début de nom
+        // Les noms laposte sont déjà en majuscules sans accent — on normalise seulement les tirets
         if ($cp !== '' && $ville !== '') {
             $stmt = $pdo->prepare(
                 "SELECT Id_LaPoste, CodePostal, Nom FROM laposte
                  WHERE CodePostal = ?
-                   AND UPPER(REPLACE(REPLACE(REPLACE(Nom,'-',' '),''',' '),'\u{2019}',' ')) LIKE ?
+                   AND REPLACE(REPLACE(Nom, '-', ' '), 'SAINT ', 'ST ') LIKE ?
                  LIMIT 1"
             );
             $stmt->execute([$cp, $ville . '%']);
@@ -77,7 +72,7 @@ try {
         if ($ville !== '') {
             $stmt = $pdo->prepare(
                 "SELECT Id_LaPoste, CodePostal, Nom FROM laposte
-                 WHERE UPPER(REPLACE(REPLACE(REPLACE(Nom,'-',' '),''',' '),'\u{2019}',' ')) LIKE ?
+                 WHERE REPLACE(REPLACE(Nom, '-', ' '), 'SAINT ', 'ST ') LIKE ?
                  ORDER BY CodePostal, Nom LIMIT 20"
             );
             $stmt->execute([$ville . '%']);

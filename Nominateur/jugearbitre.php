@@ -15,6 +15,9 @@ session_start();
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/csrf.php';
 require_once __DIR__ . '/../config/app_config.php';
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use PhpOffice\PhpSpreadsheet\IOFactory;
 
 // ── Sécurité ──────────────────────────────────────────────────────────────────
 $authRedirect = '../index.php';
@@ -24,14 +27,7 @@ $moi     = $_SESSION['utilisateur'];
 $isAdmin = !empty($moi['is_admin']);
 
 // ── Formater un numéro de téléphone ───────────────────────────────────────────
-// Normalise un nom de ville : majuscules, tirets et apostrophes → espace, espaces multiples réduits
-function normaliserVille(string $ville): string
-{
-    $v = mb_strtoupper(trim($ville), 'UTF-8');
-    $v = str_replace(['-', "'", "\u{2019}"], ' ', $v); // tiret, apostrophe droite et typographique → espace
-    $v = preg_replace('/\s+/', ' ', $v);               // espaces multiples → un seul
-    return trim($v);
-}
+require_once __DIR__ . '/../config/helpers.php';
 
 /** Rang du grade : J3=3, J2=2, JA1=1 — plus c'est haut, plus c'est prioritaire */
 function gradeRank(string $grade): int
@@ -73,7 +69,7 @@ if ($action !== '') {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfVerify(true);
 
     // Actions réservées aux administrateurs
-    $actionsAdmin = ['importer_excel', 'sauvegarder', 'supprimer', 'maj_laposte', 'enrichir_fftt', 'get_clubs_dept', 'import_fftt_club'];
+    $actionsAdmin = ['importer_excel', 'sauvegarder', 'supprimer', 'maj_laposte', 'enrichir_fftt', 'get_clubs_dept', 'import_fftt_club', 'scan_fftt_club', 'import_fftt_selected'];
     if (in_array($action, $actionsAdmin) && !$isAdmin) {
         echo json_encode(['ok' => false, 'err' => 'Accès refusé']);
         exit;
@@ -89,6 +85,8 @@ if ($action !== '') {
             'DateValidationFFTT'      => 'VARCHAR(10) NULL DEFAULT NULL',
             'GradeFFTT'               => "VARCHAR(20) NULL DEFAULT NULL COMMENT 'Grade arbitrage retourné par xml_licence_b'",
             'DateEnrichissementFFTT'  => 'DATETIME NULL DEFAULT NULL',
+            'Cp'                      => 'VARCHAR(10) NULL DEFAULT NULL',
+            'Ville'                   => 'VARCHAR(100) NULL DEFAULT NULL',
         ];
         foreach ($ffttCols as $col => $def) {
             if (!in_array($col, $colsJa)) $pdo->exec("ALTER TABLE ja ADD COLUMN $col $def");
@@ -111,9 +109,10 @@ if ($action !== '') {
                         j.Grade, j.Actif, j.Id_Club, j.Id_LaPoste,
                         j.Defiscalisation, j.Nationale, j.NumCompteEBP,
                         j.Classement, j.DateValidationFFTT, j.GradeFFTT, j.DateEnrichissementFFTT,
+                        j.Cp, j.Ville,
                         (SELECT cl.Nom FROM Club cl WHERE cl.Id_Club = j.Id_Club LIMIT 1) AS NomClub,
-                        (SELECT lp.CodePostal FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1) AS CodePostalJA,
-                        (SELECT lp.Nom        FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1) AS VilleJA,
+                        COALESCE(j.Cp,    (SELECT lp.CodePostal FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1)) AS CodePostalJA,
+                        COALESCE(j.Ville, (SELECT lp.Nom        FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1)) AS VilleJA,
                         (SELECT COUNT(*) FROM disponible d WHERE d.Id_JA = j.Id_JA) AS NbDispo
                  FROM ja j
                  ' . $whereDept . '
@@ -163,114 +162,6 @@ if ($action !== '') {
             exit;
         }
 
-        // ── Importer Excel ─────────────────────────────────────────────────
-        if ($action === 'importer_excel') {
-            if (empty($_FILES['fichier'])) {
-                ob_end_clean();
-                echo json_encode(['ok' => false, 'msg' => 'Aucun fichier reçu (post_max_size = ' . ini_get('post_max_size') . ').']);
-                exit;
-            }
-            $uploadErrors = [
-                UPLOAD_ERR_INI_SIZE   => 'Fichier trop volumineux (upload_max_filesize = ' . ini_get('upload_max_filesize') . ').',
-                UPLOAD_ERR_FORM_SIZE  => 'Fichier trop volumineux (limite formulaire).',
-                UPLOAD_ERR_PARTIAL    => 'Transfert incomplet.',
-                UPLOAD_ERR_NO_FILE    => 'Aucun fichier sélectionné.',
-                UPLOAD_ERR_NO_TMP_DIR => 'Dossier temporaire manquant.',
-                UPLOAD_ERR_CANT_WRITE => 'Impossible d\'écrire le fichier temporaire.',
-                UPLOAD_ERR_EXTENSION  => 'Upload bloqué par une extension PHP.',
-            ];
-            if ($_FILES['fichier']['error'] !== UPLOAD_ERR_OK) {
-                $code = $_FILES['fichier']['error'];
-                ob_end_clean();
-                echo json_encode(['ok' => false, 'msg' => $uploadErrors[$code] ?? "Erreur upload (code $code)."]);
-                exit;
-            }
-            if (strtolower(pathinfo($_FILES['fichier']['name'], PATHINFO_EXTENSION)) !== 'xlsx') {
-                ob_end_clean();
-                echo json_encode(['ok' => false, 'msg' => 'Seul le format .xlsx est accepté.']);
-                exit;
-            }
-
-            if (!file_exists(__DIR__ . '/../vendor/autoload.php')) {
-                ob_end_clean();
-                echo json_encode(['ok' => false, 'msg' => 'PhpSpreadsheet non installé sur ce serveur. Contactez l\'administrateur.']);
-                exit;
-            }
-            require_once __DIR__ . '/../vendor/autoload.php';
-            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($_FILES['fichier']['tmp_name']);
-            $sheet       = $spreadsheet->getActiveSheet();
-            $maxRow      = $sheet->getHighestRow();
-
-            // Charger tous les clubs pour enrichir nom_club
-            $clubsMap = [];
-            foreach ($pdo->query('SELECT Id_Club, Nom FROM Club')->fetchAll() as $c) {
-                $clubsMap[$c['Id_Club']] = $c['Nom'];
-            }
-
-            // Charger la table laposte : clé = "CP|VILLE_NORMALISEE" → Id_LaPoste
-            $laposteMap = [];
-            foreach ($pdo->query('SELECT Id_LaPoste, CodePostal, Nom FROM laposte')->fetchAll() as $lp) {
-                $cle = trim($lp['CodePostal']) . '|' . normaliserVille($lp['Nom']);
-                $laposteMap[$cle] = $lp['Id_LaPoste'];
-            }
-
-            $lignes = [];
-            // Colonnes : A=Id_JA, B=Nom, C=Prénom, H=Id_Club, J=Grade,
-            //            N=Actif, R=CodePostal, S=Ville, T=Email, U=Téléphone(alt), V=Téléphone
-            for ($row = 3; $row <= $maxRow; $row++) {
-                $grade = trim((string)$sheet->getCell('J' . $row)->getValue());
-
-                // Filtrer : ne garder que les grades commençant par "JA"
-                if (strncasecmp($grade, 'JA', 2) !== 0) continue;
-
-                $idJA    = trim((string)$sheet->getCell('A' . $row)->getValue());
-                $nom     = trim((string)$sheet->getCell('B' . $row)->getValue());
-                $prenom  = trim((string)$sheet->getCell('C' . $row)->getValue());
-                $idClub  = trim((string)$sheet->getCell('H' . $row)->getValue());
-                $actifRaw= trim((string)$sheet->getCell('N' . $row)->getValue());
-                $cp      = trim((string)$sheet->getCell('R' . $row)->getValue());
-                $ville   = trim((string)$sheet->getCell('S' . $row)->getValue());
-                $email   = trim((string)$sheet->getCell('T' . $row)->getValue());
-                $telU    = trim((string)$sheet->getCell('U' . $row)->getValue());
-                $telV    = trim((string)$sheet->getCell('V' . $row)->getValue());
-
-                if ($nom === '' && $prenom === '') continue;
-
-                // Téléphone : V en priorité, sinon U
-                $tel = $telV !== '' ? $telV : $telU;
-
-                // Actif : "Actif" → 1, tout autre valeur → 0
-                $actif = (strtolower(trim($actifRaw)) === 'actif') ? 1 : 0;
-
-                // Recherche Id_LaPoste par CP + Ville (normalisation majuscules)
-                $idLaPoste = null;
-                if ($cp !== '' && $ville !== '') {
-                    $cle = $cp . '|' . normaliserVille($ville);
-                    $idLaPoste = $laposteMap[$cle] ?? null;
-                }
-
-                $lignes[] = [
-                    'id'              => $idJA !== '' ? (int)$idJA : 0,
-                    'nom'             => mb_strtoupper($nom, 'UTF-8'),
-                    'prenom'          => mb_convert_case($prenom, MB_CASE_TITLE, 'UTF-8'),
-                    'email'           => $email !== '' ? $email : null,
-                    'telephone'       => formaterTelephone($tel !== '' ? $tel : null),
-                    'grade'           => $grade,
-                    'actif'           => $actif,
-                    'id_club'         => $idClub !== '' ? $idClub : null,
-                    'nom_club'        => $idClub !== '' ? ($clubsMap[$idClub] ?? '') : '',
-                    'id_laposte'      => $idLaPoste,
-                    'cp'              => $cp,
-                    'ville'           => $ville,
-                ];
-            }
-
-            $lignes = deduplicateJA($lignes, 'nom', 'prenom', 'grade');
-            ob_end_clean();
-            echo json_encode(['ok' => true, 'data' => $lignes, 'count' => count($lignes)]);
-            exit;
-        }
-
         // ── Clubs filtrés par département ─────────────────────────────────
         if ($action === 'clubs_par_dept') {
             $dept = trim($_POST['dept'] ?? '');
@@ -298,13 +189,15 @@ if ($action !== '') {
         if ($action === 'maj_laposte') {
             $idJA      = (int)($_POST['id_ja'] ?? 0);
             $idLaPoste = ($_POST['id_laposte'] ?? '') !== '' ? (int)$_POST['id_laposte'] : null;
+            $cp        = ($_POST['cp']    ?? '') !== '' ? trim($_POST['cp'])    : null;
+            $ville     = ($_POST['ville'] ?? '') !== '' ? trim($_POST['ville']) : null;
             if ($idJA <= 0) {
                 ob_end_clean();
                 echo json_encode(['ok' => false, 'msg' => 'Id_JA invalide.']);
                 exit;
             }
-            $stmt = $pdo->prepare('UPDATE ja SET Id_LaPoste = ? WHERE Id_JA = ?');
-            $stmt->execute([$idLaPoste, $idJA]);
+            $pdo->prepare('UPDATE ja SET Id_LaPoste = ?, Cp = ?, Ville = ? WHERE Id_JA = ?')
+                ->execute([$idLaPoste, $cp, $ville, $idJA]);
             ob_end_clean();
             echo json_encode(['ok' => true]);
             exit;
@@ -326,13 +219,15 @@ if ($action !== '') {
             $stmtCheck  = $pdo->prepare('SELECT COUNT(*) FROM ja WHERE Id_JA = ?');
             $stmtInsert = $pdo->prepare(
                 'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Telephone, Grade, Actif,
-                                 Id_Club, Id_LaPoste, Defiscalisation, Nationale, NumCompteEBP)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                                 Id_Club, Id_LaPoste, Defiscalisation, Nationale, NumCompteEBP,
+                                 Cp, Ville)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmtUpdate = $pdo->prepare(
                 'UPDATE ja SET Nom=?, Prenom=?, Email=?, Telephone=?, Grade=?,
                                Actif=?, Id_Club=?, Id_LaPoste=?,
-                               Defiscalisation=?, Nationale=?, NumCompteEBP=?
+                               Defiscalisation=?, Nationale=?, NumCompteEBP=?,
+                               Cp=?, Ville=?
                  WHERE Id_JA=?'
             );
 
@@ -349,6 +244,8 @@ if ($action !== '') {
                 $idClub  = ($l['id_club'] ?? '') !== '' ? trim($l['id_club']) : null;
                 $idLap   = $l['id_laposte'] !== '' && $l['id_laposte'] !== null ? (int)$l['id_laposte'] : null;
                 $cpteEbp = $l['num_compte_ebp'] !== '' && $l['num_compte_ebp'] !== null ? trim($l['num_compte_ebp']) : null;
+                $cp      = ($l['cp']    ?? '') !== '' ? trim($l['cp'])    : null;
+                $ville   = ($l['ville'] ?? '') !== '' ? trim($l['ville']) : null;
 
                 if ($nom === '') continue;
 
@@ -356,19 +253,20 @@ if ($action !== '') {
                     if ($id > 0) {
                         $stmtCheck->execute([$id]);
                         if ((int)$stmtCheck->fetchColumn() > 0) {
-                            $stmtUpdate->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $id]);
+                            $stmtUpdate->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $id]);
                             $updates++;
                         } else {
-                            $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp]);
+                            $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville]);
                             $inserts++;
                         }
                     } else {
                         // Pas d'Id_JA → INSERT auto-increment
                         $pdo->prepare(
                             'INSERT INTO ja (Nom, Prenom, Email, Telephone, Grade, Actif,
-                                             Id_Club, Id_LaPoste, Defiscalisation, Nationale, NumCompteEBP)
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                        )->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp]);
+                                             Id_Club, Id_LaPoste, Defiscalisation, Nationale, NumCompteEBP,
+                                             Cp, Ville)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                        )->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville]);
                         $inserts++;
                     }
                 } catch (PDOException $ex) {
@@ -407,13 +305,27 @@ if ($action !== '') {
             $membres = $api->getLicenciesClub($numClub);
             $trouves = [];
             $erreurs = 0;
+            $erreursMsgs = [];
 
             foreach ($membres as $m) {
                 $licence = trim((string)($m['licence'] ?? ''));
                 if ($licence === '') continue;
 
                 try {
-                    $lb  = $api->getLicenceB($licence);
+                    // 1 retry avec pause de 600 ms si l'API throttle
+                    $lb = null;
+                    for ($tentative = 0; $tentative < 2; $tentative++) {
+                        try {
+                            $lb = $api->getLicenceB($licence);
+                            break;
+                        } catch (RuntimeException $e) {
+                            if ($tentative === 0) {
+                                usleep(600_000);
+                            } else {
+                                throw $e;
+                            }
+                        }
+                    }
                     if (!$lb) continue;
 
                     $ja  = trim((string)($lb['ja']  ?? ''));
@@ -431,30 +343,214 @@ if ($action !== '') {
 
                     $gradeNorm = strtoupper($grade);
 
+                    // Actif = saison couverte par la licence encore en cours (1er juillet → 30 juin)
+                    $dateValidStr = trim((string)($lb['validation'] ?? ''));
+                    $actif = 0;
+                    if ($dateValidStr !== '') {
+                        if (preg_match('/(\d{1,2})\/(\d{2})\/(\d{4})/', $dateValidStr, $mv)) {
+                            $validated = new DateTime($mv[3] . '-' . $mv[2] . '-' . str_pad($mv[1], 2, '0', STR_PAD_LEFT));
+                            // La saison se termine le 30 juin : si validée juil-déc → fin = juin N+1, sinon fin = juin N
+                            $seasonEndYear = (int)$validated->format('n') >= 7
+                                ? (int)$validated->format('Y') + 1
+                                : (int)$validated->format('Y');
+                            $actif = new DateTime('today') <= new DateTime($seasonEndYear . '-06-30') ? 1 : 0;
+                        }
+                    }
+
+                    // Résolution CP / Ville / Id_LaPoste depuis les données FFTT
+                    $cpFFTT    = trim((string)($lb['cp']    ?? ''));
+                    $villeFFTT = normaliserVille((string)($lb['ville'] ?? ''));
+                    $idLaPoste  = null;
+                    $cpFinal    = $cpFFTT !== '' ? $cpFFTT : '';   // '' si l'API ne fournit pas de CP
+                    $villeFinal = $villeFFTT;
+                    if ($cpFFTT !== '') {
+                        $stmtLap = $pdo->prepare('SELECT Id_LaPoste, Nom FROM laposte WHERE CodePostal = ? LIMIT 1');
+                        $stmtLap->execute([$cpFFTT]);
+                        $lap = $stmtLap->fetch(PDO::FETCH_ASSOC);
+                        if ($lap) {
+                            $idLaPoste  = $lap['Id_LaPoste'];
+                            $villeFinal = $villeFFTT !== '' ? $villeFFTT : normaliserVille((string)($lap['Nom'] ?? ''));
+                        }
+                    }
+
                     // Upsert dans ja (Id_JA = numéro de licence)
                     $exists = $pdo->prepare('SELECT Id_JA FROM ja WHERE Id_JA = ?');
                     $exists->execute([$licence]);
                     if ($exists->fetchColumn()) {
-                        // Mise à jour du grade FFTT seulement — CP/Ville préservés
+                        // Mise à jour du grade FFTT, Actif, + CP/Ville si encore vides
                         $pdo->prepare(
-                            'UPDATE ja SET GradeFFTT=?, DateEnrichissementFFTT=NOW() WHERE Id_JA=?'
-                        )->execute([$gradeNorm, $licence]);
+                            'UPDATE ja SET GradeFFTT=?, Actif=?, DateEnrichissementFFTT=NOW(),
+                             Cp = COALESCE(Cp, ?), Ville = COALESCE(Ville, ?), Id_LaPoste = COALESCE(Id_LaPoste, ?)
+                             WHERE Id_JA=?'
+                        )->execute([$gradeNorm, $actif, $cpFinal, $villeFinal, $idLaPoste, $licence]);
                         $trouves[] = ['licence' => $licence, 'nom' => $nom, 'prenom' => $prenom, 'grade' => $gradeNorm, 'statut' => 'mis_a_jour'];
                     } else {
                         // Insertion d'un nouveau JA
                         $pdo->prepare(
-                            'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Grade, GradeFFTT, Actif, Id_Club, Defiscalisation, Nationale, DateEnrichissementFFTT)
-                             VALUES (?, ?, ?, ?, ?, ?, 1, ?, 0, 0, NOW())'
-                        )->execute([$licence, $nom, $prenom, $email ?: null, $gradeNorm, $gradeNorm, $idClub]);
+                            'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Grade, GradeFFTT, Actif, Id_Club,
+                                             Defiscalisation, Nationale, DateEnrichissementFFTT,
+                                             Id_LaPoste, Cp, Ville)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NOW(), ?, ?, ?)'
+                        )->execute([$licence, $nom, $prenom, $email ?: null, $gradeNorm, $gradeNorm, $actif, $idClub,
+                                    $idLaPoste, $cpFinal, $villeFinal]);
                         $trouves[] = ['licence' => $licence, 'nom' => $nom, 'prenom' => $prenom, 'grade' => $gradeNorm, 'statut' => 'nouveau'];
                     }
-                } catch (RuntimeException) {
+                } catch (RuntimeException $e) {
                     $erreurs++;
+                    $msg = $e->getMessage();
+                    error_log("[NIJAC] import_fftt_club $numClub licence=$licence : $msg");
+                    if (count($erreursMsgs) < 10) {
+                        $erreursMsgs[] = "[$licence] " . mb_substr($msg, 0, 120);
+                    }
                 }
             }
 
             ob_end_clean();
-            echo json_encode(['ok' => true, 'trouves' => $trouves, 'total_membres' => count($membres), 'erreurs' => $erreurs]);
+            echo json_encode(['ok' => true, 'trouves' => $trouves, 'total_membres' => count($membres), 'erreurs' => $erreurs, 'erreurs_msgs' => $erreursMsgs]);
+            exit;
+        }
+
+        // ── Scanner un club sans écriture en base (pour sélection manuelle) ──
+        if ($action === 'scan_fftt_club') {
+            $numClub = trim($_POST['num_club'] ?? '');
+            if ($numClub === '') { ob_end_clean(); echo json_encode(['ok' => false, 'msg' => 'Numéro de club manquant.']); exit; }
+
+            set_time_limit(180);
+            $api     = getFfttApi();
+            $membres = $api->getLicenciesClub($numClub);
+            $trouves = [];
+            $erreurs = 0;
+            $erreursMsgs = [];
+
+            foreach ($membres as $m) {
+                $licence = trim((string)($m['licence'] ?? ''));
+                if ($licence === '') continue;
+
+                try {
+                    $lb = null;
+                    for ($tentative = 0; $tentative < 2; $tentative++) {
+                        try {
+                            $lb = $api->getLicenceB($licence);
+                            break;
+                        } catch (RuntimeException $e) {
+                            if ($tentative === 0) { usleep(600_000); } else { throw $e; }
+                        }
+                    }
+                    if (!$lb) continue;
+
+                    $ja  = trim((string)($lb['ja']  ?? ''));
+                    $arb = trim((string)($lb['arb'] ?? ''));
+                    if ($ja === '' && $arb === '') continue;
+                    $grade = $ja ?: $arb;
+                    if (!preg_match('/^JA[123]$/i', $grade)) continue;
+
+                    $gradeNorm  = strtoupper($grade);
+                    $nom        = mb_strtoupper(trim((string)($lb['nom']    ?? '')), 'UTF-8');
+                    $prenom     = trim((string)($lb['prenom'] ?? ''));
+                    $email      = trim((string)($lb['email']  ?? ''));
+                    $idClub     = trim((string)($lb['numclub'] ?? $numClub));
+
+                    $dateValidStr = trim((string)($lb['validation'] ?? ''));
+                    $actif = 0;
+                    if ($dateValidStr !== '' && preg_match('/(\d{1,2})\/(\d{2})\/(\d{4})/', $dateValidStr, $mv)) {
+                        $validated = new DateTime($mv[3] . '-' . $mv[2] . '-' . str_pad($mv[1], 2, '0', STR_PAD_LEFT));
+                        $seasonEndYear = (int)$validated->format('n') >= 7
+                            ? (int)$validated->format('Y') + 1
+                            : (int)$validated->format('Y');
+                        $actif = new DateTime('today') <= new DateTime($seasonEndYear . '-06-30') ? 1 : 0;
+                    }
+
+                    $cpFFTT    = trim((string)($lb['cp']    ?? ''));
+                    $villeFFTT = normaliserVille((string)($lb['ville'] ?? ''));
+                    $idLaPoste  = null;
+                    $cpFinal    = $cpFFTT;
+                    $villeFinal = $villeFFTT;
+                    if ($cpFFTT !== '') {
+                        $stmtLap = $pdo->prepare('SELECT Id_LaPoste, Nom FROM laposte WHERE CodePostal = ? LIMIT 1');
+                        $stmtLap->execute([$cpFFTT]);
+                        $lap = $stmtLap->fetch(PDO::FETCH_ASSOC);
+                        if ($lap) {
+                            $idLaPoste  = $lap['Id_LaPoste'];
+                            $villeFinal = $villeFFTT !== '' ? $villeFFTT : normaliserVille((string)($lap['Nom'] ?? ''));
+                        }
+                    }
+
+                    $stmtEx = $pdo->prepare('SELECT Id_JA FROM ja WHERE Id_JA = ?');
+                    $stmtEx->execute([$licence]);
+                    $enBase = (bool)$stmtEx->fetchColumn();
+
+                    $trouves[] = [
+                        'licence'    => $licence,
+                        'nom'        => $nom,
+                        'prenom'     => $prenom,
+                        'email'      => $email,
+                        'grade'      => $gradeNorm,
+                        'actif'      => $actif,
+                        'id_club'    => $idClub,
+                        'id_laposte' => $idLaPoste,
+                        'cp'         => $cpFinal,
+                        'ville'      => $villeFinal,
+                        'en_base'    => $enBase,
+                    ];
+                } catch (RuntimeException $e) {
+                    $erreurs++;
+                    $msg = $e->getMessage();
+                    error_log("[NIJAC] scan_fftt_club $numClub licence=$licence : $msg");
+                    if (count($erreursMsgs) < 10) {
+                        $erreursMsgs[] = "[$licence] " . mb_substr($msg, 0, 120);
+                    }
+                }
+            }
+
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'trouves' => $trouves, 'total_membres' => count($membres), 'erreurs' => $erreurs, 'erreurs_msgs' => $erreursMsgs]);
+            exit;
+        }
+
+        // ── Importer les JAs sélectionnés (après scan limitrophe) ─────────────
+        if ($action === 'import_fftt_selected') {
+            $licences = json_decode($_POST['licences'] ?? '[]', true);
+            if (!is_array($licences)) { ob_end_clean(); echo json_encode(['ok' => false, 'msg' => 'Données invalides.']); exit; }
+
+            $nouveaux = 0;
+            $maj      = 0;
+
+            foreach ($licences as $ja) {
+                $licence    = trim((string)($ja['licence']    ?? ''));
+                $nom        = trim((string)($ja['nom']        ?? ''));
+                $prenom     = trim((string)($ja['prenom']     ?? ''));
+                $email      = trim((string)($ja['email']      ?? '')) ?: null;
+                $grade      = trim((string)($ja['grade']      ?? ''));
+                $actif      = (int)($ja['actif']              ?? 0);
+                $idClub     = trim((string)($ja['id_club']    ?? ''));
+                $idLaPoste  = $ja['id_laposte'] ?? null;
+                $cpFinal    = trim((string)($ja['cp']         ?? ''));
+                $villeFinal = trim((string)($ja['ville']      ?? ''));
+
+                if ($licence === '' || $grade === '') continue;
+
+                $stmtEx = $pdo->prepare('SELECT Id_JA FROM ja WHERE Id_JA = ?');
+                $stmtEx->execute([$licence]);
+                if ($stmtEx->fetchColumn()) {
+                    $pdo->prepare(
+                        'UPDATE ja SET GradeFFTT=?, Actif=?, DateEnrichissementFFTT=NOW(),
+                         Cp = COALESCE(Cp, ?), Ville = COALESCE(Ville, ?), Id_LaPoste = COALESCE(Id_LaPoste, ?)
+                         WHERE Id_JA=?'
+                    )->execute([$grade, $actif, $cpFinal ?: null, $villeFinal ?: null, $idLaPoste, $licence]);
+                    $maj++;
+                } else {
+                    $pdo->prepare(
+                        'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Grade, GradeFFTT, Actif, Id_Club,
+                                         Defiscalisation, Nationale, DateEnrichissementFFTT,
+                                         Id_LaPoste, Cp, Ville)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NOW(), ?, ?, ?)'
+                    )->execute([$licence, $nom, $prenom, $email, $grade, $grade, $actif, $idClub, $idLaPoste, $cpFinal, $villeFinal]);
+                    $nouveaux++;
+                }
+            }
+
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'nouveaux' => $nouveaux, 'maj' => $maj]);
             exit;
         }
 
@@ -492,6 +588,89 @@ if ($action !== '') {
                 'nom_fftt'   => ($lic['nom']    ?? '') . ' ' . ($lic['prenom'] ?? ''),
                 'club_fftt'  => $lic['nomclub'] ?? '',
             ]);
+            exit;
+        }
+
+        // ── Importer depuis fichier XLSX FFTT (102_*.xlsx) ───────────────────
+        if ($action === 'importer_excel') {
+            if (empty($_FILES['fichier'])) {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => 'Aucun fichier reçu (post_max_size = ' . ini_get('post_max_size') . ').']);
+                exit;
+            }
+            $uploadErrors = [
+                UPLOAD_ERR_INI_SIZE   => 'Fichier trop volumineux (upload_max_filesize = ' . ini_get('upload_max_filesize') . ').',
+                UPLOAD_ERR_FORM_SIZE  => 'Fichier trop volumineux (limite formulaire).',
+                UPLOAD_ERR_PARTIAL    => 'Transfert incomplet.',
+                UPLOAD_ERR_NO_FILE    => 'Aucun fichier sélectionné.',
+                UPLOAD_ERR_NO_TMP_DIR => 'Dossier temporaire manquant.',
+                UPLOAD_ERR_CANT_WRITE => 'Impossible d\'écrire le fichier temporaire.',
+                UPLOAD_ERR_EXTENSION  => 'Upload bloqué par une extension PHP.',
+            ];
+            if ($_FILES['fichier']['error'] !== UPLOAD_ERR_OK) {
+                $code = $_FILES['fichier']['error'];
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => $uploadErrors[$code] ?? "Erreur upload (code $code)."]);
+                exit;
+            }
+            if (strtolower(pathinfo($_FILES['fichier']['name'], PATHINFO_EXTENSION)) !== 'xlsx') {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => 'Seul le format .xlsx est accepté.']);
+                exit;
+            }
+
+            $spreadsheet = IOFactory::load($_FILES['fichier']['tmp_name']);
+            $sheet       = $spreadsheet->getActiveSheet();
+            $maxRow      = $sheet->getHighestRow();
+
+            // Charger tous les clubs pour enrichir nom_club
+            $clubsMap = [];
+            foreach ($pdo->query('SELECT Id_Club, Nom FROM Club')->fetchAll() as $c) {
+                $clubsMap[$c['Id_Club']] = $c['Nom'];
+            }
+
+            $lignes = [];
+            // Colonnes : A=Id_JA, B=Nom, C=Prénom, H=Id_Club, J=Grade,
+            //            N=Actif, R=CodePostal, S=Ville, T=Email, U=Téléphone(alt), V=Téléphone
+            for ($row = 3; $row <= $maxRow; $row++) {
+                $grade = trim((string)$sheet->getCell('J' . $row)->getValue());
+                if (strncasecmp($grade, 'JA', 2) !== 0) continue;
+
+                $idJA    = trim((string)$sheet->getCell('A' . $row)->getValue());
+                $nom     = trim((string)$sheet->getCell('B' . $row)->getValue());
+                $prenom  = trim((string)$sheet->getCell('C' . $row)->getValue());
+                $idClub  = trim((string)$sheet->getCell('H' . $row)->getValue());
+                $actifRaw= trim((string)$sheet->getCell('N' . $row)->getValue());
+                $cp      = trim((string)$sheet->getCell('R' . $row)->getValue());
+                $ville   = trim((string)$sheet->getCell('S' . $row)->getValue());
+                $email   = trim((string)$sheet->getCell('T' . $row)->getValue());
+                $telU    = trim((string)$sheet->getCell('U' . $row)->getValue());
+                $telV    = trim((string)$sheet->getCell('V' . $row)->getValue());
+
+                if ($nom === '' && $prenom === '') continue;
+
+                $tel   = $telV !== '' ? $telV : $telU;
+                $actif = strtolower(trim($actifRaw)) === 'actif' ? 1 : 0;
+
+                $lignes[] = [
+                    'id'         => $idJA !== '' ? (int)$idJA : 0,
+                    'nom'        => mb_strtoupper($nom, 'UTF-8'),
+                    'prenom'     => mb_convert_case($prenom, MB_CASE_TITLE, 'UTF-8'),
+                    'email'      => $email !== '' ? $email : null,
+                    'telephone'  => formaterTelephone($tel !== '' ? $tel : null),
+                    'grade'      => $grade,
+                    'actif'      => $actif,
+                    'id_club'    => $idClub !== '' ? $idClub : null,
+                    'nom_club'   => $idClub !== '' ? ($clubsMap[$idClub] ?? '') : '',
+                    'id_laposte' => null,   // résolu côté JS avec progression
+                    'cp'         => $cp,
+                    'ville'      => $ville,
+                ];
+            }
+
+            $lignes = deduplicateJA($lignes, 'nom', 'prenom', 'grade');
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'data' => $lignes, 'count' => count($lignes)]);
             exit;
         }
 
@@ -736,6 +915,9 @@ $deptLimitrophes  = getDepartementsLimitrophes();
 
 <?php require __DIR__ . '/includes/toolbar.php'; ?>
 
+<!-- Input file caché pour import XLSX JA -->
+<input type="file" id="file-input" accept=".xlsx" style="display:none">
+
 <!-- Spinner -->
 <div id="spinner">
     <div class="spinner-border text-light" style="width:3rem;height:3rem;"></div>
@@ -751,9 +933,6 @@ $deptLimitrophes  = getDepartementsLimitrophes();
             <i class="bi bi-chevron-down caret"></i>
         </button>
         <div class="win-menu-drop" id="win-menu-drop">
-            <button class="drop-item" id="btn-importer">
-                <i class="bi bi-file-earmark-arrow-up"></i>Importer Excel 102_*.xlsx
-            </button>
             <button class="drop-item" id="btn-maj-bdd">
                 <i class="bi bi-database-fill-up"></i>Mettre à jour la Base de données
             </button>
@@ -763,6 +942,9 @@ $deptLimitrophes  = getDepartementsLimitrophes();
             </button>
             <button class="drop-item" id="btn-import-fftt-dept" data-bs-toggle="modal" data-bs-target="#modal-import-fftt">
                 <i class="bi bi-cloud-arrow-down-fill"></i>Importer JA1/JA2/JA3 depuis FFTT (par département)
+            </button>
+            <button class="drop-item" id="btn-importer">
+                <i class="bi bi-file-earmark-spreadsheet"></i>Importer depuis fichier FFTT (102_*.xlsx)
             </button>
             <hr class="drop-sep">
             <button class="drop-item green" id="btn-nouveau-ja">
@@ -774,7 +956,6 @@ $deptLimitrophes  = getDepartementsLimitrophes();
             </a>
         </div>
     </div>
-    <input type="file" id="file-input" accept=".xlsx" style="display:none">
     <?php endif; ?>
     <span id="lbl-count">0 JA</span>
     <div id="toggle-actif" style="margin-left:.5rem">
@@ -837,9 +1018,70 @@ $deptLimitrophes  = getDepartementsLimitrophes();
 <!-- Toast -->
 <div id="toast-container"></div>
 
+<!-- Modale progression import Excel -->
+<div class="modal fade" id="modal-import-excel" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2" style="background:#198754;color:#fff;">
+        <h6 class="modal-title mb-0"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Import XLSX — Juges-Arbitres</h6>
+      </div>
+      <div class="modal-body pb-2">
+        <div class="mb-3">
+          <div class="d-flex justify-content-between small mb-1">
+            <span id="xlsx-progress-label">Envoi du fichier…</span>
+            <span id="xlsx-progress-pct">0 %</span>
+          </div>
+          <div class="progress" style="height:20px;">
+            <div id="xlsx-progress-bar"
+                 class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                 style="width:0%;transition:width .3s ease;"></div>
+          </div>
+        </div>
+        <div id="xlsx-log"
+             style="max-height:260px;overflow-y:auto;font-size:.78rem;
+                    background:#f8fafc;border:1px solid #e0e8f0;
+                    border-radius:4px;padding:.5rem;font-family:monospace;"></div>
+      </div>
+      <div class="modal-footer py-2" id="xlsx-footer" style="display:none;">
+        <button type="button" class="btn btn-success btn-sm" id="btn-xlsx-ok" data-bs-dismiss="modal">
+          <i class="bi bi-check-lg me-1"></i>OK — afficher la grille
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modale CP / Ville -->
+<div class="modal fade" id="modal-cp-ville" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog" style="max-width:480px;">
+    <div class="modal-content">
+      <div class="modal-header py-2" style="background:#0d6efd;color:#fff;">
+        <h6 class="modal-title mb-0"><i class="bi bi-geo-alt-fill me-1"></i>Code postal / Ville</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pb-2">
+        <div class="input-group input-group-sm mb-1">
+          <span class="input-group-text">CP</span>
+          <input type="text" id="mcv-cp" class="form-control" placeholder="76000" maxlength="10" style="max-width:90px">
+          <input type="text" id="mcv-ville" class="form-control text-uppercase" placeholder="ROUEN">
+        </div>
+        <div id="mcv-msg" class="form-text" style="min-height:1.2em;"></div>
+        <div id="mcv-suggestions" style="display:none;">
+          <div class="fw-semibold text-primary small mb-1">Plusieurs communes — choisissez :</div>
+          <div id="mcv-suggestions-list" class="d-flex flex-wrap gap-1"></div>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+        <button type="button" class="btn btn-success btn-sm" id="btn-mcv-ok"><i class="bi bi-check-lg me-1"></i>Valider</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modale Import FFTT par département -->
 <div class="modal fade" id="modal-import-fftt" tabindex="-1" aria-labelledby="modal-import-fftt-titre" aria-hidden="true" data-bs-backdrop="static">
-  <div class="modal-dialog modal-lg">
+  <div class="modal-dialog modal-xl">
     <div class="modal-content">
       <div class="modal-header" style="background:#0d6efd;color:#fff;">
         <h5 class="modal-title" id="modal-import-fftt-titre"><i class="bi bi-cloud-arrow-down-fill me-2"></i>Importer les JA1 / JA2 / JA3 depuis l'API FFTT</h5>
@@ -876,6 +1118,11 @@ $deptLimitrophes  = getDepartementsLimitrophes();
 
         <!-- Étape 2 : progression -->
         <div id="import-fftt-step2" style="display:none;">
+          <div class="d-flex align-items-center gap-2 mb-2 px-2 py-1 rounded" style="background:#e8f0fe;border:1px solid #c5d5f8;">
+            <i class="bi bi-geo-alt-fill text-primary"></i>
+            <span class="small fw-bold text-primary">Département en cours d'import :</span>
+            <span id="import-fftt-dept-label" class="small fw-semibold text-dark"></span>
+          </div>
           <div class="d-flex justify-content-between align-items-center mb-1">
             <span id="import-fftt-label" class="fw-semibold small text-primary">Récupération des clubs…</span>
             <span id="import-fftt-pct" class="small text-muted">0 %</span>
@@ -887,9 +1134,9 @@ $deptLimitrophes  = getDepartementsLimitrophes();
           <div class="row text-center mb-3">
             <div class="col-3">
               <div class="fw-bold fs-5 text-success" id="cnt-nouveaux">0</div>
-              <div class="small text-muted">Nouveaux JAs</div>
+              <div class="small text-muted" id="cnt-nouveaux-label">Nouveaux JAs</div>
             </div>
-            <div class="col-3">
+            <div class="col-3" id="cnt-maj-col">
               <div class="fw-bold fs-5 text-info" id="cnt-maj">0</div>
               <div class="small text-muted">Mis à jour</div>
             </div>
@@ -904,6 +1151,31 @@ $deptLimitrophes  = getDepartementsLimitrophes();
           </div>
           <!-- Log des JAs trouvés -->
           <div id="import-fftt-log" style="max-height:200px;overflow-y:auto;font-size:.78rem;background:#f8fafc;border:1px solid #e0e8f0;border-radius:4px;padding:.5rem;font-family:monospace;"></div>
+        </div>
+
+        <!-- Étape 2b : sélection des JA (départements limitrophes uniquement) -->
+        <div id="import-fftt-step2b" style="display:none;">
+          <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+            <div>
+              <span class="fw-bold text-primary fs-6">Sélectionnez les JA à importer</span>
+              <span class="text-muted small ms-2" id="import-fftt-2b-sous-titre"></span>
+            </div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-outline-secondary btn-sm" id="btn-2b-tout-cocher"><i class="bi bi-check-all me-1"></i>Tout cocher</button>
+              <button class="btn btn-outline-secondary btn-sm" id="btn-2b-tout-decocher"><i class="bi bi-square me-1"></i>Tout décocher</button>
+            </div>
+          </div>
+          <div id="import-fftt-2b-list" style="max-height:360px;overflow-y:auto;border:1px solid #dee2e6;border-radius:6px;padding:.5rem .75rem;"></div>
+          <div id="import-fftt-2b-erreurs" class="text-danger small mt-1" style="display:none;"></div>
+          <div class="mt-3 d-flex gap-2 align-items-center flex-wrap">
+            <button class="btn btn-success" id="btn-2b-valider">
+              <i class="bi bi-check-lg me-1"></i>Valider l'import
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" id="btn-2b-retour">
+              <i class="bi bi-arrow-left me-1"></i>Retour
+            </button>
+            <span class="text-muted small" id="import-fftt-2b-nb-sel"></span>
+          </div>
         </div>
 
         <!-- Étape 3 : résumé final -->
@@ -1132,8 +1404,8 @@ function renderGrille() {
             $tr.append(makeTdHtml(defiscHtml,     idx, 'defiscalisation'));
             $tr.append(makeTdHtml(nationaleHtml,   idx, 'nationale'));
             $tr.append(makeTd(l.num_compte_ebp,    idx, 'num_compte_ebp', false));
-            $tr.append(makeTdLaPoste(l.cp,         idx, 'cp'));
-            $tr.append(makeTdLaPoste(l.ville,     idx, 'ville'));
+            $tr.append(makeCpTd(l,    idx));
+            $tr.append(makeVilleTd(l, idx));
             // Colonne FFTT
             const $tdFftt = $('<td>').css({textAlign:'center', verticalAlign:'middle', padding:'.2rem', whiteSpace:'nowrap'});
             if (l.grade_fftt || l.classement || l.date_validation_fftt) {
@@ -1213,116 +1485,105 @@ function makeTdHtml(html, idx, field) {
     return $td;
 }
 
-// ── Cellule CP / Ville avec code couleur laposte ──────────────────────────────
-function makeTdLaPoste(val, idx, field) {
-    const l      = lignes[idx];
-    const trouve = l ? l.id_laposte != null : false;
-    const vide   = !val || String(val).trim() === '';
-    const bg     = trouve ? '#d1fae5' : '#fee2e2';
-    const $td = $('<td>')
-        .attr('data-idx', idx)
-        .attr('data-field', field)
-        .css({ background: bg });
-    const affichage = vide && !trouve ? '—' : (val ?? '');
-    const $div = $('<div class="cell-inner">').text(affichage).attr('contenteditable', 'false');
-    $td.append($div);
-
-    // Clic direct → édition immédiate
-    $td.on('click', function (e) {
-        e.stopPropagation();
-        selectionnerCellule($(this));
-        const $inner = $(this).find('.cell-inner');
-        if ($inner.attr('contenteditable') === 'false') {
-            $inner.attr('contenteditable', 'true').trigger('focus');
-            const range = document.createRange();
-            range.selectNodeContents($inner[0]);
-            window.getSelection().removeAllRanges();
-            window.getSelection().addRange(range);
-        }
-    });
+// ── Cellules CP / Ville — clic ouvre la modale (même pattern que salle.php) ──
+function makeCpTd(l, idx) {
+    const trouve = l.id_laposte != null;
+    const bg     = trouve ? '#d1fae5' : (l.cp ? '#fee2e2' : '');
+    const $td = $('<td>').attr('data-idx', idx).attr('data-field', 'cp').css({ background: bg });
+    $('<div class="cell-inner">').text(l.cp ?? '').appendTo($td);
+    $td.css('cursor', 'pointer').on('click', function (e) { e.stopPropagation(); ouvrirModalCpVille(idx); });
     return $td;
 }
 
-// ── Sauvegarde immédiate Id_LaPoste en base ───────────────────────────────────
-function sauvegarderLaPoste(idx) {
-    const l = lignes[idx];
-    if (!l || !(+l.id > 0)) {
-        // Ligne pas encore en base : informer seulement
-        setStatus('Commune trouvée. Cliquez sur « Mettre à jour la BDD » pour sauvegarder.');
-        return;
-    }
-    $.post('jugearbitre.php', { action: 'maj_laposte', id_ja: l.id, id_laposte: l.id_laposte ?? '', cp: l.cp ?? '', ville: l.ville ?? '' }, function (res) {
-        if (res.ok) {
-            setStatus(`Commune mise à jour en base pour ${l.nom} ${l.prenom}.`);
-            toast(`Commune sauvegardée : ${l.cp} ${l.ville}.`);
-        } else {
-            toast(`Erreur sauvegarde : ${res.msg}`, false);
-        }
-    }, 'json').fail(() => toast('Erreur réseau lors de la sauvegarde.', false));
+function makeVilleTd(l, idx) {
+    const trouve = l.id_laposte != null;
+    const bg     = trouve ? '#d1fae5' : (l.ville ? '#fee2e2' : '');
+    const $td = $('<td>').attr('data-idx', idx).attr('data-field', 'ville').css({ background: bg });
+    $('<div class="cell-inner">').text(l.ville ?? '').appendTo($td);
+    $td.css('cursor', 'pointer').on('click', function (e) { e.stopPropagation(); ouvrirModalCpVille(idx); });
+    return $td;
 }
 
-// ── Recherche laposte après édition CP ou Ville ───────────────────────────────
-function rechercherLaPoste(idx) {
-    const cp    = String(lignes[idx].cp    ?? '').trim();
-    const ville = String(lignes[idx].ville ?? '').trim();
-    if (cp === '' && ville === '') return;
+// ── Modale CP / Ville (même pattern que salle.php) ───────────────────────────
+let mcvIdx = null;
+let mcvIdLaPoste = null;
+let _modalCpVille = null;
+function getModalCpVille() {
+    if (!_modalCpVille) _modalCpVille = new bootstrap.Modal(document.getElementById('modal-cp-ville'));
+    return _modalCpVille;
+}
 
+function ouvrirModalCpVille(idx) {
+    mcvIdx = idx;
+    mcvIdLaPoste = lignes[idx].id_laposte ?? null;
+    $('#mcv-cp').val(lignes[idx].cp ?? '');
+    $('#mcv-ville').val(lignes[idx].ville ?? '');
+    $('#mcv-msg').text('').css('color', '');
+    $('#mcv-suggestions').hide();
+    $('#mcv-suggestions-list').empty();
+    getModalCpVille().show();
+    setTimeout(() => $('#mcv-cp').trigger('focus'), 300);
+}
+
+function mcvRechercher() {
+    const cp    = $('#mcv-cp').val().trim();
+    const ville = $('#mcv-ville').val().trim();
+    if (!cp && !ville) return;
+    $('#mcv-suggestions').hide();
+    $('#mcv-suggestions-list').empty();
     $.post('../ajax/laposte.php', { action: 'recherche_laposte', cp, ville }, function (res) {
         if (!res.ok && !res.multi) {
-            // Non trouvé : effacer id_laposte, garder les valeurs saisies, fond rouge
-            lignes[idx].id_laposte = null;
-            renderGrille();
-            toast(`Commune non trouvée (${cp} ${ville}).`, false);
+            $('#mcv-msg').text(res.msg ?? 'Commune non trouvée.').css('color', '#c00');
+            mcvIdLaPoste = null;
             return;
         }
         if (res.multi) {
-            afficherSuggestions(idx, res.suggestions);
-            return;
+            $('#mcv-msg').text('').css('color', '');
+            const $list = $('#mcv-suggestions-list').empty();
+            res.suggestions.forEach(s => {
+                $('<button class="btn btn-sm btn-outline-primary">')
+                    .text(`${s.cp} ${s.ville}`)
+                    .on('click', function () {
+                        $('#mcv-cp').val(s.cp);
+                        $('#mcv-ville').val(s.ville);
+                        mcvIdLaPoste = s.id_laposte;
+                        $('#mcv-msg').text(`✓ ${s.cp} ${s.ville}`).css('color', '#065f46');
+                        $('#mcv-suggestions').hide();
+                    }).appendTo($list);
+            });
+            $('#mcv-suggestions').show();
+            mcvIdLaPoste = null;
+        } else {
+            $('#mcv-cp').val(res.cp);
+            $('#mcv-ville').val(res.ville);
+            mcvIdLaPoste = res.id_laposte;
+            $('#mcv-msg').text(`✓ ${res.cp} ${res.ville}`).css('color', '#065f46');
         }
-        // Trouvé : mettre à jour cp, ville, id_laposte
-        lignes[idx].id_laposte = res.id_laposte;
-        lignes[idx].cp         = res.cp;
-        lignes[idx].ville      = res.ville;
-        renderGrille();
-        // Sauvegarde immédiate si le JA existe déjà en base (id > 0)
-        sauvegarderLaPoste(idx);
-    }, 'json').fail(() => toast('Erreur réseau lors de la recherche laposte.', false));
+    }, 'json').fail(() => $('#mcv-msg').text('Erreur réseau.').css('color', '#c00'));
 }
 
-// ── Popup de suggestions ──────────────────────────────────────────────────────
-function afficherSuggestions(idx, suggestions) {
-    $('#laposte-popup').remove();
-    const $pop = $('<div id="laposte-popup">').css({
-        position: 'fixed', top: '50%', left: '50%',
-        transform: 'translate(-50%,-50%)',
-        background: '#fff', border: '1px solid #c8d4e8',
-        borderRadius: '8px', boxShadow: '0 8px 32px rgba(0,0,0,.18)',
-        zIndex: 9999, minWidth: '280px', maxWidth: '400px',
-        maxHeight: '60vh', overflowY: 'auto', padding: '1rem'
-    });
-    $pop.append('<div style="font-weight:700;margin-bottom:.5rem;color:#1a3a6b">Plusieurs communes trouvées — choisissez :</div>');
-    suggestions.forEach(s => {
-        $('<button>').text(`${s.cp}  ${s.ville}`)
-            .css({ display: 'block', width: '100%', textAlign: 'left', padding: '.35rem .6rem',
-                   margin: '.15rem 0', border: '1px solid #c8d4e8', borderRadius: '4px',
-                   background: '#f8faff', cursor: 'pointer', fontSize: '.88rem' })
-            .on('click', function () {
-                lignes[idx].id_laposte = s.id_laposte;
-                lignes[idx].cp         = s.cp;
-                lignes[idx].ville      = s.ville;
-                $('#laposte-popup').remove();
-                renderGrille();
-                sauvegarderLaPoste(idx);
-            })
-            .appendTo($pop);
-    });
-    $('<button>').text('Annuler')
-        .css({ marginTop: '.5rem', padding: '.25rem .8rem', background: '#e5e7eb',
-               border: 'none', borderRadius: '4px', cursor: 'pointer' })
-        .on('click', () => $('#laposte-popup').remove())
-        .appendTo($pop);
-    $('body').append($pop);
-}
+$('#mcv-cp, #mcv-ville').on('blur', function () { mcvRechercher(); });
+$('#mcv-cp').on('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#mcv-ville').trigger('focus'); } });
+$('#mcv-ville').on('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); mcvRechercher(); } });
+
+$('#btn-mcv-ok').on('click', function () {
+    if (mcvIdx === null) return;
+    const cp    = $('#mcv-cp').val().trim() || null;
+    const ville = $('#mcv-ville').val().trim().toUpperCase() || null;
+    lignes[mcvIdx].cp         = cp;
+    lignes[mcvIdx].ville      = ville;
+    lignes[mcvIdx].id_laposte = mcvIdLaPoste;
+    // Sauvegarde immédiate en base si le JA existe déjà
+    const l = lignes[mcvIdx];
+    if (l && +l.id > 0) {
+        $.post('jugearbitre.php', { action: 'maj_laposte', id_ja: l.id, id_laposte: mcvIdLaPoste ?? '', cp: cp ?? '', ville: ville ?? '' }, function (res) {
+            if (!res.ok) toast(`Erreur sauvegarde : ${res.msg}`, false);
+        }, 'json');
+    }
+    getModalCpVille().hide();
+    renderGrille();
+    setStatus(cp ? `CP/Ville mis à jour : ${cp} ${ville ?? ''}.` : 'CP/Ville effacés.');
+});
 
 // ── Sélection / Edition ───────────────────────────────────────────────────────
 function selectionnerCellule($td) {
@@ -1389,11 +1650,6 @@ function validerCellule($inner, $td) {
 
     if (lignes[idx]) lignes[idx][field] = val !== '' ? val : null;
 
-    // Si CP ou Ville modifié → relancer la recherche laposte
-    if (['cp', 'ville'].includes(field)) {
-        rechercherLaPoste(idx);
-        return;
-    }
     setStatus('Modification locale. Cliquez sur « Mettre à jour la BDD » pour sauvegarder.');
 }
 
@@ -1443,42 +1699,6 @@ $(document).on('click', function () {
 $('#win-menu-drop').on('click', '.drop-item', function () {
     $('#win-menu-drop').removeClass('open');
     $('#win-menu-trigger').removeClass('open');
-});
-
-// ── Importer Excel ────────────────────────────────────────────────────────────
-$('#btn-importer').on('click', () => $('#file-input').trigger('click'));
-
-$('#file-input').on('change', function () {
-    const file = this.files[0];
-    if (!file) return;
-
-    const fd = new FormData();
-    fd.append('action',  'importer_excel');
-    fd.append('fichier', file);
-
-    spinner(true);
-    $.ajax({
-        url: 'jugearbitre.php', type: 'POST',
-        data: fd, processData: false, contentType: false, dataType: 'json',
-        success(res) {
-            spinner(false);
-            if (!res.ok) { toast(res.msg, false); return; }
-            // Les clés PHP sont déjà en minuscules (snake_case) côté import
-            lignes = res.data.map((r, i) => Object.assign(r, {
-                _idx:           i,
-                actif:          +r.actif,
-                defiscalisation: r.defiscalisation != null ? +r.defiscalisation : 0,
-                nationale:       r.nationale != null ? +r.nationale : 0,
-                cp:             r.cp    ?? '',
-                ville:          r.ville ?? '',
-            }));
-            renderGrille();
-            toast(`${res.count} JA importé(s) depuis Excel (filtre grade JA*).`);
-            setStatus(`${res.count} JA importé(s). Vérifiez les données puis cliquez sur « Mettre à jour la BDD ».`);
-        },
-        error() { spinner(false); toast("Erreur lors de l'import.", false); }
-    });
-    this.value = '';
 });
 
 // ── Mettre à jour la BDD ──────────────────────────────────────────────────────
@@ -1555,7 +1775,13 @@ $('#btn-enrichir-fftt').on('click', function () {
 });
 
 // ── Import FFTT par département ───────────────────────────────────────────────
+const DEPT_ACTIFS_CODES = <?= json_encode(array_map('strval', array_column($deptActifs, 'code'))) ?>;
 let importFfttEnCours = false;
+
+function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+let _scanJAs = []; // JAs trouvés lors du scan limitrophe
 
 $('#modal-import-fftt').on('hidden.bs.modal', function () {
     if (!importFfttEnCours) resetImportFftt();
@@ -1563,35 +1789,41 @@ $('#modal-import-fftt').on('hidden.bs.modal', function () {
 
 function resetImportFftt() {
     $('#import-fftt-step1').show();
-    $('#import-fftt-step2, #import-fftt-step3').hide();
+    $('#import-fftt-step2, #import-fftt-step2b, #import-fftt-step3').hide();
     $('#import-fftt-dept').val('');
     $('#import-fftt-bar').css('width', '0%');
     $('#import-fftt-label').text('Récupération des clubs…');
     $('#import-fftt-pct').text('0 %');
+    $('#cnt-nouveaux-label').text('Nouveaux JAs');
+    $('#cnt-maj-col').show();
     ['cnt-nouveaux','cnt-maj','cnt-membres','cnt-erreurs'].forEach(id => $(`#${id}`).text('0'));
     $('#import-fftt-log, #import-fftt-log-final').empty();
+    $('#import-fftt-2b-list').empty();
     importFfttEnCours = false;
+    _scanJAs = [];
 }
 
-$('#btn-lancer-import-fftt').on('click', function () {
-    const dep = $('#import-fftt-dept').val();
-    if (!dep) { nijacToast('Sélectionnez un département.', 'warning'); return; }
-
+// ── Utilitaire : lancer la progression (scan ou import direct) ────────────────
+function lancerProgressionClubs(dep, depText, modeScan) {
     importFfttEnCours = true;
     $('#import-fftt-step1').hide();
     $('#import-fftt-step2').show();
     $('#btn-fermer-import-fftt').prop('disabled', true);
+    $('#import-fftt-dept-label').text(depText);
+
+    if (modeScan) {
+        $('#cnt-nouveaux-label').text('JAs trouvés');
+        $('#cnt-maj-col').hide();
+    }
 
     let totalNouveaux = 0, totalMaj = 0, totalMembres = 0, totalErreurs = 0;
     const logLines = [];
+    _scanJAs = [];
 
-    // Étape 1 : récupérer la liste des clubs
     $.post('jugearbitre.php', { action: 'get_clubs_dept', dep }, function (res) {
         if (!res.ok) {
             nijacToast('Erreur : ' + res.msg, 'danger');
             resetImportFftt();
-            $('#import-fftt-step1').show();
-            $('#import-fftt-step2').hide();
             $('#btn-fermer-import-fftt').prop('disabled', false);
             return;
         }
@@ -1602,22 +1834,29 @@ $('#btn-lancer-import-fftt').on('click', function () {
 
         $('#import-fftt-label').text(`0 / ${total} clubs traités…`);
 
+        const action = modeScan ? 'scan_fftt_club' : 'import_fftt_club';
+
         function traiterClub() {
             if (done >= total) {
-                // Terminé
                 importFfttEnCours = false;
                 $('#btn-fermer-import-fftt').prop('disabled', false);
                 $('#import-fftt-step2').hide();
-                $('#import-fftt-step3').show();
-                $('#import-fftt-resume').html(
-                    `<i class="bi bi-check-circle-fill me-2"></i>` +
-                    `Import terminé — <strong>${totalNouveaux}</strong> nouveau(x) JA, ` +
-                    `<strong>${totalMaj}</strong> mis à jour, ` +
-                    `<strong>${totalMembres}</strong> membres vérifiés` +
-                    (totalErreurs ? `, <strong>${totalErreurs}</strong> erreur(s) API` : '') + '.'
-                );
-                $('#import-fftt-log-final').html(logLines.join(''));
-                chargerListe();
+
+                if (modeScan) {
+                    // Afficher l'étape de sélection
+                    afficherSelectionJAs(_scanJAs, totalMembres, totalErreurs, logLines);
+                } else {
+                    $('#import-fftt-step3').show();
+                    $('#import-fftt-resume').html(
+                        `<i class="bi bi-check-circle-fill me-2"></i>` +
+                        `Import terminé — <strong>${totalNouveaux}</strong> nouveau(x) JA, ` +
+                        `<strong>${totalMaj}</strong> mis à jour, ` +
+                        `<strong>${totalMembres}</strong> membres vérifiés` +
+                        (totalErreurs ? `, <strong>${totalErreurs}</strong> erreur(s) API` : '') + '.'
+                    );
+                    $('#import-fftt-log-final').html(logLines.join(''));
+                    chargerListe();
+                }
                 return;
             }
 
@@ -1627,21 +1866,37 @@ $('#btn-lancer-import-fftt').on('click', function () {
             $('#import-fftt-pct').text(pct + ' %');
             $('#import-fftt-label').text(`${done + 1} / ${total} — ${club.nom}`);
 
-            $.post('jugearbitre.php', { action: 'import_fftt_club', num_club: club.numero }, function (r) {
+            $.post('jugearbitre.php', { action, num_club: club.numero }, function (r) {
                 if (r.ok) {
                     totalMembres += r.total_membres;
                     totalErreurs += r.erreurs;
+                    if (r.erreurs_msgs && r.erreurs_msgs.length) {
+                        r.erreurs_msgs.forEach(msg => {
+                            const line = `<div class="text-danger">⚠ ${msg}</div>`;
+                            logLines.push(line);
+                            $('#import-fftt-log').append(line).scrollTop(9999);
+                        });
+                    }
                     r.trouves.forEach(ja => {
-                        const cls   = ja.statut === 'nouveau' ? 'text-success' : 'text-info';
-                        const label = ja.statut === 'nouveau' ? '✚ NOUVEAU' : '↻ MAJ';
-                        const line  = `<div class="${cls}">[${label}] ${ja.grade} — ${ja.nom} ${ja.prenom} (${ja.licence})</div>`;
-                        logLines.push(line);
-                        $('#import-fftt-log').append(line).scrollTop(9999);
-                        if (ja.statut === 'nouveau') totalNouveaux++;
-                        else totalMaj++;
+                        if (modeScan) {
+                            _scanJAs.push(ja);
+                            totalNouveaux = _scanJAs.length;
+                            const cls  = ja.en_base ? 'text-secondary' : 'text-success';
+                            const lbl  = ja.en_base ? '≡ EN BASE' : '✚ NOUVEAU';
+                            const line = `<div class="${cls}">[${lbl}] ${ja.grade} — ${ja.nom} ${ja.prenom} (${ja.licence})</div>`;
+                            logLines.push(line);
+                            $('#import-fftt-log').append(line).scrollTop(9999);
+                        } else {
+                            const cls   = ja.statut === 'nouveau' ? 'text-success' : 'text-info';
+                            const label = ja.statut === 'nouveau' ? '✚ NOUVEAU' : '↻ MAJ';
+                            const line  = `<div class="${cls}">[${label}] ${ja.grade} — ${ja.nom} ${ja.prenom} (${ja.licence})</div>`;
+                            logLines.push(line);
+                            $('#import-fftt-log').append(line).scrollTop(9999);
+                            if (ja.statut === 'nouveau') totalNouveaux++; else totalMaj++;
+                        }
                     });
                     $('#cnt-nouveaux').text(totalNouveaux);
-                    $('#cnt-maj').text(totalMaj);
+                    if (!modeScan) $('#cnt-maj').text(totalMaj);
                     $('#cnt-membres').text(totalMembres);
                     $('#cnt-erreurs').text(totalErreurs);
                 }
@@ -1659,10 +1914,104 @@ $('#btn-lancer-import-fftt').on('click', function () {
     }, 'json').fail(() => {
         nijacToast('Erreur réseau lors de la récupération des clubs.', 'danger');
         resetImportFftt();
-        $('#import-fftt-step1').show();
-        $('#import-fftt-step2').hide();
         $('#btn-fermer-import-fftt').prop('disabled', false);
     });
+}
+
+// ── Afficher l'écran de sélection des JAs (limitrophes) ──────────────────────
+function afficherSelectionJAs(jas, totalMembres, totalErreurs, logLines) {
+    const $list = $('#import-fftt-2b-list').empty();
+
+    if (!jas.length) {
+        $list.html('<div class="text-muted text-center py-4"><i class="bi bi-person-x fs-2 d-block mb-2"></i>Aucun JA trouvé dans ce département.</div>');
+    } else {
+        const gradeBg = { JA1: 'primary', JA2: 'success', JA3: 'warning text-dark' };
+        jas.forEach((ja, i) => {
+            const bg    = gradeBg[ja.grade] || 'secondary';
+            const lieu  = [ja.cp, ja.ville].filter(Boolean).join(' ');
+            const badge = ja.en_base
+                ? '<span class="badge bg-secondary ms-auto" style="flex-shrink:0">Déjà en base</span>'
+                : '<span class="badge bg-success ms-auto" style="flex-shrink:0">Nouveau</span>';
+            $list.append(`
+                <div class="d-flex align-items-center gap-2 py-1 border-bottom">
+                    <input type="checkbox" class="form-check-input ja-sel-check" data-idx="${i}" ${!ja.en_base ? 'checked' : ''} style="flex-shrink:0;width:1.1em;height:1.1em">
+                    <span class="badge bg-${bg}" style="flex-shrink:0">${ja.grade}</span>
+                    <span class="fw-semibold small" style="min-width:0">${escHtml(ja.prenom)} ${escHtml(ja.nom)}</span>
+                    <span class="text-muted small text-truncate">${escHtml(lieu)}</span>
+                    ${badge}
+                </div>
+            `);
+        });
+    }
+
+    const sousTitre = `${jas.length} JA(s) trouvé(s) — ${totalMembres} membres vérifiés` +
+        (totalErreurs ? ` — <span class="text-danger">${totalErreurs} erreur(s)</span>` : '');
+    $('#import-fftt-2b-sous-titre').html(sousTitre);
+    $('#import-fftt-2b-erreurs').hide();
+    majNbSel();
+
+    $('#import-fftt-step2b').show();
+}
+
+function majNbSel() {
+    const n = $('.ja-sel-check:checked').length;
+    $('#import-fftt-2b-nb-sel').text(n > 0 ? `${n} JA(s) sélectionné(s)` : 'Aucune sélection');
+}
+
+$(document).on('change', '.ja-sel-check', majNbSel);
+
+$('#btn-2b-tout-cocher').on('click', function () {
+    $('.ja-sel-check').prop('checked', true);
+    majNbSel();
+});
+$('#btn-2b-tout-decocher').on('click', function () {
+    $('.ja-sel-check').prop('checked', false);
+    majNbSel();
+});
+
+$('#btn-2b-retour').on('click', function () {
+    $('#import-fftt-step2b').hide();
+    resetImportFftt();
+});
+
+$('#btn-2b-valider').on('click', function () {
+    const selected = [];
+    $('.ja-sel-check:checked').each(function () {
+        const idx = parseInt($(this).data('idx'), 10);
+        if (!isNaN(idx) && _scanJAs[idx]) selected.push(_scanJAs[idx]);
+    });
+    if (!selected.length) {
+        nijacToast('Cochez au moins un JA à importer.', 'warning');
+        return;
+    }
+
+    $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Import…');
+
+    $.post('jugearbitre.php', { action: 'import_fftt_selected', licences: JSON.stringify(selected) }, function (r) {
+        $('#btn-2b-valider').prop('disabled', false).html('<i class="bi bi-check-lg me-1"></i>Valider l\'import');
+        if (!r.ok) { nijacToast('Erreur : ' + r.msg, 'danger'); return; }
+        $('#import-fftt-step2b').hide();
+        $('#import-fftt-step3').show();
+        $('#import-fftt-resume').html(
+            `<i class="bi bi-check-circle-fill me-2"></i>` +
+            `Import terminé — <strong>${r.nouveaux}</strong> nouveau(x) JA, ` +
+            `<strong>${r.maj}</strong> mis à jour.`
+        );
+        $('#import-fftt-log-final').empty();
+        chargerListe();
+    }, 'json').fail(() => {
+        $('#btn-2b-valider').prop('disabled', false).html('<i class="bi bi-check-lg me-1"></i>Valider l\'import');
+        nijacToast('Erreur réseau lors de l\'import.', 'danger');
+    });
+});
+
+$('#btn-lancer-import-fftt').on('click', function () {
+    const dep = $('#import-fftt-dept').val();
+    if (!dep) { nijacToast('Sélectionnez un département.', 'warning'); return; }
+
+    const depText  = $('#import-fftt-dept option:selected').text().trim();
+    const modeScan = !DEPT_ACTIFS_CODES.includes(dep);
+    lancerProgressionClubs(dep, depText, modeScan);
 });
 
 // ── Tri sur clic en-tête ──────────────────────────────────────────────────────
@@ -1838,6 +2187,197 @@ $('#btn-enregistrer-ja').on('click', function () {
         }
     }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
 });
+
+// ── Importer Excel (102_*.xlsx) ───────────────────────────────────────────────
+$('#btn-importer').on('click', () => $('#file-input').val('').trigger('click'));
+
+(function () {
+    let _modalImportExcel = null;
+    function getModalImportExcel() {
+        if (!_modalImportExcel) _modalImportExcel = new bootstrap.Modal(document.getElementById('modal-import-excel'));
+        return _modalImportExcel;
+    }
+
+    function xlsxLog(html, cls) {
+        const $d = $('<div>').html(html);
+        if (cls) $d.addClass(cls);
+        $('#xlsx-log').append($d).scrollTop(9999);
+    }
+
+    function xlsxProgress(pct, label) {
+        $('#xlsx-progress-bar').css('width', pct + '%');
+        $('#xlsx-progress-pct').text(pct + ' %');
+        if (label !== undefined) $('#xlsx-progress-label').text(label);
+    }
+
+    $('#file-input').on('change', function () {
+        const file = this.files[0];
+        if (!file) return;
+
+        // Réinitialiser la modale
+        $('#xlsx-log').empty();
+        $('#xlsx-footer').hide();
+        $('#xlsx-progress-bar')
+            .css('width', '0%')
+            .removeClass('bg-danger')
+            .addClass('bg-success progress-bar-animated progress-bar-striped');
+        xlsxProgress(5, 'Envoi du fichier…');
+        getModalImportExcel().show();
+        xlsxLog(`<i class="bi bi-cloud-upload"></i> Envoi de <strong>${file.name}</strong> (${(file.size/1024).toFixed(0)} Ko)…`);
+
+        const fd = new FormData();
+        fd.append('action',  'importer_excel');
+        fd.append('fichier', file);
+
+        $.ajax({
+            url: 'jugearbitre.php', type: 'POST',
+            data: fd, processData: false, contentType: false, dataType: 'json',
+
+            xhr() {
+                const xhr = $.ajaxSettings.xhr();
+                xhr.upload.addEventListener('progress', function (e) {
+                    if (e.lengthComputable) {
+                        const pct = Math.round(e.loaded / e.total * 30);
+                        xlsxProgress(5 + pct, pct < 30 ? 'Envoi du fichier…' : 'Analyse du fichier XLSX…');
+                    }
+                });
+                return xhr;
+            },
+
+            success(res) {
+                if (!res.ok) {
+                    xlsxLog(`<i class="bi bi-x-circle-fill text-danger"></i> ${res.msg}`, 'text-danger fw-semibold');
+                    xlsxProgress(100, 'Erreur');
+                    $('#xlsx-progress-bar').removeClass('bg-success progress-bar-animated').addClass('bg-danger');
+                    $('#xlsx-footer').show();
+                    return;
+                }
+
+                const rows = res.data;
+                xlsxProgress(40, `${rows.length} JA trouvés — résolution des communes…`);
+                xlsxLog(`<i class="bi bi-check-circle-fill text-success"></i> <strong>${rows.length}</strong> Juge(s)-Arbitre(s) trouvé(s) dans le fichier.`);
+
+                // Initialiser le tableau de lignes (id_laposte = null pour l'instant)
+                lignes = rows.map((r, i) => Object.assign({}, r, {
+                    _idx:            i,
+                    actif:           +r.actif,
+                    defiscalisation: r.defiscalisation != null ? +r.defiscalisation : 0,
+                    nationale:       r.nationale       != null ? +r.nationale       : 0,
+                    cp:              r.cp    ?? '',
+                    ville:           r.ville ?? '',
+                    id_laposte:      null,
+                }));
+
+                // Collecter les paires CP/Ville uniques à résoudre
+                const pairesUniques = {};
+                lignes.forEach(l => {
+                    if (l.cp || l.ville) {
+                        const cle = (l.cp || '') + '|' + (l.ville || '');
+                        if (!pairesUniques[cle]) pairesUniques[cle] = { cp: l.cp, ville: l.ville, id_laposte: null, resolved: false };
+                    }
+                });
+                const paires = Object.entries(pairesUniques); // [[cle, obj], ...]
+                const total  = paires.length;
+
+                if (total === 0) {
+                    finaliserImportExcel(0, 0, 0);
+                    return;
+                }
+
+                xlsxLog(`<i class="bi bi-geo-alt"></i> Résolution de <strong>${total}</strong> commune(s) unique(s)…`);
+                let done = 0, resolues = 0, multiples = 0, inconnues = 0;
+
+                function resoudreProchaine() {
+                    if (done >= total) {
+                        // Appliquer les résultats sur les lignes
+                        lignes.forEach(l => {
+                            const cle = (l.cp || '') + '|' + (l.ville || '');
+                            const r = pairesUniques[cle];
+                            if (r && r.resolved) {
+                                l.id_laposte = r.id_laposte;
+                                l.cp         = r.cp;
+                                l.ville      = r.ville;
+                            }
+                        });
+                        finaliserImportExcel(resolues, multiples, inconnues);
+                        return;
+                    }
+
+                    const pct = 40 + Math.round(done / total * 55);
+                    xlsxProgress(pct, `Communes : ${done + 1} / ${total}`);
+
+                    const [cle, obj] = paires[done];
+                    $.post('../ajax/laposte.php',
+                        { action: 'recherche_laposte', cp: obj.cp, ville: obj.ville },
+                        function (r) {
+                            if (r.ok && !r.multi) {
+                                obj.id_laposte = r.id_laposte;
+                                obj.cp         = r.cp;
+                                obj.ville      = r.ville;
+                                obj.resolved   = true;
+                                resolues++;
+                            } else if (r.multi) {
+                                // Plusieurs communes — laisser null, l'utilisateur corrigera via la modale
+                                obj.resolved = true;
+                                multiples++;
+                                xlsxLog(`<span class="text-warning">⚠ Plusieurs communes pour CP <strong>${obj.cp}</strong> — à préciser dans la grille.</span>`);
+                            } else {
+                                inconnues++;
+                                xlsxLog(`<span class="text-danger">✗ Commune non trouvée : ${obj.cp} ${obj.ville}</span>`);
+                            }
+                            done++;
+                            resoudreProchaine();
+                        }, 'json'
+                    ).fail(() => { inconnues++; done++; resoudreProchaine(); });
+                }
+
+                resoudreProchaine();
+            },
+
+            error() {
+                xlsxLog('<i class="bi bi-x-circle-fill text-danger"></i> Erreur réseau lors de l\'import.', 'fw-semibold');
+                xlsxProgress(100, 'Erreur réseau');
+                $('#xlsx-progress-bar').removeClass('bg-success progress-bar-animated').addClass('bg-danger');
+                $('#xlsx-footer').show();
+            }
+        });
+
+        function finaliserImportExcel(resolues, multiples, inconnues) {
+            xlsxLog(`<hr class="my-1">`);
+            xlsxLog(`<i class="bi bi-check-circle-fill text-success"></i> <strong>${resolues}</strong> commune(s) résolue(s).`);
+            if (multiples) xlsxLog(`<span class="text-warning"><i class="bi bi-exclamation-triangle-fill"></i> <strong>${multiples}</strong> CP avec plusieurs communes — à préciser (clic CP/Ville dans la grille).</span>`);
+            if (inconnues) xlsxLog(`<span class="text-danger"><i class="bi bi-x-circle-fill"></i> <strong>${inconnues}</strong> commune(s) introuvable(s) — à corriger dans la grille.</span>`);
+            xlsxLog(`<hr class="my-1"><i class="bi bi-database-fill-up text-primary"></i> Enregistrement en base de données…`);
+            xlsxProgress(98, 'Enregistrement en base…');
+
+            $.post('jugearbitre.php', { action: 'maj_bdd', lignes: JSON.stringify(lignes) }, function (res) {
+                xlsxProgress(100, 'Terminé');
+                $('#xlsx-progress-bar').removeClass('progress-bar-animated progress-bar-striped');
+                if (res.ok) {
+                    xlsxLog(`<i class="bi bi-check-circle-fill text-success"></i> <strong>${res.msg}</strong>`);
+                } else {
+                    xlsxLog(`<span class="text-warning"><i class="bi bi-exclamation-triangle-fill"></i> ${res.msg}</span>`);
+                }
+                xlsxLog(`<strong class="text-primary">Cliquez « OK » pour afficher la grille à jour.</strong>`);
+                renderGrille();
+                setStatus(`Import terminé. ${res.msg}`);
+                $('#xlsx-footer').show();
+                chargerListe();
+            }, 'json').fail(() => {
+                xlsxProgress(100, 'Erreur réseau');
+                xlsxLog(`<span class="text-danger"><i class="bi bi-x-circle-fill"></i> Erreur réseau lors de l'enregistrement.</span>`);
+                $('#xlsx-progress-bar').removeClass('bg-success progress-bar-animated').addClass('bg-danger');
+                xlsxLog(`<strong>Cliquez « OK » pour afficher la grille — utilisez « Mettre à jour la BDD » pour réessayer.</strong>`);
+                renderGrille();
+                $('#xlsx-footer').show();
+            });
+        }
+
+        $('#btn-xlsx-ok').off('click').on('click', function () {
+            nijacToast(`${lignes.length} JA importé(s) depuis Excel.`);
+        });
+    });
+}());
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 $(function () { chargerListe(); });

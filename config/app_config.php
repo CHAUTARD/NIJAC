@@ -194,7 +194,7 @@ function getDepartementsLimitrophes(): array
         ['code' => '35', 'nom' => 'Ille-et-Vilaine', 'region' => 'Bretagne'],
     ];
 
-    $actifs = array_filter(array_map('trim', explode(',', getConfig('departements_limitrophes', ''))));
+    $actifs = array_filter(array_map('trim', explode(',', getConfig('departements_limitrophes', '28,35,53,60,72,78,80,95'))));
     if (!$actifs) return [];
 
     return array_values(array_filter($tous, fn($d) => in_array($d['code'], $actifs, true)));
