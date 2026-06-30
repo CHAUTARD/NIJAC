@@ -554,6 +554,52 @@ if ($action !== '') {
             exit;
         }
 
+        // ── Import CSV numéros de compte EBP ──────────────────────────────
+        if ($action === 'import_csv_ebp') {
+            $lignes    = json_decode($_POST['lignes'] ?? '[]', true);
+            if (!is_array($lignes)) { ob_end_clean(); echo json_encode(['ok' => false, 'msg' => 'Données invalides.']); exit; }
+
+            $ok       = 0;
+            $echecs   = [];
+
+            $stmtSearch = $pdo->prepare(
+                "SELECT Id_JA, Nom, Prenom FROM ja
+                 WHERE UPPER(?) LIKE CONCAT('%', UPPER(TRIM(Nom)), '%')
+                   AND UPPER(?) LIKE CONCAT('%', UPPER(TRIM(Prenom)), '%')"
+            );
+            $stmtUpdate = $pdo->prepare("UPDATE ja SET NumCompteEBP = ? WHERE Id_JA = ?");
+
+            foreach ($lignes as $idx => $ligne) {
+                $numEbp    = trim((string)($ligne['num'] ?? ''));
+                $nomPrenom = trim((string)($ligne['nom'] ?? ''));
+                $lineNo    = $idx + 1;
+
+                if ($numEbp === '' || $nomPrenom === '') {
+                    $echecs[] = ['ligne' => $lineNo, 'texte' => $nomPrenom, 'raison' => 'Ligne incomplète'];
+                    continue;
+                }
+
+                if (stripos($nomPrenom, 'fournisseur') === 0) continue;
+
+                $stmtSearch->execute([$nomPrenom, $nomPrenom]);
+                $found = $stmtSearch->fetchAll();
+
+                if (count($found) === 0) {
+                    $echecs[] = ['ligne' => $lineNo, 'texte' => $nomPrenom, 'raison' => 'JA introuvable en base'];
+                } elseif (count($found) > 1) {
+                    $dups = implode(', ', array_map(fn($r) => $r['Id_JA'], $found));
+                    $echecs[] = ['ligne' => $lineNo, 'texte' => $nomPrenom, 'raison' => "Plusieurs JA trouvés ($dups) — non mis à jour"];
+                } else {
+                    $stmtUpdate->execute([$numEbp, $found[0]['Id_JA']]);
+                    $ok++;
+                }
+            }
+
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'maj' => $ok, 'echecs' => $echecs]);
+            exit;
+        }
+
         // ── Enrichir un JA via l'API FFTT ─────────────────────────────────
         if ($action === 'enrichir_fftt') {
             $idJa = trim($_POST['id_ja'] ?? '');
@@ -917,6 +963,7 @@ $deptLimitrophes  = getDepartementsLimitrophes();
 
 <!-- Input file caché pour import XLSX JA -->
 <input type="file" id="file-input" accept=".xlsx" style="display:none">
+<input type="file" id="file-input-ebp" accept=".csv,text/csv" style="display:none">
 
 <!-- Spinner -->
 <div id="spinner">
@@ -925,7 +972,6 @@ $deptLimitrophes  = getDepartementsLimitrophes();
 
 <!-- MenuStrip -->
 <div id="menu-strip">
-    <?php if ($isAdmin): ?>
     <!-- Menu déroulant style Windows -->
     <div class="win-menu-wrap">
         <button class="win-menu-btn" id="win-menu-trigger">
@@ -937,9 +983,6 @@ $deptLimitrophes  = getDepartementsLimitrophes();
                 <i class="bi bi-database-fill-up"></i>Mettre à jour la Base de données
             </button>
             <hr class="drop-sep">
-            <button class="drop-item" id="btn-enrichir-fftt">
-                <i class="bi bi-cloud-download"></i>Enrichir via FFTT (liste visible)
-            </button>
             <button class="drop-item" id="btn-import-fftt-dept" data-bs-toggle="modal" data-bs-target="#modal-import-fftt">
                 <i class="bi bi-cloud-arrow-down-fill"></i>Importer JA1/JA2/JA3 depuis FFTT (par département)
             </button>
@@ -947,16 +990,18 @@ $deptLimitrophes  = getDepartementsLimitrophes();
                 <i class="bi bi-file-earmark-spreadsheet"></i>Importer depuis fichier FFTT (102_*.xlsx)
             </button>
             <hr class="drop-sep">
+            <button class="drop-item" id="btn-import-ebp">
+                <i class="bi bi-file-earmark-text"></i>Importer numéros de compte EBP (CSV)
+            </button>
+            <hr class="drop-sep">
             <button class="drop-item green" id="btn-nouveau-ja">
                 <i class="bi bi-person-plus-fill"></i>Nouveau JA
             </button>
-            <hr class="drop-sep">
             <a class="drop-item" href="https://www.dcode.fr/code-postal" target="_blank">
                 <i class="bi bi-globe2"></i>dCode code-postal
             </a>
         </div>
     </div>
-    <?php endif; ?>
     <span id="lbl-count">0 JA</span>
     <div id="toggle-actif" style="margin-left:.5rem">
         <button id="btn-tous">Tous</button>
@@ -964,7 +1009,6 @@ $deptLimitrophes  = getDepartementsLimitrophes();
         <button id="btn-erreurs-cp">⚠ Erreurs CP/Ville</button>
     </div>
     <span style="flex:1"></span>
-    <?php if ($isAdmin): ?>
     <label for="sel-dept" style="font-size:.85rem;font-weight:700;color:#444;white-space:nowrap;margin:0;">
         <i class="bi bi-map me-1"></i>Département
     </label>
@@ -980,7 +1024,6 @@ $deptLimitrophes  = getDepartementsLimitrophes();
         <?php endforeach; ?>
         <?php endif; ?>
     </select>
-    <?php endif; ?>
     <input type="search" id="search-input" placeholder="🔍 Rechercher…">
 </div>
 
@@ -1003,12 +1046,11 @@ $deptLimitrophes  = getDepartementsLimitrophes();
                 <th style="width:110px" data-field="num_compte_ebp">Cpte EBP<span class="sort-icon"></span></th>
                 <th style="width:75px"  data-field="cp">CP<span class="sort-icon"></span></th>
                 <th style="width:160px" data-field="ville">Ville<span class="sort-icon"></span></th>
-                <th style="width:110px" class="no-sort">FFTT</th>
                 <th style="width:75px"  class="no-sort">Lien dispo</th>
             </tr>
         </thead>
         <tbody id="tbody-grille">
-            <tr><td colspan="17" class="text-center text-muted py-3">Chargement…</td></tr>
+            <tr><td colspan="16" class="text-center text-muted py-3">Chargement…</td></tr>
         </tbody>
     </table>
 </div>
@@ -1017,6 +1059,38 @@ $deptLimitrophes  = getDepartementsLimitrophes();
 
 <!-- Toast -->
 <div id="toast-container"></div>
+
+<!-- Modale rapport import EBP -->
+<div class="modal fade" id="modal-import-ebp" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2" style="background:#1a3a6b;color:#fff;">
+        <h6 class="modal-title mb-0"><i class="bi bi-file-earmark-text me-1"></i>Import numéros de compte EBP</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="ebp-resume" class="mb-2" style="font-size:.9rem;"></div>
+        <div id="ebp-echecs-bloc" style="display:none;">
+          <div class="fw-semibold text-danger mb-1" style="font-size:.85rem;">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>Lignes non traitées :
+          </div>
+          <table class="table table-sm table-bordered mb-2" style="font-size:.82rem;">
+            <thead class="table-danger">
+              <tr><th>#</th><th>Nom / Prénom (CSV)</th><th>Raison</th></tr>
+            </thead>
+            <tbody id="ebp-echecs-body"></tbody>
+          </table>
+          <button class="btn btn-sm btn-outline-secondary" id="btn-ebp-telecharger">
+            <i class="bi bi-download me-1"></i>Télécharger le rapport CSV
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fermer</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Modale progression import Excel -->
 <div class="modal fade" id="modal-import-excel" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
@@ -1052,33 +1126,6 @@ $deptLimitrophes  = getDepartementsLimitrophes();
 </div>
 
 <!-- Modale CP / Ville -->
-<div class="modal fade" id="modal-cp-ville" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog" style="max-width:480px;">
-    <div class="modal-content">
-      <div class="modal-header py-2" style="background:#0d6efd;color:#fff;">
-        <h6 class="modal-title mb-0"><i class="bi bi-geo-alt-fill me-1"></i>Code postal / Ville</h6>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body pb-2">
-        <div class="input-group input-group-sm mb-1">
-          <span class="input-group-text">CP</span>
-          <input type="text" id="mcv-cp" class="form-control" placeholder="76000" maxlength="10" style="max-width:90px">
-          <input type="text" id="mcv-ville" class="form-control text-uppercase" placeholder="ROUEN">
-        </div>
-        <div id="mcv-msg" class="form-text" style="min-height:1.2em;"></div>
-        <div id="mcv-suggestions" style="display:none;">
-          <div class="fw-semibold text-primary small mb-1">Plusieurs communes — choisissez :</div>
-          <div id="mcv-suggestions-list" class="d-flex flex-wrap gap-1"></div>
-        </div>
-      </div>
-      <div class="modal-footer py-2">
-        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
-        <button type="button" class="btn btn-success btn-sm" id="btn-mcv-ok"><i class="bi bi-check-lg me-1"></i>Valider</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- Modale Import FFTT par département -->
 <div class="modal fade" id="modal-import-fftt" tabindex="-1" aria-labelledby="modal-import-fftt-titre" aria-hidden="true" data-bs-backdrop="static">
   <div class="modal-dialog modal-xl">
@@ -1377,7 +1424,7 @@ function renderGrille() {
 
     if (!affichees.length) {
         const msg = searchTerm ? 'Aucun résultat pour cette recherche.' : 'Aucun juge-arbitre.';
-        $body.append(`<tr><td colspan="17" class="text-center text-muted py-3">${msg}</td></tr>`);
+        $body.append(`<tr><td colspan="16" class="text-center text-muted py-3">${msg}</td></tr>`);
     } else {
         affichees.forEach(l => {
             const idx  = l._idx;          // index stable, indépendant du filtre/tri
@@ -1406,28 +1453,13 @@ function renderGrille() {
             $tr.append(makeTd(l.num_compte_ebp,    idx, 'num_compte_ebp', false));
             $tr.append(makeCpTd(l,    idx));
             $tr.append(makeVilleTd(l, idx));
-            // Colonne FFTT
-            const $tdFftt = $('<td>').css({textAlign:'center', verticalAlign:'middle', padding:'.2rem', whiteSpace:'nowrap'});
-            if (l.grade_fftt || l.classement || l.date_validation_fftt) {
-                const grade = l.grade_fftt          ? `<span class="badge bg-success me-1">${l.grade_fftt}</span>` : '';
-                const pts   = l.classement          ? `<span class="badge bg-info text-dark me-1">${l.classement}</span>` : '';
-                const valid = l.date_validation_fftt ? `<br><small class="text-muted">${l.date_validation_fftt}</small>` : '';
-                $tdFftt.html(`${grade}${pts}${valid}`);
-            }
-            if (isAdmin) {
-                const $btnRefresh = $('<button>')
-                    .addClass('btn btn-sm btn-outline-primary btn-enrichir-fftt ms-1')
-                    .attr({'data-id': l.id, 'data-idx': idx, title: 'Enrichir via FFTT'})
-                    .html('<i class="bi bi-cloud-download"></i>');
-                $tdFftt.append($btnRefresh);
-            }
-            $tr.append($tdFftt);
-
             // Bouton lien disponibilité
             const $tdLien = $('<td>').css({textAlign:'center', verticalAlign:'middle', padding:'.2rem'});
             const dispoCls   = l.nb_dispo > 0 ? 'btn-success'         : 'btn-outline-secondary';
             const dispoTitle = l.nb_dispo > 0 ? `Disponibilités saisies (${l.nb_dispo} journée(s))` : 'Aucune disponibilité saisie — cliquez pour ouvrir';
-            $tdLien.html(`<button class="btn btn-sm ${dispoCls} btn-lien-dispo" data-id="${l.id}" title="${dispoTitle}"><i class="bi bi-calendar2-check"></i></button>`);
+            const adrTitle = l.id_laposte ? 'Envoyer la demande de mise à jour d\'adresse' : 'Adresse manquante — envoyer la demande';
+            $tdLien.html(`<button class="btn btn-sm ${dispoCls} btn-lien-dispo" data-id="${l.id}" title="${dispoTitle}"><i class="bi bi-calendar2-check"></i></button>`
+                + ` <button class="btn btn-sm ${l.id_laposte ? 'btn-outline-secondary' : 'btn-warning'} btn-lien-adresse" data-id="${l.id}" data-nom="${escHtml(l.prenom + ' ' + l.nom)}" data-email="${escHtml(l.email ?? '')}" title="${adrTitle}"><i class="bi bi-geo-alt"></i></button>`);
             $tr.append($tdLien);
             $body.append($tr);
         });
@@ -1485,13 +1517,12 @@ function makeTdHtml(html, idx, field) {
     return $td;
 }
 
-// ── Cellules CP / Ville — clic ouvre la modale (même pattern que salle.php) ──
+// ── Cellules CP / Ville (lecture seule — modification via bouton adresse) ────
 function makeCpTd(l, idx) {
     const trouve = l.id_laposte != null;
     const bg     = trouve ? '#d1fae5' : (l.cp ? '#fee2e2' : '');
     const $td = $('<td>').attr('data-idx', idx).attr('data-field', 'cp').css({ background: bg });
     $('<div class="cell-inner">').text(l.cp ?? '').appendTo($td);
-    $td.css('cursor', 'pointer').on('click', function (e) { e.stopPropagation(); ouvrirModalCpVille(idx); });
     return $td;
 }
 
@@ -1500,90 +1531,9 @@ function makeVilleTd(l, idx) {
     const bg     = trouve ? '#d1fae5' : (l.ville ? '#fee2e2' : '');
     const $td = $('<td>').attr('data-idx', idx).attr('data-field', 'ville').css({ background: bg });
     $('<div class="cell-inner">').text(l.ville ?? '').appendTo($td);
-    $td.css('cursor', 'pointer').on('click', function (e) { e.stopPropagation(); ouvrirModalCpVille(idx); });
     return $td;
 }
 
-// ── Modale CP / Ville (même pattern que salle.php) ───────────────────────────
-let mcvIdx = null;
-let mcvIdLaPoste = null;
-let _modalCpVille = null;
-function getModalCpVille() {
-    if (!_modalCpVille) _modalCpVille = new bootstrap.Modal(document.getElementById('modal-cp-ville'));
-    return _modalCpVille;
-}
-
-function ouvrirModalCpVille(idx) {
-    mcvIdx = idx;
-    mcvIdLaPoste = lignes[idx].id_laposte ?? null;
-    $('#mcv-cp').val(lignes[idx].cp ?? '');
-    $('#mcv-ville').val(lignes[idx].ville ?? '');
-    $('#mcv-msg').text('').css('color', '');
-    $('#mcv-suggestions').hide();
-    $('#mcv-suggestions-list').empty();
-    getModalCpVille().show();
-    setTimeout(() => $('#mcv-cp').trigger('focus'), 300);
-}
-
-function mcvRechercher() {
-    const cp    = $('#mcv-cp').val().trim();
-    const ville = $('#mcv-ville').val().trim();
-    if (!cp && !ville) return;
-    $('#mcv-suggestions').hide();
-    $('#mcv-suggestions-list').empty();
-    $.post('../ajax/laposte.php', { action: 'recherche_laposte', cp, ville }, function (res) {
-        if (!res.ok && !res.multi) {
-            $('#mcv-msg').text(res.msg ?? 'Commune non trouvée.').css('color', '#c00');
-            mcvIdLaPoste = null;
-            return;
-        }
-        if (res.multi) {
-            $('#mcv-msg').text('').css('color', '');
-            const $list = $('#mcv-suggestions-list').empty();
-            res.suggestions.forEach(s => {
-                $('<button class="btn btn-sm btn-outline-primary">')
-                    .text(`${s.cp} ${s.ville}`)
-                    .on('click', function () {
-                        $('#mcv-cp').val(s.cp);
-                        $('#mcv-ville').val(s.ville);
-                        mcvIdLaPoste = s.id_laposte;
-                        $('#mcv-msg').text(`✓ ${s.cp} ${s.ville}`).css('color', '#065f46');
-                        $('#mcv-suggestions').hide();
-                    }).appendTo($list);
-            });
-            $('#mcv-suggestions').show();
-            mcvIdLaPoste = null;
-        } else {
-            $('#mcv-cp').val(res.cp);
-            $('#mcv-ville').val(res.ville);
-            mcvIdLaPoste = res.id_laposte;
-            $('#mcv-msg').text(`✓ ${res.cp} ${res.ville}`).css('color', '#065f46');
-        }
-    }, 'json').fail(() => $('#mcv-msg').text('Erreur réseau.').css('color', '#c00'));
-}
-
-$('#mcv-cp, #mcv-ville').on('blur', function () { mcvRechercher(); });
-$('#mcv-cp').on('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#mcv-ville').trigger('focus'); } });
-$('#mcv-ville').on('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); mcvRechercher(); } });
-
-$('#btn-mcv-ok').on('click', function () {
-    if (mcvIdx === null) return;
-    const cp    = $('#mcv-cp').val().trim() || null;
-    const ville = $('#mcv-ville').val().trim().toUpperCase() || null;
-    lignes[mcvIdx].cp         = cp;
-    lignes[mcvIdx].ville      = ville;
-    lignes[mcvIdx].id_laposte = mcvIdLaPoste;
-    // Sauvegarde immédiate en base si le JA existe déjà
-    const l = lignes[mcvIdx];
-    if (l && +l.id > 0) {
-        $.post('jugearbitre.php', { action: 'maj_laposte', id_ja: l.id, id_laposte: mcvIdLaPoste ?? '', cp: cp ?? '', ville: ville ?? '' }, function (res) {
-            if (!res.ok) toast(`Erreur sauvegarde : ${res.msg}`, false);
-        }, 'json');
-    }
-    getModalCpVille().hide();
-    renderGrille();
-    setStatus(cp ? `CP/Ville mis à jour : ${cp} ${ville ?? ''}.` : 'CP/Ville effacés.');
-});
 
 // ── Sélection / Edition ───────────────────────────────────────────────────────
 function selectionnerCellule($td) {
@@ -1715,63 +1665,6 @@ $('#btn-maj-bdd').on('click', function () {
         toast(res.msg, res.ok);
         if (res.ok) chargerListe();
     }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
-});
-
-// ── Enrichir un JA via FFTT (bouton par ligne) ───────────────────────────────
-function enrichirJaFftt(idJa, idx) {
-    $.post('jugearbitre.php', { action: 'enrichir_fftt', id_ja: idJa }, function (res) {
-        if (!res.ok) { toast('FFTT : ' + res.msg, false); return; }
-        lignes[idx].classement               = res.classement;
-        lignes[idx].date_validation_fftt     = res.date_valid;
-        lignes[idx].grade_fftt               = res.grade_fftt;
-        lignes[idx].date_enrichissement_fftt = new Date().toISOString();
-        renderGrille();
-        const grade = res.grade_fftt ? ` [${res.grade_fftt}]` : '';
-        const pts   = res.classement ? ` — ${res.classement} pts` : '';
-        const dt    = res.date_valid ? `, validité ${res.date_valid}` : '';
-        toast(`FFTT : ${res.nom_fftt}${grade}${pts}${dt}`);
-    }, 'json').fail(() => toast('Erreur réseau FFTT.', false));
-}
-
-$(document).on('click', '.btn-enrichir-fftt', function () {
-    const id  = $(this).data('id');
-    const idx = $(this).data('idx');
-    enrichirJaFftt(id, idx);
-});
-
-// ── Enrichir tous les JA visibles via FFTT ────────────────────────────────────
-$('#btn-enrichir-fftt').on('click', function () {
-    const visibles = lignesFiltreesTriees();
-    if (!visibles.length) { toast('Aucun JA visible.', false); return; }
-    if (!confirm(`Enrichir ${visibles.length} JA via l'API FFTT ? (${visibles.length} appels réseau)`)) return;
-
-    let done = 0;
-    let errors = 0;
-
-    function next() {
-        if (done + errors >= visibles.length) {
-            toast(`FFTT : ${done} enrichi(s)${errors ? ', ' + errors + ' erreur(s)' : ''}.`, errors === 0);
-            spinner(false);
-            return;
-        }
-        const l = visibles[done + errors];
-        $.post('jugearbitre.php', { action: 'enrichir_fftt', id_ja: l.id }, function (res) {
-            if (res.ok) {
-                lignes[l._idx].classement               = res.classement;
-                lignes[l._idx].date_validation_fftt     = res.date_valid;
-                lignes[l._idx].grade_fftt               = res.grade_fftt;
-                lignes[l._idx].date_enrichissement_fftt = new Date().toISOString();
-                done++;
-            } else {
-                errors++;
-            }
-            setStatus(`Enrichissement FFTT : ${done + errors}/${visibles.length}…`);
-            next();
-        }, 'json').fail(() => { errors++; next(); });
-    }
-
-    spinner(true);
-    next();
 });
 
 // ── Import FFTT par département ───────────────────────────────────────────────
@@ -2068,6 +1961,37 @@ $(document).on('click', '.btn-lien-dispo', function (e) {
     });
 });
 
+// ── Bouton "Envoyer la demande de mise à jour d'adresse" ─────────────────────
+$(document).on('click', '.btn-lien-adresse', function (e) {
+    e.stopPropagation();
+    const id    = $(this).data('id');
+    const nom   = $(this).data('nom')   || `JA #${id}`;
+    const email = $(this).data('email') || '';
+
+    if (!email) {
+        nijacToast(`${nom} n'a pas d'adresse email — impossible d'envoyer le message.`, 'warning');
+        return;
+    }
+
+    nijacConfirm(
+        `Envoyer le message de demande d'adresse à <strong>${nom}</strong> ?`,
+        function () {
+            $.post('adresse_ja.php', { action: 'envoyer_demande_adresse', id_ja: id }, function (r) {
+                if (r.ok) {
+                    nijacToast(`Message envoyé à ${r.nom}.`, 'success');
+                    if (r.url) window.open(r.url, '_blank');
+                } else {
+                    nijacToast('Erreur : ' + (r.err || 'inconnue'), 'danger');
+                }
+            }, 'json').fail(function () {
+                nijacToast('Erreur réseau.', 'danger');
+            });
+        },
+        null,
+        { type: 'question', confirmLabel: 'Envoyer', cancelLabel: 'Annuler' }
+    );
+});
+
 // ── Modale Nouveau JA ─────────────────────────────────────────────────────────
 let njaIdLaPoste = null;
 
@@ -2186,6 +2110,77 @@ $('#btn-enregistrer-ja').on('click', function () {
             chargerListe();
         }
     }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
+});
+
+// ── Import CSV numéros de compte EBP ─────────────────────────────────────────
+$('#btn-import-ebp').on('click', () => $('#file-input-ebp').val('').trigger('click'));
+
+$('#file-input-ebp').on('change', function () {
+    const file = this.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        const text = e.target.result;
+        // Parsing CSV : séparateur virgule, ignorer lignes vides
+        const lignes = text.split(/\r?\n/)
+            .map(l => l.trim())
+            .filter(Boolean)
+            .map((l, i) => {
+                const idx = l.indexOf(';');
+                if (idx === -1) return { num: l.trim(), nom: '', _src: l };
+                return {
+                    num: l.substring(0, idx).trim(),
+                    nom: l.substring(idx + 1).trim().replace(/^"|"$/g, ''),
+                    _src: l,
+                };
+            });
+
+        if (!lignes.length) {
+            nijacToast('Fichier CSV vide ou illisible.', 'warning');
+            return;
+        }
+
+        spinner(true);
+        $.post('jugearbitre.php', { action: 'import_csv_ebp', lignes: JSON.stringify(lignes) }, function (r) {
+            spinner(false);
+            if (!r.ok) { nijacToast('Erreur : ' + (r.msg || 'inconnue'), 'danger'); return; }
+
+            // Résumé
+            $('#ebp-resume').html(
+                `<span class="text-success fw-semibold"><i class="bi bi-check-circle-fill me-1"></i>${r.maj} compte(s) mis à jour.</span>` +
+                (r.echecs.length ? ` &nbsp;<span class="text-danger">${r.echecs.length} ligne(s) non traitée(s).</span>` : '')
+            );
+
+            // Tableau des échecs
+            const $tbody = $('#ebp-echecs-body').empty();
+            if (r.echecs.length) {
+                r.echecs.forEach(ec => {
+                    $tbody.append(`<tr><td>${ec.ligne}</td><td>${$('<span>').text(ec.texte).html()}</td><td class="text-danger">${$('<span>').text(ec.raison).html()}</td></tr>`);
+                });
+                $('#ebp-echecs-bloc').show();
+
+                // Rapport CSV téléchargeable
+                $('#btn-ebp-telecharger').off('click').on('click', function () {
+                    const csv = 'Ligne,Nom / Prénom,Raison\n' +
+                        r.echecs.map(ec => `${ec.ligne},"${ec.texte.replace(/"/g, '""')}","${ec.raison.replace(/"/g, '""')}"`).join('\n');
+                    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+                    const url  = URL.createObjectURL(blob);
+                    const a    = document.createElement('a');
+                    a.href     = url;
+                    a.download = 'rapport_import_ebp.csv';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                });
+            } else {
+                $('#ebp-echecs-bloc').hide();
+            }
+
+            new bootstrap.Modal(document.getElementById('modal-import-ebp')).show();
+            if (r.maj > 0) chargerListe();
+        }, 'json').fail(() => { spinner(false); nijacToast('Erreur réseau.', 'danger'); });
+    };
+    reader.readAsText(file, 'UTF-8');
 });
 
 // ── Importer Excel (102_*.xlsx) ───────────────────────────────────────────────

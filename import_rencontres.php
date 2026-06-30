@@ -423,7 +423,26 @@ if ($action !== '') {
             exit;
         }
 
-        // ── 5. Vider les tables de rencontres ────────────────────────────────
+        // ── 5. Liste des rencontres déjà en base ─────────────────────────────
+        if ($action === 'liste_rencontres') {
+            $rows = $pdo->query(
+                'SELECT r.Id_Rencontre, r.Date, r.Heure, r.Journee, r.Poule, r.Phase,
+                        dv.Division AS DivisionCode, dv.Nom AS DivisionNom, dv.Color AS DivisionColor,
+                        ed.Nom AS NomDom, ev.Nom AS NomExt,
+                        r.ArbitrageObligatoire,
+                        (SELECT COUNT(*) FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre) AS NbNominations
+                 FROM rencontre r
+                 JOIN division dv ON dv.Id_Division = r.Id_Division
+                 JOIN equipe   ed ON ed.Id_Equipe   = r.Id_EquipeDom
+                 LEFT JOIN equipe ev ON ev.Id_Equipe = r.Id_EquipeExt
+                 ORDER BY r.Date ASC, r.Heure ASC, dv.Ord ASC'
+            )->fetchAll();
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'rencontres' => $rows, 'total' => count($rows)]);
+            exit;
+        }
+
+        // ── 6. Vider les tables de rencontres ────────────────────────────────
         if ($action === 'compter_tables') {
             $tables = ['equipe', 'equipe_nationale', 'rencontre', 'nomination', 'disponible'];
             $counts = [];
@@ -686,6 +705,49 @@ require __DIR__ . '/includes/page_header.php';
             <hr>
             <div class="section-title"><i class="bi bi-bar-chart-fill"></i>Bilan</div>
             <div id="bilan-stats"></div>
+        </div>
+    </div>
+
+    <!-- ── Section : Rencontres déjà en base ── -->
+    <div class="section-box mt-3">
+        <div class="section-title d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-calendar3"></i>&nbsp;Rencontres déjà en base</span>
+            <span id="lbl-nb-renc" class="text-muted fw-normal" style="font-size:.82rem;"></span>
+        </div>
+
+        <div class="d-flex gap-2 mb-2 flex-wrap align-items-center">
+            <input type="search" id="filtre-renc" class="form-control form-control-sm"
+                   placeholder="Filtrer…" style="max-width:240px;">
+            <select id="filtre-div" class="form-select form-select-sm" style="max-width:160px;">
+                <option value="">Toutes les divisions</option>
+            </select>
+            <button id="btn-refresh-renc" class="btn btn-sm btn-outline-secondary ms-auto">
+                <i class="bi bi-arrow-clockwise me-1"></i>Actualiser
+            </button>
+        </div>
+
+        <div style="max-height:65vh;overflow-y:auto;border:1px solid #e0e8f0;border-radius:6px;">
+            <table id="tbl-renc" class="table table-sm table-hover table-striped mb-0 align-middle" style="font-size:.83rem;">
+                <thead class="table-dark sticky-top" style="top:0;z-index:1;">
+                    <tr>
+                        <th class="sort-col" data-col="Date" style="cursor:pointer;white-space:nowrap;">Date <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th class="sort-col" data-col="Heure" style="cursor:pointer;">H <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th class="sort-col" data-col="Journee" style="cursor:pointer;">J <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th class="sort-col" data-col="Poule" style="cursor:pointer;">P <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th class="sort-col" data-col="Phase" style="cursor:pointer;">Ph <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th class="sort-col" data-col="DivisionCode" style="cursor:pointer;">Division <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th class="sort-col" data-col="NomDom" style="cursor:pointer;">Domicile <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th class="sort-col" data-col="NomExt" style="cursor:pointer;">Extérieur <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th class="text-center">Arb.</th>
+                        <th class="text-center">Nom.</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody-renc">
+                    <tr><td colspan="10" class="text-center text-muted py-3">
+                        <span class="spinner-border spinner-border-sm me-2"></span>Chargement…
+                    </td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
 
@@ -1120,6 +1182,112 @@ $('#btn-vider').on('click', function () { rafraichirEtatTables(true); });
 
 // Couleur au chargement de la page
 rafraichirEtatTables(false);
+
+/* ── Liste des rencontres en base ─────────────────────────────────────────── */
+let toutesRencontres = [];
+
+function chargerListeRencontres() {
+    $('#tbody-renc').html('<tr><td colspan="10" class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm me-2"></span>Chargement…</td></tr>');
+
+    $.post('import_rencontres.php', { action: 'liste_rencontres' }, function (r) {
+        if (!r.ok) {
+            $('#tbody-renc').html(`<tr><td colspan="10" class="text-danger p-2">${esc(r.msg)}</td></tr>`);
+            return;
+        }
+        toutesRencontres = r.rencontres ?? [];
+        $('#lbl-nb-renc').text(`(${r.total} rencontre(s))`);
+
+        // Alimenter le filtre division
+        const divs = [...new Set(toutesRencontres.map(rc => rc.DivisionCode))].sort();
+        const $sel = $('#filtre-div').empty().append('<option value="">Toutes les divisions</option>');
+        divs.forEach(d => $sel.append(`<option value="${esc(d)}">${esc(d)}</option>`));
+
+        renderListeRencontres();
+    }, 'json').fail(function () {
+        $('#tbody-renc').html('<tr><td colspan="10" class="text-danger p-2">Erreur réseau.</td></tr>');
+    });
+}
+
+/* Calcule la luminosité d'une couleur hex et retourne '#fff' ou '#111' selon le contraste */
+function textColorFor(hex) {
+    const c = hex.replace('#', '');
+    const r = parseInt(c.substring(0,2), 16);
+    const g = parseInt(c.substring(2,4), 16);
+    const b = parseInt(c.substring(4,6), 16);
+    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return lum > 0.55 ? '#111' : '#fff';
+}
+
+let sortCol = 'Date', sortAsc = true;
+
+function renderListeRencontres() {
+    const filtre  = $('#filtre-renc').val().trim().toLowerCase();
+    const filtDiv = $('#filtre-div').val();
+
+    let lignes = toutesRencontres.filter(rc => {
+        if (filtDiv && rc.DivisionCode !== filtDiv) return false;
+        if (filtre && !`${rc.NomDom} ${rc.NomExt} ${rc.DivisionCode}`.toLowerCase().includes(filtre)) return false;
+        return true;
+    });
+
+    // Tri
+    lignes.sort((a, b) => {
+        const va = String(a[sortCol] ?? '');
+        const vb = String(b[sortCol] ?? '');
+        return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    });
+
+    // Icônes tri dans l'en-tête
+    $('.sort-col .sort-icon').removeClass('bi-arrow-up bi-arrow-down').addClass('bi-arrow-down-up');
+    $(`.sort-col[data-col="${sortCol}"] .sort-icon`)
+        .removeClass('bi-arrow-down-up')
+        .addClass(sortAsc ? 'bi-arrow-down' : 'bi-arrow-up');
+
+    if (!lignes.length) {
+        $('#tbody-renc').html('<tr><td colspan="10" class="text-center text-muted py-3">Aucune rencontre.</td></tr>');
+        return;
+    }
+
+    const rows = lignes.map(rc => {
+        const date  = rc.Date ? rc.Date.substring(0, 10).split('-').reverse().join('/') : '—';
+        const heure = (rc.Heure ?? '').substring(0, 5) || '—';
+        const bg    = rc.DivisionColor && /^#[0-9a-fA-F]{6}$/.test(rc.DivisionColor)
+                      ? rc.DivisionColor : '#1a3a6b';
+        const fg    = textColorFor(bg);
+        const arb   = rc.ArbitrageObligatoire == 1
+            ? '<i class="bi bi-check-circle-fill text-success"></i>'
+            : '<span class="text-muted">—</span>';
+        const nom   = rc.NbNominations > 0
+            ? `<span class="badge bg-success">${rc.NbNominations}</span>`
+            : '<span class="text-muted">—</span>';
+        return `<tr>
+            <td class="fw-semibold">${esc(date)}</td>
+            <td>${esc(heure)}</td>
+            <td>${esc(rc.Journee ?? '—')}</td>
+            <td>${esc(rc.Poule ?? '—')}</td>
+            <td>${esc(rc.Phase ?? '—')}</td>
+            <td><span class="badge" style="background:${bg};color:${fg}">${esc(rc.DivisionCode)}</span></td>
+            <td>${esc(rc.NomDom ?? '—')}</td>
+            <td>${esc(rc.NomExt ?? '—')}</td>
+            <td class="text-center">${arb}</td>
+            <td class="text-center">${nom}</td>
+        </tr>`;
+    }).join('');
+
+    $('#tbody-renc').html(rows);
+}
+
+$(document).on('click', '.sort-col', function () {
+    const col = $(this).data('col');
+    if (col === sortCol) { sortAsc = !sortAsc; } else { sortCol = col; sortAsc = true; }
+    renderListeRencontres();
+});
+
+$('#filtre-renc, #filtre-div').on('input change', renderListeRencontres);
+$('#btn-refresh-renc').on('click', chargerListeRencontres);
+
+// Chargement initial
+chargerListeRencontres();
 </script>
 
 <?php require __DIR__ . '/includes/footer.php'; ?>

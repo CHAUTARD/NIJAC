@@ -1,8 +1,8 @@
 <?php
 /**
- * NIJAC – Demandes de JA pour équipes R3 / R4 (E025)
+ * NIJAC – Demandes de JA pour équipes R3M / R4M (E025)
  *
- * Permet de signaler qu'une équipe R3 ou R4 demande un Juge-Arbitre.
+ * Permet de signaler qu'une équipe R3M ou R4M demande un Juge-Arbitre.
  * Quand JAdemande = 1, toutes les rencontres à domicile de cette équipe
  * passent automatiquement en ArbitrageObligatoire = 1.
  *
@@ -28,7 +28,7 @@ if ($action !== '') {
     try {
         $pdo = getPDO();
 
-        // ── Liste des équipes R3/R4 avec filtre département ────────────────
+        // ── Liste des équipes R3M/R4M avec filtre département ────────────────
         if ($action === 'liste') {
             $dept = (int)($_GET['dept'] ?? 0);
 
@@ -141,13 +141,13 @@ $isAdmin     = !empty($moi['is_admin']);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NIJAC – Demandes JA R3/R4</title>
+    <title>NIJAC – Demandes JA R3M/R4M</title>
 
     <link rel="stylesheet" href="../asset/css/bootstrap.min.css">
     <link rel="stylesheet" href="../asset/css/bootstrap-icons.min.css">
 
     <style>
-        :root { --nijac-blue: #1a3a6b; --r34-color: #ede7f6; }
+        :root { --nijac-blue: #1a3a6b; --R3M4-color: #ede7f6; }
 
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
@@ -173,7 +173,7 @@ $isAdmin     = !empty($moi['is_admin']);
 
         /* ── Barre de filtres ── */
         #filter-bar {
-            background: var(--r34-color);
+            background: var(--R3M4-color);
             border-bottom: 2px solid #c5b0e8;
             padding: .5rem 1.25rem;
             display: flex;
@@ -224,8 +224,8 @@ $isAdmin     = !empty($moi['is_admin']);
         tr.ja-demande td { background: #e8f5e9 !important; }
         tr.ja-demande:hover td { background: #d4edda !important; }
 
-        .badge-r3  { background: #fff; border: 1px solid #999; color: #333; }
-        .badge-r4  { background: #D3D3D3; border: 1px solid #999; color: #333; }
+        .badge-R3M { background: #1565c0; color: #fff; }
+        .badge-R4M { background: #6a1b9a; color: #fff; }
         .badge-dept { background: #5c6bc0; color: #fff; font-size: .75rem; }
 
         /* ── Toast ── */
@@ -265,7 +265,7 @@ $isAdmin     = !empty($moi['is_admin']);
 </head>
 <body>
 
-<?php $pageIcon = 'bi-person-badge'; $pageTitle = 'Demandes JA pour équipes R3 / R4'; $pageCode = 'E027'; $backUrl = $isAdmin ? '../admin_menu.php' : 'menu.php'; $backBtnClass = 'ms-auto btn btn-sm btn-outline-light'; require __DIR__ . '/../includes/page_header.php'; ?>
+<?php $pageIcon = 'bi-person-badge'; $pageTitle = 'Demandes JA pour équipes R3M / R4'; $pageCode = 'E027'; $backUrl = $isAdmin ? '../admin_menu.php' : 'menu.php'; $backBtnClass = 'ms-auto btn btn-sm btn-outline-light'; require __DIR__ . '/../includes/page_header.php'; ?>
 
 <?php require __DIR__ . '/includes/toolbar.php'; ?>
 
@@ -279,8 +279,8 @@ $isAdmin     = !empty($moi['is_admin']);
     <label for="sel-division" class="ms-3">Division :</label>
     <select id="sel-division" class="form-select form-select-sm">
         <option value="">— Toutes —</option>
-        <option value="R3M">R3</option>
-        <option value="R4M">R4</option>
+        <option value="R3M">R3M</option>
+        <option value="R4M">R4M</option>
     </select>
 
     <label for="txt-recherche" class="ms-3"><i class="bi bi-search me-1"></i>Recherche :</label>
@@ -441,7 +441,7 @@ function filtrerEtAfficher() {
         tr.dataset.id = e.Id_Equipe;
         if (+e.JAdemande === 1) tr.classList.add('ja-demande');
 
-        const badgeCls = e.Division === 'R3M' ? 'badge-r3' : 'badge-r4';
+        const badgeCls = e.Division === 'R3M' ? 'badge-R3M' : 'badge-R4M';
         const checked  = +e.JAdemande === 1 ? 'checked' : '';
 
         tr.innerHTML = `

@@ -7,7 +7,7 @@
  * et est associé à un utilisateur.
  *
  * Créé par : Patrick CHAUTARD
- * Date de création : 2026-06-14
+ * Date de création : 2026-06-30
  */
 session_start();
 require_once __DIR__ . '/../config/db.php';
@@ -36,18 +36,18 @@ if ($action !== '') {
                 $rows = $pdo->query(
                     'SELECT m.Id_Messagerie, m.Type, m.Sujet, m.Message, m.Id_Utilisateur,
                             CONCAT(u.Nom, \' \', u.Prenom) AS NomUtilisateur,
-                            (m.Id_Messagerie BETWEEN 1 AND 4) AS EstSysteme
+                            (m.Id_Messagerie BETWEEN 1 AND 5) AS EstSysteme
                      FROM messagerie m
                      LEFT JOIN Utilisateur u ON u.Id_Utilisateur = m.Id_Utilisateur
-                     ORDER BY (m.Id_Messagerie BETWEEN 1 AND 4) DESC, m.Id_Messagerie * (m.Id_Messagerie BETWEEN 1 AND 4), m.Type, m.Sujet'
+                     ORDER BY (m.Id_Messagerie BETWEEN 1 AND 5) DESC, m.Id_Messagerie * (m.Id_Messagerie BETWEEN 1 AND 5), m.Type, m.Sujet'
                 )->fetchAll();
             } else {
                 $stmt = $pdo->prepare(
                     'SELECT Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, NULL AS NomUtilisateur,
-                            (Id_Messagerie BETWEEN 1 AND 4) AS EstSysteme
+                            (Id_Messagerie BETWEEN 1 AND 5) AS EstSysteme
                      FROM messagerie
-                     WHERE Id_Messagerie BETWEEN 1 AND 4 OR Id_Utilisateur IS NULL OR Id_Utilisateur = ?
-                     ORDER BY (Id_Messagerie BETWEEN 1 AND 4) DESC, Id_Messagerie * (Id_Messagerie BETWEEN 1 AND 4), Type, Sujet'
+                     WHERE Id_Messagerie BETWEEN 1 AND 5 OR Id_Utilisateur IS NULL OR Id_Utilisateur = ?
+                     ORDER BY (Id_Messagerie BETWEEN 1 AND 5) DESC, Id_Messagerie * (Id_Messagerie BETWEEN 1 AND 5), Type, Sujet'
                 );
                 $stmt->execute([$idCurrentUser]);
                 $rows = $stmt->fetchAll();
@@ -94,7 +94,7 @@ if ($action !== '') {
                 $row = $pdo->prepare('SELECT Id_Utilisateur FROM messagerie WHERE Id_Messagerie = ?');
                 $row->execute([$id]);
                 $existing = $row->fetch();
-                if ($existing && ($existing['Id_Utilisateur'] === null || ($id >= 1 && $id <= 4)) && !$isAdmin) {
+                if ($existing && ($existing['Id_Utilisateur'] === null || ($id >= 1 && $id <= 5)) && !$isAdmin) {
                     echo json_encode(['ok' => false, 'msg' => 'Ce message système ne peut être modifié que par un administrateur.']);
                     exit;
                 }
@@ -134,7 +134,7 @@ if ($action !== '') {
             $row = $pdo->prepare('SELECT Id_Utilisateur FROM messagerie WHERE Id_Messagerie = ?');
             $row->execute([$id]);
             $existing = $row->fetch();
-            if ($existing && ($existing['Id_Utilisateur'] === null || ($id >= 1 && $id <= 4)) && !$isAdmin) {
+            if ($existing && ($existing['Id_Utilisateur'] === null || ($id >= 1 && $id <= 5)) && !$isAdmin) {
                 echo json_encode(['ok' => false, 'msg' => 'Les messages système ne peuvent pas être supprimés.']);
                 exit;
             }

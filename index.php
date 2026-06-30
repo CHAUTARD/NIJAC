@@ -17,7 +17,14 @@ require_once __DIR__ . '/Classes/SecurePasswordHasher.php';
 
 // Si déjà connecté, rediriger selon le rôle
 if (isset($_SESSION['utilisateur'])) {
-    header('Location: ' . (($_SESSION['utilisateur']['role'] === 'Administrateur') ? 'admin_menu.php' : 'Nominateur/menu.php'));
+    $role = $_SESSION['utilisateur']['role'];
+    if ($role === 'Administrateur') {
+        header('Location: admin_menu.php');
+    } elseif ($role === 'JA') {
+        header('Location: JA/info_rencontre.php');
+    } else {
+        header('Location: Nominateur/menu.php');
+    }
     exit;
 }
 
@@ -63,9 +70,112 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'is_admin'       => ($row['Role'] === 'Administrateur'),
                 ];
 
-                header('Location: ' . ($row['Role'] === 'Administrateur' ? 'admin_menu.php' : 'Nominateur/menu.php'));
+                $redirect = $row['Role'] === 'Administrateur' ? 'admin_menu.php' : 'Nominateur/menu.php';
+                header('Location: ' . $redirect);
                 exit;
+            }
+
+            // ── Authentification JA : Nom + numéro de licence ────────────────
+            // Étape 1 : le nom existe-t-il dans la table ja ?
+            $stmtJaNom = $pdo->prepare(
+                'SELECT Id_JA, Nom, Prenom, Email, Grade, Id_Club,
+                        SUBSTRING(Id_Club, 3, 2) AS Departement
+                 FROM ja
+                 WHERE UPPER(TRIM(Nom)) = UPPER(TRIM(:nom)) AND Actif = 1
+                 LIMIT 1'
+            );
+            $stmtJaNom->execute([':nom' => $login]);
+            $jaNom = $stmtJaNom->fetch();
+
+            if (!$jaNom) {
+                $status       = 'Nom « ' . htmlspecialchars($login) . ' » introuvable dans la liste des JA actifs.';
+                $statut_class = 'text-danger';
             } else {
+                // Étape 2 : le numéro de licence correspond-il ?
+                $stmtJa = $pdo->prepare(
+                    'SELECT Id_JA, Nom, Prenom, Email, Grade, Id_Club,
+                            SUBSTRING(Id_Club, 3, 2) AS Departement
+                     FROM ja
+                     WHERE UPPER(TRIM(Nom)) = UPPER(TRIM(:nom)) AND TRIM(Id_JA) = TRIM(:licence) AND Actif = 1
+                     LIMIT 1'
+                );
+                $stmtJa->execute([':nom' => $login, ':licence' => $password]);
+                $ja = $stmtJa->fetch();
+            }
+
+            if ($jaNom && !isset($ja)) {
+                $status       = 'Numéro de licence incorrect pour le JA « ' . htmlspecialchars($jaNom['Nom']) . ' ».';
+                $statut_class = 'text-danger';
+            }
+
+            if (isset($ja) && $ja) {
+                $idDept = $ja['Departement'] ?? '';
+
+                // Vérifier que le club du JA a des rencontres R3M ou R4M à venir
+                $stmtCheck = $pdo->prepare(
+                    'SELECT COUNT(*) FROM rencontre r
+                     JOIN division dv  ON dv.Id_Division = r.Id_Division
+                     JOIN equipe   ed  ON ed.Id_Equipe   = r.Id_EquipeDom
+                     WHERE (dv.ArbitrageObligatoire = 1 OR ed.JAdemande = 1 OR dv.Division IN (\'R3M\', \'R4M\'))
+                       AND ed.Id_Club = :id_club
+                       AND r.Date BETWEEN DATE_SUB(CURDATE(), INTERVAL 5 DAY) AND DATE_ADD(CURDATE(), INTERVAL 5 DAY)'
+                );
+                $stmtCheck->execute([':id_club' => $ja['Id_Club']]);
+                $nbRencontres = (int)$stmtCheck->fetchColumn();
+
+                if ($nbRencontres === 0) {
+                    // Supprimer l'enregistrement Utilisateur existant s'il avait été créé
+                    $pdo->prepare('DELETE FROM Utilisateur WHERE Login = :login AND Role = \'JA\'')
+                        ->execute([':login' => $ja['Nom']]);
+                    $status       = 'Accès refusé : aucune rencontre R3/R4 pour votre club.';
+                    $statut_class = 'text-danger';
+                } else {
+                    // Vérifier si un compte Utilisateur existe déjà pour ce JA (Login = Nom)
+                    $stmtU = $pdo->prepare(
+                        'SELECT Id_Utilisateur FROM Utilisateur WHERE Login = :login LIMIT 1'
+                    );
+                    $stmtU->execute([':login' => $ja['Nom']]);
+                    $utilisateur = $stmtU->fetch();
+
+                    if (!$utilisateur) {
+                        // Créer le compte Utilisateur JA (login = Nom, password = numéro de licence hashé)
+                        $hashedPwd = SecurePasswordHasher::hash($password);
+                        $pdo->prepare(
+                            'INSERT INTO Utilisateur (Login, Password, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin)
+                             VALUES (:login, :pwd, :nom, :prenom, \'JA\', :dept, 1, 0)'
+                        )->execute([
+                            ':login'  => $ja['Nom'],
+                            ':pwd'    => $hashedPwd,
+                            ':nom'    => $ja['Nom'],
+                            ':prenom' => $ja['Prenom'],
+                            ':dept'   => $idDept,
+                        ]);
+                        $idUtilisateur = (int)$pdo->lastInsertId();
+                    } else {
+                        $idUtilisateur = (int)$utilisateur['Id_Utilisateur'];
+                    }
+
+                    session_unset();
+                    session_regenerate_id(true);
+
+                    $_SESSION['utilisateur'] = [
+                        'id'             => $idUtilisateur,
+                        'login'          => $ja['Nom'],
+                        'nom'            => $ja['Nom'],
+                        'prenom'         => $ja['Prenom'],
+                        'role'           => 'JA',
+                        'id_departement' => $idDept,
+                        'change_login'   => false,
+                        'is_admin'       => false,
+                        'id_ja'          => $ja['Id_JA'],
+                    ];
+
+                    header('Location: JA/info_rencontre.php');
+                    exit;
+                }
+            }
+
+            if ($status === 'Prêt.') {
                 $status       = 'Échec : Identifiants invalides.';
                 $statut_class = 'text-danger';
             }

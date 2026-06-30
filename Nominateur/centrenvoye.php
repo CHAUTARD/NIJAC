@@ -5,7 +5,7 @@
  * Envoie les 4 types de messages aux JA actifs du département connecté.
  *
  * Créé par : Patrick CHAUTARD
- * Date de création : 2026-06-14
+ * Date de création : 2026-06-30
  */
 session_start();
 require_once __DIR__ . '/../config/db.php';
@@ -138,6 +138,22 @@ if ($action !== '') {
                         ORDER BY j.Nom, j.Prenom
                     ");
                     $stmt->execute([$dept]);
+                    $rows = $stmt->fetchAll();
+                    break;
+
+                // ── Demande adresse : JA actifs ou sans id_laposte ──────────
+                case 'Demande adresse':
+                    $stmt = $pdo->prepare("
+                        SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
+                               COALESCE(lp.CodePostal, j.Cp)  AS Cp,
+                               COALESCE(lp.Nom,        j.Ville) AS Ville,
+                               (j.Id_LaPoste IS NOT NULL AND j.Id_LaPoste > 0) AS HasAdresse
+                        FROM ja j
+                        LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
+                        WHERE j.Actif = 1 AND (j.Id_LaPoste IS NULL OR j.Id_LaPoste = 0)
+                        ORDER BY j.Nom, j.Prenom
+                    ");
+                    $stmt->execute();
                     $rows = $stmt->fetchAll();
                     break;
 
@@ -299,6 +315,8 @@ if ($action !== '') {
                 ");
                 $stmtJa->execute([$idNomination]);
             } else {
+                // Pour "Demande adresse" on autorise aussi les JA inactifs sans adresse
+                $activeOnly = ($type !== 'Demande adresse') ? 'AND j.Actif = 1' : '';
                 $stmtJa = $pdo->prepare("
                     SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
                            NULL AS Id_Nomination, NULL AS Id_Rencontre,
@@ -307,7 +325,7 @@ if ($action !== '') {
                            NULL AS SalleNom, NULL AS SalleAdresse, NULL AS SalleCP, NULL AS SalleVille,
                            NULL AS CorrNom, NULL AS CorrEmail, NULL AS CorrTel
                     FROM ja j
-                    WHERE j.Id_JA = ? AND j.Actif = 1
+                    WHERE j.Id_JA = ? $activeOnly
                 ");
                 $stmtJa->execute([$idJa]);
             }
@@ -354,14 +372,18 @@ if ($action !== '') {
 
             $token = $_obf->obfuscate((int)$ja['Id_JA']);
             $sexe  = ($ja['SexeCode'] ?? '') === 'F' ? 'Féminin' : (($ja['SexeCode'] ?? '') === 'M' ? 'Mixte' : '');
+            $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $urlAdresseJa = $proto . '://' . $_SERVER['HTTP_HOST']
+                . rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\')
+                . '/adresse_ja.php?ja=' . $token;
             $corps = str_replace(
                 ['{NOM}','{PRENOM}','{NOM_COMPLET}','{ID_JA}','{ID_CONVOCATION}','{SEXE}',
-                 '{UTI_NOM}','{UTI_PRENOM}','{URL_LIGUE}',
+                 '{UTI_NOM}','{UTI_PRENOM}','{URL_LIGUE}','{URL_ADRESSE_JA}',
                  '{DATE}','{HEURE}','{JOURNEE}','{POULE}','{DIVISION}','{DOM}','{EXT}',
                  '{SALLE_NOM}','{SALLE_ADRESSE}','{SALLE_CP}','{SALLE_VILLE}',
                  '{CORR_NOM}','{CORR_EMAIL}','{CORR_TEL}'],
                 [$ja['Nom'],$ja['Prenom'],$ja['Prenom'].' '.$ja['Nom'],$token,(string)($ja['Id_Nomination']??''),$sexe,
-                 $moi['nom']??'',$moi['prenom']??'',getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),
+                 $moi['nom']??'',$moi['prenom']??'',getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),$urlAdresseJa,
                  $ja['Date'] ? date('d/m/Y', strtotime($ja['Date'])) : '',$ja['Heure']??'',
                  $ja['Journee']??'',$ja['Poule']??'',$ja['Division']??'',
                  $ja['NomDom']??'',$ja['NomExt']??'',
@@ -729,6 +751,9 @@ $modeleJson = json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS);
             <button class="type-tab" data-type="Liste nomination">
                 <i class="bi bi-list-check me-1"></i>Liste nomination
             </button>
+            <button class="type-tab" data-type="Demande adresse">
+                <i class="bi bi-geo-alt me-1"></i>Demande adresse
+            </button>
         </div>
 
         <!-- Corps -->
@@ -779,6 +804,10 @@ $modeleJson = json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS);
                 <div id="cart-liste-nom" style="display:none;margin-top:.2rem;">
                     <span class="badge me-1 fw-normal" style="font-size:.68rem;background:#6f42c1;">Liste nomination</span>
                     <code data-cible="message" data-marqueur="{LISTE_NOMINATIONS}">{LISTE_NOMINATIONS}</code>
+                </div>
+                <div id="cart-demande-adresse" style="display:none;margin-top:.2rem;">
+                    <span class="badge me-1 fw-normal" style="font-size:.68rem;background:#e06c00;">Demande adresse</span>
+                    <code data-cible="message" data-marqueur="{URL_ADRESSE_JA}">{URL_ADRESSE_JA}</code>
                 </div>
             </div>
 
@@ -893,6 +922,7 @@ const TITRES_JA = {
     'Rappel dispo':    'JA sans disponibilités saisies',
     'Convocation':     'JA nominés — journée sélectionnée',
     'Liste nomination':'JA avec nominations dans la phase',
+    'Demande adresse': 'JA actifs ou sans adresse domicile',
 };
 
 let typeActif  = 'Disponibilites';
@@ -937,6 +967,7 @@ function chargerModele(type) {
     // Afficher/masquer les sections du cartouche selon le type actif
     $('#cart-convocation').toggle(type === 'Convocation');
     $('#cart-liste-nom').toggle(type === 'Liste nomination');
+    $('#cart-demande-adresse').toggle(type === 'Demande adresse');
     $('#ja-header-titre').text(TITRES_JA[type] || 'JA');
     $('#result-envoi').html('');
 }
@@ -950,6 +981,8 @@ function majColonnesJA(type) {
         );
     } else if (type === 'Liste nomination') {
         $thead.append('<th class="text-center">Nominations</th>');
+    } else if (type === 'Demande adresse') {
+        $thead.append('<th>CP / Ville actuelle</th>');
     }
     $('#alerte-sans-km').remove();
 }
@@ -987,7 +1020,7 @@ function chargerJA() {
         data.date    = date;
     }
 
-    const colSpan = typeActif === 'Convocation' ? 8 : (typeActif === 'Liste nomination' ? 5 : 4);
+    const colSpan = typeActif === 'Convocation' ? 8 : (typeActif === 'Liste nomination' ? 5 : (typeActif === 'Demande adresse' ? 5 : 4));
     $('#tbody-ja').html(`<tr><td colspan="${colSpan}" class="text-center text-muted py-2"><i class="bi bi-hourglass-split me-1"></i>Chargement…</td></tr>`);
 
     $.post('centrenvoye.php', data, function (res) {
@@ -1029,6 +1062,9 @@ function chargerJA() {
                 );
             } else if (typeActif === 'Liste nomination') {
                 $tr.append($('<td class="text-center">').text(ja.NbNominations ?? ''));
+            } else if (typeActif === 'Demande adresse') {
+                const adresse = [ja.Cp, ja.Ville].filter(Boolean).join(' ') || '—';
+                $tr.append($('<td class="text-muted" style="font-size:.85rem;">').text(adresse));
             }
             $body.append($tr);
         });

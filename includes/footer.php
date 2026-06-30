@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../config/db.php';
 
 if (!isset($statusInitial)) $statusInitial = '';
-$_logoBase = str_contains($_SERVER['SCRIPT_NAME'] ?? '', '/Nominateur/') ? '../' : '';
+$_logoBase = (str_contains($_SERVER['SCRIPT_NAME'] ?? '', '/Nominateur/') || str_contains($_SERVER['SCRIPT_NAME'] ?? '', '/JA/')) ? '../' : '';
 ?>
 <style>
 #page-footer {
