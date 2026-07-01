@@ -678,12 +678,14 @@ try {
                     <i class="bi bi-binoculars me-1"></i>Scanner les clubs de <?= htmlspecialchars($regionNom) ?>
                 </button>
                 <span id="scan-status" class="text-muted small"></span>
+                <?php if (($u['login'] ?? '') === 'CHAUTARD'): ?>
                 <div class="ms-auto d-flex align-items-center gap-1" title="Tester un club précis pour voir les champs retournés par l'API">
                     <input type="text" id="dbg-numclu" class="form-control form-control-sm" style="width:110px;" placeholder="n° club">
                     <button id="btn-debug-club" class="btn btn-sm btn-outline-secondary">
                         <i class="bi bi-bug me-1"></i>Debug xml_equipe
                     </button>
                 </div>
+                <?php endif; ?>
             </div>
             <!-- Barre de progression -->
             <div id="scan-progress-wrap" style="display:none;" class="mb-2">

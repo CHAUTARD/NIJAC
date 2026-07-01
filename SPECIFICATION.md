@@ -383,8 +383,6 @@ Gérer les paramètres applicatifs stockés dans la table `configuration` (clé 
 | `regles_departements` | JSON ex : `{"76":["27"]}` | Inclusion automatique d'un département dans un autre |
 | `smtp_host` | Texte | Serveur SMTP |
 | `smtp_port` | Entier | Port SMTP |
-| `smtp_user` | Texte | Utilisateur SMTP |
-| `smtp_password` | Texte | Mot de passe SMTP |
 | `smtp_from` | Email | Adresse expéditeur |
 | `smtp_from_name` | Texte | Nom expéditeur |
 | `indemnite_forfaitaire` | Décimal | Indemnité forfaitaire JA (€) |
@@ -392,6 +390,10 @@ Gérer les paramètres applicatifs stockés dans la table `configuration` (clé 
 | `frais_max_peages` | Décimal | Plafond péages (€) |
 | `frais_max_km` | Décimal | Plafond kilomètres indemnisables |
 | `saison` | Ex : `2025-2026` | Saison en cours |
+
+L'utilisateur et le mot de passe SMTP (`SMTP_USER` / `SMTP_PASSWORD`) ne sont pas stockés dans
+`configuration` : ils sont lus depuis `.env` (encodés ROT47, comme `DB_USER`/`DB_PASS`/`FFTT_APP_ID`/`FFTT_APP_KEY`),
+pour éviter qu'ils apparaissent en clair dans un dump ou dans `db-admin.php` (E099).
 
 ### Actions AJAX
 | Action | Méthode | Description |

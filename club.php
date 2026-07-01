@@ -52,8 +52,8 @@ if ($action !== '') {
             $rows = $pdo->query(
                 'SELECT c.Id_Club, c.Nom,
                         c.CorNom, c.CorEmail, c.CorTelephone,
-                        lp.CodePostal,
-                        lp.Nom AS Ville,
+                        COALESCE(lp.CodePostal, sp.Cp)  AS CodePostal,
+                        COALESCE(lp.Nom,        sp.Ville) AS Ville,
                         (SELECT COUNT(*) FROM Salle s2 WHERE s2.Id_Club = c.Id_Club) AS NbSalles
                  FROM Club c
                  LEFT JOIN Salle   sp ON sp.Id_Club    = c.Id_Club
@@ -155,6 +155,11 @@ if ($action !== '') {
             $prenomCor  = trim((string)($detail['prenomcor'] ?? ''));
             $mailCor    = trim((string)($detail['mailcor']   ?? ''));
             $telCor     = trim((string)($detail['telcor']    ?? ''));
+            // Formatage XX.XX.XX.XX.XX
+            $telDigits = preg_replace('/[^0-9]/', '', $telCor);
+            if (strlen($telDigits) === 10) {
+                $telCor = implode('.', str_split($telDigits, 2));
+            }
 
             $ops = [];
 

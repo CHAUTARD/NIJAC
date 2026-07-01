@@ -51,6 +51,13 @@ if ($action !== '') {
                 exit;
             }
 
+            // smtp_user et smtp_password ne sont plus stockés en base (voir .env)
+            if (in_array($cle, ['smtp_user', 'smtp_password'], true)) {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => "« $cle » est géré via .env, non modifiable ici."]);
+                exit;
+            }
+
             // Validation JSON pour regles_departements
             if ($cle === 'regles_departements' && $valeur !== '') {
                 $decoded = json_decode($valeur, true);
@@ -171,6 +178,11 @@ if ($action !== '') {
                 echo json_encode(['ok' => false, 'msg' => 'La clé ne doit contenir que lettres, chiffres et underscores.']);
                 exit;
             }
+            if (in_array($cle, ['smtp_user', 'smtp_password'], true)) {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => "« $cle » est géré via .env, non gérable ici."]);
+                exit;
+            }
 
             $existe = $pdo->prepare('SELECT 1 FROM configuration WHERE cle = ?');
             $existe->execute([$cle]);
@@ -203,6 +215,11 @@ if ($action !== '') {
             if (!preg_match('/^[a-z0-9_]+$/i', $cle)) {
                 ob_end_clean();
                 echo json_encode(['ok' => false, 'msg' => 'La clé ne doit contenir que lettres, chiffres et underscores.']);
+                exit;
+            }
+            if (in_array($cle, ['smtp_user', 'smtp_password'], true) || in_array($cleOriginale, ['smtp_user', 'smtp_password'], true)) {
+                ob_end_clean();
+                echo json_encode(['ok' => false, 'msg' => "« $cle » est géré via .env, non gérable ici."]);
                 exit;
             }
 
@@ -279,8 +296,7 @@ try {
     $smtpProdPort      = getConfig('smtp_port',      '587');
     $smtpProdSecure    = getConfig('smtp_secure',    'tls');
     $smtpProdAuth      = getConfig('smtp_auth',      '1');
-    $smtpProdUser      = getConfig('smtp_user',      '');
-    $smtpProdPassword  = getConfig('smtp_password',  '');
+    $smtpProdCredsOk = getSmtpUser() !== '' && getSmtpPassword() !== '';
     $smtpProdFrom      = getConfig('smtp_from',      '');
     $smtpProdFromName  = getConfig('smtp_from_name', '');
 } catch (\Throwable $e) {
@@ -298,8 +314,9 @@ try {
     $phase1Fin        = '01-31';
     $phase2Debut      = '02-01';
     $phase2Fin        = '06-30';
-    $smtpProdHost      = $smtpProdPort = $smtpProdUser = $smtpProdPassword = $smtpProdFrom = $smtpProdFromName = '';
+    $smtpProdHost      = $smtpProdPort = $smtpProdFrom = $smtpProdFromName = '';
     $smtpProdSecure    = 'tls'; $smtpProdAuth = '1';
+    $smtpProdCredsOk   = getSmtpUser() !== '' && getSmtpPassword() !== '';
 }
 $deptsActifsArray = array_map('trim', explode(',', $deptsActifs));
 
@@ -1076,17 +1093,15 @@ $changeLogin = !empty($moi['change_login']);
                             </div>
                         </div>
                         <div class="smtp-field">
-                            <label for="smtp-prod-user"><i class="bi bi-person me-1"></i>Utilisateur</label>
-                            <input type="text" id="smtp-prod-user" value="<?= htmlspecialchars($smtpProdUser) ?>" autocomplete="off">
-                        </div>
-                        <div class="smtp-field">
-                            <label for="smtp-prod-password"><i class="bi bi-key me-1"></i>Mot de passe</label>
-                            <div class="input-group">
-                                <input type="password" id="smtp-prod-password" class="form-control" value="<?= htmlspecialchars($smtpProdPassword) ?>" autocomplete="new-password">
-                                <button type="button" class="btn btn-outline-secondary btn-toggle-pwd" data-target="smtp-prod-password" tabindex="-1">
-                                    <i class="bi bi-eye-slash"></i>
-                                </button>
-                            </div>
+                            <label><i class="bi bi-shield-lock me-1"></i>Identifiants (utilisateur / mot de passe)</label>
+                            <p style="font-size:.82rem;margin:0;">
+                                <?php if ($smtpProdCredsOk): ?>
+                                    <span class="text-success"><i class="bi bi-check-circle me-1"></i>Configurés dans <code>.env</code></span>
+                                <?php else: ?>
+                                    <span class="text-danger"><i class="bi bi-x-circle me-1"></i>Non configurés — renseignez <code>SMTP_USER</code> et <code>SMTP_PASSWORD</code> dans <code>.env</code></span>
+                                <?php endif; ?>
+                                <br>Pour des raisons de sécurité, l'utilisateur et le mot de passe SMTP ne sont plus stockés en base ni modifiables depuis cet écran.
+                            </p>
                         </div>
                         <div class="smtp-field">
                             <label for="smtp-prod-from"><i class="bi bi-envelope me-1"></i>Adresse expéditeur (From)</label>
@@ -1932,8 +1947,6 @@ function sauvegarderSmtp(env) {
     const host     = $('#smtp-' + env + '-host').val().trim();
     const port     = $('#smtp-' + env + '-port').val().trim();
     const secure   = $('#smtp-' + env + '-secure').val();
-    const user     = $('#smtp-' + env + '-user').val().trim();
-    const password = $('#smtp-' + env + '-password').val();
     const from     = $('#smtp-' + env + '-from').val().trim();
     const fromName = $('#smtp-' + env + '-from-name').val().trim();
 
@@ -1958,9 +1971,7 @@ function sauvegarderSmtp(env) {
         [p + 'host',      host],
         [p + 'port',      port],
         [p + 'secure',    secure],
-        [p + 'auth',      user !== '' ? '1' : '0'],
-        [p + 'user',      user],
-        [p + 'password',  password],
+        [p + 'auth',      '1'],
         [p + 'from',      from],
         [p + 'from_name', fromName],
     ];
@@ -1992,15 +2003,6 @@ function sauvegarderSmtp(env) {
         });
     });
 }
-
-// ── Afficher / masquer les mots de passe SMTP ────────────────────────────────
-$(document).on('click', '.btn-toggle-pwd', function () {
-    const $input = $('#' + $(this).data('target'));
-    const $icon  = $(this).find('i');
-    const isHidden = $input.attr('type') === 'password';
-    $input.attr('type', isHidden ? 'text' : 'password');
-    $icon.toggleClass('bi-eye-slash', !isHidden).toggleClass('bi-eye', isHidden);
-});
 
 $('#btn-smtp-prod').on('click',  () => sauvegarderSmtp('prod'));
 

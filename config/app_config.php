@@ -269,7 +269,9 @@ function isModeDeveloppement(): bool
 }
 
 /**
- * Retourne une instance PHPMailer préconfigurée avec les paramètres SMTP de la table configuration.
+ * Retourne une instance PHPMailer préconfigurée avec les paramètres SMTP.
+ * Host/port/sécurité/expéditeur viennent de la table `configuration` ; l'utilisateur
+ * et le mot de passe viennent de .env (SMTP_USER / SMTP_PASSWORD, encodés ROT47).
  * Lance une exception en cas d'erreur de configuration.
  */
 function getNijacMailer(string $forcedPrefix = null): \PHPMailer\PHPMailer\PHPMailer
@@ -307,8 +309,8 @@ function getNijacMailer(string $forcedPrefix = null): \PHPMailer\PHPMailer\PHPMa
             ? \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS
             : ($secure === 'tls' ? \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS : '');
         if ($auth) {
-            $mail->Username = getConfig($p . 'user', '');
-            $mail->Password = getConfig($p . 'password', '');
+            $mail->Username = getSmtpUser();
+            $mail->Password = getSmtpPassword();
         }
     } else {
         throw new \RuntimeException('SMTP non configuré. Veuillez renseigner les paramètres SMTP dans la configuration.');

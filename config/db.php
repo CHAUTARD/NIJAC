@@ -59,6 +59,9 @@ define('OBFUSCATOR_SEED', 167);
 function getFfttAppId(): string  { return rot47($_ENV['FFTT_APP_ID']  ?? ''); }
 function getFfttAppKey(): string { return rot47($_ENV['FFTT_APP_KEY'] ?? ''); }
 
+function getSmtpUser(): string     { return rot47($_ENV['SMTP_USER']     ?? ''); }
+function getSmtpPassword(): string { return rot47($_ENV['SMTP_PASSWORD'] ?? ''); }
+
 /**
  * Retourne une instance PDO partagée (singleton).
  */
