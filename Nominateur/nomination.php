@@ -27,6 +27,76 @@ $pdo = getPDO();
 // ── Départements visibles pour l'utilisateur connecté ────────────────────────
 $deptsAutorises = getDepartementsAutorises($_SESSION['utilisateur']['id_departement'] ?? null);
 
+/**
+ * Résout l'Id_Disponible à utiliser pour nominer $idJa sur $idRenc (date $dateRenc).
+ * Règle : un JA doit être disponible pour être nominé.
+ *   1. Ligne disponible précise (Id_Rencontre = $idRenc, Reponse='O') → utilisée telle quelle.
+ *   2. Sinon, disponibilité "toute la journée" (Id_Rencontre NULL, Reponse='O', même date)
+ *      → une ligne précise est matérialisée pour cette rencontre.
+ *   3. Sinon → null (le JA n'est pas disponible, la nomination doit être refusée).
+ */
+function resoudreDisponible(\PDO $pdo, int $idJa, int $idRenc, string $dateRenc): ?int
+{
+    $stmt = $pdo->prepare("SELECT Id_Disponible FROM disponible WHERE Id_JA = ? AND Id_Rencontre = ? AND Reponse = 'O'");
+    $stmt->execute([$idJa, $idRenc]);
+    $idDispo = $stmt->fetchColumn();
+    if ($idDispo) return (int)$idDispo;
+
+    $stmtJournee = $pdo->prepare("
+        SELECT DateReponse FROM disponible
+        WHERE Id_JA = ? AND Id_Rencontre IS NULL AND DateCompetition = ? AND Reponse = 'O'
+        LIMIT 1
+    ");
+    $stmtJournee->execute([$idJa, $dateRenc]);
+    $dateReponse = $stmtJournee->fetchColumn();
+    if ($dateReponse === false) return null;
+
+    $pdo->prepare("
+        INSERT INTO disponible (Id_JA, Id_Rencontre, DateCompetition, Reponse, DateReponse)
+        VALUES (?, ?, ?, 'O', ?)
+    ")->execute([$idJa, $idRenc, $dateRenc, $dateReponse]);
+    return (int)$pdo->lastInsertId();
+}
+
+/**
+ * Affecte (crée ou remplace) la nomination d'une rencontre. Une rencontre n'a
+ * qu'un seul JA nominé (uq_nomination_rencontre) :
+ *   - Si aucune nomination n'existe encore → création.
+ *   - Si une nomination existe pour le même JA (même Id_Disponible) → simple
+ *     rafraîchissement (les frais déjà saisis sont conservés).
+ *   - Si une nomination existe pour un AUTRE JA → remplacement, et les frais/
+ *     rapports de l'ancien JA sont réinitialisés (ils ne concernent pas le nouveau).
+ */
+function affecterNomination(\PDO $pdo, int $idRenc, int $idDispo): void
+{
+    $stmt = $pdo->prepare("SELECT Id_Nomination, Id_Disponible FROM nomination WHERE Id_Rencontre = ?");
+    $stmt->execute([$idRenc]);
+    $existant = $stmt->fetch();
+
+    if (!$existant) {
+        $pdo->prepare("
+            INSERT INTO nomination (Id_Rencontre, Id_Disponible, DateNomination, Valide, EmailEnvoye)
+            VALUES (?, ?, CURDATE(), 0, 0)
+        ")->execute([$idRenc, $idDispo]);
+        return;
+    }
+
+    if ((int)$existant['Id_Disponible'] === $idDispo) {
+        $pdo->prepare("
+            UPDATE nomination SET DateNomination = CURDATE(), Valide = 0, EmailEnvoye = 0
+            WHERE Id_Nomination = ?
+        ")->execute([$existant['Id_Nomination']]);
+        return;
+    }
+
+    $pdo->prepare("
+        UPDATE nomination SET
+            Id_Disponible = ?, DateNomination = CURDATE(), Valide = 0, EmailEnvoye = 0,
+            Peage = 0, Kilometre = 0, RapportAccueil = NULL, RapportEquipements = NULL, DateSaisie = NULL
+        WHERE Id_Nomination = ?
+    ")->execute([$idDispo, $existant['Id_Nomination']]);
+}
+
 // ── Actions AJAX ────────────────────────────────────────────────────────────
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 if ($action !== '') {
@@ -90,7 +160,7 @@ if ($action !== '') {
                 COALESCE(s_r.Nom,         s_c.Nom)         AS NomSalle,
                 COALESCE(lp_r.Latitude,  lp_c.Latitude)  AS VenueLat,
                 COALESCE(lp_r.Longitude, lp_c.Longitude) AS VenueLon,
-                n.Id_JA      AS IdJaAffecte,
+                d_n.Id_JA    AS IdJaAffecte,
                 CONCAT(ja_n.Prenom, ' ', ja_n.Nom) AS NomJaAffecte,
                 n.Valide,
                 n.EmailEnvoye
@@ -103,7 +173,8 @@ if ($action !== '') {
             LEFT JOIN salle   s_c  ON s_c.Id_Club     = ed.Id_Club AND s_c.EstPrincipale = 1
             LEFT JOIN laposte lp_c ON lp_c.Id_LaPoste = s_c.Id_Laposte
             LEFT JOIN nomination n  ON n.Id_Rencontre  = r.Id_Rencontre
-            LEFT JOIN ja ja_n       ON ja_n.Id_JA       = n.Id_JA
+            LEFT JOIN disponible d_n ON d_n.Id_Disponible = n.Id_Disponible
+            LEFT JOIN ja ja_n       ON ja_n.Id_JA       = d_n.Id_JA
             WHERE r.Date = ?
               AND SUBSTRING(ed.Id_Club, 3, 2) IN ($deptPh)
               AND (dv.ArbitrageObligatoire = 1 OR ed.JAdemande = 1)
@@ -159,9 +230,10 @@ if ($action !== '') {
                 AND dr.Id_Rencontre    IS NOT NULL
                 AND dr.Reponse         = 'O'
             LEFT JOIN (
-                SELECT n2.Id_JA, COUNT(*) AS NbNominations
+                SELECT d2.Id_JA, COUNT(*) AS NbNominations
                 FROM nomination n2
-                GROUP BY n2.Id_JA
+                JOIN disponible d2 ON d2.Id_Disponible = n2.Id_Disponible
+                GROUP BY d2.Id_JA
             ) nbnom ON nbnom.Id_JA = ja.Id_JA
             WHERE ja.Actif = 1
               AND (dj.Id_JA IS NOT NULL OR dr.Id_JA IS NOT NULL)
@@ -189,19 +261,22 @@ if ($action !== '') {
 
         $checkDate = $pdo->prepare("
             SELECT COUNT(*) FROM nomination n
-            JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
-            WHERE n.Id_JA = ? AND r.Date = ? AND n.Id_Rencontre != ?
+            JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+            WHERE d.Id_JA = ? AND n.Id_Rencontre != ?
+              AND n.Id_Rencontre IN (SELECT Id_Rencontre FROM rencontre WHERE Date = ?)
         ");
-        $checkDate->execute([$idJa, $ri['Date'], $idRenc]);
+        $checkDate->execute([$idJa, $idRenc, $ri['Date']]);
         if ($checkDate->fetchColumn() > 0) {
             echo json_encode(['ok' => false, 'err' => 'Ce JA est déjà affecté ce jour-là']); exit;
         }
 
-        $pdo->prepare("
-            INSERT INTO nomination (Id_Rencontre, Id_JA, DateNomination, Valide, EmailEnvoye)
-            VALUES (?, ?, CURDATE(), 0, 0)
-            ON DUPLICATE KEY UPDATE Id_JA = VALUES(Id_JA), DateNomination = CURDATE(), Valide = 0, EmailEnvoye = 0
-        ")->execute([$idRenc, $idJa]);
+        // Règle : pour être nominé, un JA doit être disponible
+        $idDispo = resoudreDisponible($pdo, $idJa, $idRenc, $ri['Date']);
+        if (!$idDispo) {
+            echo json_encode(['ok' => false, 'err' => 'Ce JA n\'est pas disponible pour cette rencontre']); exit;
+        }
+
+        affecterNomination($pdo, $idRenc, $idDispo);
 
         // Récupérer le nom du JA pour affichage
         $jaInfo = $pdo->prepare("SELECT Nom, Prenom, Grade, Id_Club FROM ja WHERE Id_JA = ?");
@@ -231,11 +306,10 @@ if ($action !== '') {
             foreach ($autresStmt->fetchAll() as $autre) {
                 // Ne pas affecter si le club du JA joue dans cette rencontre
                 if ($jaClub && ($jaClub == $autre['IdClubDom'] || $jaClub == $autre['IdClubExt'])) continue;
-                $pdo->prepare("
-                    INSERT INTO nomination (Id_Rencontre, Id_JA, DateNomination, Valide, EmailEnvoye)
-                    VALUES (?, ?, CURDATE(), 0, 0)
-                    ON DUPLICATE KEY UPDATE Id_JA = VALUES(Id_JA), DateNomination = CURDATE(), Valide = 0, EmailEnvoye = 0
-                ")->execute([$autre['Id_Rencontre'], $idJa]);
+                // Le JA doit aussi être disponible pour cette deuxième rencontre
+                $idDispoAutre = resoudreDisponible($pdo, $idJa, (int)$autre['Id_Rencontre'], $ri['Date']);
+                if (!$idDispoAutre) continue;
+                affecterNomination($pdo, (int)$autre['Id_Rencontre'], $idDispoAutre);
                 $autoAffectes[] = $autre['Id_Rencontre'];
                 break; // une seule deuxième rencontre automatique
             }
@@ -281,12 +355,13 @@ if ($action !== '') {
 
         // Récupérer les nominations + email JA
         $stmt = $pdo->prepare("
-            SELECT n.Id_Nomination, n.Id_Rencontre, n.Id_JA, ja.Nom, ja.Prenom, ja.Email,
+            SELECT n.Id_Nomination, n.Id_Rencontre, ja.Id_JA, ja.Nom, ja.Prenom, ja.Email,
                    ed.Nom AS NomDom, ee.Nom AS NomExt,
                    r.Date, r.Heure, dv.Division
             FROM nomination n
+            JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
             JOIN rencontre r  ON r.Id_Rencontre  = n.Id_Rencontre
-            JOIN ja           ON ja.Id_JA         = n.Id_JA
+            JOIN ja           ON ja.Id_JA         = d.Id_JA
             JOIN equipe  ed   ON ed.Id_Equipe     = r.Id_EquipeDom
             LEFT JOIN equipe ee ON ee.Id_Equipe   = r.Id_EquipeExt
             JOIN division dv  ON dv.Id_Division   = r.Id_Division

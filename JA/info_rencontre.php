@@ -82,21 +82,23 @@ if ($action !== '') {
         if (!$renc) { echo json_encode(['ok' => false, 'msg' => 'Rencontre introuvable ou non autorisée.']); exit; }
 
         // Vérifier qu'aucun JA n'est déjà désigné
-        $already = $pdo->prepare('SELECT Id_JA FROM nomination WHERE Id_Rencontre = ?');
+        $already = $pdo->prepare('SELECT Id_Nomination FROM nomination WHERE Id_Rencontre = ?');
         $already->execute([$idRencontre]);
         if ($already->fetch()) { echo json_encode(['ok' => false, 'msg' => 'Un JA est déjà désigné pour cette rencontre.']); exit; }
 
         // Insérer dans disponible si pas déjà présent
-        $dispo = $pdo->prepare('SELECT Id_JA FROM disponible WHERE Id_JA = ? AND Id_Rencontre = ?');
+        $dispo = $pdo->prepare('SELECT Id_Disponible FROM disponible WHERE Id_JA = ? AND Id_Rencontre = ?');
         $dispo->execute([$idJa, $idRencontre]);
-        if (!$dispo->fetch()) {
+        $idDispo = $dispo->fetchColumn();
+        if (!$idDispo) {
             $pdo->prepare("INSERT INTO disponible (Id_JA, Id_Rencontre, DateCompetition, Reponse, DateReponse) VALUES (?, ?, ?, 'P', CURDATE())")
                 ->execute([$idJa, $idRencontre, $renc['Date']]);
+            $idDispo = (int)$pdo->lastInsertId();
         }
 
         // Créer la nomination
-        $pdo->prepare('INSERT INTO nomination (Id_Rencontre, Id_JA, DateNomination, Valide, EmailEnvoye) VALUES (?, ?, CURDATE(), 1, 0)')
-            ->execute([$idRencontre, $idJa]);
+        $pdo->prepare('INSERT INTO nomination (Id_Rencontre, Id_Disponible, DateNomination, Valide, EmailEnvoye) VALUES (?, ?, CURDATE(), 1, 0)')
+            ->execute([$idRencontre, $idDispo]);
         $idNomination = (int)$pdo->lastInsertId();
 
         // Charger le modèle convocation et envoyer l'email
@@ -209,6 +211,7 @@ $nominations = $pdo->prepare(
             ec.Nom AS NomClubDomicile,
             ev.Nom AS NomClubVisiteur
      FROM Nomination n
+     JOIN disponible dp ON dp.Id_Disponible = n.Id_Disponible
      JOIN Rencontre r ON r.Id_Rencontre = n.Id_Rencontre
      LEFT JOIN Salle s   ON s.Id_Salle   = r.Id_Salle
      LEFT JOIN laposte lps ON lps.Id_LaPoste = s.Id_LaPoste
@@ -217,7 +220,7 @@ $nominations = $pdo->prepare(
      LEFT JOIN Club  ec  ON ec.Id_Club = ede.Id_Club
      LEFT JOIN equipe eve ON eve.Id_Equipe = r.Id_EquipeExt
      LEFT JOIN Club  ev  ON ev.Id_Club = eve.Id_Club
-     WHERE n.Id_JA = :id_ja AND r.Date >= CURDATE()
+     WHERE dp.Id_JA = :id_ja AND r.Date >= CURDATE()
      ORDER BY r.Date ASC, r.Heure ASC
      LIMIT 10'
 );
@@ -233,7 +236,7 @@ $stmtR3R4 = $pdo->prepare(
             COALESCE(s_r.Nom,  s_c.Nom)         AS NomSalle,
             COALESCE(lp_r.CodePostal, lp_c.CodePostal) AS CpSalle,
             COALESCE(lp_r.Nom,        lp_c.Nom)        AS VilleSalle,
-            n.Id_JA AS IdJaAffecte,
+            d_n.Id_JA AS IdJaAffecte,
             CONCAT(ja_n.Prenom, \' \', ja_n.Nom) AS NomJaAffecte
      FROM rencontre r
      JOIN division dv   ON dv.Id_Division = r.Id_Division
@@ -244,7 +247,8 @@ $stmtR3R4 = $pdo->prepare(
      LEFT JOIN salle   s_c  ON s_c.Id_Club = ed.Id_Club AND s_c.EstPrincipale = 1
      LEFT JOIN laposte lp_c ON lp_c.Id_LaPoste = s_c.Id_Laposte
      LEFT JOIN nomination n   ON n.Id_Rencontre = r.Id_Rencontre
-     LEFT JOIN ja ja_n        ON ja_n.Id_JA     = n.Id_JA
+     LEFT JOIN disponible d_n ON d_n.Id_Disponible = n.Id_Disponible
+     LEFT JOIN ja ja_n        ON ja_n.Id_JA     = d_n.Id_JA
      WHERE (dv.ArbitrageObligatoire = 1 OR ed.JAdemande = 1 OR dv.Division IN (\'R3M\', \'R4M\'))
        AND ed.Id_Club = :id_club
        AND r.Date >= CURDATE()

@@ -23,7 +23,11 @@ $idJa         = 0;
 $idRencontre  = 0;
 
 if ($idNomination > 0) {
-    $row = $pdo->prepare("SELECT Id_JA, Id_Rencontre FROM nomination WHERE Id_Nomination = ?");
+    $row = $pdo->prepare("
+        SELECT d.Id_JA, n.Id_Rencontre
+        FROM nomination n JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+        WHERE n.Id_Nomination = ?
+    ");
     $row->execute([$idNomination]);
     $row = $row->fetch();
     if ($row) { $idJa = (int)$row['Id_JA']; $idRencontre = (int)$row['Id_Rencontre']; }
@@ -39,7 +43,11 @@ if ($action === 'sauvegarder_frais') {
         if (!$idNomP) {
             echo json_encode(['ok' => false, 'err' => 'Paramètre id_nomination manquant.']); exit;
         }
-        $rowNom = $pdo->prepare("SELECT Id_JA, Id_Rencontre FROM nomination WHERE Id_Nomination = ?");
+        $rowNom = $pdo->prepare("
+            SELECT d.Id_JA, n.Id_Rencontre
+            FROM nomination n JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+            WHERE n.Id_Nomination = ?
+        ");
         $rowNom->execute([$idNomP]);
         $rowNom = $rowNom->fetch();
         if (!$rowNom) {

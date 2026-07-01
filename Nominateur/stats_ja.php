@@ -53,7 +53,8 @@ if ($action !== '') {
                         + COALESCE(SUM(n.Peage), 0)
                         + COUNT(n.Id_Nomination) * :indem2 AS total_frais
                 FROM ja
-                JOIN nomination n    ON n.Id_JA         = ja.Id_JA AND n.Valide = 1
+                JOIN nomination n    ON n.Valide = 1
+                JOIN disponible dn   ON dn.Id_Disponible = n.Id_Disponible AND dn.Id_JA = ja.Id_JA
                 JOIN rencontre  r    ON r.Id_Rencontre  = n.Id_Rencontre
                 LEFT JOIN Club  cl   ON cl.Id_Club      = ja.Id_Club
                 LEFT JOIN salle s    ON s.Id_Club       = cl.Id_Club AND s.EstPrincipale = 1
@@ -122,7 +123,8 @@ if ($action !== '') {
                         + COALESCE(SUM(n.Peage), 0)
                         + COUNT(n.Id_Nomination) * :indem2 AS Total
                 FROM ja
-                JOIN nomination n    ON n.Id_JA        = ja.Id_JA AND n.Valide = 1
+                JOIN nomination n    ON n.Valide = 1
+                JOIN disponible dn   ON dn.Id_Disponible = n.Id_Disponible AND dn.Id_JA = ja.Id_JA
                 JOIN rencontre  r    ON r.Id_Rencontre = n.Id_Rencontre
                 LEFT JOIN Club  cl   ON cl.Id_Club     = ja.Id_Club
                 LEFT JOIN salle s    ON s.Id_Club      = cl.Id_Club AND s.EstPrincipale = 1

@@ -151,10 +151,10 @@ if ($action !== '') {
             $adresse    = trim(implode(' ', array_filter([$adr1, $adr2, $adr3]))) ?: null;
             $cpSalle    = trim((string)($detail['codepsalle'] ?? ''));
             $villeSalle = mb_strtoupper(trim((string)($detail['villesalle'] ?? '')), 'UTF-8');
-            $nomCor     = mb_strtoupper(trim((string)($detail['nomcor']    ?? '')), 'UTF-8');
-            $prenomCor  = trim((string)($detail['prenomcor'] ?? ''));
-            $mailCor    = trim((string)($detail['mailcor']   ?? ''));
-            $telCor     = trim((string)($detail['telcor']    ?? ''));
+            $nomCor     = mb_strtoupper(trim(is_array($detail['nomcor']    ?? []) ? '' : (string)$detail['nomcor']),    'UTF-8');
+            $prenomCor  = trim(is_array($detail['prenomcor'] ?? []) ? '' : (string)$detail['prenomcor']);
+            $mailCor    = trim(is_array($detail['mailcor']   ?? []) ? '' : (string)$detail['mailcor']);
+            $telCor     = trim(is_array($detail['telcor']    ?? []) ? '' : (string)$detail['telcor']);
             // Formatage XX.XX.XX.XX.XX
             $telDigits = preg_replace('/[^0-9]/', '', $telCor);
             if (strlen($telDigits) === 10) {

@@ -58,7 +58,8 @@ if ($action !== '') {
                     :indem                                                        AS Prestations
                 FROM nomination n
                 JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
-                JOIN ja j        ON j.Id_JA        = n.Id_JA
+                JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                JOIN ja j        ON j.Id_JA        = d.Id_JA
                 WHERE (n.Valide = 1 OR n.Peage IS NOT NULL OR n.Kilometre IS NOT NULL)
                   AND r.Date BETWEEN :debut AND :fin
                 ORDER BY j.Nom, j.Prenom, r.Date
@@ -97,7 +98,8 @@ if ($action !== '') {
                     ROUND(COUNT(n.Id_Nomination) * :indem, 2) AS Prestations
                 FROM nomination n
                 JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
-                JOIN ja j        ON j.Id_JA        = n.Id_JA
+                JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                JOIN ja j        ON j.Id_JA        = d.Id_JA
                 WHERE (n.Valide = 1 OR n.Peage IS NOT NULL OR n.Kilometre IS NOT NULL)
                   AND r.Date BETWEEN :debut AND :fin
                 GROUP BY j.Id_JA, j.Nom, j.Prenom, j.NumCompteEBP

@@ -39,9 +39,10 @@ if ($action !== '') {
             if (!$saison) { echo json_encode(['ok' => true, 'data' => []]); exit; }
             $rows = $pdo->query("
                 SELECT r.Journee, r.Date,
-                       COUNT(DISTINCT n.Id_JA) AS NbJA
+                       COUNT(DISTINCT d.Id_JA) AS NbJA
                 FROM rencontre r
                 LEFT JOIN nomination n ON n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
+                LEFT JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
                 GROUP BY r.Journee, r.Date
                 ORDER BY r.Date, r.Journee
             ");
@@ -109,7 +110,8 @@ if ($action !== '') {
                                co.CorEmail    AS CorrEmail,
                                co.CorTelephone AS CorrTel
                         FROM nomination n
-                        JOIN ja j              ON j.Id_JA        = n.Id_JA
+                        JOIN disponible dn     ON dn.Id_Disponible = n.Id_Disponible
+                        JOIN ja j              ON j.Id_JA        = dn.Id_JA
                         JOIN rencontre r        ON r.Id_Rencontre = n.Id_Rencontre
                         JOIN equipe ed          ON ed.Id_Equipe   = r.Id_EquipeDom
                         LEFT JOIN equipe ee     ON ee.Id_Equipe   = r.Id_EquipeExt
@@ -128,10 +130,11 @@ if ($action !== '') {
                 case 'Liste nomination':
                     $stmt = $pdo->prepare("
                         SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
-                               COUNT(n.Id_JA) AS NbNominations
+                               COUNT(n.Id_Nomination) AS NbNominations
                         FROM ja j
                         LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
-                        JOIN nomination n ON n.Id_JA = j.Id_JA
+                        JOIN disponible dn ON dn.Id_JA = j.Id_JA
+                        JOIN nomination n ON n.Id_Disponible = dn.Id_Disponible
                         WHERE j.Actif = 1
                           AND LEFT(lp.CodePostal, 2) = ?
                         GROUP BY j.Id_JA, j.Nom, j.Prenom, j.Email
@@ -216,7 +219,8 @@ if ($action !== '') {
                        lps.CodePostal AS SalleCP, lps.Nom AS SalleVille,
                        co.Nom AS CorrNom, co.Email AS CorrEmail, co.Telephone AS CorrTel
                 FROM nomination n
-                JOIN ja j              ON j.Id_JA        = n.Id_JA
+                JOIN disponible dn     ON dn.Id_Disponible = n.Id_Disponible
+                JOIN ja j              ON j.Id_JA        = dn.Id_JA
                 JOIN rencontre r        ON r.Id_Rencontre = n.Id_Rencontre
                 JOIN equipe ed          ON ed.Id_Equipe   = r.Id_EquipeDom
                 LEFT JOIN equipe ee     ON ee.Id_Equipe   = r.Id_EquipeExt
@@ -300,7 +304,8 @@ if ($action !== '') {
                            co.Email       AS CorrEmail,
                            co.Telephone   AS CorrTel
                     FROM nomination n
-                    JOIN ja j              ON j.Id_JA        = n.Id_JA
+                    JOIN disponible dn     ON dn.Id_Disponible = n.Id_Disponible
+                    JOIN ja j              ON j.Id_JA        = dn.Id_JA
                     JOIN rencontre r        ON r.Id_Rencontre = n.Id_Rencontre
                     JOIN equipe ed          ON ed.Id_Equipe   = r.Id_EquipeDom
                     LEFT JOIN equipe ee     ON ee.Id_Equipe   = r.Id_EquipeExt
@@ -341,11 +346,12 @@ if ($action !== '') {
                 $stmtNoms = $pdo->prepare("
                     SELECT r.Date, r.Heure, dv.Division, ed.Nom AS Dom, ee.Nom AS Ext
                     FROM nomination n
+                    JOIN disponible dn  ON dn.Id_Disponible = n.Id_Disponible
                     JOIN rencontre r    ON r.Id_Rencontre = n.Id_Rencontre
                     JOIN equipe ed      ON ed.Id_Equipe   = r.Id_EquipeDom
                     LEFT JOIN equipe ee ON ee.Id_Equipe   = r.Id_EquipeExt
                     JOIN division dv    ON dv.Id_Division = r.Id_Division
-                    WHERE n.Id_JA = ? ORDER BY r.Date, r.Heure
+                    WHERE dn.Id_JA = ? ORDER BY r.Date, r.Heure
                 ");
                 $stmtNoms->execute([$idJa]);
                 $noms = $stmtNoms->fetchAll();
