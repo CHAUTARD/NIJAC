@@ -25,10 +25,11 @@
 - [E020 – Menu nominateur](#e020--menu-nominateur)
 - [E021 – Disponibilités JA](#e021--disponibilités-ja)
 - [E022 – Nomination JA](#e022--nomination-ja)
+- [E023 – Désidératas club](#e023--désidératas-club)
 - [E024 – Centre d'envoi](#e024--centre-denvoi)
 - [E025 – Comptabilité frais JA](#e025--comptabilité-frais-ja)
 - [E026 – Messagerie](#e026--messagerie)
-- [E027 – Demandes JA R3M / R4M](#e027--demandes-ja-r3m--r4m)
+- [E027 – Désidératas clubs](#e027--désidératas-clubs)
 - [E028 – Statistiques JA](#e028--statistiques-ja)
 - [E029 – Adresse domicile JA](#e029--adresse-domicile-ja)
 - [E030 – Fiche personnelle JA](#e030--fiche-personnelle-ja)
@@ -65,7 +66,7 @@ Point d'entrée unique de l'application. Authentifie l'utilisateur et initialise
 Si le login ne correspond à aucun `Utilisateur` existant, l'application tente une authentification JA :
 1. Recherche un `ja` actif dont `Nom` correspond au login saisi (comparaison insensible à la casse/espaces).
 2. Vérifie que le mot de passe saisi correspond exactement à `Id_JA` (le numéro de licence sert de mot de passe).
-3. **Contrôle d'accès métier** : le club du JA doit avoir au moins une rencontre en division `R3M`/`R4M` (ou `ArbitrageObligatoire = 1`, ou `equipe.JAdemande = 1`) dans une fenêtre de `CURDATE() ± 5 jours`. Sinon, l'accès est refusé et le compte `Utilisateur` associé (s'il existe) est supprimé.
+3. **Contrôle d'accès métier** : le club du JA doit avoir au moins une rencontre en division `R3M`/`R4M` (ou `division.ArbitrageCRA = 1`, ou `equipe.JAdemande = 1`) dans une fenêtre de `CURDATE() ± 5 jours`. Sinon, l'accès est refusé et le compte `Utilisateur` associé (s'il existe) est supprimé.
 4. Si l'accès est autorisé et qu'aucun compte `Utilisateur` n'existe pour ce login, un compte est créé automatiquement : `Login = ja.Nom`, `Password = hash(licence)`, `Role = 'JA'`, `Id_Departement` déduit des 2 premiers chiffres du `Id_Club`, `Actif = 1`.
 
 ### Session créée
@@ -614,7 +615,7 @@ Les indicateurs affichent un **badge rouge** sur le bouton de menu correspondant
 | Messagerie | E026 | `messagerie.php` |
 | Centre d'envoi | E024 | `centrenvoye.php` |
 | Comptabilité | E025 | `compta.php` |
-| R3 R4 ayant demandé un JA | E027 | `JA_R3R4.php` |
+| Désidératas clubs | E027 | `JA_R3R4.php` |
 | Statistiques JA | E028 | `stats_ja.php` |
 | Se déconnecter | — | `../logout.php` |
 
@@ -771,44 +772,79 @@ Créer et gérer les modèles de messages utilisés pour les convocations, rappe
 |-------|------|-------------|
 | Type | Valeur de l'ENUM `messagerie.Type` (lu dynamiquement en base, ex. `Convocation`, `Demande adresse`, `Rappel`, `Annulation`, `Information`) | Oui |
 | Sujet | Texte | Oui |
-| Message | HTML / Texte, avec marqueurs (`{NOM}`, `{DATE}`, `{URL_ADRESSE_JA}`, etc.) | Oui |
+| Message | HTML / Texte, avec marqueurs (`{NOM}`, `{DATE}`, `{URL_ADRESSE_JA}`, `{YEAR_PHASE}`, etc.) | Oui |
 | Id_Utilisateur | `NULL` = message système, sinon propriétaire nominateur | — |
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `liste` | GET | Retourne tous les modèles (système en tête, `Id_Messagerie` 1 à 5, puis les autres) |
+| `liste` | GET | Retourne tous les modèles (système en tête, `Id_Messagerie` 1 à 6, puis les autres) |
 | `charger` | GET | Charge un modèle par son Id |
 | `enregistrer` | POST | Créer ou modifier un modèle (le `Type` doit correspondre à une valeur de l'ENUM) |
 | `dupliquer` | POST | Duplique un modèle existant (système ou personnel) pour personnalisation |
 | `supprimer` | POST | Supprime un modèle |
 
 ### Règles
-- Les messages système (`Id_Utilisateur IS NULL` ou `Id_Messagerie` entre 1 et 5) ne sont modifiables/supprimables que par un administrateur ; un nominateur peut les dupliquer pour créer sa propre variante
+- Les messages système (`Id_Utilisateur IS NULL` ou `Id_Messagerie` entre 1 et 6) ne sont modifiables/supprimables que par un administrateur ; un nominateur peut les dupliquer pour créer sa propre variante
 - Un nominateur ne peut modifier/supprimer que ses propres messages personnels
 - Les modèles système sont référencés par type depuis d'autres écrans : `Convocation` (E024, E030 « se désigner »), `Demande adresse` (E029)
 
 ---
 
-## E027 – Demandes JA R3M / R4M
+## E023 – Désidératas club
+
+**Fichier :** `Nominateur/desiderata_club.php`  
+**Accès :** Public, sans authentification — page tokenisée par le paramètre `?club=<Id_Club>`
+
+### Objectif
+Remplace le questionnaire Excel envoyé par mail aux clubs en début de saison. Permet à un club (via le lien envoyé depuis E027) de renseigner en ligne, pour la saison en cours, les coordonnées de son correspondant, sa salle et les désidératas de ses équipes de la **Pré-Nationale à la R4M**.
+
+### Contenu du formulaire
+- **Correspondant** : nom/prénom, téléphone, email (`club.CorNom`, `club.CorTelephone`, `club.CorEmail`)
+- **Salle** : nom, adresse, téléphone (`salle.Telephone`), nombre maximum d'aires de jeu (`club.NbAiresJeu`) — la salle principale (`EstPrincipale = 1`) est créée si elle n'existe pas encore
+- **Équipes** : une ligne par équipe du club dans une division dont `division.Ord` est compris entre 70 (PNM) et 150 (R4M), soit PNM, PNF, R1M, R1F, R2M, R3M, R4M. Pour chaque équipe :
+  - Réengagement (Oui/Non) → `equipe.ReEngagement`
+  - Jour de rencontre souhaité (Samedi/Dimanche) → `equipe.JourSouhaite`
+  - Souhait de désignation JA (CRA ou Club) → `equipe.SouhaitJA`, uniquement affiché pour les équipes **R3M/R4M** (`Id_Division` 1 ou 10)
+- **Note libre** (`club.DesiderataNote`) pour signaler toute modification (nouvelle équipe, correction…) sans avoir à gérer un formulaire d'ajout d'équipe
+
+### Règles
+- À l'enregistrement, `club.DesiderataSaison` et `club.DesiderataDate` sont mis à jour (saison courante, horodatage) — utilisés par E027 pour afficher le statut « Soumis / En attente »
+- Pour les équipes R3M/R4M, le souhait JA pilote automatiquement `equipe.JAdemande` (`CRA` → 1, `Club` → 0) et `rencontre.ArbitrageObligatoire` sur les rencontres à domicile de l'équipe, avec la même logique que l'ancien bouton de bascule de E027 : `CRA` force `ArbitrageObligatoire = 1`, `Club` restaure la valeur par défaut de la division (`division.ArbitrageCRA`)
+
+### Actions AJAX
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `charger` | GET | Retourne le club, sa salle principale et ses équipes (PN à R4M) avec leurs désidératas actuels |
+| `enregistrer` | POST | Enregistre correspondant, salle, note et désidératas par équipe ; synchronise `JAdemande`/`ArbitrageObligatoire` pour R3M/R4M |
+
+---
+
+## E027 – Désidératas clubs
 
 **Fichier :** `Nominateur/JA_R3R4.php`  
 **Accès :** Administrateur et Nominateur
 
 ### Objectif
-Signaler qu'une équipe **R3M ou R4M** (divisions régionales masculines uniquement, pas de distinction féminine) demande la présence d'un Juge-Arbitre pour ses rencontres à domicile.
+Sélectionner les clubs ayant des équipes de la **Pré-Nationale à la R4M** et leur envoyer en masse le questionnaire de désidératas de saison (formulaire public E023), en remplacement de l'envoi manuel du fichier Excel.
 
 ### Comportement
-- Affiche la liste des équipes des divisions **R3M** (`Id_Division = 1`) et **R4M** (`Id_Division = 10`) uniquement
-- Un toggle **JA demandé** (Oui / Non) par équipe, avec badges `R3M` / `R4M`
-- Quand `JAdemande = 1` : toutes les rencontres à domicile de cette équipe passent automatiquement en `ArbitrageObligatoire = 1`, ce qui les inclut dans les nominations de E022
+- Liste, uniquement pour les départements actifs de la région (`getDeptActifs()` — exclut les clubs Hors région), un club par ligne (regroupement de ses équipes dont `division.Ord` est entre 70 et 150), avec département, correspondant/email, nombre d'équipes concernées, badges des divisions concernées (ex. `R2M`, `R3M`), statut **Soumis** (si `club.DesiderataSaison` correspond à la saison configurée) ou **En attente**, et date du dernier envoi (`club.DesiderataEmailDate`)
+- Lignes en couleurs alternées (une sur deux) pour la lisibilité
+- Case à cocher par club, boutons **Tout sélectionner** / **Tout désélectionner**, filtres département / statut / recherche par nom de club
+- Bouton **Visualiser le message** : ouvre une modale d'aperçu du modèle n°6 avec ses marqueurs résolus (données du premier club sélectionné, ou valeurs génériques si aucune sélection)
+- Bouton **Envoyer le questionnaire** : envoie le modèle système `Id_Messagerie = 6` (créé/édité dans E026) aux correspondants des clubs cochés ayant un email, avec un lien `desiderata_club.php?club=<Id_Club>` généré pour chacun
+
+### Marqueurs disponibles dans le message n°6
+`{NOM_CLUB}`, `{CORR_NOM}`, `{URL_DESIDERATA}`, `{URL_LIGUE}`, `{YEAR_PHASE}`, `{UTI_NOM}`, `{UTI_PRENOM}`
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `liste` | GET | Retourne les équipes R3M/R4M avec leur flag `JAdemande` |
+| `liste` | GET | Retourne les clubs de la région ayant des équipes PN à R4M, avec divisions concernées, statut de soumission et date de dernier envoi |
 | `departements` | GET | Retourne les départements disponibles |
-| `toggle` | POST | Bascule `JAdemande` entre 0 et 1 pour une équipe |
+| `apercu` | GET | Retourne le sujet/corps du message n°6 avec marqueurs résolus (club optionnel en paramètre) |
+| `envoyer` | POST | Envoie le message système n°6 aux clubs sélectionnés (soumis au rate-limiting), met à jour `club.DesiderataEmailDate` |
 
 ---
 
@@ -866,7 +902,7 @@ Permettre à un Juge-Arbitre de renseigner ou corriger son code postal et sa vil
 
 ### Génération et envoi du lien
 - Token = `Obfuscator::obfuscate($idJa)` (seed `OBFUSCATOR_SEED`), lien généré depuis E007 (fiche JA) ou par `envoyer_demande_adresse`
-- Le modèle « Demande adresse » (système, `messagerie.Type = 'Demande adresse'`) supporte les marqueurs `{NOM}`, `{PRENOM}`, `{NOM_COMPLET}`, `{URL_ADRESSE_JA}`, `{UTI_NOM}`, `{UTI_PRENOM}`, `{URL_LIGUE}`
+- Le modèle « Demande adresse » (système, `messagerie.Type = 'Demande adresse'`) supporte les marqueurs `{NOM}`, `{PRENOM}`, `{NOM_COMPLET}`, `{URL_ADRESSE_JA}`, `{UTI_NOM}`, `{UTI_PRENOM}`, `{URL_LIGUE}`, `{YEAR_PHASE}`
 - Envoi via `getNijacMailer()`, destinataire résolu par `getEmailDestinataire()`, soumis au rate-limiting (`checkRateLimit()` / `enregistrerEnvois()`)
 
 ---
@@ -877,23 +913,23 @@ Permettre à un Juge-Arbitre de renseigner ou corriger son code postal et sa vil
 **Accès :** Rôle `JA` (voir connexion E001) — dossier `JA/` ne contient que ce fichier ; pas de menu ni de formulaire de connexion dédiés, le login se fait via `index.php` (E001) et la déconnexion via `logout.php`
 
 ### Objectif
-Page d'accueil du Juge-Arbitre connecté par Nom + numéro de licence : consultation de sa fiche, de ses prochaines nominations, et auto-désignation sur les rencontres R3M/R4M non pourvues de son club.
+Page d'accueil du Juge-Arbitre connecté par Nom + numéro de licence : consultation de sa fiche, de ses prochaines nominations, et auto-désignation en masse sur les rencontres R3M/R4M à domicile de son club lorsque celui-ci a choisi l'**arbitrage club** (E023 : `equipe.SouhaitJA = 'Club'`).
 
 ### Interface
 - Fiche identité : Prénom / Nom, licence (`Id_JA`), club, domicile (`Cp`/`Ville` ou commune liée), bouton pour modifier l'adresse (même mécanisme que E029)
 - **Mes nominations à venir** (10 max, `Date >= CURDATE()`) : jointure `Nomination → disponible → Rencontre → Salle → laposte`, division, équipes domicile/visiteur
-- **Rencontres R3M/R4M à venir** du club du JA : jointure `rencontre → division → equipe → salle → laposte`, avec le JA déjà désigné le cas échéant ; ligne en vert si c'est le JA connecté, grisée si la date est à plus de 5 jours, bouton **« Non désigné »** cliquable pour s'auto-désigner sinon
+- **Arbitrage club — Rencontres R3M/R4M à venir** : uniquement les rencontres à domicile des équipes R3M/R4M du club du JA ayant `SouhaitJA = 'Club'` (renseigné via le formulaire E023). Une case à cocher par rencontre non pourvue, boutons **Tout sélectionner** (case d'en-tête) et **Valider ma sélection** pour s'auto-désigner sur plusieurs rencontres en une seule action ; ligne en vert si c'est le JA connecté
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `se_designer` | POST | Le JA se désigne lui-même sur une rencontre R3M/R4M de son club sans JA déjà nominé : crée la ligne `disponible` (Réponse = `O`) si absente, crée la `nomination` (`Valide = 1`), envoie l'email du modèle système `Convocation` |
+| `se_designer` | POST | Le JA se désigne lui-même sur une ou plusieurs rencontres (`ids` : tableau JSON d'`Id_Rencontre`) sans JA déjà nominé : crée la ligne `disponible` (Réponse = `P`) si absente, crée la `nomination` (`Valide = 1`) pour chacune, envoie l'email du modèle système `Convocation` ; retourne un résultat par rencontre |
 | `recherche_laposte` | POST | Identique à E029 |
 | `sauvegarder_adresse` | POST | Met à jour `Cp`/`Ville`/`Id_LaPoste` du JA connecté (identifié via la session, pas de paramètre `id_ja`) |
 
 ### Règles
 - Toutes les actions POST exigent `csrfVerify(true)`
-- `se_designer` refuse si une nomination existe déjà sur la rencontre ou si celle-ci n'appartient pas au club du JA connecté
+- `se_designer` traite chaque rencontre indépendamment (fonction `designerJaPourRencontre()`) et refuse celles ayant déjà une nomination ou n'appartenant pas au club du JA connecté ; les autres rencontres de la sélection restent traitées
 
 ---
 

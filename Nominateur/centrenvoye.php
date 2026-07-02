@@ -241,12 +241,12 @@ if ($action !== '') {
             $sexe  = ($ja['SexeCode'] ?? '') === 'F' ? 'Féminin' : (($ja['SexeCode'] ?? '') === 'M' ? 'Mixte' : '');
             $corps = str_replace(
                 ['{NOM}','{PRENOM}','{NOM_COMPLET}','{ID_JA}','{ID_CONVOCATION}','{SEXE}',
-                 '{UTI_NOM}','{UTI_PRENOM}','{URL_LIGUE}',
+                 '{UTI_NOM}','{UTI_PRENOM}','{URL_LIGUE}','{YEAR_PHASE}',
                  '{DATE}','{HEURE}','{JOURNEE}','{POULE}','{DIVISION}','{DOM}','{EXT}',
                  '{SALLE_NOM}','{SALLE_ADRESSE}','{SALLE_CP}','{SALLE_VILLE}',
                  '{CORR_NOM}','{CORR_EMAIL}','{CORR_TEL}'],
                 [$ja['Nom'],$ja['Prenom'],$ja['Prenom'].' '.$ja['Nom'],$token,(string)$ja['Id_Nomination'],$sexe,
-                 $moi['nom']??'',$moi['prenom']??'',getConfig('url_ligue','https://www.ligue-normandie-tt.fr'),
+                 $moi['nom']??'',$moi['prenom']??'',getConfig('url_ligue','https://www.ligue-normandie-tt.fr'),getAnneePhase(),
                  $ja['Date'] ? date('d/m/Y', strtotime($ja['Date'])) : '',$ja['Heure']??'',
                  $ja['Journee']??'',$ja['Poule']??'',$ja['Division']??'',
                  $ja['NomDom']??'',$ja['NomExt']??'',
@@ -256,10 +256,10 @@ if ($action !== '') {
             );
             $sujetRendu = str_replace(
                 ['{NOM}','{PRENOM}','{NOM_COMPLET}','{ID_JA}','{ID_CONVOCATION}','{SEXE}',
-                 '{UTI_NOM}','{UTI_PRENOM}','{URL_LIGUE}',
+                 '{UTI_NOM}','{UTI_PRENOM}','{URL_LIGUE}','{YEAR_PHASE}',
                  '{DATE}','{HEURE}','{JOURNEE}','{POULE}','{DIVISION}','{DOM}','{EXT}'],
                 [$ja['Nom'],$ja['Prenom'],$ja['Prenom'].' '.$ja['Nom'],$token,(string)$ja['Id_Nomination'],$sexe,
-                 $moi['nom']??'',$moi['prenom']??'',getConfig('url_ligue','https://www.ligue-normandie-tt.fr'),
+                 $moi['nom']??'',$moi['prenom']??'',getConfig('url_ligue','https://www.ligue-normandie-tt.fr'),getAnneePhase(),
                  $ja['Date'] ? date('d/m/Y', strtotime($ja['Date'])) : '',$ja['Heure']??'',
                  $ja['Journee']??'',$ja['Poule']??'',$ja['Division']??'',
                  $ja['NomDom']??'',$ja['NomExt']??''],
@@ -384,12 +384,12 @@ if ($action !== '') {
                 . '/adresse_ja.php?ja=' . $token;
             $corps = str_replace(
                 ['{NOM}','{PRENOM}','{NOM_COMPLET}','{ID_JA}','{ID_CONVOCATION}','{SEXE}',
-                 '{UTI_NOM}','{UTI_PRENOM}','{URL_LIGUE}','{URL_ADRESSE_JA}',
+                 '{UTI_NOM}','{UTI_PRENOM}','{URL_LIGUE}','{URL_ADRESSE_JA}','{YEAR_PHASE}',
                  '{DATE}','{HEURE}','{JOURNEE}','{POULE}','{DIVISION}','{DOM}','{EXT}',
                  '{SALLE_NOM}','{SALLE_ADRESSE}','{SALLE_CP}','{SALLE_VILLE}',
                  '{CORR_NOM}','{CORR_EMAIL}','{CORR_TEL}'],
                 [$ja['Nom'],$ja['Prenom'],$ja['Prenom'].' '.$ja['Nom'],$token,(string)($ja['Id_Nomination']??''),$sexe,
-                 $moi['nom']??'',$moi['prenom']??'',getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),$urlAdresseJa,
+                 $moi['nom']??'',$moi['prenom']??'',getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),$urlAdresseJa,getAnneePhase(),
                  $ja['Date'] ? date('d/m/Y', strtotime($ja['Date'])) : '',$ja['Heure']??'',
                  $ja['Journee']??'',$ja['Poule']??'',$ja['Division']??'',
                  $ja['NomDom']??'',$ja['NomExt']??'',
@@ -428,10 +428,10 @@ if ($action !== '') {
                 }
                 $sujetRendu = str_replace(
                     ['{NOM}','{PRENOM}','{NOM_COMPLET}','{ID_JA}','{ID_CONVOCATION}','{SEXE}',
-                     '{UTI_NOM}','{UTI_PRENOM}','{URL_LIGUE}',
+                     '{UTI_NOM}','{UTI_PRENOM}','{URL_LIGUE}','{YEAR_PHASE}',
                      '{DATE}','{HEURE}','{JOURNEE}','{POULE}','{DIVISION}','{DOM}','{EXT}'],
                     [$ja['Nom'],$ja['Prenom'],$ja['Prenom'].' '.$ja['Nom'],$token,(string)($ja['Id_Nomination']??''),$sexe,
-                     $moi['nom']??'',$moi['prenom']??'',getConfig('url_ligue','https://www.ligue-normandie-tt.fr'),
+                     $moi['nom']??'',$moi['prenom']??'',getConfig('url_ligue','https://www.ligue-normandie-tt.fr'),getAnneePhase(),
                      $ja['Date'] ? date('d/m/Y', strtotime($ja['Date'])) : '',$ja['Heure']??'',
                      $ja['Journee']??'',$ja['Poule']??'',$ja['Division']??'',
                      $ja['NomDom']??'',$ja['NomExt']??''],

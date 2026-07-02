@@ -51,6 +51,115 @@ if (!$ja) {
     exit;
 }
 
+/**
+ * Auto-désigne le JA connecté sur une rencontre de son club (arbitrage club)
+ * et envoie la convocation par email. Retourne ['ok', 'msg', 'id_rencontre'].
+ */
+function designerJaPourRencontre(PDO $pdo, string $idJa, array $ja, int $idRencontre): array
+{
+    if (!$idRencontre) return ['ok' => false, 'msg' => 'Rencontre invalide.', 'id_rencontre' => $idRencontre];
+
+    // Charger la rencontre + vérifier qu'elle appartient au club du JA
+    $stmtR = $pdo->prepare(
+        'SELECT r.Id_Rencontre, r.Date, r.Heure, r.Journee, r.Poule,
+                dv.Division, RIGHT(dv.Division, 1) AS SexeCode,
+                ed.Nom AS NomDom, ev.Nom AS NomExt,
+                s.Nom AS SalleNom, s.Adresse AS SalleAdresse,
+                lps.CodePostal AS SalleCP, lps.Nom AS SalleVille,
+                cl.CorNom AS CorrNom, cl.CorEmail AS CorrEmail, cl.CorTelephone AS CorrTel
+         FROM rencontre r
+         JOIN division dv   ON dv.Id_Division = r.Id_Division
+         JOIN equipe   ed   ON ed.Id_Equipe   = r.Id_EquipeDom
+         LEFT JOIN equipe ev ON ev.Id_Equipe  = r.Id_EquipeExt
+         LEFT JOIN salle s   ON s.Id_Salle    = r.Id_Salle
+         LEFT JOIN laposte lps ON lps.Id_LaPoste = s.Id_Laposte
+         LEFT JOIN Club cl   ON cl.Id_Club    = ed.Id_Club
+         WHERE r.Id_Rencontre = ? AND ed.Id_Club = ?'
+    );
+    $stmtR->execute([$idRencontre, $ja['Id_Club']]);
+    $renc = $stmtR->fetch();
+    if (!$renc) return ['ok' => false, 'msg' => 'Rencontre introuvable ou non autorisée.', 'id_rencontre' => $idRencontre];
+
+    // Vérifier qu'aucun JA n'est déjà désigné
+    $already = $pdo->prepare('SELECT Id_Nomination FROM nomination WHERE Id_Rencontre = ?');
+    $already->execute([$idRencontre]);
+    if ($already->fetch()) return ['ok' => false, 'msg' => 'Un JA est déjà désigné pour cette rencontre.', 'id_rencontre' => $idRencontre];
+
+    // Insérer dans disponible si pas déjà présent
+    $dispo = $pdo->prepare('SELECT Id_Disponible FROM disponible WHERE Id_JA = ? AND Id_Rencontre = ?');
+    $dispo->execute([$idJa, $idRencontre]);
+    $idDispo = $dispo->fetchColumn();
+    if (!$idDispo) {
+        $pdo->prepare("INSERT INTO disponible (Id_JA, Id_Rencontre, DateCompetition, Reponse, DateReponse) VALUES (?, ?, ?, 'P', CURDATE())")
+            ->execute([$idJa, $idRencontre, $renc['Date']]);
+        $idDispo = (int)$pdo->lastInsertId();
+    }
+
+    // Créer la nomination
+    $pdo->prepare('INSERT INTO nomination (Id_Rencontre, Id_Disponible, DateNomination, Valide, EmailEnvoye) VALUES (?, ?, CURDATE(), 1, 0)')
+        ->execute([$idRencontre, $idDispo]);
+    $idNomination = (int)$pdo->lastInsertId();
+
+    // Charger le modèle convocation et envoyer l'email
+    $msgRow = $pdo->query("SELECT Sujet, Message FROM messagerie WHERE Type = 'Convocation' LIMIT 1")->fetch();
+    $emailSent = false;
+    if ($msgRow && !empty($ja['Email'])) {
+        $_obf = new Obfuscator(OBFUSCATOR_SEED);
+        $token = $_obf->obfuscate((int)$idJa);
+        $sexe  = ($renc['SexeCode'] ?? '') === 'F' ? 'Féminin' : (($renc['SexeCode'] ?? '') === 'M' ? 'Mixte' : '');
+        $vars  = [
+            '{NOM}'           => $ja['Nom'],
+            '{PRENOM}'        => $ja['Prenom'],
+            '{NOM_COMPLET}'   => $ja['Prenom'] . ' ' . $ja['Nom'],
+            '{ID_JA}'         => $token,
+            '{ID_CONVOCATION}'=> (string)$idNomination,
+            '{SEXE}'          => $sexe,
+            '{UTI_NOM}'       => '',
+            '{UTI_PRENOM}'    => '',
+            '{URL_LIGUE}'     => getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),
+            '{YEAR_PHASE}'    => getAnneePhase(),
+            '{DATE}'          => $renc['Date'] ? date('d/m/Y', strtotime($renc['Date'])) : '',
+            '{HEURE}'         => substr($renc['Heure'] ?? '', 0, 5),
+            '{JOURNEE}'       => $renc['Journee'] ?? '',
+            '{POULE}'         => $renc['Poule'] ?? '',
+            '{DIVISION}'      => $renc['Division'] ?? '',
+            '{DOM}'           => $renc['NomDom'] ?? '',
+            '{EXT}'           => $renc['NomExt'] ?? '',
+            '{SALLE_NOM}'     => $renc['SalleNom'] ?? '',
+            '{SALLE_ADRESSE}' => $renc['SalleAdresse'] ?? '',
+            '{SALLE_CP}'      => $renc['SalleCP'] ?? '',
+            '{SALLE_VILLE}'   => $renc['SalleVille'] ?? '',
+            '{CORR_NOM}'      => $renc['CorrNom'] ?? '',
+            '{CORR_EMAIL}'    => $renc['CorrEmail'] ?? '',
+            '{CORR_TEL}'      => $renc['CorrTel'] ?? '',
+        ];
+        $corps = str_replace(array_keys($vars), array_values($vars), $msgRow['Message']);
+        $sujet = str_replace(array_keys($vars), array_values($vars), $msgRow['Sujet']);
+        try {
+            $dest   = getEmailDestinataire($ja['Email']);
+            $isHtml = strip_tags($corps) !== $corps;
+            $mail   = getNijacMailer();
+            $mail->isHTML($isHtml);
+            $mail->addAddress($dest, $ja['Prenom'] . ' ' . $ja['Nom']);
+            $modeDev = isModeDeveloppement();
+            $mail->Subject = ($modeDev && $dest !== $ja['Email']) ? "[DEV] $sujet" : $sujet;
+            $mail->Body    = $corps;
+            if ($isHtml) $mail->AltBody = strip_tags(str_replace(['<br>','<br/>','<br />'], "\n", $corps));
+            $mail->send();
+            enregistrerEnvois(1);
+            $pdo->prepare('UPDATE nomination SET EmailEnvoye = 1 WHERE Id_Nomination = ?')->execute([$idNomination]);
+            $emailSent = true;
+        } catch (\Exception $e) {
+            error_log('[NIJAC] info_rencontre se_designer mail : ' . $e->getMessage());
+        }
+    }
+
+    $msg = $emailSent
+        ? 'Désignation enregistrée. Un email de convocation vous a été envoyé.'
+        : 'Désignation enregistrée (email non envoyé).';
+    return ['ok' => true, 'msg' => $msg, 'id_rencontre' => $idRencontre];
+}
+
 // ── Actions AJAX ─────────────────────────────────────────────────────────────
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 if ($action !== '') {
@@ -58,107 +167,20 @@ if ($action !== '') {
     csrfVerify(true);
 
     if ($action === 'se_designer') {
-        $idRencontre = (int)($_POST['id_rencontre'] ?? 0);
-        if (!$idRencontre) { echo json_encode(['ok' => false, 'msg' => 'Rencontre invalide.']); exit; }
+        $ids = json_decode($_POST['ids'] ?? '[]', true);
+        if (!is_array($ids) || !$ids) {
+            $idUnique = (int)($_POST['id_rencontre'] ?? 0);
+            $ids = $idUnique ? [$idUnique] : [];
+        }
+        if (!$ids) { echo json_encode(['ok' => false, 'msg' => 'Aucune rencontre sélectionnée.']); exit; }
 
-        // Charger la rencontre + vérifier qu'elle appartient au club du JA
-        $stmtR = $pdo->prepare(
-            'SELECT r.Id_Rencontre, r.Date, r.Heure, r.Journee, r.Poule,
-                    dv.Division, RIGHT(dv.Division, 1) AS SexeCode,
-                    ed.Nom AS NomDom, ev.Nom AS NomExt,
-                    s.Nom AS SalleNom, s.Adresse AS SalleAdresse,
-                    lps.CodePostal AS SalleCP, lps.Nom AS SalleVille,
-                    cl.CorNom AS CorrNom, cl.CorEmail AS CorrEmail, cl.CorTelephone AS CorrTel
-             FROM rencontre r
-             JOIN division dv   ON dv.Id_Division = r.Id_Division
-             JOIN equipe   ed   ON ed.Id_Equipe   = r.Id_EquipeDom
-             LEFT JOIN equipe ev ON ev.Id_Equipe  = r.Id_EquipeExt
-             LEFT JOIN salle s   ON s.Id_Salle    = r.Id_Salle
-             LEFT JOIN laposte lps ON lps.Id_LaPoste = s.Id_Laposte
-             LEFT JOIN Club cl   ON cl.Id_Club    = ed.Id_Club
-             WHERE r.Id_Rencontre = ? AND ed.Id_Club = ?'
-        );
-        $stmtR->execute([$idRencontre, $ja['Id_Club']]);
-        $renc = $stmtR->fetch();
-        if (!$renc) { echo json_encode(['ok' => false, 'msg' => 'Rencontre introuvable ou non autorisée.']); exit; }
-
-        // Vérifier qu'aucun JA n'est déjà désigné
-        $already = $pdo->prepare('SELECT Id_Nomination FROM nomination WHERE Id_Rencontre = ?');
-        $already->execute([$idRencontre]);
-        if ($already->fetch()) { echo json_encode(['ok' => false, 'msg' => 'Un JA est déjà désigné pour cette rencontre.']); exit; }
-
-        // Insérer dans disponible si pas déjà présent
-        $dispo = $pdo->prepare('SELECT Id_Disponible FROM disponible WHERE Id_JA = ? AND Id_Rencontre = ?');
-        $dispo->execute([$idJa, $idRencontre]);
-        $idDispo = $dispo->fetchColumn();
-        if (!$idDispo) {
-            $pdo->prepare("INSERT INTO disponible (Id_JA, Id_Rencontre, DateCompetition, Reponse, DateReponse) VALUES (?, ?, ?, 'P', CURDATE())")
-                ->execute([$idJa, $idRencontre, $renc['Date']]);
-            $idDispo = (int)$pdo->lastInsertId();
+        $resultats = [];
+        foreach (array_map('intval', $ids) as $idRencontre) {
+            $resultats[] = designerJaPourRencontre($pdo, $idJa, $ja, $idRencontre);
         }
 
-        // Créer la nomination
-        $pdo->prepare('INSERT INTO nomination (Id_Rencontre, Id_Disponible, DateNomination, Valide, EmailEnvoye) VALUES (?, ?, CURDATE(), 1, 0)')
-            ->execute([$idRencontre, $idDispo]);
-        $idNomination = (int)$pdo->lastInsertId();
-
-        // Charger le modèle convocation et envoyer l'email
-        $msgRow = $pdo->query("SELECT Sujet, Message FROM messagerie WHERE Type = 'Convocation' LIMIT 1")->fetch();
-        $emailSent = false;
-        if ($msgRow && !empty($ja['Email'])) {
-            $_obf = new Obfuscator(OBFUSCATOR_SEED);
-            $token = $_obf->obfuscate((int)$idJa);
-            $sexe  = ($renc['SexeCode'] ?? '') === 'F' ? 'Féminin' : (($renc['SexeCode'] ?? '') === 'M' ? 'Mixte' : '');
-            $vars  = [
-                '{NOM}'           => $ja['Nom'],
-                '{PRENOM}'        => $ja['Prenom'],
-                '{NOM_COMPLET}'   => $ja['Prenom'] . ' ' . $ja['Nom'],
-                '{ID_JA}'         => $token,
-                '{ID_CONVOCATION}'=> (string)$idNomination,
-                '{SEXE}'          => $sexe,
-                '{UTI_NOM}'       => '',
-                '{UTI_PRENOM}'    => '',
-                '{URL_LIGUE}'     => getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),
-                '{DATE}'          => $renc['Date'] ? date('d/m/Y', strtotime($renc['Date'])) : '',
-                '{HEURE}'         => substr($renc['Heure'] ?? '', 0, 5),
-                '{JOURNEE}'       => $renc['Journee'] ?? '',
-                '{POULE}'         => $renc['Poule'] ?? '',
-                '{DIVISION}'      => $renc['Division'] ?? '',
-                '{DOM}'           => $renc['NomDom'] ?? '',
-                '{EXT}'           => $renc['NomExt'] ?? '',
-                '{SALLE_NOM}'     => $renc['SalleNom'] ?? '',
-                '{SALLE_ADRESSE}' => $renc['SalleAdresse'] ?? '',
-                '{SALLE_CP}'      => $renc['SalleCP'] ?? '',
-                '{SALLE_VILLE}'   => $renc['SalleVille'] ?? '',
-                '{CORR_NOM}'      => $renc['CorrNom'] ?? '',
-                '{CORR_EMAIL}'    => $renc['CorrEmail'] ?? '',
-                '{CORR_TEL}'      => $renc['CorrTel'] ?? '',
-            ];
-            $corps = str_replace(array_keys($vars), array_values($vars), $msgRow['Message']);
-            $sujet = str_replace(array_keys($vars), array_values($vars), $msgRow['Sujet']);
-            try {
-                $dest   = getEmailDestinataire($ja['Email']);
-                $isHtml = strip_tags($corps) !== $corps;
-                $mail   = getNijacMailer();
-                $mail->isHTML($isHtml);
-                $mail->addAddress($dest, $ja['Prenom'] . ' ' . $ja['Nom']);
-                $modeDev = isModeDeveloppement();
-                $mail->Subject = ($modeDev && $dest !== $ja['Email']) ? "[DEV] $sujet" : $sujet;
-                $mail->Body    = $corps;
-                if ($isHtml) $mail->AltBody = strip_tags(str_replace(['<br>','<br/>','<br />'], "\n", $corps));
-                $mail->send();
-                enregistrerEnvois(1);
-                $pdo->prepare('UPDATE nomination SET EmailEnvoye = 1 WHERE Id_Nomination = ?')->execute([$idNomination]);
-                $emailSent = true;
-            } catch (\Exception $e) {
-                error_log('[NIJAC] info_rencontre se_designer mail : ' . $e->getMessage());
-            }
-        }
-
-        $msg = $emailSent
-            ? 'Désignation enregistrée. Un email de convocation vous a été envoyé.'
-            : 'Désignation enregistrée (email non envoyé).';
-        echo json_encode(['ok' => true, 'msg' => $msg, 'id_ja' => $idJa]);
+        $nbOk = count(array_filter($resultats, fn($r) => $r['ok']));
+        echo json_encode(['ok' => $nbOk > 0, 'resultats' => $resultats, 'id_ja' => $idJa]);
         exit;
     }
 
@@ -253,7 +275,8 @@ $stmtR3R4 = $pdo->prepare(
      LEFT JOIN nomination n   ON n.Id_Rencontre = r.Id_Rencontre
      LEFT JOIN disponible d_n ON d_n.Id_Disponible = n.Id_Disponible
      LEFT JOIN ja ja_n        ON ja_n.Id_JA     = d_n.Id_JA
-     WHERE (dv.ArbitrageObligatoire = 1 OR ed.JAdemande = 1 OR dv.Division IN (\'R3M\', \'R4M\'))
+     WHERE dv.Division IN (\'R3M\', \'R4M\')
+       AND ed.SouhaitJA = \'Club\'
        AND ed.Id_Club = :id_club
        AND r.Date >= CURDATE()
      ORDER BY r.Date ASC, r.Heure ASC, dv.Ord ASC'
@@ -395,20 +418,23 @@ $backUrl   = null;
         </div>
     </div>
 
-    <!-- ── Rencontres R3 / R4 à venir ──────────────────────────────────── -->
+    <!-- ── Arbitrage club : rencontres R3M / R4M à sélectionner ─────────── -->
     <div class="card border-0 shadow-sm mt-3">
         <div class="card-header fw-semibold bg-warning text-dark d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-trophy me-2"></i>Rencontres R3M / R4M à venir</span>
+            <span><i class="bi bi-trophy me-2"></i>Arbitrage club — Rencontres R3M / R4M à venir</span>
             <span class="badge bg-dark"><?= count($rencontresR3R4) ?></span>
         </div>
         <div class="card-body p-0">
             <?php if (empty($rencontresR3R4)): ?>
-            <p class="text-muted p-3 mb-0"><i class="bi bi-info-circle me-2"></i>Aucune rencontre R3M/R4M à venir.</p>
+            <p class="text-muted p-3 mb-0"><i class="bi bi-info-circle me-2"></i>Aucune rencontre R3M/R4M à venir avec arbitrage assuré par le club.</p>
             <?php else: ?>
+            <p class="text-muted px-3 pt-3 mb-2 small"><i class="bi bi-info-circle me-2"></i>Votre club a choisi d'assurer lui-même l'arbitrage de ses rencontres R3M/R4M à domicile. Sélectionnez les rencontres que vous allez arbitrer, puis validez.</p>
+            <form id="form-selection">
             <div class="table-responsive">
                 <table class="table table-hover table-sm mb-0 align-middle">
                     <thead class="table-light">
                         <tr>
+                            <th style="width:2.2rem" class="text-center"><input type="checkbox" id="chk-all-r3r4"></th>
                             <th>Date</th>
                             <th>Heure</th>
                             <th>Journée</th>
@@ -437,18 +463,20 @@ $backUrl   = null;
                             } else {
                                 $textColor = '#fff';
                             }
-                            $isMe      = ($rc['IdJaAffecte'] === $idJa);
-                            $diffJours = $rc['DateRencontre']
-                                ? (new DateTime('today'))->diff(new DateTime($rc['DateRencontre']))->days
-                                : 99;
-                            $lointain  = $diffJours > 5;
+                            $isMe        = ($rc['IdJaAffecte'] === $idJa);
+                            $selectable  = !$rc['IdJaAffecte'];
                         ?>
-                        <tr<?= $isMe ? ' class="table-success fw-semibold"' : ($lointain ? ' style="opacity:.45;background:#f0f0f0"' : '') ?>>
+                        <tr<?= $isMe ? ' class="table-success fw-semibold"' : '' ?> data-id-rencontre="<?= (int)$rc['Id_Rencontre'] ?>">
+                            <td class="text-center">
+                                <?php if ($selectable): ?>
+                                <input type="checkbox" class="chk-r3r4">
+                                <?php endif; ?>
+                            </td>
                             <td class="fw-semibold"><?= $dateFr ?></td>
                             <td><?= $heure ?></td>
                             <td class="text-muted small">J<?= htmlspecialchars($rc['Journee'] ?? '—') ?></td>
                             <td>
-                                <span class="badge" style="background:<?= $lointain ? '#adb5bd' : htmlspecialchars($color) ?>;color:<?= $lointain ? '#fff' : $textColor ?>">
+                                <span class="badge" style="background:<?= htmlspecialchars($color) ?>;color:<?= $textColor ?>">
                                     <?= htmlspecialchars($rc['DivisionCode'] ?? '—') ?>
                                 </span>
                             </td>
@@ -456,7 +484,7 @@ $backUrl   = null;
                             <td><?= htmlspecialchars($rc['NomExt'] ?? '—') ?></td>
                             <td class="text-muted small"><?= htmlspecialchars($rc['NomSalle'] ?? '—') ?></td>
                             <td class="text-muted small"><?= htmlspecialchars(trim(($rc['CpSalle'] ?? '') . ' ' . ($rc['VilleSalle'] ?? ''))) ?></td>
-                            <td>
+                            <td class="td-statut">
                                 <?php if ($rc['IdJaAffecte']): ?>
                                     <?php if ($isMe): ?>
                                     <span class="badge bg-success"><i class="bi bi-person-check me-1"></i><?= htmlspecialchars($rc['NomJaAffecte']) ?></span>
@@ -464,15 +492,7 @@ $backUrl   = null;
                                     <span class="badge bg-secondary"><?= htmlspecialchars($rc['NomJaAffecte']) ?></span>
                                     <?php endif; ?>
                                 <?php else: ?>
-                                    <?php if ($lointain): ?>
-                                    <span class="badge bg-secondary"><i class="bi bi-exclamation-circle me-1"></i>Non désigné</span>
-                                    <?php else: ?>
-                                    <button class="btn btn-danger btn-sm py-0 px-2"
-                                            onclick="seDesigner(this, <?= (int)$rc['Id_Rencontre'] ?>)"
-                                            title="Me désigner pour cette rencontre">
-                                        <i class="bi bi-exclamation-circle me-1"></i>Non désigné
-                                    </button>
-                                    <?php endif; ?>
+                                    <span class="badge bg-danger"><i class="bi bi-exclamation-circle me-1"></i>Non désigné</span>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -480,6 +500,13 @@ $backUrl   = null;
                     </tbody>
                 </table>
             </div>
+            <div class="p-3 border-top d-flex justify-content-between align-items-center">
+                <span id="lbl-r3r4-selection" class="text-muted small">0 rencontre(s) sélectionnée(s)</span>
+                <button type="button" id="btn-valider-selection" class="btn btn-danger btn-sm" disabled>
+                    <i class="bi bi-check2-circle me-1"></i>Valider ma sélection
+                </button>
+            </div>
+            </form>
             <?php endif; ?>
         </div>
     </div>
@@ -633,38 +660,66 @@ document.getElementById('modal-adresse').addEventListener('show.bs.modal', () =>
     document.getElementById('adr-btn-valider').innerHTML = '<i class="bi bi-floppy me-1"></i>Enregistrer';
 });
 
-// ── Auto-désignation ──────────────────────────────────────────────────────────
+// ── Sélection des rencontres à arbitrer (arbitrage club) ──────────────────────
 const JA_NOM_COMPLET = <?= json_encode($ja['Prenom'] . ' ' . $ja['Nom']) ?>;
 
-async function seDesigner(btn, idRencontre) {
-    if (!confirm('Vous désigner comme JA pour cette rencontre et envoyer une convocation ?')) return;
+function majSelectionR3R4() {
+    const nb = document.querySelectorAll('.chk-r3r4:checked').length;
+    document.getElementById('lbl-r3r4-selection').textContent = `${nb} rencontre(s) sélectionnée(s)`;
+    document.getElementById('btn-valider-selection').disabled = nb === 0;
+    const total = document.querySelectorAll('.chk-r3r4').length;
+    const chkAll = document.getElementById('chk-all-r3r4');
+    if (chkAll) chkAll.checked = total > 0 && nb === total;
+}
 
-    const tr = btn.closest('tr');
-    const td = btn.closest('td');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+document.querySelectorAll('.chk-r3r4').forEach(chk => chk.addEventListener('change', majSelectionR3R4));
 
-    try {
-        const body = new URLSearchParams({ action: 'se_designer', id_rencontre: idRencontre, _csrf: CSRF });
-        const r = await fetch('info_rencontre.php', { method: 'POST', body });
-        const text = await r.text();
-        let d;
-        try { d = JSON.parse(text); } catch { alert('Réponse invalide : ' + text.substring(0, 200)); btn.disabled = false; btn.innerHTML = '<i class="bi bi-exclamation-circle me-1"></i>Non désigné'; return; }
-        if (d.ok) {
-            td.innerHTML = '<span class="badge bg-success"><i class="bi bi-person-check me-1"></i>' + JA_NOM_COMPLET + '</span>';
-            tr.style.cssText = '';
-            tr.className = 'table-success fw-semibold';
-            alert(d.msg);
-        } else {
-            alert(d.msg);
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-exclamation-circle me-1"></i>Non désigné';
+const chkAllR3R4 = document.getElementById('chk-all-r3r4');
+if (chkAllR3R4) {
+    chkAllR3R4.addEventListener('change', ev => {
+        document.querySelectorAll('.chk-r3r4').forEach(chk => { chk.checked = ev.target.checked; });
+        majSelectionR3R4();
+    });
+}
+
+const btnValiderSelection = document.getElementById('btn-valider-selection');
+if (btnValiderSelection) {
+    btnValiderSelection.addEventListener('click', async () => {
+        const ids = Array.from(document.querySelectorAll('.chk-r3r4:checked'))
+            .map(chk => +chk.closest('tr').dataset.idRencontre);
+        if (!ids.length) return;
+        if (!confirm(`Vous désigner comme JA pour ${ids.length} rencontre(s) et envoyer les convocations ?`)) return;
+
+        btnValiderSelection.disabled = true;
+        btnValiderSelection.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Validation…';
+
+        try {
+            const body = new URLSearchParams({ action: 'se_designer', ids: JSON.stringify(ids), _csrf: CSRF });
+            const r = await fetch('info_rencontre.php', { method: 'POST', body });
+            const d = await r.json();
+
+            (d.resultats || []).forEach(res => {
+                const tr = document.querySelector(`tr[data-id-rencontre="${res.id_rencontre}"]`);
+                if (!tr) return;
+                if (res.ok) {
+                    tr.querySelector('.td-statut').innerHTML = '<span class="badge bg-success"><i class="bi bi-person-check me-1"></i>' + JA_NOM_COMPLET + '</span>';
+                    tr.querySelector('td:first-child').innerHTML = '';
+                    tr.className = 'table-success fw-semibold';
+                }
+            });
+
+            const nbOk = (d.resultats || []).filter(r => r.ok).length;
+            const nbKo = (d.resultats || []).filter(r => !r.ok);
+            let msg = `${nbOk} rencontre(s) validée(s).`;
+            if (nbKo.length) msg += ' Échecs : ' + nbKo.map(r => r.msg).join(' | ');
+            alert(msg);
+        } catch (e) {
+            alert('Erreur : ' + e.message);
         }
-    } catch (e) {
-        alert('Erreur : ' + e.message);
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-exclamation-circle me-1"></i>Non désigné';
-    }
+
+        majSelectionR3R4();
+        btnValiderSelection.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Valider ma sélection';
+    });
 }
 </script>
 <?php require __DIR__ . '/../includes/footer.php'; ?>

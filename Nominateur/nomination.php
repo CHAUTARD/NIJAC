@@ -120,7 +120,7 @@ if ($action !== '') {
             JOIN division dv ON dv.Id_Division = r.Id_Division
             JOIN equipe eq ON eq.Id_Equipe = r.Id_EquipeDom
             WHERE SUBSTRING(eq.Id_Club, 3, 2) IN ($deptPh)
-              AND (dv.ArbitrageObligatoire = 1 OR eq.JAdemande = 1)
+              AND (dv.ArbitrageCRA = 1 OR eq.JAdemande = 1)
               AND r.Date >= CURDATE()
             ORDER BY r.Journee, r.Date
         ");
@@ -177,7 +177,7 @@ if ($action !== '') {
             LEFT JOIN ja ja_n       ON ja_n.Id_JA       = d_n.Id_JA
             WHERE r.Date = ?
               AND SUBSTRING(ed.Id_Club, 3, 2) IN ($deptPh)
-              AND (dv.ArbitrageObligatoire = 1 OR ed.JAdemande = 1)
+              AND (dv.ArbitrageCRA = 1 OR ed.JAdemande = 1)
             ORDER BY dv.Ord, r.Poule, r.Id_Rencontre
         ");
         $stmt->execute(array_merge([$date], $deptsAutorises));
@@ -396,12 +396,12 @@ if ($action !== '') {
 
                 $markers  = ['{NOM}','{PRENOM}','{NOM_COMPLET}','{ID_JA}',
                              '{DATE}','{HEURE}','{JOURNEE}','{DIVISION}','{DOM}','{EXT}',
-                             '{LIEN_CONVOCATION}','{LIEN_LIGUE}'];
+                             '{LIEN_CONVOCATION}','{LIEN_LIGUE}','{YEAR_PHASE}'];
                 $values   = [$nom['Nom'],$nom['Prenom'],$nom['Prenom'].' '.$nom['Nom'],$token,
                              $nom['Date'] ? date('d/m/Y', strtotime($nom['Date'])) : '',$nom['Heure']??'',
                              $nom['Journee']??'',$nom['Division'],
                              $nom['NomDom'],$nom['NomExt']??'',
-                             $lien, getConfig('url_ligue','https://www.ligue-normandie-tt.fr')];
+                             $lien, getConfig('url_ligue','https://www.ligue-normandie-tt.fr'),getAnneePhase()];
 
                 $sujet = str_replace($markers, $values, $tplConv['Sujet']);
                 $corps = str_replace($markers, $values, $tplConv['Message']);

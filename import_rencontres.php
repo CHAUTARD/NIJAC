@@ -259,11 +259,11 @@ if ($action !== '') {
                 ob_end_clean(); echo json_encode(['ok'=>false,'msg'=>'Paramètres manquants.']); exit;
             }
 
-            $stmtDiv = $pdo->prepare('SELECT ArbitrageObligatoire, Division FROM division WHERE Id_Division=?');
+            $stmtDiv = $pdo->prepare('SELECT ArbitrageCRA, Division FROM division WHERE Id_Division=?');
             $stmtDiv->execute([$idDivNijac]);
             $divInfo = $stmtDiv->fetch();
             if (!$divInfo) { ob_end_clean(); echo json_encode(['ok'=>false,'msg'=>"Division NIJAC #$idDivNijac introuvable."]); exit; }
-            $arbitrage   = (int)$divInfo['ArbitrageObligatoire'];
+            $arbitrage   = (int)$divInfo['ArbitrageCRA'];
             $divCode     = (string)$divInfo['Division'];          // ex: "N1M", "R2M"
             $isNationale = str_starts_with($divCode, 'N');        // N1M, N2M, N3M, N1F, N2F
 

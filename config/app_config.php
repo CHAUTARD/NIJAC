@@ -56,6 +56,60 @@ function initTableConfiguration(\PDO $pdo): void
             END
         ");
     }
+
+    // Renommage colonne ArbitrageObligatoire -> ArbitrageCRA sur la table division
+    $divCols = array_column($pdo->query('SHOW COLUMNS FROM division')->fetchAll(\PDO::FETCH_ASSOC), 'Field');
+    if (in_array('ArbitrageObligatoire', $divCols) && !in_array('ArbitrageCRA', $divCols)) {
+        $pdo->exec("ALTER TABLE division CHANGE COLUMN ArbitrageObligatoire ArbitrageCRA TINYINT(1) NOT NULL DEFAULT 1");
+    }
+
+    // Colonnes pour le formulaire de désidératas club (E023, remplace le questionnaire Excel)
+    $colsClub = array_column($pdo->query('SHOW COLUMNS FROM club')->fetchAll(\PDO::FETCH_ASSOC), 'Field');
+    foreach ([
+        'NbAiresJeu'          => 'INT NULL',
+        'DesiderataNote'      => 'TEXT NULL',
+        'DesiderataSaison'    => 'VARCHAR(9) NULL',
+        'DesiderataDate'      => 'DATETIME NULL',
+        'DesiderataEmailDate' => 'DATETIME NULL',
+    ] as $col => $def) {
+        if (!in_array($col, $colsClub)) $pdo->exec("ALTER TABLE club ADD COLUMN $col $def");
+    }
+
+    $colsSalle = array_column($pdo->query('SHOW COLUMNS FROM salle')->fetchAll(\PDO::FETCH_ASSOC), 'Field');
+    if (!in_array('Telephone', $colsSalle)) {
+        $pdo->exec("ALTER TABLE salle ADD COLUMN Telephone VARCHAR(20) NULL");
+    }
+
+    $colsEquipe = array_column($pdo->query('SHOW COLUMNS FROM equipe')->fetchAll(\PDO::FETCH_ASSOC), 'Field');
+    foreach ([
+        'ReEngagement'     => "ENUM('O','N') NULL",
+        'JourSouhaite'     => "ENUM('Samedi','Dimanche') NULL",
+        'SouhaitJA'        => "ENUM('CRA','Club') NULL",
+        'DesiderataSaison' => 'VARCHAR(9) NULL',
+    ] as $col => $def) {
+        if (!in_array($col, $colsEquipe)) $pdo->exec("ALTER TABLE equipe ADD COLUMN $col $def");
+    }
+}
+
+/**
+ * Retourne la valeur du marqueur {YEAR_PHASE} : les 4 premiers caractères de
+ * la saison en Phase 1 (ex "2026"), la saison complète en Phase 2 (ex "2026-2027").
+ * Phase courante déterminée à partir des bornes de config phase2_debut/phase2_fin (MM-JJ).
+ */
+function getAnneePhase(): string
+{
+    $saison = getConfig('saison', date('Y') . '-' . (date('Y') + 1));
+
+    $today = new \DateTime();
+    $md    = (int)$today->format('m') * 100 + (int)$today->format('d');
+    $toMd  = fn(string $s) => (int)substr($s, 0, 2) * 100 + (int)substr($s, 3, 2);
+
+    $p2Debut = $toMd(getConfig('phase2_debut', '02-01'));
+    $p2Fin   = $toMd(getConfig('phase2_fin',   '06-30'));
+
+    $enPhase2 = $md >= $p2Debut && $md <= $p2Fin;
+
+    return $enPhase2 ? $saison : substr($saison, 0, 4);
 }
 
 /**

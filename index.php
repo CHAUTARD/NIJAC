@@ -127,7 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'SELECT COUNT(*) FROM rencontre r
                      JOIN division dv  ON dv.Id_Division = r.Id_Division
                      JOIN equipe   ed  ON ed.Id_Equipe   = r.Id_EquipeDom
-                     WHERE (dv.ArbitrageObligatoire = 1 OR ed.JAdemande = 1 OR dv.Division IN (\'R3M\', \'R4M\'))
+                     WHERE (dv.ArbitrageCRA = 1 OR ed.JAdemande = 1 OR dv.Division IN (\'R3M\', \'R4M\'))
                        AND ed.Id_Club = :id_club
                        AND r.Date BETWEEN DATE_SUB(CURDATE(), INTERVAL 5 DAY) AND DATE_ADD(CURDATE(), INTERVAL 5 DAY)'
                 );

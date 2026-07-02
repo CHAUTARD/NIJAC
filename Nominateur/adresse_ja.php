@@ -80,9 +80,9 @@ if ($action !== '') {
 
             // Remplacement des marqueurs
             $cherche  = ['{NOM}','{PRENOM}','{NOM_COMPLET}','{ID_JA}','{URL_ADRESSE_JA}',
-                         '{UTI_NOM}','{UTI_PRENOM}','{URL_LIGUE}'];
+                         '{UTI_NOM}','{UTI_PRENOM}','{URL_LIGUE}','{YEAR_PHASE}'];
             $remplace = [$ja['Nom'],$ja['Prenom'],$ja['Prenom'].' '.$ja['Nom'],$token,$urlAdresseJa,
-                         $moi['nom']??'',$moi['prenom']??'',getConfig('url_ligue','https://www.ligue-normandie-tt.fr')];
+                         $moi['nom']??'',$moi['prenom']??'',getConfig('url_ligue','https://www.ligue-normandie-tt.fr'),getAnneePhase()];
 
             $corps  = str_replace($cherche, $remplace, $modele['Message']);
             $sujet  = str_replace($cherche, $remplace, $modele['Sujet']);

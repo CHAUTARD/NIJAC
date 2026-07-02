@@ -468,8 +468,8 @@ if ($stats['prochaine_date']) {
             <a href="JA_R3R4.php" class="menu-btn btn-r34">
                 <span class="btn-code">E027</span>
                 <div class="btn-icon"><img src="../img/R3_4.png" alt="Import Rencontres"></div>
-                <span>R3 R4 ayant demandé un JA</span>
-                <span class="btn-desc">Une R3 ou R4 demande un JA</span>
+                <span>Désidératas clubs</span>
+                <span class="btn-desc">Envoi du questionnaire de désidératas (PN à R4) aux clubs</span>
             </a>
         </div>
 

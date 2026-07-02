@@ -12,6 +12,10 @@
 session_start();
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/csrf.php';
+require_once __DIR__ . '/../config/app_config.php';
+
+// Nombre de messages système par défaut (Id_Messagerie 1 à N)
+const NB_MESSAGES_SYSTEME = 6;
 
 // ── Sécurité : accès admin et nominateurs ────────────────────────────────────
 $authRedirect = '../index.php';
@@ -32,22 +36,23 @@ if ($action !== '') {
 
         // ── Liste ──────────────────────────────────────────────────────────
         if ($action === 'liste') {
+            $nbSys = NB_MESSAGES_SYSTEME;
             if ($isAdmin) {
                 $rows = $pdo->query(
-                    'SELECT m.Id_Messagerie, m.Type, m.Sujet, m.Message, m.Id_Utilisateur,
-                            CONCAT(u.Nom, \' \', u.Prenom) AS NomUtilisateur,
-                            (m.Id_Messagerie BETWEEN 1 AND 5) AS EstSysteme
+                    "SELECT m.Id_Messagerie, m.Type, m.Sujet, m.Message, m.Id_Utilisateur,
+                            CONCAT(u.Nom, ' ', u.Prenom) AS NomUtilisateur,
+                            (m.Id_Messagerie BETWEEN 1 AND $nbSys) AS EstSysteme
                      FROM messagerie m
                      LEFT JOIN Utilisateur u ON u.Id_Utilisateur = m.Id_Utilisateur
-                     ORDER BY (m.Id_Messagerie BETWEEN 1 AND 5) DESC, m.Id_Messagerie * (m.Id_Messagerie BETWEEN 1 AND 5), m.Type, m.Sujet'
+                     ORDER BY (m.Id_Messagerie BETWEEN 1 AND $nbSys) DESC, m.Id_Messagerie * (m.Id_Messagerie BETWEEN 1 AND $nbSys), m.Type, m.Sujet"
                 )->fetchAll();
             } else {
                 $stmt = $pdo->prepare(
-                    'SELECT Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, NULL AS NomUtilisateur,
-                            (Id_Messagerie BETWEEN 1 AND 5) AS EstSysteme
+                    "SELECT Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, NULL AS NomUtilisateur,
+                            (Id_Messagerie BETWEEN 1 AND $nbSys) AS EstSysteme
                      FROM messagerie
-                     WHERE Id_Messagerie BETWEEN 1 AND 5 OR Id_Utilisateur IS NULL OR Id_Utilisateur = ?
-                     ORDER BY (Id_Messagerie BETWEEN 1 AND 5) DESC, Id_Messagerie * (Id_Messagerie BETWEEN 1 AND 5), Type, Sujet'
+                     WHERE Id_Messagerie BETWEEN 1 AND $nbSys OR Id_Utilisateur IS NULL OR Id_Utilisateur = ?
+                     ORDER BY (Id_Messagerie BETWEEN 1 AND $nbSys) DESC, Id_Messagerie * (Id_Messagerie BETWEEN 1 AND $nbSys), Type, Sujet"
                 );
                 $stmt->execute([$idCurrentUser]);
                 $rows = $stmt->fetchAll();
@@ -94,7 +99,7 @@ if ($action !== '') {
                 $row = $pdo->prepare('SELECT Id_Utilisateur FROM messagerie WHERE Id_Messagerie = ?');
                 $row->execute([$id]);
                 $existing = $row->fetch();
-                if ($existing && ($existing['Id_Utilisateur'] === null || ($id >= 1 && $id <= 5)) && !$isAdmin) {
+                if ($existing && ($existing['Id_Utilisateur'] === null || ($id >= 1 && $id <= NB_MESSAGES_SYSTEME)) && !$isAdmin) {
                     echo json_encode(['ok' => false, 'msg' => 'Ce message système ne peut être modifié que par un administrateur.']);
                     exit;
                 }
@@ -134,7 +139,7 @@ if ($action !== '') {
             $row = $pdo->prepare('SELECT Id_Utilisateur FROM messagerie WHERE Id_Messagerie = ?');
             $row->execute([$id]);
             $existing = $row->fetch();
-            if ($existing && ($existing['Id_Utilisateur'] === null || ($id >= 1 && $id <= 5)) && !$isAdmin) {
+            if ($existing && ($existing['Id_Utilisateur'] === null || ($id >= 1 && $id <= NB_MESSAGES_SYSTEME)) && !$isAdmin) {
                 echo json_encode(['ok' => false, 'msg' => 'Les messages système ne peuvent pas être supprimés.']);
                 exit;
             }
@@ -387,7 +392,12 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
         </div>
 
         <div class="mb-2 flex-grow-1 d-flex flex-column">
-            <label class="form-label" for="txt-message">Message :</label>
+            <div class="d-flex align-items-center justify-content-between mb-0">
+                <label class="form-label mb-0" for="txt-message">Message :</label>
+                <button type="button" class="btn btn-sm btn-outline-secondary py-0" id="btn-apercu-html">
+                    <i class="bi bi-eye me-1"></i>Aperçu HTML
+                </button>
+            </div>
             <textarea id="txt-message" class="form-control form-control-sm flex-grow-1"></textarea>
         </div>
 
@@ -426,6 +436,7 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
                 <code data-marqueur="{UTI_NOM}" class="me-2">{UTI_NOM}</code>
                 <code data-marqueur="{UTI_PRENOM}" class="me-2">{UTI_PRENOM}</code>
                 <code data-marqueur="{URL_LIGUE}" class="me-2">{URL_LIGUE}</code>
+                <code data-marqueur="{YEAR_PHASE}" class="me-2">{YEAR_PHASE}</code>
             </div>
             <div class="mb-1">
                 <span class="badge me-1 fw-normal" style="background:#1a7f4b;">Convocation</span>
@@ -446,9 +457,15 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
                 <code data-marqueur="{ID_CONVOCATION}" class="me-2">{ID_CONVOCATION}</code>
                 <code data-marqueur="{SEXE}" class="me-2">{SEXE}</code>
             </div>
-            <div>
+            <div class="mb-1">
                 <span class="badge me-1 fw-normal" style="background:#6f42c1;">Liste nomination</span>
                 <code data-marqueur="{LISTE_NOMINATIONS}" class="me-2">{LISTE_NOMINATIONS}</code>
+            </div>
+            <div>
+                <span class="badge me-1 fw-normal" style="background:#c2185b;">Désidératas club (E027)</span>
+                <code data-marqueur="{NOM_CLUB}" class="me-2">{NOM_CLUB}</code>
+                <code data-marqueur="{CORR_NOM}" class="me-2">{CORR_NOM}</code>
+                <code data-marqueur="{URL_DESIDERATA}" class="me-2">{URL_DESIDERATA}</code>
             </div>
         </div>
 
@@ -458,6 +475,20 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
     </div><!-- /panel-form -->
 </div><!-- /split-container -->
 
+<!-- Modale aperçu HTML -->
+<div class="modal fade" id="modal-apercu" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2" style="background:var(--nijac-blue);color:#fff;">
+                <h6 class="modal-title mb-0"><i class="bi bi-eye me-1"></i>Aperçu HTML du message</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <iframe id="iframe-apercu" style="width:100%;height:60vh;border:0;"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Toast notifications -->
 <div id="toast-container"></div>
@@ -474,6 +505,45 @@ function escHtml(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 const ID_CURRENT_USER = <?= $idCurrentUser ?>;
+
+// ── Valeurs d'exemple pour l'aperçu des marqueurs ──────────────────────────────
+const MARQUEURS_EXEMPLE = {
+    '{PRENOM}':            'Jean',
+    '{NOM}':                'Dupont',
+    '{NOM_COMPLET}':        'Jean Dupont',
+    '{ID_JA}':              '12345',
+    '{UTI_NOM}':            'Martin',
+    '{UTI_PRENOM}':         'Sophie',
+    '{URL_LIGUE}':          'https://www.ligue-normandie-tt.fr',
+    '{YEAR_PHASE}':         <?= json_encode(getAnneePhase()) ?>,
+    '{DATE}':               '15/03/2026',
+    '{HEURE}':              '14:30',
+    '{JOURNEE}':            '12',
+    '{POULE}':              'A',
+    '{DIVISION}':           'R2M',
+    '{DOM}':                'Club A',
+    '{EXT}':                'Club B',
+    '{SALLE_NOM}':          'Salle Omnisports',
+    '{SALLE_ADRESSE}':      '12 rue des Sports',
+    '{SALLE_CP}':           '76000',
+    '{SALLE_VILLE}':        'Rouen',
+    '{CORR_NOM}':           'Durand',
+    '{CORR_EMAIL}':         'correspondant@club.fr',
+    '{CORR_TEL}':           '06 12 34 56 78',
+    '{ID_CONVOCATION}':     'AB12CD34',
+    '{SEXE}':               'M',
+    '{LISTE_NOMINATIONS}':  '<ul><li>15/03/2026 — R2M — Club A vs Club B</li></ul>',
+    '{NOM_CLUB}':           'ASSUN TT',
+    '{URL_DESIDERATA}':     'https://www.ligue-normandie-tt.fr/nijac/Nominateur/desiderata_club.php?club=09760136'
+};
+
+function resoudreMarqueurs(txt) {
+    let out = String(txt ?? '');
+    for (const [m, v] of Object.entries(MARQUEURS_EXEMPLE)) {
+        out = out.split(m).join(v);
+    }
+    return out;
+}
 
 let currentId       = null;
 let currentEstSys   = false; // true si message système (Id_Utilisateur === null)
@@ -589,6 +659,12 @@ $('#btn-dupliquer').on('click', function () {
             toast(res.msg, false);
         }
     }, 'json');
+});
+
+// ── Aperçu HTML ──────────────────────────────────────────────────────────────
+$('#btn-apercu-html').on('click', function () {
+    document.getElementById('iframe-apercu').srcdoc = resoudreMarqueurs($('#txt-message').val());
+    new bootstrap.Modal('#modal-apercu').show();
 });
 
 // ── Enregistrer ───────────────────────────────────────────────────────────────

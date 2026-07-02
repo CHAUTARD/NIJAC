@@ -432,8 +432,8 @@ if ($action !== '') {
             $enMap  = [];
             foreach ($enRows as $r) $enMap[$r['DivCode']][$r['Nom']] = $r;
 
-            // Map divCode → Id_Division NIJAC + ArbitrageObligatoire
-            $divRows = $pdo->query("SELECT Id_Division, Division, ArbitrageObligatoire FROM division")->fetchAll(PDO::FETCH_ASSOC);
+            // Map divCode → Id_Division NIJAC + ArbitrageCRA
+            $divRows = $pdo->query("SELECT Id_Division, Division, ArbitrageCRA FROM division")->fetchAll(PDO::FETCH_ASSOC);
             $divNijac = [];
             foreach ($divRows as $r) $divNijac[$r['Division']] = $r;
 
@@ -456,7 +456,7 @@ if ($action !== '') {
                     $nijac   = $divNijac[$divCode] ?? null;
                     if (!$nijac) { $stats['erreurs'][] = "Division $divCode non mappée en NIJAC."; continue; }
                     $idDivNijac = (int)$nijac['Id_Division'];
-                    $arbitrage  = (int)$nijac['ArbitrageObligatoire'];
+                    $arbitrage  = (int)$nijac['ArbitrageCRA'];
 
                     try {
                         $rencontres = getRencontresDivision($api, $divFftt);

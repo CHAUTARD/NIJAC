@@ -36,6 +36,9 @@ goto MENU
 
 :ADD
 echo.
+echo --- Incrementation du numero de version ---
+php increment_version.php
+echo.
 echo --- git add . ---
 git add .
 echo.

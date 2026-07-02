@@ -32,7 +32,7 @@ if ($action !== '') {
         // ── Liste ──────────────────────────────────────────────────────────
         if ($action === 'liste') {
             $rows = $pdo->query(
-                'SELECT Id_Division, Division, Ord, Nom, Color, ArbitrageObligatoire FROM Division ORDER BY Ord'
+                'SELECT Id_Division, Division, Ord, Nom, Color, ArbitrageCRA FROM Division ORDER BY Ord'
             )->fetchAll();
             echo json_encode(['ok' => true, 'data' => $rows]);
             exit;
@@ -42,7 +42,7 @@ if ($action !== '') {
         if ($action === 'charger') {
             $id   = (int)($_GET['id'] ?? 0);
             $stmt = $pdo->prepare(
-                'SELECT Id_Division, Division, Ord, Nom, Color, ArbitrageObligatoire FROM Division WHERE Id_Division = ?'
+                'SELECT Id_Division, Division, Ord, Nom, Color, ArbitrageCRA FROM Division WHERE Id_Division = ?'
             );
             $stmt->execute([$id]);
             $row = $stmt->fetch();
@@ -66,13 +66,13 @@ if ($action !== '') {
 
             if ($id > 0) {
                 $stmt = $pdo->prepare(
-                    'UPDATE Division SET Division=?, Ord=?, Nom=?, Color=?, ArbitrageObligatoire=? WHERE Id_Division=?'
+                    'UPDATE Division SET Division=?, Ord=?, Nom=?, Color=?, ArbitrageCRA=? WHERE Id_Division=?'
                 );
                 $stmt->execute([$nom, $ord, $nomLong, $color, $arbitrage, $id]);
                 echo json_encode(['ok' => true, 'msg' => 'Division mise à jour.', 'id' => $id]);
             } else {
                 $stmt = $pdo->prepare(
-                    'INSERT INTO Division (Division, Ord, Nom, Color, ArbitrageObligatoire) VALUES (?, ?, ?, ?, ?)'
+                    'INSERT INTO Division (Division, Ord, Nom, Color, ArbitrageCRA) VALUES (?, ?, ?, ?, ?)'
                 );
                 $stmt->execute([$nom, $ord, $nomLong, $color, $arbitrage]);
                 echo json_encode(['ok' => true, 'msg' => 'Division créée.', 'id' => (int)$pdo->lastInsertId()]);
@@ -242,7 +242,7 @@ $changeLogin = !empty($moi['change_login']);
                         <th style="width:80px">Division</th>
                         <th>Nom</th>
                         <th style="width:50px;text-align:center">Couleur</th>
-                        <th style="width:120px;text-align:center">Arbitrage JA</th>
+                        <th style="width:120px;text-align:center">Arbitrage CRA</th>
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
@@ -281,7 +281,7 @@ $changeLogin = !empty($moi['change_login']);
         </div>
 
         <div class="mb-3">
-            <label class="form-label">Arbitrage JA :</label>
+            <label class="form-label">Arbitrage CRA :</label>
             <div class="d-flex gap-3">
                 <div class="form-check">
                     <input class="form-check-input" type="radio" name="arbitrage" id="radio-oblig" value="1" checked>
@@ -359,7 +359,7 @@ function chargerListe(selectId = null) {
             return;
         }
         res.data.forEach(d => {
-            const arb = +d.ArbitrageObligatoire === 1
+            const arb = +d.ArbitrageCRA === 1
                 ? '<span class="badge" style="background:#1565c0;font-size:.75rem">Obligatoire</span>'
                 : '<span class="badge" style="background:#e65100;font-size:.75rem">Sur demande</span>';
             const couleur = `<span style="display:inline-block;width:16px;height:16px;border-radius:3px;border:1px solid #999;background:${d.Color || '#1565c0'}"></span>`;
@@ -396,7 +396,7 @@ function selectionnerLigne($tr) {
         $('#num-ord').val(d.Ord);
         $('#txt-nom-long').val(d.Nom);
         $('#color-couleur').val(d.Color || '#1565c0');
-        $('input[name="arbitrage"]').filter(`[value="${+d.ArbitrageObligatoire}"]`).prop('checked', true);
+        $('input[name="arbitrage"]').filter(`[value="${+d.ArbitrageCRA}"]`).prop('checked', true);
         $('#btn-supprimer').prop('disabled', false);
         setStatus('');
     }, 'json');
