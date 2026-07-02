@@ -17,6 +17,7 @@ require_once __DIR__ . '/../Classes/Obfuscator.php';
 
 // ── Sécurité : accès réservé aux JA connectés ────────────────────────────────
 $authRedirect = '../index.php';
+$allowJa      = true;
 require __DIR__ . '/../includes/auth_required.php';
 
 $moi = $_SESSION['utilisateur'];
@@ -202,14 +203,15 @@ if ($action !== '') {
     echo json_encode(['ok' => false, 'msg' => 'Action inconnue.']); exit;
 }
 
-// ── Nominations à venir ───────────────────────────────────────────────────────
+// ── Mes nominations (à venir + déjà arbitrées) ────────────────────────────────
 $nominations = $pdo->prepare(
     'SELECT n.Id_Nomination, r.Date AS DateRencontre, r.Heure AS HeureRencontre,
             s.Nom AS NomSalle, s.Adresse AS AdresseSalle,
             lps.CodePostal AS CpSalle, lps.Nom AS VilleSalle,
             d.Division AS DivisionCode, d.Color AS DivisionColor,
             ec.Nom AS NomClubDomicile,
-            ev.Nom AS NomClubVisiteur
+            ev.Nom AS NomClubVisiteur,
+            (r.Date >= CURDATE()) AS AVenir
      FROM Nomination n
      JOIN disponible dp ON dp.Id_Disponible = n.Id_Disponible
      JOIN Rencontre r ON r.Id_Rencontre = n.Id_Rencontre
@@ -220,9 +222,11 @@ $nominations = $pdo->prepare(
      LEFT JOIN Club  ec  ON ec.Id_Club = ede.Id_Club
      LEFT JOIN equipe eve ON eve.Id_Equipe = r.Id_EquipeExt
      LEFT JOIN Club  ev  ON ev.Id_Club = eve.Id_Club
-     WHERE dp.Id_JA = :id_ja AND r.Date >= CURDATE()
-     ORDER BY r.Date ASC, r.Heure ASC
-     LIMIT 10'
+     WHERE dp.Id_JA = :id_ja
+     ORDER BY (r.Date >= CURDATE()) DESC,
+              CASE WHEN r.Date >= CURDATE() THEN r.Date END ASC,
+              CASE WHEN r.Date <  CURDATE() THEN r.Date END DESC
+     LIMIT 15'
 );
 $nominations->execute([':id_ja' => $idJa]);
 $prochaines = $nominations->fetchAll();
@@ -327,15 +331,15 @@ $backUrl   = null;
         </div>
     </div>
 
-    <!-- ── Nominations à venir ───────────────────────────────────────────── -->
+    <!-- ── Nominations (à venir + déjà arbitrées) ──────────────────────────── -->
     <div class="card border-0 shadow-sm">
         <div class="card-header fw-semibold bg-primary text-white d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-calendar-check me-2"></i>Mes nominations à venir</span>
+            <span><i class="bi bi-calendar-check me-2"></i>Mes nominations</span>
             <span class="badge bg-light text-dark"><?= count($prochaines) ?></span>
         </div>
         <div class="card-body p-0">
             <?php if (empty($prochaines)): ?>
-            <p class="text-muted p-3 mb-0"><i class="bi bi-info-circle me-2"></i>Aucune nomination à venir pour le moment.</p>
+            <p class="text-muted p-3 mb-0"><i class="bi bi-info-circle me-2"></i>Aucune nomination pour le moment.</p>
             <?php else: ?>
             <div class="table-responsive">
                 <table class="table table-hover table-sm mb-0 align-middle">
@@ -347,6 +351,7 @@ $backUrl   = null;
                             <th>Rencontre</th>
                             <th>Salle</th>
                             <th>Lieu</th>
+                            <th>Statut</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -364,15 +369,23 @@ $backUrl   = null;
                             $lumN = strlen($hexN) === 6
                                 ? (0.299*hexdec(substr($hexN,0,2)) + 0.587*hexdec(substr($hexN,2,2)) + 0.114*hexdec(substr($hexN,4,2))) / 255
                                 : 0;
-                            $fgN  = $lumN > 0.55 ? '#111' : '#fff';
+                            $fgN     = $lumN > 0.55 ? '#111' : '#fff';
+                            $aVenir  = (bool)$n['AVenir'];
                         ?>
-                        <tr>
+                        <tr<?= $aVenir ? '' : ' style="opacity:.6"' ?>>
                             <td class="fw-semibold"><?= $dateFr ?></td>
                             <td><?= $heure ?></td>
                             <td><span class="badge" style="background:<?= htmlspecialchars($bgN) ?>;color:<?= $fgN ?>"><?= htmlspecialchars($n['DivisionCode'] ?? '—') ?></span></td>
                             <td><?= $rencontre ?></td>
                             <td><?= htmlspecialchars($n['NomSalle'] ?? '—') ?></td>
                             <td class="text-muted small"><?= $lieu ?></td>
+                            <td>
+                                <?php if ($aVenir): ?>
+                                <span class="badge bg-primary"><i class="bi bi-hourglass-split me-1"></i>À venir</span>
+                                <?php else: ?>
+                                <span class="badge bg-secondary"><i class="bi bi-check-circle me-1"></i>Arbitrée</span>
+                                <?php endif; ?>
+                            </td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>

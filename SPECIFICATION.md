@@ -9,7 +9,6 @@
 
 - [E001 – Connexion](#e001--connexion)
 - [E002 – Menu administrateur](#e002--menu-administrateur)
-- [E004 – Correspondants de clubs](#e004--correspondants-de-clubs)
 - [E005 – Salles](#e005--salles)
 - [E006 – Communes](#e006--communes)
 - [E007 – Juges-Arbitres](#e007--juges-arbitres)
@@ -17,16 +16,22 @@
 - [E009 – Utilisateurs](#e009--utilisateurs)
 - [E010 – Divisions](#e010--divisions)
 - [E011 – Import Rencontres](#e011--import-rencontres)
+- [E012 – Régions](#e012--régions)
+- [E013 – Départements](#e013--départements)
 - [E015 – Configuration générale](#e015--configuration-générale)
 - [E016 – Saison / Nettoyage](#e016--saison--nettoyage)
 - [E017 – Import Rencontres Nationales](#e017--import-rencontres-nationales)
+- [E018 – Test API FFTT](#e018--test-api-fftt)
 - [E020 – Menu nominateur](#e020--menu-nominateur)
 - [E021 – Disponibilités JA](#e021--disponibilités-ja)
 - [E022 – Nomination JA](#e022--nomination-ja)
 - [E024 – Centre d'envoi](#e024--centre-denvoi)
 - [E025 – Comptabilité frais JA](#e025--comptabilité-frais-ja)
 - [E026 – Messagerie](#e026--messagerie)
-- [E027 – Demandes JA R3 / R4](#e027--demandes-ja-r3--r4)
+- [E027 – Demandes JA R3M / R4M](#e027--demandes-ja-r3m--r4m)
+- [E028 – Statistiques JA](#e028--statistiques-ja)
+- [E029 – Adresse domicile JA](#e029--adresse-domicile-ja)
+- [E030 – Fiche personnelle JA](#e030--fiche-personnelle-ja)
 - [E099 – Administration base de données](#e099--administration-base-de-données)
 
 ---
@@ -40,23 +45,32 @@
 Point d'entrée unique de l'application. Authentifie l'utilisateur et initialise la session.
 
 ### Interface
-- Champ **Login** (texte)
-- Champ **Mot de passe** (password, bouton afficher/masquer)
+- Champ **Login** (texte) — pour un JA, il s'agit de son **Nom** de famille (voir plus bas)
+- Champ **Mot de passe** (password, bouton afficher/masquer) — pour un JA, il s'agit de son **numéro de licence**
 - Bouton **Se connecter**
 - Zone de statut (message d'erreur ou de succès)
 
 ### Comportement
 | Situation | Résultat |
 |-----------|----------|
-| Déjà connecté | Redirige immédiatement vers E002 (Admin) ou E020 (Nominateur) |
+| Déjà connecté | Redirige immédiatement vers E002 (Admin), E020 (Nominateur) ou E030 (JA) |
 | Login ou MDP vide | Message d'avertissement, pas d'appel base |
 | Identifiants invalides ou compte inactif | Message `Échec : Identifiants invalides.` |
 | Connexion réussie + rôle Admin | Redirection vers `admin_menu.php` (E002) |
 | Connexion réussie + rôle Nominateur | Redirection vers `Nominateur/menu.php` (E020) |
+| Connexion réussie + rôle JA | Redirection vers `JA/info_rencontre.php` (E030) |
 | Erreur base de données | Message système, log PHP |
+
+### Connexion Juge-Arbitre (rôle `JA`)
+Si le login ne correspond à aucun `Utilisateur` existant, l'application tente une authentification JA :
+1. Recherche un `ja` actif dont `Nom` correspond au login saisi (comparaison insensible à la casse/espaces).
+2. Vérifie que le mot de passe saisi correspond exactement à `Id_JA` (le numéro de licence sert de mot de passe).
+3. **Contrôle d'accès métier** : le club du JA doit avoir au moins une rencontre en division `R3M`/`R4M` (ou `ArbitrageObligatoire = 1`, ou `equipe.JAdemande = 1`) dans une fenêtre de `CURDATE() ± 5 jours`. Sinon, l'accès est refusé et le compte `Utilisateur` associé (s'il existe) est supprimé.
+4. Si l'accès est autorisé et qu'aucun compte `Utilisateur` n'existe pour ce login, un compte est créé automatiquement : `Login = ja.Nom`, `Password = hash(licence)`, `Role = 'JA'`, `Id_Departement` déduit des 2 premiers chiffres du `Id_Club`, `Actif = 1`.
 
 ### Session créée
 ```php
+// Administrateur / Nominateur
 $_SESSION['utilisateur'] = [
     'id'             => int,
     'login'          => string,
@@ -66,6 +80,13 @@ $_SESSION['utilisateur'] = [
     'id_departement' => string,
     'change_login'   => bool,
     'is_admin'       => bool,
+]
+
+// Juge-Arbitre (E030)
+$_SESSION['utilisateur'] = [
+    // ... mêmes clés que ci-dessus, avec :
+    'role'  => 'JA',
+    'id_ja' => string,   // numéro de licence (= Id_JA), utilisé comme identifiant métier
 ]
 ```
 
@@ -94,50 +115,23 @@ Page d'accueil de l'espace administrateur. Donne accès à tous les écrans de p
 | Club / Association | E008 | `club.php` |
 | Salle | E005 | `salle.php` |
 | Utilisateur | E009 | `utilisateur.php` |
-| Correspondant Club | E004 | `correspondant.php` |
 | Communes | E006 | `communes.php` |
 | Division | E010 | `division.php` |
 | Import Rencontres | E011 | `import_rencontres.php` |
 | Import Rencontres Nationales | E017 | `import_rencontres_nat.php` |
+| Régions | E012 | `region.php` |
+| Départements | E013 | `departement.php` |
 | Saison | E016 | `clean.php` |
 | Configuration | E015 | `configuration.php` |
+| Test API FFTT *(CHAUTARD seulement)* | E018 | `fftt_test.php` |
 | Base de données *(CHAUTARD seulement)* | E099 | `db-admin.php` |
 | Se déconnecter | — | `logout.php` |
 
 ### Règles
-- Le bouton **Base de données** (E099) n'est visible que si `$_SESSION['utilisateur']['nom'] === 'CHAUTARD'`
+- Les boutons **Test API FFTT** (E018) et **Base de données** (E099) ne sont visibles que si `$_SESSION['utilisateur']['login'] === 'CHAUTARD'`
 - Le bouton **Se déconnecter** demande une confirmation JavaScript
 
----
-
-## E004 – Correspondants de clubs
-
-**Fichier :** `correspondant.php`  
-**Accès :** Administrateur uniquement
-
-### Objectif
-Gérer les contacts référents (correspondants) associés à chaque club.
-
-### Champs d'une fiche correspondant
-| Champ | Type | Obligatoire |
-|-------|------|-------------|
-| Nom | Texte | Oui |
-| Prénom | Texte | Non |
-| Email | Email | Non |
-| Téléphone | Texte (formaté `06.12.34.56.78`) | Non |
-| Fonction | Texte | Non |
-| Club (Id_Club) | Sélecteur | Oui |
-
-### Actions AJAX
-| Action | Méthode | Description |
-|--------|---------|-------------|
-| `liste` | GET | Retourne tous les correspondants avec le nom du club |
-| `importer_excel` | POST | Import depuis fichier Excel FFTT (upsert par email) |
-| `maj_bdd` | POST | Créer ou modifier un correspondant |
-
-### Import Excel
-- Colonnes attendues : N° FFTT du club, Nom, Prénom, Email, Téléphone, Fonction
-- Comportement : upsert sur l'email (mise à jour si existant, création sinon)
+> **Note :** l'ancien écran E004 (Correspondants de clubs, `correspondant.php`) a été supprimé. La gestion des correspondants est désormais intégrée à l'écran E008 (Clubs / Associations), sous forme de colonnes directement sur la fiche club.
 
 ---
 
@@ -243,6 +237,7 @@ Gérer la liste complète des Juges-Arbitres : import depuis fichier FFTT, consu
 ### Règles
 - Seuls les JA avec `Actif = 1` sont proposés à la nomination (E022)
 - Le département d'un JA est déterminé par le code postal de sa salle principale de club
+- Le sélecteur de département (filtre liste + import FFTT) propose, en plus des départements actifs (`getDeptActifs()`), un groupe **« Départements limitrophes »** alimenté par `getDepartementsLimitrophes()` — liste paramétrable via la clé `departements_limitrophes` en E015 (par défaut `28,35,53,60,72,78,80,95`). Ce mécanisme est distinct de la règle 76→27 (`regles_departements`, voir E015) : il permet de gérer des JA rattachés à des départements hors Normandie qui interviennent occasionnellement en Normandie, plutôt qu'une inclusion automatique entre deux départements normands.
 
 ---
 
@@ -259,17 +254,28 @@ Importer et gérer la liste des clubs affiliés à la ligue Normandie.
 |-------|------|-------------|
 | Id_Club | Texte (N° FFTT, ex : `07614001`) | Oui |
 | Nom | Texte | Oui |
+| CorNom | Texte (nom du correspondant) | Non |
+| CorEmail | Email | Non |
+| CorTelephone | Texte | Non |
+
+> Les colonnes correspondant (`CorNom`, `CorEmail`, `CorTelephone`) remplacent l'ancien écran E004 (table `Correspondant` séparée, supprimée). À la première utilisation, une migration copie automatiquement le correspondant existant de chaque club (le plus ancien s'il y en a plusieurs) vers ces colonnes.
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `liste` | GET | Retourne tous les clubs |
-| `maj_bdd` | POST | Import / upsert depuis fichier Excel FFTT |
+| `liste` | GET | Retourne tous les clubs avec correspondant, code postal / ville (salle principale) et nombre de salles |
+| `maj_bdd` | POST | Import / upsert d'une liste de clubs (JSON), y compris renommage du N° FFTT avec propagation aux tables liées (salles, correspondants, équipes, JA) |
+| `get_clubs_dept_fftt` | POST | Liste des clubs FFTT d'un département via l'API FFTT (`getClubsDepartement`) |
+| `sync_fftt_club` | POST | Synchronise un club depuis l'API FFTT : Club, Salle principale et Correspondant en une seule opération |
 
 ### Import Excel
 - Format FFTT : colonne `N° FFTT` (Id_Club) + `Nom club` (Nom)
-- Données lues à partir de la ligne 3 du fichier
+- Données lues à partir de la ligne 3 du fichier, parsées côté client puis envoyées à `maj_bdd` sous forme de tableau JSON (`lignes`)
 - Comportement : upsert (mise à jour si le club existe, création sinon)
+
+### Synchronisation FFTT
+- `get_clubs_dept_fftt` liste les clubs d'un département via l'API FFTT pour sélection
+- `sync_fftt_club` récupère le détail d'un club FFTT et met à jour en une fois le nom du club, sa salle principale (nom, adresse, commune) et son correspondant (nom, email, téléphone)
 
 ---
 
@@ -366,6 +372,67 @@ Saison, Journée, Date, Division, Équipe domicile (Id_Club), Équipe visiteur, 
 
 ---
 
+## E012 – Régions
+
+**Fichier :** `region.php`  
+**Accès :** Administrateur uniquement
+
+### Objectif
+Référentiel des régions administratives, utilisé pour rattacher les départements (E013).
+
+### Champs d'une région
+| Champ | Type | Obligatoire |
+|-------|------|-------------|
+| code | Texte (clé primaire, ex : `28`) | Oui, non modifiable après création |
+| nom | Texte | Oui |
+| Gentile | Texte (ex : `Normand(e)`) | Non |
+| chef_lieu | Texte | Non |
+
+### Actions AJAX
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `liste` | POST | Retourne toutes les régions triées par nom |
+| `charger` | GET | Charge une région par son code |
+| `enregistrer` | POST | Créer (`is_new=1`) ou modifier une région |
+| `supprimer` | POST | Supprime une région |
+
+### Règles
+- `code` et `nom` sont obligatoires à l'enregistrement
+- Aucune vérification de dépendance à la suppression : un département référençant un code de région supprimé n'est pas bloqué (orphelin possible sur `departement.code_region`)
+
+---
+
+## E013 – Départements
+
+**Fichier :** `departement.php`  
+**Accès :** Administrateur uniquement
+
+### Objectif
+Référentiel des départements, rattachés à une région (E012). Sert de base à la résolution des noms de département utilisée par d'autres écrans (import rencontres nationales, demandes JA R3M/R4M).
+
+### Champs d'un département
+| Champ | Type | Obligatoire |
+|-------|------|-------------|
+| code | Texte (clé primaire, ex : `76`) | Oui, non modifiable après création |
+| nom | Texte (ex : `Seine-Maritime`) | Oui |
+| code_region | Texte (référence logique vers `region.code`) | Non |
+
+### Actions AJAX
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `liste` | POST | Retourne tous les départements avec le nom de région (jointure), triés par code numérique |
+| `charger` | GET | Charge un département par son code |
+| `liste_regions` | POST | Retourne les régions pour peupler le sélecteur |
+| `enregistrer` | POST | Créer (`is_new=1`) ou modifier un département |
+| `supprimer` | POST | Supprime un département |
+
+### Règles
+- `code` et `nom` sont obligatoires à l'enregistrement
+- `code_region` n'est pas une contrainte FK déclarée en base : la cohérence est gérée applicativement, pas de blocage de suppression
+- Distinct des listes de départements actifs (`departements_actifs`, E015) et limitrophes (`departements_limitrophes`, E015) : cette table est un référentiel de noms, pas un mécanisme de filtrage des écrans nominateur
+
+---
+
 ## E015 – Configuration générale
 
 **Fichier :** `configuration.php`  
@@ -381,6 +448,7 @@ Gérer les paramètres applicatifs stockés dans la table `configuration` (clé 
 | `email_developpement` | Email | Adresse cible en mode développement |
 | `departements_actifs` | Ex : `14,27,50,61,76` | Départements affichés dans les sélecteurs |
 | `regles_departements` | JSON ex : `{"76":["27"]}` | Inclusion automatique d'un département dans un autre |
+| `departements_limitrophes` | CSV ex : `28,35,53,60,72,78,80,95` | Départements hors Normandie proposés en complément dans les sélecteurs de département (E007, E021) |
 | `smtp_host` | Texte | Serveur SMTP |
 | `smtp_port` | Entier | Port SMTP |
 | `smtp_from` | Email | Adresse expéditeur |
@@ -481,6 +549,43 @@ Avant l'import, toutes les équipes non reconnues doivent être associées manue
 
 ---
 
+## E018 – Test API FFTT
+
+**Fichier :** `fftt_test.php`  
+**Accès :** Administrateur (uniquement utilisateur `CHAUTARD`, même restriction que E099)
+
+### Objectif
+Interface de diagnostic/débogage de l'intégration API FFTT (Smartping v2) : vérifier les identifiants, appeler manuellement chaque endpoint FFTT et inspecter la réponse brute (XML/JSON) sans écrire en base. Réutilise la même classe partagée `Classes/FfttApi.php` (factory `getFfttApi()`) que les écrans d'import réels (E007, E008, E005, E011, E017) — il n'existe qu'un seul client FFTT dans l'application.
+
+### Actions AJAX
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `ping` | POST | Test minimal sans appel API (vérifie la chaîne JS → PHP) |
+| `test_clubs_dep` | POST | Liste des clubs d'un département (`xml_club_dep2`) |
+| `test_licence` | POST | Détail d'un licencié (`xml_licence`) |
+| `test_equipes` | POST | Équipes d'un club (`xml_equipe`) |
+| `test_club_detail` | POST | Détail complet d'un club (`xml_club_detail`) |
+| `debug_club_salle` | POST | Analyse des champs salle d'un club (nom, adresse, code postal, ville) |
+| `test_licence_b` | POST | Détail étendu + grades d'un licencié (`xml_licence_b`) |
+| `test_arbitres_dep` | POST | Parcourt les clubs d'un département et collecte les licenciés avec grade d'arbitrage |
+| `test_spid_club` | POST | Licenciés SPID d'un club (`xml_liste_joueur_o`) |
+| `test_organisme` | POST | Liste des organismes (`xml_organisme`) |
+| `test_epreuve` | POST | Épreuves d'un organisme (`xml_epreuve`) |
+| `test_division` | POST | Divisions d'une épreuve (`xml_division`) |
+| `test_poule` | POST | Poules d'une division (`xml_poule`) |
+| `test_rencontre` | POST | Flux poules → rencontres (`xml_result_equ` puis `xml_rencontre_equ`) |
+| `test_rencontre_poule` | POST | Rencontres d'une poule (`xml_result_equ`) |
+| `test_chp_renc` | POST | Détail d'une rencontre (`xml_chp_renc`) |
+| `test_result_equ` | POST | Résultats d'une équipe (`xml_result_equ`) |
+| `test_equipe_nat` | POST | Analyse de la détection d'équipe nationale pour un club (logique réutilisée de E017) |
+| `scan_dept_nat` | POST | Scan complet d'un département pour repérer les clubs ayant une équipe nationale (opération longue, 2 à 5 min) |
+
+### Règles
+- Page strictement en lecture : aucune action n'effectue d'INSERT/UPDATE en base
+- Identifiants lus via `getFfttAppId()` / `getFfttAppKey()` (`.env`), `serial` FFTT persisté dans la config (`fftt_serial`)
+
+---
+
 ## E020 – Menu nominateur
 
 **Fichier :** `Nominateur/menu.php`  
@@ -510,6 +615,7 @@ Les indicateurs affichent un **badge rouge** sur le bouton de menu correspondant
 | Centre d'envoi | E024 | `centrenvoye.php` |
 | Comptabilité | E025 | `compta.php` |
 | R3 R4 ayant demandé un JA | E027 | `JA_R3R4.php` |
+| Statistiques JA | E028 | `stats_ja.php` |
 | Se déconnecter | — | `../logout.php` |
 
 ### Règle département Seine-Maritime (76)
@@ -526,14 +632,14 @@ Le département 76 inclut automatiquement l'Eure (27) dans tous les calculs, con
 Consulter et modifier les disponibilités des JA par département et par journée.
 
 ### Interface
-- Sélecteur de département (14, 27, 50, 61, 76)
-- Grille des JA du département avec leur disponibilité par journée
-- Clic sur un JA → ouvre `disponibilite_ja.php` (lien tokenisé via `Obfuscator`) dans une nouvelle fenêtre
+- Sélecteur de département : groupe **« Normandie »** (14, 27, 50, 61, 76) et groupe **« Départements limitrophes »** (liste de `getDepartementsLimitrophes()`, paramétrable via `departements_limitrophes` en E015)
+- Grille des JA du/des département(s) sélectionné(s) avec leur disponibilité par journée
+- Clic sur un JA → ouvre `disponibilite_ja.php?id_ja=...` dans une nouvelle fenêtre pour la saisie détaillée par journée
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `ja_dept` | GET | Retourne les JA actifs du département avec leurs disponibilités |
+| `ja_dept` | GET | Retourne les JA actifs des départements sélectionnés (`depts`, liste séparée par virgules) avec leurs disponibilités |
 
 ### Règle département 76
 La sélection du département 76 inclut automatiquement les JA du 27.
@@ -564,18 +670,26 @@ Affecter les JA disponibles aux rencontres de la saison en appliquant les règle
 | `rencontres_journee` | GET | Retourne les rencontres d'une journée avec nominations |
 | `candidats_journee` | GET | Retourne les JA candidats pour une rencontre (triés par règles) |
 | `affecter_ja` | POST | Nomme un JA sur une rencontre |
-| `retirer_ja` | POST | Retire la nomination d'un JA |
+| `retirer_ja` | POST | Retire la nomination d'un JA (`DELETE FROM nomination WHERE Id_Rencontre = ?`) |
 | `valider_nominations` | POST | Valide les nominations de la journée (`Valide = 1`) |
 | `envoyer_convocations` | POST | Envoie les emails de convocation aux JA validés |
+
+### Modèle de données (`nomination` → `disponible`)
+Depuis la migration décrite dans le commit *« modification dans la table nomination de id_ja par id_disponible »*, la table `nomination` ne référence plus directement `ja.Id_JA` mais **`disponible.Id_Disponible`** (`nomination.Id_Disponible`). Le JA nominé s'obtient par jointure `nomination → disponible → ja`. Une contrainte d'unicité `uq_nomination_rencontre` sur `nomination.Id_Rencontre` garantit qu'**une rencontre ne peut avoir qu'une seule nomination**.
+
+Deux fonctions internes portent cette logique dans `nomination.php` :
+- `resoudreDisponible($pdo, $idJa, $idRenc, $dateRenc)` : trouve/crée la ligne `disponible` à utiliser — priorité à une réponse précise sur la rencontre (`Reponse='O'`), sinon une disponibilité « toute la journée » (`Id_Rencontre IS NULL`) qu'elle matérialise en ligne précise, sinon retourne `null` (JA non disponible → nomination refusée)
+- `affecterNomination($pdo, $idRenc, $idDispo)` : crée la nomination si absente ; si un autre JA était déjà nominé, réinitialise `Peage`, `Kilometre`, `RapportAccueil`, `RapportEquipements`, `DateSaisie`
 
 ### Règles métier de nomination
 1. **Exclusion club** : un JA ne peut pas arbitrer une rencontre où son club joue (domicile ou visiteur)
 2. **Max rencontres par club / phase** : un JA ne peut pas arbitrer plus de 2 rencontres du même club sur une phase
-3. **Unicité par date** : un JA ne peut arbitrer qu'une seule rencontre par date
-4. **Priorité disponibilité déclarée** : les rencontres choisies par le JA dans ses disponibilités sont prioritaires
-5. **Proximité géographique** : en cas d'égalité, la rencontre la plus proche du domicile du JA est privilégiée
-6. **Équité** : priorité au JA ayant le moins d'arbitrages validés sur la phase en cours
-7. **Double rencontre en salle** : si un JA est affecté à une rencontre, une 2ᵉ rencontre dans la même salle le même jour lui est automatiquement proposée
+3. **Unicité par date** : un JA ne peut arbitrer qu'une seule rencontre par date (vérifié par jointure `nomination → disponible` sur la même date)
+4. **Unicité par rencontre** : une rencontre ne peut avoir qu'un seul JA nominé (contrainte `uq_nomination_rencontre`)
+5. **Priorité disponibilité déclarée** : les rencontres choisies par le JA dans ses disponibilités sont prioritaires
+6. **Proximité géographique** : en cas d'égalité, la rencontre la plus proche du domicile du JA est privilégiée
+7. **Équité** : priorité au JA ayant le moins d'arbitrages validés sur la phase en cours
+8. **Double rencontre en salle** : si un JA est affecté à une rencontre, une 2ᵉ rencontre dans la même salle le même jour (hors rencontres où son club joue) lui est automatiquement proposée via `resoudreDisponible` / `affecterNomination`, une seule à la fois
 
 ---
 
@@ -625,13 +739,22 @@ Générer le récapitulatif des frais de déplacement des JA pour une période e
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `donnees` | GET | Retourne les frais par JA pour la période |
-| `export_csv` | GET | Télécharge le fichier CSV au format EBP (journal AC) |
+| `donnees` | POST | Retourne les frais par JA pour la période |
+| `export_csv` | POST | Retourne le CSV au format EBP (le fichier est ensuite déclenché en téléchargement côté client) |
 
 ### Calcul des frais
-- **Indemnité forfaitaire** : valeur de `configuration.indemnite_forfaitaire` par arbitrage
-- **Frais kilométriques** : `Kilometres × frais_kilometrique`, plafonnés à `frais_max_km`
-- **Péages** : montant saisi, plafonné à `frais_max_peages`
+- **Indemnité forfaitaire** : `COUNT(nominations validées) × configuration.indemnite_forfaitaire`
+- **Frais kilométriques + péages** : `SUM(Kilometre) × frais_kilometrique + SUM(Peage)`
+- Nominations prises en compte : `Valide = 1` OU `Peage`/`Kilometre` renseignés, sur la période sélectionnée
+
+### Export CSV (format EBP)
+- Une ligne d'en-tête ajoutée côté client : `journal,date,cpte,sens,montant,mode_reglement,libelle,poste analytique`
+- Par JA ayant des frais > 0, jusqu'à 3 lignes, code journal **`AC`**, date = date de fin de période, mode de règlement `virement` :
+  1. Débit (`D`) frais kilométriques + péages sur le compte `compte_frais_km` (config, défaut `62511`)
+  2. Débit (`D`) indemnité/prestations sur le compte `compte_prestations` (config, défaut `62261`)
+  3. Crédit (`C`) du total sur le compte du JA (`ja.NumCompteEBP`, ou `?????` si absent)
+- Poste analytique (config `code_analytique_compta`, défaut `04EPR232`) renseigné uniquement sur les lignes de débit
+- Une ligne vide sépare chaque JA ; nom de fichier `import_JA_{datefin sans tirets}.csv`
 
 ---
 
@@ -646,41 +769,131 @@ Créer et gérer les modèles de messages utilisés pour les convocations, rappe
 ### Champs d'un message
 | Champ | Type | Obligatoire |
 |-------|------|-------------|
-| Type | `convocation` \| `rappel` \| `annulation` \| `information` | Oui |
+| Type | Valeur de l'ENUM `messagerie.Type` (lu dynamiquement en base, ex. `Convocation`, `Demande adresse`, `Rappel`, `Annulation`, `Information`) | Oui |
 | Sujet | Texte | Oui |
-| Corps | HTML / Texte | Oui |
-| Utilisateur | Lié à `Id_Utilisateur` | Oui |
+| Message | HTML / Texte, avec marqueurs (`{NOM}`, `{DATE}`, `{URL_ADRESSE_JA}`, etc.) | Oui |
+| Id_Utilisateur | `NULL` = message système, sinon propriétaire nominateur | — |
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `liste` | GET | Retourne tous les modèles de messages |
+| `liste` | GET | Retourne tous les modèles (système en tête, `Id_Messagerie` 1 à 5, puis les autres) |
 | `charger` | GET | Charge un modèle par son Id |
-| `enregistrer` | POST | Créer ou modifier un modèle |
-| `dupliquer` | POST | Duplique un modèle existant |
+| `enregistrer` | POST | Créer ou modifier un modèle (le `Type` doit correspondre à une valeur de l'ENUM) |
+| `dupliquer` | POST | Duplique un modèle existant (système ou personnel) pour personnalisation |
 | `supprimer` | POST | Supprime un modèle |
+
+### Règles
+- Les messages système (`Id_Utilisateur IS NULL` ou `Id_Messagerie` entre 1 et 5) ne sont modifiables/supprimables que par un administrateur ; un nominateur peut les dupliquer pour créer sa propre variante
+- Un nominateur ne peut modifier/supprimer que ses propres messages personnels
+- Les modèles système sont référencés par type depuis d'autres écrans : `Convocation` (E024, E030 « se désigner »), `Demande adresse` (E029)
 
 ---
 
-## E027 – Demandes JA R3 / R4
+## E027 – Demandes JA R3M / R4M
 
 **Fichier :** `Nominateur/JA_R3R4.php`  
 **Accès :** Administrateur et Nominateur
 
 ### Objectif
-Signaler qu'une équipe R3 ou R4 demande la présence d'un Juge-Arbitre pour ses rencontres à domicile.
+Signaler qu'une équipe **R3M ou R4M** (divisions régionales masculines uniquement, pas de distinction féminine) demande la présence d'un Juge-Arbitre pour ses rencontres à domicile.
 
 ### Comportement
-- Affiche la liste des équipes des divisions R3 et R4
-- Un toggle **JA demandé** (Oui / Non) par équipe
-- Quand `JAdemande = 1` : toutes les rencontres à domicile de cette équipe passent automatiquement en `ArbitrageObligatoire = 1`, ce qui les inclut dans les nominatons de E022
+- Affiche la liste des équipes des divisions **R3M** (`Id_Division = 1`) et **R4M** (`Id_Division = 10`) uniquement
+- Un toggle **JA demandé** (Oui / Non) par équipe, avec badges `R3M` / `R4M`
+- Quand `JAdemande = 1` : toutes les rencontres à domicile de cette équipe passent automatiquement en `ArbitrageObligatoire = 1`, ce qui les inclut dans les nominations de E022
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `liste` | GET | Retourne les équipes R3/R4 avec leur flag `JAdemande` |
+| `liste` | GET | Retourne les équipes R3M/R4M avec leur flag `JAdemande` |
 | `departements` | GET | Retourne les départements disponibles |
 | `toggle` | POST | Bascule `JAdemande` entre 0 et 1 pour une équipe |
+
+---
+
+## E028 – Statistiques JA
+
+**Fichier :** `Nominateur/stats_ja.php`  
+**Accès :** Administrateur et Nominateur
+
+### Objectif
+Rapport agrégé, en lecture seule, des arbitrages et frais par JA sur une période donnée (complémentaire de l'export comptable détaillé E025).
+
+### Interface
+- Filtres de période (défaut : 1ᵉʳ septembre de l'année en cours → aujourd'hui), bouton **Afficher**
+- Tableau triable (clic sur en-tête) : JA (avec mini barre proportionnelle au nombre d'arbitrages), Grade, Club, Arbitrages, Km, Péages, Indemnité, Total frais — avec ligne de totaux
+- Boutons **Export CSV** et **Imprimer** (vue imprimable via CSS `@media print`)
+
+### Actions AJAX
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `donnees` | GET | Retourne, par JA, le nombre d'arbitrages et les totaux km / péages / indemnité / frais sur la période |
+| `export_csv` | GET | Télécharge un CSV (BOM UTF-8, séparateur `;`) `stats_ja_{debut}_{fin}.csv` |
+
+### Calcul (par JA, sur les nominations `Valide = 1` de la période)
+- `total_km` = `SUM(Kilometre)`, `total_peages` = `SUM(Peage)`
+- `total_indemnite` = `COUNT(nominations) × indemnite_forfaitaire`
+- `total_frais` = `total_km × frais_kilometrique + total_peages + total_indemnite`
+- Utilise les mêmes clés de configuration (`indemnite_forfaitaire`, `frais_kilometrique`) que E025, mais comme rapport de synthèse par JA plutôt que comme export comptable ligne à ligne
+
+---
+
+## E029 – Adresse domicile JA
+
+**Fichier :** `Nominateur/adresse_ja.php`  
+**Accès :** Page publique (sans session), accessible via un lien tokenisé ; certaines actions internes exigent une session nominateur
+
+### Objectif
+Permettre à un Juge-Arbitre de renseigner ou corriger son code postal et sa ville, sans avoir besoin de se connecter, via un lien envoyé par email.
+
+### Actions AJAX
+| Action | Méthode | Session requise | Description |
+|--------|---------|------------------|-------------|
+| `token` | GET/POST | Nominateur/admin (`auth_required`) | Génère l'URL tokenisée `adresse_ja.php?ja=TOKEN` (Obfuscator) pour un `Id_JA` donné |
+| `envoyer_demande_adresse` | POST | Nominateur/admin | Envoie au JA l'email du modèle système `Demande adresse` avec son lien personnalisé |
+| `recherche_laposte` | POST | Aucune (public) | Recherche une commune par code postal / nom dans `laposte` |
+| `sauvegarder` | POST | Aucune (public) | Enregistre l'adresse choisie pour le JA |
+
+### Interface publique
+- Champs **Code postal** et **Ville**, recherche/normalisation (accents, tirets, `SAINT` → `ST`) dans la table `laposte`
+- Code postal unique → sélection automatique de la commune ; plusieurs communes pour un même CP → bloc de suggestions à choisir manuellement
+- Bouton **Enregistrer** désactivé tant qu'une commune valide (`Id_LaPoste`) n'est pas résolue
+
+### Écritures en base
+- `UPDATE ja SET Id_LaPoste = ?, Cp = ?, Ville = ? WHERE Id_JA = ?`
+- Auto-migration : ajout des colonnes `ja.Cp` et `ja.Ville` si absentes
+
+### Génération et envoi du lien
+- Token = `Obfuscator::obfuscate($idJa)` (seed `OBFUSCATOR_SEED`), lien généré depuis E007 (fiche JA) ou par `envoyer_demande_adresse`
+- Le modèle « Demande adresse » (système, `messagerie.Type = 'Demande adresse'`) supporte les marqueurs `{NOM}`, `{PRENOM}`, `{NOM_COMPLET}`, `{URL_ADRESSE_JA}`, `{UTI_NOM}`, `{UTI_PRENOM}`, `{URL_LIGUE}`
+- Envoi via `getNijacMailer()`, destinataire résolu par `getEmailDestinataire()`, soumis au rate-limiting (`checkRateLimit()` / `enregistrerEnvois()`)
+
+---
+
+## E030 – Fiche personnelle JA
+
+**Fichier :** `JA/info_rencontre.php`  
+**Accès :** Rôle `JA` (voir connexion E001) — dossier `JA/` ne contient que ce fichier ; pas de menu ni de formulaire de connexion dédiés, le login se fait via `index.php` (E001) et la déconnexion via `logout.php`
+
+### Objectif
+Page d'accueil du Juge-Arbitre connecté par Nom + numéro de licence : consultation de sa fiche, de ses prochaines nominations, et auto-désignation sur les rencontres R3M/R4M non pourvues de son club.
+
+### Interface
+- Fiche identité : Prénom / Nom, licence (`Id_JA`), club, domicile (`Cp`/`Ville` ou commune liée), bouton pour modifier l'adresse (même mécanisme que E029)
+- **Mes nominations à venir** (10 max, `Date >= CURDATE()`) : jointure `Nomination → disponible → Rencontre → Salle → laposte`, division, équipes domicile/visiteur
+- **Rencontres R3M/R4M à venir** du club du JA : jointure `rencontre → division → equipe → salle → laposte`, avec le JA déjà désigné le cas échéant ; ligne en vert si c'est le JA connecté, grisée si la date est à plus de 5 jours, bouton **« Non désigné »** cliquable pour s'auto-désigner sinon
+
+### Actions AJAX
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `se_designer` | POST | Le JA se désigne lui-même sur une rencontre R3M/R4M de son club sans JA déjà nominé : crée la ligne `disponible` (Réponse = `O`) si absente, crée la `nomination` (`Valide = 1`), envoie l'email du modèle système `Convocation` |
+| `recherche_laposte` | POST | Identique à E029 |
+| `sauvegarder_adresse` | POST | Met à jour `Cp`/`Ville`/`Id_LaPoste` du JA connecté (identifié via la session, pas de paramètre `id_ja`) |
+
+### Règles
+- Toutes les actions POST exigent `csrfVerify(true)`
+- `se_designer` refuse si une nomination existe déjà sur la rencontre ou si celle-ci n'appartient pas au club du JA connecté
 
 ---
 
@@ -759,7 +972,7 @@ Interface d'administration directe de la base de données MySQL : consultation, 
 | `drop_index` | POST | Supprimer un index |
 
 ### Sécurité
-- Accès conditionnel : `$_SESSION['utilisateur']['nom'] === 'CHAUTARD'`
+- Accès conditionnel : `$_SESSION['utilisateur']['login'] === 'CHAUTARD'`
 - CSRF vérifié sur toutes les actions POST
 - Tous les noms de tables et colonnes sont validés par regex `^\w+$` avant injection dans les requêtes
 - Les noms de colonnes dans `insert` / `update` sont comparés à la liste réelle de `DESCRIBE` avant utilisation

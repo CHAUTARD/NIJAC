@@ -541,6 +541,10 @@ $appId    = getFfttAppId();
 $appKey   = getFfttAppKey();
 $serial   = getConfig('fftt_serial', '');
 $deptsNorm = getDeptActifs(); // [['code'=>'14','nom'=>'Calvados'], …]
+$moi         = $_SESSION['utilisateur'];
+$nomComplet  = htmlspecialchars($moi['nom'] . ' ' . $moi['prenom']);
+$departement = htmlspecialchars($moi['id_departement'] ?? '');
+$changeLogin = !empty($moi['change_login']);
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -555,6 +559,14 @@ $deptsNorm = getDeptActifs(); // [['code'=>'14','nom'=>'Calvados'], …]
         :root { --nijac-blue: #1a3a6b; }
         body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f4fa; display: flex; flex-direction: column; min-height: 100vh; }
         main { flex: 1; }
+        #page-header {
+            background: var(--nijac-blue);
+            color: #fff;
+            padding: .5rem 1.25rem;
+            font-size: .9rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
     </style>
 </head>
 <body>
@@ -566,8 +578,10 @@ $backUrl   = 'admin_menu.php';
 require __DIR__ . '/includes/page_header.php';
 ?>
 
+<?php require __DIR__ . '/includes/toolbar.php'; ?>
+
 <main>
-<div class="container-fluid py-4" style="max-width:960px">
+<div class="container-fluid py-4" style="max-width:1800px">
 
     <!-- Statut de la configuration -->
     <?php $configured = ($appId !== '' && $appKey !== ''); ?>
@@ -581,7 +595,31 @@ require __DIR__ . '/includes/page_header.php';
         <?php endif; ?>
     </div>
 
+    <!-- Onglets -->
+    <ul class="nav nav-tabs mb-3" id="fftt-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tab-general-btn" data-bs-toggle="tab" data-bs-target="#tab-general" type="button" role="tab">
+                <i class="bi bi-plug me-1"></i>Tests généraux
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-rencontres-btn" data-bs-toggle="tab" data-bs-target="#tab-rencontres" type="button" role="tab">
+                <i class="bi bi-calendar3 me-1"></i>Exploration Rencontres
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-national-btn" data-bs-toggle="tab" data-bs-target="#tab-national" type="button" role="tab">
+                <i class="bi bi-trophy me-1"></i>Détection Équipes Nationales
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+    <div class="tab-pane fade show active" id="tab-general" role="tabpanel">
+    <div class="row">
+
     <!-- Ping PHP -->
+    <div class="col-lg-6">
     <div class="card mb-3 border-secondary">
         <div class="card-header fw-semibold text-secondary"><i class="bi bi-activity me-2"></i>Étape 1 — Ping PHP (sans appel API)</div>
         <div class="card-body">
@@ -590,6 +628,9 @@ require __DIR__ . '/includes/page_header.php';
         </div>
     </div>
 
+    </div>
+
+    <div class="col-lg-6">
     <!-- Test 1 : clubs par département -->
     <div class="card mb-3">
         <div class="card-header fw-semibold"><i class="bi bi-building me-2"></i>Clubs par département</div>
@@ -603,14 +644,17 @@ require __DIR__ . '/includes/page_header.php';
         </div>
     </div>
 
+    </div>
+
+    <div class="col-lg-6">
     <!-- Test : détail club + salle -->
     <div class="card mb-3 border-success">
         <div class="card-header fw-semibold text-success"><i class="bi bi-building me-2"></i>Détail club et salle (xml_club_detail)</div>
         <div class="card-body">
             <p class="text-muted small mb-2">Retourne les informations complètes d'un club : adresse, coordonnées, salle(s).</p>
-            <div class="input-group mb-2" style="max-width:340px">
+            <div class="input-group mb-2" style="max-width:600px">
                 <span class="input-group-text">N° Club</span>
-                <input type="text" id="club-detail" class="form-control" value="09760442">
+                <input type="text" id="club-detail" class="form-control form-control-lg" value="09760442">
                 <button class="btn btn-success" onclick="tester('test_club_detail', {club:$('#club-detail').val()}, 'club-detail')">Tester</button>
                 <button class="btn btn-warning" onclick="tester('debug_club_salle', {club:$('#club-detail').val()}, 'club-detail')" title="Analyser la structure des champs salle">Analyser salles</button>
             </div>
@@ -618,6 +662,9 @@ require __DIR__ . '/includes/page_header.php';
         </div>
     </div>
 
+    </div>
+
+    <div class="col-lg-6">
     <!-- Test 2 : licence -->
     <div class="card mb-3">
         <div class="card-header fw-semibold"><i class="bi bi-person-badge me-2"></i>Détail d'un licencié (xml_licence)</div>
@@ -631,6 +678,9 @@ require __DIR__ . '/includes/page_header.php';
         </div>
     </div>
 
+    </div>
+
+    <div class="col-lg-6">
     <!-- Test 2b : xml_licence_b (détails complets + grades) -->
     <div class="card mb-3 border-warning">
         <div class="card-header fw-semibold text-warning"><i class="bi bi-person-badge-fill me-2"></i>Détail étendu (xml_licence_b) — cherche les grades JA</div>
@@ -645,6 +695,9 @@ require __DIR__ . '/includes/page_header.php';
         </div>
     </div>
 
+    </div>
+
+    <div class="col-lg-6">
     <!-- Test 3 : équipes d'un club -->
     <div class="card mb-3">
         <div class="card-header fw-semibold"><i class="bi bi-people-fill me-2"></i>Équipes d'un club</div>
@@ -658,6 +711,9 @@ require __DIR__ . '/includes/page_header.php';
         </div>
     </div>
 
+    </div>
+
+    <div class="col-lg-6">
     <!-- Test 4 : arbitres d'un département -->
     <div class="card mb-3 border-primary">
         <div class="card-header fw-semibold text-primary"><i class="bi bi-award me-2"></i>Arbitres par département (JA1/JA2/JA3/AR)</div>
@@ -672,6 +728,9 @@ require __DIR__ . '/includes/page_header.php';
         </div>
     </div>
 
+    </div>
+
+    <div class="col-lg-6">
     <!-- Test 5 : licenciés SPID d'un club (structure complète) -->
     <div class="card mb-3 border-warning">
         <div class="card-header fw-semibold text-warning-emphasis"><i class="bi bi-search me-2"></i>Test structure — Licenciés SPID d'un club (xml_liste_joueur_o)</div>
@@ -686,9 +745,16 @@ require __DIR__ . '/includes/page_header.php';
         </div>
     </div>
 
-    <hr class="my-4">
-    <h5 class="text-danger fw-bold mb-3"><i class="bi bi-calendar3 me-2"></i>Exploration Rencontres (organisme → épreuve → division → poule → rencontre)</h5>
+    </div>
 
+    </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-rencontres" role="tabpanel">
+    <p class="text-muted small mb-3">Organisme → épreuve → division → poule → rencontre.</p>
+    <div class="row">
+
+    <div class="col-lg-6">
     <!-- Organismes -->
     <div class="card mb-3 border-danger">
         <div class="card-header fw-semibold text-danger"><i class="bi bi-diagram-3 me-2"></i>1. Organismes (xml_organisme)</div>
@@ -707,6 +773,9 @@ require __DIR__ . '/includes/page_header.php';
         </div>
     </div>
 
+    </div>
+
+    <div class="col-lg-6">
     <!-- Épreuves -->
     <div class="card mb-3 border-danger">
         <div class="card-header fw-semibold text-danger"><i class="bi bi-trophy me-2"></i>2. Épreuves (xml_epreuve)</div>
@@ -724,6 +793,9 @@ require __DIR__ . '/includes/page_header.php';
         </div>
     </div>
 
+    </div>
+
+    <div class="col-lg-6">
     <!-- Divisions -->
     <div class="card mb-3 border-danger">
         <div class="card-header fw-semibold text-danger"><i class="bi bi-list-ol me-2"></i>3. Divisions (xml_division)</div>
@@ -741,6 +813,9 @@ require __DIR__ . '/includes/page_header.php';
         </div>
     </div>
 
+    </div>
+
+    <div class="col-lg-6">
     <!-- Poules -->
     <div class="card mb-3 border-danger">
         <div class="card-header fw-semibold text-danger"><i class="bi bi-grid-3x3 me-2"></i>4. Liste des poules (xml_result_equ — action=poule)</div>
@@ -762,6 +837,9 @@ require __DIR__ . '/includes/page_header.php';
         </div>
     </div>
 
+    </div>
+
+    <div class="col-lg-6">
     <!-- Rencontres d'une poule -->
     <div class="card mb-3 border-danger">
         <div class="card-header fw-semibold text-danger"><i class="bi bi-table me-2"></i>5. Rencontres d'une poule (xml_result_equ — cx_poule + D1)</div>
@@ -785,6 +863,9 @@ require __DIR__ . '/includes/page_header.php';
         </div>
     </div>
 
+    </div>
+
+    <div class="col-lg-6">
     <!-- xml_equipe -->
     <div class="card mb-3 border-danger">
         <div class="card-header fw-semibold text-danger"><i class="bi bi-people-fill me-2"></i>6. Équipes d'un club (xml_equipe — numclu)</div>
@@ -804,9 +885,16 @@ require __DIR__ . '/includes/page_header.php';
         </div>
     </div>
 
-    <hr class="my-4">
-    <h5 class="text-warning fw-bold mb-3"><i class="bi bi-trophy me-2"></i>Détection Équipes Nationales (E017)</h5>
+    </div>
 
+    </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-national" role="tabpanel">
+    <p class="text-muted small mb-3">Détection Équipes Nationales (E017).</p>
+    <div class="row">
+
+    <div class="col-lg-6">
     <!-- Carte 7 : Analyse détection nationale pour un club -->
     <div class="card mb-3 border-warning">
         <div class="card-header fw-semibold text-warning-emphasis">
@@ -828,6 +916,9 @@ require __DIR__ . '/includes/page_header.php';
         </div>
     </div>
 
+    </div>
+
+    <div class="col-lg-6">
     <!-- Carte 8 : Scan département → clubs avec nationales -->
     <div class="card mb-3 border-warning">
         <div class="card-header fw-semibold text-warning-emphasis">
@@ -856,6 +947,11 @@ require __DIR__ . '/includes/page_header.php';
             </div>
             <div id="res-scan-dep"></div>
         </div>
+    </div>
+    </div>
+
+    </div>
+    </div>
     </div>
 
 </div>

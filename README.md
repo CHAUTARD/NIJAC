@@ -14,7 +14,6 @@ Le détail complet de chaque écran (fonctionnalités, fichier source) est dispo
 |------|-------|-------------|
 | E001 | Connexion | Authentification, redirection selon le rôle, forçage du changement de mot de passe |
 | E002 | Menu administrateur | Accès aux écrans de paramétrage, bascule vers le menu nominateur |
-| E004 | Correspondants de clubs | CRUD des contacts référents par club, import Excel FFTT |
 | E005 | Salles | CRUD des salles de compétition, rattachement club, coordonnées GPS |
 | E006 | Communes | Référentiel codes postaux / communes avec coordonnées GPS (calcul distances) |
 | E007 | Juges-Arbitres | Import Excel FFTT, fiche JA (grade, club, commune, défiscalisation, nationale) |
@@ -85,7 +84,6 @@ NIJAC/
 ├── club.php                    # Gestion clubs (E008)
 ├── salle.php                   # Gestion salles (E005)
 ├── utilisateur.php             # Gestion utilisateurs (E009)
-├── correspondant.php           # Gestion correspondants (E004)
 ├── communes.php                # Gestion communes (E006)
 ├── division.php                # Gestion divisions (E010)
 ├── import_rencontres.php       # Import rencontres régionales (E011)

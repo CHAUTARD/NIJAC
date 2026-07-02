@@ -17,8 +17,6 @@ Complète la table pour les équipes hors Normandie qui seraient adversaires
 Étape 2 — Associer les équipes hors région
 Cliquer sur "Assigner Hors Région".
 
-Crée automatiquement des clubs fictifs (HR076, HR014…) pour les équipes dont le CodeDept n'est pas normand
-Utile si l'étape 1 a ramené des équipes sans club associé
 Étape 3 — Importer les rencontres
 Cliquer sur "Importer les rencontres".
 

@@ -70,7 +70,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'is_admin'       => ($row['Role'] === 'Administrateur'),
                 ];
 
-                $redirect = $row['Role'] === 'Administrateur' ? 'admin_menu.php' : 'Nominateur/menu.php';
+                if ($row['Role'] === 'JA') {
+                    $stmtIdJa = $pdo->prepare(
+                        'SELECT Id_JA FROM ja WHERE UPPER(TRIM(Nom)) = UPPER(TRIM(:nom)) LIMIT 1'
+                    );
+                    $stmtIdJa->execute([':nom' => $row['Nom']]);
+                    $_SESSION['utilisateur']['id_ja'] = $stmtIdJa->fetchColumn() ?: null;
+                }
+
+                $redirect = match ($row['Role']) {
+                    'Administrateur' => 'admin_menu.php',
+                    'JA'             => 'JA/info_rencontre.php',
+                    default          => 'Nominateur/menu.php',
+                };
                 header('Location: ' . $redirect);
                 exit;
             }
@@ -78,8 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // ── Authentification JA : Nom + numéro de licence ────────────────
             // Étape 1 : le nom existe-t-il dans la table ja ?
             $stmtJaNom = $pdo->prepare(
-                'SELECT Id_JA, Nom, Prenom, Email, Grade, Id_Club,
-                        SUBSTRING(Id_Club, 3, 2) AS Departement
+                'SELECT Id_JA, Nom, Prenom, Email, Grade, Id_Club, SUBSTRING(Id_Club, 3, 2) AS Departement
                  FROM ja
                  WHERE UPPER(TRIM(Nom)) = UPPER(TRIM(:nom)) AND Actif = 1
                  LIMIT 1'

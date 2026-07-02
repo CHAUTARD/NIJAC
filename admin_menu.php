@@ -309,7 +309,7 @@ $isAdmin      = !empty($u['is_admin']);
         <?php if (($_SESSION['utilisateur']['login'] ?? '') === 'CHAUTARD') : ?>
         <a href="fftt_test.php" class="menu-btn btn-configuration">
             <span class="btn-code">E018</span>
-            <div class="btn-icon"><i class="bi bi-plug-fill" style="font-size:2rem;color:#0d6efd;"></i></div>
+            <div class="btn-icon"><i class="bi bi-plug-fill" style="font-size:6rem;color:#0d6efd;"></i></div>
             <span>Test API FFTT</span>
             <span class="btn-desc">Vérifier la connexion à l'API FFTT</span>
         </a>

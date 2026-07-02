@@ -138,3 +138,5 @@ Both menu pages (`admin_menu.php` E002 and `Nominateur/menu.php` E020) display a
     <span class="btn-desc">Description courte</span>
 </a>
 ```
+
+Discution en Français

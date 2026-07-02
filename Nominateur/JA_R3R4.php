@@ -265,7 +265,7 @@ $isAdmin     = !empty($moi['is_admin']);
 </head>
 <body>
 
-<?php $pageIcon = 'bi-person-badge'; $pageTitle = 'Demandes JA pour équipes R3M / R4'; $pageCode = 'E027'; $backUrl = $isAdmin ? '../admin_menu.php' : 'menu.php'; $backBtnClass = 'ms-auto btn btn-sm btn-outline-light'; require __DIR__ . '/../includes/page_header.php'; ?>
+<?php $pageIcon = 'bi-person-badge'; $pageTitle = 'Demandes JA pour équipes R3M / R4M'; $pageCode = 'E027'; $backUrl = $isAdmin ? '../admin_menu.php' : 'menu.php'; $backBtnClass = 'ms-auto btn btn-sm btn-outline-light'; require __DIR__ . '/../includes/page_header.php'; ?>
 
 <?php require __DIR__ . '/includes/toolbar.php'; ?>
 
@@ -281,6 +281,13 @@ $isAdmin     = !empty($moi['is_admin']);
         <option value="">— Toutes —</option>
         <option value="R3M">R3M</option>
         <option value="R4M">R4M</option>
+    </select>
+
+    <label for="sel-jademande" class="ms-3">JA demandé :</label>
+    <select id="sel-jademande" class="form-select form-select-sm">
+        <option value="">— Tous —</option>
+        <option value="1">Oui</option>
+        <option value="0">Non</option>
     </select>
 
     <label for="txt-recherche" class="ms-3"><i class="bi bi-search me-1"></i>Recherche :</label>
@@ -397,10 +404,12 @@ function valTri(e, col) {
 // ── Filtrer et afficher ───────────────────────────────────────────────────────
 function filtrerEtAfficher() {
     const divFilter  = document.getElementById('sel-division').value;
+    const jaFilter   = document.getElementById('sel-jademande').value;
     const recherche  = document.getElementById('txt-recherche').value.trim().toLowerCase();
 
     const data = tousEquipes.filter(e => {
         if (divFilter && e.Division !== divFilter) return false;
+        if (jaFilter !== '' && +e.JAdemande !== +jaFilter) return false;
         if (recherche) {
             const inClub   = e.NomClub.toLowerCase().includes(recherche);
             const inEquipe = e.NomEquipe.toLowerCase().includes(recherche);
@@ -488,16 +497,8 @@ document.getElementById('tbody-equipes').addEventListener('change', async ev => 
     const eq = tousEquipes.find(e => +e.Id_Equipe === idEquipe);
     if (eq) eq.JAdemande = valeur;
 
-    // Mettre à jour la ligne visuellement
-    const tr = chk.closest('tr');
-    tr.classList.toggle('ja-demande', valeur === 1);
-
-    // Rafraîchir le compteur
-    const divFilter = document.getElementById('sel-division').value;
-    const data = divFilter ? tousEquipes.filter(e => e.Division === divFilter) : tousEquipes;
-    const nbJA = data.filter(e => +e.JAdemande === 1).length;
-    document.getElementById('lbl-count').textContent =
-        `${data.length} équipe(s) — dont ${nbJA} avec JA demandé`;
+    // Ré-appliquer les filtres (le filtre "JA demandé" peut masquer la ligne)
+    filtrerEtAfficher();
 
     toast(res.msg, 'ok');
 });
@@ -515,6 +516,7 @@ document.querySelectorAll('#tbl-equipes thead th[data-col]').forEach(th => {
 // ── Filtres ──────────────────────────────────────────────────────────────────
 document.getElementById('sel-dept').addEventListener('change', chargerListe);
 document.getElementById('sel-division').addEventListener('change', filtrerEtAfficher);
+document.getElementById('sel-jademande').addEventListener('change', filtrerEtAfficher);
 document.getElementById('txt-recherche').addEventListener('input', filtrerEtAfficher);
 
 // ── Init ─────────────────────────────────────────────────────────────────────
