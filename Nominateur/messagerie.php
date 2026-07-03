@@ -331,14 +331,6 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
         #cartouche-marqueurs code:active {
             transform: scale(.95);
         }
-
-        /* ── Toast ── */
-        #toast-container {
-            position: fixed;
-            bottom: 1rem;
-            right: 1rem;
-            z-index: 9999;
-        }
     </style>
 </head>
 <body>
@@ -490,11 +482,7 @@ if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
     </div>
 </div>
 
-<!-- Toast notifications -->
-<div id="toast-container"></div>
-
 <script src="../asset/js/jquery-3.7.1.min.js"></script>
-    <script src="../asset/js/nijac-csrf.js"></script>
 <script src="../asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';
@@ -550,17 +538,7 @@ let currentEstSys   = false; // true si message système (Id_Utilisateur === nul
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
 function toast(msg, ok = true) {
-    const id  = 'toast-' + Date.now();
-    const cls = ok ? 'text-bg-success' : 'text-bg-danger';
-    $('#toast-container').append(
-        `<div id="${id}" class="toast align-items-center ${cls} border-0 mb-2 show" role="alert">
-           <div class="d-flex">
-             <div class="toast-body">${msg}</div>
-             <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-           </div>
-         </div>`
-    );
-    setTimeout(() => { $(`#${id}`).remove(); }, 3500);
+    nijacToast(msg, ok ? 'success' : 'danger');
 }
 
 function setStatus(msg, ok = true) {

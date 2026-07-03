@@ -530,6 +530,15 @@ $divsNijac = getPDO()->query('SELECT Id_Division, Division FROM division ORDER B
     <style>
         :root { --nijac-blue: #1a3a6b; }
         body { background: #f0f4fa; font-family: 'Segoe UI', system-ui, sans-serif; }
+        /* ── En-tête ── */
+        #page-header {
+            background: var(--nijac-blue);
+            color: #fff;
+            padding: .5rem 1.25rem;
+            font-size: .9rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
         #content { padding: 1.25rem 1.5rem; }
 
         /* ── Bouton FFTT ── */
@@ -754,9 +763,7 @@ require __DIR__ . '/includes/page_header.php';
 </div><!-- #content -->
 
 <script src="asset/js/jquery-3.7.1.min.js"></script>
-<script src="asset/js/nijac-csrf.js"></script>
 <script src="asset/js/bootstrap.bundle.min.js"></script>
-<script src="asset/js/nijac-toast.js"></script>
 <script>
 'use strict';
 
@@ -1218,7 +1225,7 @@ function textColorFor(hex) {
     return lum > 0.55 ? '#111' : '#fff';
 }
 
-let sortCol = 'Date', sortAsc = true;
+const sortState = { col: 'Date', asc: true };
 
 function renderListeRencontres() {
     const filtre  = $('#filtre-renc').val().trim().toLowerCase();
@@ -1232,16 +1239,16 @@ function renderListeRencontres() {
 
     // Tri
     lignes.sort((a, b) => {
-        const va = String(a[sortCol] ?? '');
-        const vb = String(b[sortCol] ?? '');
-        return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+        const va = String(a[sortState.col] ?? '');
+        const vb = String(b[sortState.col] ?? '');
+        return sortState.asc ? va.localeCompare(vb) : vb.localeCompare(va);
     });
 
     // Icônes tri dans l'en-tête
     $('.sort-col .sort-icon').removeClass('bi-arrow-up bi-arrow-down').addClass('bi-arrow-down-up');
-    $(`.sort-col[data-col="${sortCol}"] .sort-icon`)
+    $(`.sort-col[data-col="${sortState.col}"] .sort-icon`)
         .removeClass('bi-arrow-down-up')
-        .addClass(sortAsc ? 'bi-arrow-down' : 'bi-arrow-up');
+        .addClass(sortState.asc ? 'bi-arrow-down' : 'bi-arrow-up');
 
     if (!lignes.length) {
         $('#tbody-renc').html('<tr><td colspan="10" class="text-center text-muted py-3">Aucune rencontre.</td></tr>');
@@ -1277,11 +1284,9 @@ function renderListeRencontres() {
     $('#tbody-renc').html(rows);
 }
 
-$(document).on('click', '.sort-col', function () {
-    const col = $(this).data('col');
-    if (col === sortCol) { sortAsc = !sortAsc; } else { sortCol = col; sortAsc = true; }
-    renderListeRencontres();
-});
+// Différé : nijac-sortable-table.js est chargé en fin de page (includes/footer.php),
+// donc pas encore défini si on l'appelait ici de façon synchrone.
+$(function () { nijacSortableTable('.sort-col', 'col', sortState, renderListeRencontres); });
 
 $('#filtre-renc, #filtre-div').on('input change', renderListeRencontres);
 $('#btn-refresh-renc').on('click', chargerListeRencontres);

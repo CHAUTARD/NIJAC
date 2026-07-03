@@ -177,6 +177,11 @@ $changeLogin = !empty($moi['change_login']);
             top: 0;
             z-index: 1;
         }
+        #tbl-divisions thead th[data-col] { cursor: pointer; user-select: none; }
+        #tbl-divisions thead th .sort-icon { margin-left: .3rem; opacity: .4; font-size: .75rem; }
+        #tbl-divisions thead th.sort-asc  .sort-icon::after { content: '▲'; opacity: 1; }
+        #tbl-divisions thead th.sort-desc .sort-icon::after { content: '▼'; opacity: 1; }
+        #tbl-divisions thead th[data-col]:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
 
         #tbl-divisions tbody tr {
             cursor: pointer;
@@ -217,9 +222,6 @@ $changeLogin = !empty($moi['change_login']);
         .btn-enregistrer:hover { background: #a8dfb0; }
         .btn-supprimer:hover   { background: #f0a0a8; }
         .btn-supprimer:disabled { opacity: .5; cursor: not-allowed; }
-
-        /* ── Toast ── */
-        #toast-container { position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; }
     </style>
 </head>
 <body>
@@ -238,11 +240,11 @@ $changeLogin = !empty($moi['change_login']);
             <table id="tbl-divisions">
                 <thead>
                     <tr>
-                        <th style="width:50px">Ord</th>
-                        <th style="width:80px">Division</th>
-                        <th>Nom</th>
+                        <th style="width:50px" data-col="0">Ord<span class="sort-icon"></span></th>
+                        <th style="width:80px" data-col="1">Division<span class="sort-icon"></span></th>
+                        <th data-col="2">Nom<span class="sort-icon"></span></th>
                         <th style="width:50px;text-align:center">Couleur</th>
-                        <th style="width:120px;text-align:center">Arbitrage CRA</th>
+                        <th style="width:120px;text-align:center" data-col="4">Arbitrage CRA<span class="sort-icon"></span></th>
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
@@ -318,30 +320,17 @@ $changeLogin = !empty($moi['change_login']);
     </div>
 </div>
 
-<!-- Toast notifications -->
-<div id="toast-container"></div>
-
 <script src="asset/js/jquery-3.7.1.min.js"></script>
-    <script src="asset/js/nijac-csrf.js"></script>
 <script src="asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';
 
 let currentId = null;
+const sortState = { col: null, asc: true };
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
 function toast(msg, ok = true) {
-    const id  = 'toast-' + Date.now();
-    const cls = ok ? 'text-bg-success' : 'text-bg-danger';
-    $('#toast-container').append(
-        `<div id="${id}" class="toast align-items-center ${cls} border-0 mb-2 show" role="alert">
-           <div class="d-flex">
-             <div class="toast-body">${msg}</div>
-             <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-           </div>
-         </div>`
-    );
-    setTimeout(() => $(`#${id}`).remove(), 3500);
+    nijacToast(msg, ok ? 'success' : 'danger');
 }
 
 function setStatus(msg, ok = true) {
@@ -452,6 +441,14 @@ $('#btn-supprimer').on('click', function () {
             toast(res.msg, false);
         }
     }, 'json');
+});
+
+// ── Tri sur clic en-tête ──────────────────────────────────────────────────────
+// Différé : nijac-sortable-table.js est chargé en fin de page (includes/footer.php),
+// donc pas encore défini si on l'appelait ici de façon synchrone.
+$(function () {
+    nijacSortableTable('#tbl-divisions thead th[data-col]', 'col', sortState,
+        () => nijacSortRows('#tbody-liste', parseInt(sortState.col, 10), sortState.asc));
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────

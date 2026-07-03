@@ -215,8 +215,8 @@ $changeLogin = !empty($u['change_login']);
             cursor: pointer; user-select: none;
         }
         .stats-table thead th:hover { background: #2a4a8b; }
-        .stats-table thead th.sorted-asc::after  { content: ' ▲'; }
-        .stats-table thead th.sorted-desc::after { content: ' ▼'; }
+        .stats-table thead th.sort-asc::after  { content: ' ▲'; }
+        .stats-table thead th.sort-desc::after { content: ' ▼'; }
         .stats-table tbody tr:nth-child(even) { background: #f4f7fb; }
         .stats-table tbody tr:hover { background: #dbeafe; }
         .stats-table td { padding: .35rem .6rem; border-bottom: 1px solid #e5e7eb; }
@@ -285,7 +285,7 @@ $changeLogin = !empty($u['change_login']);
                     <th data-col="Nom">Juge-Arbitre</th>
                     <th data-col="Grade">Grade</th>
                     <th data-col="Club">Club</th>
-                    <th data-col="nb_arbitrages" class="sorted-desc">Arbitrages</th>
+                    <th data-col="nb_arbitrages" class="sort-desc">Arbitrages</th>
                     <th data-col="total_km">Km</th>
                     <th data-col="total_peages">Péages (€)</th>
                     <th data-col="total_indemnite">Indemnité (€)</th>
@@ -299,14 +299,12 @@ $changeLogin = !empty($u['change_login']);
 </div>
 
 <script src="../asset/js/jquery-3.7.1.min.js"></script>
-<script src="../asset/js/nijac-csrf.js"></script>
 <script src="../asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';
 
 let _rows   = [];
-let _sortCol = 'nb_arbitrages';
-let _sortDir = 'desc';
+const sortState = { col: 'nb_arbitrages', asc: false };
 let _maxArb  = 1;
 let _cfg     = {};
 
@@ -324,11 +322,11 @@ function gradeBadge(g) {
 
 function renderTable() {
     const sorted = [..._rows].sort((a, b) => {
-        let va = a[_sortCol], vb = b[_sortCol];
+        let va = a[sortState.col], vb = b[sortState.col];
         if (!isNaN(va) && !isNaN(vb)) { va = parseFloat(va); vb = parseFloat(vb); }
         else { va = String(va || '').toLowerCase(); vb = String(vb || '').toLowerCase(); }
-        if (va < vb) return _sortDir === 'asc' ? -1 :  1;
-        if (va > vb) return _sortDir === 'asc' ?  1 : -1;
+        if (va < vb) return sortState.asc ? -1 :  1;
+        if (va > vb) return sortState.asc ?  1 : -1;
         return 0;
     });
 
@@ -354,9 +352,7 @@ function renderTable() {
         </tr>`;
     }).join(''));
 
-    // Mise à jour des icônes de tri
-    $('#stats-table thead th').removeClass('sorted-asc sorted-desc');
-    $(`#stats-table thead th[data-col="${_sortCol}"]`).addClass('sorted-' + _sortDir);
+    refreshTriEntetes();
 }
 
 function charger() {
@@ -395,11 +391,11 @@ function charger() {
 }
 
 // Tri par colonne
-$('#stats-table').on('click', 'thead th[data-col]', function () {
-    const col = $(this).data('col');
-    if (_sortCol === col) _sortDir = _sortDir === 'asc' ? 'desc' : 'asc';
-    else { _sortCol = col; _sortDir = 'desc'; }
-    renderTable();
+// Différé : nijac-sortable-table.js est chargé en fin de page (includes/footer.php),
+// donc pas encore défini si on l'appelait ici de façon synchrone.
+let refreshTriEntetes = () => {};
+$(function () {
+    refreshTriEntetes = nijacSortableTable('#stats-table thead th[data-col]', 'col', sortState, renderTable, false);
 });
 
 $('#btn-charger').on('click', charger);

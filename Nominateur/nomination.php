@@ -692,7 +692,6 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; min-heig
 <!-- Pied de page -->
 
 <script src="../asset/js/jquery-3.7.1.min.js"></script>
-    <script src="../asset/js/nijac-csrf.js"></script>
 <script src="../asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';

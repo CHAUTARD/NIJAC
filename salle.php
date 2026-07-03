@@ -510,8 +510,6 @@ $deptActifs = getDeptActifs();
 
 
 
-        /* ── Toast ── */
-        #toast-container { position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; }
 
         /* ── Spinner ── */
         #spinner {
@@ -596,9 +594,6 @@ $deptActifs = getDeptActifs();
 </div>
 
 <?php $statusInitial = 'Prêt.'; ?>
-
-<!-- Toast -->
-<div id="toast-container"></div>
 
 <!-- Modale saisie CP / Ville -->
 <div class="modal fade" id="modal-cp-ville" tabindex="-1" aria-hidden="true">
@@ -704,7 +699,6 @@ $deptActifs = getDeptActifs();
 </div>
 
 <script src="asset/js/jquery-3.7.1.min.js"></script>
-    <script src="asset/js/nijac-csrf.js"></script>
 <script src="asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';
@@ -716,8 +710,7 @@ let lignes     = [];
 let clubs      = [];   // [{id_club, nom}]
 let cellActive = null;
 let rowActive  = null; // idx de la ligne sélectionnée
-let sortField  = 'nom_club';
-let sortDir    = 'asc';
+const sortState = { col: 'nom_club', asc: true };
 let searchTerm = '';
 let deptFiltre = IS_ADMIN ? '' : (DEPT_USER ?? '');
 
@@ -729,17 +722,7 @@ function setStatus(msg, ok = true) {
 }
 
 function toast(msg, ok = true) {
-    const id  = 't' + Date.now();
-    const cls = ok ? 'text-bg-success' : 'text-bg-danger';
-    $('#toast-container').append(
-        `<div id="${id}" class="toast align-items-center ${cls} border-0 mb-2 show">
-           <div class="d-flex">
-             <div class="toast-body">${msg}</div>
-             <button class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-           </div>
-         </div>`
-    );
-    setTimeout(() => $(`#${id}`).remove(), 4000);
+    nijacToast(msg, ok ? 'success' : 'danger');
 }
 
 // ── Tri & Recherche ───────────────────────────────────────────────────────────
@@ -758,31 +741,23 @@ function lignesFiltreesTriees() {
 
     const numFields = ['id_salle', 'id_laposte'];
     result.sort((a, b) => {
-        if (numFields.includes(sortField)) {
-            return sortDir === 'asc' ? (+a[sortField]) - (+b[sortField]) : (+b[sortField]) - (+a[sortField]);
+        if (numFields.includes(sortState.col)) {
+            return sortState.asc ? (+a[sortState.col]) - (+b[sortState.col]) : (+b[sortState.col]) - (+a[sortState.col]);
         }
-        if (sortField === 'est_principale') {
-            return sortDir === 'asc' ? a.est_principale - b.est_principale : b.est_principale - a.est_principale;
+        if (sortState.col === 'est_principale') {
+            return sortState.asc ? a.est_principale - b.est_principale : b.est_principale - a.est_principale;
         }
-        const va = String(a[sortField] ?? '').toLowerCase();
-        const vb = String(b[sortField] ?? '').toLowerCase();
-        return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+        const va = String(a[sortState.col] ?? '').toLowerCase();
+        const vb = String(b[sortState.col] ?? '').toLowerCase();
+        return sortState.asc ? va.localeCompare(vb) : vb.localeCompare(va);
     });
     return result;
-}
-
-function majEnteteTri() {
-    $('#tbl-salles thead th').each(function () {
-        const f = $(this).data('field');
-        $(this).removeClass('sort-asc sort-desc');
-        if (f === sortField) $(this).addClass(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
-    });
 }
 
 // ── Rendu ─────────────────────────────────────────────────────────────────────
 function renderGrille() {
     const $body = $('#tbody-grille').empty();
-    majEnteteTri();
+    refreshTriEntetes();
 
     const affichees = lignesFiltreesTriees();
 
@@ -1089,15 +1064,11 @@ $('#btn-sauvegarder').on('click', function () {
 });
 
 // ── Tri sur clic en-tête ──────────────────────────────────────────────────────
-$('#tbl-salles thead th[data-field]').on('click', function () {
-    const f = $(this).data('field');
-    if (sortField === f) {
-        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
-    } else {
-        sortField = f;
-        sortDir   = 'asc';
-    }
-    renderGrille();
+// Différé : nijac-sortable-table.js est chargé en fin de page (includes/footer.php),
+// donc pas encore défini si on l'appelait ici de façon synchrone.
+let refreshTriEntetes = () => {};
+$(function () {
+    refreshTriEntetes = nijacSortableTable('#tbl-salles thead th[data-field]', 'field', sortState, renderGrille);
 });
 
 // ── Recherche ─────────────────────────────────────────────────────────────────

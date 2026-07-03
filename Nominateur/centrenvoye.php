@@ -727,9 +727,6 @@ $modeleJson = json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS);
         .col-sort { cursor: pointer; user-select: none; }
         .no-email { color: #bbb; font-style: italic; font-size: .75rem; }
         tr.masque { display: none; }
-
-        /* ── Toast ── */
-        #toast-container { position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; }
     </style>
 </head>
 <body>
@@ -912,10 +909,7 @@ $modeleJson = json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS);
     </div>
 </div>
 
-<div id="toast-container"></div>
-
 <script src="../asset/js/jquery-3.7.1.min.js"></script>
-    <script src="../asset/js/nijac-csrf.js"></script>
 <script src="../asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';
@@ -933,21 +927,11 @@ const TITRES_JA = {
 
 let typeActif  = 'Disponibilites';
 let saisonCourante = null;
-let sortCol = 1, sortAsc = true;
+const sortState = { col: 1, asc: true };
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
 function toast(msg, ok = true) {
-    const id  = 'toast-' + Date.now();
-    const cls = ok ? 'text-bg-success' : 'text-bg-danger';
-    $('#toast-container').append(
-        `<div id="${id}" class="toast align-items-center ${cls} border-0 mb-2 show" role="alert">
-           <div class="d-flex">
-             <div class="toast-body">${msg}</div>
-             <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-           </div>
-         </div>`
-    );
-    setTimeout(() => { $(`#${id}`).remove(); }, 4500);
+    nijacToast(msg, ok ? 'success' : 'danger');
 }
 
 // ── Onglets ───────────────────────────────────────────────────────────────────
@@ -1125,22 +1109,23 @@ $(document).on('click', '[data-marqueur]', function () {
 });
 
 // ── Tri ───────────────────────────────────────────────────────────────────────
-function trierJA(col) {
-    sortAsc = (sortCol === col) ? !sortAsc : true;
-    sortCol = col;
+function trierJA() {
+    const col = parseInt(sortState.col, 10);
     $('.sort-icon').text('↕');
-    $(`.col-sort[data-col="${col}"] .sort-icon`).text(sortAsc ? '↑' : '↓');
+    $(`.col-sort[data-col="${col}"] .sort-icon`).text(sortState.asc ? '↑' : '↓');
     const rows = $('#tbody-ja tr').toArray();
     rows.sort((a, b) => {
         const va = $(a).find('td').eq(col).text().trim().toLowerCase();
         const vb = $(b).find('td').eq(col).text().trim().toLowerCase();
-        return sortAsc ? va.localeCompare(vb, 'fr') : vb.localeCompare(va, 'fr');
+        return sortState.asc ? va.localeCompare(vb, 'fr') : vb.localeCompare(va, 'fr');
     });
     rows.forEach(r => $('#tbody-ja').append(r));
     filtrerJA();
 }
 
-$('#tbl-ja').on('click', '.col-sort', function () { trierJA(parseInt($(this).data('col'))); });
+// Différé : nijac-sortable-table.js est chargé en fin de page (includes/footer.php),
+// donc pas encore défini si on l'appelait ici de façon synchrone.
+$(function () { nijacSortableTable('.col-sort', 'col', sortState, trierJA); });
 
 // ── Recherche ─────────────────────────────────────────────────────────────────
 function filtrerJA() {

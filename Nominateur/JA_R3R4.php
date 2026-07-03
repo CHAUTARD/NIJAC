@@ -390,29 +390,6 @@ $isAdmin     = !empty($moi['is_admin']);
         .badge-nb       { background: #1a3a6b; color: #fff; }
         .badge-div      { background: #7e57c2; color: #fff; font-size: .72rem; margin: 1px; }
 
-        /* ── Toast ── */
-        #toast-container {
-            position: fixed;
-            bottom: 1.5rem;
-            right: 1.5rem;
-            z-index: 1100;
-        }
-
-        .toast-msg {
-            background: #1a3a6b;
-            color: #fff;
-            padding: .6rem 1.1rem;
-            border-radius: 6px;
-            font-size: .85rem;
-            margin-top: .4rem;
-            animation: fadeIn .2s;
-            max-width: 420px;
-        }
-        .toast-msg.ok  { background: #2e7d32; }
-        .toast-msg.err { background: #c62828; }
-
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
-
         /* ── Spinner ── */
         #spinner {
             display: none;
@@ -618,19 +595,12 @@ $isAdmin     = !empty($moi['is_admin']);
     </div>
 </div>
 
-<!-- Toast -->
-<div id="toast-container"></div>
-
 <script>
 const CSRF = <?= json_encode(csrfToken()) ?>;
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
 function toast(msg, type = 'ok') {
-    const el = document.createElement('div');
-    el.className = `toast-msg ${type}`;
-    el.textContent = msg;
-    document.getElementById('toast-container').appendChild(el);
-    setTimeout(() => el.remove(), 5000);
+    nijacToast(msg, type === 'err' ? 'danger' : 'success');
 }
 
 function spin(on) {
@@ -663,8 +633,7 @@ function escHtml(s) {
 let tousClubs = [];
 let saisonActuelle = '';
 let selection = new Set();
-let sortCol = 'club';
-let sortAsc = true;
+const sortState = { col: 'club', asc: true };
 
 // ── Charger les départements disponibles ─────────────────────────────────────
 async function chargerDepartements() {
@@ -724,15 +693,9 @@ function filtrerEtAfficher() {
     });
 
     data.sort((a, b) => {
-        const va = valTri(a, sortCol), vb = valTri(b, sortCol);
+        const va = valTri(a, sortState.col), vb = valTri(b, sortState.col);
         const cmp = va < vb ? -1 : va > vb ? 1 : 0;
-        return sortAsc ? cmp : -cmp;
-    });
-
-    document.querySelectorAll('#tbl-clubs thead th[data-col]').forEach(th => {
-        const col = th.dataset.col;
-        th.classList.toggle('sort-asc',  col === sortCol &&  sortAsc);
-        th.classList.toggle('sort-desc', col === sortCol && !sortAsc);
+        return sortState.asc ? cmp : -cmp;
     });
 
     const tbody = document.getElementById('tbody-clubs');
@@ -868,13 +831,10 @@ document.getElementById('btn-envoyer').addEventListener('click', async () => {
 });
 
 // ── Tri par clic sur en-tête ─────────────────────────────────────────────────
-document.querySelectorAll('#tbl-clubs thead th[data-col]').forEach(th => {
-    th.addEventListener('click', () => {
-        const col = th.dataset.col;
-        if (sortCol === col) { sortAsc = !sortAsc; }
-        else { sortCol = col; sortAsc = true; }
-        filtrerEtAfficher();
-    });
+// Différé : nijac-sortable-table.js est chargé en fin de page (includes/footer.php),
+// donc pas encore défini si on l'appelait ici de façon synchrone.
+document.addEventListener('DOMContentLoaded', () => {
+    nijacSortableTable('#tbl-clubs thead th[data-col]', 'col', sortState, filtrerEtAfficher);
 });
 
 // ── Aperçu du message n°6 ──────────────────────────────────────────────────────

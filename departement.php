@@ -108,6 +108,15 @@ $changeLogin = !empty($moi['change_login']);
             height: 100vh;
             overflow: hidden;
         }
+        /* ── En-tête ── */
+        #page-header {
+            background: var(--nijac-blue);
+            color: #fff;
+            padding: .5rem 1.25rem;
+            font-size: .9rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
         #split-container { display: flex; flex: 1; overflow: hidden; }
         #panel-liste {
             width: 54%;
@@ -133,7 +142,13 @@ $changeLogin = !empty($moi['change_login']);
             position: sticky;
             top: 0;
             z-index: 1;
+            cursor: pointer;
+            user-select: none;
         }
+        #tbl-depts thead th .sort-icon { margin-left: .3rem; opacity: .4; font-size: .75rem; }
+        #tbl-depts thead th.sort-asc  .sort-icon::after { content: '▲'; opacity: 1; }
+        #tbl-depts thead th.sort-desc .sort-icon::after { content: '▼'; opacity: 1; }
+        #tbl-depts thead th:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
         #tbl-depts tbody tr { cursor: pointer; border-bottom: 1px solid #e0e8f0; }
         #tbl-depts tbody tr:hover { background: #dce8f8; }
         #tbl-depts tbody tr.selected { background: #b8d0f0 !important; }
@@ -154,7 +169,6 @@ $changeLogin = !empty($moi['change_login']);
         .btn-enregistrer:hover { background:#a8dfb0; }
         .btn-supprimer:hover   { background:#f0a0a8; }
         .btn-supprimer:disabled { opacity:.5; cursor:not-allowed; }
-        #toast-container { position:fixed; bottom:1rem; right:1rem; z-index:9999; }
     </style>
 </head>
 <body>
@@ -177,9 +191,9 @@ $changeLogin = !empty($moi['change_login']);
             <table id="tbl-depts">
                 <thead>
                     <tr>
-                        <th style="width:55px;">Code</th>
-                        <th>Nom</th>
-                        <th>Région</th>
+                        <th style="width:55px;" data-col="code">Code<span class="sort-icon"></span></th>
+                        <th data-col="nom">Nom<span class="sort-icon"></span></th>
+                        <th data-col="nom_region">Région<span class="sort-icon"></span></th>
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
@@ -220,23 +234,17 @@ $changeLogin = !empty($moi['change_login']);
     </div>
 </div>
 
-<div id="toast-container"></div>
-
 <script src="asset/js/jquery-3.7.1.min.js"></script>
-<script src="asset/js/nijac-csrf.js"></script>
 <script src="asset/js/bootstrap.bundle.min.js"></script>
-<script src="asset/js/nijac-toast.js"></script>
 <script>
 'use strict';
 let currentCode = null;
 let regions = [];
 let tousLesDepts = [];
+const sortState = { col: null, asc: true };
 
 function toast(msg, ok = true) {
-    const id = 'toast-' + Date.now();
-    const cls = ok ? 'text-bg-success' : 'text-bg-danger';
-    $('#toast-container').append(`<div id="${id}" class="toast align-items-center ${cls} border-0 mb-2 show" role="alert"><div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div>`);
-    setTimeout(() => $(`#${id}`).remove(), 3500);
+    nijacToast(msg, ok ? 'success' : 'danger');
 }
 
 function setStatus(msg, ok = true) {
@@ -261,6 +269,14 @@ function appliquerFiltre() {
         (!texte  || d.code.toLowerCase().includes(texte) || d.nom.toLowerCase().includes(texte)) &&
         (!region || d.code_region === region)
     );
+    if (sortState.col) {
+        data.sort((a, b) => {
+            const va = String(a[sortState.col] ?? '').toLowerCase();
+            const vb = String(b[sortState.col] ?? '').toLowerCase();
+            const cmp = va.localeCompare(vb, 'fr');
+            return sortState.asc ? cmp : -cmp;
+        });
+    }
     if (!data.length) {
         $body.append('<tr><td colspan="3" class="text-center text-muted py-3">Aucun département.</td></tr>');
         return;
@@ -342,6 +358,13 @@ $('#btn-supprimer').on('click', function() {
             else toast(res.msg, false);
         }, 'json');
     }, null, {type: 'danger'});
+});
+
+// ── Tri sur clic en-tête ──────────────────────────────────────────────────────
+// Différé : nijac-sortable-table.js est chargé en fin de page (includes/footer.php),
+// donc pas encore défini si on l'appelait ici de façon synchrone.
+$(function () {
+    nijacSortableTable('#tbl-depts thead th[data-col]', 'col', sortState, appliquerFiltre);
 });
 
 $(function() {

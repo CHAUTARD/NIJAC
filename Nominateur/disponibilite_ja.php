@@ -636,9 +636,6 @@ if ($action !== '') {
         }
         #lbl-recap-save { font-size: .83rem; color: #555; flex: 1; }
 
-        /* ── Toast ───────────────────────────────────────────────────────── */
-        #toast-zone { position: fixed; bottom: 4.5rem; right: 1rem; z-index: 9999; }
-
         /* ── Spinner inline ──────────────────────────────────────────────── */
         .spin-sm {
             display: inline-block;
@@ -874,11 +871,7 @@ require __DIR__ . '/includes/toolbar.php'; ?>
     <span id="save-spinner" class="spin-sm d-none"></span>
 </div>
 
-<!-- Toasts -->
-<div id="toast-zone"></div>
-
 <script src="../asset/js/jquery-3.7.1.min.js"></script>
-    <script src="../asset/js/nijac-csrf.js"></script>
 <script src="../asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';
@@ -906,17 +899,7 @@ let etatJournees = {};
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
 function toast(msg, ok = true) {
-    const id  = 't' + Date.now();
-    const cls = ok ? 'text-bg-success' : 'text-bg-danger';
-    $('#toast-zone').append(
-        `<div id="${id}" class="toast align-items-center ${cls} border-0 mb-2 show">
-           <div class="d-flex">
-             <div class="toast-body">${msg}</div>
-             <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-           </div>
-         </div>`
-    );
-    setTimeout(() => $(`#${id}`).remove(), 3500);
+    nijacToast(msg, ok ? 'success' : 'danger');
 }
 
 const JOURS      = ['dim.','lun.','mar.','mer.','jeu.','ven.','sam.'];

@@ -93,6 +93,15 @@ $changeLogin = !empty($moi['change_login']);
             height: 100vh;
             overflow: hidden;
         }
+        /* ── En-tête ── */
+        #page-header {
+            background: var(--nijac-blue);
+            color: #fff;
+            padding: .5rem 1.25rem;
+            font-size: .9rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
         #split-container { display: flex; flex: 1; overflow: hidden; }
         #panel-liste {
             width: 60%;
@@ -118,7 +127,13 @@ $changeLogin = !empty($moi['change_login']);
             position: sticky;
             top: 0;
             z-index: 1;
+            cursor: pointer;
+            user-select: none;
         }
+        #tbl-regions thead th .sort-icon { margin-left: .3rem; opacity: .4; font-size: .75rem; }
+        #tbl-regions thead th.sort-asc  .sort-icon::after { content: '▲'; opacity: 1; }
+        #tbl-regions thead th.sort-desc .sort-icon::after { content: '▼'; opacity: 1; }
+        #tbl-regions thead th:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
         #tbl-regions tbody tr { cursor: pointer; border-bottom: 1px solid #e0e8f0; }
         #tbl-regions tbody tr:hover { background: #dce8f8; }
         #tbl-regions tbody tr.selected { background: #b8d0f0 !important; }
@@ -139,7 +154,6 @@ $changeLogin = !empty($moi['change_login']);
         .btn-enregistrer:hover { background:#a8dfb0; }
         .btn-supprimer:hover   { background:#f0a0a8; }
         .btn-supprimer:disabled { opacity:.5; cursor:not-allowed; }
-        #toast-container { position:fixed; bottom:1rem; right:1rem; z-index:9999; }
     </style>
 </head>
 <body>
@@ -155,10 +169,10 @@ $changeLogin = !empty($moi['change_login']);
             <table id="tbl-regions">
                 <thead>
                     <tr>
-                        <th style="width:55px;">Code</th>
-                        <th>Nom</th>
-                        <th>Gentilé</th>
-                        <th>Chef-lieu</th>
+                        <th style="width:55px;" data-col="0">Code<span class="sort-icon"></span></th>
+                        <th data-col="1">Nom<span class="sort-icon"></span></th>
+                        <th data-col="2">Gentilé<span class="sort-icon"></span></th>
+                        <th data-col="3">Chef-lieu<span class="sort-icon"></span></th>
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
@@ -202,20 +216,15 @@ $changeLogin = !empty($moi['change_login']);
     </div>
 </div>
 
-<div id="toast-container"></div>
-
 <script src="asset/js/jquery-3.7.1.min.js"></script>
-<script src="asset/js/nijac-csrf.js"></script>
 <script src="asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';
 let currentCode = null;
+const sortState = { col: null, asc: true };
 
 function toast(msg, ok = true) {
-    const id = 'toast-' + Date.now();
-    const cls = ok ? 'text-bg-success' : 'text-bg-danger';
-    $('#toast-container').append(`<div id="${id}" class="toast align-items-center ${cls} border-0 mb-2 show" role="alert"><div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div>`);
-    setTimeout(() => $(`#${id}`).remove(), 3500);
+    nijacToast(msg, ok ? 'success' : 'danger');
 }
 
 function setStatus(msg, ok = true) {
@@ -294,6 +303,14 @@ $('#btn-supprimer').on('click', function() {
             else toast(res.msg, false);
         }, 'json');
     }, null, {type: 'danger'});
+});
+
+// ── Tri sur clic en-tête ──────────────────────────────────────────────────────
+// Différé : nijac-sortable-table.js est chargé en fin de page (includes/footer.php),
+// donc pas encore défini si on l'appelait ici de façon synchrone.
+$(function () {
+    nijacSortableTable('#tbl-regions thead th[data-col]', 'col', sortState,
+        () => nijacSortRows('#tbody-liste', parseInt(sortState.col, 10), sortState.asc));
 });
 
 $(function() { chargerListe(); });

@@ -596,6 +596,15 @@ try {
     <style>
         :root { --nijac-blue: #1a3a6b; }
         body { background: #f0f4fa; font-family: 'Segoe UI', system-ui, sans-serif; }
+        /* ── En-tête ── */
+        #page-header {
+            background: var(--nijac-blue);
+            color: #fff;
+            padding: .5rem 1.25rem;
+            font-size: .9rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
         .badge-div { display:inline-block; font-size:.75rem; font-weight:700; padding:.15rem .45rem; border-radius:4px; white-space:nowrap; }
         .bdiv-N1M { background:#1a3a6b; color:#fff; }
         .bdiv-N2M { background:#2563eb; color:#fff; }

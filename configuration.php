@@ -1172,7 +1172,6 @@ $changeLogin = !empty($moi['change_login']);
 <?php $statusInitial = 'État actuel : ' . ($etatCourant === 'Developpement' ? 'Développement — emails redirigés' : 'Opérationnel — emails réels'); ?>
 
 <script src="asset/js/jquery-3.7.1.min.js"></script>
-    <script src="asset/js/nijac-csrf.js"></script>
 <script src="asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';
@@ -1700,8 +1699,8 @@ $('#btn-sauvegarder-limitrophes').on('click', function () {
 let configRows      = [];
 let tableChargee    = false;
 let cellActiveConfig = null;
-let sortFieldConfig  = 'cle';
-let sortDirConfig    = 'asc';
+const sortStateConfig = { col: 'cle', asc: true };
+let refreshTriEntetesConfig = () => {};
 let searchTermConfig = '';
 
 function tableMsg(msg, ok = true) {
@@ -1729,25 +1728,17 @@ function lignesConfigFiltreesTriees() {
         : [...configRows];
 
     result.sort((a, b) => {
-        const va = String(a[sortFieldConfig] ?? '').toLowerCase();
-        const vb = String(b[sortFieldConfig] ?? '').toLowerCase();
-        return sortDirConfig === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+        const va = String(a[sortStateConfig.col] ?? '').toLowerCase();
+        const vb = String(b[sortStateConfig.col] ?? '').toLowerCase();
+        return sortStateConfig.asc ? va.localeCompare(vb) : vb.localeCompare(va);
     });
     return result;
-}
-
-function majEnteteTriConfig() {
-    $('#tbl-config thead th').each(function () {
-        const f = $(this).data('field');
-        $(this).removeClass('sort-asc sort-desc');
-        if (f && f === sortFieldConfig) $(this).addClass(sortDirConfig === 'asc' ? 'sort-asc' : 'sort-desc');
-    });
 }
 
 // ── Rendu ─────────────────────────────────────────────────────────────────────
 function renderTableConfig() {
     const $body = $('#tbody-config').empty();
-    majEnteteTriConfig();
+    refreshTriEntetesConfig();
 
     const affichees = lignesConfigFiltreesTriees();
 
@@ -1917,15 +1908,10 @@ $('#btn-table-ajouter').on('click', function () {
 });
 
 // ── Tri sur clic en-tête ──────────────────────────────────────────────────────
-$('#tbl-config thead th[data-field]').on('click', function () {
-    const f = $(this).data('field');
-    if (sortFieldConfig === f) {
-        sortDirConfig = sortDirConfig === 'asc' ? 'desc' : 'asc';
-    } else {
-        sortFieldConfig = f;
-        sortDirConfig   = 'asc';
-    }
-    renderTableConfig();
+// Différé : nijac-sortable-table.js est chargé en fin de page (includes/footer.php),
+// donc pas encore défini si on l'appelait ici de façon synchrone.
+$(function () {
+    refreshTriEntetesConfig = nijacSortableTable('#tbl-config thead th[data-field]', 'field', sortStateConfig, renderTableConfig);
 });
 
 // ── Recherche ─────────────────────────────────────────────────────────────────

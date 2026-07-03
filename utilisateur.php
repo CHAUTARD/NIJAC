@@ -214,7 +214,13 @@ $deptActifs  = getDeptActifs();
             position: sticky;
             top: 0;
             z-index: 1;
+            cursor: pointer;
+            user-select: none;
         }
+        #tbl-utilisateurs thead th .sort-icon { margin-left: .3rem; opacity: .4; font-size: .75rem; }
+        #tbl-utilisateurs thead th.sort-asc  .sort-icon::after { content: '▲'; opacity: 1; }
+        #tbl-utilisateurs thead th.sort-desc .sort-icon::after { content: '▼'; opacity: 1; }
+        #tbl-utilisateurs thead th:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
 
         #tbl-utilisateurs tbody tr {
             cursor: pointer;
@@ -266,14 +272,6 @@ $deptActifs  = getDeptActifs();
         .btn-supprimer:hover   { background:#f0a0a8; }
 
         .btn-supprimer:disabled { opacity:.5; cursor:not-allowed; }
-
-        /* ── Toast ── */
-        #toast-container {
-            position: fixed;
-            bottom: 1rem;
-            right: 1rem;
-            z-index: 9999;
-        }
     </style>
 </head>
 <body>
@@ -292,12 +290,12 @@ $deptActifs  = getDeptActifs();
             <table id="tbl-utilisateurs">
                 <thead>
                     <tr>
-                        <th>Login</th>
-                        <th>Nom</th>
-                        <th>Prénom</th>
-                        <th>Rôle</th>
-                        <th>Dept</th>
-                        <th>Actif</th>
+                        <th data-col="0">Login<span class="sort-icon"></span></th>
+                        <th data-col="1">Nom<span class="sort-icon"></span></th>
+                        <th data-col="2">Prénom<span class="sort-icon"></span></th>
+                        <th data-col="3">Rôle<span class="sort-icon"></span></th>
+                        <th data-col="4">Dept<span class="sort-icon"></span></th>
+                        <th data-col="5">Actif<span class="sort-icon"></span></th>
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
@@ -397,31 +395,18 @@ $deptActifs  = getDeptActifs();
     </div><!-- /panel-form -->
 </div><!-- /split-container -->
 
-<!-- Toast notifications -->
-<div id="toast-container"></div>
-
 <script src="asset/js/jquery-3.7.1.min.js"></script>
-    <script src="asset/js/nijac-csrf.js"></script>
 <script src="asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';
 
 const MOI_ID = <?= (int)$moi['id'] ?>;
 let   currentId = null; // null = nouvel utilisateur
+const sortState = { col: null, asc: true };
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
 function toast(msg, ok = true) {
-    const id  = 'toast-' + Date.now();
-    const cls = ok ? 'text-bg-success' : 'text-bg-danger';
-    $('#toast-container').append(
-        `<div id="${id}" class="toast align-items-center ${cls} border-0 mb-2 show" role="alert">
-           <div class="d-flex">
-             <div class="toast-body">${msg}</div>
-             <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-           </div>
-         </div>`
-    );
-    setTimeout(() => { $(`#${id}`).remove(); }, 3500);
+    nijacToast(msg, ok ? 'success' : 'danger');
 }
 
 function setStatus(msg, ok = true) {
@@ -550,6 +535,14 @@ $('#btn-toggle-mdp').on('click', function () {
     const hidden = $input.attr('type') === 'password';
     $input.attr('type', hidden ? 'text' : 'password');
     $('#eye-mdp').toggleClass('bi-eye-slash', !hidden).toggleClass('bi-eye', hidden);
+});
+
+// ── Tri sur clic en-tête ──────────────────────────────────────────────────────
+// Différé : nijac-sortable-table.js est chargé en fin de page (includes/footer.php),
+// donc pas encore défini si on l'appelait ici de façon synchrone.
+$(function () {
+    nijacSortableTable('#tbl-utilisateurs thead th[data-col]', 'col', sortState,
+        () => nijacSortRows('#tbody-liste', parseInt(sortState.col, 10), sortState.asc));
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────

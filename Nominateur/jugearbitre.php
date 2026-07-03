@@ -940,9 +940,6 @@ $deptLimitrophes  = getDepartementsLimitrophes();
         .win-menu-drop .drop-item.green { color: #1a6b2b; font-weight: 600; }
         .win-menu-drop .drop-item.green:hover { background: #d1fae5; }
 
-        /* ── Toast ── */
-        #toast-container { position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; }
-
         /* ── Spinner ── */
         #spinner {
             display: none;
@@ -1057,9 +1054,6 @@ $deptLimitrophes  = getDepartementsLimitrophes();
 </div>
 
 <?php $statusInitial = 'Prêt. — Cliquez sur une cellule puis F2 pour modifier.'; ?>
-
-<!-- Toast -->
-<div id="toast-container"></div>
 
 <!-- Modale rapport import EBP -->
 <div class="modal fade" id="modal-import-ebp" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
@@ -1337,7 +1331,6 @@ $deptLimitrophes  = getDepartementsLimitrophes();
 </div>
 
 <script src="../asset/js/jquery-3.7.1.min.js"></script>
-    <script src="../asset/js/nijac-csrf.js"></script>
 <script src="../asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';
@@ -1346,8 +1339,7 @@ let lignes     = [];
 let filtreActif   = true;   // false = tous, true = actifs seulement
 let filtreErreursCp = false; // true = uniquement les lignes sans id_laposte
 let cellActive = null;
-let sortField  = 'nom';
-let sortDir    = 'asc';
+const sortState = { col: 'nom', asc: true };
 let searchTerm = '';
 const isAdmin  = <?= $isAdminJs ?>;
 let deptFiltre = <?= $deptUserJs ?>; // nominateur : filtré sur son dept
@@ -1360,17 +1352,7 @@ function setStatus(msg, ok = true) {
 }
 
 function toast(msg, ok = true) {
-    const id  = 't' + Date.now();
-    const cls = ok ? 'text-bg-success' : 'text-bg-danger';
-    $('#toast-container').append(
-        `<div id="${id}" class="toast align-items-center ${cls} border-0 mb-2 show">
-           <div class="d-flex">
-             <div class="toast-body">${msg}</div>
-             <button class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-           </div>
-         </div>`
-    );
-    setTimeout(() => $(`#${id}`).remove(), 4000);
+    nijacToast(msg, ok ? 'success' : 'danger');
 }
 
 // ── Tri & Recherche ───────────────────────────────────────────────────────────
@@ -1394,6 +1376,7 @@ function lignesFiltreesTriees() {
         : source;
 
     const numFields = ['id'];
+    const sortField = sortState.col, sortDir = sortState.asc ? 'asc' : 'desc';
     result.sort((a, b) => {
         if (numFields.includes(sortField)) {
             return sortDir === 'asc' ? (+a[sortField]) - (+b[sortField]) : (+b[sortField]) - (+a[sortField]);
@@ -1408,18 +1391,10 @@ function lignesFiltreesTriees() {
     return result;
 }
 
-function majEnteteTri() {
-    $('#tbl-ja thead th').each(function () {
-        const f = $(this).data('field');
-        $(this).removeClass('sort-asc sort-desc');
-        if (f === sortField) $(this).addClass(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
-    });
-}
-
 // ── Rendu ─────────────────────────────────────────────────────────────────────
 function renderGrille() {
     const $body = $('#tbody-grille').empty();
-    majEnteteTri();
+    refreshTriEntetes();
 
     const affichees = lignesFiltreesTriees();
 
@@ -1909,11 +1884,11 @@ $('#btn-lancer-import-fftt').on('click', function () {
 });
 
 // ── Tri sur clic en-tête ──────────────────────────────────────────────────────
-$('#tbl-ja thead th[data-field]').on('click', function () {
-    const f = $(this).data('field');
-    sortDir   = sortField === f ? (sortDir === 'asc' ? 'desc' : 'asc') : 'asc';
-    sortField = f;
-    renderGrille();
+// Différé : nijac-sortable-table.js est chargé en fin de page (includes/footer.php),
+// donc pas encore défini si on l'appelait ici de façon synchrone.
+let refreshTriEntetes = () => {};
+$(function () {
+    refreshTriEntetes = nijacSortableTable('#tbl-ja thead th[data-field]', 'field', sortState, renderGrille);
 });
 
 // ── Filtre département ────────────────────────────────────────────────────────

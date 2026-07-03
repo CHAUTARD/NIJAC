@@ -397,21 +397,6 @@ try {
             font-size: .9rem;
         }
 
-        /* Toast */
-        #toast-container { position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; }
-        .toast-msg {
-            background: #1a3a6b;
-            color: #fff;
-            border-radius: 8px;
-            padding: .6rem 1rem;
-            font-size: .84rem;
-            margin-top: .4rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,.18);
-            animation: fadeIn .2s ease;
-        }
-        .toast-msg.toast-err { background: #c0392b; }
-        @keyframes fadeIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: none; } }
-
         /* Spinner */
         #spinner { display: none; }
         #spinner.active { display: inline-block; }
@@ -505,10 +490,7 @@ try {
 
 </div>
 
-<div id="toast-container"></div>
-
 <script src="../asset/js/jquery-3.7.1.min.js"></script>
-<script src="../asset/js/nijac-csrf.js"></script>
 <script>
 const URL_PAGE = 'compta.php';
 
@@ -523,9 +505,7 @@ $('.btn-phase').on('click', function () {
 });
 
 function toast(msg, ok = true) {
-    const $t = $('<div>').addClass('toast-msg' + (ok ? '' : ' toast-err')).text(msg);
-    $('#toast-container').append($t);
-    setTimeout(() => $t.fadeOut(300, () => $t.remove()), 3500);
+    nijacToast(msg, ok ? 'success' : 'danger');
 }
 
 function money(v) {

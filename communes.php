@@ -544,9 +544,6 @@ $changeLogin = !empty($moi['change_login']);
         }
         .btn-coller:hover { background: #d0dff0; }
 
-        /* ── Toast ── */
-        #toast-container { position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; }
-
         /* ── Spinner ── */
         #spinner {
             display: none;
@@ -842,11 +839,7 @@ $changeLogin = !empty($moi['change_login']);
 
 <?php $statusInitial = 'Prêt.'; ?>
 
-<!-- Toast -->
-<div id="toast-container"></div>
-
 <script src="asset/js/jquery-3.7.1.min.js"></script>
-    <script src="asset/js/nijac-csrf.js"></script>
 <script src="asset/js/bootstrap.bundle.min.js"></script>
 <script>
 'use strict';
@@ -855,8 +848,8 @@ let lignes           = [];
 let totalRows        = 0;
 let currentOffset    = 0;
 const PAGE_SIZE      = 500;
-let sortField        = 'CodePostal';
-let sortDir          = 'asc';
+const sortState      = { col: 'CodePostal', asc: true };
+let refreshTriEntetes = () => {};
 let searchTerm       = '';
 let searchTimer      = null;
 let fichiersCSV      = [];
@@ -875,44 +868,26 @@ function setStatus(msg, ok = true) {
 }
 
 function toast(msg, ok = true) {
-    const id  = 't' + Date.now();
-    const cls = ok ? 'text-bg-success' : 'text-bg-danger';
-    $('#toast-container').append(
-        `<div id="${id}" class="toast align-items-center ${cls} border-0 mb-2 show">
-           <div class="d-flex">
-             <div class="toast-body">${msg}</div>
-             <button class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-           </div>
-         </div>`
-    );
-    setTimeout(() => $(`#${id}`).remove(), 5000);
+    nijacToast(msg, ok ? 'success' : 'danger');
 }
 
 // ── Tri local (sur la page courante) ─────────────────────────────────────────
 function lignesTriees() {
     const numFields = ['Id_LaPoste', 'Latitude', 'Longitude'];
     return [...lignes].sort((a, b) => {
-        if (numFields.includes(sortField)) {
-            return sortDir === 'asc' ? (+a[sortField]) - (+b[sortField]) : (+b[sortField]) - (+a[sortField]);
+        if (numFields.includes(sortState.col)) {
+            return sortState.asc ? (+a[sortState.col]) - (+b[sortState.col]) : (+b[sortState.col]) - (+a[sortState.col]);
         }
-        const va = String(a[sortField] ?? '').toLowerCase();
-        const vb = String(b[sortField] ?? '').toLowerCase();
-        return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
-    });
-}
-
-function majEnteteTri() {
-    $('#tbl-communes thead th').each(function () {
-        const f = $(this).data('field');
-        $(this).removeClass('sort-asc sort-desc');
-        if (f === sortField) $(this).addClass(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+        const va = String(a[sortState.col] ?? '').toLowerCase();
+        const vb = String(b[sortState.col] ?? '').toLowerCase();
+        return sortState.asc ? va.localeCompare(vb) : vb.localeCompare(va);
     });
 }
 
 // ── Rendu ─────────────────────────────────────────────────────────────────────
 function renderGrille() {
     const $body = $('#tbody-grille').empty();
-    majEnteteTri();
+    refreshTriEntetes();
 
     const affichees = lignesTriees();
 
@@ -990,15 +965,6 @@ function chargerListe(offset = 0) {
     }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
 }
 
-// ── Tri sur clic en-tête ──────────────────────────────────────────────────────
-$('#tbl-communes thead th[data-field]').on('click', function () {
-    const f = $(this).data('field');
-    sortField = (sortField === f) ? sortField : f;
-    sortDir   = (sortField === f && sortDir === 'asc') ? 'desc' : (sortField !== f ? 'asc' : sortDir === 'asc' ? 'desc' : 'asc');
-    sortField = f;
-    renderGrille();
-    majEnteteTri();
-});
 
 // ── Recherche (debounce 400 ms, serveur) ──────────────────────────────────────
 $('#search-input').on('input', function () {
@@ -1265,19 +1231,7 @@ $('#mod-btn-ok').on('click', function () {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 $(function () {
-    // Corriger le gestionnaire de tri (réécriture propre)
-    $('#tbl-communes thead th[data-field]').off('click').on('click', function () {
-        const f = $(this).data('field');
-        if (sortField === f) {
-            sortDir = sortDir === 'asc' ? 'desc' : 'asc';
-        } else {
-            sortField = f;
-            sortDir   = 'asc';
-        }
-        renderGrille();
-        majEnteteTri();
-    });
-
+    refreshTriEntetes = nijacSortableTable('#tbl-communes thead th[data-field]', 'field', sortState, renderGrille);
     chargerListe(0);
 });
 </script>
