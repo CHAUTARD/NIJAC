@@ -21,6 +21,10 @@ require_once __DIR__ . '/../config/app_config.php';
 $pdo = getPDO();
 try { initTableConfiguration($pdo); } catch (\Throwable $ignored) {}
 
+$colsSalle = array_column($pdo->query('SHOW COLUMNS FROM salle')->fetchAll(\PDO::FETCH_ASSOC), 'Field');
+if (!in_array('Cp', $colsSalle))    $pdo->exec("ALTER TABLE salle ADD COLUMN Cp VARCHAR(10) NULL AFTER Adresse");
+if (!in_array('Ville', $colsSalle)) $pdo->exec("ALTER TABLE salle ADD COLUMN Ville VARCHAR(100) NULL AFTER Cp");
+
 $idClubGet = trim($_GET['club'] ?? '');
 
 // ── ACTIONS AJAX ──────────────────────────────────────────────────────────────
@@ -43,9 +47,9 @@ if ($action !== '') {
             $c = $stmt->fetch();
             if (!$c) { echo json_encode(['ok' => false, 'msg' => 'Club introuvable.']); exit; }
 
-            $stmtS = $pdo->prepare('SELECT Nom, Adresse, Telephone FROM salle WHERE Id_Club = ? AND EstPrincipale = 1 LIMIT 1');
+            $stmtS = $pdo->prepare('SELECT Nom, Adresse, Cp, Ville, Telephone FROM salle WHERE Id_Club = ? AND EstPrincipale = 1 LIMIT 1');
             $stmtS->execute([$club]);
-            $salle = $stmtS->fetch() ?: ['Nom' => '', 'Adresse' => '', 'Telephone' => ''];
+            $salle = $stmtS->fetch() ?: ['Nom' => '', 'Adresse' => '', 'Cp' => '', 'Ville' => '', 'Telephone' => ''];
 
             $stmtE = $pdo->prepare(
                 "SELECT e.Id_Equipe, e.Nom AS NomEquipe, e.ReEngagement, e.JourSouhaite, e.SouhaitJA,
@@ -85,20 +89,22 @@ if ($action !== '') {
                  WHERE Id_Club=?'
             )->execute([$corNom, $corEmail, $corTel, $nbAires, $note, $saison, $club]);
 
-            $salleNom = trim($_POST['salle_nom']     ?? '') ?: null;
-            $salleAdr = trim($_POST['salle_adresse'] ?? '') ?: null;
-            $salleTel = trim($_POST['salle_tel']     ?? '') ?: null;
+            $salleNom  = trim($_POST['salle_nom']     ?? '') ?: null;
+            $salleAdr  = trim($_POST['salle_adresse'] ?? '') ?: null;
+            $salleCp   = trim($_POST['salle_cp']      ?? '') ?: null;
+            $salleVille = trim($_POST['salle_ville']  ?? '') ?: null;
+            $salleTel  = trim($_POST['salle_tel']     ?? '') ?: null;
 
             $stmtSalleChk = $pdo->prepare('SELECT Id_Salle FROM salle WHERE Id_Club=? AND EstPrincipale=1 LIMIT 1');
             $stmtSalleChk->execute([$club]);
             $idSalle = $stmtSalleChk->fetchColumn();
             if ($idSalle) {
                 // Nom laissé vide = conserve le nom existant (colonne NOT NULL)
-                $pdo->prepare('UPDATE salle SET Nom=COALESCE(?, Nom), Adresse=?, Telephone=? WHERE Id_Salle=?')
-                    ->execute([$salleNom, $salleAdr, $salleTel, $idSalle]);
+                $pdo->prepare('UPDATE salle SET Nom=COALESCE(?, Nom), Adresse=?, Cp=?, Ville=?, Telephone=? WHERE Id_Salle=?')
+                    ->execute([$salleNom, $salleAdr, $salleCp, $salleVille, $salleTel, $idSalle]);
             } elseif ($salleNom !== null) {
-                $pdo->prepare('INSERT INTO salle (Nom, Adresse, Telephone, Id_Club, EstPrincipale) VALUES (?,?,?,?,1)')
-                    ->execute([$salleNom, $salleAdr, $salleTel, $club]);
+                $pdo->prepare('INSERT INTO salle (Nom, Adresse, Cp, Ville, Telephone, Id_Club, EstPrincipale) VALUES (?,?,?,?,?,?,1)')
+                    ->execute([$salleNom, $salleAdr, $salleCp, $salleVille, $salleTel, $club]);
             }
 
             $equipes = json_decode($_POST['equipes'] ?? '[]', true);
@@ -181,12 +187,13 @@ if ($idClubGet !== '') {
     body { background: #f0f4f8; font-family: Arial, Helvetica, sans-serif; }
 
     #bandeau-normandie {
-        max-width: 720px;
+        max-width: 420px;
         margin: 1.5rem auto .5rem;
         padding: 0 .5rem;
     }
     #bandeau-normandie img {
         width: 100%;
+        height: auto;
         display: block;
         border-radius: 8px;
         box-shadow: 0 2px 8px rgba(26,58,107,.2);
@@ -210,7 +217,7 @@ if ($idClubGet !== '') {
     }
 
     .card-desiderata {
-        max-width: 720px;
+        max-width: 860px;
         margin: 1.5rem auto;
         border-radius: .75rem;
         box-shadow: 0 4px 20px rgba(0,0,0,.12);
@@ -286,7 +293,7 @@ if ($idClubGet !== '') {
 <body>
 
 <div class="page-header">
-    <h1><i class="bi bi-clipboard2-check-fill me-2"></i>Désidératas du club — saison</h1>
+    <h1><i class="bi bi-clipboard2-check-fill me-2"></i>Désidératas du club — Phase</h1>
     <span class="badge-ecran">E023</span>
 </div>
 
@@ -335,20 +342,30 @@ if ($idClubGet !== '') {
 
             <div class="section-titre"><i class="bi bi-building me-1"></i>Salle</div>
             <div class="row g-2 mb-2">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label fw-semibold" for="inp-salle-nom">Nom de la salle</label>
                     <input type="text" id="inp-salle-nom" class="form-control" maxlength="100">
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label fw-semibold" for="inp-salle-adresse">Adresse</label>
                     <input type="text" id="inp-salle-adresse" class="form-control" maxlength="255">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold" for="inp-salle-cp">Code postal</label>
+                    <input type="text" id="inp-salle-cp" class="form-control" maxlength="10">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold" for="inp-salle-ville">Ville</label>
+                    <input type="text" id="inp-salle-ville" class="form-control" maxlength="100">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label fw-semibold" for="inp-salle-tel">Téléphone</label>
                     <input type="text" id="inp-salle-tel" class="form-control" maxlength="20">
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label fw-semibold" for="inp-nb-aires">Aires de jeu (max)</label>
+            </div>
+            <div class="row g-2 mb-2">
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold text-nowrap" for="inp-nb-aires">Aires de jeu (max)</label>
                     <input type="number" id="inp-nb-aires" class="form-control" min="0" max="20">
                 </div>
             </div>
@@ -420,10 +437,12 @@ function escHtml(s) {
 }
 
 function radioGroup(name, id, options, current) {
-    return options.map(([val, label]) => `
-        <label class="btn btn-sm btn-outline-primary">
-            <input type="radio" class="btn-check" name="${name}-${id}" value="${val}" autocomplete="off" ${current === val ? 'checked' : ''}> ${label}
-        </label>`).join('');
+    return options.map(([val, label], i) => {
+        const inputId = `${name}-${id}-${i}`;
+        return `
+        <input type="radio" class="btn-check" id="${inputId}" name="${name}-${id}" value="${val}" autocomplete="off" ${current === val ? 'checked' : ''}>
+        <label class="btn btn-sm btn-outline-primary" for="${inputId}">${label}</label>`;
+    }).join('');
 }
 
 function renderEquipes(equipes) {
@@ -434,15 +453,18 @@ function renderEquipes(equipes) {
     }
     equipes.forEach(e => {
         const isR34 = e.Division === 'R3M' || e.Division === 'R4M';
+        const reengagement = e.ReEngagement || 'O';
+        const jour         = e.JourSouhaite || 'Samedi';
+        const souhaitJa    = e.SouhaitJA    || 'CRA';
         const souhaitCell = isR34
-            ? `<div class="btn-group btn-check-group" role="group">${radioGroup('sja', e.Id_Equipe, [['CRA','CRA'],['Club','Club']], e.SouhaitJA)}</div>`
+            ? `<div class="btn-group btn-check-group" role="group">${radioGroup('sja', e.Id_Equipe, [['CRA','CRA'],['Club','Club']], souhaitJa)}</div>`
             : `<span class="text-muted" style="font-size:.75rem">—</span>`;
         const $tr = $(`
             <tr data-id="${e.Id_Equipe}">
                 <td>${escHtml(e.NomEquipe)}</td>
                 <td><span class="badge div-badge" style="background:#5c6bc0">${escHtml(e.Division)}</span></td>
-                <td><div class="btn-group btn-check-group" role="group">${radioGroup('re', e.Id_Equipe, [['O','Oui'],['N','Non']], e.ReEngagement)}</div></td>
-                <td><div class="btn-group btn-check-group" role="group">${radioGroup('jr', e.Id_Equipe, [['Samedi','Samedi'],['Dimanche','Dimanche']], e.JourSouhaite)}</div></td>
+                <td><div class="btn-group btn-check-group" role="group">${radioGroup('re', e.Id_Equipe, [['O','Oui'],['N','Non']], reengagement)}</div></td>
+                <td><div class="btn-group btn-check-group" role="group">${radioGroup('jr', e.Id_Equipe, [['Samedi','Samedi'],['Dimanche','Dimanche']], jour)}</div></td>
                 <td class="souhait-ja-cell${isR34 ? '' : ' disabled'}">${souhaitCell}</td>
             </tr>`);
         $body.append($tr);
@@ -473,10 +495,12 @@ function charger() {
         $('#inp-cor-nom').val(res.club.CorNom || '');
         $('#inp-cor-tel').val(res.club.CorTelephone || '');
         $('#inp-cor-email').val(res.club.CorEmail || '');
-        $('#inp-nb-aires').val(res.club.NbAiresJeu ?? '');
+        $('#inp-nb-aires').val(res.club.NbAiresJeu ?? 1);
         $('#inp-note').val(res.club.DesiderataNote || '');
         $('#inp-salle-nom').val(res.salle.Nom || '');
         $('#inp-salle-adresse').val(res.salle.Adresse || '');
+        $('#inp-salle-cp').val(res.salle.Cp || '');
+        $('#inp-salle-ville').val(res.salle.Ville || '');
         $('#inp-salle-tel').val(res.salle.Telephone || '');
         renderEquipes(res.equipes);
     }, 'json').fail(function () {
@@ -498,6 +522,8 @@ $('#btn-valider').on('click', function () {
         note:          $('#inp-note').val().trim(),
         salle_nom:     $('#inp-salle-nom').val().trim(),
         salle_adresse: $('#inp-salle-adresse').val().trim(),
+        salle_cp:      $('#inp-salle-cp').val().trim(),
+        salle_ville:   $('#inp-salle-ville').val().trim(),
         salle_tel:     $('#inp-salle-tel').val().trim(),
         equipes:       JSON.stringify(collecteEquipes()),
     }, function (r) {

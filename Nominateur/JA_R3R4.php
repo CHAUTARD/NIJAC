@@ -48,7 +48,7 @@ if ($action !== '') {
             }
 
             $sql = "SELECT c.Id_Club, c.Nom AS NomClub, c.CorNom, c.CorEmail,
-                           c.DesiderataSaison, c.DesiderataDate, c.DesiderataEmailDate,
+                           c.DesiderataSaison, c.DesiderataDate, c.DesiderataEmailDate, c.DesiderataNote,
                            SUBSTRING(c.Id_Club, 3, 2) AS Departement,
                            COUNT(e.Id_Equipe) AS NbEquipes,
                            GROUP_CONCAT(DISTINCT d.Division ORDER BY d.Ord SEPARATOR ',') AS Divisions
@@ -66,7 +66,7 @@ if ($action !== '') {
                 $params = array_merge($params, $deptsRegion);
             }
             $sql .= " GROUP BY c.Id_Club, c.Nom, c.CorNom, c.CorEmail,
-                               c.DesiderataSaison, c.DesiderataDate, c.DesiderataEmailDate,
+                               c.DesiderataSaison, c.DesiderataDate, c.DesiderataEmailDate, c.DesiderataNote,
                                SUBSTRING(c.Id_Club, 3, 2)
                       ORDER BY c.Nom";
 
@@ -96,6 +96,31 @@ if ($action !== '') {
             );
             $stmt->execute($codes);
             echo json_encode(['ok' => true, 'data' => $stmt->fetchAll()]);
+            exit;
+        }
+
+        // ── Détail des désidératas d'un club (récapitulatif équipes) ──────────
+        if ($action === 'detail') {
+            $idClub = trim($_GET['club'] ?? '');
+            if ($idClub === '') { echo json_encode(['ok' => false, 'msg' => 'Club manquant.']); exit; }
+
+            $stmtC = $pdo->prepare('SELECT Id_Club, Nom, DesiderataNote FROM club WHERE Id_Club = ?');
+            $stmtC->execute([$idClub]);
+            $club = $stmtC->fetch();
+            if (!$club) { echo json_encode(['ok' => false, 'msg' => 'Club introuvable.']); exit; }
+
+            $stmtE = $pdo->prepare(
+                "SELECT e.Id_Equipe, e.Nom AS NomEquipe, e.ReEngagement, e.JourSouhaite, e.SouhaitJA,
+                        d.Id_Division, d.Division, d.Nom AS NomDivision
+                 FROM equipe e
+                 JOIN division d ON d.Id_Division = e.Id_Division
+                 WHERE e.Id_Club = ? AND d.Ord BETWEEN 70 AND 150
+                 ORDER BY d.Ord, e.Nom"
+            );
+            $stmtE->execute([$idClub]);
+            $equipes = $stmtE->fetchAll();
+
+            echo json_encode(['ok' => true, 'club' => $club, 'equipes' => $equipes]);
             exit;
         }
 
@@ -401,6 +426,66 @@ $isAdmin     = !empty($moi['is_admin']);
             background: none; border: none; color: #fff; font-size: 1.2rem; line-height: 1;
         }
         #modal-apercu iframe { flex: 1; border: 0; width: 100%; min-height: 400px; }
+
+        /* ── Modale récapitulatif désidératas club ── */
+        #modal-detail {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+        }
+        #modal-detail.visible { display: flex; }
+        #modal-detail .modal-card {
+            background: #fff;
+            border-radius: .5rem;
+            width: 100%;
+            max-width: 640px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 8px 30px rgba(0,0,0,.3);
+        }
+        #modal-detail .modal-card-header {
+            background: var(--nijac-blue);
+            color: #fff;
+            padding: .6rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+        }
+        #modal-detail .modal-card-header .sujet { font-weight: 700; font-size: .9rem; flex: 1; }
+        #modal-detail .modal-card-header button {
+            background: none; border: none; color: #fff; font-size: 1.2rem; line-height: 1;
+        }
+        #modal-detail .modal-card-body { padding: 1rem; overflow-y: auto; }
+        #modal-detail .note-club {
+            background: #fff8e1;
+            border: 1px solid #ffe082;
+            border-radius: .35rem;
+            padding: .5rem .75rem;
+            font-size: .82rem;
+            margin-bottom: .75rem;
+        }
+        #tbl-detail { width: 100%; font-size: .85rem; border-collapse: collapse; }
+        #tbl-detail th {
+            background: #e8eef7;
+            padding: .4rem .5rem;
+            text-align: center;
+            font-size: .78rem;
+            white-space: nowrap;
+        }
+        #tbl-detail th:first-child, #tbl-detail td:first-child { text-align: left; }
+        #tbl-detail td { padding: .4rem .5rem; border-top: 1px solid #e8eef7; text-align: center; vertical-align: middle; }
+        #tbl-detail .badge-oui   { background: #2e7d32; color: #fff; }
+        #tbl-detail .badge-non   { background: #c62828; color: #fff; }
+        #tbl-detail .badge-jour  { background: #5c6bc0; color: #fff; }
+        #tbl-detail .badge-cra   { background: #1a3a6b; color: #fff; }
+        #tbl-detail .badge-club  { background: #7e57c2; color: #fff; }
     </style>
 </head>
 <body>
@@ -459,11 +544,12 @@ $isAdmin     = !empty($moi['is_admin']);
                 <th style="width:6rem; text-align:center;" data-col="equipes">Équipes<span class="sort-icon"></span></th>
                 <th                       data-col="divisions">Divisions<span class="sort-icon"></span></th>
                 <th style="width:9rem; text-align:center;" data-col="statut">Statut<span class="sort-icon"></span></th>
+                <th style="width:4rem; text-align:center;" data-col="note">Note<span class="sort-icon"></span></th>
                 <th style="width:9rem; text-align:center;" data-col="envoi">Dernier envoi<span class="sort-icon"></span></th>
             </tr>
         </thead>
         <tbody id="tbody-clubs">
-            <tr><td colspan="8" class="text-center text-muted py-3">Chargement…</td></tr>
+            <tr><td colspan="9" class="text-center text-muted py-3">Chargement…</td></tr>
         </tbody>
     </table>
 </div>
@@ -479,6 +565,30 @@ $isAdmin     = !empty($moi['is_admin']);
             <button type="button" id="btn-apercu-fermer" aria-label="Fermer">&times;</button>
         </div>
         <iframe id="apercu-iframe"></iframe>
+    </div>
+</div>
+
+<!-- Modale récapitulatif désidératas club -->
+<div id="modal-detail">
+    <div class="modal-card">
+        <div class="modal-card-header">
+            <span class="sujet" id="detail-sujet"></span>
+            <button type="button" id="btn-detail-fermer" aria-label="Fermer">&times;</button>
+        </div>
+        <div class="modal-card-body">
+            <div id="detail-note" class="note-club" style="display:none;"></div>
+            <table id="tbl-detail">
+                <thead>
+                    <tr>
+                        <th>Équipe</th>
+                        <th>Maintenu</th>
+                        <th>Jour</th>
+                        <th>Souhait JA</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody-detail"></tbody>
+            </table>
+        </div>
     </div>
 </div>
 
@@ -569,6 +679,7 @@ function valTri(c, col) {
         case 'equipes':       return +c.NbEquipes;
         case 'divisions':     return (c.Divisions || '').toLowerCase();
         case 'statut':        return estSoumis(c) ? 1 : 0;
+        case 'note':          return c.DesiderataNote && c.DesiderataNote.trim() ? 1 : 0;
         case 'envoi':         return c.DesiderataEmailDate ? new Date(c.DesiderataEmailDate).getTime() : 0;
         default:               return '';
     }
@@ -602,7 +713,7 @@ function filtrerEtAfficher() {
     tbody.innerHTML = '';
 
     if (data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Aucun club trouvé.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3">Aucun club trouvé.</td></tr>';
         document.getElementById('lbl-count').textContent = '';
         majBarreSelection();
         return;
@@ -617,7 +728,7 @@ function filtrerEtAfficher() {
 
         const soumis   = estSoumis(c);
         const statutEl = soumis
-            ? `<span class="badge badge-soumis">Soumis</span>`
+            ? `<span class="badge badge-soumis" style="cursor:pointer" title="Voir le récapitulatif">Soumis</span>`
             : `<span class="badge badge-attente">En attente</span>`;
         const dernierEnvoi = c.DesiderataEmailDate
             ? new Date(c.DesiderataEmailDate).toLocaleDateString('fr-FR')
@@ -628,6 +739,9 @@ function filtrerEtAfficher() {
         const deptTxt = (c.Departement || (c.Id_Club || '').substring(2, 4) || '').trim();
         const divisionsHtml = (c.Divisions || '').split(',').filter(Boolean)
             .map(d => `<span class="badge badge-div">${escHtml(d)}</span>`).join('') || '<span class="text-muted">—</span>';
+        const noteEl = c.DesiderataNote && c.DesiderataNote.trim()
+            ? `<i class="bi bi-chat-square-text-fill text-warning" title="${escHtml(c.DesiderataNote)}"></i>`
+            : '<span class="text-muted">—</span>';
 
         tr.innerHTML = `
             <td style="text-align:center;"><input type="checkbox" class="chk-club" data-id="${escHtml(c.Id_Club)}" ${checked}></td>
@@ -637,6 +751,7 @@ function filtrerEtAfficher() {
             <td style="text-align:center;"><span class="badge badge-nb">${c.NbEquipes}</span></td>
             <td>${divisionsHtml}</td>
             <td style="text-align:center;">${statutEl}</td>
+            <td style="text-align:center;">${noteEl}</td>
             <td style="text-align:center;">${dernierEnvoi}</td>`;
         tbody.appendChild(tr);
     });
@@ -665,6 +780,12 @@ document.getElementById('tbody-clubs').addEventListener('change', ev => {
 // ── Clic sur la ligne = bascule la case à cocher ─────────────────────────────
 document.getElementById('tbody-clubs').addEventListener('click', ev => {
     if (ev.target.closest('.chk-club')) return; // déjà géré nativement
+    const badgeSoumis = ev.target.closest('.badge-soumis');
+    if (badgeSoumis) {
+        const tr = badgeSoumis.closest('tr[data-id]');
+        if (tr) ouvrirModalDetail(tr.dataset.id);
+        return;
+    }
     const tr = ev.target.closest('tr[data-id]');
     if (!tr) return;
     const chk = tr.querySelector('.chk-club');
@@ -734,6 +855,64 @@ document.getElementById('btn-apercu-fermer').addEventListener('click', () => {
 });
 document.getElementById('modal-apercu').addEventListener('click', ev => {
     if (ev.target.id === 'modal-apercu') ev.currentTarget.classList.remove('visible');
+});
+
+// ── Récapitulatif des désidératas d'un club ──────────────────────────────────
+async function ouvrirModalDetail(idClub) {
+    spin(true);
+    const res = await apiGet({ action: 'detail', club: idClub });
+    spin(false);
+    if (!res.ok) { toast(res.msg, 'err'); return; }
+
+    document.getElementById('detail-sujet').textContent = res.club.Nom;
+
+    const $note = document.getElementById('detail-note');
+    if (res.club.DesiderataNote && res.club.DesiderataNote.trim()) {
+        $note.innerHTML = `<i class="bi bi-chat-square-text-fill me-1 text-warning"></i>${escHtml(res.club.DesiderataNote)}`;
+        $note.style.display = '';
+    } else {
+        $note.style.display = 'none';
+    }
+
+    const tbody = document.getElementById('tbody-detail');
+    tbody.innerHTML = '';
+    if (!res.equipes.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Aucune équipe (Pré-Nationale à R4) pour ce club.</td></tr>';
+    } else {
+        res.equipes.forEach(e => {
+            const maintenuEl = e.ReEngagement === 'O'
+                ? '<span class="badge badge-oui">Oui</span>'
+                : e.ReEngagement === 'N'
+                    ? '<span class="badge badge-non">Non</span>'
+                    : '<span class="text-muted">—</span>';
+            const jourEl = e.JourSouhaite
+                ? `<span class="badge badge-jour">${escHtml(e.JourSouhaite)}</span>`
+                : '<span class="text-muted">—</span>';
+            const isR34 = e.Division === 'R3M' || e.Division === 'R4M';
+            const souhaitEl = !isR34
+                ? '<span class="text-muted">—</span>'
+                : e.SouhaitJA === 'CRA'
+                    ? '<span class="badge badge-cra">CRA</span>'
+                    : e.SouhaitJA === 'Club'
+                        ? '<span class="badge badge-club">Club</span>'
+                        : '<span class="text-muted">—</span>';
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${escHtml(e.NomEquipe)} <span class="badge div-badge" style="background:#5c6bc0">${escHtml(e.Division)}</span></td>
+                <td>${maintenuEl}</td>
+                <td>${jourEl}</td>
+                <td>${souhaitEl}</td>`;
+            tbody.appendChild(tr);
+        });
+    }
+
+    document.getElementById('modal-detail').classList.add('visible');
+}
+document.getElementById('btn-detail-fermer').addEventListener('click', () => {
+    document.getElementById('modal-detail').classList.remove('visible');
+});
+document.getElementById('modal-detail').addEventListener('click', ev => {
+    if (ev.target.id === 'modal-detail') ev.currentTarget.classList.remove('visible');
 });
 
 // ── Filtres ──────────────────────────────────────────────────────────────────
