@@ -15,18 +15,32 @@ require_once __DIR__ . '/../config/csrf.php';
 require_once __DIR__ . '/../config/app_config.php';
 require_once __DIR__ . '/../Classes/Obfuscator.php';
 
-// ── Sécurité : accès réservé aux JA connectés ────────────────────────────────
+// ── Décodage du paramètre obfusqué ja=TOKEN (accès nominateur/admin pour un JA donné) ──
+// Présent en query string au chargement de la page, et repris dans le corps des
+// requêtes AJAX POST (le fetch() ne réutilise pas la query string de la page).
+$_obf = new Obfuscator(OBFUSCATOR_SEED);
+$idJaToken = null;
+$jaTokenRaw = $_GET['ja'] ?? $_POST['ja'] ?? '';
+if ($jaTokenRaw !== '') {
+    $decoded = $_obf->deobfuscate(trim($jaTokenRaw));
+    if ($decoded > 0) $idJaToken = $decoded;
+}
+
+// ── Sécurité : accès réservé aux JA connectés, ou au nominateur/admin via lien tokenisé ──
 $authRedirect = '../index.php';
 $allowJa      = true;
 require __DIR__ . '/../includes/auth_required.php';
 
 $moi = $_SESSION['utilisateur'];
-if ($moi['role'] !== 'JA') {
+if ($moi['role'] === 'JA') {
+    $idJa = $moi['id_ja'] ?? $moi['login'];
+} elseif (in_array($moi['role'], ['Administrateur', 'Nominateur'], true) && $idJaToken) {
+    $idJa = $idJaToken;
+} else {
     header('Location: ../Nominateur/menu.php');
     exit;
 }
 
-$idJa = $moi['id_ja'] ?? $moi['login'];
 $pdo  = getPDO();
 
 // ── Chargement de la fiche JA ─────────────────────────────────────────────────
@@ -166,6 +180,8 @@ if ($action !== '') {
     header('Content-Type: application/json; charset=utf-8');
     csrfVerify(true);
 
+    try {
+
     if ($action === 'se_designer') {
         $ids = json_decode($_POST['ids'] ?? '[]', true);
         if (!is_array($ids) || !$ids) {
@@ -223,6 +239,16 @@ if ($action !== '') {
     }
 
     echo json_encode(['ok' => false, 'msg' => 'Action inconnue.']); exit;
+
+    } catch (PDOException $e) {
+        error_log('[NIJAC] info_rencontre.php PDO : ' . $e->getMessage());
+        echo json_encode(['ok' => false, 'msg' => 'Erreur base de données : ' . $e->getMessage()]);
+        exit;
+    } catch (\Throwable $e) {
+        error_log('[NIJAC] info_rencontre.php : ' . $e->getMessage());
+        echo json_encode(['ok' => false, 'msg' => 'Erreur : ' . $e->getMessage()]);
+        exit;
+    }
 }
 
 // ── Mes nominations (à venir + déjà arbitrées) ────────────────────────────────
@@ -431,7 +457,7 @@ $backUrl   = null;
             <p class="text-muted px-3 pt-3 mb-2 small"><i class="bi bi-info-circle me-2"></i>Votre club a choisi d'assurer lui-même l'arbitrage de ses rencontres R3M/R4M à domicile. Sélectionnez les rencontres que vous allez arbitrer, puis validez.</p>
             <form id="form-selection">
             <div class="table-responsive">
-                <table class="table table-hover table-sm mb-0 align-middle">
+                <table class="table table-hover table-striped table-sm mb-0 align-middle">
                     <thead class="table-light">
                         <tr>
                             <th style="width:2.2rem" class="text-center"><input type="checkbox" id="chk-all-r3r4"></th>
@@ -562,6 +588,7 @@ $backUrl   = null;
 <script src="../asset/js/bootstrap.bundle.min.js"></script>
 <script>
 const CSRF = <?= json_encode(csrfToken()) ?>;
+const JA_TOKEN = <?= json_encode($_GET['ja'] ?? '') ?>;
 
 // ── Modale adresse domicile ───────────────────────────────────────────────────
 let adrIdLaPoste = <?= ($ja['Id_LaPoste'] ?? 0) ? (int)$ja['Id_LaPoste'] : 'null' ?>;
@@ -590,7 +617,7 @@ async function adrChercher() {
     document.getElementById('adr-btn-valider').disabled = true;
     document.getElementById('adr-suggestions').classList.add('d-none');
 
-    const body = new URLSearchParams({ action: 'recherche_laposte', cp, ville, _csrf: CSRF });
+    const body = new URLSearchParams({ action: 'recherche_laposte', cp, ville, _csrf: CSRF, ja: JA_TOKEN });
     try {
         const r = await fetch('info_rencontre.php', { method: 'POST', body });
         const d = await r.json();
@@ -632,7 +659,7 @@ document.getElementById('adr-btn-valider').addEventListener('click', async () =>
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enregistrement…';
     const cp    = document.getElementById('adr-cp').value.trim();
     const ville = document.getElementById('adr-ville').value.trim();
-    const body  = new URLSearchParams({ action: 'sauvegarder_adresse', id_laposte: adrIdLaPoste, cp, ville, _csrf: CSRF });
+    const body  = new URLSearchParams({ action: 'sauvegarder_adresse', id_laposte: adrIdLaPoste, cp, ville, _csrf: CSRF, ja: JA_TOKEN });
     try {
         const r = await fetch('info_rencontre.php', { method: 'POST', body });
         const d = await r.json();
@@ -674,6 +701,18 @@ function majSelectionR3R4() {
 
 document.querySelectorAll('.chk-r3r4').forEach(chk => chk.addEventListener('change', majSelectionR3R4));
 
+// ── Clic sur la ligne = bascule la case à cocher ──────────────────────────────
+document.querySelectorAll('#form-selection tr[data-id-rencontre]').forEach(tr => {
+    const chk = tr.querySelector('.chk-r3r4');
+    if (!chk) return;
+    tr.style.cursor = 'pointer';
+    tr.addEventListener('click', ev => {
+        if (ev.target.closest('.chk-r3r4')) return;
+        chk.checked = !chk.checked;
+        chk.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+});
+
 const chkAllR3R4 = document.getElementById('chk-all-r3r4');
 if (chkAllR3R4) {
     chkAllR3R4.addEventListener('change', ev => {
@@ -694,7 +733,7 @@ if (btnValiderSelection) {
         btnValiderSelection.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Validation…';
 
         try {
-            const body = new URLSearchParams({ action: 'se_designer', ids: JSON.stringify(ids), _csrf: CSRF });
+            const body = new URLSearchParams({ action: 'se_designer', ids: JSON.stringify(ids), _csrf: CSRF, ja: JA_TOKEN });
             const r = await fetch('info_rencontre.php', { method: 'POST', body });
             const d = await r.json();
 

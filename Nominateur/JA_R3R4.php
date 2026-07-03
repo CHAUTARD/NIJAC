@@ -51,7 +51,8 @@ if ($action !== '') {
                            c.DesiderataSaison, c.DesiderataDate, c.DesiderataEmailDate, c.DesiderataNote,
                            SUBSTRING(c.Id_Club, 3, 2) AS Departement,
                            COUNT(e.Id_Equipe) AS NbEquipes,
-                           GROUP_CONCAT(DISTINCT d.Division ORDER BY d.Ord SEPARATOR ',') AS Divisions
+                           GROUP_CONCAT(DISTINCT d.Division ORDER BY d.Ord SEPARATOR ',') AS Divisions,
+                           GROUP_CONCAT(CONCAT(d.Division, '§', e.Nom) ORDER BY d.Ord SEPARATOR '||') AS DivisionsEquipes
                     FROM club c
                     JOIN equipe e   ON e.Id_Club = c.Id_Club
                     JOIN division d ON d.Id_Division = e.Id_Division
@@ -121,6 +122,40 @@ if ($action !== '') {
             $equipes = $stmtE->fetchAll();
 
             echo json_encode(['ok' => true, 'club' => $club, 'equipes' => $equipes]);
+            exit;
+        }
+
+        // ── Liste des JA d'un club (nom, prénom, numéro de licence) ───────────
+        if ($action === 'ja_club') {
+            $idClub = trim($_GET['club'] ?? '');
+            if ($idClub === '') { echo json_encode(['ok' => false, 'msg' => 'Club manquant.']); exit; }
+
+            $stmtC = $pdo->prepare('SELECT Id_Club, Nom FROM club WHERE Id_Club = ?');
+            $stmtC->execute([$idClub]);
+            $club = $stmtC->fetch();
+            if (!$club) { echo json_encode(['ok' => false, 'msg' => 'Club introuvable.']); exit; }
+
+            $stmtJ = $pdo->prepare(
+                'SELECT Id_JA, Nom, Prenom, Grade FROM ja WHERE Id_Club = ? AND Actif = 1 ORDER BY Nom, Prenom'
+            );
+            $stmtJ->execute([$idClub]);
+            $jas = $stmtJ->fetchAll();
+
+            require_once __DIR__ . '/../Classes/Obfuscator.php';
+            $obf = new Obfuscator(OBFUSCATOR_SEED);
+            foreach ($jas as &$j) {
+                $j['Token'] = $obf->obfuscate((int)$j['Id_JA']);
+            }
+            unset($j);
+
+            $stmtAC = $pdo->prepare(
+                "SELECT COUNT(*) FROM equipe e JOIN division d ON d.Id_Division = e.Id_Division
+                 WHERE e.Id_Club = ? AND d.Division IN ('R3M','R4M') AND e.SouhaitJA = 'Club'"
+            );
+            $stmtAC->execute([$idClub]);
+            $arbitrageClub = (bool)$stmtAC->fetchColumn();
+
+            echo json_encode(['ok' => true, 'club' => $club, 'jas' => $jas, 'arbitrageClub' => $arbitrageClub]);
             exit;
         }
 
@@ -390,8 +425,8 @@ $isAdmin     = !empty($moi['is_admin']);
         }
         #spinner.visible { display: flex; }
 
-        /* ── Modale aperçu message ── */
-        #modal-apercu {
+        /* ── Modales (aperçu message, récapitulatif club, liste JA) ── */
+        .modal-overlay {
             display: none;
             position: fixed;
             inset: 0;
@@ -401,45 +436,8 @@ $isAdmin     = !empty($moi['is_admin']);
             justify-content: center;
             padding: 1.5rem;
         }
-        #modal-apercu.visible { display: flex; }
-        #modal-apercu .modal-card {
-            background: #fff;
-            border-radius: .5rem;
-            width: 100%;
-            max-width: 760px;
-            max-height: 85vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            box-shadow: 0 8px 30px rgba(0,0,0,.3);
-        }
-        #modal-apercu .modal-card-header {
-            background: var(--nijac-blue);
-            color: #fff;
-            padding: .6rem 1rem;
-            display: flex;
-            align-items: center;
-            gap: .6rem;
-        }
-        #modal-apercu .modal-card-header .sujet { font-weight: 700; font-size: .9rem; flex: 1; }
-        #modal-apercu .modal-card-header button {
-            background: none; border: none; color: #fff; font-size: 1.2rem; line-height: 1;
-        }
-        #modal-apercu iframe { flex: 1; border: 0; width: 100%; min-height: 400px; }
-
-        /* ── Modale récapitulatif désidératas club ── */
-        #modal-detail {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,.5);
-            z-index: 2000;
-            align-items: center;
-            justify-content: center;
-            padding: 1.5rem;
-        }
-        #modal-detail.visible { display: flex; }
-        #modal-detail .modal-card {
+        .modal-overlay.visible { display: flex; }
+        .modal-overlay .modal-card {
             background: #fff;
             border-radius: .5rem;
             width: 100%;
@@ -450,7 +448,8 @@ $isAdmin     = !empty($moi['is_admin']);
             overflow: hidden;
             box-shadow: 0 8px 30px rgba(0,0,0,.3);
         }
-        #modal-detail .modal-card-header {
+        #modal-apercu .modal-card { max-width: 760px; }
+        .modal-overlay .modal-card-header {
             background: var(--nijac-blue);
             color: #fff;
             padding: .6rem 1rem;
@@ -458,12 +457,13 @@ $isAdmin     = !empty($moi['is_admin']);
             align-items: center;
             gap: .6rem;
         }
-        #modal-detail .modal-card-header .sujet { font-weight: 700; font-size: .9rem; flex: 1; }
-        #modal-detail .modal-card-header button {
+        .modal-overlay .modal-card-header .sujet { font-weight: 700; font-size: .9rem; flex: 1; }
+        .modal-overlay .modal-card-header button {
             background: none; border: none; color: #fff; font-size: 1.2rem; line-height: 1;
         }
-        #modal-detail .modal-card-body { padding: 1rem; overflow-y: auto; }
-        #modal-detail .note-club {
+        .modal-overlay .modal-card-body { padding: 1rem; overflow-y: auto; }
+        #modal-apercu iframe { flex: 1; border: 0; width: 100%; min-height: 400px; }
+        .modal-overlay .note-club {
             background: #fff8e1;
             border: 1px solid #ffe082;
             border-radius: .35rem;
@@ -471,21 +471,24 @@ $isAdmin     = !empty($moi['is_admin']);
             font-size: .82rem;
             margin-bottom: .75rem;
         }
-        #tbl-detail { width: 100%; font-size: .85rem; border-collapse: collapse; }
-        #tbl-detail th {
+        #tbl-detail, #tbl-ja { width: 100%; font-size: .85rem; border-collapse: collapse; }
+        #tbl-detail th, #tbl-ja th {
             background: #e8eef7;
             padding: .4rem .5rem;
             text-align: center;
             font-size: .78rem;
             white-space: nowrap;
         }
-        #tbl-detail th:first-child, #tbl-detail td:first-child { text-align: left; }
-        #tbl-detail td { padding: .4rem .5rem; border-top: 1px solid #e8eef7; text-align: center; vertical-align: middle; }
+        #tbl-detail th:first-child, #tbl-detail td:first-child,
+        #tbl-ja th:first-child, #tbl-ja td:first-child { text-align: left; }
+        #tbl-detail td, #tbl-ja td { padding: .4rem .5rem; border-top: 1px solid #e8eef7; text-align: center; vertical-align: middle; }
         #tbl-detail .badge-oui   { background: #2e7d32; color: #fff; }
         #tbl-detail .badge-non   { background: #c62828; color: #fff; }
         #tbl-detail .badge-jour  { background: #5c6bc0; color: #fff; }
         #tbl-detail .badge-cra   { background: #1a3a6b; color: #fff; }
         #tbl-detail .badge-club  { background: #7e57c2; color: #fff; }
+        #tbl-ja .badge-grade     { background: #1a3a6b; color: #fff; }
+        #tbl-ja tbody tr:nth-child(even) { background: #f5f7fb; }
     </style>
 </head>
 <body>
@@ -558,7 +561,7 @@ $isAdmin     = !empty($moi['is_admin']);
 <div id="spinner"><div class="spinner-border text-primary"></div></div>
 
 <!-- Modale aperçu message -->
-<div id="modal-apercu">
+<div id="modal-apercu" class="modal-overlay">
     <div class="modal-card">
         <div class="modal-card-header">
             <span class="sujet" id="apercu-sujet"></span>
@@ -569,7 +572,7 @@ $isAdmin     = !empty($moi['is_admin']);
 </div>
 
 <!-- Modale récapitulatif désidératas club -->
-<div id="modal-detail">
+<div id="modal-detail" class="modal-overlay">
     <div class="modal-card">
         <div class="modal-card-header">
             <span class="sujet" id="detail-sujet"></span>
@@ -587,6 +590,29 @@ $isAdmin     = !empty($moi['is_admin']);
                     </tr>
                 </thead>
                 <tbody id="tbody-detail"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modale liste des JA du club -->
+<div id="modal-ja" class="modal-overlay">
+    <div class="modal-card">
+        <div class="modal-card-header">
+            <span class="sujet" id="ja-sujet"></span>
+            <button type="button" id="btn-ja-fermer" aria-label="Fermer">&times;</button>
+        </div>
+        <div class="modal-card-body">
+            <table id="tbl-ja">
+                <thead>
+                    <tr>
+                        <th>Nom</th>
+                        <th>Grade</th>
+                        <th>N° licence</th>
+                        <th id="th-ja-arbitrage" style="display:none;">Arbitrage club</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody-ja"></tbody>
             </table>
         </div>
     </div>
@@ -737,8 +763,14 @@ function filtrerEtAfficher() {
         // Recalculé côté client à partir de Id_Club pour toujours afficher le département,
         // même si la valeur agrégée côté serveur venait à manquer.
         const deptTxt = (c.Departement || (c.Id_Club || '').substring(2, 4) || '').trim();
+        const divTeamMap = {};
+        (c.DivisionsEquipes || '').split('||').filter(Boolean).forEach(pair => {
+            const [div, eqName] = pair.split('§');
+            if (!div) return;
+            (divTeamMap[div] = divTeamMap[div] || []).push(eqName || '');
+        });
         const divisionsHtml = (c.Divisions || '').split(',').filter(Boolean)
-            .map(d => `<span class="badge badge-div">${escHtml(d)}</span>`).join('') || '<span class="text-muted">—</span>';
+            .map(d => `<span class="badge badge-div" title="${escHtml((divTeamMap[d] || []).join(', '))}">${escHtml(d)}</span>`).join('') || '<span class="text-muted">—</span>';
         const noteEl = c.DesiderataNote && c.DesiderataNote.trim()
             ? `<i class="bi bi-chat-square-text-fill text-warning" title="${escHtml(c.DesiderataNote)}"></i>`
             : '<span class="text-muted">—</span>';
@@ -748,7 +780,7 @@ function filtrerEtAfficher() {
             <td><span class="badge badge-dept">${escHtml(deptTxt || '—')}</span></td>
             <td>${escHtml(c.NomClub)}</td>
             <td>${c.CorEmail ? escHtml(c.CorNom || '') + ' <span class="text-muted">(' + escHtml(c.CorEmail) + ')</span>' : '<span class="text-danger">Pas d\'email</span>'}</td>
-            <td style="text-align:center;"><span class="badge badge-nb">${c.NbEquipes}</span></td>
+            <td style="text-align:center;"><span class="badge badge-nb" style="cursor:pointer" title="Voir les JA du club">${c.NbEquipes}</span></td>
             <td>${divisionsHtml}</td>
             <td style="text-align:center;">${statutEl}</td>
             <td style="text-align:center;">${noteEl}</td>
@@ -784,6 +816,12 @@ document.getElementById('tbody-clubs').addEventListener('click', ev => {
     if (badgeSoumis) {
         const tr = badgeSoumis.closest('tr[data-id]');
         if (tr) ouvrirModalDetail(tr.dataset.id);
+        return;
+    }
+    const badgeNb = ev.target.closest('.badge-nb');
+    if (badgeNb) {
+        const tr = badgeNb.closest('tr[data-id]');
+        if (tr) ouvrirModalJa(tr.dataset.id);
         return;
     }
     const tr = ev.target.closest('tr[data-id]');
@@ -913,6 +951,46 @@ document.getElementById('btn-detail-fermer').addEventListener('click', () => {
 });
 document.getElementById('modal-detail').addEventListener('click', ev => {
     if (ev.target.id === 'modal-detail') ev.currentTarget.classList.remove('visible');
+});
+
+// ── Liste des JA d'un club ────────────────────────────────────────────────────
+async function ouvrirModalJa(idClub) {
+    spin(true);
+    const res = await apiGet({ action: 'ja_club', club: idClub });
+    spin(false);
+    if (!res.ok) { toast(res.msg, 'err'); return; }
+
+    document.getElementById('ja-sujet').textContent = 'JA du club — ' + res.club.Nom;
+    document.getElementById('th-ja-arbitrage').style.display = res.arbitrageClub ? '' : 'none';
+
+    const tbody = document.getElementById('tbody-ja');
+    tbody.innerHTML = '';
+    if (!res.jas.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Aucun JA rattaché à ce club.</td></tr>';
+    } else {
+        res.jas.forEach(j => {
+            const tr = document.createElement('tr');
+            const colArbitrage = res.arbitrageClub
+                ? `<td><a href="../JA/info_rencontre.php?ja=${escHtml(j.Token)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">
+                       <i class="bi bi-calendar2-check me-1"></i>Choisir les dates
+                   </a></td>`
+                : '';
+            tr.innerHTML = `
+                <td>${escHtml(j.Nom)} ${escHtml(j.Prenom || '')}</td>
+                <td>${j.Grade ? `<span class="badge badge-grade">${escHtml(j.Grade)}</span>` : '<span class="text-muted">—</span>'}</td>
+                <td>${escHtml(j.Id_JA)}</td>
+                ${colArbitrage}`;
+            tbody.appendChild(tr);
+        });
+    }
+
+    document.getElementById('modal-ja').classList.add('visible');
+}
+document.getElementById('btn-ja-fermer').addEventListener('click', () => {
+    document.getElementById('modal-ja').classList.remove('visible');
+});
+document.getElementById('modal-ja').addEventListener('click', ev => {
+    if (ev.target.id === 'modal-ja') ev.currentTarget.classList.remove('visible');
 });
 
 // ── Filtres ──────────────────────────────────────────────────────────────────

@@ -244,8 +244,9 @@ if ($action !== '') {
                 $idClub  = ($l['id_club'] ?? '') !== '' ? trim($l['id_club']) : null;
                 $idLap   = $l['id_laposte'] !== '' && $l['id_laposte'] !== null ? (int)$l['id_laposte'] : null;
                 $cpteEbp = $l['num_compte_ebp'] !== '' && $l['num_compte_ebp'] !== null ? trim($l['num_compte_ebp']) : null;
-                $cp      = ($l['cp']    ?? '') !== '' ? trim($l['cp'])    : null;
-                $ville   = ($l['ville'] ?? '') !== '' ? trim($l['ville']) : null;
+                // Cp/Ville sont NOT NULL en base : chaîne vide plutôt que null si inconnu
+                $cp      = trim((string)($l['cp']    ?? ''));
+                $ville   = trim((string)($l['ville'] ?? ''));
 
                 if ($nom === '') continue;
 
@@ -536,7 +537,7 @@ if ($action !== '') {
                         'UPDATE ja SET GradeFFTT=?, Actif=?, DateEnrichissementFFTT=NOW(),
                          Cp = COALESCE(Cp, ?), Ville = COALESCE(Ville, ?), Id_LaPoste = COALESCE(Id_LaPoste, ?)
                          WHERE Id_JA=?'
-                    )->execute([$grade, $actif, $cpFinal ?: null, $villeFinal ?: null, $idLaPoste, $licence]);
+                    )->execute([$grade, $actif, $cpFinal, $villeFinal, $idLaPoste, $licence]);
                     $maj++;
                 } else {
                     $pdo->prepare(

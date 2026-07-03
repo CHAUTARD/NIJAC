@@ -22,7 +22,9 @@ require __DIR__ . '/../includes/auth_required.php';
 require __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/csrf.php';
 require_once __DIR__ . '/../config/app_config.php';
-$pdo = getPDO();
+require_once __DIR__ . '/../Classes/Obfuscator.php';
+$pdo  = getPDO();
+$_obf = new Obfuscator(OBFUSCATOR_SEED);
 
 // ── Départements visibles pour l'utilisateur connecté ────────────────────────
 $deptsAutorises = getDepartementsAutorises($_SESSION['utilisateur']['id_departement'] ?? null);
@@ -378,6 +380,7 @@ if ($action !== '') {
 
         $envoyes = 0; $erreurs = []; $liens = [];
         foreach ($nominations as $nom) {
+            $token = $_obf->obfuscate((int)$nom['Id_JA']);
             $lien  = "$base/Nominateur/convocation_ja.php?nomination={$nom['Id_Nomination']}";
             $liens[] = [
                 'nom'     => "{$nom['Prenom']} {$nom['Nom']}",
