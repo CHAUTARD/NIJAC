@@ -1,0 +1,49 @@
+<?php
+
+namespace App\Filters;
+
+use CodeIgniter\Filters\FilterInterface;
+use CodeIgniter\HTTP\RequestInterface;
+use CodeIgniter\HTTP\ResponseInterface;
+
+/**
+ * Réplique includes/auth_required.php de l'app legacy NIJAC : accès réservé
+ * aux sessions authentifiées (Administrateur OU Nominateur), contrairement à
+ * AdminAuth.php qui exige en plus is_admin. Un rôle JA est redirigé vers son
+ * unique écran autorisé (E030 — InfoRencontreController).
+ *
+ * Session native — voir AdminAuth.php pour le détail de cette contrainte.
+ */
+class Auth implements FilterInterface
+{
+    public function before(RequestInterface $request, $arguments = null)
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        $utilisateur = $_SESSION['utilisateur'] ?? null;
+
+        if (!$utilisateur) {
+            return redirect()->to('http://nijac/ci4/public/login');
+        }
+
+        if (($utilisateur['role'] ?? '') === 'JA') {
+            return redirect()->to(site_url('info-rencontre'));
+        }
+
+        // Garantit un token CSRF persisté avant fermeture de session — voir
+        // AdminAuth.php pour l'explication complète de ce correctif.
+        require_once __DIR__ . '/../../../config/csrf.php';
+        csrfToken();
+
+        session_write_close();
+
+        return null;
+    }
+
+    public function after(RequestInterface $request, ResponseInterface $response, $arguments = null)
+    {
+        // no-op
+    }
+}

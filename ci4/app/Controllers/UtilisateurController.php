@@ -1,0 +1,157 @@
+<?php
+
+namespace App\Controllers;
+
+use App\Models\UtilisateurModel;
+use CodeIgniter\HTTP\ResponseInterface;
+
+/**
+ * NIJAC – Gestion des utilisateurs (E009), portage CI4 de utilisateur.php.
+ */
+class UtilisateurController extends BaseController
+{
+    protected UtilisateurModel $utilisateurModel;
+
+    public function __construct()
+    {
+        require_once __DIR__ . '/../../../config/csrf.php';
+        require_once __DIR__ . '/../../../config/app_config.php';
+        require_once __DIR__ . '/../../../Classes/SecurePasswordHasher.php';
+        $this->utilisateurModel = new UtilisateurModel();
+    }
+
+    public function index()
+    {
+        $moi = $_SESSION['utilisateur'] ?? [];
+
+        $data = [
+            'nomComplet'  => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
+            'departement' => $moi['id_departement'] ?? '',
+            'changeLogin' => !empty($moi['change_login']),
+            'csrfToken'   => csrfToken(),
+            'moiId'       => (int) ($moi['id'] ?? 0),
+            'deptActifs'  => getDeptActifs(),
+        ];
+
+        return view('utilisateur_index', $data);
+    }
+
+    public function data(): ResponseInterface
+    {
+        $rows = $this->utilisateurModel
+            ->select('Id_Utilisateur, Login, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin')
+            ->orderBy('Nom', 'ASC')
+            ->orderBy('Prenom', 'ASC')
+            ->findAll();
+
+        return $this->response->setJSON(['ok' => true, 'data' => $rows]);
+    }
+
+    public function show($id = null): ResponseInterface
+    {
+        $id  = (int) $id;
+        $row = $this->utilisateurModel
+            ->select('Id_Utilisateur, Login, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin')
+            ->find($id);
+
+        return $this->response->setJSON(
+            $row ? ['ok' => true, 'data' => $row] : ['ok' => false, 'msg' => 'Introuvable']
+        );
+    }
+
+    public function store(): ResponseInterface
+    {
+        csrfVerify(true);
+
+        $fields = $this->extractFields($this->request->getPost(), true);
+
+        if (is_string($fields)) {
+            return $this->response->setJSON(['ok' => false, 'msg' => $fields]);
+        }
+
+        $this->utilisateurModel->insert($fields);
+        $id = (int) $this->utilisateurModel->getInsertID();
+
+        return $this->response->setJSON(['ok' => true, 'msg' => 'Utilisateur créé.', 'id' => $id]);
+    }
+
+    public function update($id = null): ResponseInterface
+    {
+        csrfVerify(true);
+
+        $id     = (int) $id;
+        $fields = $this->extractFields($this->request->getRawInput(), false);
+
+        if (is_string($fields)) {
+            return $this->response->setJSON(['ok' => false, 'msg' => $fields]);
+        }
+
+        $this->utilisateurModel->update($id, $fields);
+
+        return $this->response->setJSON(['ok' => true, 'msg' => 'Utilisateur mis à jour.', 'id' => $id]);
+    }
+
+    public function delete($id = null): ResponseInterface
+    {
+        csrfVerify(true);
+
+        $id  = (int) $id;
+        $moi = $_SESSION['utilisateur'] ?? [];
+
+        if ($id === (int) ($moi['id'] ?? 0)) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Vous ne pouvez pas supprimer votre propre compte.']);
+        }
+
+        $db = \Config\Database::connect();
+        $db->table('Messagerie')->where('Id_Utilisateur', $id)->delete();
+
+        $this->utilisateurModel->delete($id);
+
+        return $this->response->setJSON(['ok' => true, 'msg' => 'Utilisateur supprimé.']);
+    }
+
+    /**
+     * Extrait et valide les champs du formulaire. Retourne un message d'erreur
+     * (string) en cas de validation échouée, sinon le tableau de champs prêt
+     * pour insert()/update() — même règles que utilisateur.php legacy.
+     * Password absent du tableau si le mot de passe soumis est vide (modification
+     * sans changement de mot de passe).
+     */
+    private function extractFields(array $input, bool $isNew)
+    {
+        $login    = trim($input['login'] ?? '');
+        $nom      = trim($input['nom'] ?? '');
+        $prenom   = trim($input['prenom'] ?? '');
+        $role     = trim($input['role'] ?? '');
+        $dept     = (int) ($input['dept'] ?? 0);
+        $mdp      = $input['mdp'] ?? '';
+        $actif    = ($input['actif'] ?? '0') === '1' ? 1 : 0;
+        $chgLogin = ($input['change_login'] ?? '0') === '1' ? 1 : 0;
+
+        if ($login === '') {
+            return 'Le login ne peut pas être vide.';
+        }
+        if ($isNew && $mdp === '') {
+            return 'Un mot de passe est obligatoire pour un nouvel utilisateur.';
+        }
+        if (!in_array($role, ['Administrateur', 'Nominateur', 'Consultation'], true)) {
+            return 'Rôle invalide.';
+        }
+
+        $fields = [
+            'Login'          => $login,
+            'Nom'            => $nom,
+            'Prenom'         => $prenom,
+            'Role'           => $role,
+            'Id_Departement' => $dept,
+            'Actif'          => $actif,
+            'ChangeLogin'    => $chgLogin,
+        ];
+
+        if ($mdp !== '') {
+            $fields['Password'] = \SecurePasswordHasher::hash($mdp);
+        }
+
+        return $fields;
+    }
+}

@@ -1,0 +1,273 @@
+<?php
+
+use CodeIgniter\Router\RouteCollection;
+
+/** @var RouteCollection $routes */
+$routes->get('/', 'Home::index');
+
+// ── E001 Connexion ──────────────────────────────────────────────────────────
+$routes->get('login', 'AuthController::index');
+$routes->post('login', 'AuthController::index');
+
+// ── E002 Menu administrateur ─────────────────────────────────────────────────
+$routes->get('admin-menu', 'AdminMenuController::index', ['filter' => 'adminauth']);
+
+// ── E020 Menu nominateur ─────────────────────────────────────────────────────
+$routes->get('nominateur-menu', 'NominateurMenuController::index', ['filter' => 'auth']);
+
+// ── E012 Régions (pilote migration CI4) ────────────────────────────────────
+$routes->get('region', 'RegionController::index', ['filter' => 'adminauth']);
+$routes->get('region/data', 'RegionController::data', ['filter' => 'adminauth']);
+$routes->get('region/data/(:segment)', 'RegionController::show/$1', ['filter' => 'adminauth']);
+$routes->post('region', 'RegionController::store', ['filter' => 'adminauth']);
+$routes->put('region/(:segment)', 'RegionController::update/$1', ['filter' => 'adminauth']);
+$routes->delete('region/(:segment)', 'RegionController::delete/$1', ['filter' => 'adminauth']);
+
+// ── E013 Départements ────────────────────────────────────────────────────────
+$routes->get('departement', 'DepartementController::index', ['filter' => 'adminauth']);
+$routes->get('departement/data', 'DepartementController::data', ['filter' => 'adminauth']);
+$routes->get('departement/data/(:segment)', 'DepartementController::show/$1', ['filter' => 'adminauth']);
+$routes->get('departement/regions', 'DepartementController::regions', ['filter' => 'adminauth']);
+$routes->post('departement', 'DepartementController::store', ['filter' => 'adminauth']);
+$routes->put('departement/(:segment)', 'DepartementController::update/$1', ['filter' => 'adminauth']);
+$routes->delete('departement/(:segment)', 'DepartementController::delete/$1', ['filter' => 'adminauth']);
+
+// ── E009 Utilisateurs ────────────────────────────────────────────────────────
+$routes->get('utilisateur', 'UtilisateurController::index', ['filter' => 'adminauth']);
+$routes->get('utilisateur/data', 'UtilisateurController::data', ['filter' => 'adminauth']);
+$routes->get('utilisateur/data/(:segment)', 'UtilisateurController::show/$1', ['filter' => 'adminauth']);
+$routes->post('utilisateur', 'UtilisateurController::store', ['filter' => 'adminauth']);
+$routes->put('utilisateur/(:segment)', 'UtilisateurController::update/$1', ['filter' => 'adminauth']);
+$routes->delete('utilisateur/(:segment)', 'UtilisateurController::delete/$1', ['filter' => 'adminauth']);
+
+// ── E010 Divisions ───────────────────────────────────────────────────────────
+$routes->get('division', 'DivisionController::index', ['filter' => 'adminauth']);
+$routes->get('division/data', 'DivisionController::data', ['filter' => 'adminauth']);
+$routes->get('division/data/(:segment)', 'DivisionController::show/$1', ['filter' => 'adminauth']);
+$routes->post('division', 'DivisionController::store', ['filter' => 'adminauth']);
+$routes->put('division/(:segment)', 'DivisionController::update/$1', ['filter' => 'adminauth']);
+$routes->delete('division/(:segment)', 'DivisionController::delete/$1', ['filter' => 'adminauth']);
+
+// ── E005 Salles ───────────────────────────────────────────────────────────────
+// Filtre "auth" (pas "adminauth") : accessible aux Nominateurs en lecture,
+// import/enregistrement/suppression/FFTT restreints à l'admin dans le contrôleur.
+$routes->get('salle', 'SalleController::index', ['filter' => 'auth']);
+$routes->get('salle/data', 'SalleController::data', ['filter' => 'auth']);
+$routes->get('salle/clubs', 'SalleController::clubs', ['filter' => 'auth']);
+$routes->post('salle/import-excel', 'SalleController::importExcel', ['filter' => 'auth']);
+$routes->post('salle/save', 'SalleController::save', ['filter' => 'auth']);
+$routes->delete('salle/(:segment)', 'SalleController::delete/$1', ['filter' => 'auth']);
+$routes->post('salle/fftt/clubs', 'SalleController::ffttClubs', ['filter' => 'auth']);
+$routes->post('salle/fftt/sync', 'SalleController::ffttSync', ['filter' => 'auth']);
+
+// ── E006 Communes / La Poste ─────────────────────────────────────────────────
+$routes->get('commune', 'CommuneController::index', ['filter' => 'adminauth']);
+$routes->get('commune/data', 'CommuneController::data', ['filter' => 'adminauth']);
+$routes->get('commune/export', 'CommuneController::exportCsv', ['filter' => 'adminauth']);
+$routes->post('commune', 'CommuneController::store', ['filter' => 'adminauth']);
+$routes->post('commune/import', 'CommuneController::importCsv', ['filter' => 'adminauth']);
+$routes->put('commune/(:segment)', 'CommuneController::updateCoords/$1', ['filter' => 'adminauth']);
+
+// ── E026 Messagerie ──────────────────────────────────────────────────────────
+// Filtre "auth" (pas "adminauth") : accessible aux Nominateurs (leurs messages
+// + les systèmes), modification/suppression des messages système restreinte à
+// l'admin dans le contrôleur, comme le fait messagerie.php.
+$routes->get('messagerie', 'MessagerieController::index', ['filter' => 'auth']);
+$routes->get('messagerie/data', 'MessagerieController::data', ['filter' => 'auth']);
+$routes->get('messagerie/data/(:segment)', 'MessagerieController::show/$1', ['filter' => 'auth']);
+$routes->post('messagerie', 'MessagerieController::store', ['filter' => 'auth']);
+$routes->put('messagerie/(:segment)', 'MessagerieController::update/$1', ['filter' => 'auth']);
+$routes->post('messagerie/(:segment)/dupliquer', 'MessagerieController::duplicate/$1', ['filter' => 'auth']);
+$routes->delete('messagerie/(:segment)', 'MessagerieController::delete/$1', ['filter' => 'auth']);
+
+// ── E024 Centre d'envoi ──────────────────────────────────────────────────────
+$routes->get('centrenvoye', 'CentrenvoyeController::index', ['filter' => 'auth']);
+$routes->get('centrenvoye/journees', 'CentrenvoyeController::journees', ['filter' => 'auth']);
+$routes->get('centrenvoye/ja', 'CentrenvoyeController::ja', ['filter' => 'auth']);
+$routes->post('centrenvoye/apercu', 'CentrenvoyeController::apercu', ['filter' => 'auth']);
+$routes->post('centrenvoye/envoyer', 'CentrenvoyeController::envoyer', ['filter' => 'auth']);
+$routes->post('centrenvoye/envoyer-un', 'CentrenvoyeController::envoyerUn', ['filter' => 'auth']);
+
+// ── E016 Nettoyage / Restauration de phase ──────────────────────────────────
+// Outil admin destructeur — toute action hors listage de fichiers exige en
+// plus une revérification du mot de passe admin (voir CleanController).
+$routes->get('clean', 'CleanController::index', ['filter' => 'adminauth']);
+$routes->get('clean/sauvegardes', 'CleanController::sauvegardes', ['filter' => 'adminauth']);
+$routes->get('clean/sauvegardes-total', 'CleanController::sauvegardesTotal', ['filter' => 'adminauth']);
+$routes->post('clean/verifier-mdp', 'CleanController::verifierMdp', ['filter' => 'adminauth']);
+$routes->post('clean/tables', 'CleanController::tables', ['filter' => 'adminauth']);
+$routes->post('clean/supprimer-anciennes', 'CleanController::supprimerAnciennes', ['filter' => 'adminauth']);
+$routes->post('clean/executer', 'CleanController::executer', ['filter' => 'adminauth']);
+$routes->post('clean/sauvegarde-totale', 'CleanController::sauvegardeTotale', ['filter' => 'adminauth']);
+$routes->post('clean/restaurer', 'CleanController::restaurer', ['filter' => 'adminauth']);
+$routes->post('clean/restaurer-total', 'CleanController::restaurerTotal', ['filter' => 'adminauth']);
+$routes->post('clean/restaurer-table', 'CleanController::restaurerTableFull', ['filter' => 'adminauth']);
+
+// ── E007 Juges-Arbitres ──────────────────────────────────────────────────────
+// Filtre "auth" (pas "adminauth") : accessible aux Nominateurs (grille +
+// import EBP), import Excel/API FFTT et maj Id_LaPoste ponctuelle restreints
+// à l'admin dans le contrôleur, comme le fait jugearbitre.php.
+$routes->get('jugearbitre', 'JugearbitreController::index', ['filter' => 'auth']);
+$routes->get('jugearbitre/liste', 'JugearbitreController::liste', ['filter' => 'auth']);
+$routes->get('jugearbitre/clubs', 'JugearbitreController::clubsParDept', ['filter' => 'auth']);
+$routes->post('jugearbitre/laposte', 'JugearbitreController::majLaposte', ['filter' => 'auth']);
+$routes->post('jugearbitre/maj-bdd', 'JugearbitreController::majBdd', ['filter' => 'auth']);
+$routes->post('jugearbitre/fftt/clubs-dept', 'JugearbitreController::getClubsDept', ['filter' => 'auth']);
+$routes->post('jugearbitre/fftt/import-club', 'JugearbitreController::importFfttClub', ['filter' => 'auth']);
+$routes->post('jugearbitre/fftt/scan-club', 'JugearbitreController::scanFfttClub', ['filter' => 'auth']);
+$routes->post('jugearbitre/fftt/import-selected', 'JugearbitreController::importFfttSelected', ['filter' => 'auth']);
+$routes->post('jugearbitre/import-csv-ebp', 'JugearbitreController::importCsvEbp', ['filter' => 'auth']);
+$routes->post('jugearbitre/fftt/enrichir', 'JugearbitreController::enrichirFftt', ['filter' => 'auth']);
+$routes->post('jugearbitre/import-excel', 'JugearbitreController::importerExcel', ['filter' => 'auth']);
+
+// ── E011 Import Rencontres FFTT ──────────────────────────────────────────────
+// Admin uniquement (comme includes/admin_required.php côté legacy — la
+// SPECIFICATION.md mentionne à tort "Administrateur et Nominateur").
+$routes->get('import-rencontres', 'ImportRencontresController::index', ['filter' => 'adminauth']);
+$routes->post('import-rencontres/chercher-ligue', 'ImportRencontresController::chercherLigue', ['filter' => 'adminauth']);
+$routes->post('import-rencontres/charger-epreuves', 'ImportRencontresController::chargerEpreuves', ['filter' => 'adminauth']);
+$routes->post('import-rencontres/debug-result-equ', 'ImportRencontresController::debugResultEqu', ['filter' => 'adminauth']);
+$routes->post('import-rencontres/charger-divisions', 'ImportRencontresController::chargerDivisions', ['filter' => 'adminauth']);
+$routes->post('import-rencontres/importer-division', 'ImportRencontresController::importerDivision', ['filter' => 'adminauth']);
+$routes->get('import-rencontres/liste-rencontres', 'ImportRencontresController::listeRencontres', ['filter' => 'adminauth']);
+$routes->get('import-rencontres/compter-tables', 'ImportRencontresController::compterTables', ['filter' => 'adminauth']);
+
+// ── E008 Clubs / Associations ────────────────────────────────────────────────
+$routes->get('club', 'ClubController::index', ['filter' => 'adminauth']);
+$routes->get('club/liste', 'ClubController::liste', ['filter' => 'adminauth']);
+$routes->post('club/maj-bdd', 'ClubController::majBdd', ['filter' => 'adminauth']);
+$routes->post('club/fftt/clubs-dept', 'ClubController::getClubsDeptFftt', ['filter' => 'adminauth']);
+$routes->post('club/fftt/sync', 'ClubController::syncFfttClub', ['filter' => 'adminauth']);
+
+// ── E017 Import Rencontres Nationales ────────────────────────────────────────
+// Admin uniquement (comme includes/admin_required.php côté legacy — la
+// SPECIFICATION.md décrit à tort un import de fichier Excel multi-feuilles).
+$routes->get('import-rencontres-nat', 'ImportRencontresNatController::index', ['filter' => 'adminauth']);
+$routes->post('import-rencontres-nat/reset-cache', 'ImportRencontresNatController::resetNatCache', ['filter' => 'adminauth']);
+$routes->get('import-rencontres-nat/clubs-region', 'ImportRencontresNatController::listerClubsRegion', ['filter' => 'adminauth']);
+$routes->get('import-rencontres-nat/debug-club', 'ImportRencontresNatController::debugClub', ['filter' => 'adminauth']);
+$routes->post('import-rencontres-nat/scanner-club', 'ImportRencontresNatController::scannerClub', ['filter' => 'adminauth']);
+$routes->post('import-rencontres-nat/charger-depuis-api', 'ImportRencontresNatController::chargerDepuisApi', ['filter' => 'adminauth']);
+$routes->get('import-rencontres-nat/equipes', 'ImportRencontresNatController::listeEquipes', ['filter' => 'adminauth']);
+$routes->get('import-rencontres-nat/recherche-club', 'ImportRencontresNatController::rechercheClub', ['filter' => 'adminauth']);
+$routes->post('import-rencontres-nat/sauvegarder-assoc', 'ImportRencontresNatController::sauvegarderAssoc', ['filter' => 'adminauth']);
+$routes->post('import-rencontres-nat/hors-region', 'ImportRencontresNatController::assignerHorsRegion', ['filter' => 'adminauth']);
+$routes->post('import-rencontres-nat/importer', 'ImportRencontresNatController::importerRencontres', ['filter' => 'adminauth']);
+
+// ── E021 Disponibilités JA ───────────────────────────────────────────────────
+$routes->get('disponibilites', 'DisponibilitesController::index', ['filter' => 'auth']);
+$routes->get('disponibilites/ja-dept', 'DisponibilitesController::jaDept', ['filter' => 'auth']);
+
+// ── E022 Nomination des Juges-Arbitres ───────────────────────────────────────
+$routes->get('nomination', 'NominationController::index', ['filter' => 'auth']);
+$routes->get('nomination/journees', 'NominationController::journees', ['filter' => 'auth']);
+$routes->get('nomination/rencontres-journee', 'NominationController::rencontresJournee', ['filter' => 'auth']);
+$routes->get('nomination/candidats-journee', 'NominationController::candidatsJournee', ['filter' => 'auth']);
+$routes->post('nomination/affecter-ja', 'NominationController::affecterJa', ['filter' => 'auth']);
+$routes->post('nomination/retirer-ja', 'NominationController::retirerJa', ['filter' => 'auth']);
+$routes->post('nomination/valider', 'NominationController::validerNominations', ['filter' => 'auth']);
+$routes->post('nomination/envoyer-convocations', 'NominationController::envoyerConvocations', ['filter' => 'auth']);
+
+// ── E023 Désidératas club ────────────────────────────────────────────────────
+// Page PUBLIQUE (sans authentification), tokenisée par ?club=<Id_Club> — lien
+// envoyé par email depuis E027. Pas de filtre "auth"/"adminauth" ici, seul le
+// filtre global "canonicalhost" s'applique (voir Filters.php).
+$routes->get('desiderata-club', 'DesiderataClubController::index');
+$routes->get('desiderata-club/charger', 'DesiderataClubController::charger');
+$routes->post('desiderata-club/enregistrer', 'DesiderataClubController::enregistrer');
+
+// ── E027 Désidératas clubs ───────────────────────────────────────────────────
+$routes->get('desiderata-clubs', 'DesiderataClubsController::index', ['filter' => 'auth']);
+$routes->get('desiderata-clubs/liste', 'DesiderataClubsController::liste', ['filter' => 'auth']);
+$routes->get('desiderata-clubs/departements', 'DesiderataClubsController::departements', ['filter' => 'auth']);
+$routes->get('desiderata-clubs/detail', 'DesiderataClubsController::detail', ['filter' => 'auth']);
+$routes->get('desiderata-clubs/ja-club', 'DesiderataClubsController::jaClub', ['filter' => 'auth']);
+$routes->get('desiderata-clubs/apercu', 'DesiderataClubsController::apercu', ['filter' => 'auth']);
+$routes->post('desiderata-clubs/envoyer', 'DesiderataClubsController::envoyer', ['filter' => 'auth']);
+
+// ── E025 Comptabilité frais JA ───────────────────────────────────────────────
+$routes->get('compta', 'ComptaController::index', ['filter' => 'auth']);
+$routes->post('compta/donnees', 'ComptaController::donnees', ['filter' => 'auth']);
+$routes->post('compta/export-csv', 'ComptaController::exportCsv', ['filter' => 'auth']);
+
+// ── E028 Statistiques JA ─────────────────────────────────────────────────────
+$routes->get('stats-ja', 'StatsJaController::index', ['filter' => 'auth']);
+$routes->get('stats-ja/donnees', 'StatsJaController::donnees', ['filter' => 'auth']);
+$routes->get('stats-ja/export-csv', 'StatsJaController::exportCsv', ['filter' => 'auth']);
+
+// ── E029 Adresse domicile JA ─────────────────────────────────────────────────
+// Page PUBLIQUE (sans authentification), tokenisée par ?ja=TOKEN — lien envoyé
+// par email depuis E007/E024. Les actions "token" et "envoyer-demande-adresse"
+// exigent en revanche une session Nominateur/Admin (filtre "auth"), comme le
+// fait le legacy en ré-incluant auth_required.php uniquement pour elles.
+$routes->get('adresse-ja', 'AdresseJaController::index');
+$routes->get('adresse-ja/token', 'AdresseJaController::token', ['filter' => 'auth']);
+$routes->post('adresse-ja/token', 'AdresseJaController::token', ['filter' => 'auth']);
+$routes->post('adresse-ja/envoyer-demande-adresse', 'AdresseJaController::envoyerDemandeAdresse', ['filter' => 'auth']);
+$routes->post('adresse-ja/recherche-laposte', 'AdresseJaController::rechercheLaposte');
+$routes->post('adresse-ja/sauvegarder', 'AdresseJaController::sauvegarder');
+
+// ── E030 Fiche personnelle JA ────────────────────────────────────────────────
+// Accès réservé au rôle JA, ou au Nominateur/Admin via lien tokenisé ?ja=TOKEN.
+// Pas de filtre "auth"/"adminauth" (tous deux redirigent le rôle JA ailleurs) :
+// la vérification de session est faite manuellement dans le contrôleur.
+$routes->get('info-rencontre', 'InfoRencontreController::index');
+$routes->post('info-rencontre/se-designer', 'InfoRencontreController::seDesigner');
+$routes->post('info-rencontre/recherche-laposte', 'InfoRencontreController::rechercheLaposte');
+$routes->post('info-rencontre/sauvegarder-adresse', 'InfoRencontreController::sauvegarderAdresse');
+
+// ── E015 Configuration générale ──────────────────────────────────────────────
+$routes->get('configuration', 'ConfigurationController::index', ['filter' => 'adminauth']);
+$routes->post('configuration/lire', 'ConfigurationController::lire', ['filter' => 'adminauth']);
+$routes->post('configuration/enregistrer', 'ConfigurationController::enregistrer', ['filter' => 'adminauth']);
+$routes->post('configuration/smtp-test-prod', 'ConfigurationController::smtpTestProd', ['filter' => 'adminauth']);
+$routes->post('configuration/table-creer', 'ConfigurationController::tableCreer', ['filter' => 'adminauth']);
+$routes->post('configuration/table-modifier', 'ConfigurationController::tableModifier', ['filter' => 'adminauth']);
+$routes->post('configuration/table-supprimer', 'ConfigurationController::tableSupprimer', ['filter' => 'adminauth']);
+
+// ── E018 Test API FFTT ───────────────────────────────────────────────────────
+// Admin uniquement (filtre "adminauth"), + restriction supplémentaire
+// login === 'CHAUTARD' vérifiée manuellement dans le contrôleur (même règle
+// que E099).
+$routes->get('fftt-test', 'FfttTestController::index', ['filter' => 'adminauth']);
+$routes->post('fftt-test/ping', 'FfttTestController::ping', ['filter' => 'adminauth']);
+$routes->post('fftt-test/test-clubs-dep', 'FfttTestController::testClubsDep', ['filter' => 'adminauth']);
+$routes->post('fftt-test/test-licence', 'FfttTestController::testLicence', ['filter' => 'adminauth']);
+$routes->post('fftt-test/test-equipes', 'FfttTestController::testEquipes', ['filter' => 'adminauth']);
+$routes->post('fftt-test/test-club-detail', 'FfttTestController::testClubDetail', ['filter' => 'adminauth']);
+$routes->post('fftt-test/debug-club-salle', 'FfttTestController::debugClubSalle', ['filter' => 'adminauth']);
+$routes->post('fftt-test/test-licence-b', 'FfttTestController::testLicenceB', ['filter' => 'adminauth']);
+$routes->post('fftt-test/test-arbitres-dep', 'FfttTestController::testArbitresDep', ['filter' => 'adminauth']);
+$routes->post('fftt-test/test-spid-club', 'FfttTestController::testSpidClub', ['filter' => 'adminauth']);
+$routes->post('fftt-test/test-organisme', 'FfttTestController::testOrganisme', ['filter' => 'adminauth']);
+$routes->post('fftt-test/test-epreuve', 'FfttTestController::testEpreuve', ['filter' => 'adminauth']);
+$routes->post('fftt-test/test-division', 'FfttTestController::testDivision', ['filter' => 'adminauth']);
+$routes->post('fftt-test/test-poule', 'FfttTestController::testPoule', ['filter' => 'adminauth']);
+$routes->post('fftt-test/test-rencontre', 'FfttTestController::testRencontre', ['filter' => 'adminauth']);
+$routes->post('fftt-test/test-rencontre-poule', 'FfttTestController::testRencontrePoule', ['filter' => 'adminauth']);
+$routes->post('fftt-test/test-chp-renc', 'FfttTestController::testChpRenc', ['filter' => 'adminauth']);
+$routes->post('fftt-test/test-result-equ', 'FfttTestController::testResultEqu', ['filter' => 'adminauth']);
+$routes->post('fftt-test/test-equipe-nat', 'FfttTestController::testEquipeNat', ['filter' => 'adminauth']);
+$routes->post('fftt-test/scan-dept-nat', 'FfttTestController::scanDeptNat', ['filter' => 'adminauth']);
+
+// ── E099 Administration base de données ──────────────────────────────────────
+// Admin uniquement (filtre "adminauth"), + restriction supplémentaire
+// login === 'CHAUTARD' vérifiée manuellement dans le contrôleur (même règle
+// que E018). Outil "bris de glace" : accès SQL direct total pour ce seul compte.
+$routes->get('db-admin', 'DbAdminController::index', ['filter' => 'adminauth']);
+$routes->get('db-admin/tables', 'DbAdminController::tables', ['filter' => 'adminauth']);
+$routes->get('db-admin/describe', 'DbAdminController::describe', ['filter' => 'adminauth']);
+$routes->get('db-admin/browse', 'DbAdminController::browse', ['filter' => 'adminauth']);
+$routes->get('db-admin/get-row', 'DbAdminController::getRow', ['filter' => 'adminauth']);
+$routes->post('db-admin/insert', 'DbAdminController::insert', ['filter' => 'adminauth']);
+$routes->post('db-admin/update', 'DbAdminController::update', ['filter' => 'adminauth']);
+$routes->post('db-admin/delete', 'DbAdminController::delete', ['filter' => 'adminauth']);
+$routes->post('db-admin/sql', 'DbAdminController::sql', ['filter' => 'adminauth']);
+$routes->post('db-admin/add-column', 'DbAdminController::addColumn', ['filter' => 'adminauth']);
+$routes->post('db-admin/modify-column', 'DbAdminController::modifyColumn', ['filter' => 'adminauth']);
+$routes->post('db-admin/drop-column', 'DbAdminController::dropColumn', ['filter' => 'adminauth']);
+$routes->get('db-admin/export-csv', 'DbAdminController::exportCsv', ['filter' => 'adminauth']);
+$routes->post('db-admin/truncate', 'DbAdminController::truncate', ['filter' => 'adminauth']);
+$routes->post('db-admin/add-index', 'DbAdminController::addIndex', ['filter' => 'adminauth']);
+$routes->post('db-admin/drop-index', 'DbAdminController::dropIndex', ['filter' => 'adminauth']);
+$routes->post('db-admin/rename-column', 'DbAdminController::renameColumn', ['filter' => 'adminauth']);

@@ -1,0 +1,520 @@
+<?php
+
+namespace App\Controllers;
+
+use CodeIgniter\HTTP\ResponseInterface;
+
+/**
+ * NIJAC – Nomination des Juges-Arbitres (E022), portage CI4 de
+ * Nominateur/nomination.php.
+ *
+ * Accessible à tout utilisateur authentifié (filtre "auth"). Le classement/tri
+ * des candidats JA (score, distance, préférence) reste calculé côté client en
+ * JS, comme le fait le fichier legacy — le serveur ne fait que retourner les
+ * données brutes (coordonnées, disponibilités, nominations existantes).
+ *
+ * Pas de Model : jointures multiples nomination→disponible→ja, résolution de
+ * disponibilité avec matérialisation conditionnelle, affectation automatique
+ * en cascade (même salle) — trop éloigné du Query Builder simple. Réutilise
+ * getPDO() directement, comme le fichier legacy.
+ */
+class NominationController extends BaseController
+{
+    public function __construct()
+    {
+        require_once __DIR__ . '/../../../config/db.php';
+        require_once __DIR__ . '/../../../config/csrf.php';
+        require_once __DIR__ . '/../../../config/app_config.php';
+        require_once __DIR__ . '/../../../Classes/Obfuscator.php';
+    }
+
+    /**
+     * Exécute une action et convertit toute exception en réponse JSON
+     * ['ok' => false, 'err' => ...] — nomination.php enveloppe de la même
+     * façon la totalité de son dispatcher d'actions.
+     */
+    private function tryJson(\Closure $fn): ResponseInterface
+    {
+        try {
+            return $fn();
+        } catch (\Throwable $e) {
+            return $this->response->setJSON(['ok' => false, 'err' => $e->getMessage()]);
+        }
+    }
+
+    private function deptsAutorises(): array
+    {
+        return getDepartementsAutorises($_SESSION['utilisateur']['id_departement'] ?? null);
+    }
+
+    /**
+     * Résout l'Id_Disponible à utiliser pour nominer $idJa sur $idRenc (date $dateRenc).
+     * Règle : un JA doit être disponible pour être nominé.
+     *   1. Ligne disponible précise (Id_Rencontre = $idRenc, Reponse='O') → utilisée telle quelle.
+     *   2. Sinon, disponibilité "toute la journée" (Id_Rencontre NULL, Reponse='O', même date)
+     *      → une ligne précise est matérialisée pour cette rencontre.
+     *   3. Sinon → null (le JA n'est pas disponible, la nomination doit être refusée).
+     */
+    private function resoudreDisponible(\PDO $pdo, int $idJa, int $idRenc, string $dateRenc): ?int
+    {
+        $stmt = $pdo->prepare("SELECT Id_Disponible FROM disponible WHERE Id_JA = ? AND Id_Rencontre = ? AND Reponse = 'O'");
+        $stmt->execute([$idJa, $idRenc]);
+        $idDispo = $stmt->fetchColumn();
+        if ($idDispo) {
+            return (int) $idDispo;
+        }
+
+        $stmtJournee = $pdo->prepare('
+            SELECT DateReponse FROM disponible
+            WHERE Id_JA = ? AND Id_Rencontre IS NULL AND DateCompetition = ? AND Reponse = \'O\'
+            LIMIT 1
+        ');
+        $stmtJournee->execute([$idJa, $dateRenc]);
+        $dateReponse = $stmtJournee->fetchColumn();
+        if ($dateReponse === false) {
+            return null;
+        }
+
+        $pdo->prepare("
+            INSERT INTO disponible (Id_JA, Id_Rencontre, DateCompetition, Reponse, DateReponse)
+            VALUES (?, ?, ?, 'O', ?)
+        ")->execute([$idJa, $idRenc, $dateRenc, $dateReponse]);
+
+        return (int) $pdo->lastInsertId();
+    }
+
+    /**
+     * Affecte (crée ou remplace) la nomination d'une rencontre. Une rencontre n'a
+     * qu'un seul JA nominé (uq_nomination_rencontre) :
+     *   - Si aucune nomination n'existe encore → création.
+     *   - Si une nomination existe pour le même JA (même Id_Disponible) → simple
+     *     rafraîchissement (les frais déjà saisis sont conservés).
+     *   - Si une nomination existe pour un AUTRE JA → remplacement, et les frais/
+     *     rapports de l'ancien JA sont réinitialisés (ils ne concernent pas le nouveau).
+     */
+    private function affecterNomination(\PDO $pdo, int $idRenc, int $idDispo): void
+    {
+        $stmt = $pdo->prepare('SELECT Id_Nomination, Id_Disponible FROM nomination WHERE Id_Rencontre = ?');
+        $stmt->execute([$idRenc]);
+        $existant = $stmt->fetch();
+
+        if (!$existant) {
+            $pdo->prepare('
+                INSERT INTO nomination (Id_Rencontre, Id_Disponible, DateNomination, Valide, EmailEnvoye)
+                VALUES (?, ?, CURDATE(), 0, 0)
+            ')->execute([$idRenc, $idDispo]);
+
+            return;
+        }
+
+        if ((int) $existant['Id_Disponible'] === $idDispo) {
+            $pdo->prepare('
+                UPDATE nomination SET DateNomination = CURDATE(), Valide = 0, EmailEnvoye = 0
+                WHERE Id_Nomination = ?
+            ')->execute([$existant['Id_Nomination']]);
+
+            return;
+        }
+
+        $pdo->prepare('
+            UPDATE nomination SET
+                Id_Disponible = ?, DateNomination = CURDATE(), Valide = 0, EmailEnvoye = 0,
+                Peage = 0, Kilometre = 0, RapportAccueil = NULL, RapportEquipements = NULL, DateSaisie = NULL
+            WHERE Id_Nomination = ?
+        ')->execute([$idDispo, $existant['Id_Nomination']]);
+    }
+
+    public function index()
+    {
+        $u = $_SESSION['utilisateur'] ?? [];
+
+        $data = [
+            'nomComplet'  => trim(($u['nom'] ?? '') . ' ' . ($u['prenom'] ?? '')),
+            'departement' => $u['id_departement'] ?? '',
+            'changeLogin' => !empty($u['change_login']),
+            'isAdmin'     => !empty($u['is_admin']),
+            'csrfToken'   => csrfToken(),
+        ];
+
+        return view('nomination_index', $data);
+    }
+
+    public function journees(): ResponseInterface
+    {
+        return $this->tryJson(function () {
+            $deptsAutorises = $this->deptsAutorises();
+            if (!$deptsAutorises) {
+                return $this->response->setJSON(['ok' => true, 'data' => []]);
+            }
+
+            $pdo    = getPDO();
+            $deptPh = implode(',', array_fill(0, count($deptsAutorises), '?'));
+
+            $stmt = $pdo->prepare("
+                SELECT DISTINCT r.Journee, r.Date
+                FROM rencontre r
+                JOIN division dv ON dv.Id_Division = r.Id_Division
+                JOIN equipe eq ON eq.Id_Equipe = r.Id_EquipeDom
+                WHERE SUBSTRING(eq.Id_Club, 3, 2) IN ($deptPh)
+                  AND (dv.ArbitrageCRA = 1 OR eq.JAdemande = 1)
+                  AND r.Date >= CURDATE()
+                ORDER BY r.Journee, r.Date
+            ");
+            $stmt->execute($deptsAutorises);
+
+            return $this->response->setJSON(['ok' => true, 'data' => $stmt->fetchAll()]);
+        });
+    }
+
+    public function rencontresJournee(): ResponseInterface
+    {
+        return $this->tryJson(function () {
+            $journee = (int) ($this->request->getGet('journee') ?? 0);
+            $date    = trim($this->request->getGet('date') ?? '');
+            if (!$journee || !$date) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Paramètres manquants']);
+            }
+
+            $deptsAutorises = $this->deptsAutorises();
+            if (!$deptsAutorises) {
+                return $this->response->setJSON(['ok' => true, 'data' => []]);
+            }
+
+            $pdo    = getPDO();
+            $deptPh = implode(',', array_fill(0, count($deptsAutorises), '?'));
+
+            $stmt = $pdo->prepare("
+                SELECT
+                    r.Id_Rencontre,
+                    r.Journee,
+                    r.Date,
+                    r.Heure,
+                    r.Poule,
+                    dv.Division AS DivisionCode,
+                    dv.Nom      AS DivisionNom,
+                    dv.Color    AS DivisionColor,
+                    ed.Nom       AS NomDom,
+                    ed.Id_Club   AS IdClubDom,
+                    ee.Nom       AS NomExt,
+                    COALESCE(lp_r.CodePostal, lp_c.CodePostal) AS CpSalle,
+                    COALESCE(lp_r.Nom,        lp_c.Nom)        AS VilleSalle,
+                    COALESCE(s_r.Nom,         s_c.Nom)         AS NomSalle,
+                    COALESCE(lp_r.Latitude,  lp_c.Latitude)  AS VenueLat,
+                    COALESCE(lp_r.Longitude, lp_c.Longitude) AS VenueLon,
+                    d_n.Id_JA    AS IdJaAffecte,
+                    CONCAT(ja_n.Prenom, ' ', ja_n.Nom) AS NomJaAffecte,
+                    n.Valide,
+                    n.EmailEnvoye
+                FROM rencontre r
+                JOIN  division dv   ON dv.Id_Division  = r.Id_Division
+                JOIN  equipe   ed   ON ed.Id_Equipe    = r.Id_EquipeDom
+                LEFT JOIN equipe ee ON ee.Id_Equipe    = r.Id_EquipeExt
+                LEFT JOIN salle   s_r  ON s_r.Id_Salle   = r.id_Salle
+                LEFT JOIN laposte lp_r ON lp_r.Id_LaPoste = s_r.Id_Laposte
+                LEFT JOIN salle   s_c  ON s_c.Id_Club     = ed.Id_Club AND s_c.EstPrincipale = 1
+                LEFT JOIN laposte lp_c ON lp_c.Id_LaPoste = s_c.Id_Laposte
+                LEFT JOIN nomination n  ON n.Id_Rencontre  = r.Id_Rencontre
+                LEFT JOIN disponible d_n ON d_n.Id_Disponible = n.Id_Disponible
+                LEFT JOIN ja ja_n       ON ja_n.Id_JA       = d_n.Id_JA
+                WHERE r.Date = ?
+                  AND SUBSTRING(ed.Id_Club, 3, 2) IN ($deptPh)
+                  AND (dv.ArbitrageCRA = 1 OR ed.JAdemande = 1)
+                ORDER BY dv.Ord, r.Poule, r.Id_Rencontre
+            ");
+            $stmt->execute(array_merge([$date], $deptsAutorises));
+
+            return $this->response->setJSON(['ok' => true, 'data' => $stmt->fetchAll()]);
+        });
+    }
+
+    public function candidatsJournee(): ResponseInterface
+    {
+        return $this->tryJson(function () {
+            $date = trim($this->request->getGet('date') ?? '');
+            if (!$date) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Date manquante']);
+            }
+
+            $pdo     = getPDO();
+            $jaCols  = array_column($pdo->query('DESCRIBE ja')->fetchAll(), 'Field');
+            $hasNote = in_array('Note', $jaCols);
+            $noteExpr = $hasNote ? 'ja.Note' : 'NULL';
+
+            $stmt = $pdo->prepare("
+                SELECT
+                    ja.Id_JA,
+                    ja.Nom,
+                    ja.Prenom,
+                    ja.Grade,
+                    COALESCE(ja.Nationale, 0)        AS Nationale,
+                    ja.Id_Club,
+                    lp_ja.CodePostal                 AS Cp,
+                    lp_ja.Nom                        AS Ville,
+                    $noteExpr                        AS Note,
+                    lp_ja.Latitude                   AS JaLat,
+                    lp_ja.Longitude                  AS JaLon,
+                    CASE WHEN dj.Id_JA IS NOT NULL THEN 1 ELSE 0 END AS DispoJournee,
+                    (SELECT GROUP_CONCAT(dr2.Id_Rencontre ORDER BY dr2.Id_Rencontre)
+                     FROM disponible dr2
+                     WHERE dr2.Id_JA = ja.Id_JA
+                       AND dr2.DateCompetition = ?
+                       AND dr2.Id_Rencontre IS NOT NULL
+                       AND dr2.Reponse = 'O') AS DispoRencontres,
+                    COALESCE(nbnom.NbNominations, 0) AS NbNominations
+                FROM ja
+                LEFT JOIN laposte lp_ja ON lp_ja.Id_LaPoste = ja.Id_LaPoste
+                LEFT JOIN disponible dj
+                    ON  dj.Id_JA           = ja.Id_JA
+                    AND dj.DateCompetition = ?
+                    AND dj.Id_Rencontre    IS NULL
+                    AND dj.Reponse         = 'O'
+                LEFT JOIN disponible dr
+                    ON  dr.Id_JA           = ja.Id_JA
+                    AND dr.DateCompetition = ?
+                    AND dr.Id_Rencontre    IS NOT NULL
+                    AND dr.Reponse         = 'O'
+                LEFT JOIN (
+                    SELECT d2.Id_JA, COUNT(*) AS NbNominations
+                    FROM nomination n2
+                    JOIN disponible d2 ON d2.Id_Disponible = n2.Id_Disponible
+                    GROUP BY d2.Id_JA
+                ) nbnom ON nbnom.Id_JA = ja.Id_JA
+                WHERE ja.Actif = 1
+                  AND (dj.Id_JA IS NOT NULL OR dr.Id_JA IS NOT NULL)
+                GROUP BY ja.Id_JA
+                ORDER BY ja.Nom, ja.Prenom
+            ");
+            $stmt->execute([$date, $date, $date]);
+
+            return $this->response->setJSON(['ok' => true, 'data' => $stmt->fetchAll()]);
+        });
+    }
+
+    public function affecterJa(): ResponseInterface
+    {
+        csrfVerify(true);
+
+        return $this->tryJson(function () {
+            $pdo    = getPDO();
+            $idRenc = (int) ($this->request->getPost('id_rencontre') ?? 0);
+            $idJa   = (int) ($this->request->getPost('id_ja') ?? 0);
+            if (!$idRenc || !$idJa) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Paramètres manquants']);
+            }
+
+            // Vérification règle : pas déjà affecté ce jour-là
+            $dateRenc = $pdo->prepare('SELECT Date FROM rencontre WHERE Id_Rencontre = ?');
+            $dateRenc->execute([$idRenc]);
+            $ri = $dateRenc->fetch();
+            if (!$ri) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Rencontre introuvable']);
+            }
+
+            $checkDate = $pdo->prepare('
+                SELECT COUNT(*) FROM nomination n
+                JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                WHERE d.Id_JA = ? AND n.Id_Rencontre != ?
+                  AND n.Id_Rencontre IN (SELECT Id_Rencontre FROM rencontre WHERE Date = ?)
+            ');
+            $checkDate->execute([$idJa, $idRenc, $ri['Date']]);
+            if ($checkDate->fetchColumn() > 0) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Ce JA est déjà affecté ce jour-là']);
+            }
+
+            // Règle : pour être nominé, un JA doit être disponible
+            $idDispo = $this->resoudreDisponible($pdo, $idJa, $idRenc, $ri['Date']);
+            if (!$idDispo) {
+                return $this->response->setJSON(['ok' => false, 'err' => "Ce JA n'est pas disponible pour cette rencontre"]);
+            }
+
+            $this->affecterNomination($pdo, $idRenc, $idDispo);
+
+            // Récupérer le nom du JA pour affichage
+            $jaInfo = $pdo->prepare('SELECT Nom, Prenom, Grade, Id_Club FROM ja WHERE Id_JA = ?');
+            $jaInfo->execute([$idJa]);
+            $ja     = $jaInfo->fetch();
+            $jaClub = $ja['Id_Club'] ?? null;
+
+            // Affectation automatique aux autres rencontres dans la même salle le même jour
+            $autoAffectes = [];
+            $salleStmt    = $pdo->prepare('SELECT id_Salle FROM rencontre WHERE Id_Rencontre = ?');
+            $salleStmt->execute([$idRenc]);
+            $idSalle = $salleStmt->fetchColumn();
+
+            if ($idSalle) {
+                $autresStmt = $pdo->prepare('
+                    SELECT r.Id_Rencontre, ed.Id_Club AS IdClubDom, ee.Id_Club AS IdClubExt
+                    FROM rencontre r
+                    JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
+                    LEFT JOIN equipe ee ON ee.Id_Equipe = r.Id_EquipeExt
+                    LEFT JOIN nomination n ON n.Id_Rencontre = r.Id_Rencontre
+                    WHERE r.id_Salle = ?
+                      AND r.Date = ?
+                      AND r.Id_Rencontre != ?
+                      AND n.Id_Rencontre IS NULL
+                ');
+                $autresStmt->execute([$idSalle, $ri['Date'], $idRenc]);
+                foreach ($autresStmt->fetchAll() as $autre) {
+                    // Ne pas affecter si le club du JA joue dans cette rencontre
+                    if ($jaClub && ($jaClub == $autre['IdClubDom'] || $jaClub == $autre['IdClubExt'])) {
+                        continue;
+                    }
+                    // Le JA doit aussi être disponible pour cette deuxième rencontre
+                    $idDispoAutre = $this->resoudreDisponible($pdo, $idJa, (int) $autre['Id_Rencontre'], $ri['Date']);
+                    if (!$idDispoAutre) {
+                        continue;
+                    }
+                    $this->affecterNomination($pdo, (int) $autre['Id_Rencontre'], $idDispoAutre);
+                    $autoAffectes[] = $autre['Id_Rencontre'];
+                    break; // une seule deuxième rencontre automatique
+                }
+            }
+
+            return $this->response->setJSON(['ok' => true, 'ja' => $ja, 'autoAffectes' => $autoAffectes]);
+        });
+    }
+
+    public function retirerJa(): ResponseInterface
+    {
+        csrfVerify(true);
+
+        return $this->tryJson(function () {
+            $idRenc = (int) ($this->request->getPost('id_rencontre') ?? 0);
+            if (!$idRenc) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Rencontre manquante']);
+            }
+            getPDO()->prepare('DELETE FROM nomination WHERE Id_Rencontre = ?')->execute([$idRenc]);
+
+            return $this->response->setJSON(['ok' => true]);
+        });
+    }
+
+    public function validerNominations(): ResponseInterface
+    {
+        csrfVerify(true);
+
+        return $this->tryJson(function () {
+            $journee = (int) ($this->request->getPost('journee') ?? 0);
+            $date    = trim($this->request->getPost('date') ?? '');
+            if (!$journee || !$date) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Paramètres manquants']);
+            }
+            getPDO()->prepare('
+                UPDATE nomination n
+                JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
+                SET n.Valide = 1
+                WHERE r.Journee = ? AND r.Date = ?
+            ')->execute([$journee, $date]);
+
+            return $this->response->setJSON(['ok' => true]);
+        });
+    }
+
+    public function envoyerConvocations(): ResponseInterface
+    {
+        csrfVerify(true);
+
+        return $this->tryJson(function () {
+            $pdo     = getPDO();
+            $journee = (int) ($this->request->getPost('journee') ?? 0);
+            $date    = trim($this->request->getPost('date') ?? '');
+            if (!$journee || !$date) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Paramètres manquants']);
+            }
+
+            // Récupérer les nominations + email JA
+            $stmt = $pdo->prepare('
+                SELECT n.Id_Nomination, n.Id_Rencontre, ja.Id_JA, ja.Nom, ja.Prenom, ja.Email,
+                       ed.Nom AS NomDom, ee.Nom AS NomExt,
+                       r.Date, r.Heure, dv.Division
+                FROM nomination n
+                JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                JOIN rencontre r  ON r.Id_Rencontre  = n.Id_Rencontre
+                JOIN ja           ON ja.Id_JA         = d.Id_JA
+                JOIN equipe  ed   ON ed.Id_Equipe     = r.Id_EquipeDom
+                LEFT JOIN equipe ee ON ee.Id_Equipe   = r.Id_EquipeExt
+                JOIN division dv  ON dv.Id_Division   = r.Id_Division
+                WHERE r.Journee = ? AND r.Date = ?
+                  AND n.Valide = 1
+            ');
+            $stmt->execute([$journee, $date]);
+            $nominations = $stmt->fetchAll();
+
+            // Remplace le calcul basé sur PHP_SELF du fichier legacy (invalide
+            // sous la structure CI4) : le dossier legacy Nominateur/ n'a pas bougé.
+            $scheme = $this->request->getServer('HTTPS') ? 'https' : 'http';
+            $host   = $this->request->getServer('HTTP_HOST') ?? 'nijac';
+            $base   = "$scheme://$host";
+
+            $obf     = new \Obfuscator(OBFUSCATOR_SEED);
+            $envoyes = 0;
+            $erreurs = [];
+            $liens   = [];
+
+            foreach ($nominations as $nom) {
+                $token = $obf->obfuscate((int) $nom['Id_JA']);
+                $lien  = "$base/Nominateur/convocation_ja.php?nomination={$nom['Id_Nomination']}";
+                $liens[] = [
+                    'nom'       => "{$nom['Prenom']} {$nom['Nom']}",
+                    'email'     => $nom['Email'] ?? '',
+                    'rencontre' => "{$nom['NomDom']} vs {$nom['NomExt']}",
+                    'lien'      => $lien,
+                ];
+
+                if (!empty($nom['Email'])) {
+                    // Charger le template 'Convocation' depuis messagerie
+                    static $tplConv = null;
+                    if ($tplConv === null) {
+                        $r       = $pdo->query("SELECT Sujet, Message FROM messagerie WHERE Type='Convocation' ORDER BY Id_Messagerie LIMIT 1")->fetch();
+                        $tplConv = $r ?: ['Sujet' => 'Convocation — {DIVISION} — {DATE}', 'Message' => ''];
+                    }
+
+                    $markers = ['{NOM}', '{PRENOM}', '{NOM_COMPLET}', '{ID_JA}',
+                        '{DATE}', '{HEURE}', '{JOURNEE}', '{DIVISION}', '{DOM}', '{EXT}',
+                        '{LIEN_CONVOCATION}', '{LIEN_LIGUE}', '{YEAR_PHASE}'];
+                    $values = [$nom['Nom'], $nom['Prenom'], $nom['Prenom'] . ' ' . $nom['Nom'], $token,
+                        $nom['Date'] ? date('d/m/Y', strtotime($nom['Date'])) : '', $nom['Heure'] ?? '',
+                        $nom['Journee'] ?? '', $nom['Division'],
+                        $nom['NomDom'], $nom['NomExt'] ?? '',
+                        $lien, getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'), getAnneePhase()];
+
+                    $sujet = str_replace($markers, $values, $tplConv['Sujet']);
+                    $corps = str_replace($markers, $values, $tplConv['Message']);
+
+                    if ($corps === '') {
+                        $corps = "Bonjour {$nom['Prenom']},\r\n\r\nVous êtes nominé(e) pour la rencontre {$nom['NomDom']} vs {$nom['NomExt']} le {$nom['Date']}.\r\n\r\nConsultez votre convocation : $lien";
+                    }
+
+                    // Retirer les images base64 (antispam)
+                    if (str_contains($corps, 'data:image/')) {
+                        $corps = preg_replace('/src="data:image\/[^;]+;base64,[^"]*"/', 'src=""', $corps);
+                    }
+
+                    $modeDev = isModeDeveloppement();
+                    $dest    = getEmailDestinataire($nom['Email']);
+                    try {
+                        $mail = getNijacMailer();
+                        $mail->isHTML(strip_tags($corps) !== $corps);
+                        $mail->addAddress($dest, $nom['Prenom'] . ' ' . $nom['Nom']);
+                        $mail->Subject = ($modeDev && $dest !== $nom['Email'])
+                            ? "[DEV → {$nom['Email']}] $sujet" : $sujet;
+                        if ($mail->ContentType === 'text/html') {
+                            $mail->Body    = $corps;
+                            $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $corps));
+                        } else {
+                            $mail->Body = nl2br(htmlspecialchars($corps, ENT_NOQUOTES, 'UTF-8'));
+                        }
+                        $mail->send();
+                        $envoyes++;
+                        $pdo->prepare('UPDATE nomination SET EmailEnvoye = 1 WHERE Id_Rencontre = ?')
+                            ->execute([$nom['Id_Rencontre']]);
+                    } catch (\Exception $e) {
+                        $erreurs[] = $nom['Email'] . ' (' . $e->getMessage() . ')';
+                    }
+                }
+            }
+
+            return $this->response->setJSON(['ok' => true, 'envoyes' => $envoyes, 'erreurs' => $erreurs, 'liens' => $liens]);
+        });
+    }
+}

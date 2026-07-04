@@ -5,6 +5,11 @@
 vendor/
 composer.phar
 
+# CI4 (migration incrémentale, ci4/ a son propre vendor/writable isolés)
+ci4/vendor/
+ci4/writable/
+ci4/.env
+
 # Fichiers de déploiement
 .env.production
 
