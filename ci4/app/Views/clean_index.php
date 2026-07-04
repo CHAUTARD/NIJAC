@@ -6,8 +6,8 @@
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
     <title>NIJAC – Nettoyage / Restauration (E016)</title>
 
-    <link rel="stylesheet" href="/asset/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/asset/css/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
 
     <style>
         :root { --nijac-blue: #1a3a6b; }
@@ -598,14 +598,14 @@
     <span id="status-bar">Prêt.</span>
     <span class="footer-copyright">
         &copy; <?= date('Y') ?> &mdash; Tous droits réservés &mdash;
-        <img src="/img/logo_region.png" alt="" class="footer-logo" aria-hidden="true">
+        <img src="<?= base_url('img/logo_region.png') ?>" alt="" class="footer-logo" aria-hidden="true">
         Ligue Normandie de Tennis de Table &mdash; Version&nbsp;: <?= defined('APP_VERSION') ? APP_VERSION : '' ?>
     </span>
 </div>
 
-<script src="/asset/js/jquery-3.7.1.min.js"></script>
-<script src="/asset/js/nijac-csrf.js"></script>
-<script src="/asset/js/bootstrap.bundle.min.js"></script>
+<script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
+<script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
 <script>
 'use strict';
 
@@ -1118,6 +1118,6 @@ $(function () {
     chargerFichiersTableRestore();
 });
 </script>
-<script src="/asset/js/nijac-toast.js"></script>
+<script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
 </body>
 </html>

@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NIJAC – Menu paramètres (E002)</title>
 
-    <link rel="stylesheet" href="/asset/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/asset/css/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
 
     <style>
         :root {
@@ -200,49 +200,49 @@
 
         <a href="<?= site_url('club') ?>" class="menu-btn btn-club">
             <span class="btn-code">E008</span>
-            <div class="btn-icon"><img src="/img/Association.png" alt="Club / Association"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Association.png') ?>" alt="Club / Association"></div>
             <span>Club / Association</span>
             <span class="btn-desc">Gérer les clubs et associations affiliés</span>
         </a>
 
         <a href="<?= site_url('salle') ?>" class="menu-btn btn-salle">
             <span class="btn-code">E005</span>
-            <div class="btn-icon"><img src="/img/Salle.png" alt="Salle"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Salle.png') ?>" alt="Salle"></div>
             <span>Salle</span>
             <span class="btn-desc">Référencer les salles de compétition et leur adresse</span>
         </a>
 
         <a href="<?= site_url('utilisateur') ?>" class="menu-btn btn-utilisateur">
             <span class="btn-code">E009</span>
-            <div class="btn-icon"><img src="/img/Utilisateur.png" alt="Utilisateur"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Utilisateur.png') ?>" alt="Utilisateur"></div>
             <span>Utilisateur</span>
             <span class="btn-desc">Gérer les comptes et droits d'accès</span>
         </a>
 
         <a href="<?= site_url('commune') ?>" class="menu-btn btn-communes">
             <span class="btn-code">E006</span>
-            <div class="btn-icon"><img src="/img/La_Poste.png" alt="Communes"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/La_Poste.png') ?>" alt="Communes"></div>
             <span>Communes</span>
             <span class="btn-desc">Base des codes postaux et coordonnées GPS</span>
         </a>
 
         <a href="<?= site_url('division') ?>" class="menu-btn btn-division">
             <span class="btn-code">E010</span>
-            <div class="btn-icon"><img src="/img/podium.png" alt="Division"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/podium.png') ?>" alt="Division"></div>
             <span>Division</span>
             <span class="btn-desc">Définir les divisions et leur niveau</span>
         </a>
 
         <a href="<?= site_url('import-rencontres') ?>" class="menu-btn btn-club">
             <span class="btn-code">E011</span>
-            <div class="btn-icon"><img src="/img/Competition.png" alt="Import Rencontres"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Competition.png') ?>" alt="Import Rencontres"></div>
             <span>Import Rencontres</span>
             <span class="btn-desc">Importer les rencontres depuis un fichier FFTT</span>
         </a>
 
         <a href="<?= site_url('import-rencontres-nat') ?>" class="menu-btn btn-club">
             <span class="btn-code">E017</span>
-            <div class="btn-icon"><img src="/img/ImportExcel_32.png" alt="Import Nationales"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/ImportExcel_32.png') ?>" alt="Import Nationales"></div>
             <span>Import Rencontres Nationales</span>
             <span class="btn-desc">Importer les rencontres de divisions Nationales</span>
         </a>
@@ -263,14 +263,14 @@
 
         <a href="<?= site_url('clean') ?>" class="menu-btn btn-saison" style="grid-column: 1;">
             <span class="btn-code">E016</span>
-            <div class="btn-icon"><img src="/img/Nettoyage.png" alt="Saison"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Nettoyage.png') ?>" alt="Saison"></div>
             <span>Saison</span>
             <span class="btn-desc">Suppression des informations sur la saison dernière</span>
         </a>
 
         <a href="<?= site_url('configuration') ?>" class="menu-btn btn-configuration">
             <span class="btn-code">E015</span>
-            <div class="btn-icon"><img src="/img/Parametres.png" alt="Configuration"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Parametres.png') ?>" alt="Configuration"></div>
             <span>Configuration</span>
             <span class="btn-desc">Paramètres généraux de l'application</span>
         </a>
@@ -287,7 +287,7 @@
         <?php if ($isChautard): ?>
         <a href="<?= site_url('db-admin') ?>" class="menu-btn btn-dbadmin" target="_blank" style="background: repeating-linear-gradient(45deg, #fce4ec, #fce4ec 10px, #ffcdd2 10px, #ffcdd2 20px); border: 2px solid #c62828;">
             <span class="btn-code">E099</span>
-            <div class="btn-icon"><img src="/img/database.png" alt="Base de données"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/database.png') ?>" alt="Base de données"></div>
             <span>Base de données</span>
             <span class="btn-desc">Administration directe de la base de données</span>
         </a>
@@ -301,10 +301,10 @@
 
     </div>
 
-    <script src="/asset/js/jquery-3.7.1.min.js"></script>
-    <script src="/asset/js/nijac-csrf.js"></script>
-    <script src="/asset/js/bootstrap.bundle.min.js"></script>
-    <script src="/asset/js/nijac-toast.js"></script>
+    <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
+    <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
+    <script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
+    <script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
 
     <script>
     'use strict';

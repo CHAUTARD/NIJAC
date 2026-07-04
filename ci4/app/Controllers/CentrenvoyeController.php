@@ -351,9 +351,7 @@ class CentrenvoyeController extends BaseController
             }
         }
 
-        $token  = $this->obfuscator()->obfuscate((int) $ja['Id_JA']);
-        $scheme = $this->request->getServer('HTTPS') ? 'https' : 'http';
-        $host   = $this->request->getServer('HTTP_HOST') ?? 'nijac';
+        $token        = $this->obfuscator()->obfuscate((int) $ja['Id_JA']);
         $urlAdresseJa = site_url('adresse-ja') . '?ja=' . $token;
 
         $vars = $this->marqueurs($ja, $moi, $token, $listeNoms, $urlAdresseJa);
@@ -370,7 +368,7 @@ class CentrenvoyeController extends BaseController
         if (str_contains($corps, 'data:image/')) {
             $corps = preg_replace(
                 '/src=["\']data:image\/[^;]+;base64,[^"\']*["\']/s',
-                'src="' . $scheme . '://' . $host . '/img/FFTT_LIGUE.png"',
+                'src="' . base_url('img/FFTT_LIGUE.png') . '"',
                 $corps
             );
         }

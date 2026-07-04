@@ -172,8 +172,7 @@ $routes->post('nomination/envoyer-convocations', 'NominationController::envoyerC
 
 // ── E023 Désidératas club ────────────────────────────────────────────────────
 // Page PUBLIQUE (sans authentification), tokenisée par ?club=<Id_Club> — lien
-// envoyé par email depuis E027. Pas de filtre "auth"/"adminauth" ici, seul le
-// filtre global "canonicalhost" s'applique (voir Filters.php).
+// envoyé par email depuis E027. Pas de filtre "auth"/"adminauth" ici.
 $routes->get('desiderata-club', 'DesiderataClubController::index');
 $routes->get('desiderata-club/charger', 'DesiderataClubController::charger');
 $routes->post('desiderata-club/enregistrer', 'DesiderataClubController::enregistrer');

@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NIJAC – Nomination Informatisé des JA (E001)</title>
 
-    <link rel="stylesheet" href="/asset/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/asset/css/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
 
     <style>
         :root {
@@ -153,7 +153,7 @@
 
 <div id="bandeau-fftt">
     <a href="https://www.ligue-normandie-tt.fr/" target="_blank" rel="noopener noreferrer">
-        <img src="/img/FFTT_LIGUE.png" alt="FFTT – Ligue de Normandie">
+        <img src="<?= base_url('img/FFTT_LIGUE.png') ?>" alt="FFTT – Ligue de Normandie">
     </a>
 </div>
 
@@ -200,10 +200,10 @@
 
                 <div class="d-flex gap-2 mt-3">
                     <button type="submit" class="btn btn-login flex-fill" id="btn-login">
-                        <img src="/img/se-connecter.png" alt="" width="20" height="20" class="me-1">Se connecter
+                        <img src="<?= base_url('img/se-connecter.png') ?>" alt="" width="20" height="20" class="me-1">Se connecter
                     </button>
                     <button type="button" class="btn btn-outline-secondary flex-fill" id="btn-cancel">
-                        <img src="/img/Annuler_32.png" alt="" width="20" height="20" class="me-1">Annuler
+                        <img src="<?= base_url('img/Annuler_32.png') ?>" alt="" width="20" height="20" class="me-1">Annuler
                     </button>
                 </div>
 
@@ -215,8 +215,8 @@
         </div>
 
         <div class="img-panel">
-            <img src="/img/Arbitre_filet.png" alt="Arbitre">
-            <img src="/img/logo_region.png" alt="Ligue Normandie de Tennis de Table" class="logo-normandie">
+            <img src="<?= base_url('img/Arbitre_filet.png') ?>" alt="Arbitre">
+            <img src="<?= base_url('img/logo_region.png') ?>" alt="Ligue Normandie de Tennis de Table" class="logo-normandie">
         </div>
 
     </div>
@@ -227,9 +227,9 @@
 
 </div>
 
-<script src="/asset/js/jquery-3.7.1.min.js"></script>
-<script src="/asset/js/nijac-csrf.js"></script>
-<script src="/asset/js/bootstrap.bundle.min.js"></script>
+<script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
+<script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
 
 <script>
 'use strict';

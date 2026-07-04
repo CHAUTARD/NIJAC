@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="csrf-token" content="<?= csrf_hash() ?>">
 <title>Convocation JA (E031)<?= $ja ? ' – ' . esc($ja['Nom'] . ' ' . $ja['Prenom']) : '' ?></title>
-<link rel="stylesheet" href="/asset/css/bootstrap.min.css">
-<link rel="stylesheet" href="/asset/css/bootstrap-icons.min.css">
+<link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
+<link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
 <style>
     /*  Variables  */
     :root {
@@ -325,7 +325,7 @@
                 Tél : 01.53.94.50.00
             </td>
             <td style="width:100px;text-align:right;vertical-align:middle;">
-                <img src="/img/logo_FFTT.png" class="fftt-logo" alt="FFTT" onerror="this.style.display='none'">
+                <img src="<?= base_url('img/logo_FFTT.png') ?>" class="fftt-logo" alt="FFTT" onerror="this.style.display='none'">
             </td>
         </tr>
     </table>
@@ -497,8 +497,8 @@
 
 <?php endif; ?>
 
-<script src="/asset/js/jquery-3.7.1.min.js"></script>
-<script src="/asset/js/nijac-csrf.js"></script>
+<script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script>
 'use strict';
 const BASE    = '<?= site_url('convocation-ja') ?>';

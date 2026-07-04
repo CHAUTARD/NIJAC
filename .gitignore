@@ -12,6 +12,7 @@ ci4/.env
 
 # Fichiers de déploiement
 .env.production
+Serveur/
 
 # Logs
 logs/

@@ -4,17 +4,20 @@ php_value post_max_size 12M
 php_value max_execution_time 300
 php_value max_input_time 300
 
-# ── Front controller CI4 exposé à la racine du vhost "nijac" ─────────────────
-# Le docroot pointe sur ce dossier ; les fichiers/dossiers réels (asset/, img/,
-# SQL/, Importation/, logs/, ci4/ lui-même, etc.) sont servis tels quels, tout
-# le reste est transmis au front controller CodeIgniter 4 (ci4/public/index.php)
-# — même logique que ci4/public/.htaccess, appliquée un niveau au-dessus.
+# ── Front controller CI4 exposé à la racine de ce dossier ────────────────────
+# Ce dossier peut être le docroot du vhost (WAMP local, "nijac") ou un
+# sous-dossier du site (production, ".../nijac/") : pas de RewriteBase codée
+# en dur, Apache déduit la base du chemin physique du présent .htaccess, donc
+# les deux cas fonctionnent sans modification. Les fichiers/dossiers réels
+# (asset/, img/, SQL/, Importation/, logs/, ci4/ lui-même, etc.) sont servis
+# tels quels, tout le reste est transmis au front controller CodeIgniter 4
+# (ci4/public/index.php) — même logique que ci4/public/.htaccess, appliquée
+# un niveau au-dessus.
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteBase /
 
-    # Racine du vhost (le dossier lui-même existe -> ne pas la confondre avec
-    # un passthrough de fichier/dossier réel ci-dessous)
+    # Racine du dossier (lui-même existe -> ne pas la confondre avec un
+    # passthrough de fichier/dossier réel ci-dessous)
     RewriteRule ^$ ci4/public/index.php [L]
 
     RewriteCond %{REQUEST_FILENAME} -f [OR]

@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="csrf-token" content="<?= csrf_hash() ?>">
 <title>Adresse domicile JA (E029)<?= $ja ? ' – ' . esc($ja['Nom'] . ' ' . $ja['Prenom']) : '' ?></title>
-<link rel="stylesheet" href="/asset/css/bootstrap.min.css">
-<link rel="stylesheet" href="/asset/css/bootstrap-icons.min.css">
+<link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
+<link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
 <style>
     body { background: #f0f4f8; font-family: Arial, Helvetica, sans-serif; }
 
@@ -120,7 +120,7 @@
 
 <div id="bandeau-normandie">
     <a href="https://www.ligue-normandie-tt.fr/" target="_blank" rel="noopener noreferrer">
-        <img src="/img/FFTT_LIGUE.png" alt="FFTT – Ligue de Normandie">
+        <img src="<?= base_url('img/FFTT_LIGUE.png') ?>" alt="FFTT – Ligue de Normandie">
     </a>
 </div>
 
@@ -208,8 +208,8 @@
 <?php endif; ?>
 </div>
 
-<script src="/asset/js/jquery-3.7.1.min.js"></script>
-<script src="/asset/js/nijac-csrf.js"></script>
+<script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script>
 'use strict';
 const ID_JA = <?= (int) $idJa ?>;

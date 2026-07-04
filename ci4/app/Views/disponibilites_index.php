@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="csrf-token" content="<?= csrf_hash() ?>">
 <title>NIJAC – Disponibilités JA (E021)</title>
-<link rel="stylesheet" href="/asset/css/bootstrap.min.css">
-<link rel="stylesheet" href="/asset/css/bootstrap-icons.min.css">
+<link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
+<link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
 <style>
 :root { --nijac-blue:#1a3a6b; --col-dispo:#2e7d32; }
 
@@ -196,9 +196,9 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
     <div id="liste-ja" style="display:none"></div>
 </div>
 
-<script src="/asset/js/jquery-3.7.1.min.js"></script>
-<script src="/asset/js/nijac-csrf.js"></script>
-<script src="/asset/js/bootstrap.bundle.min.js"></script>
+<script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
+<script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
 <script>
 'use strict';
 

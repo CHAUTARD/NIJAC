@@ -16,15 +16,13 @@ Options -Indexes
 	# http://httpd.apache.org/docs/current/mod/mod_rewrite.html#rewritebase
 	# RewriteBase /
 
-	# Redirect Trailing Slashes...
-	RewriteCond %{REQUEST_FILENAME} !-d
-	RewriteCond %{REQUEST_URI} (.+)/$
-	RewriteRule ^ %1 [L,R=301]
-
-	# Rewrite "www.example.com -> example.com"
-	RewriteCond %{HTTPS} !=on
-	RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
-	RewriteRule ^ http://%1%{REQUEST_URI} [R=301,L]
+	# NB : pas de règle "Redirect Trailing Slashes" ici (boilerplate CI4 par
+	# défaut retirée) — en déploiement sous-dossier (.../nijac/), ce dossier
+	# est un vrai répertoire disque : Apache redirige déjà nativement
+	# "/nijac" -> "/nijac/" (mod_dir), et cette règle faisait l'inverse
+	# ("/nijac/" -> "/nijac/"), créant une boucle de redirection infinie
+	# entre les deux. Sans incidence en local (docroot du vhost, jamais
+	# cette ambiguïté de slash).
 
 	# Checks to see if the user is attempting to access a valid file,
 	# such as an image or css document, if this isn't true it sends the

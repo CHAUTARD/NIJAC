@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
     <title>NIJAC – Gestion des régions (E012)</title>
-    <link rel="stylesheet" href="/asset/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/asset/css/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <style>
         :root { --nijac-blue: #1a3a6b; }
         body {
@@ -173,8 +173,8 @@
     <span>CodeIgniter 4 — pilote E012</span>
 </div>
 
-<script src="/asset/js/jquery-3.7.1.min.js"></script>
-<script src="/asset/js/bootstrap.bundle.min.js"></script>
+<script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
+<script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
 <script>
 'use strict';
 const REGION_BASE = '<?= site_url('region') ?>';
@@ -274,8 +274,8 @@ $(function () {
     chargerListe();
 });
 </script>
-<script src="/asset/js/nijac-csrf.js"></script>
-<script src="/asset/js/nijac-toast.js"></script>
-<script src="/asset/js/nijac-sortable-table.js"></script>
+<script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-sortable-table.js') ?>"></script>
 </body>
 </html>

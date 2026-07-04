@@ -77,7 +77,11 @@ class Filters extends BaseFilters
      */
     public array $globals = [
         'before' => [
-            'canonicalhost', // Redirige vers le vhost "nijac" si l'app est atteinte via un autre host (localhost…)
+            // 'canonicalhost' désactivé : commodité de dev local uniquement (évite
+            // un décalage de cookie quand le même code est accessible par plusieurs
+            // vhosts WAMP) — a causé des boucles de redirection en production
+            // (dépend d'une correspondance exacte host reçu / baseURL configurée,
+            // fragile en environnement réel). Voir App\Filters\CanonicalHost.
             'csrf', // Protection CSRF native CI4 (mode cookie, voir Config\Security) — remplace config/csrf.php pour tous les écrans CI4 ; ne s'applique qu'aux POST/PUT/PATCH/DELETE, jamais aux GET.
             // 'honeypot',
             // 'invalidchars',

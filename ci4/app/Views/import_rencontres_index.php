@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
     <title>NIJAC – Import Rencontres FFTT (E011)</title>
-    <link rel="stylesheet" href="/asset/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/asset/css/bootstrap-icons.min.css">
-    <link rel="stylesheet" href="/asset/css/nijac.css">
+    <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
     <style>
         :root { --nijac-blue: #1a3a6b; }
         body { background: #f0f4fa; font-family: 'Segoe UI', system-ui, sans-serif; }
@@ -172,7 +172,7 @@
     <!-- ── Bouton + carte ligue (côte à côte) ── -->
     <div class="d-flex align-items-center gap-3 flex-wrap mb-1">
         <button id="btn-fftt" <?= $ffttOk ? '' : 'disabled' ?>>
-            <img src="/img/FFTT_LIGUE.png" alt="FFTT">
+            <img src="<?= base_url('img/FFTT_LIGUE.png') ?>" alt="FFTT">
             <span>
                 Importer depuis la FFTT
                 <br>
@@ -283,8 +283,8 @@
 
 </div><!-- #content -->
 
-<script src="/asset/js/jquery-3.7.1.min.js"></script>
-<script src="/asset/js/bootstrap.bundle.min.js"></script>
+<script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
+<script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
 <script>
 'use strict';
 
@@ -821,8 +821,8 @@ $('#btn-refresh-renc').on('click', chargerListeRencontres);
 // Chargement initial
 chargerListeRencontres();
 </script>
-<script src="/asset/js/nijac-csrf.js"></script>
-<script src="/asset/js/nijac-toast.js"></script>
-<script src="/asset/js/nijac-sortable-table.js"></script>
+<script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-sortable-table.js') ?>"></script>
 </body>
 </html>

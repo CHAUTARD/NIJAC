@@ -6,8 +6,8 @@
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
     <title>NIJAC – Menu Nominateur (E020)</title>
 
-    <link rel="stylesheet" href="/asset/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/asset/css/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
 
     <style>
         :root { --nijac-blue: #1a3a6b; }
@@ -333,7 +333,7 @@
     <div class="menu-btn-wrap">
         <a href="<?= site_url('jugearbitre') ?>" class="menu-btn btn-ja">
             <span class="btn-code">E007</span>
-            <div class="btn-icon"><img src="/img/Arbitre_filet.png" alt="Juge-Arbitre"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Arbitre_filet.png') ?>" alt="Juge-Arbitre"></div>
             <span>Juge-Arbitre</span>
             <span class="btn-desc">Gérer la liste des juges-arbitres, grades et coordonnées</span>
         </a>
@@ -342,7 +342,7 @@
     <div class="menu-btn-wrap">
         <a href="<?= site_url('disponibilites') ?>" class="menu-btn btn-correspondant">
             <span class="btn-code">E021</span>
-            <div class="btn-icon"><img src="/img/Dispo.png" alt="Disponibilités JA"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Dispo.png') ?>" alt="Disponibilités JA"></div>
             <span>Disponibilités JA</span>
             <span class="btn-desc">Saisir ou modifier les disponibilités d'un JA par département</span>
         </a>
@@ -351,7 +351,7 @@
     <div class="menu-btn-wrap">
         <a href="<?= site_url('desiderata-clubs') ?>" class="menu-btn btn-r34">
             <span class="btn-code">E027</span>
-            <div class="btn-icon"><img src="/img/R3_4.png" alt="Import Rencontres"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/R3_4.png') ?>" alt="Import Rencontres"></div>
             <span>Désidératas clubs</span>
             <span class="btn-desc">Envoi du questionnaire de désidératas (PN à R4) aux clubs</span>
         </a>
@@ -360,7 +360,7 @@
     <div class="menu-btn-wrap">
         <a href="<?= site_url('nomination') ?>" class="menu-btn btn-nomination">
             <span class="btn-code">E022</span>
-            <div class="btn-icon"><img src="/img/Nomination.png" alt="Nomination JA" style="max-width:220px;max-height:220px;width:220px;height:220px;"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Nomination.png') ?>" alt="Nomination JA" style="max-width:220px;max-height:220px;width:220px;height:220px;"></div>
             <span>Nomination JA</span>
             <span class="btn-desc">Affecter les JA aux rencontres et valider les nominations</span>
         </a>
@@ -374,7 +374,7 @@
     <div class="menu-btn-wrap">
         <a href="<?= site_url('messagerie') ?>" class="menu-btn btn-messagerie">
             <span class="btn-code">E026</span>
-            <div class="btn-icon"><img src="/img/Correspondant.png" alt="Messagerie"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Correspondant.png') ?>" alt="Messagerie"></div>
             <span>Messagerie</span>
             <span class="btn-desc">Préparer les messages pour JA et correspondants de club</span>
         </a>
@@ -383,7 +383,7 @@
     <div class="menu-btn-wrap">
         <a href="<?= site_url('centrenvoye') ?>" class="menu-btn btn-envoi">
             <span class="btn-code">E024</span>
-            <div class="btn-icon"><img src="/img/Centrenvoye.png" alt="Centre d'envoi"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Centrenvoye.png') ?>" alt="Centre d'envoi"></div>
             <span>Centre d'envoi</span>
             <span class="btn-desc">Envoyer les messages aux JA et correspondants</span>
         </a>
@@ -395,7 +395,7 @@
     <div class="menu-btn-wrap">
         <a href="<?= site_url('compta') ?>" class="menu-btn btn-envoi">
             <span class="btn-code">E025</span>
-            <div class="btn-icon"><img src="/img/Compta.png" alt="Comptabilite"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Compta.png') ?>" alt="Comptabilite"></div>
             <span>Comptabilité</span>
             <span class="btn-desc">Génération des pièces pour la comptabilité</span>
         </a>
@@ -404,7 +404,7 @@
     <div class="menu-btn-wrap">
         <a href="<?= site_url('stats-ja') ?>" class="menu-btn btn-ja">
             <span class="btn-code">E028</span>
-            <div class="btn-icon"><img src="/img/Stat_JA.png" alt="Statistiques JA"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Stat_JA.png') ?>" alt="Statistiques JA"></div>
             <span>Statistiques JA</span>
             <span class="btn-desc">Arbitrages, kilomètres et frais par JA sur une période</span>
         </a>
@@ -421,9 +421,9 @@
 
 </div>
 
-<script src="/asset/js/jquery-3.7.1.min.js"></script>
-<script src="/asset/js/nijac-csrf.js"></script>
-<script src="/asset/js/bootstrap.bundle.min.js"></script>
+<script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
+<script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
 <script>
 'use strict';
 $('#lnk-logout').on('click', function (e) {
@@ -434,6 +434,6 @@ $('#lnk-logout').on('click', function (e) {
     }, null, { type: 'question', title: 'Déconnexion', confirmLabel: 'Se déconnecter' });
 });
 </script>
-<script src="/asset/js/nijac-toast.js"></script>
+<script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
 </body>
 </html>
