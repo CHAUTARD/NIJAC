@@ -11,16 +11,16 @@ use CodeIgniter\HTTP\ResponseInterface;
  * envoyé par email depuis E027 (JA_R3R4.php, pas encore porté). Pas de filtre de
  * route ("auth"/"adminauth") : seul le filtre global "canonicalhost" s'applique.
  *
- * Session native démarrée manuellement dans chaque action (comme AuthController) :
- * le CSRF (config/csrf.php) exige $_SESSION, mais aucun filtre "auth" n'ouvre la
- * session ici puisque la page n'a pas d'utilisateur connecté.
+ * Session native démarrée manuellement dans chaque action (comme AuthController),
+ * bien qu'aucun filtre "auth" n'ouvre de session ici puisque la page n'a pas
+ * d'utilisateur connecté. La protection CSRF (filtre global "csrf") est en
+ * mode cookie et ne dépend donc pas de cette session.
  */
 class DesiderataClubController extends BaseController
 {
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
         require_once __DIR__ . '/../../../config/app_config.php';
 
         $pdo = getPDO();
@@ -80,13 +80,11 @@ class DesiderataClubController extends BaseController
             $erreur = 'Lien invalide ou paramètre manquant.';
         }
 
-        $csrfToken = csrfToken();
         session_write_close();
 
         return view('desiderata_club_index', [
-            'club'      => $club,
-            'erreur'    => $erreur,
-            'csrfToken' => $csrfToken,
+            'club'   => $club,
+            'erreur' => $erreur,
         ]);
     }
 
@@ -141,7 +139,6 @@ class DesiderataClubController extends BaseController
     public function enregistrer(): ResponseInterface
     {
         $this->startSession();
-        csrfVerify(true);
         session_write_close();
 
         return $this->tryJson(function () {

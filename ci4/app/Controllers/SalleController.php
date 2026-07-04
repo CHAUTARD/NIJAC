@@ -23,7 +23,6 @@ class SalleController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
         require_once __DIR__ . '/../../../config/app_config.php';
         require_once __DIR__ . '/../../../config/helpers.php';
         require_once __DIR__ . '/../../../vendor/autoload.php';
@@ -43,7 +42,6 @@ class SalleController extends BaseController
             'nomComplet'  => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
             'departement' => $moi['id_departement'] ?? '',
             'changeLogin' => !empty($moi['change_login']),
-            'csrfToken'   => csrfToken(),
             'isAdmin'     => $isAdmin,
             'deptUser'    => $moi['id_departement'] ?? null,
             'deptActifs'  => getDeptActifs(),
@@ -104,7 +102,6 @@ class SalleController extends BaseController
 
     public function importExcel(): ResponseInterface
     {
-        csrfVerify(true);
 
         if (!$this->isAdmin()) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Accès refusé.']);
@@ -163,7 +160,6 @@ class SalleController extends BaseController
 
     public function save(): ResponseInterface
     {
-        csrfVerify(true);
 
         if (!$this->isAdmin()) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Accès refusé.']);
@@ -228,7 +224,6 @@ class SalleController extends BaseController
 
     public function delete($id = null): ResponseInterface
     {
-        csrfVerify(true);
 
         if (!$this->isAdmin()) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Accès refusé.']);
@@ -246,7 +241,6 @@ class SalleController extends BaseController
 
     public function ffttClubs(): ResponseInterface
     {
-        csrfVerify(true);
 
         if (!$this->isAdmin()) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Accès refusé.']);
@@ -284,7 +278,6 @@ class SalleController extends BaseController
 
     public function ffttSync(): ResponseInterface
     {
-        csrfVerify(true);
 
         if (!$this->isAdmin()) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Accès refusé.']);

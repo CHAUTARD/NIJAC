@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="<?= esc($csrfToken) ?>">
+    <meta name="csrf-token" content="<?= csrf_hash() ?>">
     <title>NIJAC – Gestion des messages (E026)</title>
 
     <link rel="stylesheet" href="/asset/css/bootstrap.min.css">
@@ -192,12 +192,12 @@
     <span class="ts-user">
         <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= esc($nomComplet) ?><?= $departement ? ' (' . esc($departement) . ')' : '' ?>
     </span>
-    <a class="ts-pwd-warning" href="/changer_mot_de_passe.php" id="lnk-chg-pwd" data-base="/changer_mot_de_passe.php">
+    <a class="ts-pwd-warning" href="<?= site_url('changer-mot-de-passe') ?>" id="lnk-chg-pwd" data-base="<?= site_url('changer-mot-de-passe') ?>">
         <i class="bi bi-key-fill"></i>Mot de passe à modifier
     </a>
 </div>
 
-<?php require __DIR__ . '/../../../includes/modal_mdp.php'; ?>
+<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Split -->
 <div id="split-container">
@@ -308,10 +308,19 @@
                 <code data-marqueur="{CORR_TEL}" class="me-2">{CORR_TEL}</code>
                 <code data-marqueur="{ID_CONVOCATION}" class="me-2">{ID_CONVOCATION}</code>
                 <code data-marqueur="{SEXE}" class="me-2">{SEXE}</code>
+                <code data-marqueur="{URL_CONVOCATION_JA}" class="me-2">{URL_CONVOCATION_JA}</code>
             </div>
             <div class="mb-1">
                 <span class="badge me-1 fw-normal" style="background:#6f42c1;">Liste nomination</span>
                 <code data-marqueur="{LISTE_NOMINATIONS}" class="me-2">{LISTE_NOMINATIONS}</code>
+            </div>
+            <div class="mb-1">
+                <span class="badge me-1 fw-normal" style="background:#0d6efd;">Disponibilités / Rappel dispo</span>
+                <code data-marqueur="{URL_DISPONIBILITE_JA}" class="me-2">{URL_DISPONIBILITE_JA}</code>
+            </div>
+            <div class="mb-1">
+                <span class="badge me-1 fw-normal" style="background:#e06c00;">Demande adresse</span>
+                <code data-marqueur="{URL_ADRESSE_JA}" class="me-2">{URL_ADRESSE_JA}</code>
             </div>
             <div>
                 <span class="badge me-1 fw-normal" style="background:#c2185b;">Désidératas club (E027)</span>
@@ -364,6 +373,9 @@ const MARQUEURS_EXEMPLE = {
     '{UTI_NOM}':            'Martin',
     '{UTI_PRENOM}':         'Sophie',
     '{URL_LIGUE}':          'https://www.ligue-normandie-tt.fr',
+    '{URL_ADRESSE_JA}':     <?= json_encode(site_url('adresse-ja') . '?ja=AbCd1234') ?>,
+    '{URL_DISPONIBILITE_JA}': <?= json_encode(site_url('disponibilite-ja') . '?ja=AbCd1234') ?>,
+    '{URL_CONVOCATION_JA}': <?= json_encode(site_url('convocation-ja') . '?nomination=12345') ?>,
     '{YEAR_PHASE}':         <?= json_encode(getAnneePhase()) ?>,
     '{DATE}':               '15/03/2026',
     '{HEURE}':              '14:30',
@@ -383,7 +395,7 @@ const MARQUEURS_EXEMPLE = {
     '{SEXE}':               'M',
     '{LISTE_NOMINATIONS}':  '<ul><li>15/03/2026 — R2M — Club A vs Club B</li></ul>',
     '{NOM_CLUB}':           'ASSUN TT',
-    '{URL_DESIDERATA}':     'https://www.ligue-normandie-tt.fr/nijac/Nominateur/desiderata_club.php?club=09760136'
+    '{URL_DESIDERATA}':     <?= json_encode(site_url('desiderata-club') . '?club=09760136') ?>
 };
 
 function resoudreMarqueurs(txt) {

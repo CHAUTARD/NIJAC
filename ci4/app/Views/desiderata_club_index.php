@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="csrf-token" content="<?= esc($csrfToken) ?>">
+<meta name="csrf-token" content="<?= csrf_hash() ?>">
 <title>Désidératas club (E023)<?= $club ? ' – ' . esc($club['Nom']) : '' ?></title>
 <link rel="stylesheet" href="/asset/css/bootstrap.min.css">
 <link rel="stylesheet" href="/asset/css/bootstrap-icons.min.css">

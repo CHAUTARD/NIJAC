@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="<?= esc($csrfToken) ?>">
+    <meta name="csrf-token" content="<?= csrf_hash() ?>">
     <title>NIJAC – Juges-Arbitres (E007)</title>
 
     <link rel="stylesheet" href="/asset/css/bootstrap.min.css">
@@ -274,12 +274,12 @@
     <span class="ts-user">
         <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= esc($nomComplet) ?><?= $departement ? ' (' . esc($departement) . ')' : '' ?>
     </span>
-    <a class="ts-pwd-warning" href="/changer_mot_de_passe.php" id="lnk-chg-pwd" data-base="/changer_mot_de_passe.php">
+    <a class="ts-pwd-warning" href="<?= site_url('changer-mot-de-passe') ?>" id="lnk-chg-pwd" data-base="<?= site_url('changer-mot-de-passe') ?>">
         <i class="bi bi-key-fill"></i>Mot de passe à modifier
     </a>
 </div>
 
-<?php require __DIR__ . '/../../../includes/modal_mdp.php'; ?>
+<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Input file caché pour import XLSX JA -->
 <input type="file" id="file-input" accept=".xlsx" style="display:none">
@@ -669,6 +669,8 @@
 'use strict';
 
 const JUGEARBITRE_BASE = '<?= site_url('jugearbitre') ?>';
+const LAPOSTE_BASE = '<?= site_url('laposte') ?>';
+const DISPONIBILITE_JA_BASE = '<?= site_url('disponibilite-ja') ?>';
 
 let lignes     = [];
 let filtreActif   = true;   // false = tous, true = actifs seulement
@@ -1270,7 +1272,7 @@ $('#btn-erreurs-cp').on('click', function () {
 $(document).on('click', '.btn-lien-dispo', function (e) {
     e.stopPropagation();
     const id = $(this).data('id');
-    $.getJSON('/Nominateur/disponibilite_ja.php', { action: 'token', id: id }, function (r) {
+    $.getJSON(`${DISPONIBILITE_JA_BASE}/token`, { id: id }, function (r) {
         if (!r.ok) { nijacToast('Erreur lors de la génération du lien.', 'danger'); return; }
         window.open(r.url, '_blank');
     });
@@ -1328,7 +1330,7 @@ function njaRechercherLaPoste() {
     const ville = $('#nja-ville').val().trim();
     if (cp === '' && ville === '') { njaIdLaPoste = null; return; }
 
-    $.post('/ajax/laposte.php', { action: 'recherche_laposte', cp, ville }, function (res) {
+    $.post(`${LAPOSTE_BASE}/recherche-laposte`, { cp, ville }, function (res) {
         $('#nja-suggestions').hide();
         $('#nja-suggestions-list').empty();
         if (!res.ok && !res.multi) {
@@ -1617,8 +1619,8 @@ $('#btn-importer').on('click', () => $('#file-input').val('').trigger('click'));
                     xlsxProgress(pct, `Communes : ${done + 1} / ${total}`);
 
                     const [cle, obj] = paires[done];
-                    $.post('/ajax/laposte.php',
-                        { action: 'recherche_laposte', cp: obj.cp, ville: obj.ville },
+                    $.post(`${LAPOSTE_BASE}/recherche-laposte`,
+                        { cp: obj.cp, ville: obj.ville },
                         function (r) {
                             if (r.ok && !r.multi) {
                                 obj.id_laposte = r.id_laposte;

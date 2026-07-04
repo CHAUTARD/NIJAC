@@ -78,8 +78,8 @@ class Filters extends BaseFilters
     public array $globals = [
         'before' => [
             'canonicalhost', // Redirige vers le vhost "nijac" si l'app est atteinte via un autre host (localhost…)
+            'csrf', // Protection CSRF native CI4 (mode cookie, voir Config\Security) — remplace config/csrf.php pour tous les écrans CI4 ; ne s'applique qu'aux POST/PUT/PATCH/DELETE, jamais aux GET.
             // 'honeypot',
-            // 'csrf',
             // 'invalidchars',
         ],
         'after' => [

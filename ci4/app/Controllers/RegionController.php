@@ -11,10 +11,6 @@ class RegionController extends BaseController
 
     public function __construct()
     {
-        // Fonctions CSRF partagées avec l'app legacy (config/csrf.php) :
-        // même session, même schéma de token, compatible avec le
-        // asset/js/nijac-csrf.js déjà utilisé côté client.
-        require_once __DIR__ . '/../../../config/csrf.php';
         $this->regionModel = new RegionModel();
     }
 
@@ -25,7 +21,6 @@ class RegionController extends BaseController
         $data = [
             'nomComplet'  => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
             'departement' => $moi['id_departement'] ?? '',
-            'csrfToken'   => csrfToken(),
         ];
 
         return view('region_index', $data);
@@ -55,7 +50,6 @@ class RegionController extends BaseController
 
     public function store(): ResponseInterface
     {
-        csrfVerify(true);
 
         $input    = $this->request->getPost();
         $code     = trim($input['code'] ?? '');
@@ -77,7 +71,6 @@ class RegionController extends BaseController
 
     public function update($code = null): ResponseInterface
     {
-        csrfVerify(true);
 
         $code = trim((string) $code);
         [$nom, $gentile, $chefLieu] = $this->extractFields($this->request->getRawInput());
@@ -97,7 +90,6 @@ class RegionController extends BaseController
 
     public function delete($code = null): ResponseInterface
     {
-        csrfVerify(true);
 
         $code = trim((string) $code);
         if ($code === '') {

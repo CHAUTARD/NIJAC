@@ -186,7 +186,7 @@
         <span class="ts-user">
             <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= htmlspecialchars($nomComplet) ?><?= $departement ? ' (' . htmlspecialchars($departement) . ')' : '' ?>
         </span>
-        <a class="ts-pwd-warning" href="/changer_mot_de_passe.php" id="lnk-chg-pwd" data-base="/changer_mot_de_passe.php">
+        <a class="ts-pwd-warning" href="<?= site_url('changer-mot-de-passe') ?>" id="lnk-chg-pwd" data-base="<?= site_url('changer-mot-de-passe') ?>">
             <i class="bi bi-key-fill"></i>Mot de passe à modifier
         </a>
         <a id="btn-switch-nominateur" href="<?= site_url('nominateur-menu') ?>" title="Basculer vers le menu nominateur">
@@ -194,7 +194,7 @@
         </a>
     </div>
 
-    <?php require __DIR__ . '/../../../includes/modal_mdp.php'; ?>
+    <?php require __DIR__ . '/_modal_mdp.php'; ?>
 
     <div id="menu-grid">
 
@@ -293,7 +293,7 @@
         </a>
         <?php endif; ?>
 
-        <a href="/logout.php" class="menu-btn" style="background:#f8d7da; grid-column: 5;">
+        <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da; grid-column: 5;">
             <div class="btn-icon"><i class="bi bi-box-arrow-right" style="color:#842029;"></i></div>
             <span style="color:#842029;">Se déconnecter</span>
             <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
@@ -304,14 +304,17 @@
     <script src="/asset/js/jquery-3.7.1.min.js"></script>
     <script src="/asset/js/nijac-csrf.js"></script>
     <script src="/asset/js/bootstrap.bundle.min.js"></script>
+    <script src="/asset/js/nijac-toast.js"></script>
 
     <script>
     'use strict';
 
-    $('a[href="/logout.php"]').on('click', function (e) {
-        if (!confirm('Voulez-vous vous déconnecter ?')) {
-            e.preventDefault();
-        }
+    $('#lnk-logout').on('click', function (e) {
+        e.preventDefault();
+        const href = this.href;
+        nijacConfirm('Voulez-vous vous déconnecter ?', function () {
+            window.location.href = href;
+        }, null, { type: 'question', title: 'Déconnexion', confirmLabel: 'Se déconnecter' });
     });
     </script>
 </body>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="csrf-token" content="<?= esc($csrfToken) ?>">
+<meta name="csrf-token" content="<?= csrf_hash() ?>">
 <title>NIJAC – Administration BDD (E099)</title>
 <link rel="stylesheet" href="/asset/css/bootstrap.min.css">
 <link rel="stylesheet" href="/asset/css/bootstrap-icons.min.css">
@@ -255,18 +255,24 @@ body {
 <body>
 
 <!-- En-tête -->
-<div id="page-header">
-    <i class="bi bi-database-gear me-2"></i>Administration base de données
-    <small class="opacity-75 ms-2">(E099)</small>
+<div id="page-header" style="display:flex;align-items:center;gap:.5rem;">
+    <div style="flex:1;min-width:0;">
+        <span style="font-size:.78rem;font-weight:400;">
+            <a href="<?= site_url('admin-menu') ?>" style="color:#93c5fd;text-decoration:none;">Admin</a>
+            <span class="mx-1" style="color:#93c5fd;">&rsaquo;</span>
+        </span>
+        <i class="bi bi-database-gear me-2"></i>Administration base de données
+        <small class="opacity-75 ms-2">(E099)</small>
+    </div>
+    <a href="<?= site_url('admin-menu') ?>" class="btn btn-sm py-0" style="flex-shrink:0;background:#fff;color:#1a3a6b;border:1px solid #fff;">
+        <i class="bi bi-arrow-left me-1"></i>Retour
+    </a>
 </div>
 
 <!-- ToolStrip -->
 <div id="toolbar">
     <span class="ts-user"><i class="bi bi-person-fill me-1"></i><?= esc($nomComplet) ?></span>
     <span class="badge bg-danger">Admin BDD</span>
-    <a href="<?= site_url('admin-menu') ?>" class="btn btn-sm btn-light py-0 ms-auto">
-        <i class="bi bi-arrow-left me-1"></i>Retour menu
-    </a>
 </div>
 
 <!-- Layout -->

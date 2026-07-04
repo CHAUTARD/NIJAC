@@ -13,7 +13,6 @@ class DepartementController extends BaseController
 
     public function __construct()
     {
-        require_once __DIR__ . '/../../../config/csrf.php';
         $this->departementModel = new DepartementModel();
         $this->regionModel      = new RegionModel();
     }
@@ -26,7 +25,6 @@ class DepartementController extends BaseController
             'nomComplet'  => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
             'departement' => $moi['id_departement'] ?? '',
             'changeLogin' => !empty($moi['change_login']),
-            'csrfToken'   => csrfToken(),
         ];
 
         return view('departement_index', $data);
@@ -68,7 +66,6 @@ class DepartementController extends BaseController
 
     public function store(): ResponseInterface
     {
-        csrfVerify(true);
 
         $input      = $this->request->getPost();
         $code       = trim($input['code'] ?? '');
@@ -89,7 +86,6 @@ class DepartementController extends BaseController
 
     public function update($code = null): ResponseInterface
     {
-        csrfVerify(true);
 
         $code = trim((string) $code);
         [$nom, $codeRegion] = $this->extractFields($this->request->getRawInput());
@@ -108,7 +104,6 @@ class DepartementController extends BaseController
 
     public function delete($code = null): ResponseInterface
     {
-        csrfVerify(true);
 
         $code = trim((string) $code);
         if ($code === '') {

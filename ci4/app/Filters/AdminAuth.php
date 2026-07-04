@@ -29,19 +29,8 @@ class AdminAuth implements FilterInterface
         $utilisateur = $_SESSION['utilisateur'] ?? null;
 
         if (!$utilisateur || empty($utilisateur['is_admin'])) {
-            return redirect()->to('http://nijac/ci4/public/login');
+            return redirect()->to(site_url('login'));
         }
-
-        // Garantit qu'un token CSRF existe et est persisté AVANT de fermer la
-        // session. Sans ça, un contrôleur qui appelle csrfToken()/csrfField()
-        // après ce filtre (donc après session_write_close()) le générerait en
-        // mémoire seulement, jamais écrit sur disque — chaque requête suivante
-        // en recréerait un différent et toute vérification CSRF échouerait en
-        // boucle. Cas réel : une session fraîchement créée par AuthController
-        // (qui fait session_unset() à la connexion, effaçant l'ancien token)
-        // n'a plus aucun csrf_token persisté avant son premier passage ici.
-        require_once __DIR__ . '/../../../config/csrf.php';
-        csrfToken();
 
         // Referme proprement l'écriture de la session native maintenant qu'on a
         // lu ce qu'il fallait. $_SESSION reste lisible en tant que tableau PHP

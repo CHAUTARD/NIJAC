@@ -3,3 +3,23 @@ php_value upload_max_filesize 10M
 php_value post_max_size 12M
 php_value max_execution_time 300
 php_value max_input_time 300
+
+# ── Front controller CI4 exposé à la racine du vhost "nijac" ─────────────────
+# Le docroot pointe sur ce dossier ; les fichiers/dossiers réels (asset/, img/,
+# SQL/, Importation/, logs/, ci4/ lui-même, etc.) sont servis tels quels, tout
+# le reste est transmis au front controller CodeIgniter 4 (ci4/public/index.php)
+# — même logique que ci4/public/.htaccess, appliquée un niveau au-dessus.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Racine du vhost (le dossier lui-même existe -> ne pas la confondre avec
+    # un passthrough de fichier/dossier réel ci-dessous)
+    RewriteRule ^$ ci4/public/index.php [L]
+
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    RewriteRule ^(.*)$ ci4/public/index.php/$1 [L,QSA]
+</IfModule>

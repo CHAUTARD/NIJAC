@@ -23,7 +23,6 @@ class CleanController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
         require_once __DIR__ . '/../../../Classes/SecurePasswordHasher.php';
     }
 
@@ -75,8 +74,9 @@ class CleanController extends BaseController
      * Revérifie le mot de passe admin pour la requête POST courante. Retourne
      * une réponse d'erreur JSON à renvoyer immédiatement si invalide, ou null
      * si la vérification est passée — chaque action destructrice appelle ceci
-     * en premier (après csrfVerify), comme le fait clean.php pour tout ce qui
-     * n'est pas liste_sauvegardes/liste_sauvegardes_total.
+     * en premier (le CSRF a déjà été validé par le filtre global "csrf" avant
+     * même l'exécution de la méthode), comme le fait clean.php pour tout ce
+     * qui n'est pas liste_sauvegardes/liste_sauvegardes_total.
      */
     private function verifierMdpRequete(): ?ResponseInterface
     {
@@ -200,7 +200,6 @@ class CleanController extends BaseController
             'nomComplet'  => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
             'departement' => $moi['id_departement'] ?? '',
             'changeLogin' => !empty($moi['change_login']),
-            'csrfToken'   => csrfToken(),
             'tablesBdd'   => $tablesBdd,
         ];
 
@@ -219,7 +218,6 @@ class CleanController extends BaseController
 
     public function verifierMdp(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             if ($err = $this->verifierMdpRequete()) {
@@ -240,7 +238,6 @@ class CleanController extends BaseController
      */
     public function tables(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             if ($err = $this->verifierMdpRequete()) {
@@ -256,7 +253,6 @@ class CleanController extends BaseController
 
     public function supprimerAnciennes(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             if ($err = $this->verifierMdpRequete()) {
@@ -297,7 +293,6 @@ class CleanController extends BaseController
      */
     public function executer(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             if ($err = $this->verifierMdpRequete()) {
@@ -381,7 +376,6 @@ class CleanController extends BaseController
 
     public function sauvegardeTotale(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             if ($err = $this->verifierMdpRequete()) {
@@ -454,7 +448,6 @@ class CleanController extends BaseController
 
     public function restaurer(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             if ($err = $this->verifierMdpRequete()) {
@@ -492,7 +485,6 @@ class CleanController extends BaseController
 
     public function restaurerTotal(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             if ($err = $this->verifierMdpRequete()) {
@@ -530,7 +522,6 @@ class CleanController extends BaseController
 
     public function restaurerTableFull(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             if ($err = $this->verifierMdpRequete()) {

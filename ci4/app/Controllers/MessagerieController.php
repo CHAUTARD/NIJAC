@@ -26,7 +26,6 @@ class MessagerieController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
         require_once __DIR__ . '/../../../config/app_config.php';
     }
 
@@ -68,7 +67,6 @@ class MessagerieController extends BaseController
             'nomComplet'    => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
             'departement'   => $moi['id_departement'] ?? '',
             'changeLogin'   => !empty($moi['change_login']),
-            'csrfToken'     => csrfToken(),
             'isAdmin'       => $this->isAdmin(),
             'idCurrentUser' => $this->idCurrentUser(),
             'enumTypes'     => $this->typesValides($pdo),
@@ -122,7 +120,6 @@ class MessagerieController extends BaseController
 
     public function store(): ResponseInterface
     {
-        csrfVerify(true);
 
         $pdo    = getPDO();
         $fields = $this->extractFields($this->request->getPost(), $pdo);
@@ -140,7 +137,6 @@ class MessagerieController extends BaseController
 
     public function update($id = null): ResponseInterface
     {
-        csrfVerify(true);
 
         $id     = (int) $id;
         $pdo    = getPDO();
@@ -170,7 +166,6 @@ class MessagerieController extends BaseController
 
     public function duplicate($id = null): ResponseInterface
     {
-        csrfVerify(true);
 
         $id  = (int) $id;
         $pdo = getPDO();
@@ -191,7 +186,6 @@ class MessagerieController extends BaseController
 
     public function delete($id = null): ResponseInterface
     {
-        csrfVerify(true);
 
         $id  = (int) $id;
         $pdo = getPDO();

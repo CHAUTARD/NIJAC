@@ -23,7 +23,6 @@ class NominationController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
         require_once __DIR__ . '/../../../config/app_config.php';
         require_once __DIR__ . '/../../../Classes/Obfuscator.php';
     }
@@ -133,7 +132,6 @@ class NominationController extends BaseController
             'departement' => $u['id_departement'] ?? '',
             'changeLogin' => !empty($u['change_login']),
             'isAdmin'     => !empty($u['is_admin']),
-            'csrfToken'   => csrfToken(),
         ];
 
         return view('nomination_index', $data);
@@ -169,11 +167,12 @@ class NominationController extends BaseController
     public function rencontresJournee(): ResponseInterface
     {
         return $this->tryJson(function () {
-            $journee = (int) ($this->request->getGet('journee') ?? 0);
-            $date    = trim($this->request->getGet('date') ?? '');
-            if (!$journee || !$date) {
+            $journeeRaw = $this->request->getGet('journee');
+            $date       = trim($this->request->getGet('date') ?? '');
+            if ($journeeRaw === null || $journeeRaw === '' || $date === '') {
                 return $this->response->setJSON(['ok' => false, 'err' => 'Paramètres manquants']);
             }
+            $journee = (int) $journeeRaw;
 
             $deptsAutorises = $this->deptsAutorises();
             if (!$deptsAutorises) {
@@ -292,7 +291,6 @@ class NominationController extends BaseController
 
     public function affecterJa(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $pdo    = getPDO();
@@ -376,7 +374,6 @@ class NominationController extends BaseController
 
     public function retirerJa(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $idRenc = (int) ($this->request->getPost('id_rencontre') ?? 0);
@@ -391,14 +388,14 @@ class NominationController extends BaseController
 
     public function validerNominations(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
-            $journee = (int) ($this->request->getPost('journee') ?? 0);
-            $date    = trim($this->request->getPost('date') ?? '');
-            if (!$journee || !$date) {
+            $journeeRaw = $this->request->getPost('journee');
+            $date       = trim($this->request->getPost('date') ?? '');
+            if ($journeeRaw === null || $journeeRaw === '' || $date === '') {
                 return $this->response->setJSON(['ok' => false, 'err' => 'Paramètres manquants']);
             }
+            $journee = (int) $journeeRaw;
             getPDO()->prepare('
                 UPDATE nomination n
                 JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
@@ -412,15 +409,15 @@ class NominationController extends BaseController
 
     public function envoyerConvocations(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
-            $pdo     = getPDO();
-            $journee = (int) ($this->request->getPost('journee') ?? 0);
-            $date    = trim($this->request->getPost('date') ?? '');
-            if (!$journee || !$date) {
+            $pdo        = getPDO();
+            $journeeRaw = $this->request->getPost('journee');
+            $date       = trim($this->request->getPost('date') ?? '');
+            if ($journeeRaw === null || $journeeRaw === '' || $date === '') {
                 return $this->response->setJSON(['ok' => false, 'err' => 'Paramètres manquants']);
             }
+            $journee = (int) $journeeRaw;
 
             // Récupérer les nominations + email JA
             $stmt = $pdo->prepare('
@@ -440,12 +437,6 @@ class NominationController extends BaseController
             $stmt->execute([$journee, $date]);
             $nominations = $stmt->fetchAll();
 
-            // Remplace le calcul basé sur PHP_SELF du fichier legacy (invalide
-            // sous la structure CI4) : le dossier legacy Nominateur/ n'a pas bougé.
-            $scheme = $this->request->getServer('HTTPS') ? 'https' : 'http';
-            $host   = $this->request->getServer('HTTP_HOST') ?? 'nijac';
-            $base   = "$scheme://$host";
-
             $obf     = new \Obfuscator(OBFUSCATOR_SEED);
             $envoyes = 0;
             $erreurs = [];
@@ -453,7 +444,7 @@ class NominationController extends BaseController
 
             foreach ($nominations as $nom) {
                 $token = $obf->obfuscate((int) $nom['Id_JA']);
-                $lien  = "$base/Nominateur/convocation_ja.php?nomination={$nom['Id_Nomination']}";
+                $lien  = site_url('convocation-ja') . '?nomination=' . $nom['Id_Nomination'];
                 $liens[] = [
                     'nom'       => "{$nom['Prenom']} {$nom['Nom']}",
                     'email'     => $nom['Email'] ?? '',

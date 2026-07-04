@@ -17,7 +17,6 @@ class ConfigurationController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
         require_once __DIR__ . '/../../../config/app_config.php';
     }
 
@@ -91,7 +90,6 @@ class ConfigurationController extends BaseController
             'departement'       => $u['id_departement'] ?? '',
             'changeLogin'       => !empty($u['change_login']),
             'isAdmin'           => !empty($u['is_admin']),
-            'csrfToken'         => csrfToken(),
             'etatCourant'       => $etatCourant,
             'emailDev'          => $emailDev,
             'deptsActifs'       => $deptsActifs,
@@ -130,7 +128,6 @@ class ConfigurationController extends BaseController
 
     public function enregistrer(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $pdo    = getPDO();
@@ -218,7 +215,6 @@ class ConfigurationController extends BaseController
 
     public function smtpTestProd(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $destinataire = trim($this->request->getPost('destinataire') ?? '');
@@ -238,7 +234,6 @@ class ConfigurationController extends BaseController
 
     public function tableCreer(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $pdo         = getPDO();
@@ -271,7 +266,6 @@ class ConfigurationController extends BaseController
 
     public function tableModifier(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $pdo          = getPDO();
@@ -307,7 +301,6 @@ class ConfigurationController extends BaseController
 
     public function tableSupprimer(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $cle = trim($this->request->getPost('cle') ?? '');

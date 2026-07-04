@@ -1,0 +1,111 @@
+<?php
+
+namespace App\Controllers;
+
+/**
+ * NIJAC – Changement du mot de passe (E033), portage CI4 de
+ * changer_mot_de_passe.php.
+ *
+ * Ouverte depuis la modale "Mot de passe à modifier" (toolbar, _modal_mdp.php)
+ * en AJAX (GET puis POST, en-tête X-Requested-With), ou directement en page
+ * complète si JS désactivé. Filtre "auth" (voir Auth.php) : redirige déjà le
+ * rôle JA ailleurs, exactement comme includes/auth_required.php sans
+ * $allowJa — ce dernier n'était jamais activé par le fichier legacy.
+ *
+ * La session est déjà fermée par le filtre "auth" en lecture seule ; comme la
+ * mise à jour de ChangeLogin doit être persistée, la session est rouverte ici
+ * puis refermée après écriture.
+ */
+class ChangerMotDePasseController extends BaseController
+{
+    public function __construct()
+    {
+        require_once __DIR__ . '/../../../config/db.php';
+        require_once __DIR__ . '/../../../Classes/SecurePasswordHasher.php';
+    }
+
+    public function index()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        $moi    = $_SESSION['utilisateur'];
+        $retour = !empty($moi['is_admin']) ? site_url('admin-menu') : site_url('nominateur-menu');
+        $isAjax = strtolower($this->request->getHeaderLine('X-Requested-With')) === 'xmlhttprequest';
+
+        $status      = !empty($moi['change_login'])
+            ? 'Pour des raisons de sécurité, vous devez changer votre mot de passe.'
+            : 'Modifiez votre mot de passe ci-dessous.';
+        $statutClass = !empty($moi['change_login']) ? 'text-warning' : 'text-secondary';
+        $succes      = false;
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $actuel   = trim($this->request->getPost('mdp_actuel')   ?? '');
+            $nouveau  = trim($this->request->getPost('mdp_nouveau')  ?? '');
+            $confirme = trim($this->request->getPost('mdp_confirme') ?? '');
+
+            if ($actuel === '' || $nouveau === '' || $confirme === '') {
+                $status      = 'Veuillez remplir tous les champs.';
+                $statutClass = 'text-warning';
+            } elseif (strlen($nouveau) < 8) {
+                $status      = 'Le nouveau mot de passe doit contenir au moins 8 caractères.';
+                $statutClass = 'text-warning';
+            } elseif ($nouveau !== $confirme) {
+                $status      = 'Les deux saisies du nouveau mot de passe ne correspondent pas.';
+                $statutClass = 'text-warning';
+            } else {
+                try {
+                    $pdo  = getPDO();
+                    $stmt = $pdo->prepare('SELECT Password FROM Utilisateur WHERE Id_Utilisateur = ? LIMIT 1');
+                    $stmt->execute([$moi['id']]);
+                    $row = $stmt->fetch();
+
+                    if (!$row || !\SecurePasswordHasher::verify($actuel, $row['Password'])) {
+                        $status      = 'Mot de passe actuel incorrect.';
+                        $statutClass = 'text-danger';
+                    } else {
+                        $hash = \SecurePasswordHasher::hash($nouveau);
+                        $pdo->prepare('UPDATE Utilisateur SET Password = ?, ChangeLogin = 0 WHERE Id_Utilisateur = ?')
+                            ->execute([$hash, $moi['id']]);
+
+                        if (session_status() === PHP_SESSION_NONE) {
+                            session_start();
+                        }
+                        $_SESSION['utilisateur']['change_login'] = false;
+                        session_write_close();
+
+                        $status       = 'Mot de passe modifié avec succès.';
+                        $statutClass  = 'text-success';
+                        $succes       = true;
+                    }
+                } catch (\PDOException $e) {
+                    $status      = 'Erreur système : impossible de contacter la base de données.';
+                    $statutClass = 'text-danger';
+                    error_log('[NIJAC] PDOException changer_mot_de_passe : ' . $e->getMessage());
+                }
+            }
+
+            if ($isAjax) {
+                if (session_status() === PHP_SESSION_ACTIVE) {
+                    session_write_close();
+                }
+
+                return $this->response->setJSON(['ok' => $succes, 'msg' => $status, 'retour' => $retour]);
+            }
+        }
+
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+
+        return view('changer_mot_de_passe_index', [
+            'isAjax'      => $isAjax,
+            'moi'         => $moi,
+            'retour'      => $retour,
+            'status'      => $status,
+            'statutClass' => $statutClass,
+            'succes'      => $succes,
+        ]);
+    }
+}

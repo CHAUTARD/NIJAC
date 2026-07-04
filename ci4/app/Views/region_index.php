@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="<?= esc($csrfToken) ?>">
+    <meta name="csrf-token" content="<?= csrf_hash() ?>">
     <title>NIJAC – Gestion des régions (E012)</title>
     <link rel="stylesheet" href="/asset/css/bootstrap.min.css">
     <link rel="stylesheet" href="/asset/css/bootstrap-icons.min.css">
@@ -97,13 +97,13 @@
 <div id="page-header" style="display:flex;align-items:center;gap:.5rem;">
     <div style="flex:1;min-width:0;">
         <span style="font-size:.78rem;font-weight:400;">
-            <a href="/admin_menu.php" style="color:#cfe0ff;text-decoration:none;">Admin</a>
+            <a href="<?= site_url('admin-menu') ?>" style="color:#cfe0ff;text-decoration:none;">Admin</a>
             <span class="mx-1" style="color:#cfe0ff;">&rsaquo;</span>
         </span>
         <i class="bi bi-map-fill me-2"></i>Régions
         <small class="ms-2" style="color:#cfe0ff;">(E012)</small>
     </div>
-    <a href="/admin_menu.php" class="btn btn-sm py-0" style="flex-shrink:0;background:#fff;color:#1a3a6b;border:1px solid #fff;">
+    <a href="<?= site_url('admin-menu') ?>" class="btn btn-sm py-0" style="flex-shrink:0;background:#fff;color:#1a3a6b;border:1px solid #fff;">
         <i class="bi bi-arrow-left me-1"></i>Retour
     </a>
 </div>

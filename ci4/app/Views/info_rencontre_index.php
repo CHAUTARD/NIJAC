@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="<?= esc($csrfToken) ?>">
+    <meta name="csrf-token" content="<?= csrf_hash() ?>">
     <title>NIJAC – Ma fiche JA (E030)</title>
     <link rel="stylesheet" href="/asset/css/bootstrap.min.css">
     <link rel="stylesheet" href="/asset/css/bootstrap-icons.min.css">
@@ -225,7 +225,7 @@
     </div>
 
     <div class="text-end mt-3">
-        <a href="/logout.php" class="btn btn-outline-danger btn-sm">
+        <a href="<?= site_url('logout') ?>" class="btn btn-outline-danger btn-sm">
             <i class="bi bi-box-arrow-left me-2"></i>Se déconnecter
         </a>
     </div>
@@ -276,7 +276,7 @@
 <script src="/asset/js/nijac-csrf.js"></script>
 <script src="/asset/js/bootstrap.bundle.min.js"></script>
 <script>
-const CSRF     = <?= json_encode($csrfToken) ?>;
+const CSRF     = <?= json_encode(csrf_hash()) ?>;
 const JA_TOKEN = <?= json_encode($jaToken ?? '') ?>;
 const BASE     = '<?= site_url('info-rencontre') ?>';
 

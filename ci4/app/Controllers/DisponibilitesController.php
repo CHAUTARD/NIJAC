@@ -23,7 +23,6 @@ class DisponibilitesController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
         require_once __DIR__ . '/../../../config/app_config.php';
     }
 
@@ -36,7 +35,6 @@ class DisponibilitesController extends BaseController
             'departement'     => $u['id_departement'] ?? '',
             'changeLogin'     => !empty($u['change_login']),
             'isAdmin'         => !empty($u['is_admin']),
-            'csrfToken'       => csrfToken(),
             'deptActifs'      => getDeptActifs(),
             'deptLimitrophes' => getDepartementsLimitrophes(),
         ];

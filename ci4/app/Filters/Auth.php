@@ -25,17 +25,12 @@ class Auth implements FilterInterface
         $utilisateur = $_SESSION['utilisateur'] ?? null;
 
         if (!$utilisateur) {
-            return redirect()->to('http://nijac/ci4/public/login');
+            return redirect()->to(site_url('login'));
         }
 
         if (($utilisateur['role'] ?? '') === 'JA') {
             return redirect()->to(site_url('info-rencontre'));
         }
-
-        // Garantit un token CSRF persisté avant fermeture de session — voir
-        // AdminAuth.php pour l'explication complète de ce correctif.
-        require_once __DIR__ . '/../../../config/csrf.php';
-        csrfToken();
 
         session_write_close();
 

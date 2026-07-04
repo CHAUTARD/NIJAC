@@ -16,7 +16,8 @@ use CodeIgniter\HTTP\ResponseInterface;
  *
  * Session native démarrée manuellement dans index() (comme AuthController /
  * DesiderataClubController) : aucun filtre "auth" n'ouvre la session sur la
- * route publique, mais csrfToken() en a besoin.
+ * route publique. La protection CSRF (filtre global "csrf") est en mode
+ * cookie et ne dépend donc pas de cette session.
  */
 class AdresseJaController extends BaseController
 {
@@ -25,7 +26,6 @@ class AdresseJaController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
         require_once __DIR__ . '/../../../config/app_config.php';
         require_once __DIR__ . '/../../../config/helpers.php';
         require_once __DIR__ . '/../../../Classes/Obfuscator.php';
@@ -91,14 +91,12 @@ class AdresseJaController extends BaseController
             $erreur = 'Lien invalide ou paramètre manquant.';
         }
 
-        $csrfToken = csrfToken();
         session_write_close();
 
         return view('adresse_ja_index', [
-            'idJa'      => $idJa,
-            'ja'        => $ja,
-            'erreur'    => $erreur,
-            'csrfToken' => $csrfToken,
+            'idJa'   => $idJa,
+            'ja'     => $ja,
+            'erreur' => $erreur,
         ]);
     }
 
@@ -125,7 +123,6 @@ class AdresseJaController extends BaseController
      */
     public function envoyerDemandeAdresse(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $pdo      = getPDO();
@@ -198,7 +195,6 @@ class AdresseJaController extends BaseController
     {
         $this->startSession();
         if ($this->request->getMethod() === 'post') {
-            csrfVerify(true);
         }
         session_write_close();
 
@@ -267,7 +263,6 @@ class AdresseJaController extends BaseController
     public function sauvegarder(): ResponseInterface
     {
         $this->startSession();
-        csrfVerify(true);
         session_write_close();
 
         return $this->tryJson(function () {

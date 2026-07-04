@@ -2,10 +2,12 @@
 /**
  * NIJAC – Fenêtre modale "Changer le mot de passe"
  *
- * Partagée par toutes les pages (toolbar root, toolbar Nominateur, admin_menu).
- * Le lien déclencheur doit avoir : id="lnk-chg-pwd" et data-base="<chemin vers changer_mot_de_passe.php>".
+ * Partagée par toutes les vues CI4 (portage de includes/modal_mdp.php).
+ * Le lien déclencheur doit avoir : id="lnk-chg-pwd" et data-base="<?= site_url('changer-mot-de-passe') ?>".
+ * Cible ChangerMotDePasseController (E033), portage CI4 de
+ * changer_mot_de_passe.php.
  *
- * Usage : <?php require __DIR__ . '/includes/modal_mdp.php'; ?>  (ou chemin relatif équivalent)
+ * Usage : <?php require __DIR__ . '/_modal_mdp.php'; ?>
  */
 ?>
 <!-- Modale changement de mot de passe -->

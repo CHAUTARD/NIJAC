@@ -15,7 +15,6 @@ class AuthController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
         require_once __DIR__ . '/../../../Classes/SecurePasswordHasher.php';
     }
 
@@ -36,7 +35,6 @@ class AuthController extends BaseController
         $statutClass = 'text-secondary';
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            csrfVerify(false); // termine la requête (echo + exit) si le token est invalide
 
             $login    = trim($this->request->getPost('login')    ?? '');
             $password = trim($this->request->getPost('password') ?? '');
@@ -195,7 +193,6 @@ class AuthController extends BaseController
         $data = [
             'status'      => $status,
             'statutClass' => $statutClass,
-            'csrfField'   => csrfField(),
             'loginValue'  => $this->request->getPost('login') ?? '',
         ];
 

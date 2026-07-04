@@ -25,7 +25,6 @@ class ImportRencontresNatController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
         require_once __DIR__ . '/../../../config/app_config.php';
 
         // ── Migration table ───────────────────────────────────────────────
@@ -237,7 +236,6 @@ class ImportRencontresNatController extends BaseController
             'nomComplet'     => trim(($u['nom'] ?? '') . ' ' . ($u['prenom'] ?? '')),
             'departement'    => $u['id_departement'] ?? '',
             'changeLogin'    => !empty($u['change_login']),
-            'csrfToken'      => csrfToken(),
             'isChautard'     => ($u['login'] ?? '') === 'CHAUTARD',
             'deptsNorm'      => $deptsNorm,
             'regionNom'      => $regionNom,
@@ -251,7 +249,6 @@ class ImportRencontresNatController extends BaseController
 
     public function resetNatCache(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             unset($_SESSION['nat_div_ids']);
@@ -305,7 +302,6 @@ class ImportRencontresNatController extends BaseController
 
     public function scannerClub(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $pdo     = getPDO();
@@ -400,7 +396,6 @@ class ImportRencontresNatController extends BaseController
 
     public function chargerDepuisApi(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $pdo = getPDO();
@@ -513,7 +508,6 @@ class ImportRencontresNatController extends BaseController
 
     public function sauvegarderAssoc(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $idEn     = (int) ($this->request->getPost('id_equipe_nat') ?? 0);
@@ -531,7 +525,6 @@ class ImportRencontresNatController extends BaseController
 
     public function assignerHorsRegion(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $pdo          = getPDO();
@@ -570,7 +563,6 @@ class ImportRencontresNatController extends BaseController
 
     public function importerRencontres(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $pdo = getPDO();

@@ -20,7 +20,6 @@ class FfttTestController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
         require_once __DIR__ . '/../../../config/app_config.php';
     }
 
@@ -258,7 +257,6 @@ class FfttTestController extends BaseController
             'departement' => $u['id_departement'] ?? '',
             'changeLogin' => !empty($u['change_login']),
             'isAdmin'     => !empty($u['is_admin']),
-            'csrfToken'   => csrfToken(),
             'appId'       => getFfttAppId(),
             'appKey'      => getFfttAppKey(),
             'serial'      => getConfig('fftt_serial', ''),
@@ -282,7 +280,6 @@ class FfttTestController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->runAction(function ($api, &$trace, &$warnings) {
             $dep     = trim($this->request->getPost('dep') ?? '76');
@@ -299,7 +296,6 @@ class FfttTestController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->runAction(function ($api, &$trace, &$warnings) {
             $licence = trim($this->request->getPost('licence') ?? '');
@@ -319,7 +315,6 @@ class FfttTestController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->runAction(function ($api, &$trace, &$warnings) {
             $club = trim($this->request->getPost('club') ?? '');
@@ -339,7 +334,6 @@ class FfttTestController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->runAction(function ($api, &$trace, &$warnings) {
             $club = trim($this->request->getPost('club') ?? '');
@@ -359,7 +353,6 @@ class FfttTestController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->runAction(function ($api, &$trace, &$warnings) {
             $club = trim($this->request->getPost('club') ?? '');
@@ -387,7 +380,6 @@ class FfttTestController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->runAction(function ($api, &$trace, &$warnings) {
             $licence = trim($this->request->getPost('licence') ?? '');
@@ -407,7 +399,6 @@ class FfttTestController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->runAction(function ($api, &$trace, &$warnings) {
             $dep     = trim($this->request->getPost('dep') ?? '76');
@@ -425,7 +416,6 @@ class FfttTestController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->runAction(function ($api, &$trace, &$warnings) {
             $club = trim($this->request->getPost('club') ?? '');
@@ -447,7 +437,6 @@ class FfttTestController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->runAction(function ($api, &$trace, &$warnings) {
             $type = trim($this->request->getPost('type') ?? 'L');
@@ -462,7 +451,6 @@ class FfttTestController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->runAction(function ($api, &$trace, &$warnings) {
             $org  = trim($this->request->getPost('organisme') ?? '');
@@ -481,7 +469,6 @@ class FfttTestController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->runAction(function ($api, &$trace, &$warnings) {
             $org     = trim($this->request->getPost('organisme') ?? '');
@@ -501,7 +488,6 @@ class FfttTestController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->runAction(function ($api, &$trace, &$warnings) {
             $org      = trim($this->request->getPost('organisme') ?? '');
@@ -522,7 +508,6 @@ class FfttTestController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->runAction(function ($api, &$trace, &$warnings) {
             $division = trim($this->request->getPost('division') ?? '');
@@ -566,7 +551,6 @@ class FfttTestController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->runAction(function ($api, &$trace, &$warnings) {
             $cxPoule = trim($this->request->getPost('cx_poule') ?? '');
@@ -586,7 +570,6 @@ class FfttTestController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->runAction(function ($api, &$trace, &$warnings) {
             $idRenc = trim($this->request->getPost('id_rencontre') ?? '');
@@ -604,7 +587,6 @@ class FfttTestController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->runAction(function ($api, &$trace, &$warnings) {
             $club = trim($this->request->getPost('club') ?? '');
@@ -623,7 +605,6 @@ class FfttTestController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->runAction(function ($api, &$trace, &$warnings) {
             $numclu = trim($this->request->getPost('club') ?? '');
@@ -678,7 +659,6 @@ class FfttTestController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->runAction(function ($api, &$trace, &$warnings) {
             $dep   = trim($this->request->getPost('dep') ?? '76');

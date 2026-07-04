@@ -11,16 +11,14 @@ use CodeIgniter\HTTP\ResponseInterface;
  * Récapitulatif par JA (arbitrages, km, péages, indemnité, total frais) sur
  * une période choisie, avec export CSV. Accessible Administrateur +
  * Nominateur (filtre "auth"). Les deux actions sont en GET (comme le
- * legacy : $.getJSON / window.open) — aucune vérification CSRF, cohérent
- * avec `if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfVerify(true);` côté
- * legacy qui ne s'applique jamais ici.
+ * legacy : $.getJSON / window.open) — le filtre CSRF global CI4 ne
+ * s'applique qu'aux POST/PUT/PATCH/DELETE, donc jamais ici.
  */
 class StatsJaController extends BaseController
 {
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
         require_once __DIR__ . '/../../../config/app_config.php';
     }
 
@@ -43,7 +41,6 @@ class StatsJaController extends BaseController
             'departement'  => $u['id_departement'] ?? '',
             'changeLogin'  => !empty($u['change_login']),
             'isAdmin'      => !empty($u['is_admin']),
-            'csrfToken'    => csrfToken(),
             'defaultDebut' => date('Y') . '-09-01',
             'defaultFin'   => date('Y-m-d'),
         ];

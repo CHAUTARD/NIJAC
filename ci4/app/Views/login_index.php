@@ -167,7 +167,7 @@
 
         <div class="form-panel">
             <form method="POST" action="<?= site_url('login') ?>" id="form-login" novalidate>
-                <?= $csrfField ?>
+                <?= csrf_field() ?>
 
                 <div class="mb-3">
                     <label for="login" class="form-label">Nom de login utilisateur :</label>
@@ -222,7 +222,7 @@
     </div>
 
     <div class="login-footer">
-        <span>&copy; <?= date('Y') ?> &mdash; Ligue Normandie de Tennis de Table &mdash; CodeIgniter 4</span>
+        <span>&copy; <?= date('Y') ?> &mdash; Ligue Normandie de Tennis de Table &mdash; Version&nbsp;: <?= defined('APP_VERSION') ? APP_VERSION : '' ?></span>
     </div>
 
 </div>

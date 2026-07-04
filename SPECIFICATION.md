@@ -33,6 +33,9 @@
 - [E028 – Statistiques JA](#e028--statistiques-ja)
 - [E029 – Adresse domicile JA](#e029--adresse-domicile-ja)
 - [E030 – Fiche personnelle JA](#e030--fiche-personnelle-ja)
+- [E031 – Convocation et frais JA](#e031--convocation-et-frais-ja)
+- [E032 – Disponibilité JA](#e032--disponibilité-ja)
+- [E033 – Changement du mot de passe](#e033--changement-du-mot-de-passe)
 - [E099 – Administration base de données](#e099--administration-base-de-données)
 
 ---
@@ -690,6 +693,9 @@ Deux fonctions internes portent cette logique dans `nomination.php` :
 5. **Priorité disponibilité déclarée** : les rencontres choisies par le JA dans ses disponibilités sont prioritaires
 6. **Proximité géographique** : en cas d'égalité, la rencontre la plus proche du domicile du JA est privilégiée
 7. **Équité** : priorité au JA ayant le moins d'arbitrages validés sur la phase en cours
+
+### Bug corrigé lors du portage CI4 (contrairement à la politique habituelle de préservation)
+Le fichier legacy `Nominateur/nomination.php` testait `!$journee` (avec `$journee` casté en `int`) pour valider le paramètre `journee` dans `rencontres_journee`, `valider_nominations` et `envoyer_convocations` — un test `!0` étant vrai en PHP, `Journee = 0` était traité comme "paramètre manquant". Comme **toutes** les lignes de `rencontre` ont actuellement `Journee = 0` (numérotation jamais renseignée à l'import FFTT), ce bug rendait l'intégralité de l'écran Nomination inutilisable en pratique — contrairement à E032 où seules deux actions annexes étaient touchées. Corrigé dans `NominationController` (CI4) en distinguant "paramètre absent" (`null`/chaîne vide) de "paramètre valant 0" avant le cast en entier.
 8. **Double rencontre en salle** : si un JA est affecté à une rencontre, une 2ᵉ rencontre dans la même salle le même jour (hors rencontres où son club joue) lui est automatiquement proposée via `resoudreDisponible` / `affecterNomination`, une seule à la fois
 
 ---
@@ -930,6 +936,93 @@ Page d'accueil du Juge-Arbitre connecté par Nom + numéro de licence : consulta
 ### Règles
 - Toutes les actions POST exigent `csrfVerify(true)`
 - `se_designer` traite chaque rencontre indépendamment (fonction `designerJaPourRencontre()`) et refuse celles ayant déjà une nomination ou n'appartenant pas au club du JA connecté ; les autres rencontres de la sélection restent traitées
+
+---
+
+## E031 – Convocation et frais JA
+
+**Fichier :** `Nominateur/convocation_ja.php`  
+**Accès :** Page publique — aucune authentification, aucun token obfusqué : l'URL porte l'`Id_Nomination` en clair (`?nomination=<Id_Nomination>`), comportement identique au fichier legacy et volontairement préservé tel quel lors du portage CI4
+
+### Objectif
+Affiche la convocation officielle imprimable (format A4) d'un Juge-Arbitre pour une rencontre donnée, et permet la saisie de ses frais de déplacement. Générée depuis E022 (`NominationController::envoyerConvocations()`), envoyée par email au JA nominé.
+
+### Interface
+- En-tête FFTT, identité du JA, détails de la rencontre (journée, division, poule, opposants, date, heure, salle)
+- Correspondant du club recevant (nom, téléphone)
+- Tableau indemnités : indemnité forfaitaire (config `indemnite_forfaitaire`) + péages (saisis) + km (saisis) × tarif (config `frais_kilometrique`) = total, recalculé en JS à la saisie
+- Distance domicile JA ↔ salle pré-calculée par Haversine si aucun kilométrage n'a encore été saisi
+- Rapport JA (accueil/ambiance, équipements/salle) — zones de texte libres
+- Bouton **Imprimer / PDF** (CSS `@media print`), bouton **Enregistrer les frais**
+
+### Actions AJAX
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `sauvegarder_frais` (`sauvegarderFrais`) | POST | Valide et enregistre péages/km (plafonds `frais_max_peages`/`frais_max_km`) et les deux rapports texte dans `nomination` |
+
+### Règles
+- Un journal de debug (`logs/convocation_debug.log`) trace chaque enregistrement — résidu de débogage du fichier legacy, conservé à l'identique
+- Aucune vérification de session ni de rôle : accessible à quiconque connaît ou devine un `Id_Nomination`
+
+---
+
+## E032 – Disponibilité JA
+
+**Fichier :** `Nominateur/disponibilite_ja.php`  
+**Accès :** Page publique — aucune authentification (le fichier legacy se labellisait par erreur "E012", déjà attribué à Régions)
+
+### Objectif
+Permet à un Juge-Arbitre de déclarer ses disponibilités par journée de championnat (Disponible / Partiel / Non disponible), avec sélection fine des rencontres qu'il souhaite arbitrer en mode Partiel. Accessible via un lien tokenisé (`?ja=TOKEN`, Obfuscator) généré depuis E007 (action `token`), ou directement en `?id_ja=N` depuis E021.
+
+### Interface
+- Vue calendrier mensuel (saison courante, navigable) avec code couleur par statut, et vue liste des journées
+- Modale par journée : bascule Disponible/Partiel/Non disponible, panneau de sélection des rencontres si Partiel
+- Distance domicile JA ↔ salle (Haversine), affichée en plage min/max si ≥ 20 rencontres sur la journée
+- Case à cocher **Défiscalisation**, bouton **Note** (zone de texte libre à destination des nominateurs)
+- Filtrage des rencontres proposées par département du JA (règle Seine-Maritime 76 → inclut aussi l'Eure 27, config `dept_76_includes`)
+
+### Actions AJAX
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `liste_ja` (`listeJa`) | GET | Liste des JA actifs (non utilisée par l'interface actuelle) |
+| `ja` | GET | Fiche résumée d'un JA (nom, grade, CP/ville, défiscalisation) |
+| `journees` | GET | Cartouches Journée × Date avec statut actuel et distances Haversine min/max |
+| `rencontres_journee` (`rencontresJournee`) | GET | Rencontres d'une journée filtrées par département du JA, avec distance et réponse existante |
+| `sauvegarder_dispo_journee` (`sauvegarderDispoJournee`) | POST | Enregistre le statut d'une journée (O/P/N) et, en mode P, la liste des rencontres sélectionnées |
+| `token` | GET/POST | Génère le lien tokenisé (`?ja=TOKEN`) pour un `Id_JA` — **action publique**, contrairement à E029 où l'action équivalente exige une session Nominateur/Admin |
+| `lire_note` (`lireNote`) | GET | Lit `ja.Note` |
+| `sauvegarder_note` (`sauvegarderNote`) | POST | Met à jour `ja.Note` |
+| `sauvegarder_defiscalisation` (`sauvegarderDefiscalisation`) | POST | Met à jour `ja.Defiscalisation` |
+
+### Bug corrigé lors du portage CI4 (contrairement à la politique habituelle de préservation)
+Les actions `rencontres_journee` et `sauvegarder_dispo_journee` du fichier legacy rejetaient la requête (`Paramètres manquants`/`Paramètres invalides`) dès que `journee = 0`, à cause d'un test PHP `!$journee` qui traite `0` comme une valeur absente — même bug que celui identifié et corrigé dans E022 (Nomination). Sur la base de données actuelle, **toutes** les lignes de `rencontre` ont `Journee = 0` (numérotation de journée jamais renseignée), ce qui rendait ces deux actions non fonctionnelles en pratique. Corrigé dans `DisponibiliteJaController` (CI4) en distinguant "paramètre absent" (`null`/chaîne vide) de "paramètre valant 0" avant le cast en entier.
+
+---
+
+## E033 – Changement du mot de passe
+
+**Fichier :** `changer_mot_de_passe.php`  
+**Accès :** Tout utilisateur authentifié (Administrateur ou Nominateur) — le rôle JA n'y a pas accès (redirigé vers E030, comme partout ailleurs hors E030 lui-même)
+
+### Objectif
+Permet à l'utilisateur connecté de changer son propre mot de passe : saisie du mot de passe actuel (vérifié contre le hash en base), du nouveau mot de passe et de sa confirmation. Réinitialise le flag `ChangeLogin` (forçage de changement à la première connexion) une fois le changement effectué.
+
+### Interface
+- Ouverte depuis le lien **"Mot de passe à modifier"** du bandeau utilisateur (toolbar), présent sur toutes les pages authentifiées : chargement en AJAX dans une modale Bootstrap (`_modal_mdp.php`)
+- Accessible aussi en page complète autonome (fallback si JS désactivé, ou navigation directe)
+- Message d'état coloré (info/warning/danger/success) selon le résultat de la validation
+- En cas de succès : bouton **Continuer** vers le menu (Admin ou Nominateur selon le rôle)
+
+### Actions
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `index` | GET | Retourne la page complète, ou le fragment de formulaire seul si en-tête `X-Requested-With: XMLHttpRequest` (chargement modale) |
+| `index` | POST | Valide (champs non vides, ≥ 8 caractères, confirmation identique, mot de passe actuel correct), met à jour le hash et `ChangeLogin = 0` · Réponse JSON `{ok, msg, retour}` si AJAX, sinon page complète avec le résultat |
+
+### Règles métier
+- Nouveau mot de passe : 8 caractères minimum, doit être confirmé à l'identique
+- Le mot de passe actuel est vérifié via `SecurePasswordHasher::verify()` avant tout changement
+- Le lien de retour (`retour`) pointe vers E002 (menu admin) ou E020 (menu nominateur) selon `is_admin`
 
 ---
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="csrf-token" content="<?= esc($csrfToken) ?>">
+<meta name="csrf-token" content="<?= csrf_hash() ?>">
 <title>NIJAC – Disponibilités JA (E021)</title>
 <link rel="stylesheet" href="/asset/css/bootstrap.min.css">
 <link rel="stylesheet" href="/asset/css/bootstrap-icons.min.css">
@@ -140,12 +140,12 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
     <span class="ts-user">
         <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= esc($nomComplet) ?><?= $departement ? ' (' . esc($departement) . ')' : '' ?>
     </span>
-    <a class="ts-pwd-warning" href="/changer_mot_de_passe.php" id="lnk-chg-pwd" data-base="/changer_mot_de_passe.php">
+    <a class="ts-pwd-warning" href="<?= site_url('changer-mot-de-passe') ?>" id="lnk-chg-pwd" data-base="<?= site_url('changer-mot-de-passe') ?>">
         <i class="bi bi-key-fill"></i>Mot de passe à modifier
     </a>
 </div>
 
-<?php require __DIR__ . '/../../../includes/modal_mdp.php'; ?>
+<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Bandeau département -->
 <div id="barre-dept">
@@ -203,6 +203,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 'use strict';
 
 const DISPO_BASE = '<?= site_url('disponibilites') ?>';
+const DISPONIBILITE_JA_BASE = '<?= site_url('disponibilite-ja') ?>';
 
 // Libellés des départements
 const DEPT_NOMS = <?= json_encode(
@@ -311,10 +312,10 @@ function chargerJA(dept) {
                     ? `<div class="ja-dispo-badge" title="Disponibilités saisies"><i class="bi bi-check-lg"></i></div>`
                     : `<div class="ja-dispo-badge" style="background:#c62828;" title="Aucune disponibilité saisie"><i class="bi bi-x-lg"></i></div>`;
 
-                // Lien vers disponibilite_ja.php dans une nouvelle fenêtre
+                // Lien vers la fiche de disponibilité (E032) dans une nouvelle fenêtre
                 $grid.append(`
                     <a class="ja-card ${gradeClass} ${noDispoClass}"
-                       href="/Nominateur/disponibilite_ja.php?id_ja=${ja.Id_JA}"
+                       href="${DISPONIBILITE_JA_BASE}?id_ja=${ja.Id_JA}"
                        target="_blank"
                        title="${hasDispo ? 'Disponibilités saisies — ' : 'Aucune disponibilité — '}${escHtml(ja.Prenom)} ${escHtml(ja.Nom)}">
                         <div class="ja-avatar">${escHtml(initiales)}</div>

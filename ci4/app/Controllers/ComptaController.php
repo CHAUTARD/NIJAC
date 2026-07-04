@@ -17,7 +17,6 @@ class ComptaController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
         require_once __DIR__ . '/../../../config/app_config.php';
     }
 
@@ -80,7 +79,6 @@ class ComptaController extends BaseController
             'departement'  => $u['id_departement'] ?? '',
             'changeLogin'  => !empty($u['change_login']),
             'isAdmin'      => !empty($u['is_admin']),
-            'csrfToken'    => csrfToken(),
             'defaultDebut' => $defaultDebut,
             'defaultFin'   => $defaultFin,
             'dateP1Debut'  => $dateP1Debut,
@@ -94,7 +92,6 @@ class ComptaController extends BaseController
 
     public function donnees(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $pdo = getPDO();
@@ -147,7 +144,6 @@ class ComptaController extends BaseController
 
     public function exportCsv(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $pdo = getPDO();

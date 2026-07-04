@@ -24,7 +24,6 @@ class JugearbitreController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
         require_once __DIR__ . '/../../../config/app_config.php';
         require_once __DIR__ . '/../../../config/helpers.php';
         require_once __DIR__ . '/../../../vendor/autoload.php';
@@ -106,7 +105,6 @@ class JugearbitreController extends BaseController
             'nomComplet'      => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
             'departement'     => $moi['id_departement'] ?? '',
             'changeLogin'     => !empty($moi['change_login']),
-            'csrfToken'       => csrfToken(),
             'isAdmin'         => $this->isAdmin(),
             'deptUser'        => $this->isAdmin() ? '' : ($moi['id_departement'] ?? ''),
             'deptActifs'      => getDeptActifs(),
@@ -207,7 +205,6 @@ class JugearbitreController extends BaseController
      */
     public function majLaposte(): ResponseInterface
     {
-        csrfVerify(true);
         if (!$this->isAdmin()) {
             return $this->response->setJSON(['ok' => false, 'err' => 'Accès refusé']);
         }
@@ -232,7 +229,6 @@ class JugearbitreController extends BaseController
 
     public function majBdd(): ResponseInterface
     {
-        csrfVerify(true);
 
         $pdo = getPDO();
         $this->ensureFfttColumns($pdo);
@@ -317,7 +313,6 @@ class JugearbitreController extends BaseController
 
     public function getClubsDept(): ResponseInterface
     {
-        csrfVerify(true);
         if (!$this->isAdmin()) {
             return $this->response->setJSON(['ok' => false, 'err' => 'Accès refusé']);
         }
@@ -338,7 +333,6 @@ class JugearbitreController extends BaseController
 
     public function importFfttClub(): ResponseInterface
     {
-        csrfVerify(true);
         if (!$this->isAdmin()) {
             return $this->response->setJSON(['ok' => false, 'err' => 'Accès refusé']);
         }
@@ -462,7 +456,6 @@ class JugearbitreController extends BaseController
 
     public function scanFfttClub(): ResponseInterface
     {
-        csrfVerify(true);
         if (!$this->isAdmin()) {
             return $this->response->setJSON(['ok' => false, 'err' => 'Accès refusé']);
         }
@@ -579,7 +572,6 @@ class JugearbitreController extends BaseController
 
     public function importFfttSelected(): ResponseInterface
     {
-        csrfVerify(true);
         if (!$this->isAdmin()) {
             return $this->response->setJSON(['ok' => false, 'err' => 'Accès refusé']);
         }
@@ -636,7 +628,6 @@ class JugearbitreController extends BaseController
 
     public function importCsvEbp(): ResponseInterface
     {
-        csrfVerify(true);
 
         $pdo = getPDO();
         $this->ensureFfttColumns($pdo);
@@ -693,7 +684,6 @@ class JugearbitreController extends BaseController
      */
     public function enrichirFftt(): ResponseInterface
     {
-        csrfVerify(true);
         if (!$this->isAdmin()) {
             return $this->response->setJSON(['ok' => false, 'err' => 'Accès refusé']);
         }
@@ -735,7 +725,6 @@ class JugearbitreController extends BaseController
 
     public function importerExcel(): ResponseInterface
     {
-        csrfVerify(true);
         if (!$this->isAdmin()) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Accès refusé']);
         }

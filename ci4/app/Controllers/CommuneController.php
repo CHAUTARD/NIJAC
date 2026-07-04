@@ -17,7 +17,6 @@ class CommuneController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
     }
 
     public function index()
@@ -28,7 +27,6 @@ class CommuneController extends BaseController
             'nomComplet'  => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
             'departement' => $moi['id_departement'] ?? '',
             'changeLogin' => !empty($moi['change_login']),
-            'csrfToken'   => csrfToken(),
         ];
 
         return view('commune_index', $data);
@@ -72,7 +70,6 @@ class CommuneController extends BaseController
 
     public function store(): ResponseInterface
     {
-        csrfVerify(true);
 
         $insee = (int) ($_POST['insee'] ?? 0);
         $nom   = mb_strtoupper(trim($_POST['nom'] ?? ''), 'UTF-8');
@@ -121,7 +118,6 @@ class CommuneController extends BaseController
 
     public function updateCoords($insee = null): ResponseInterface
     {
-        csrfVerify(true);
 
         $insee = (int) $insee;
         $input = $this->request->getRawInput();
@@ -151,7 +147,6 @@ class CommuneController extends BaseController
 
     public function importCsv(): ResponseInterface
     {
-        csrfVerify(true);
 
         if (empty($_FILES['fichier'])) {
             $postMax = ini_get('post_max_size');

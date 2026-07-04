@@ -19,7 +19,6 @@ class DbAdminController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
     }
 
     private function guardChautard(): ?ResponseInterface
@@ -50,7 +49,6 @@ class DbAdminController extends BaseController
 
         return view('db_admin_index', [
             'nomComplet' => trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? '')),
-            'csrfToken'  => csrfToken(),
         ]);
     }
 
@@ -184,7 +182,6 @@ class DbAdminController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $pdo   = getPDO();
@@ -213,7 +210,6 @@ class DbAdminController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $pdo   = getPDO();
@@ -245,7 +241,6 @@ class DbAdminController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $table = $this->request->getPost('table') ?? '';
@@ -266,7 +261,6 @@ class DbAdminController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $pdo = getPDO();
@@ -302,7 +296,6 @@ class DbAdminController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $pdo      = getPDO();
@@ -338,7 +331,6 @@ class DbAdminController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $pdo      = getPDO();
@@ -372,7 +364,6 @@ class DbAdminController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $table   = $this->request->getPost('table') ?? '';
@@ -423,7 +414,6 @@ class DbAdminController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $table = $this->request->getPost('table') ?? '';
@@ -441,7 +431,6 @@ class DbAdminController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $table  = $this->request->getPost('table') ?? '';
@@ -469,7 +458,6 @@ class DbAdminController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $table = $this->request->getPost('table') ?? '';
@@ -488,7 +476,6 @@ class DbAdminController extends BaseController
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $table   = $this->request->getPost('table') ?? '';

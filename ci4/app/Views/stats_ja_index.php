@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="<?= esc($csrfToken) ?>">
+    <meta name="csrf-token" content="<?= csrf_hash() ?>">
     <title>NIJAC – Statistiques JA (E028)</title>
     <link rel="stylesheet" href="/asset/css/bootstrap.min.css">
     <link rel="stylesheet" href="/asset/css/bootstrap-icons.min.css">
@@ -75,12 +75,12 @@
     <span class="ts-user">
         <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= esc($nomComplet) ?><?= $departement ? ' (' . esc($departement) . ')' : '' ?>
     </span>
-    <a class="ts-pwd-warning" href="/changer_mot_de_passe.php" id="lnk-chg-pwd" data-base="/changer_mot_de_passe.php">
+    <a class="ts-pwd-warning" href="<?= site_url('changer-mot-de-passe') ?>" id="lnk-chg-pwd" data-base="<?= site_url('changer-mot-de-passe') ?>">
         <i class="bi bi-key-fill"></i>Mot de passe à modifier
     </a>
 </div>
 
-<?php require __DIR__ . '/../../../includes/modal_mdp.php'; ?>
+<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Barre de filtres -->
 <div id="toolbar">

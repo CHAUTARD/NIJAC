@@ -22,7 +22,6 @@ class InfoRencontreController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
         require_once __DIR__ . '/../../../config/app_config.php';
         require_once __DIR__ . '/../../../config/helpers.php';
         require_once __DIR__ . '/../../../Classes/Obfuscator.php';
@@ -270,7 +269,6 @@ class InfoRencontreController extends BaseController
         $stmtR3R4->execute([':id_club' => $ja['Id_Club']]);
         $rencontresR3R4 = $stmtR3R4->fetchAll();
 
-        $csrfToken = csrfToken();
         session_write_close();
 
         return view('info_rencontre_index', [
@@ -279,7 +277,6 @@ class InfoRencontreController extends BaseController
             'jaToken'        => $jaTokenRaw,
             'prochaines'     => $prochaines,
             'rencontresR3R4' => $rencontresR3R4,
-            'csrfToken'      => $csrfToken,
         ]);
     }
 
@@ -294,7 +291,6 @@ class InfoRencontreController extends BaseController
         }
         $idJa = $ctx['idJa'];
 
-        csrfVerify(true);
         session_write_close();
 
         try {
@@ -345,7 +341,6 @@ class InfoRencontreController extends BaseController
             return redirect()->to($ctx['redirect']);
         }
 
-        csrfVerify(true);
         session_write_close();
 
         try {
@@ -407,7 +402,6 @@ class InfoRencontreController extends BaseController
         }
         $idJa = $ctx['idJa'];
 
-        csrfVerify(true);
         session_write_close();
 
         try {

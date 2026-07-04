@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="<?= esc($csrfToken) ?>">
+    <meta name="csrf-token" content="<?= csrf_hash() ?>">
     <title>NIJAC – Désidératas clubs (E027)</title>
 
     <link rel="stylesheet" href="/asset/css/bootstrap.min.css">
@@ -207,19 +207,18 @@
 <body>
 
 <!-- En-tête : recopié de includes/page_header.php -->
-<?php $backUrl = $isAdmin ? site_url('admin-menu') : site_url('nominateur-menu'); ?>
 <div id="page-header" style="display:flex;align-items:center;gap:.5rem;">
     <div style="flex:1;min-width:0;">
         <span style="font-size:.78rem;font-weight:400;">
-            <a href="<?= esc($backUrl) ?>" style="color:#cfe0ff;text-decoration:none;">
-                <?= $isAdmin ? 'Admin' : 'Nominateur' ?>
+            <a href="<?= site_url('nominateur-menu') ?>" style="color:#cfe0ff;text-decoration:none;">
+                Nominateur
             </a>
             <span class="mx-1" style="color:#cfe0ff;">&rsaquo;</span>
         </span>
         <i class="bi bi-clipboard2-check me-2"></i>Désidératas clubs (PN à R4)
         <small class="ms-2" style="color:#cfe0ff;">(E027)</small>
     </div>
-    <a href="<?= esc($backUrl) ?>" class="btn btn-sm btn-outline-light">
+    <a href="<?= site_url('nominateur-menu') ?>" class="btn btn-sm btn-outline-light">
         <i class="bi bi-arrow-left me-1"></i>Retour
     </a>
 </div>
@@ -229,12 +228,12 @@
     <span class="ts-user">
         <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= esc($nomComplet) ?><?= $departement ? ' (' . esc($departement) . ')' : '' ?>
     </span>
-    <a class="ts-pwd-warning" href="/changer_mot_de_passe.php" id="lnk-chg-pwd" data-base="/changer_mot_de_passe.php">
+    <a class="ts-pwd-warning" href="<?= site_url('changer-mot-de-passe') ?>" id="lnk-chg-pwd" data-base="<?= site_url('changer-mot-de-passe') ?>">
         <i class="bi bi-key-fill"></i>Mot de passe à modifier
     </a>
 </div>
 
-<?php require __DIR__ . '/../../../includes/modal_mdp.php'; ?>
+<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Barre de filtres -->
 <div id="filter-bar">
@@ -358,7 +357,7 @@
 </div>
 
 <script>
-const CSRF = <?= json_encode($csrfToken) ?>;
+const CSRF = <?= json_encode(csrf_hash()) ?>;
 const BASE = '<?= site_url('desiderata-clubs') ?>';
 const INFO_RENCONTRE_BASE = '<?= site_url('info-rencontre') ?>';
 

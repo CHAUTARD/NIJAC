@@ -20,7 +20,6 @@ class DesiderataClubsController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
         require_once __DIR__ . '/../../../config/app_config.php';
     }
 
@@ -43,8 +42,6 @@ class DesiderataClubsController extends BaseController
             'nomComplet'  => trim(($u['nom'] ?? '') . ' ' . ($u['prenom'] ?? '')),
             'departement' => $u['id_departement'] ?? '',
             'changeLogin' => !empty($u['change_login']),
-            'isAdmin'     => !empty($u['is_admin']),
-            'csrfToken'   => csrfToken(),
         ];
 
         return view('desiderata_clubs_index', $data);
@@ -227,7 +224,6 @@ class DesiderataClubsController extends BaseController
 
     public function envoyer(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $pdo = getPDO();

@@ -3,7 +3,9 @@
 use CodeIgniter\Router\RouteCollection;
 
 /** @var RouteCollection $routes */
-$routes->get('/', 'Home::index');
+// Racine du vhost "nijac" : point d'entrée de l'appli (E001), pas la page
+// de bienvenue CI4 par défaut.
+$routes->get('/', 'AuthController::index');
 
 // ── E001 Connexion ──────────────────────────────────────────────────────────
 $routes->get('login', 'AuthController::index');
@@ -271,3 +273,40 @@ $routes->post('db-admin/truncate', 'DbAdminController::truncate', ['filter' => '
 $routes->post('db-admin/add-index', 'DbAdminController::addIndex', ['filter' => 'adminauth']);
 $routes->post('db-admin/drop-index', 'DbAdminController::dropIndex', ['filter' => 'adminauth']);
 $routes->post('db-admin/rename-column', 'DbAdminController::renameColumn', ['filter' => 'adminauth']);
+
+// ── Déconnexion ──────────────────────────────────────────────────────────────
+$routes->get('logout', 'LogoutController::index');
+
+// ── E033 Changement du mot de passe ─────────────────────────────────────────
+// Ouverte depuis la modale toolbar (_modal_mdp.php) sur toute page CI4
+// authentifiée. Filtre "auth" : redirige déjà le rôle JA ailleurs, comme le
+// fait includes/auth_required.php côté legacy pour ce fichier.
+$routes->get('changer-mot-de-passe', 'ChangerMotDePasseController::index', ['filter' => 'auth']);
+$routes->post('changer-mot-de-passe', 'ChangerMotDePasseController::index', ['filter' => 'auth']);
+
+// ── Utilitaire partagé : résolution code postal / commune (laposte) ─────────
+// Pas un écran EXXX — réutilisé par E005 (Salle) et E007 (Juge-Arbitre).
+$routes->post('laposte/recherche-laposte', 'LaposteController::rechercheLaposte', ['filter' => 'auth']);
+$routes->post('laposte/lookup-laposte', 'LaposteController::lookupLaposte', ['filter' => 'auth']);
+
+// ── E031 Convocation et frais JA ─────────────────────────────────────────────
+// Page PUBLIQUE (sans authentification, ni même de token obfusqué — l'URL
+// porte l'Id_Nomination en clair, comme le legacy). Générée depuis E022.
+$routes->get('convocation-ja', 'ConvocationJaController::index');
+$routes->post('convocation-ja/sauvegarder-frais', 'ConvocationJaController::sauvegarderFrais');
+
+// ── E032 Disponibilité JA ────────────────────────────────────────────────────
+// Page PUBLIQUE (sans authentification) — accessible via ?ja=TOKEN ou ?id_ja=N.
+$routes->get('disponibilite-ja', 'DisponibiliteJaController::index');
+$routes->get('disponibilite-ja/liste-ja', 'DisponibiliteJaController::listeJa');
+$routes->get('disponibilite-ja/ja', 'DisponibiliteJaController::ja');
+$routes->get('disponibilite-ja/journees', 'DisponibiliteJaController::journees');
+$routes->get('disponibilite-ja/rencontres-journee', 'DisponibiliteJaController::rencontresJournee');
+$routes->post('disponibilite-ja/sauvegarder-dispo-journee', 'DisponibiliteJaController::sauvegarderDispoJournee');
+// "token" est public dans ce fichier (contrairement à E029/adresse_ja.php) :
+// le legacy n'y appelle jamais auth_required.php pour cette action précise.
+$routes->get('disponibilite-ja/token', 'DisponibiliteJaController::token');
+$routes->post('disponibilite-ja/token', 'DisponibiliteJaController::token');
+$routes->get('disponibilite-ja/lire-note', 'DisponibiliteJaController::lireNote');
+$routes->post('disponibilite-ja/sauvegarder-note', 'DisponibiliteJaController::sauvegarderNote');
+$routes->post('disponibilite-ja/sauvegarder-defiscalisation', 'DisponibiliteJaController::sauvegarderDefiscalisation');

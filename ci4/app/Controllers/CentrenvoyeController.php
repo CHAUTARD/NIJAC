@@ -21,7 +21,6 @@ class CentrenvoyeController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
         require_once __DIR__ . '/../../../config/app_config.php';
         require_once __DIR__ . '/../../../Classes/Obfuscator.php';
     }
@@ -58,7 +57,6 @@ class CentrenvoyeController extends BaseController
             'nomComplet'  => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
             'departement' => $moi['id_departement'] ?? '',
             'changeLogin' => !empty($moi['change_login']),
-            'csrfToken'   => csrfToken(),
             'dept'        => $this->dept(),
             'modeles'     => $modeles,
         ];
@@ -218,7 +216,6 @@ class CentrenvoyeController extends BaseController
 
     public function apercu(): ResponseInterface
     {
-        csrfVerify(true);
 
         $pdo          = getPDO();
         $idNomination = (int) ($this->request->getPost('id_nomination') ?? 0);
@@ -246,7 +243,6 @@ class CentrenvoyeController extends BaseController
 
     public function envoyer(): ResponseInterface
     {
-        csrfVerify(true);
 
         $ids     = json_decode($this->request->getPost('ids') ?? '[]', true);
         $sujet   = trim($this->request->getPost('sujet') ?? '');
@@ -275,7 +271,6 @@ class CentrenvoyeController extends BaseController
 
     public function envoyerUn(): ResponseInterface
     {
-        csrfVerify(true);
 
         $pdo = getPDO();
         $moi = $this->moi();
@@ -464,38 +459,46 @@ class CentrenvoyeController extends BaseController
      * marqueur absent du texte n'est simplement jamais substitué (strtr), donc
      * ce périmètre plus large que chaque appel legacy individuel est sans
      * effet observable.
+     *
+     * {URL_DISPONIBILITE_JA} et {URL_CONVOCATION_JA} remplacent les anciens
+     * liens codés en dur vers Nominateur/disponibilite_ja.php et
+     * Nominateur/convocation_ja.php (fichiers legacy supprimés, migrés en
+     * routes CI4) — à utiliser dans les modèles de message à la place de
+     * {URL_LIGUE}/nijac/Nominateur/....
      */
     private function marqueurs(array $ja, array $moi, string $token, string $listeNominations = '', string $urlAdresseJa = ''): array
     {
         $sexe = ($ja['SexeCode'] ?? '') === 'F' ? 'Féminin' : (($ja['SexeCode'] ?? '') === 'M' ? 'Mixte' : '');
 
         return [
-            '{NOM}'               => $ja['Nom'],
-            '{PRENOM}'            => $ja['Prenom'],
-            '{NOM_COMPLET}'       => $ja['Prenom'] . ' ' . $ja['Nom'],
-            '{ID_JA}'             => $token,
-            '{ID_CONVOCATION}'    => (string) ($ja['Id_Nomination'] ?? ''),
-            '{SEXE}'              => $sexe,
-            '{UTI_NOM}'           => $moi['nom'] ?? '',
-            '{UTI_PRENOM}'        => $moi['prenom'] ?? '',
-            '{URL_LIGUE}'         => getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),
-            '{URL_ADRESSE_JA}'    => $urlAdresseJa,
-            '{YEAR_PHASE}'        => getAnneePhase(),
-            '{DATE}'              => $ja['Date'] ? date('d/m/Y', strtotime($ja['Date'])) : '',
-            '{HEURE}'             => $ja['Heure'] ?? '',
-            '{JOURNEE}'           => $ja['Journee'] ?? '',
-            '{POULE}'             => $ja['Poule'] ?? '',
-            '{DIVISION}'          => $ja['Division'] ?? '',
-            '{DOM}'               => $ja['NomDom'] ?? '',
-            '{EXT}'               => $ja['NomExt'] ?? '',
-            '{SALLE_NOM}'         => $ja['SalleNom'] ?? '',
-            '{SALLE_ADRESSE}'     => $ja['SalleAdresse'] ?? '',
-            '{SALLE_CP}'          => $ja['SalleCP'] ?? '',
-            '{SALLE_VILLE}'       => $ja['SalleVille'] ?? '',
-            '{CORR_NOM}'          => $ja['CorrNom'] ?? '',
-            '{CORR_EMAIL}'        => $ja['CorrEmail'] ?? '',
-            '{CORR_TEL}'          => $ja['CorrTel'] ?? '',
-            '{LISTE_NOMINATIONS}' => $listeNominations,
+            '{NOM}'                  => $ja['Nom'],
+            '{PRENOM}'               => $ja['Prenom'],
+            '{NOM_COMPLET}'          => $ja['Prenom'] . ' ' . $ja['Nom'],
+            '{ID_JA}'                => $token,
+            '{ID_CONVOCATION}'       => (string) ($ja['Id_Nomination'] ?? ''),
+            '{SEXE}'                 => $sexe,
+            '{UTI_NOM}'              => $moi['nom'] ?? '',
+            '{UTI_PRENOM}'           => $moi['prenom'] ?? '',
+            '{URL_LIGUE}'            => getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),
+            '{URL_ADRESSE_JA}'       => $urlAdresseJa,
+            '{URL_DISPONIBILITE_JA}' => site_url('disponibilite-ja') . '?ja=' . $token,
+            '{URL_CONVOCATION_JA}'   => !empty($ja['Id_Nomination']) ? (site_url('convocation-ja') . '?nomination=' . $ja['Id_Nomination']) : '',
+            '{YEAR_PHASE}'           => getAnneePhase(),
+            '{DATE}'                 => $ja['Date'] ? date('d/m/Y', strtotime($ja['Date'])) : '',
+            '{HEURE}'                => $ja['Heure'] ?? '',
+            '{JOURNEE}'              => $ja['Journee'] ?? '',
+            '{POULE}'                => $ja['Poule'] ?? '',
+            '{DIVISION}'             => $ja['Division'] ?? '',
+            '{DOM}'                  => $ja['NomDom'] ?? '',
+            '{EXT}'                  => $ja['NomExt'] ?? '',
+            '{SALLE_NOM}'            => $ja['SalleNom'] ?? '',
+            '{SALLE_ADRESSE}'        => $ja['SalleAdresse'] ?? '',
+            '{SALLE_CP}'             => $ja['SalleCP'] ?? '',
+            '{SALLE_VILLE}'          => $ja['SalleVille'] ?? '',
+            '{CORR_NOM}'             => $ja['CorrNom'] ?? '',
+            '{CORR_EMAIL}'           => $ja['CorrEmail'] ?? '',
+            '{CORR_TEL}'             => $ja['CorrTel'] ?? '',
+            '{LISTE_NOMINATIONS}'    => $listeNominations,
         ];
     }
 }

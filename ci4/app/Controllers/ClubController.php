@@ -20,7 +20,6 @@ class ClubController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/csrf.php';
         require_once __DIR__ . '/../../../config/app_config.php';
     }
 
@@ -52,7 +51,6 @@ class ClubController extends BaseController
             'nomComplet'  => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
             'departement' => $moi['id_departement'] ?? '',
             'changeLogin' => !empty($moi['change_login']),
-            'csrfToken'   => csrfToken(),
             'deptActifs'  => getDeptActifs(),
         ];
 
@@ -109,7 +107,6 @@ class ClubController extends BaseController
 
     public function majBdd(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $pdo    = getPDO();
@@ -171,7 +168,6 @@ class ClubController extends BaseController
 
     public function getClubsDeptFftt(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $dep = trim($this->request->getPost('dep') ?? '');
@@ -193,7 +189,6 @@ class ClubController extends BaseController
 
     public function syncFfttClub(): ResponseInterface
     {
-        csrfVerify(true);
 
         return $this->tryJson(function () {
             $pdo     = getPDO();

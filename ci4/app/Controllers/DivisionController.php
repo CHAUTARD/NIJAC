@@ -11,7 +11,6 @@ class DivisionController extends BaseController
 
     public function __construct()
     {
-        require_once __DIR__ . '/../../../config/csrf.php';
         $this->divisionModel = new DivisionModel();
     }
 
@@ -23,7 +22,6 @@ class DivisionController extends BaseController
             'nomComplet'  => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
             'departement' => $moi['id_departement'] ?? '',
             'changeLogin' => !empty($moi['change_login']),
-            'csrfToken'   => csrfToken(),
         ];
 
         return view('division_index', $data);
@@ -53,7 +51,6 @@ class DivisionController extends BaseController
 
     public function store(): ResponseInterface
     {
-        csrfVerify(true);
 
         $fields = $this->extractFields($this->request->getPost());
 
@@ -69,7 +66,6 @@ class DivisionController extends BaseController
 
     public function update($id = null): ResponseInterface
     {
-        csrfVerify(true);
 
         $id     = (int) $id;
         $fields = $this->extractFields($this->request->getRawInput());
@@ -85,7 +81,6 @@ class DivisionController extends BaseController
 
     public function delete($id = null): ResponseInterface
     {
-        csrfVerify(true);
 
         $id = (int) $id;
         $this->divisionModel->delete($id);
