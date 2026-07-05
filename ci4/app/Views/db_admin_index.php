@@ -250,24 +250,37 @@ body {
     flex-direction: column;
     gap: .5rem;
 }
+
+#page-footer {
+    background: #e8eef7;
+    border-top: 1px solid #c8d4e8;
+    padding: .25rem 1rem;
+    font-size: .8rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-shrink: 0;
+    gap: 1rem;
+}
+#status-bar { color: #374151; min-height: 18px; }
+.footer-copyright { color: #6b7280; white-space: nowrap; }
+.footer-logo { height: 20px; width: auto; opacity: .75; }
+#page-footer.pf-status-left {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+}
+#page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
+#page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
 </style>
 </head>
 <body>
 
-<!-- En-tête -->
-<div id="page-header" style="display:flex;align-items:center;gap:.5rem;">
-    <div style="flex:1;min-width:0;">
-        <span style="font-size:.78rem;font-weight:400;">
-            <a href="<?= site_url('admin-menu') ?>" style="color:#93c5fd;text-decoration:none;">Admin</a>
-            <span class="mx-1" style="color:#93c5fd;">&rsaquo;</span>
-        </span>
-        <i class="bi bi-database-gear me-2"></i>Administration base de données
-        <small class="opacity-75 ms-2">(E099)</small>
-    </div>
-    <a href="<?= site_url('admin-menu') ?>" class="btn btn-sm py-0" style="flex-shrink:0;background:#fff;color:#1a3a6b;border:1px solid #fff;">
-        <i class="bi bi-arrow-left me-1"></i>Retour
-    </a>
-</div>
+<?= view('partials/page_header', [
+    'phIcon' => 'database-gear', 'phTitle' => 'Administration base de données', 'phCode' => 'E099',
+    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
+    'phCrumbColor' => '#93c5fd', 'phBadgeOpacityOnly' => true,
+]) ?>
 
 <!-- ToolStrip -->
 <div id="toolbar">
@@ -401,6 +414,8 @@ body {
         </div><!-- /ws-content -->
     </div><!-- /workspace -->
 </div><!-- /main-layout -->
+
+<?= view('partials/page_footer', ['pfStatusAlign' => 'left']) ?>
 
 <!-- ── Modal Ligne (Insert / Edit) ──────────────────────────────────────────── -->
 <div class="modal fade" id="modal-row" tabindex="-1">

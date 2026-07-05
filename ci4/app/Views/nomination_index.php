@@ -105,24 +105,14 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 </head>
 <body>
 
-<!-- En-tête : recopié de includes/page_header.php -->
-<div id="page-header">
-    <i class="bi bi-person-check-fill fs-5 me-2"></i>Nomination des Juges-Arbitres
-    <small style="color:#d0f0d0;">(E022)</small>
-    <a href="<?= site_url('nominateur-menu') ?>" class="btn btn-sm btn-outline-light btn-retour">
-        <i class="bi bi-arrow-left me-1"></i>Retour
-    </a>
-</div>
+<?= view('partials/page_header', [
+    'phIcon' => 'person-check-fill', 'phTitle' => 'Nomination des Juges-Arbitres', 'phCode' => 'E022',
+    'phCrumbLabel' => 'Nominateur', 'phCrumbUrl' => site_url('nominateur-menu'), 'phBackUrl' => site_url('nominateur-menu'),
+    'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
+]) ?>
 
 <!-- Toolbar : recopié de Nominateur/includes/toolbar.php -->
-<div id="toolbar">
-    <span class="ts-user">
-        <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= esc($nomComplet) ?><?= $departement ? ' (' . esc($departement) . ')' : '' ?>
-    </span>
-    <a class="ts-pwd-warning" href="<?= site_url('changer-mot-de-passe') ?>" id="lnk-chg-pwd" data-base="<?= site_url('changer-mot-de-passe') ?>">
-        <i class="bi bi-key-fill"></i>Mot de passe à modifier
-    </a>
-</div>
+<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
 
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 

@@ -217,24 +217,14 @@
 </head>
 <body>
 
-<!-- En-tête : recopié de includes/page_header.php -->
-<div id="page-header">
-    <i class="bi bi-calculator-fill me-2"></i>Comptabilité frais JA
-    <small class="ms-2" style="opacity:.75;">(E025)</small>
-    <a href="<?= site_url('nominateur-menu') ?>" class="btn btn-sm btn-outline-light ms-auto">
-        <i class="bi bi-arrow-left me-1"></i>Retour
-    </a>
-</div>
+<?= view('partials/page_header', [
+    'phIcon' => 'calculator-fill', 'phTitle' => 'Comptabilité frais JA', 'phCode' => 'E025',
+    'phCrumbLabel' => 'Nominateur', 'phCrumbUrl' => site_url('nominateur-menu'), 'phBackUrl' => site_url('nominateur-menu'),
+    'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
+]) ?>
 
 <!-- Toolbar utilisateur : recopié de Nominateur/includes/toolbar.php -->
-<div id="toolbar-user">
-    <span class="ts-user">
-        <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= esc($nomComplet) ?><?= $departement ? ' (' . esc($departement) . ')' : '' ?>
-    </span>
-    <a class="ts-pwd-warning" href="<?= site_url('changer-mot-de-passe') ?>" id="lnk-chg-pwd" data-base="<?= site_url('changer-mot-de-passe') ?>">
-        <i class="bi bi-key-fill"></i>Mot de passe à modifier
-    </a>
-</div>
+<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbId' => 'toolbar-user']) ?>
 
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 

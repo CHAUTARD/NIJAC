@@ -45,7 +45,7 @@
 
         /* ── En-tête ── */
         #page-header {
-            background: var(--nijac-blue);
+            background: #2e7d32;
             color: #fff;
             padding: .5rem 1.25rem;
             font-size: .9rem;
@@ -206,32 +206,14 @@
 </head>
 <body>
 
-<!-- En-tête : recopié de includes/page_header.php -->
-<div id="page-header" style="display:flex;align-items:center;gap:.5rem;">
-    <div style="flex:1;min-width:0;">
-        <span style="font-size:.78rem;font-weight:400;">
-            <a href="<?= site_url('nominateur-menu') ?>" style="color:#cfe0ff;text-decoration:none;">
-                Nominateur
-            </a>
-            <span class="mx-1" style="color:#cfe0ff;">&rsaquo;</span>
-        </span>
-        <i class="bi bi-clipboard2-check me-2"></i>Désidératas clubs (PN à R4)
-        <small class="ms-2" style="color:#cfe0ff;">(E027)</small>
-    </div>
-    <a href="<?= site_url('nominateur-menu') ?>" class="btn btn-sm btn-outline-light">
-        <i class="bi bi-arrow-left me-1"></i>Retour
-    </a>
-</div>
+<?= view('partials/page_header', [
+    'phIcon' => 'clipboard2-check', 'phTitle' => 'Désidératas clubs (PN à R4)', 'phCode' => 'E027',
+    'phCrumbLabel' => 'Nominateur', 'phCrumbUrl' => site_url('nominateur-menu'), 'phBackUrl' => site_url('nominateur-menu'),
+    'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
+]) ?>
 
 <!-- Toolbar : recopié de Nominateur/includes/toolbar.php -->
-<div id="toolbar">
-    <span class="ts-user">
-        <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= esc($nomComplet) ?><?= $departement ? ' (' . esc($departement) . ')' : '' ?>
-    </span>
-    <a class="ts-pwd-warning" href="<?= site_url('changer-mot-de-passe') ?>" id="lnk-chg-pwd" data-base="<?= site_url('changer-mot-de-passe') ?>">
-        <i class="bi bi-key-fill"></i>Mot de passe à modifier
-    </a>
-</div>
+<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
 
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 

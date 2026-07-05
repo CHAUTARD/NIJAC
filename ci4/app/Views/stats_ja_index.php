@@ -11,7 +11,7 @@
         :root { --nijac-blue: #1a3a6b; }
         body { background: #f0f4fa; font-family: 'Segoe UI', system-ui, sans-serif; display: flex; flex-direction: column; min-height: 100vh; }
 
-        #page-header { background: var(--nijac-blue); color: #fff; padding: .65rem 1.25rem; font-size: .9rem; font-weight: 600; display: flex; align-items: center; gap: .75rem; }
+        #page-header { background: #2e7d32; color: #fff; padding: .65rem 1.25rem; font-size: .9rem; font-weight: 600; display: flex; align-items: center; gap: .75rem; }
 
         #toolbar-user { background: #f8fafc; border-bottom: 1px solid #dde5f0; padding: .3rem 1rem; display: flex; align-items: center; justify-content: space-between; font-size: .85rem; }
         #toolbar-user .ts-user { color: #1a3a6b; font-weight: 600; }
@@ -61,24 +61,14 @@
 </head>
 <body>
 
-<!-- En-tête : recopié de includes/page_header.php -->
-<div id="page-header">
-    <i class="bi bi-bar-chart-fill me-2"></i>Statistiques des Juges-Arbitres
-    <small class="ms-2" style="opacity:.75;">(E028)</small>
-    <a href="<?= site_url('nominateur-menu') ?>" class="btn btn-sm btn-outline-light ms-auto">
-        <i class="bi bi-arrow-left me-1"></i>Retour
-    </a>
-</div>
+<?= view('partials/page_header', [
+    'phIcon' => 'bar-chart-fill', 'phTitle' => 'Statistiques des Juges-Arbitres', 'phCode' => 'E028',
+    'phCrumbLabel' => 'Nominateur', 'phCrumbUrl' => site_url('nominateur-menu'), 'phBackUrl' => site_url('nominateur-menu'),
+    'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
+]) ?>
 
 <!-- Toolbar utilisateur : recopié de Nominateur/includes/toolbar.php -->
-<div id="toolbar-user">
-    <span class="ts-user">
-        <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= esc($nomComplet) ?><?= $departement ? ' (' . esc($departement) . ')' : '' ?>
-    </span>
-    <a class="ts-pwd-warning" href="<?= site_url('changer-mot-de-passe') ?>" id="lnk-chg-pwd" data-base="<?= site_url('changer-mot-de-passe') ?>">
-        <i class="bi bi-key-fill"></i>Mot de passe à modifier
-    </a>
-</div>
+<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbId' => 'toolbar-user']) ?>
 
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 

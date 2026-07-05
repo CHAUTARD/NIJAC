@@ -136,34 +136,40 @@
         .btn-enregistrer:hover { background: #a8dfb0; }
         .btn-supprimer:hover   { background: #f0a0a8; }
         .btn-supprimer:disabled { opacity: .5; cursor: not-allowed; }
+
+        #page-footer {
+            background: #e8eef7;
+            border-top: 1px solid #c8d4e8;
+            padding: .25rem 1rem;
+            font-size: .8rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-shrink: 0;
+            gap: 1rem;
+        }
+        #status-bar { color: #374151; min-height: 18px; }
+        .footer-copyright { color: #6b7280; white-space: nowrap; }
+        .footer-logo { height: 20px; width: auto; opacity: .75; }
+        #page-footer.pf-status-left {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+        }
+        #page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
+        #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
     </style>
 </head>
 <body>
 
 <!-- En-tête : recopié de includes/page_header.php -->
-<div id="page-header" style="display:flex;align-items:center;gap:.5rem;">
-    <div style="flex:1;min-width:0;">
-        <span style="font-size:.78rem;font-weight:400;">
-            <a href="<?= site_url('admin-menu') ?>" style="color:#cfe0ff;text-decoration:none;">Admin</a>
-            <span class="mx-1" style="color:#cfe0ff;">&rsaquo;</span>
-        </span>
-        <i class="bi bi-people-fill me-2"></i>Gestion des utilisateurs
-        <small class="ms-2" style="color:#cfe0ff;">(E009)</small>
-    </div>
-    <a href="<?= site_url('admin-menu') ?>" class="btn btn-sm py-0" style="flex-shrink:0;background:#fff;color:#1a3a6b;border:1px solid #fff;">
-        <i class="bi bi-arrow-left me-1"></i>Retour
-    </a>
-</div>
+<?= view('partials/page_header', [
+    'phIcon' => 'people-fill', 'phTitle' => 'Gestion des utilisateurs', 'phCode' => 'E009',
+    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
+]) ?>
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
-<div id="toolbar">
-    <span class="ts-user">
-        <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= esc($nomComplet) ?><?= $departement ? ' (' . esc($departement) . ')' : '' ?>
-    </span>
-    <a class="ts-pwd-warning" href="<?= site_url('changer-mot-de-passe') ?>" id="lnk-chg-pwd" data-base="<?= site_url('changer-mot-de-passe') ?>">
-        <i class="bi bi-key-fill"></i>Mot de passe à modifier
-    </a>
-</div>
+<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
 
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 
@@ -228,7 +234,7 @@
             <select id="cbo-role" class="form-select form-select-sm">
                 <option value="Administrateur">Administrateur</option>
                 <option value="Nominateur" selected>Nominateur</option>
-                <option value="Consultation">Consultation</option>
+                <option value="JA">JA</option>
             </select>
         </div>
 
@@ -287,6 +293,8 @@
 
     </div><!-- /panel-form -->
 </div><!-- /split-container -->
+
+<?= view('partials/page_footer', ['pfStatusAlign' => 'left']) ?>
 
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>

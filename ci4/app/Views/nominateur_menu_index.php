@@ -259,17 +259,7 @@
 </div>
 
 <!-- Toolbar : recopié de Nominateur/includes/toolbar.php -->
-<div id="toolbar">
-    <span class="ts-user">
-        <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= esc($nomComplet) ?><?= $departement ? ' (' . esc($departement) . ')' : '' ?>
-    </span>
-    <a class="ts-pwd-warning" href="<?= site_url('changer-mot-de-passe') ?>" id="lnk-chg-pwd" data-base="<?= site_url('changer-mot-de-passe') ?>">
-        <i class="bi bi-key-fill"></i>Mot de passe à modifier
-    </a>
-    <a id="btn-switch-admin" href="<?= site_url('admin-menu') ?>" title="Basculer vers le menu administrateur">
-        <i class="bi bi-shield-lock-fill"></i>Menu administrateur
-    </a>
-</div>
+<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbSwitchTo' => 'admin']) ?>
 
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 

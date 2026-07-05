@@ -26,7 +26,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 .ts-user { color:#1a3a6b; font-weight:600; }
 .ts-pwd-warning { display:<?= $changeLogin ? 'inline-flex' : 'none' ?>; align-items:center; gap:.35rem; color:#c00; font-weight:700; cursor:pointer; text-decoration:underline dotted; }
 /* ── En-tête ── */
-#page-header { background:var(--nijac-blue); color:#fff; padding:.65rem 1.25rem; display:flex; align-items:center; gap:.75rem; font-size:.9rem; font-weight:600; flex-shrink:0; }
+#page-header { background:#2e7d32; color:#fff; padding:.65rem 1.25rem; display:flex; align-items:center; gap:.75rem; font-size:.9rem; font-weight:600; flex-shrink:0; }
 #page-header .btn-retour { margin-left:auto; }
 
 /* ── Bandeau département ── */
@@ -118,32 +118,41 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 /* ── Spinner ── */
 #spinner-dept { display:none; }
 
+/* ── Pied de page ── */
+#page-footer {
+    background: #e8eef7;
+    border-top: 1px solid #c8d4e8;
+    padding: .25rem 1rem;
+    font-size: .8rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-shrink: 0;
+    gap: 1rem;
+}
+#status-bar { color: #374151; min-height: 18px; }
+.footer-copyright { color: #6b7280; white-space: nowrap; }
+.footer-logo { height: 20px; width: auto; opacity: .75; }
+#page-footer.pf-status-left {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+}
+#page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
+#page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
+
 </style>
 </head>
 <body>
 
-<!-- En-tête : recopié de includes/page_header.php -->
-<div id="page-header">
-    <span style="font-size:.78rem;font-weight:400;">
-        <a href="<?= site_url('nominateur-menu') ?>" style="color:#cfe0ff;text-decoration:none;">Nominateur</a>
-        <span class="mx-1" style="color:#cfe0ff;">&rsaquo;</span>
-    </span>
-    <i class="bi bi-calendar2-check fs-5 me-2"></i>Saisie des disponibilités JA
-    <small style="color:#cfe0ff;">(E021)</small>
-    <a href="<?= site_url('nominateur-menu') ?>" class="btn btn-sm btn-light py-0 btn-retour">
-        <i class="bi bi-arrow-left me-1"></i>Retour
-    </a>
-</div>
+<?= view('partials/page_header', [
+    'phIcon' => 'calendar2-check', 'phTitle' => 'Saisie des disponibilités JA', 'phCode' => 'E021',
+    'phCrumbLabel' => 'Nominateur', 'phCrumbUrl' => site_url('nominateur-menu'), 'phBackUrl' => site_url('nominateur-menu'),
+    'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
+]) ?>
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
-<div id="toolbar">
-    <span class="ts-user">
-        <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= esc($nomComplet) ?><?= $departement ? ' (' . esc($departement) . ')' : '' ?>
-    </span>
-    <a class="ts-pwd-warning" href="<?= site_url('changer-mot-de-passe') ?>" id="lnk-chg-pwd" data-base="<?= site_url('changer-mot-de-passe') ?>">
-        <i class="bi bi-key-fill"></i>Mot de passe à modifier
-    </a>
-</div>
+<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
 
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 
@@ -195,6 +204,8 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
     </div>
     <div id="liste-ja" style="display:none"></div>
 </div>
+
+<?= view('partials/page_footer', ['pfStatusAlign' => 'left']) ?>
 
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>

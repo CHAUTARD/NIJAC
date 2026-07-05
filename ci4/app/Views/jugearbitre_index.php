@@ -55,7 +55,7 @@
 
         /* ── En-tête ── */
         #page-header {
-            background: var(--nijac-blue);
+            background: #2e7d32;
             color: #fff;
             padding: .5rem 1.25rem;
             font-size: .9rem;
@@ -131,18 +131,6 @@
         .badge-inactif   { background: #fee2e2; color: #991b1b; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
         .badge-defisc    { background: #dbeafe; color: #1e40af; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
         .badge-no-defisc { background: #f3f4f6; color: #6b7280; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
-
-        /* ── Label compteur ── */
-        #lbl-count {
-            margin-left: .75rem;
-            padding: .2rem .6rem;
-            background: #e8eef7;
-            border: 1px solid #c8d4e8;
-            border-radius: 4px;
-            font-size: .82rem;
-            color: #1a3a6b;
-            font-weight: 600;
-        }
 
         /* ── Toggle Tous / Actifs ── */
         #toggle-actif {
@@ -236,6 +224,17 @@
         }
         #spinner.show { display: flex; }
 
+        #lbl-count {
+            margin-left: .75rem;
+            padding: .2rem .6rem;
+            background: #e8eef7;
+            border: 1px solid #c8d4e8;
+            border-radius: 4px;
+            font-size: .82rem;
+            color: #1a3a6b;
+            font-weight: 600;
+        }
+
         #page-footer {
             background: #e8eef7;
             border-top: 1px solid #c8d4e8;
@@ -250,34 +249,25 @@
         #status-bar { color: #374151; min-height: 18px; }
         .footer-copyright { color: #6b7280; white-space: nowrap; }
         .footer-logo { height: 20px; width: auto; opacity: .75; }
+        #page-footer.pf-status-left {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+        }
+        #page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
+        #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
     </style>
 </head>
 <body>
 
-<!-- En-tête : recopié de includes/page_header.php -->
-<div id="page-header" style="display:flex;align-items:center;gap:.5rem;">
-    <div style="flex:1;min-width:0;">
-        <span style="font-size:.78rem;font-weight:400;">
-            <a href="<?= site_url('nominateur-menu') ?>" style="color:#cfe0ff;text-decoration:none;">Nominateur</a>
-            <span class="mx-1" style="color:#cfe0ff;">&rsaquo;</span>
-        </span>
-        <i class="bi bi-person-badge-fill me-2"></i>Gestion des Juges-Arbitres
-        <small class="ms-2" style="color:#cfe0ff;">(E007)</small>
-    </div>
-    <a href="<?= site_url('nominateur-menu') ?>" class="btn btn-sm py-0" style="flex-shrink:0;background:#fff;color:#1a3a6b;border:1px solid #fff;">
-        <i class="bi bi-arrow-left me-1"></i>Retour
-    </a>
-</div>
+<?= view('partials/page_header', [
+    'phIcon' => 'person-badge-fill', 'phTitle' => 'Gestion des Juges-Arbitres', 'phCode' => 'E007',
+    'phCrumbLabel' => 'Nominateur', 'phCrumbUrl' => site_url('nominateur-menu'), 'phBackUrl' => site_url('nominateur-menu'),
+    'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
+]) ?>
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
-<div id="toolbar">
-    <span class="ts-user">
-        <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= esc($nomComplet) ?><?= $departement ? ' (' . esc($departement) . ')' : '' ?>
-    </span>
-    <a class="ts-pwd-warning" href="<?= site_url('changer-mot-de-passe') ?>" id="lnk-chg-pwd" data-base="<?= site_url('changer-mot-de-passe') ?>">
-        <i class="bi bi-key-fill"></i>Mot de passe à modifier
-    </a>
-</div>
+<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
 
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 
@@ -324,12 +314,12 @@
             </a>
         </div>
     </div>
-    <span id="lbl-count">0 JA</span>
     <div id="toggle-actif" style="margin-left:.5rem">
         <button id="btn-tous">Tous</button>
         <button id="btn-actifs"       class="active">Actifs seulement</button>
         <button id="btn-erreurs-cp">⚠ Erreurs CP/Ville</button>
     </div>
+    <span id="lbl-count">0 JA</span>
     <span style="flex:1"></span>
     <label for="sel-dept" style="font-size:.85rem;font-weight:700;color:#444;white-space:nowrap;margin:0;">
         <i class="bi bi-map me-1"></i>Département
@@ -378,14 +368,10 @@
 </div>
 
 <!-- Pied de page : recopié de includes/footer.php (setStatus() écrit dans #status-bar) -->
-<div id="page-footer">
-    <span id="status-bar">Prêt. — Cliquez sur une cellule puis F2 pour modifier.</span>
-    <span class="footer-copyright">
-        &copy; <?= date('Y') ?> &mdash; Tous droits réservés &mdash;
-        <img src="<?= base_url('img/logo_region.png') ?>" alt="" class="footer-logo" aria-hidden="true">
-        Ligue Normandie de Tennis de Table &mdash; Version&nbsp;: <?= defined('APP_VERSION') ? APP_VERSION : '' ?>
-    </span>
-</div>
+<?= view('partials/page_footer', [
+    'pfStatusText' => 'Prêt. — Cliquez sur une cellule puis F2 pour modifier.',
+    'pfStatusAlign' => 'left',
+]) ?>
 
 <!-- Modale rapport import EBP -->
 <div class="modal fade" id="modal-import-ebp" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
@@ -778,15 +764,9 @@ function renderGrille() {
         });
     }
 
-    const info = searchTerm
-        ? `${affichees.length} résultat(s) sur ${lignes.length}`
-        : `${lignes.length} JA`;
-    setStatus(`${info}. Cliquez sur une cellule puis <kbd>F2</kbd> pour modifier.`);
-    const nbActifs    = lignes.filter(l => l.actif === 1).length;
-    const nbErreursCp = lignes.filter(l => l.id_laposte == null).length;
-    let   lblTxt = `${lignes.length} JA dont ${nbActifs} actif${nbActifs > 1 ? 's' : ''}`;
-    if (nbErreursCp > 0) lblTxt += ` — ⚠ ${nbErreursCp} erreur${nbErreursCp > 1 ? 's' : ''} CP`;
-    $('#lbl-count').text(lblTxt);
+    const info = searchTerm ? `${affichees.length} résultat(s) sur ${lignes.length}. ` : '';
+    setStatus(`${info}Cliquez sur une cellule puis <kbd>F2</kbd> pour modifier.`);
+    $('#lbl-count').text(`${lignes.length} JA`);
 }
 
 const CHAMPS_NUMERIQUES = [];

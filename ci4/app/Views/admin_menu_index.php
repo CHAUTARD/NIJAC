@@ -182,17 +182,7 @@
         </div>
     </div>
 
-    <div id="toolbar">
-        <span class="ts-user">
-            <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= htmlspecialchars($nomComplet) ?><?= $departement ? ' (' . htmlspecialchars($departement) . ')' : '' ?>
-        </span>
-        <a class="ts-pwd-warning" href="<?= site_url('changer-mot-de-passe') ?>" id="lnk-chg-pwd" data-base="<?= site_url('changer-mot-de-passe') ?>">
-            <i class="bi bi-key-fill"></i>Mot de passe à modifier
-        </a>
-        <a id="btn-switch-nominateur" href="<?= site_url('nominateur-menu') ?>" title="Basculer vers le menu nominateur">
-            <i class="bi bi-people-fill"></i>Menu nominateur
-        </a>
-    </div>
+    <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbSwitchTo' => 'nominateur']) ?>
 
     <?php require __DIR__ . '/_modal_mdp.php'; ?>
 
