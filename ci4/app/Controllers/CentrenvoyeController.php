@@ -46,10 +46,10 @@ class CentrenvoyeController extends BaseController
         $pdo = getPDO();
 
         $modeles = [];
-        $rows    = $pdo->query('SELECT Type, Sujet, Message FROM messagerie ORDER BY Id_Messagerie')->fetchAll();
+        $rows    = $pdo->query('SELECT Type, Sujet, Message, Cc FROM messagerie ORDER BY Id_Messagerie')->fetchAll();
         foreach ($rows as $r) {
             if (!isset($modeles[$r['Type']])) {
-                $modeles[$r['Type']] = ['sujet' => $r['Sujet'], 'message' => $r['Message']];
+                $modeles[$r['Type']] = ['sujet' => $r['Sujet'], 'message' => $r['Message'], 'cc' => (bool) $r['Cc']];
             }
         }
 
@@ -59,6 +59,7 @@ class CentrenvoyeController extends BaseController
             'changeLogin' => !empty($moi['change_login']),
             'dept'        => $this->dept(),
             'modeles'     => $modeles,
+            'monEmail'    => $moi['email'] ?? '',
         ];
 
         return view('centrenvoye_index', $data);
@@ -281,6 +282,7 @@ class CentrenvoyeController extends BaseController
         $idJa         = (int) ($this->request->getPost('id_ja') ?? 0);
         $idNomination = (int) ($this->request->getPost('id_nomination') ?? 0);
         $saison       = trim($this->request->getPost('saison') ?? '');
+        $cc           = trim($this->request->getPost('cc') ?? '');
 
         $identifiant = ($type === 'Convocation') ? $idNomination : $idJa;
         if (!$identifiant || $sujet === '' || $message === '') {
@@ -381,8 +383,11 @@ class CentrenvoyeController extends BaseController
             $mail = getNijacMailer();
             $mail->isHTML($isHtml);
             $mail->addAddress($dest, $ja['Prenom'] . ' ' . $ja['Nom']);
-            if (!empty($moi['email_lntt'])) {
-                $mail->addReplyTo($moi['email_lntt'], $moi['nom'] . ' ' . $moi['prenom']);
+            if (!empty($moi['email'])) {
+                $mail->addReplyTo($moi['email'], $moi['nom'] . ' ' . $moi['prenom']);
+            }
+            if ($cc !== '' && filter_var($cc, FILTER_VALIDATE_EMAIL)) {
+                $mail->addCC(getEmailDestinataire($cc), $moi['nom'] . ' ' . $moi['prenom']);
             }
             $mail->Subject = ($modeDev && $dest !== $ja['Email']) ? "[DEV] $sujetRendu" : $sujetRendu;
             $mail->Body    = $corps;

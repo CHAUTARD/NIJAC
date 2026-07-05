@@ -19,6 +19,7 @@ class DbAdminController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
+        require_once __DIR__ . '/../../../config/app_config.php';
     }
 
     private function guardChautard(): ?ResponseInterface
@@ -46,6 +47,11 @@ class DbAdminController extends BaseController
         }
 
         $u = $_SESSION['utilisateur'] ?? [];
+
+        try {
+            initTableConfiguration(getPDO());
+        } catch (\Throwable) {
+        }
 
         return view('db_admin_index', [
             'nomComplet' => trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? '')),

@@ -14,7 +14,7 @@ class UtilisateurModel extends Model
     protected $useSoftDeletes = false;
 
     protected $allowedFields = [
-        'Login', 'Password', 'Nom', 'Prenom', 'Role', 'Id_Departement', 'Actif', 'ChangeLogin',
+        'Login', 'Password', 'Nom', 'Prenom', 'Role', 'Id_Departement', 'Actif', 'ChangeLogin', 'Email',
     ];
 
     protected $useTimestamps = false;

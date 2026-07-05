@@ -183,10 +183,11 @@
                         <th data-col="3">Rôle<span class="sort-icon"></span></th>
                         <th data-col="4">Dept<span class="sort-icon"></span></th>
                         <th data-col="5">Actif<span class="sort-icon"></span></th>
+                        <th data-col="6">Email<span class="sort-icon"></span></th>
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
-                    <tr><td colspan="6" class="text-center text-muted py-3">Chargement…</td></tr>
+                    <tr><td colspan="7" class="text-center text-muted py-3">Chargement…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -215,6 +216,11 @@
         <div class="mb-2">
             <label class="form-label" for="txt-prenom">Prénom :</label>
             <input type="text" id="txt-prenom" class="form-control form-control-sm" maxlength="100">
+        </div>
+
+        <div class="mb-2">
+            <label class="form-label" for="txt-email">Adresse email :</label>
+            <input type="email" id="txt-email" class="form-control form-control-sm" maxlength="150">
         </div>
 
         <div class="mb-2">
@@ -305,7 +311,7 @@ function chargerListe(selectId = null) {
     $.get(`${UTILISATEUR_BASE}/data`, function (res) {
         const $body = $('#tbody-liste').empty();
         if (!res.ok || !res.data.length) {
-            $body.append('<tr><td colspan="6" class="text-center text-muted py-3">Aucun utilisateur.</td></tr>');
+            $body.append('<tr><td colspan="7" class="text-center text-muted py-3">Aucun utilisateur.</td></tr>');
             return;
         }
         res.data.forEach(u => {
@@ -319,7 +325,8 @@ function chargerListe(selectId = null) {
                     $('<td>').text(u.Prenom),
                     $('<td>').text(u.Role),
                     $('<td class="text-center">').text(u.Id_Departement),
-                    $('<td class="text-center">').text(actif ? '✔' : '')
+                    $('<td class="text-center">').text(actif ? '✔' : ''),
+                    $('<td>').text(u.Email || '')
                 )
                 .on('click', function () { selectionnerLigne($(this)); });
             $body.append($tr);
@@ -344,6 +351,7 @@ function selectionnerLigne($tr) {
         $('#txt-login').val(u.Login);
         $('#txt-nom').val(u.Nom);
         $('#txt-prenom').val(u.Prenom);
+        $('#txt-email').val(u.Email || '');
         $('#cbo-role').val(u.Role);
         $('#cbo-dept').val(u.Id_Departement);
         $('#txt-mdp').val('');
@@ -363,6 +371,7 @@ $('#btn-nouveau').on('click', function () {
     $('#txt-login').val('').trigger('focus');
     $('#txt-nom').val('');
     $('#txt-prenom').val('');
+    $('#txt-email').val('');
     $('#cbo-role').val('Nominateur');
     $('#cbo-dept').val(0);
     $('#txt-mdp').val('Change_On_Install');
@@ -380,6 +389,7 @@ $('#btn-enregistrer').on('click', function () {
         login:        $('#txt-login').val().trim(),
         nom:          $('#txt-nom').val().trim(),
         prenom:       $('#txt-prenom').val().trim(),
+        email:        $('#txt-email').val().trim(),
         role:         $('#cbo-role').val(),
         dept:         $('#cbo-dept').val(),
         mdp:          $('#txt-mdp').val(),

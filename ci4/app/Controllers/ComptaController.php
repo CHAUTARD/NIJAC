@@ -34,10 +34,6 @@ class ComptaController extends BaseController
         $u = $_SESSION['utilisateur'] ?? [];
 
         $pdo = getPDO();
-        try {
-            initTableConfiguration($pdo);
-        } catch (\Throwable $ignored) {
-        }
 
         $saison      = getConfig('saison', '');
         $phase1Debut = getConfig('phase1_debut', '09-01');

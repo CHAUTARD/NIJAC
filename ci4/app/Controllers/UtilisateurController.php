@@ -37,7 +37,7 @@ class UtilisateurController extends BaseController
     public function data(): ResponseInterface
     {
         $rows = $this->utilisateurModel
-            ->select('Id_Utilisateur, Login, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin')
+            ->select('Id_Utilisateur, Login, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin, Email')
             ->orderBy('Nom', 'ASC')
             ->orderBy('Prenom', 'ASC')
             ->findAll();
@@ -49,7 +49,7 @@ class UtilisateurController extends BaseController
     {
         $id  = (int) $id;
         $row = $this->utilisateurModel
-            ->select('Id_Utilisateur, Login, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin')
+            ->select('Id_Utilisateur, Login, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin, Email')
             ->find($id);
 
         return $this->response->setJSON(
@@ -120,6 +120,7 @@ class UtilisateurController extends BaseController
         $role     = trim($input['role'] ?? '');
         $dept     = (int) ($input['dept'] ?? 0);
         $mdp      = $input['mdp'] ?? '';
+        $email    = trim($input['email'] ?? '');
         $actif    = ($input['actif'] ?? '0') === '1' ? 1 : 0;
         $chgLogin = ($input['change_login'] ?? '0') === '1' ? 1 : 0;
 
@@ -132,6 +133,9 @@ class UtilisateurController extends BaseController
         if (!in_array($role, ['Administrateur', 'Nominateur', 'Consultation'], true)) {
             return 'Rôle invalide.';
         }
+        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return 'Adresse email invalide.';
+        }
 
         $fields = [
             'Login'          => $login,
@@ -141,6 +145,7 @@ class UtilisateurController extends BaseController
             'Id_Departement' => $dept,
             'Actif'          => $actif,
             'ChangeLogin'    => $chgLogin,
+            'Email'          => $email !== '' ? $email : null,
         ];
 
         if ($mdp !== '') {

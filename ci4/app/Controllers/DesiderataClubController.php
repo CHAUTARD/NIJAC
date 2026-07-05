@@ -24,10 +24,6 @@ class DesiderataClubController extends BaseController
         require_once __DIR__ . '/../../../config/app_config.php';
 
         $pdo = getPDO();
-        try {
-            initTableConfiguration($pdo);
-        } catch (\Throwable $ignored) {
-        }
 
         $colsSalle = array_column($pdo->query('SHOW COLUMNS FROM salle')->fetchAll(\PDO::FETCH_ASSOC), 'Field');
         if (!in_array('Cp', $colsSalle)) {

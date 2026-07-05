@@ -28,67 +28,6 @@ function jsonError(string $msg, int $httpCode = 200): never
  */
 function initTableConfiguration(\PDO $pdo): void
 {
-    // Ajout colonne Gentile sur table region (gentilé de la région, ex: "Normand(e)")
-    $cols = array_column($pdo->query('SHOW COLUMNS FROM region')->fetchAll(\PDO::FETCH_ASSOC), 'Field');
-    if (!in_array('Gentile', $cols)) {
-        $pdo->exec("ALTER TABLE region ADD COLUMN Gentile VARCHAR(100) NULL AFTER nom");
-        $pdo->exec("
-            UPDATE region SET Gentile = CASE nom
-                WHEN 'Normandie'              THEN 'Normand(e)'
-                WHEN 'Île-de-France'          THEN 'Francilien(ne)'
-                WHEN 'Bretagne'               THEN 'Breton(ne)'
-                WHEN 'Pays de la Loire'       THEN 'Ligérien(ne)'
-                WHEN 'Nouvelle-Aquitaine'     THEN 'Néo-Aquitain(e)'
-                WHEN 'Occitanie'              THEN 'Occitan(e)'
-                WHEN 'Auvergne-Rhône-Alpes'  THEN 'Auvergnat(e)-Rhônalpin(e)'
-                WHEN 'Provence-Alpes-Côte d''Azur' THEN 'Provençal(e)'
-                WHEN 'Grand Est'              THEN 'Grand-Estien(ne)'
-                WHEN 'Hauts-de-France'        THEN 'Haut-de-Français(e)'
-                WHEN 'Bourgogne-Franche-Comté' THEN 'Bourguignon(ne)-Franc-Comtois(e)'
-                WHEN 'Centre-Val de Loire'    THEN 'Centrevalloirien(ne)'
-                WHEN 'Corse'                  THEN 'Corse'
-                WHEN 'Guadeloupe'             THEN 'Guadeloupéen(ne)'
-                WHEN 'Martinique'             THEN 'Martiniquais(e)'
-                WHEN 'Guyane'                 THEN 'Guyanais(e)'
-                WHEN 'La Réunion'             THEN 'Réunionnais(e)'
-                WHEN 'Mayotte'                THEN 'Mahorais(e)'
-                ELSE nom
-            END
-        ");
-    }
-
-    // Renommage colonne ArbitrageObligatoire -> ArbitrageCRA sur la table division
-    $divCols = array_column($pdo->query('SHOW COLUMNS FROM division')->fetchAll(\PDO::FETCH_ASSOC), 'Field');
-    if (in_array('ArbitrageObligatoire', $divCols) && !in_array('ArbitrageCRA', $divCols)) {
-        $pdo->exec("ALTER TABLE division CHANGE COLUMN ArbitrageObligatoire ArbitrageCRA TINYINT(1) NOT NULL DEFAULT 1");
-    }
-
-    // Colonnes pour le formulaire de désidératas club (E023, remplace le questionnaire Excel)
-    $colsClub = array_column($pdo->query('SHOW COLUMNS FROM club')->fetchAll(\PDO::FETCH_ASSOC), 'Field');
-    foreach ([
-        'NbAiresJeu'          => 'INT NULL',
-        'DesiderataNote'      => 'TEXT NULL',
-        'DesiderataSaison'    => 'VARCHAR(9) NULL',
-        'DesiderataDate'      => 'DATETIME NULL',
-        'DesiderataEmailDate' => 'DATETIME NULL',
-    ] as $col => $def) {
-        if (!in_array($col, $colsClub)) $pdo->exec("ALTER TABLE club ADD COLUMN $col $def");
-    }
-
-    $colsSalle = array_column($pdo->query('SHOW COLUMNS FROM salle')->fetchAll(\PDO::FETCH_ASSOC), 'Field');
-    if (!in_array('Telephone', $colsSalle)) {
-        $pdo->exec("ALTER TABLE salle ADD COLUMN Telephone VARCHAR(20) NULL");
-    }
-
-    $colsEquipe = array_column($pdo->query('SHOW COLUMNS FROM equipe')->fetchAll(\PDO::FETCH_ASSOC), 'Field');
-    foreach ([
-        'ReEngagement'     => "ENUM('O','N') NULL",
-        'JourSouhaite'     => "ENUM('Samedi','Dimanche') NULL",
-        'SouhaitJA'        => "ENUM('CRA','Club') NULL",
-        'DesiderataSaison' => 'VARCHAR(9) NULL',
-    ] as $col => $def) {
-        if (!in_array($col, $colsEquipe)) $pdo->exec("ALTER TABLE equipe ADD COLUMN $col $def");
-    }
 }
 
 /**

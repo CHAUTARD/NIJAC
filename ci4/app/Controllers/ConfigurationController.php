@@ -41,7 +41,6 @@ class ConfigurationController extends BaseController
 
         $pdo = getPDO();
         try {
-            initTableConfiguration($pdo);
             $etatCourant       = getConfig('etat_logiciel', 'Developpement');
             $emailDev          = getConfig('email_developpement', 'patrick.chautard@free.fr');
             $deptsActifs       = getConfig('departements_actifs', '14,27,50,61,76');

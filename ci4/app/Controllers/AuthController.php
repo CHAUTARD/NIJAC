@@ -47,7 +47,7 @@ class AuthController extends BaseController
                     $pdo = getPDO();
 
                     $stmt = $pdo->prepare(
-                        'SELECT Id_Utilisateur, Password, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin
+                        'SELECT Id_Utilisateur, Password, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin, Email
                          FROM Utilisateur
                          WHERE Login = :login
                          LIMIT 1'
@@ -68,6 +68,7 @@ class AuthController extends BaseController
                             'id_departement' => $row['Id_Departement'],
                             'change_login'   => (bool) $row['ChangeLogin'],
                             'is_admin'       => ($row['Role'] === 'Administrateur'),
+                            'email'          => $row['Email'] ?? '',
                         ];
 
                         if ($row['Role'] === 'JA') {

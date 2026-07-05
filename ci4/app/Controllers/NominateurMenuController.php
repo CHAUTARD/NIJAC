@@ -35,10 +35,6 @@ class NominateurMenuController extends BaseController
 
         try {
             $pdo = getPDO();
-            try {
-                initTableConfiguration($pdo);
-            } catch (\Throwable) {
-            }
 
             $deptsAutorises = getDepartementsAutorises($u['id_departement'] ?? null);
             $deptPh         = $deptsAutorises ? implode(',', array_fill(0, count($deptsAutorises), '?')) : "''";

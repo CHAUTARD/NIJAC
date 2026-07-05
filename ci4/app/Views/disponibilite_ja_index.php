@@ -493,13 +493,7 @@
 <!-- ── Vue calendrier mensuelle ───────────────────────────────────────── -->
 <div id="section-cal-grille">
     <div id="nav-saison" style="display:flex;align-items:center;gap:.75rem;padding:.5rem 0 .6rem;flex-wrap:wrap;">
-        <button id="btn-saison-prev" class="btn btn-sm btn-outline-secondary" style="font-size:.82rem;font-weight:600;">
-            <i class="bi bi-chevron-left"></i> Saison précédente
-        </button>
         <span id="lbl-saison-cal" style="font-size:.92rem;font-weight:700;color:var(--nijac-blue);flex:1;text-align:center;"></span>
-        <button id="btn-saison-next" class="btn btn-sm btn-outline-secondary" style="font-size:.82rem;font-weight:600;">
-            Saison suivante <i class="bi bi-chevron-right"></i>
-        </button>
     </div>
     <div class="cal-legende">
         <span class="cal-legende-item"><span class="cal-dot dot-O"></span>Disponible</span>
@@ -532,6 +526,8 @@ const BASE = '<?= site_url('disponibilite-ja') ?>';
 
 // Saison courante lue depuis la configuration (ex : "2026/2027")
 const CONFIG_SAISON = <?= json_encode(getConfig('saison') ?: '') ?>;
+// Phase courante (1 ou 2), déterminée par getAnneePhase() (bornes phase2_debut/phase2_fin)
+const CONFIG_PHASE = <?= strpos(getAnneePhase(), '-') !== false ? 2 : 1 ?>;
 
 (function () {
     const m = CONFIG_SAISON.match(/(\d{4})/);
@@ -539,8 +535,6 @@ const CONFIG_SAISON = <?= json_encode(getConfig('saison') ?: '') ?>;
         const n = new Date(); return n.getMonth() >= 8 ? n.getFullYear() : n.getFullYear() - 1;
     })();
 })();
-
-let saisonOffset = 0;
 
 let idJaCourant  = null;
 let nomJaCourant = '';
@@ -986,9 +980,9 @@ function renderCalendrierMensuel() {
     const today = new Date();
     today.setHours(0,0,0,0);
 
-    const yrDebut = window._yrDebutConfig + saisonOffset;
+    const yrDebut = window._yrDebutConfig;
 
-    $('#lbl-saison-cal').text(`Saison ${yrDebut} / ${yrDebut + 1}`);
+    $('#lbl-saison-cal').text(`Phase ${CONFIG_PHASE} / ${yrDebut}-${yrDebut + 1}`);
 
     const moisSaison = [
         [yrDebut,     8],
@@ -1008,15 +1002,6 @@ function renderCalendrierMensuel() {
         $grille.append(buildMonthGrid(annee, mois, today));
     });
 }
-
-$('#btn-saison-prev').on('click', function () {
-    saisonOffset--;
-    renderCalendrierMensuel();
-});
-$('#btn-saison-next').on('click', function () {
-    saisonOffset++;
-    renderCalendrierMensuel();
-});
 
 function buildMonthGrid(annee, mois, today) {
     const $wrap = $('<div class="cal-mois">');

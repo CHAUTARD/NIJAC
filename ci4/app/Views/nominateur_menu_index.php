@@ -275,7 +275,7 @@
 
 <!-- ── Tableau de bord ── -->
 <div id="dashboard">
-    <div class="dash-title"><i class="bi bi-speedometer2 me-1"></i>Tableau de bord</div>
+    <div class="dash-title"></div>
     <div class="dash-cards">
 
         <!-- Prochaine journée -->

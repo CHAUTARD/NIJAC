@@ -311,6 +311,11 @@
         <!-- Corps -->
         <div id="panel-message-body">
 
+            <div class="mb-2" id="grp-cc" style="display:none;">
+                <label class="form-label" for="txt-cc">Cc :</label>
+                <input type="email" id="txt-cc" class="form-control form-control-sm" maxlength="150">
+            </div>
+
             <div class="mb-2">
                 <label class="form-label" for="txt-sujet">Sujet :</label>
                 <input type="text" id="txt-sujet" class="form-control form-control-sm" maxlength="150">
@@ -464,7 +469,8 @@
 'use strict';
 
 const CENTRENVOYE_BASE = '<?= site_url('centrenvoye') ?>';
-const MODELES = <?= json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS) ?>;
+const MODELES  = <?= json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS) ?>;
+const MON_EMAIL = <?= json_encode($monEmail, JSON_HEX_TAG | JSON_HEX_APOS) ?>;
 
 const TITRES_JA = {
     'Disponibilites':  'JA actifs du département',
@@ -500,9 +506,11 @@ $('.type-tab').on('click', function () {
 });
 
 function chargerModele(type) {
-    const m = MODELES[type] || { sujet: '', message: '' };
+    const m = MODELES[type] || { sujet: '', message: '', cc: false };
     $('#txt-sujet').val(m.sujet || '');
     $('#txt-message').val(m.message || '');
+    $('#grp-cc').toggle(!!m.cc);
+    $('#txt-cc').val(m.cc ? MON_EMAIL : '');
     // Afficher/masquer les sections du cartouche selon le type actif
     $('#cart-convocation').toggle(type === 'Convocation');
     $('#cart-liste-nom').toggle(type === 'Liste nomination');
@@ -787,6 +795,7 @@ function demarrerEnvoi(sujet, message, ids) {
                 type:    typeActif,
                 sujet, message,
                 saison:  saisonCourante ?? '',
+                cc:      $('#grp-cc').is(':visible') ? $('#txt-cc').val().trim() : '',
             };
             if (typeActif === 'Convocation') {
                 postData.id_nomination = id;
