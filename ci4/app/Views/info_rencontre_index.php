@@ -134,12 +134,12 @@
     <!-- ── Arbitrage club : rencontres R3M / R4M à sélectionner ─────────── -->
     <div class="card border-0 shadow-sm mt-3">
         <div class="card-header fw-semibold bg-warning text-dark d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-trophy me-2"></i>Arbitrage club — Rencontres R3M / R4M à venir</span>
+            <span><i class="bi bi-trophy me-2"></i>Arbitrage club — Rencontres R3M / R4M (± 5 jours)</span>
             <span class="badge bg-dark"><?= count($rencontresR3R4) ?></span>
         </div>
         <div class="card-body p-0">
             <?php if (empty($rencontresR3R4)): ?>
-            <p class="text-muted p-3 mb-0"><i class="bi bi-info-circle me-2"></i>Aucune rencontre R3M/R4M à venir avec arbitrage assuré par le club.</p>
+            <p class="text-muted p-3 mb-0"><i class="bi bi-info-circle me-2"></i>Aucune rencontre R3M/R4M dans les ± 5 jours avec arbitrage assuré par le club.</p>
             <?php else: ?>
             <p class="text-muted px-3 pt-3 mb-2 small"><i class="bi bi-info-circle me-2"></i>Votre club a choisi d'assurer lui-même l'arbitrage de ses rencontres R3M/R4M à domicile. Sélectionnez les rencontres que vous allez arbitrer, puis validez.</p>
             <form id="form-selection">

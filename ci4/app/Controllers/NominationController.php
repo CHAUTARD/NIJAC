@@ -423,7 +423,7 @@ class NominationController extends BaseController
             $stmt = $pdo->prepare('
                 SELECT n.Id_Nomination, n.Id_Rencontre, ja.Id_JA, ja.Nom, ja.Prenom, ja.Email,
                        ed.Nom AS NomDom, ee.Nom AS NomExt,
-                       r.Date, r.Heure, dv.Division
+                       r.Date, r.Heure, r.Journee, r.Poule, dv.Division, RIGHT(dv.Division, 1) AS SexeCode
                 FROM nomination n
                 JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
                 JOIN rencontre r  ON r.Id_Rencontre  = n.Id_Rencontre
@@ -437,14 +437,13 @@ class NominationController extends BaseController
             $stmt->execute([$journee, $date]);
             $nominations = $stmt->fetchAll();
 
-            $obf     = new \Obfuscator(OBFUSCATOR_SEED);
+            $moi     = $_SESSION['utilisateur'] ?? [];
             $envoyes = 0;
             $erreurs = [];
             $liens   = [];
 
             foreach ($nominations as $nom) {
-                $token = $obf->obfuscate((int) $nom['Id_JA']);
-                $lien  = site_url('convocation-ja') . '?nomination=' . $nom['Id_Nomination'];
+                $lien    = site_url('convocation-ja') . '?nomination=' . $nom['Id_Nomination'];
                 $liens[] = [
                     'nom'       => "{$nom['Prenom']} {$nom['Nom']}",
                     'email'     => $nom['Email'] ?? '',
@@ -460,17 +459,21 @@ class NominationController extends BaseController
                         $tplConv = $r ?: ['Sujet' => 'Convocation — {DIVISION} — {DATE}', 'Message' => ''];
                     }
 
-                    $markers = ['{NOM}', '{PRENOM}', '{NOM_COMPLET}', '{ID_JA}',
-                        '{DATE}', '{HEURE}', '{JOURNEE}', '{DIVISION}', '{DOM}', '{EXT}',
-                        '{LIEN_CONVOCATION}', '{LIEN_LIGUE}', '{YEAR_PHASE}'];
-                    $values = [$nom['Nom'], $nom['Prenom'], $nom['Prenom'] . ' ' . $nom['Nom'], $token,
-                        $nom['Date'] ? date('d/m/Y', strtotime($nom['Date'])) : '', $nom['Heure'] ?? '',
-                        $nom['Journee'] ?? '', $nom['Division'],
-                        $nom['NomDom'], $nom['NomExt'] ?? '',
-                        $lien, getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'), getAnneePhase()];
-
-                    $sujet = str_replace($markers, $values, $tplConv['Sujet']);
-                    $corps = str_replace($markers, $values, $tplConv['Message']);
+                    $marqueurs = construireMarqueursMessage($nom, $moi, [
+                        'id_nomination' => $nom['Id_Nomination'],
+                        'sexe_code'     => $nom['SexeCode'] ?? null,
+                        'date'          => $nom['Date']     ?? null,
+                        'heure'         => $nom['Heure']    ?? null,
+                        'journee'       => $nom['Journee']  ?? null,
+                        'poule'         => $nom['Poule']    ?? null,
+                        'division'      => $nom['Division'] ?? null,
+                        'dom'           => $nom['NomDom']   ?? null,
+                        'ext'           => $nom['NomExt']   ?? null,
+                    ]);
+                    $rendu = remplacerMarqueursMessage($tplConv['Sujet'], $tplConv['Message'], $marqueurs);
+                    // Alias historique : les modèles écrits avant l'ajout de {URL_CONVOCATION_JA} utilisent {LIEN_CONVOCATION}/{LIEN_LIGUE}.
+                    $sujet = str_replace(['{LIEN_CONVOCATION}', '{LIEN_LIGUE}'], [$lien, getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr')], $rendu['sujet']);
+                    $corps = str_replace(['{LIEN_CONVOCATION}', '{LIEN_LIGUE}'], [$lien, getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr')], $rendu['corps']);
 
                     if ($corps === '') {
                         $corps = "Bonjour {$nom['Prenom']},\r\n\r\nVous êtes nominé(e) pour la rencontre {$nom['NomDom']} vs {$nom['NomExt']} le {$nom['Date']}.\r\n\r\nConsultez votre convocation : $lien";

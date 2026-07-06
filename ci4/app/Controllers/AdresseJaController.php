@@ -150,17 +150,10 @@ class AdresseJaController extends BaseController
                     return $this->response->setJSON(['ok' => false, 'err' => 'Modèle "Demande adresse" introuvable en base.']);
                 }
 
-                $token        = $this->obf->obfuscate($idJaPost);
-                $urlAdresseJa = site_url('adresse-ja') . '?ja=' . $token;
-
-                $cherche  = ['{NOM}', '{PRENOM}', '{NOM_COMPLET}', '{ID_JA}', '{URL_ADRESSE_JA}',
-                    '{UTI_NOM}', '{UTI_PRENOM}', '{URL_LIGUE}', '{YEAR_PHASE}'];
-                $remplace = [$ja['Nom'], $ja['Prenom'], $ja['Prenom'] . ' ' . $ja['Nom'], $token, $urlAdresseJa,
-                    $moi['nom'] ?? '', $moi['prenom'] ?? '', getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'), getAnneePhase()];
-
-                $corps = str_replace($cherche, $remplace, $modele['Message']);
-                $sujet = str_replace($cherche, $remplace, $modele['Sujet']);
-                $corps = preg_replace('/ {3,}/', ' ', $corps);
+                $marqueurs = construireMarqueursMessage($ja, $moi);
+                $rendu     = remplacerMarqueursMessage($modele['Sujet'], $modele['Message'], $marqueurs);
+                $sujet     = $rendu['sujet'];
+                $corps     = preg_replace('/ {3,}/', ' ', $rendu['corps']);
 
                 $errRl = checkRateLimit(1);
                 if ($errRl !== null) {
@@ -181,7 +174,7 @@ class AdresseJaController extends BaseController
                 $mail->send();
                 enregistrerEnvois(1);
 
-                return $this->response->setJSON(['ok' => true, 'nom' => $ja['Prenom'] . ' ' . $ja['Nom'], 'url' => $urlAdresseJa]);
+                return $this->response->setJSON(['ok' => true, 'nom' => $ja['Prenom'] . ' ' . $ja['Nom'], 'url' => $marqueurs['{URL_ADRESSE_JA}']]);
             } catch (\Exception $e) {
                 return $this->response->setJSON(['ok' => false, 'err' => $e->getMessage()]);
             }

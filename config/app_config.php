@@ -110,6 +110,86 @@ function getEmailDestinataire(string $email): string
 }
 
 /**
+ * Construit la table de correspondance des marqueurs {XXX} des modèles de
+ * message (table `messagerie`) — source unique remplaçant les listes de
+ * marqueurs dupliquées et divergentes qui existaient dans
+ * CentrenvoyeController::marqueurs() (E024), NominationController::
+ * envoyerConvocations() (E022), InfoRencontreController::
+ * designerJaPourRencontre() (E030) et AdresseJaController::
+ * envoyerDemandeAdresse() (E029). C'est cette divergence qui causait le bug
+ * "{URL_CONVOCATION_JA} non remplacé" (E022 ne connaissait que
+ * {LIEN_CONVOCATION}).
+ *
+ * @param array $ja   Ligne JA : au moins Id_JA, Nom, Prenom.
+ * @param array $moi  Utilisateur connecté ($_SESSION['utilisateur']) ; tableau vide pour un envoi sans session.
+ * @param array $ctx  Contexte optionnel de la rencontre/convocation — toute clé absente laisse
+ *                    le(s) marqueur(s) correspondant(s) vide(s) :
+ *                    id_nomination, sexe_code ('F'|'M'), date, heure, journee, poule, division, dom, ext,
+ *                    salle_nom, salle_adresse, salle_cp, salle_ville,
+ *                    corr_nom, corr_email, corr_tel, liste_nominations (HTML de {LISTE_NOMINATIONS}).
+ * @return array<string,string> Table marqueur => valeur, prête pour remplacerMarqueursMessage().
+ */
+function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = []): array
+{
+    require_once __DIR__ . '/../Classes/Obfuscator.php';
+
+    $idJa         = (int)($ja['Id_JA'] ?? 0);
+    $token        = $idJa > 0 ? (new \Obfuscator(OBFUSCATOR_SEED))->obfuscate($idJa) : '';
+    $idNomination = $ctx['id_nomination'] ?? null;
+
+    $sexe = match ($ctx['sexe_code'] ?? '') {
+        'F'     => 'Féminin',
+        'M'     => 'Mixte',
+        default => '',
+    };
+
+    return [
+        '{NOM}'                  => $ja['Nom'] ?? '',
+        '{PRENOM}'               => $ja['Prenom'] ?? '',
+        '{NOM_COMPLET}'          => trim(($ja['Prenom'] ?? '') . ' ' . ($ja['Nom'] ?? '')),
+        '{ID_JA}'                => $token,
+        '{ID_CONVOCATION}'       => $idNomination !== null ? (string)$idNomination : '',
+        '{SEXE}'                 => $sexe,
+        '{UTI_NOM}'              => $moi['nom'] ?? '',
+        '{UTI_PRENOM}'           => $moi['prenom'] ?? '',
+        '{URL_LIGUE}'            => getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),
+        '{URL_ADRESSE_JA}'       => $token !== '' ? (site_url('adresse-ja') . '?ja=' . $token) : '',
+        '{URL_DISPONIBILITE_JA}' => $token !== '' ? (site_url('disponibilite-ja') . '?ja=' . $token) : '',
+        '{URL_CONVOCATION_JA}'   => !empty($idNomination) ? (site_url('convocation-ja') . '?nomination=' . $idNomination) : '',
+        '{YEAR_PHASE}'           => getAnneePhase(),
+        '{DATE}'                 => !empty($ctx['date']) ? date('d/m/Y', strtotime($ctx['date'])) : '',
+        '{HEURE}'                => substr((string)($ctx['heure'] ?? ''), 0, 5),
+        '{JOURNEE}'              => $ctx['journee']  ?? '',
+        '{POULE}'                => $ctx['poule']    ?? '',
+        '{DIVISION}'             => $ctx['division'] ?? '',
+        '{DOM}'                  => $ctx['dom']       ?? '',
+        '{EXT}'                  => $ctx['ext']       ?? '',
+        '{SALLE_NOM}'            => $ctx['salle_nom']     ?? '',
+        '{SALLE_ADRESSE}'        => $ctx['salle_adresse'] ?? '',
+        '{SALLE_CP}'             => $ctx['salle_cp']      ?? '',
+        '{SALLE_VILLE}'          => $ctx['salle_ville']   ?? '',
+        '{CORR_NOM}'             => $ctx['corr_nom']   ?? '',
+        '{CORR_EMAIL}'           => $ctx['corr_email'] ?? '',
+        '{CORR_TEL}'             => $ctx['corr_tel']   ?? '',
+        '{LISTE_NOMINATIONS}'    => $ctx['liste_nominations'] ?? '',
+    ];
+}
+
+/**
+ * Substitue les marqueurs {XXX} dans un couple sujet/corps de message, à
+ * partir de la table retournée par construireMarqueursMessage().
+ *
+ * @return array{sujet: string, corps: string}
+ */
+function remplacerMarqueursMessage(string $sujet, string $corps, array $marqueurs): array
+{
+    return [
+        'sujet' => strtr($sujet, $marqueurs),
+        'corps' => strtr($corps, $marqueurs),
+    ];
+}
+
+/**
  * Vérifie si l'utilisateur peut envoyer $nb emails supplémentaires.
  * Utilise une fenêtre glissante stockée en session.
  *

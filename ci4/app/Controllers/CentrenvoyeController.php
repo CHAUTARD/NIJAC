@@ -232,14 +232,10 @@ class CentrenvoyeController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => 'Nomination introuvable.']);
         }
 
-        $token = $this->obfuscator()->obfuscate((int) $ja['Id_JA']);
-        $vars  = $this->marqueurs($ja, $this->moi(), $token);
+        $marqueurs = construireMarqueursMessage($ja, $this->moi(), $this->ctxConvocation($ja));
+        $rendu     = remplacerMarqueursMessage($sujet, $message, $marqueurs);
 
-        return $this->response->setJSON([
-            'ok'    => true,
-            'sujet' => strtr($sujet, $vars),
-            'corps' => strtr($message, $vars),
-        ]);
+        return $this->response->setJSON(['ok' => true, 'sujet' => $rendu['sujet'], 'corps' => $rendu['corps']]);
     }
 
     public function envoyer(): ResponseInterface
@@ -299,16 +295,7 @@ class CentrenvoyeController extends BaseController
         } else {
             // Pour "Demande adresse" on autorise aussi les JA inactifs sans adresse
             $activeOnly = ($type !== 'Demande adresse') ? 'AND j.Actif = 1' : '';
-            $stmt       = $pdo->prepare("
-                SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
-                       NULL AS Id_Nomination, NULL AS Id_Rencontre,
-                       NULL AS Date, NULL AS Heure, NULL AS Journee, NULL AS Poule,
-                       NULL AS Division, NULL AS SexeCode, NULL AS NomDom, NULL AS NomExt,
-                       NULL AS SalleNom, NULL AS SalleAdresse, NULL AS SalleCP, NULL AS SalleVille,
-                       NULL AS CorrNom, NULL AS CorrEmail, NULL AS CorrTel
-                FROM ja j
-                WHERE j.Id_JA = ? $activeOnly
-            ");
+            $stmt       = $pdo->prepare("SELECT j.Id_JA, j.Nom, j.Prenom, j.Email FROM ja j WHERE j.Id_JA = ? $activeOnly");
             $stmt->execute([$idJa]);
             $ja = $stmt->fetch();
         }
@@ -353,13 +340,13 @@ class CentrenvoyeController extends BaseController
             }
         }
 
-        $token        = $this->obfuscator()->obfuscate((int) $ja['Id_JA']);
-        $urlAdresseJa = site_url('adresse-ja') . '?ja=' . $token;
+        $ctx = $type === 'Convocation' ? $this->ctxConvocation($ja) : [];
+        $ctx['liste_nominations'] = $listeNoms;
 
-        $vars = $this->marqueurs($ja, $moi, $token, $listeNoms, $urlAdresseJa);
-
-        $corps      = strtr($message, $vars);
-        $sujetRendu = strtr($sujet, $vars);
+        $marqueurs  = construireMarqueursMessage($ja, $moi, $ctx);
+        $rendu      = remplacerMarqueursMessage($sujet, $message, $marqueurs);
+        $corps      = $rendu['corps'];
+        $sujetRendu = $rendu['sujet'];
 
         // Réduire les suites d'espaces (>2) en un seul espace — les plages d'espaces
         // déclenchent les filtres antispam (Free.fr, OVH…)
@@ -456,52 +443,30 @@ class CentrenvoyeController extends BaseController
     }
 
     /**
-     * Table de substitution des marqueurs {XXX} pour sujet/corps — partagée
-     * par apercu() et envoyerUn(). $listeNominations/$urlAdresseJa restent
-     * vides hors de leur contexte (Liste nomination / Demande adresse) ; un
-     * marqueur absent du texte n'est simplement jamais substitué (strtr), donc
-     * ce périmètre plus large que chaque appel legacy individuel est sans
-     * effet observable.
-     *
-     * {URL_DISPONIBILITE_JA} et {URL_CONVOCATION_JA} remplacent les anciens
-     * liens codés en dur vers Nominateur/disponibilite_ja.php et
-     * Nominateur/convocation_ja.php (fichiers legacy supprimés, migrés en
-     * routes CI4) — à utiliser dans les modèles de message à la place de
-     * {URL_LIGUE}/nijac/Nominateur/....
+     * Mappe une ligne retournée par chargerNominationConvocation() (alias SQL
+     * en PascalCase) vers le $ctx snake_case attendu par
+     * construireMarqueursMessage() (config/app_config.php), utilisée par
+     * apercu() et envoyerUn() pour le type "Convocation".
      */
-    private function marqueurs(array $ja, array $moi, string $token, string $listeNominations = '', string $urlAdresseJa = ''): array
+    private function ctxConvocation(array $ja): array
     {
-        $sexe = ($ja['SexeCode'] ?? '') === 'F' ? 'Féminin' : (($ja['SexeCode'] ?? '') === 'M' ? 'Mixte' : '');
-
         return [
-            '{NOM}'                  => $ja['Nom'],
-            '{PRENOM}'               => $ja['Prenom'],
-            '{NOM_COMPLET}'          => $ja['Prenom'] . ' ' . $ja['Nom'],
-            '{ID_JA}'                => $token,
-            '{ID_CONVOCATION}'       => (string) ($ja['Id_Nomination'] ?? ''),
-            '{SEXE}'                 => $sexe,
-            '{UTI_NOM}'              => $moi['nom'] ?? '',
-            '{UTI_PRENOM}'           => $moi['prenom'] ?? '',
-            '{URL_LIGUE}'            => getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),
-            '{URL_ADRESSE_JA}'       => $urlAdresseJa,
-            '{URL_DISPONIBILITE_JA}' => site_url('disponibilite-ja') . '?ja=' . $token,
-            '{URL_CONVOCATION_JA}'   => !empty($ja['Id_Nomination']) ? (site_url('convocation-ja') . '?nomination=' . $ja['Id_Nomination']) : '',
-            '{YEAR_PHASE}'           => getAnneePhase(),
-            '{DATE}'                 => $ja['Date'] ? date('d/m/Y', strtotime($ja['Date'])) : '',
-            '{HEURE}'                => $ja['Heure'] ?? '',
-            '{JOURNEE}'              => $ja['Journee'] ?? '',
-            '{POULE}'                => $ja['Poule'] ?? '',
-            '{DIVISION}'             => $ja['Division'] ?? '',
-            '{DOM}'                  => $ja['NomDom'] ?? '',
-            '{EXT}'                  => $ja['NomExt'] ?? '',
-            '{SALLE_NOM}'            => $ja['SalleNom'] ?? '',
-            '{SALLE_ADRESSE}'        => $ja['SalleAdresse'] ?? '',
-            '{SALLE_CP}'             => $ja['SalleCP'] ?? '',
-            '{SALLE_VILLE}'          => $ja['SalleVille'] ?? '',
-            '{CORR_NOM}'             => $ja['CorrNom'] ?? '',
-            '{CORR_EMAIL}'           => $ja['CorrEmail'] ?? '',
-            '{CORR_TEL}'             => $ja['CorrTel'] ?? '',
-            '{LISTE_NOMINATIONS}'    => $listeNominations,
+            'id_nomination' => $ja['Id_Nomination'] ?? null,
+            'sexe_code'     => $ja['SexeCode']      ?? null,
+            'date'          => $ja['Date']          ?? null,
+            'heure'         => $ja['Heure']         ?? null,
+            'journee'       => $ja['Journee']       ?? null,
+            'poule'         => $ja['Poule']         ?? null,
+            'division'      => $ja['Division']      ?? null,
+            'dom'           => $ja['NomDom']        ?? null,
+            'ext'           => $ja['NomExt']        ?? null,
+            'salle_nom'     => $ja['SalleNom']      ?? null,
+            'salle_adresse' => $ja['SalleAdresse']  ?? null,
+            'salle_cp'      => $ja['SalleCP']       ?? null,
+            'salle_ville'   => $ja['SalleVille']    ?? null,
+            'corr_nom'      => $ja['CorrNom']       ?? null,
+            'corr_email'    => $ja['CorrEmail']     ?? null,
+            'corr_tel'      => $ja['CorrTel']       ?? null,
         ];
     }
 }

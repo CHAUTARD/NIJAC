@@ -121,36 +121,27 @@ class InfoRencontreController extends BaseController
         $msgRow    = $pdo->query("SELECT Sujet, Message FROM messagerie WHERE Type = 'Convocation' LIMIT 1")->fetch();
         $emailSent = false;
         if ($msgRow && !empty($ja['Email'])) {
-            $token = $this->obf->obfuscate((int) $idJa);
-            $sexe  = ($renc['SexeCode'] ?? '') === 'F' ? 'Féminin' : (($renc['SexeCode'] ?? '') === 'M' ? 'Mixte' : '');
-            $vars  = [
-                '{NOM}'            => $ja['Nom'],
-                '{PRENOM}'         => $ja['Prenom'],
-                '{NOM_COMPLET}'    => $ja['Prenom'] . ' ' . $ja['Nom'],
-                '{ID_JA}'          => $token,
-                '{ID_CONVOCATION}' => (string) $idNomination,
-                '{SEXE}'           => $sexe,
-                '{UTI_NOM}'        => '',
-                '{UTI_PRENOM}'     => '',
-                '{URL_LIGUE}'      => getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),
-                '{YEAR_PHASE}'     => getAnneePhase(),
-                '{DATE}'           => $renc['Date'] ? date('d/m/Y', strtotime($renc['Date'])) : '',
-                '{HEURE}'          => substr($renc['Heure'] ?? '', 0, 5),
-                '{JOURNEE}'        => $renc['Journee'] ?? '',
-                '{POULE}'          => $renc['Poule'] ?? '',
-                '{DIVISION}'       => $renc['Division'] ?? '',
-                '{DOM}'            => $renc['NomDom'] ?? '',
-                '{EXT}'            => $renc['NomExt'] ?? '',
-                '{SALLE_NOM}'      => $renc['SalleNom'] ?? '',
-                '{SALLE_ADRESSE}'  => $renc['SalleAdresse'] ?? '',
-                '{SALLE_CP}'       => $renc['SalleCP'] ?? '',
-                '{SALLE_VILLE}'    => $renc['SalleVille'] ?? '',
-                '{CORR_NOM}'       => $renc['CorrNom'] ?? '',
-                '{CORR_EMAIL}'     => $renc['CorrEmail'] ?? '',
-                '{CORR_TEL}'       => $renc['CorrTel'] ?? '',
-            ];
-            $corps = str_replace(array_keys($vars), array_values($vars), $msgRow['Message']);
-            $sujet = str_replace(array_keys($vars), array_values($vars), $msgRow['Sujet']);
+            $marqueurs = construireMarqueursMessage($ja, [], [
+                'id_nomination' => $idNomination,
+                'sexe_code'     => $renc['SexeCode']    ?? null,
+                'date'          => $renc['Date']        ?? null,
+                'heure'         => $renc['Heure']        ?? null,
+                'journee'       => $renc['Journee']     ?? null,
+                'poule'         => $renc['Poule']       ?? null,
+                'division'      => $renc['Division']    ?? null,
+                'dom'           => $renc['NomDom']      ?? null,
+                'ext'           => $renc['NomExt']      ?? null,
+                'salle_nom'     => $renc['SalleNom']     ?? null,
+                'salle_adresse' => $renc['SalleAdresse'] ?? null,
+                'salle_cp'      => $renc['SalleCP']      ?? null,
+                'salle_ville'   => $renc['SalleVille']   ?? null,
+                'corr_nom'      => $renc['CorrNom']      ?? null,
+                'corr_email'    => $renc['CorrEmail']    ?? null,
+                'corr_tel'      => $renc['CorrTel']      ?? null,
+            ]);
+            $rendu = remplacerMarqueursMessage($msgRow['Sujet'], $msgRow['Message'], $marqueurs);
+            $sujet = $rendu['sujet'];
+            $corps = $rendu['corps'];
             try {
                 $dest    = getEmailDestinataire($ja['Email']);
                 $isHtml  = strip_tags($corps) !== $corps;
@@ -263,7 +254,7 @@ class InfoRencontreController extends BaseController
              WHERE dv.Division IN ('R3M', 'R4M')
                AND ed.SouhaitJA = 'Club'
                AND ed.Id_Club = :id_club
-               AND r.Date >= CURDATE()
+               AND r.Date BETWEEN DATE_SUB(CURDATE(), INTERVAL 5 DAY) AND DATE_ADD(CURDATE(), INTERVAL 5 DAY)
              ORDER BY r.Date ASC, r.Heure ASC, dv.Ord ASC"
         );
         $stmtR3R4->execute([':id_club' => $ja['Id_Club']]);

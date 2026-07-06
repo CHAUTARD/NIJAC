@@ -341,6 +341,7 @@
                     <code data-cible="message" data-marqueur="{UTI_NOM}">{UTI_NOM}</code>
                     <code data-cible="message" data-marqueur="{UTI_PRENOM}">{UTI_PRENOM}</code>
                     <code data-cible="message" data-marqueur="{URL_LIGUE}">{URL_LIGUE}</code>
+                    <code data-cible="message" data-marqueur="{URL_DISPONIBILITE_JA}">{URL_DISPONIBILITE_JA}</code>
                 </div>
                 <div id="cart-convocation" style="display:none;margin-top:.2rem;">
                     <span class="badge me-1 fw-normal" style="font-size:.68rem;background:#1a7f4b;">Convocation</span>
@@ -360,6 +361,7 @@
                     <code data-cible="message" data-marqueur="{CORR_TEL}">{CORR_TEL}</code>
                     <code data-cible="message" data-marqueur="{ID_CONVOCATION}">{ID_CONVOCATION}</code>
                     <code data-cible="message" data-marqueur="{SEXE}">{SEXE}</code>
+                    <code data-cible="message" data-marqueur="{URL_CONVOCATION_JA}">{URL_CONVOCATION_JA}</code>
                 </div>
                 <div id="cart-liste-nom" style="display:none;margin-top:.2rem;">
                     <span class="badge me-1 fw-normal" style="font-size:.68rem;background:#6f42c1;">Liste nomination</span>
