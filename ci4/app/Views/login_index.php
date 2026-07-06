@@ -7,10 +7,10 @@
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
 
     <style>
         :root {
-            --nijac-blue: #1a3a6b;
             --nijac-blue-light: #2557a7;
         }
 

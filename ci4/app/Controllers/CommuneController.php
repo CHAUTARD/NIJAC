@@ -22,11 +22,13 @@ class CommuneController extends BaseController
     public function index()
     {
         $moi = $_SESSION['utilisateur'] ?? [];
+        $pdo = getPDO();
 
         $data = [
-            'nomComplet'  => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
-            'departement' => $moi['id_departement'] ?? '',
-            'changeLogin' => !empty($moi['change_login']),
+            'nomComplet'   => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
+            'departement'  => $moi['id_departement'] ?? '',
+            'changeLogin'  => !empty($moi['change_login']),
+            'departements' => $pdo->query('SELECT code, nom FROM departement ORDER BY code')->fetchAll(),
         ];
 
         return view('commune_index', $data);
@@ -39,15 +41,22 @@ class CommuneController extends BaseController
         $q          = trim($_GET['q'] ?? '');
         $offset     = max(0, (int) ($_GET['offset'] ?? 0));
         $sansCoords = !empty($_GET['sans_coords'] ?? '');
+        $dept       = trim($_GET['dept'] ?? '');
         $limit      = 500;
 
         $where  = $sansCoords ? '(lp.Latitude IS NULL OR lp.Longitude IS NULL OR lp.Latitude = 0 OR lp.Longitude = 0)' : '1';
         $params = [];
 
+        if ($dept !== '') {
+            $where  .= ' AND LEFT(lp.CodePostal, 2) = ?';
+            $params[] = $dept;
+        }
+
         if ($q !== '') {
-            $like    = '%' . $q . '%';
-            $where  .= ' AND (lp.CodePostal LIKE ? OR lp.Nom LIKE ?)';
-            $params  = [$like, $like];
+            $like     = '%' . $q . '%';
+            $where   .= ' AND (lp.CodePostal LIKE ? OR lp.Nom LIKE ?)';
+            $params[] = $like;
+            $params[] = $like;
         }
 
         $cntStmt = $pdo->prepare("SELECT COUNT(*) FROM laposte lp WHERE $where");

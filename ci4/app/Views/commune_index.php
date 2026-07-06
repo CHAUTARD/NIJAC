@@ -11,8 +11,6 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
 
     <style>
-        :root { --nijac-blue: #1a3a6b; }
-
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
             background: #f0f4fa;
@@ -156,16 +154,6 @@
         }
         .btn-coller:hover { background: #d0dff0; }
 
-        #spinner {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,.3);
-            z-index: 99999;
-            align-items: center;
-            justify-content: center;
-        }
-        #spinner.show { display: flex; }
 
         #import-progress {
             display: none;
@@ -222,9 +210,7 @@
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Spinner -->
-<div id="spinner">
-    <div class="spinner-border text-light" style="width:3rem;height:3rem;"></div>
-</div>
+<?= view('partials/spinner_overlay') ?>
 
 <!-- Overlay import -->
 <div id="import-progress">
@@ -269,6 +255,15 @@
         <i class="bi bi-question-circle-fill" style="font-size:1.1rem;margin-right:.35rem;color:#2557a7;"></i>Comment obtenir les coordonnées GPS ?
     </button>
     <span style="flex:1"></span>
+    <label for="sel-dept" style="font-size:.85rem;font-weight:700;color:#444;white-space:nowrap;margin:0;">
+        <i class="bi bi-map me-1"></i>Département
+    </label>
+    <select id="sel-dept" class="form-select form-select-sm w-auto">
+        <option value="">— Tous —</option>
+        <?php foreach ($departements as $d): ?>
+        <option value="<?= esc($d['code']) ?>"><?= esc($d['code']) ?> — <?= esc($d['nom']) ?></option>
+        <?php endforeach; ?>
+    </select>
     <input type="search" id="search-input" placeholder="🔍 Code postal ou commune…">
 </div>
 
@@ -495,6 +490,7 @@ let searchTerm       = '';
 let searchTimer      = null;
 let fichiersCSV      = [];
 let sansCoords       = false;
+let deptFilter       = '';
 let ligneSelectionnee = null;
 
 function spinner(show) { $('#spinner').toggleClass('show', show); }
@@ -505,10 +501,6 @@ function importProgress(show, msg) {
 
 function setStatus(msg, ok = true) {
     $('#status-bar').html(msg).css('color', ok ? '#374151' : '#c00');
-}
-
-function toast(msg, ok = true) {
-    nijacToast(msg, ok ? 'success' : 'danger');
 }
 
 function lignesTriees() {
@@ -583,7 +575,7 @@ function chargerListe(offset = 0) {
     spinner(true);
     currentOffset     = offset;
     ligneSelectionnee = null;
-    $.get(`${COMMUNE_BASE}/data`, { q: searchTerm, offset, sans_coords: sansCoords ? 1 : 0 }, function (res) {
+    $.get(`${COMMUNE_BASE}/data`, { q: searchTerm, offset, sans_coords: sansCoords ? 1 : 0, dept: deptFilter }, function (res) {
         spinner(false);
         if (!res.ok) { toast(res.msg, false); return; }
         lignes    = res.data;
@@ -600,6 +592,11 @@ $('#search-input').on('input', function () {
         searchTerm = val;
         chargerListe(0);
     }, 400);
+});
+
+$('#sel-dept').on('change', function () {
+    deptFilter = $(this).val();
+    chargerListe(0);
 });
 
 $('#btn-prev').on('click', () => chargerListe(Math.max(0, currentOffset - PAGE_SIZE)));

@@ -7,9 +7,9 @@
     <title>NIJAC – Disponibilités JA (E032)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
     <style>
         :root {
-            --nijac-blue:  #1a3a6b;
             --col-dispo:   #2e7d32;
             --col-partiel: #e65100;
             --col-nodispo: #c62828;
@@ -530,10 +530,6 @@ let idJaCourant  = null;
 let nomJaCourant = '';
 
 let etatJournees = {};
-
-function toast(msg, ok = true) {
-    nijacToast(msg, ok ? 'success' : 'danger');
-}
 
 const JOURS      = ['dim.','lun.','mar.','mer.','jeu.','ven.','sam.'];
 const MOIS       = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];

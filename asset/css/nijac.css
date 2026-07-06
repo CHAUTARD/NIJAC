@@ -2,6 +2,8 @@
    NIJAC – Styles partagés
    ══════════════════════════════════════════════ */
 
+:root { --nijac-blue: #1a3a6b; }
+
 /* ── Menu strip ── */
 #menu-strip {
     background: #f8f9fa;
@@ -31,3 +33,15 @@
 .menu-item.danger:hover  { background: #fde8e8; border-color: #f5c6cb; color: #c00; }
 .menu-item i             { font-size: 1.1rem; line-height: 1; }
 .menu-item:disabled      { opacity: .5; cursor: default; }
+
+/* ── Overlay plein écran (spinner de chargement) ── */
+#spinner {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.3);
+    z-index: 99999;
+    align-items: center;
+    justify-content: center;
+}
+#spinner.show { display: flex; }

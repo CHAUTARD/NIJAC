@@ -8,10 +8,9 @@
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
 
     <style>
-        :root { --nijac-blue: #1a3a6b; }
-
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
             background: #f0f4fa;
@@ -264,10 +263,6 @@
 const DIVISION_BASE = '<?= site_url('division') ?>';
 let currentId = null;
 const sortState = { col: null, asc: true };
-
-function toast(msg, ok = true) {
-    nijacToast(msg, ok ? 'success' : 'danger');
-}
 
 function setStatus(msg, ok = true) {
     $('#form-status').text(msg)

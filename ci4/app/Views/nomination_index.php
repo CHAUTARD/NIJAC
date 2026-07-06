@@ -7,14 +7,14 @@
 <title>NIJAC – Nomination JA (E022)</title>
 <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
 <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
+<link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
 <style>
-:root { --nijac-blue: #1a3a6b; --nom-green: #2e7d32; }
+:root { --nom-green: #2e7d32; }
 
 body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
 
 /* ── En-tête ── */
 #page-header { background:var(--nom-green); color:#fff; padding:.65rem 1.25rem; font-size:.9rem; font-weight:600; display:flex; align-items:center; gap:.75rem; flex-shrink:0; }
-#page-header .btn-retour { margin-left:auto; }
 
 /* ── Toolbar ── */
 #toolbar { background:#f8fafc; border-bottom:1px solid #dde5f0; padding:.3rem 1rem; display:flex; align-items:center; justify-content:space-between; font-size:.85rem; flex-shrink:0; }
@@ -101,6 +101,15 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
     #main-content { flex-direction:column; }
     #col-rencontres { width:100%; border-right:none; border-bottom:2px solid #dee2e6; max-height:40vh; }
 }
+
+/* ── Pied de page ── */
+#page-footer { background:#e8eef7; border-top:1px solid #c8d4e8; padding:.25rem 1rem; font-size:.8rem; display:flex; justify-content:center; align-items:center; flex-shrink:0; }
+#status-bar { color:#374151; min-height:18px; }
+.footer-copyright { color:#6b7280; white-space:nowrap; }
+.footer-logo { height:20px; width:auto; opacity:.75; }
+#page-footer.pf-status-left { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; }
+#page-footer.pf-status-left #status-bar { grid-column:1; justify-self:start; text-align:left; }
+#page-footer.pf-status-left .footer-copyright { grid-column:2; justify-self:center; }
 </style>
 </head>
 <body>
@@ -238,6 +247,9 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
         </div>
     </div>
 </div>
+
+<!-- Pied de page : recopié de includes/footer.php -->
+<?= view('partials/page_footer', ['pfStatusAlign' => 'left']) ?>
 
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>

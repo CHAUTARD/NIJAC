@@ -10,10 +10,9 @@ use CodeIgniter\HTTP\ResponseInterface;
  * Admin uniquement (filtre "adminauth", comme includes/admin_required.php
  * côté legacy).
  *
- * Pas de Model : auto-migration de colonnes, upsert avec renommage de clé
- * primaire (propagation FK via ON UPDATE CASCADE), appels API FFTT — trop
- * éloigné du Query Builder simple. Réutilise getPDO() directement, comme le
- * fichier legacy.
+ * Pas de Model : auto-migration de colonnes, appels API FFTT — trop éloigné
+ * du Query Builder simple. Réutilise getPDO() directement, comme le fichier
+ * legacy.
  */
 class ClubController extends BaseController
 {
@@ -91,13 +90,8 @@ class ClubController extends BaseController
             $rows = $pdo->query(
                 'SELECT c.Id_Club, c.Nom,
                         c.CorNom, c.CorEmail, c.CorTelephone,
-                        COALESCE(lp.CodePostal, sp.Cp)  AS CodePostal,
-                        COALESCE(lp.Nom,        sp.Ville) AS Ville,
                         (SELECT COUNT(*) FROM Salle s2 WHERE s2.Id_Club = c.Id_Club) AS NbSalles
                  FROM Club c
-                 LEFT JOIN Salle   sp ON sp.Id_Club    = c.Id_Club
-                                     AND sp.EstPrincipale = 1
-                 LEFT JOIN laposte lp ON lp.Id_LaPoste = sp.Id_Laposte
                  ORDER BY c.Nom'
             )->fetchAll();
 
@@ -105,64 +99,33 @@ class ClubController extends BaseController
         });
     }
 
-    public function majBdd(): ResponseInterface
+    public function modifier(string $idClub): ResponseInterface
     {
+        return $this->tryJson(function () use ($idClub) {
+            $pdo   = getPDO();
+            $input = $this->request->getRawInput();
 
-        return $this->tryJson(function () {
-            $pdo    = getPDO();
-            $lignes = json_decode($this->request->getPost('lignes') ?? '[]', true);
-            if (!is_array($lignes)) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Données invalides.']);
+            $nom      = trim($input['nom'] ?? '');
+            $corNom   = trim($input['cor_nom'] ?? '') ?: null;
+            $corEmail = trim($input['cor_email'] ?? '') ?: null;
+            $corTel   = trim($input['cor_tel'] ?? '') ?: null;
+
+            if ($nom === '') {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Le nom du club est obligatoire.']);
             }
 
-            $inserts = 0;
-            $updates = 0;
-            $erreurs = [];
+            $stmt = $pdo->prepare('UPDATE Club SET Nom=?, CorNom=?, CorEmail=?, CorTelephone=? WHERE Id_Club=?');
+            $stmt->execute([$nom, $corNom, $corEmail, $corTel, $idClub]);
 
-            $stmtCheck  = $pdo->prepare('SELECT COUNT(*) FROM Club WHERE Id_Club = ?');
-            $stmtRename = $pdo->prepare('UPDATE Club SET Id_Club = ? WHERE Id_Club = ?');
-            $stmtUpdate = $pdo->prepare('UPDATE Club SET Nom=?, CorNom=?, CorEmail=?, CorTelephone=? WHERE Id_Club=?');
-            $stmtInsert = $pdo->prepare('INSERT INTO Club (Id_Club, Nom, CorNom, CorEmail, CorTelephone) VALUES (?,?,?,?,?)');
-
-            foreach ($lignes as $l) {
-                $id       = trim($l['id_club'] ?? '');
-                $idOrig   = trim($l['id_club_orig'] ?? $id);
-                $nom      = trim($l['nom'] ?? '') ?: null;
-                $corNom   = ($l['cor_nom'] ?? '') !== '' ? trim($l['cor_nom']) : null;
-                $corEmail = ($l['cor_email'] ?? '') !== '' ? trim($l['cor_email']) : null;
-                $corTel   = ($l['cor_tel'] ?? '') !== '' ? trim($l['cor_tel']) : null;
-                if ($id === '') {
-                    continue;
-                }
-
-                try {
-                    // Renommage du N° FFTT : l'UPDATE CASCADE propage aux tables liées
-                    if ($idOrig !== $id && $idOrig !== '') {
-                        $stmtCheck->execute([$idOrig]);
-                        if ((int) $stmtCheck->fetchColumn() > 0) {
-                            $stmtRename->execute([$id, $idOrig]);
-                        }
-                    }
-
-                    $stmtCheck->execute([$id]);
-                    if ((int) $stmtCheck->fetchColumn() > 0) {
-                        $stmtUpdate->execute([$nom, $corNom, $corEmail, $corTel, $id]);
-                        $updates++;
-                    } else {
-                        $stmtInsert->execute([$id, $nom, $corNom, $corEmail, $corTel]);
-                        $inserts++;
-                    }
-                } catch (\PDOException $ex) {
-                    $erreurs[] = "Id $id : " . $ex->getMessage();
+            if ($stmt->rowCount() === 0) {
+                $chk = $pdo->prepare('SELECT COUNT(*) FROM Club WHERE Id_Club = ?');
+                $chk->execute([$idClub]);
+                if ((int) $chk->fetchColumn() === 0) {
+                    return $this->response->setJSON(['ok' => false, 'msg' => "Club $idClub introuvable."]);
                 }
             }
 
-            $msg = "Mise à jour terminée : $inserts insérés, $updates mis à jour.";
-            if ($erreurs) {
-                $msg .= ' Erreurs : ' . implode(' | ', $erreurs);
-            }
-
-            return $this->response->setJSON(['ok' => empty($erreurs), 'msg' => $msg]);
+            return $this->response->setJSON(['ok' => true, 'msg' => 'Club mis à jour.']);
         });
     }
 

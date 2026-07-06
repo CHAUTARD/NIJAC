@@ -161,3 +161,11 @@ function nijacConfirm(message, onConfirm, onCancel, opts) {
     bsModal.show();
     setTimeout(function () { newOk.focus(); }, 300);
 }
+
+/* ── toast(message, ok) ──────────────────────────────────────────────────────
+ *  Raccourci utilisé par la plupart des vues : mappe un booléen ok/échec sur
+ *  nijacToast('success'|'danger').
+ * ─────────────────────────────────────────────────────────────────────────── */
+function toast(msg, ok = true) {
+    nijacToast(msg, ok ? 'success' : 'danger');
+}

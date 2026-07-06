@@ -11,8 +11,6 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
 
     <style>
-        :root { --nijac-blue: #1a3a6b; }
-
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
             background: #f0f4fa;
@@ -79,42 +77,26 @@
         #tbl-clubs tbody tr { border-bottom: 1px solid #e0e8f0; }
         #tbl-clubs tbody tr:nth-child(even) { background: #f7faff; }
         #tbl-clubs tbody tr:hover   { background: #dce8f8; }
-        #tbl-clubs tbody tr.selected { background: #b8d0f0 !important; }
         #tbl-clubs tbody tr.en-region { background: #d1fae5; }
         #tbl-clubs tbody tr.en-region:nth-child(even) { background: #a7f3d0; }
         #tbl-clubs tbody tr.en-region:hover { background: #6ee7b7; }
-        #tbl-clubs tbody tr.en-region.selected { background: #b8d0f0 !important; }
         #tbl-clubs tbody tr.hors-region { background: #e5e7eb; }
         #tbl-clubs tbody tr.hors-region:nth-child(even) { background: #d1d5db; }
         #tbl-clubs tbody tr.hors-region:hover { background: #9ca3af; }
-        #tbl-clubs tbody tr.hors-region.selected { background: #b8d0f0 !important; }
         #tbl-clubs tbody td { border: 1px solid #e0e8f0; padding: 0; }
 
-        /* Cellule éditable */
         .cell-inner {
             display: block;
             padding: .28rem .5rem;
             min-height: 28px;
-            outline: none;
             white-space: nowrap;
             overflow: hidden;
-        }
-        .cell-inner[contenteditable="true"] {
-            background: #fffbe6;
-            outline: 2px solid #f0a000;
-            outline-offset: -2px;
         }
 
         td.col-id .cell-inner {
             color: #6b7280;
             font-style: italic;
             background: #f0f4fa;
-        }
-        td.col-id.id-modifie .cell-inner {
-            color: #b45309;
-            font-style: normal;
-            font-weight: 700;
-            background: #fef3c7;
         }
 
         /* ── Recherche ── */
@@ -135,16 +117,6 @@
         #tbl-clubs thead th:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
 
         /* ── Spinner ── */
-        #spinner {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,.3);
-            z-index: 99999;
-            align-items: center;
-            justify-content: center;
-        }
-        #spinner.show { display: flex; }
 
         #page-footer {
             background: #e8eef7;
@@ -182,17 +154,12 @@
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Spinner -->
-<div id="spinner">
-    <div class="spinner-border text-light" style="width:3rem;height:3rem;"></div>
-</div>
+<?= view('partials/spinner_overlay') ?>
 
 <!-- MenuStrip -->
 <div id="menu-strip">
     <button class="menu-item" id="btn-sync-fftt" data-bs-toggle="modal" data-bs-target="#modal-sync-fftt">
         <i class="bi bi-cloud-arrow-down-fill"></i>Synchroniser depuis FFTT
-    </button>
-    <button class="menu-item" id="btn-maj-bdd">
-        <i class="bi bi-database-fill-up"></i>Mettre à jour la Base de données
     </button>
     <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 club(s)</span>
     <span style="flex:1"></span>
@@ -208,7 +175,7 @@
     <button class="menu-item" id="btn-plusieurs-salles" title="Afficher uniquement les clubs ayant plusieurs salles" style="border-color:transparent;">
         <i class="bi bi-door-open me-1"></i>Plusieurs salles
     </button>
-    <button class="menu-item" id="btn-filtre-region" title="Cliquer pour filtrer par région" style="border-color:transparent;">
+    <button class="menu-item" id="btn-filtre-region" title="Cliquer pour n'afficher que les clubs de la région, ou tous les clubs" style="border-color:transparent;">
         <i class="bi bi-geo-alt me-1"></i><span id="lbl-filtre-region">Région</span>
     </button>
     <input type="search" id="search-input" placeholder="🔍 Rechercher…">
@@ -222,23 +189,66 @@
                 <th style="width:120px" data-field="id_club">N° FFTT<span class="sort-icon"></span></th>
                 <th data-field="nom">Nom club<span class="sort-icon"></span></th>
                 <th style="width:200px" data-field="cor_nom">Correspondant<span class="sort-icon"></span></th>
-                <th style="width:200px" data-field="cor_email">Email cor.<span class="sort-icon"></span></th>
-                <th style="width:120px" data-field="cor_tel">Tél. cor.<span class="sort-icon"></span></th>
-                <th style="width:100px" data-field="code_postal">Code postal<span class="sort-icon"></span></th>
-                <th style="width:160px" data-field="ville">Ville<span class="sort-icon"></span></th>
+                <th style="width:220px" data-field="cor_email">Email correspondant<span class="sort-icon"></span></th>
+                <th style="width:150px" data-field="cor_tel">Téléphone correspondant<span class="sort-icon"></span></th>
+                <th style="width:70px"></th>
             </tr>
         </thead>
         <tbody id="tbody-grille">
-            <tr><td colspan="7" class="text-center text-muted py-3">Chargement…</td></tr>
+            <tr><td colspan="6" class="text-center text-muted py-3">Chargement…</td></tr>
         </tbody>
     </table>
 </div>
 
 <!-- Pied de page : recopié de includes/footer.php (setStatus() écrit dans #status-bar) -->
 <?= view('partials/page_footer', [
-    'pfStatusText' => 'Prêt. — Cliquez sur une cellule puis appuyez sur F2 pour modifier.',
+    'pfStatusText' => 'Prêt.',
     'pfStatusAlign' => 'left',
 ]) ?>
+
+<!-- Modale : modifier un club -->
+<div class="modal fade" id="modal-modifier-club" tabindex="-1" aria-labelledby="modal-modifier-club-titre" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:480px">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#1a3a6b;color:#fff;">
+                <h5 class="modal-title" id="modal-modifier-club-titre">
+                    <i class="bi bi-building me-2"></i>Modifier le club
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="font-size:.88rem;">
+                <input type="hidden" id="mod-club-idx">
+                <div class="mb-2">
+                    <label class="form-label fw-semibold" style="font-size:.82rem;">N° FFTT</label>
+                    <p id="mod-club-id" class="fw-bold mb-0" style="color:#6b7280;"></p>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold" style="font-size:.82rem;">Nom du club <span class="text-danger">*</span></label>
+                    <input type="text" id="mod-club-nom" class="form-control form-control-sm">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold" style="font-size:.82rem;">Correspondant</label>
+                    <input type="text" id="mod-club-cor-nom" class="form-control form-control-sm">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold" style="font-size:.82rem;">Email correspondant</label>
+                    <input type="email" id="mod-club-cor-email" class="form-control form-control-sm">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold" style="font-size:.82rem;">Téléphone correspondant</label>
+                    <input type="text" id="mod-club-cor-tel" class="form-control form-control-sm">
+                </div>
+                <div id="mod-club-msg" style="font-size:.8rem;min-height:18px;margin-top:.4rem;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary btn-sm" id="mod-club-btn-ok">
+                    <i class="bi bi-floppy-fill me-1"></i>Valider
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Modale Synchronisation FFTT -->
 <div class="modal fade" id="modal-sync-fftt" tabindex="-1" aria-labelledby="modal-sync-fftt-titre" aria-hidden="true" data-bs-backdrop="static">
@@ -329,12 +339,11 @@ function deptDeClub(idClub) {
 }
 
 let lignes           = [];
-let cellActive       = null;
 const sortState      = { col: 'id_club', asc: true };
 let searchTerm       = '';
 let deptFiltre       = '';   // filtré côté JS
 let filtreMultiSalle = false;
-let filtreRegion = 0; // 0 = Tous, 1 = En région, 2 = Hors région
+let filtreEnRegion = true; // true = En région uniquement (par défaut), false = Tous
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
 function spinner(show) { $('#spinner').toggleClass('show', show); }
@@ -343,23 +352,16 @@ function setStatus(msg, ok = true) {
     $('#status-bar').html(msg).css('color', ok ? '#374151' : '#c00');
 }
 
-function toast(msg, ok = true) {
-    nijacToast(msg, ok ? 'success' : 'danger');
-}
-
 // ── Tri & Recherche ───────────────────────────────────────────────────────────
 function lignesFiltreesTriees() {
     const term = searchTerm.toLowerCase();
     let result = [...lignes];
     if (deptFiltre)      result = result.filter(l => deptDeClub(l.id_club) === deptFiltre);
     if (filtreMultiSalle) result = result.filter(l => (l.nb_salles ?? 0) > 1);
-    if (filtreRegion === 1) result = result.filter(l =>  DEPTS_REGION.has(deptDeClub(l.id_club)));
-    if (filtreRegion === 2) result = result.filter(l => !DEPTS_REGION.has(deptDeClub(l.id_club)));
+    if (filtreEnRegion) result = result.filter(l => DEPTS_REGION.has(deptDeClub(l.id_club)));
     if (term) result = result.filter(l =>
         String(l.id_club     ?? '').toLowerCase().includes(term) ||
         String(l.nom         ?? '').toLowerCase().includes(term) ||
-        String(l.code_postal ?? '').toLowerCase().includes(term) ||
-        String(l.ville       ?? '').toLowerCase().includes(term) ||
         String(l.cor_nom     ?? '').toLowerCase().includes(term) ||
         String(l.cor_email   ?? '').toLowerCase().includes(term));
 
@@ -372,129 +374,145 @@ function lignesFiltreesTriees() {
 }
 
 // ── Rendu ─────────────────────────────────────────────────────────────────────
+// Cache des lignes déjà construites pour l'état « En région » / « Hors région »,
+// afin d'éviter de reconstruire le tableau (coûteux vu le nombre de clubs hors
+// région) à chaque bascule du filtre. Invalidé dès que les données ou un autre
+// filtre changent (voir invaliderCacheRendu()).
+let renduCache = { true: null, false: null }; // { signature, rows, total }
+
+function signatureFiltres() {
+    return JSON.stringify({ deptFiltre, filtreMultiSalle, searchTerm, col: sortState.col, asc: sortState.asc });
+}
+
+function invaliderCacheRendu() {
+    renduCache = { true: null, false: null };
+}
+
 function renderGrille() {
-    const $body = $('#tbody-grille').empty();
     refreshTriEntetes();
+    const $body = $('#tbody-grille').empty();
 
-    const affichees = lignesFiltreesTriees();
+    const sig    = signatureFiltres();
+    const cached = renduCache[filtreEnRegion];
+    let rows, total;
 
-    if (!affichees.length) {
+    if (cached && cached.signature === sig) {
+        rows  = cached.rows;
+        total = cached.total;
+    } else {
+        const affichees = lignesFiltreesTriees();
+        rows  = affichees.map(construireLigne);
+        total = affichees.length;
+        renduCache[filtreEnRegion] = { signature: sig, rows, total };
+    }
+
+    if (!rows.length) {
         const msg = searchTerm ? 'Aucun résultat pour cette recherche.' : 'Aucun club.';
-        $body.append(`<tr><td colspan="7" class="text-center text-muted py-3">${msg}</td></tr>`);
+        $body.append(`<tr><td colspan="6" class="text-center text-muted py-3">${msg}</td></tr>`);
         setStatus(searchTerm ? `0 résultat sur ${lignes.length} club(s).` : 'Aucun club enregistré.');
         return;
     }
 
-    affichees.forEach((l) => {
-        const idx  = lignes.indexOf(l);
-        const dept = deptDeClub(l.id_club);
-        const $tr  = $('<tr>').attr('data-idx', idx);
-        if (dept && !DEPTS_REGION.has(dept)) $tr.addClass('hors-region').attr('title', `Département ${dept} hors région`);
-        else if (dept) $tr.addClass('en-region');
-        $tr.append(makeTd(l.id_club,     idx, 'id_club',     false));
-        $tr.append(makeTd(l.nom,         idx, 'nom',         false));
-        const horsRegion = dept && !DEPTS_REGION.has(dept);
-        $tr.append(makeTd(l.cor_nom,     idx, 'cor_nom',     horsRegion));
-        $tr.append(makeTd(l.cor_email,   idx, 'cor_email',   horsRegion));
-        $tr.append(makeTd(l.cor_tel,     idx, 'cor_tel',     horsRegion));
-        $tr.append(makeTd(l.code_postal, idx, 'code_postal', true));
-        $tr.append(makeTd(l.ville,       idx, 'ville',       true));
-        $body.append($tr);
-    });
+    rows.forEach((tr) => $body.append(tr));
 
-    const info = searchTerm ? `${affichees.length} résultat(s) sur ${lignes.length}. ` : '';
-    setStatus(`${info}Cliquez sur une cellule puis <kbd>F2</kbd> pour modifier.`);
+    const info = searchTerm ? `${total} résultat(s) sur ${lignes.length}. ` : '';
+    setStatus(`${info}Prêt.`);
     $('#lbl-count').text(`${lignes.length} club(s)`);
 }
 
-function makeTd(val, idx, field, readonly) {
-    const $td  = $('<td>').addClass(readonly ? 'col-id' : '').attr('data-idx', idx).attr('data-field', field);
-    if (field === 'id_club') {
-        $td.addClass('col-id');
-        const l = lignes[idx];
-        if (l && l.id_club_orig !== undefined && String(val) !== String(l.id_club_orig)) {
-            $td.addClass('id-modifie').attr('title', `Ancien N° : ${l.id_club_orig}`);
-        }
-    }
-    const $div = $('<div class="cell-inner">').text(val ?? '').attr('contenteditable', 'false');
+function construireLigne(l) {
+    const idx  = lignes.indexOf(l);
+    const dept = deptDeClub(l.id_club);
+    const $tr  = $('<tr>').attr('data-idx', idx);
+    if (dept && !DEPTS_REGION.has(dept)) $tr.addClass('hors-region').attr('title', `Département ${dept} hors région`);
+    else if (dept) $tr.addClass('en-region');
+    $tr.append(makeTd(l.id_club,     'id_club'));
+    $tr.append(makeTd(l.nom,         'nom'));
+    $tr.append(makeTd(l.cor_nom,     'cor_nom'));
+    $tr.append(makeTd(l.cor_email,   'cor_email'));
+    $tr.append(makeTd(l.cor_tel,     'cor_tel'));
+    const $tdActions = $('<td class="text-center">');
+    $tdActions.append(
+        $('<button type="button" class="btn btn-sm btn-outline-primary btn-modifier-club" title="Modifier">')
+            .attr('data-idx', idx)
+            .html('<i class="bi bi-pencil-fill"></i>')
+    );
+    $tr.append($tdActions);
+    return $tr;
+}
+
+function makeTd(val, field) {
+    const $td  = $('<td>').attr('data-field', field);
+    if (field === 'id_club') $td.addClass('col-id');
+    const $div = $('<div class="cell-inner">').text(val ?? '');
     $td.append($div);
-    if (!readonly) {
-        $td.on('click', function () { selectionnerCellule($(this)); });
-    }
     return $td;
 }
 
-function selectionnerCellule($td) {
-    if (cellActive) {
-        cellActive.find('.cell-inner').attr('contenteditable', 'false').trigger('blur');
-        cellActive.closest('tr').removeClass('selected');
-    }
-    cellActive = $td;
-    $td.closest('tr').addClass('selected');
-    setStatus(`Cellule sélectionnée — <kbd>F2</kbd> pour modifier, <kbd>Échap</kbd> pour annuler.`);
+$('#tbody-grille').on('click', '.btn-modifier-club', function () {
+    ouvrirModaleModifClub(+$(this).attr('data-idx'));
+});
+
+function ouvrirModaleModifClub(idx) {
+    const l = lignes[idx];
+    if (!l) return;
+    $('#mod-club-idx').val(idx);
+    $('#mod-club-id').text(l.id_club ?? '');
+    $('#mod-club-nom').val(l.nom ?? '');
+    $('#mod-club-cor-nom').val(l.cor_nom ?? '');
+    $('#mod-club-cor-email').val(l.cor_email ?? '');
+    $('#mod-club-cor-tel').val(l.cor_tel ?? '');
+    $('#mod-club-msg').text('');
+    const el = document.getElementById('modal-modifier-club');
+    let modal = bootstrap.Modal.getInstance(el);
+    if (!modal) modal = new bootstrap.Modal(el);
+    modal.show();
+    el.addEventListener('shown.bs.modal', () => {
+        $('#mod-club-nom').trigger('focus').trigger('select');
+    }, { once: true });
 }
 
-// ── Clavier : F2 / Échap / Entrée ────────────────────────────────────────────
-$(document).on('keydown', function (e) {
-    if (!cellActive) return;
-    const $inner = cellActive.find('.cell-inner');
-
-    if (e.key === 'F2' && $inner.attr('contenteditable') === 'false') {
-        e.preventDefault();
-        $inner.attr('contenteditable', 'true').trigger('focus');
-        const range = document.createRange();
-        range.selectNodeContents($inner[0]);
-        range.collapse(false);
-        window.getSelection().removeAllRanges();
-        window.getSelection().addRange(range);
-
-    } else if (e.key === 'Escape') {
-        const idx   = +cellActive.attr('data-idx');
-        const field = cellActive.attr('data-field');
-        $inner.text(lignes[idx]?.[field] ?? '').attr('contenteditable', 'false');
-        setStatus('Modification annulée.');
-
-    } else if (e.key === 'Enter' && $inner.attr('contenteditable') === 'true') {
-        e.preventDefault();
-        validerCellule($inner, cellActive);
-    }
+$('#modal-modifier-club').on('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); $('#mod-club-btn-ok').trigger('click'); }
 });
 
-$(document).on('blur', '.cell-inner[contenteditable="true"]', function () {
-    validerCellule($(this), $(this).closest('td'));
-});
+$('#mod-club-btn-ok').on('click', function () {
+    $('#mod-club-msg').text('');
+    const idx      = +$('#mod-club-idx').val();
+    const l        = lignes[idx];
+    if (!l) return;
+    const nom      = $('#mod-club-nom').val().trim();
+    const corNom   = $('#mod-club-cor-nom').val().trim();
+    const corEmail = $('#mod-club-cor-email').val().trim();
+    const corTel   = $('#mod-club-cor-tel').val().trim();
 
-function validerCellule($inner, $td) {
-    $inner.attr('contenteditable', 'false');
-    const idx    = +$td.attr('data-idx');
-    const field  = $td.attr('data-field');
-    const newVal = $inner.text().trim() || null;
-
-    function appliquer() {
-        if (lignes[idx]) lignes[idx][field] = newVal;
-        renderGrille();
-        setStatus('Modification locale. Cliquez sur « Mettre à jour la BDD » pour sauvegarder.');
+    if (!nom) {
+        $('#mod-club-msg').html('<span class="text-danger">Le nom du club est obligatoire.</span>');
+        return;
     }
 
-    if (field === 'id_club' && lignes[idx]) {
-        const oldId = lignes[idx].id_club_orig ?? lignes[idx].id_club;
-        const newId = newVal ? +newVal : 0;
-        if (newId && newId !== +oldId) {
-            nijacConfirm(
-                `Modifier le N° FFTT ${oldId} → ${newId} ?\n\nCette modification mettra également à jour toutes les tables liées (salles, correspondants, équipes, JA).`,
-                appliquer,
-                function () {
-                    $inner.text(lignes[idx].id_club ?? '');
-                    setStatus('Modification annulée.');
-                },
-                { type: 'warning', confirmLabel: 'Modifier' }
-            );
-            return;
+    spinner(true);
+    $.ajax({
+        url: `${CLUB_BASE}/${encodeURIComponent(l.id_club)}`,
+        method: 'PUT',
+        data: { nom, cor_nom: corNom, cor_email: corEmail, cor_tel: corTel },
+        dataType: 'json',
+    }).done(function (res) {
+        spinner(false);
+        if (res.ok) {
+            toast(res.msg, true);
+            bootstrap.Modal.getInstance(document.getElementById('modal-modifier-club')).hide();
+            l.nom       = nom;
+            l.cor_nom   = corNom;
+            l.cor_email = corEmail;
+            l.cor_tel   = corTel;
+            invaliderCacheRendu();
+            renderGrille();
+        } else {
+            $('#mod-club-msg').html('<span class="text-danger">✖ ' + res.msg + '</span>');
         }
-    }
-
-    appliquer();
-}
+    }).fail(() => { spinner(false); $('#mod-club-msg').html('<span class="text-danger">Erreur réseau.</span>'); });
+});
 
 // ── Charger depuis la BDD ─────────────────────────────────────────────────────
 function chargerListe() {
@@ -504,15 +522,13 @@ function chargerListe() {
         if (!res.ok) { toast(res.msg, false); return; }
         lignes = res.data.map(r => ({
             id_club:      r.Id_Club,
-            id_club_orig: r.Id_Club,
             nom:          r.Nom,
-            code_postal:  r.CodePostal ?? '',
-            ville:        r.Ville      ?? '',
             nb_salles:    +(r.NbSalles ?? 0),
             cor_nom:      r.CorNom      ?? '',
             cor_email:    r.CorEmail    ?? '',
             cor_tel:      r.CorTelephone ?? '',
         }));
+        invaliderCacheRendu();
         const aMultiSalles = lignes.some(l => l.nb_salles > 1);
         $('#btn-plusieurs-salles').toggle(aMultiSalles);
         if (!aMultiSalles && filtreMultiSalle) {
@@ -522,21 +538,6 @@ function chargerListe() {
         renderGrille();
     }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
 }
-
-// ── Mettre à jour la BDD ──────────────────────────────────────────────────────
-$('#btn-maj-bdd').on('click', function () {
-    if (!lignes.length) { toast('Aucune donnée à enregistrer.', false); return; }
-    nijacConfirm(`Mettre à jour la base de données avec ${lignes.length} club(s) ?`, function () {
-        spinner(true);
-        $.post(`${CLUB_BASE}/maj-bdd`, {
-            lignes: JSON.stringify(lignes),
-        }, function (res) {
-            spinner(false);
-            toast(res.msg, res.ok);
-            if (res.ok) chargerListe();
-        }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
-    });
-});
 
 // ── Tri sur clic en-tête ──────────────────────────────────────────────────────
 // Différé : nijac-sortable-table.js est chargé en fin de page, donc pas encore
@@ -558,16 +559,33 @@ $('#btn-plusieurs-salles').on('click', function () {
     renderGrille();
 });
 
-// ── Filtre région / hors région (3 états) ────────────────────────────────────
+// ── Filtre région / tous (bascule) ───────────────────────────────────────────
+function appliquerStyleFiltreRegion() {
+    $('#lbl-filtre-region').text(filtreEnRegion ? 'Région' : 'Tous');
+    $('#btn-filtre-region').css({
+        background:  filtreEnRegion ? '#166534' : '',
+        color:       filtreEnRegion ? '#fff'    : '',
+        borderColor: filtreEnRegion ? '#166534' : 'transparent',
+    });
+}
+appliquerStyleFiltreRegion();
+
 $('#btn-filtre-region').on('click', function () {
-    filtreRegion = (filtreRegion + 1) % 3;
-    const labels = ['Région', 'En région', 'Hors région'];
-    const bgs    = ['',        '#166534',   '#be123c'];
-    const colors = ['',        '#fff',       '#fff'];
-    const bords  = ['transparent', '#166534', '#be123c'];
-    $('#lbl-filtre-region').text(labels[filtreRegion]);
-    $(this).css({ background: bgs[filtreRegion], color: colors[filtreRegion], borderColor: bords[filtreRegion] });
-    renderGrille();
+    filtreEnRegion = !filtreEnRegion;
+    appliquerStyleFiltreRegion();
+
+    const cached = renduCache[filtreEnRegion];
+    if (cached && cached.signature === signatureFiltres()) {
+        renderGrille(); // déjà construit précédemment, affichage instantané
+        return;
+    }
+
+    spinner(true);
+    setStatus('Chargement en cours…');
+    setTimeout(function () {
+        renderGrille();
+        spinner(false);
+    }, 10);
 });
 
 // ── Filtre département ────────────────────────────────────────────────────────

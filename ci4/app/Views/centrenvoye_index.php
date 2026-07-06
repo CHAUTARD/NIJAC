@@ -11,8 +11,6 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
 
     <style>
-        :root { --nijac-blue: #1a3a6b; }
-
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
             background: #f0f4fa;
@@ -253,6 +251,27 @@
         .col-sort { cursor: pointer; user-select: none; }
         .no-email { color: #bbb; font-style: italic; font-size: .75rem; }
         tr.masque { display: none; }
+
+        #page-footer {
+            background: #e8eef7;
+            border-top: 1px solid #c8d4e8;
+            padding: .25rem 1rem;
+            font-size: .8rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        #status-bar { color: #374151; min-height: 18px; }
+        .footer-copyright { color: #6b7280; white-space: nowrap; }
+        .footer-logo { height: 20px; width: auto; opacity: .75; }
+        #page-footer.pf-status-left {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+        }
+        #page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
+        #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
     </style>
 </head>
 <body>
@@ -447,6 +466,9 @@
     </div>
 </div>
 
+<!-- Pied de page : recopié de includes/footer.php -->
+<?= view('partials/page_footer', ['pfStatusAlign' => 'left']) ?>
+
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
 <script>
@@ -469,10 +491,6 @@ let saisonCourante = null;
 const sortState = { col: 1, asc: true };
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
-function toast(msg, ok = true) {
-    nijacToast(msg, ok ? 'success' : 'danger');
-}
-
 // ── Onglets ───────────────────────────────────────────────────────────────────
 $('.type-tab').on('click', function () {
     typeActif = $(this).data('type');

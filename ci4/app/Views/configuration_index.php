@@ -8,10 +8,9 @@
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
 
     <style>
-        :root { --nijac-blue: #1a3a6b; }
-
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
             background: #f0f4fa;
@@ -256,13 +255,6 @@
         .smtp-save-row button:disabled { opacity: .5; cursor: default; }
         .smtp-msg { font-size: .82rem; min-height: 18px; }
 
-        #spinner {
-            display: none; position: fixed; inset: 0;
-            background: rgba(0,0,0,.3); z-index: 99999;
-            align-items: center; justify-content: center;
-        }
-        #spinner.show { display: flex; }
-
         #page-footer {
             background: #e8eef7;
             border-top: 1px solid #c8d4e8;
@@ -302,9 +294,7 @@
 </div>
 
 <!-- Spinner -->
-<div id="spinner">
-    <div class="spinner-border text-light" style="width:3rem;height:3rem;"></div>
-</div>
+<?= view('partials/spinner_overlay') ?>
 
 <!-- Onglets -->
 <ul class="nav nav-tabs" id="config-tabs" role="tablist" style="background:#fff;padding:0 1.5rem;flex-shrink:0;">

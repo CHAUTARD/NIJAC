@@ -41,9 +41,10 @@
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
 
     <style>
-        :root { --nijac-blue: #1a3a6b; --nijac-blue-light: #2557a7; }
+        :root { --nijac-blue-light: #2557a7; }
 
         body {
             background: linear-gradient(135deg, #e8eef7 0%, #c8d8f0 100%);

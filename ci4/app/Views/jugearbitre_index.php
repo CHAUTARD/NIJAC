@@ -11,8 +11,6 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
 
     <style>
-        :root { --nijac-blue: #1a3a6b; }
-
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
             background: #f0f4fa;
@@ -117,12 +115,6 @@
             white-space: nowrap;
             overflow: hidden;
         }
-        .cell-inner[contenteditable="true"] {
-            background: #fffbe6;
-            outline: 2px solid #f0a000;
-            outline-offset: -2px;
-        }
-
         td.col-readonly { background: #f0f4fa; }
         td.col-readonly .cell-inner { color: #6b7280; font-style: italic; }
 
@@ -213,16 +205,6 @@
         .win-menu-drop .drop-item.green:hover { background: #d1fae5; }
 
         /* ── Spinner ── */
-        #spinner {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,.3);
-            z-index: 99999;
-            align-items: center;
-            justify-content: center;
-        }
-        #spinner.show { display: flex; }
 
         #lbl-count {
             margin-left: .75rem;
@@ -276,9 +258,7 @@
 <input type="file" id="file-input-ebp" accept=".csv,text/csv" style="display:none">
 
 <!-- Spinner -->
-<div id="spinner">
-    <div class="spinner-border text-light" style="width:3rem;height:3rem;"></div>
-</div>
+<?= view('partials/spinner_overlay') ?>
 
 <!-- MenuStrip -->
 <div id="menu-strip">
@@ -289,19 +269,15 @@
             <i class="bi bi-chevron-down caret"></i>
         </button>
         <div class="win-menu-drop" id="win-menu-drop">
-            <button class="drop-item" id="btn-maj-bdd">
-                <i class="bi bi-database-fill-up"></i>Mettre à jour la Base de données
-            </button>
             <?php if ($isAdmin): ?>
-            <hr class="drop-sep">
             <button class="drop-item" id="btn-import-fftt-dept" data-bs-toggle="modal" data-bs-target="#modal-import-fftt">
                 <i class="bi bi-cloud-arrow-down-fill"></i>Importer JA1/JA2/JA3 depuis FFTT (par département)
             </button>
             <button class="drop-item" id="btn-importer">
                 <i class="bi bi-file-earmark-spreadsheet"></i>Importer depuis fichier FFTT (102_*.xlsx)
             </button>
-            <?php endif; ?>
             <hr class="drop-sep">
+            <?php endif; ?>
             <button class="drop-item" id="btn-import-ebp">
                 <i class="bi bi-file-earmark-text"></i>Importer numéros de compte EBP (CSV)
             </button>
@@ -369,7 +345,7 @@
 
 <!-- Pied de page : recopié de includes/footer.php (setStatus() écrit dans #status-bar) -->
 <?= view('partials/page_footer', [
-    'pfStatusText' => 'Prêt. — Cliquez sur une cellule puis F2 pour modifier.',
+    'pfStatusText' => 'Prêt. — Double-cliquez sur une ligne pour la modifier.',
     'pfStatusAlign' => 'left',
 ]) ?>
 
@@ -564,7 +540,11 @@
       <div class="modal-body">
         <form id="form-nouveau-ja" novalidate>
           <div class="row g-3">
-            <div class="col-md-3">
+            <div class="col-md-2">
+              <label class="form-label fw-semibold">N° JA</label>
+              <input type="text" class="form-control form-control-sm" id="nja-id" disabled placeholder="Auto">
+            </div>
+            <div class="col-md-2">
               <label class="form-label fw-semibold">Grade <span class="text-danger">*</span></label>
               <select class="form-select form-select-sm" id="nja-grade" required>
                 <option value="">— Choisir —</option>
@@ -577,7 +557,7 @@
               <label class="form-label fw-semibold">Nom <span class="text-danger">*</span></label>
               <input type="text" class="form-control form-control-sm text-uppercase" id="nja-nom" required placeholder="NOM">
             </div>
-            <div class="col-md-5">
+            <div class="col-md-4">
               <label class="form-label fw-semibold">Prénom <span class="text-danger">*</span></label>
               <input type="text" class="form-control form-control-sm" id="nja-prenom" required placeholder="Prénom">
             </div>
@@ -661,7 +641,6 @@ const DISPONIBILITE_JA_BASE = '<?= site_url('disponibilite-ja') ?>';
 let lignes     = [];
 let filtreActif   = true;   // false = tous, true = actifs seulement
 let filtreErreursCp = false; // true = uniquement les lignes sans id_laposte
-let cellActive = null;
 const sortState = { col: 'nom', asc: true };
 let searchTerm = '';
 const isAdmin  = <?= $isAdmin ? 'true' : 'false' ?>;
@@ -672,10 +651,6 @@ function spinner(show) { $('#spinner').toggleClass('show', show); }
 
 function setStatus(msg, ok = true) {
     $('#status-bar').html(msg).css('color', ok ? '#374151' : '#c00');
-}
-
-function toast(msg, ok = true) {
-    nijacToast(msg, ok ? 'success' : 'danger');
 }
 
 // ── Tri & Recherche ───────────────────────────────────────────────────────────
@@ -765,49 +740,20 @@ function renderGrille() {
     }
 
     const info = searchTerm ? `${affichees.length} résultat(s) sur ${lignes.length}. ` : '';
-    setStatus(`${info}Cliquez sur une cellule puis <kbd>F2</kbd> pour modifier.`);
+    setStatus(`${info}Double-cliquez sur une ligne pour la modifier.`);
     $('#lbl-count').text(`${lignes.length} JA`);
 }
 
-const CHAMPS_NUMERIQUES = [];
-
 function makeTd(val, idx, field, readonly) {
     const $td  = $('<td>').addClass(readonly ? 'col-readonly' : '').attr('data-idx', idx).attr('data-field', field);
-    const $div = $('<div class="cell-inner">').text(val ?? '').attr('contenteditable', 'false');
-    $td.append($div);
-    if (!readonly) {
-        if (CHAMPS_NUMERIQUES.includes(field)) {
-            // Clic direct → édition immédiate pour les champs numériques
-            $td.on('click', function (e) {
-                e.stopPropagation();
-                selectionnerCellule($(this));
-                const $inner = $(this).find('.cell-inner');
-                if ($inner.attr('contenteditable') === 'false') {
-                    $inner.attr('contenteditable', 'true').trigger('focus');
-                    const range = document.createRange();
-                    range.selectNodeContents($inner[0]);
-                    window.getSelection().removeAllRanges();
-                    window.getSelection().addRange(range);
-                }
-            });
-        } else {
-            $td.on('click', function (e) { e.stopPropagation(); selectionnerCellule($(this)); });
-        }
-    }
+    $('<div class="cell-inner">').text(val ?? '').appendTo($td);
     return $td;
 }
 
 function makeTdHtml(html, idx, field) {
-    const $td = $('<td>').attr('data-idx', idx).attr('data-field', field)
-                         .css({textAlign: 'center', verticalAlign: 'middle', padding: '.2rem'});
-    $td.html(html);
-    // Clic → bascule la valeur booléenne du champ
-    $td.on('click', function () {
-        lignes[idx][field] = lignes[idx][field] ? 0 : 1;
-        renderGrille();
-        setStatus('Modification locale. Cliquez sur « Mettre à jour la BDD » pour sauvegarder.');
-    });
-    return $td;
+    return $('<td>').attr('data-idx', idx).attr('data-field', field)
+                     .css({textAlign: 'center', verticalAlign: 'middle', padding: '.2rem'})
+                     .html(html);
 }
 
 // ── Cellules CP / Ville (lecture seule — modification via bouton adresse) ────
@@ -828,73 +774,16 @@ function makeVilleTd(l, idx) {
 }
 
 
-// ── Sélection / Edition ───────────────────────────────────────────────────────
-function selectionnerCellule($td) {
-    if (cellActive) {
-        cellActive.find('.cell-inner').attr('contenteditable', 'false').trigger('blur');
-        cellActive.closest('tr').removeClass('selected');
-    }
-    cellActive = $td;
-    $td.closest('tr').addClass('selected');
-    setStatus(`Cellule sélectionnée — <kbd>F2</kbd> pour modifier, <kbd>Échap</kbd> pour annuler.`);
-}
-
-$(document).on('keydown', function (e) {
-    if (!cellActive) return;
-    const $inner = cellActive.find('.cell-inner');
-
-    if (e.key === 'F2' && $inner.attr('contenteditable') === 'false') {
-        e.preventDefault();
-        $inner.attr('contenteditable', 'true').trigger('focus');
-        const range = document.createRange();
-        range.selectNodeContents($inner[0]);
-        range.collapse(false);
-        window.getSelection().removeAllRanges();
-        window.getSelection().addRange(range);
-    } else if (e.key === 'Escape') {
-        const idx   = +cellActive.attr('data-idx');
-        const field = cellActive.attr('data-field');
-        $inner.text(lignes[idx]?.[field] ?? '').attr('contenteditable', 'false');
-        setStatus('Modification annulée.');
-    } else if (e.key === 'Enter' && $inner.attr('contenteditable') === 'true') {
-        e.preventDefault();
-        validerCellule($inner, cellActive);
-    }
+// ── Sélection / Édition ───────────────────────────────────────────────────────
+$(document).on('click', '#tbody-grille tr', function () {
+    $('#tbody-grille tr').removeClass('selected');
+    $(this).addClass('selected');
 });
 
-$(document).on('blur', '.cell-inner[contenteditable="true"]', function () {
-    validerCellule($(this), $(this).closest('td'));
+$(document).on('dblclick', '#tbody-grille tr', function () {
+    const idx = +$(this).attr('data-idx');
+    if (lignes[idx]) ouvrirModaleJa(lignes[idx]);
 });
-
-// Bloquer la saisie non numérique dans Distance
-$(document).on('keypress', '.cell-inner[contenteditable="true"]', function (e) {
-    const field = $(this).closest('td').attr('data-field');
-    if (CHAMPS_NUMERIQUES.includes(field)) {
-        if (!/[0-9]/.test(e.key)) { e.preventDefault(); }
-    }
-});
-
-function validerCellule($inner, $td) {
-    $inner.attr('contenteditable', 'false');
-    const idx   = +$td.attr('data-idx');
-    const field = $td.attr('data-field');
-    let   val   = $inner.text().trim();
-
-    // Validation numérique pour Distance
-    if (CHAMPS_NUMERIQUES.includes(field)) {
-        const n = parseInt(val, 10);
-        if (val !== '' && (isNaN(n) || n < 0)) {
-            toast('Valeur numérique entière ≥ 0 attendue.', false);
-            $inner.text(lignes[idx]?.[field] ?? '');  // restaurer
-            return;
-        }
-        val = val !== '' ? n : null;
-    }
-
-    if (lignes[idx]) lignes[idx][field] = val !== '' ? val : null;
-
-    setStatus('Modification locale. Cliquez sur « Mettre à jour la BDD » pour sauvegarder.');
-}
 
 // ── Charger depuis la BDD ─────────────────────────────────────────────────────
 function chargerListe() {
@@ -942,21 +831,6 @@ $(document).on('click', function () {
 $('#win-menu-drop').on('click', '.drop-item', function () {
     $('#win-menu-drop').removeClass('open');
     $('#win-menu-trigger').removeClass('open');
-});
-
-// ── Mettre à jour la BDD ──────────────────────────────────────────────────────
-$('#btn-maj-bdd').on('click', function () {
-    if (!lignes.length) { toast('Aucune donnée à enregistrer.', false); return; }
-    nijacConfirm(`Mettre à jour la base de données avec ${lignes.length} JA ?`, function () {
-        spinner(true);
-        $.post(`${JUGEARBITRE_BASE}/maj-bdd`, {
-            lignes: JSON.stringify(lignes),
-        }, function (res) {
-            spinner(false);
-            toast(res.msg, res.ok);
-            if (res.ok) chargerListe();
-        }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
-    });
 });
 
 <?php if ($isAdmin): ?>
@@ -1289,20 +1163,52 @@ $(document).on('click', '.btn-lien-adresse', function (e) {
     );
 });
 
-// ── Modale Nouveau JA ─────────────────────────────────────────────────────────
+// ── Modale Créer/Modifier un JA ───────────────────────────────────────────────
 let njaIdLaPoste = null;
+let njaEditId    = null; // null = création, sinon Id_JA en cours de modification
 
-$('#btn-nouveau-ja').on('click', function () {
-    // Réinitialiser le formulaire
+function ouvrirModaleJa(record) {
     $('#form-nouveau-ja')[0].reset();
-    $('#nja-actif').prop('checked', true);
     njaIdLaPoste = null;
     $('#nja-laposte-msg').text('').css('color', '');
     $('#nja-suggestions').hide();
     $('#nja-suggestions-list').empty();
-    $('#nja-id-club').html('<option value="">— Sélectionnez d\'abord un département —</option>').prop('disabled', false);
+
+    if (record) {
+        njaEditId = record.id;
+        $('#modal-nouveau-ja-titre').html('<i class="bi bi-pencil-fill me-2"></i>Modifier le Juge-Arbitre');
+        $('#btn-enregistrer-ja').html('<i class="bi bi-check-lg me-1"></i>Enregistrer');
+        $('#nja-id').val(record.id);
+        $('#nja-grade').val(record.grade || '');
+        $('#nja-nom').val(record.nom || '');
+        $('#nja-prenom').val(record.prenom || '');
+        $('#nja-email').val(record.email || '');
+        $('#nja-telephone').val(record.telephone || '');
+        $('#nja-cp').val(record.cp || '');
+        $('#nja-ville').val(record.ville || '');
+        $('#nja-cpte-ebp').val(record.num_compte_ebp || '');
+        $('#nja-actif').prop('checked', !!record.actif);
+        $('#nja-defisc').prop('checked', !!record.defiscalisation);
+        $('#nja-nationale').prop('checked', !!record.nationale);
+        njaIdLaPoste = record.id_laposte ?? null;
+        if (njaIdLaPoste && (record.cp || record.ville)) {
+            $('#nja-laposte-msg').text(`✓ ${record.cp} ${record.ville}`).css('color', '#065f46');
+        }
+        $('#nja-dept').val('');
+        njaChargerClubs('', record.id_club || '');
+    } else {
+        njaEditId = null;
+        $('#modal-nouveau-ja-titre').html('<i class="bi bi-person-plus-fill me-2"></i>Créer un nouveau Juge-Arbitre');
+        $('#btn-enregistrer-ja').html('<i class="bi bi-check-lg me-1"></i>Créer le JA');
+        $('#nja-id').val('');
+        $('#nja-actif').prop('checked', true);
+        $('#nja-id-club').html('<option value="">— Sélectionnez d\'abord un département —</option>').prop('disabled', false);
+    }
+
     new bootstrap.Modal('#modal-nouveau-ja').show();
-});
+}
+
+$('#btn-nouveau-ja').on('click', function () { ouvrirModaleJa(null); });
 
 // Recherche laposte dans la modale
 function njaRechercherLaPoste() {
@@ -1344,7 +1250,7 @@ function njaRechercherLaPoste() {
 }
 
 // Chargement des clubs selon le département sélectionné
-function njaChargerClubs(dept) {
+function njaChargerClubs(dept, selectionner) {
     const $sel = $('#nja-id-club');
     $sel.html('<option value="">Chargement…</option>').prop('disabled', true);
     $.get(`${JUGEARBITRE_BASE}/clubs`, { dept }, function (res) {
@@ -1358,6 +1264,7 @@ function njaChargerClubs(dept) {
             opts += `<option value="${c.Id_Club}">${c.Id_Club} — ${$('<span>').text(c.Nom).html()}</option>`;
         });
         $sel.html(opts);
+        if (selectionner) $sel.val(selectionner);
     }, 'json').fail(() => {
         $sel.prop('disabled', false).html('<option value="">— Erreur chargement —</option>');
     });
@@ -1382,7 +1289,7 @@ $('#btn-enregistrer-ja').on('click', function () {
     }
 
     const record = {
-        id:              0,
+        id:              njaEditId || 0,
         grade,
         nom,
         prenom,

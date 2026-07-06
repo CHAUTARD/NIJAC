@@ -11,8 +11,6 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
 
     <style>
-        :root { --nijac-blue: #1a3a6b; }
-
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
             background: #f0f4fa;
@@ -93,7 +91,6 @@
         #tbl-salles tbody tr:nth-child(even) { background: #f7faff; }
         #tbl-salles tbody tr:hover   { background: #dce8f8; }
         #tbl-salles tbody tr.selected { background: #b8d0f0 !important; }
-        #tbl-salles tbody tr.new-row  { background: #fffbe6 !important; }
         #tbl-salles tbody td { border: 1px solid #e0e8f0; padding: 0; }
 
         .cell-inner {
@@ -104,11 +101,6 @@
             white-space: nowrap;
             overflow: hidden;
         }
-        .cell-inner[contenteditable="true"] {
-            background: #fffbe6;
-            outline: 2px solid #f0a000;
-            outline-offset: -2px;
-        }
 
         td.col-id, td.col-nom-club { background: #f0f4fa; }
         td.col-id .cell-inner, td.col-nom-club .cell-inner { color: #6b7280; font-style: italic; }
@@ -116,16 +108,6 @@
         td.col-principale { text-align: center; vertical-align: middle; }
         td.col-principale input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
 
-        #spinner {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,.3);
-            z-index: 99999;
-            align-items: center;
-            justify-content: center;
-        }
-        #spinner.show { display: flex; }
 
         #page-footer {
             background: #e8eef7;
@@ -165,9 +147,7 @@
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Spinner -->
-<div id="spinner">
-    <div class="spinner-border text-light" style="width:3rem;height:3rem;"></div>
-</div>
+<?= view('partials/spinner_overlay') ?>
 
 <!-- MenuStrip -->
 <div id="menu-strip">
@@ -180,9 +160,6 @@
     </button>
     <button class="menu-item danger" id="btn-supprimer">
         <i class="bi bi-trash3"></i>Supprimer
-    </button>
-    <button class="menu-item" id="btn-sauvegarder">
-        <i class="bi bi-database-fill-up"></i>Enregistrer dans la Base de données
     </button>
     <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 salle(s)</span>
     <span style="flex:1"></span>
@@ -214,41 +191,65 @@
                 <th style="width:80px"  data-field="id_club">N° Club<span class="sort-icon"></span></th>
                 <th style="width:210px" data-field="nom_club">Nom du club<span class="sort-icon"></span></th>
                 <th style="width:200px" data-field="nom">Nom<span class="sort-icon"></span></th>
-                <th style="width:260px" data-field="adresse">Adresse<span class="sort-icon"></span></th>
+                <th style="width:230px" data-field="adresse">Adresse<span class="sort-icon"></span></th>
+                <th style="width:120px" data-field="telephone">Téléphone<span class="sort-icon"></span></th>
                 <th style="width:90px"  data-field="cp">Code postal<span class="sort-icon"></span></th>
                 <th style="width:170px" data-field="ville">Ville<span class="sort-icon"></span></th>
                 <th style="width:90px"  data-field="est_principale">Principale<span class="sort-icon"></span></th>
+                <?php if ($isAdmin): ?>
+                <th style="width:70px"></th>
+                <?php endif; ?>
             </tr>
         </thead>
         <tbody id="tbody-grille">
-            <tr><td colspan="8" class="text-center text-muted py-3">Chargement…</td></tr>
+            <tr><td colspan="10" class="text-center text-muted py-3">Chargement…</td></tr>
         </tbody>
     </table>
 </div>
 
-<!-- Modale saisie CP / Ville -->
-<div class="modal fade" id="modal-cp-ville" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-sm">
+<!-- Modale Ajouter / Modifier une salle -->
+<div class="modal fade" id="modal-modifier-salle" tabindex="-1" aria-labelledby="modal-modifier-salle-titre" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:460px">
     <div class="modal-content">
-      <div class="modal-header py-2" style="background:#0d6efd;color:#fff;">
-        <h6 class="modal-title mb-0"><i class="bi bi-geo-alt-fill me-1"></i>Code postal / Ville</h6>
+      <div class="modal-header py-2" style="background:#1a3a6b;color:#fff;">
+        <h6 class="modal-title mb-0" id="modal-modifier-salle-titre"><i class="bi bi-building me-2"></i>Modifier la salle</h6>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body pb-2">
-        <div class="input-group input-group-sm mb-1">
-          <span class="input-group-text">CP</span>
-          <input type="text" id="mcv-cp" class="form-control" placeholder="76000" maxlength="10" style="max-width:90px">
-          <input type="text" id="mcv-ville" class="form-control text-uppercase" placeholder="ROUEN">
+      <div class="modal-body" style="font-size:.88rem;">
+        <input type="hidden" id="mms-idx">
+        <div class="mb-2">
+          <label class="form-label fw-semibold" style="font-size:.82rem;">Nom <span class="text-danger">*</span></label>
+          <input type="text" id="mms-nom" class="form-control form-control-sm">
         </div>
-        <div id="mcv-msg" class="form-text" style="min-height:1.2em;"></div>
-        <div id="mcv-suggestions" style="display:none;">
+        <div class="mb-2">
+          <label class="form-label fw-semibold" style="font-size:.82rem;">Adresse</label>
+          <input type="text" id="mms-adresse" class="form-control form-control-sm">
+        </div>
+        <div class="mb-2">
+          <label class="form-label fw-semibold" style="font-size:.82rem;">Téléphone</label>
+          <input type="text" id="mms-telephone" class="form-control form-control-sm" placeholder="00.00.00.00.00" maxlength="14">
+        </div>
+        <div class="mb-1">
+          <label class="form-label fw-semibold" style="font-size:.82rem;">Code postal / Ville</label>
+          <div class="input-group input-group-sm">
+            <input type="text" id="mms-cp" class="form-control" placeholder="76000" maxlength="10" style="max-width:90px">
+            <input type="text" id="mms-ville" class="form-control text-uppercase" placeholder="ROUEN">
+          </div>
+        </div>
+        <div id="mms-cp-msg" class="form-text" style="min-height:1.2em;"></div>
+        <div id="mms-suggestions" style="display:none;">
           <div class="fw-semibold text-primary small mb-1">Plusieurs communes — choisissez :</div>
-          <div id="mcv-suggestions-list" class="d-flex flex-wrap gap-1"></div>
+          <div id="mms-suggestions-list" class="d-flex flex-wrap gap-1"></div>
         </div>
+        <div class="form-check mt-2">
+          <input type="checkbox" class="form-check-input" id="mms-principale">
+          <label class="form-check-label" for="mms-principale" style="font-size:.85rem;">Salle principale</label>
+        </div>
+        <div id="mms-msg" style="font-size:.8rem;min-height:18px;margin-top:.4rem;"></div>
       </div>
       <div class="modal-footer py-2">
         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
-        <button type="button" class="btn btn-success btn-sm" id="btn-mcv-ok"><i class="bi bi-check-lg me-1"></i>Valider</button>
+        <button type="button" class="btn btn-primary btn-sm" id="mms-btn-ok"><i class="bi bi-floppy-fill me-1"></i>Enregistrer</button>
       </div>
     </div>
   </div>
@@ -341,7 +342,6 @@ const DEPT_USER = <?= json_encode($deptUser) ?>;
 
 let lignes     = [];
 let clubs      = [];
-let cellActive = null;
 let rowActive  = null;
 const sortState = { col: 'nom_club', asc: true };
 let searchTerm = '';
@@ -353,10 +353,6 @@ function setStatus(msg, ok = true) {
     $('#status-bar').html(msg).css('color', ok ? '#374151' : '#c00');
 }
 
-function toast(msg, ok = true) {
-    nijacToast(msg, ok ? 'success' : 'danger');
-}
-
 function lignesFiltreesTriees() {
     const term = searchTerm.toLowerCase();
     let result = term
@@ -364,6 +360,7 @@ function lignesFiltreesTriees() {
             String(l.id_salle   ?? '').toLowerCase().includes(term) ||
             String(l.nom        ?? '').toLowerCase().includes(term) ||
             String(l.adresse    ?? '').toLowerCase().includes(term) ||
+            String(l.telephone  ?? '').toLowerCase().includes(term) ||
             String(l.cp         ?? '').toLowerCase().includes(term) ||
             String(l.ville      ?? '').toLowerCase().includes(term) ||
             String(l.id_club    ?? '').toLowerCase().includes(term) ||
@@ -393,143 +390,60 @@ function renderGrille() {
 
     if (!affichees.length) {
         const msg = searchTerm ? 'Aucun résultat.' : 'Aucune salle.';
-        $body.append(`<tr><td colspan="8" class="text-center text-muted py-3">${msg}</td></tr>`);
+        $body.append(`<tr><td colspan="10" class="text-center text-muted py-3">${msg}</td></tr>`);
         setStatus(searchTerm ? `0 résultat sur ${lignes.length} salle(s).` : 'Aucune salle enregistrée.');
         return;
     }
 
     affichees.forEach((l) => {
         const idx = lignes.indexOf(l);
-        const isNew = !!l._nouveau;
-        const $tr = $('<tr>').attr('data-idx', idx).toggleClass('new-row', isNew);
+        const $tr = $('<tr>').attr('data-idx', idx);
 
-        $tr.append(makeTd(isNew ? '(nouveau)' : l.id_salle, idx, 'id_salle', true));
+        $tr.append(makeTd(l.id_salle, idx, 'id_salle', true));
         $tr.append(makeTd(l.id_club  ?? '', idx, 'id_club',  true));
         $tr.append(makeTd(l.nom_club ?? '', idx, 'nom_club', true));
         $tr.append(makeTd(l.nom,        idx, 'nom',        false));
         $tr.append(makeTd(l.adresse,    idx, 'adresse',    false));
-        $tr.append(makeCpTd(l, idx));
-        $tr.append(makeVilleTd(l, idx));
+        $tr.append(makeTd(l.telephone,  idx, 'telephone',  false));
+        $tr.append(makeTd(l.cp,         idx, 'cp',         false));
+        $tr.append(makeTd(l.ville,      idx, 'ville',      false));
         $tr.append(makePrincipaleTd(l, idx));
+        if (IS_ADMIN) $tr.append(makeActionsTd(idx));
 
         $tr.on('click', function () { selectionnerLigne(idx); });
         $body.append($tr);
     });
 
     const info = searchTerm ? `${affichees.length} résultat(s) sur ${lignes.length}. ` : '';
-    setStatus(`${info}Cliquez sur une cellule puis <kbd>F2</kbd> pour modifier.`);
+    setStatus(`${info}Prêt.`);
     $('#lbl-count').text(`${lignes.length} salle(s)`);
 }
 
 function makeTd(val, idx, field, readonly) {
     const $td  = $('<td>').addClass(readonly ? `col-${field.replace('_','-')}` : '').attr('data-idx', idx).attr('data-field', field);
-    const $div = $('<div class="cell-inner">').text(val ?? '').attr('contenteditable', 'false');
+    const $div = $('<div class="cell-inner">').text(val ?? '');
     $td.append($div);
-    if (!readonly) {
-        $td.on('click', function (e) { e.stopPropagation(); selectionnerCellule($(this)); });
-    }
     return $td;
 }
 
-let mcvIdx = null;
-let mcvIdLaPoste = null;
-let _modalCpVille = null;
-function getModalCpVille() {
-    if (!_modalCpVille) _modalCpVille = new bootstrap.Modal(document.getElementById('modal-cp-ville'));
-    return _modalCpVille;
-}
-
-function ouvrirModalCpVille(idx) {
-    mcvIdx = idx;
-    mcvIdLaPoste = lignes[idx].id_laposte ?? null;
-    $('#mcv-cp').val(lignes[idx].cp ?? '');
-    $('#mcv-ville').val(lignes[idx].ville ?? '');
-    $('#mcv-msg').text('').css('color', '');
-    $('#mcv-suggestions').hide();
-    $('#mcv-suggestions-list').empty();
-    getModalCpVille().show();
-    setTimeout(() => $('#mcv-cp').trigger('focus'), 300);
-}
-
-function mcvRechercher() {
-    const cp    = $('#mcv-cp').val().trim();
-    const ville = $('#mcv-ville').val().trim();
-    if (!cp && !ville) return;
-    $('#mcv-suggestions').hide();
-    $('#mcv-suggestions-list').empty();
-    $.post(`${LAPOSTE_BASE}/recherche-laposte`, { cp, ville }, function (res) {
-        if (!res.ok) {
-            $('#mcv-msg').text(res.msg ?? 'Commune non trouvée.').css('color', '#c00');
-            mcvIdLaPoste = null;
-            return;
-        }
-        if (res.multi) {
-            $('#mcv-msg').text('').css('color', '');
-            const $list = $('#mcv-suggestions-list').empty();
-            res.suggestions.forEach(s => {
-                $('<button class="btn btn-sm btn-outline-primary">')
-                    .text(`${s.cp} ${s.ville}`)
-                    .on('click', function () {
-                        $('#mcv-cp').val(s.cp);
-                        $('#mcv-ville').val(s.ville);
-                        mcvIdLaPoste = s.id_laposte;
-                        $('#mcv-msg').text(`✓ ${s.cp} ${s.ville}`).css('color', '#065f46');
-                        $('#mcv-suggestions').hide();
-                    }).appendTo($list);
-            });
-            $('#mcv-suggestions').show();
-            mcvIdLaPoste = null;
-        } else {
-            $('#mcv-cp').val(res.cp);
-            $('#mcv-ville').val(res.ville);
-            mcvIdLaPoste = res.id_laposte;
-            $('#mcv-msg').text(`✓ ${res.cp} ${res.ville}`).css('color', '#065f46');
-        }
-    }, 'json').fail(() => $('#mcv-msg').text('Erreur réseau.').css('color', '#c00'));
-}
-
-$('#mcv-cp, #mcv-ville').on('blur', function () { mcvRechercher(); });
-$('#mcv-cp').on('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#mcv-ville').trigger('focus'); } });
-$('#mcv-ville').on('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); mcvRechercher(); } });
-
-$('#btn-mcv-ok').on('click', function () {
-    if (mcvIdx === null) return;
-    const cp    = $('#mcv-cp').val().trim() || null;
-    const ville = $('#mcv-ville').val().trim().toUpperCase() || null;
-    lignes[mcvIdx].cp         = cp;
-    lignes[mcvIdx].ville      = ville;
-    lignes[mcvIdx].id_laposte = mcvIdLaPoste;
-    getModalCpVille().hide();
-    renderGrille();
-    setStatus(cp ? `CP/Ville mis à jour : ${cp} ${ville ?? ''}.` : 'CP/Ville effacés.');
-});
-
-function makeVilleTd(l, idx) {
-    const $td  = $('<td>').attr('data-idx', idx).attr('data-field', 'ville');
-    const $div = $('<div class="cell-inner">').text(l.ville ?? '');
-    $td.append($div);
-    if (IS_ADMIN) {
-        $td.css('cursor', 'pointer').on('click', function (e) { e.stopPropagation(); ouvrirModalCpVille(idx); });
-    }
-    return $td;
-}
-
-function makeCpTd(l, idx) {
-    const $td  = $('<td>').attr('data-idx', idx).attr('data-field', 'cp');
-    const $div = $('<div class="cell-inner">').text(l.cp ?? '');
-    $td.append($div);
-    if (IS_ADMIN) {
-        $td.css('cursor', 'pointer').on('click', function (e) { e.stopPropagation(); ouvrirModalCpVille(idx); });
-    }
+function makeActionsTd(idx) {
+    const $td = $('<td class="text-center">');
+    $td.append(
+        $('<button type="button" class="btn btn-sm btn-outline-primary btn-modifier-salle" title="Modifier">')
+            .attr('data-idx', idx)
+            .html('<i class="bi bi-pencil-fill"></i>')
+    );
     return $td;
 }
 
 function makePrincipaleTd(l, idx) {
     const $td  = $('<td class="col-principale">').attr('data-idx', idx).attr('data-field', 'est_principale');
-    const $cb  = $('<input type="checkbox">').prop('checked', !!l.est_principale);
+    const $cb  = $('<input type="checkbox">').prop('checked', !!l.est_principale).prop('disabled', !IS_ADMIN);
     $cb.on('change', function () {
-        lignes[idx].est_principale = this.checked ? 1 : 0;
-        setStatus('Modification locale. Cliquez sur « Enregistrer » pour sauvegarder.');
+        const checked = this.checked;
+        persisterSalle(idx, { est_principale: checked ? 1 : 0 },
+            (res) => toast(res.msg, true),
+            (res) => { $cb.prop('checked', !checked); toast(res.msg ?? 'Erreur réseau.', false); });
     });
     $td.append($cb);
     return $td;
@@ -541,59 +455,25 @@ function selectionnerLigne(idx) {
     $(`#tbody-grille tr[data-idx="${idx}"]`).addClass('selected');
 }
 
-function selectionnerCellule($td) {
-    if (cellActive) {
-        cellActive.find('.cell-inner').attr('contenteditable', 'false').trigger('blur');
-        cellActive.closest('tr').removeClass('selected');
-    }
-    cellActive = $td;
-    const idx = +$td.attr('data-idx');
-    selectionnerLigne(idx);
-    setStatus(`Cellule sélectionnée — <kbd>F2</kbd> pour modifier, <kbd>Échap</kbd> pour annuler.`);
-}
-
-$(document).on('keydown', function (e) {
-    if (!cellActive) return;
-    const $inner = cellActive.find('.cell-inner');
-
-    if (e.key === 'F2' && $inner.attr('contenteditable') === 'false') {
-        e.preventDefault();
-        $inner.attr('contenteditable', 'true').trigger('focus');
-        const range = document.createRange();
-        range.selectNodeContents($inner[0]);
-        range.collapse(false);
-        window.getSelection().removeAllRanges();
-        window.getSelection().addRange(range);
-
-    } else if (e.key === 'Escape') {
-        const idx   = +cellActive.attr('data-idx');
-        const field = cellActive.attr('data-field');
-        $inner.text(lignes[idx]?.[field] ?? '').attr('contenteditable', 'false');
-        setStatus('Modification annulée.');
-
-    } else if (e.key === 'Enter' && $inner.attr('contenteditable') === 'true') {
-        e.preventDefault();
-        if (cellActive.attr('data-field') === 'cp') {
-            $inner.trigger('blur');
-        } else {
-            validerCellule($inner, cellActive);
-        }
-    }
-});
-
-$(document).on('blur', '.cell-inner[contenteditable="true"]', function () {
-    validerCellule($(this), $(this).closest('td'));
-});
-
-function validerCellule($inner, $td) {
-    $inner.attr('contenteditable', 'false');
-    const idx   = +$td.attr('data-idx');
-    const field = $td.attr('data-field');
-    const val   = $inner.text().trim();
-    if (lignes[idx]) {
-        lignes[idx][field] = val !== '' ? val : null;
-    }
-    setStatus('Modification locale. Cliquez sur « Enregistrer » pour sauvegarder.');
+// Envoie l'état complet de la ligne (fusionné avec les overrides) au serveur ;
+// une salle existante doit toujours être sauvegardée dans son intégralité,
+// PUT /salle/{id} remplaçant toutes les colonnes.
+function persisterSalle(idx, overrides, onSuccess, onError) {
+    const l = lignes[idx];
+    if (!l) return;
+    const payload = {
+        nom: l.nom, adresse: l.adresse, telephone: l.telephone, cp: l.cp, ville: l.ville,
+        id_laposte: l.id_laposte, id_club: l.id_club, est_principale: l.est_principale ? 1 : 0,
+        ...overrides,
+    };
+    spinner(true);
+    $.ajax({ url: `${SALLE_BASE}/${l.id_salle}`, method: 'PUT', data: payload, dataType: 'json' })
+        .done(function (res) {
+            spinner(false);
+            if (res.ok) { Object.assign(l, overrides); onSuccess?.(res); }
+            else onError?.(res);
+        })
+        .fail(() => { spinner(false); onError?.({ msg: 'Erreur réseau.' }); });
 }
 
 function chargerClubs() {
@@ -612,6 +492,7 @@ function chargerListe() {
                 id_salle:       r.Id_Salle,
                 nom:            r.Nom,
                 adresse:        r.Adresse,
+                telephone:      r.Telephone ?? '',
                 id_laposte:     r.Id_Laposte,
                 cp:             r.Cp    ?? '',
                 ville:          r.Ville ?? '',
@@ -625,19 +506,154 @@ function chargerListe() {
     });
 }
 
+let mmsIdLaposteVerifie = null;
+
+// Formate au fil de la saisie sous la forme 00.00.00.00.00 (10 chiffres groupés par deux).
+function formaterTelephone(val) {
+    const chiffres = (val ?? '').replace(/\D/g, '').substring(0, 10);
+    return chiffres.match(/.{1,2}/g)?.join('.') ?? '';
+}
+
+$('#mms-telephone').on('input', function () {
+    this.value = formaterTelephone(this.value);
+});
+
+function ouvrirModalModifierSalle(idx) {
+    const l = idx !== null ? lignes[idx] : null;
+    $('#mms-idx').val(idx !== null ? idx : '');
+    $('#modal-modifier-salle-titre').html(l
+        ? '<i class="bi bi-building me-2"></i>Modifier la salle'
+        : '<i class="bi bi-building me-2"></i>Ajouter une salle');
+    $('#mms-nom').val(l ? (l.nom ?? '') : '');
+    $('#mms-adresse').val(l ? (l.adresse ?? '') : '');
+    $('#mms-telephone').val(formaterTelephone(l ? (l.telephone ?? '') : ''));
+    $('#mms-cp').val(l ? (l.cp ?? '') : '');
+    $('#mms-ville').val(l ? (l.ville ?? '') : '');
+    $('#mms-principale').prop('checked', l ? !!l.est_principale : false);
+    mmsIdLaposteVerifie = l ? (l.id_laposte ?? null) : null;
+    $('#mms-cp-msg').text('').css('color', '');
+    $('#mms-suggestions').hide();
+    $('#mms-suggestions-list').empty();
+    $('#mms-msg').text('');
+    const el = document.getElementById('modal-modifier-salle');
+    let modal = bootstrap.Modal.getInstance(el);
+    if (!modal) modal = new bootstrap.Modal(el);
+    modal.show();
+    el.addEventListener('shown.bs.modal', () => {
+        $('#mms-nom').trigger('focus').trigger('select');
+    }, { once: true });
+}
+
+$('#tbody-grille').on('click', '.btn-modifier-salle', function (e) {
+    e.stopPropagation();
+    ouvrirModalModifierSalle(+$(this).attr('data-idx'));
+});
+
 $('#btn-ajouter').on('click', function () {
-    lignes.push({
-        id_salle: 0, nom: '', adresse: null,
-        id_laposte: null, id_club: null, nom_club: '', est_principale: 0,
-    });
-    renderGrille();
-    const newIdx = lignes.length - 1;
-    selectionnerLigne(newIdx);
-    const $tr = $(`#tbody-grille tr[data-idx="${newIdx}"]`);
-    $tr[0]?.scrollIntoView({ block: 'nearest' });
-    const $nomTd = $tr.find('td[data-field="nom"]');
-    selectionnerCellule($nomTd);
-    $nomTd.find('.cell-inner').attr('contenteditable', 'true').trigger('focus');
+    ouvrirModalModifierSalle(null);
+});
+
+// Enter valide la modale, sauf sur CP/Ville où Enter sert à enchaîner
+// le champ suivant / déclencher la vérification laposte (voir plus bas).
+$('#modal-modifier-salle').on('keydown', function (e) {
+    if (e.key === 'Enter' && e.target.id !== 'mms-cp' && e.target.id !== 'mms-ville') {
+        e.preventDefault();
+        $('#mms-btn-ok').trigger('click');
+    }
+});
+
+// Vérifie le CP/Ville saisis auprès de la table laposte et résout
+// Id_Laposte en conséquence (mêmes règles que la recherche club/commune).
+function mmsVerifierLaposte() {
+    const cp    = $('#mms-cp').val().trim();
+    const ville = $('#mms-ville').val().trim();
+    $('#mms-suggestions').hide();
+    $('#mms-suggestions-list').empty();
+    if (!cp && !ville) {
+        $('#mms-cp-msg').text('').css('color', '');
+        mmsIdLaposteVerifie = null;
+        return;
+    }
+    $.post(`${LAPOSTE_BASE}/recherche-laposte`, { cp, ville }, function (res) {
+        if (!res.ok) {
+            $('#mms-cp-msg').text(res.msg ?? 'Commune non trouvée.').css('color', '#c00');
+            mmsIdLaposteVerifie = null;
+            return;
+        }
+        if (res.multi) {
+            $('#mms-cp-msg').text('').css('color', '');
+            const $list = $('#mms-suggestions-list').empty();
+            res.suggestions.forEach(s => {
+                $('<button type="button" class="btn btn-sm btn-outline-primary">')
+                    .text(`${s.cp} ${s.ville}`)
+                    .on('click', function () {
+                        $('#mms-cp').val(s.cp);
+                        $('#mms-ville').val(s.ville);
+                        mmsIdLaposteVerifie = s.id_laposte;
+                        $('#mms-cp-msg').text(`✓ ${s.cp} ${s.ville}`).css('color', '#065f46');
+                        $('#mms-suggestions').hide();
+                    }).appendTo($list);
+            });
+            $('#mms-suggestions').show();
+            mmsIdLaposteVerifie = null;
+        } else {
+            $('#mms-cp').val(res.cp);
+            $('#mms-ville').val(res.ville);
+            mmsIdLaposteVerifie = res.id_laposte;
+            $('#mms-cp-msg').text(`✓ ${res.cp} ${res.ville}`).css('color', '#065f46');
+        }
+    }, 'json').fail(() => $('#mms-cp-msg').text('Erreur réseau.').css('color', '#c00'));
+}
+
+$('#mms-cp, #mms-ville').on('blur', function () { mmsVerifierLaposte(); });
+$('#mms-cp').on('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#mms-ville').trigger('focus'); } });
+$('#mms-ville').on('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); mmsVerifierLaposte(); } });
+
+$('#mms-btn-ok').on('click', function () {
+    const idxVal        = $('#mms-idx').val();
+    const nom           = $('#mms-nom').val().trim();
+    const adresse       = $('#mms-adresse').val().trim() || null;
+    const telephone     = $('#mms-telephone').val().trim() || null;
+    const cp            = $('#mms-cp').val().trim() || null;
+    const ville         = $('#mms-ville').val().trim().toUpperCase() || null;
+    const estPrincipale = $('#mms-principale').is(':checked') ? 1 : 0;
+
+    if (!nom) {
+        $('#mms-msg').html('<span class="text-danger">Le nom est obligatoire.</span>');
+        return;
+    }
+    if (telephone && telephone.replace(/\D/g, '').length !== 10) {
+        $('#mms-msg').html('<span class="text-danger">Le téléphone doit être saisi sous la forme 00.00.00.00.00.</span>');
+        return;
+    }
+
+    const champs = {
+        nom, adresse, telephone, cp, ville,
+        id_laposte: mmsIdLaposteVerifie, est_principale: estPrincipale,
+    };
+
+    if (idxVal === '') {
+        spinner(true);
+        $.post(SALLE_BASE, champs, function (res) {
+            spinner(false);
+            if (res.ok) {
+                toast(res.msg, true);
+                bootstrap.Modal.getInstance(document.getElementById('modal-modifier-salle')).hide();
+                chargerListe();
+            } else {
+                $('#mms-msg').html('<span class="text-danger">✖ ' + res.msg + '</span>');
+            }
+        }, 'json').fail(() => { spinner(false); $('#mms-msg').html('<span class="text-danger">Erreur réseau.</span>'); });
+        return;
+    }
+
+    persisterSalle(+idxVal, champs,
+        (res) => {
+            bootstrap.Modal.getInstance(document.getElementById('modal-modifier-salle')).hide();
+            renderGrille();
+            toast(res.msg, true);
+        },
+        (res) => $('#mms-msg').html('<span class="text-danger">✖ ' + (res.msg ?? 'Erreur réseau.') + '</span>'));
 });
 
 $('#btn-supprimer').on('click', function () {
@@ -645,15 +661,8 @@ $('#btn-supprimer').on('click', function () {
     const l = lignes[rowActive];
     if (!l) return;
 
-    const label = l.nom || '(nouvelle ligne)';
+    const label = l.nom || '(salle)';
     if (!confirm(`Supprimer la salle « ${label} » ?`)) return;
-
-    if (l.id_salle === 0) {
-        lignes.splice(rowActive, 1);
-        rowActive = null;
-        renderGrille();
-        return;
-    }
 
     spinner(true);
     $.ajax({ url: `${SALLE_BASE}/${l.id_salle}`, method: 'DELETE', dataType: 'json' }).done(function (res) {
@@ -661,23 +670,6 @@ $('#btn-supprimer').on('click', function () {
         toast(res.msg, res.ok);
         if (res.ok) { rowActive = null; chargerListe(); }
     }).fail(() => { spinner(false); toast('Erreur réseau.', false); });
-});
-
-$('#btn-sauvegarder').on('click', function () {
-    const modifiees = lignes
-        .filter(l => l.nom !== '' && l.nom !== null)
-        .map(l => l._nouveau ? { ...l, id_salle: 0 } : l);
-    if (!modifiees.length) { toast('Aucune donnée à enregistrer.', false); return; }
-    if (!confirm(`Enregistrer ${modifiees.length} salle(s) ?`)) return;
-
-    spinner(true);
-    $.post(`${SALLE_BASE}/save`, {
-        lignes: JSON.stringify(modifiees),
-    }, function (res) {
-        spinner(false);
-        toast(res.msg, res.ok);
-        if (res.ok) chargerListe();
-    }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
 });
 
 let refreshTriEntetes = () => {};

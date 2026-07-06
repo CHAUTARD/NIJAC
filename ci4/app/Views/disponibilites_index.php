@@ -7,8 +7,9 @@
 <title>NIJAC – Disponibilités JA (E021)</title>
 <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
 <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
+<link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
 <style>
-:root { --nijac-blue:#1a3a6b; --col-dispo:#2e7d32; }
+:root { --col-dispo:#2e7d32; }
 
 body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
 
@@ -27,7 +28,6 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 .ts-pwd-warning { display:<?= $changeLogin ? 'inline-flex' : 'none' ?>; align-items:center; gap:.35rem; color:#c00; font-weight:700; cursor:pointer; text-decoration:underline dotted; }
 /* ── En-tête ── */
 #page-header { background:#2e7d32; color:#fff; padding:.65rem 1.25rem; display:flex; align-items:center; gap:.75rem; font-size:.9rem; font-weight:600; flex-shrink:0; }
-#page-header .btn-retour { margin-left:auto; }
 
 /* ── Bandeau département ── */
 #barre-dept { background:#fff; border-bottom:2px solid #dee2e6; padding:.65rem 1.25rem; display:flex; align-items:center; gap:1.25rem; flex-wrap:wrap; }

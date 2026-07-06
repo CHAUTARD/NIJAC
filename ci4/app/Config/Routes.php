@@ -57,7 +57,8 @@ $routes->get('salle', 'SalleController::index', ['filter' => 'auth']);
 $routes->get('salle/data', 'SalleController::data', ['filter' => 'auth']);
 $routes->get('salle/clubs', 'SalleController::clubs', ['filter' => 'auth']);
 $routes->post('salle/import-excel', 'SalleController::importExcel', ['filter' => 'auth']);
-$routes->post('salle/save', 'SalleController::save', ['filter' => 'auth']);
+$routes->post('salle', 'SalleController::store', ['filter' => 'auth']);
+$routes->put('salle/(:segment)', 'SalleController::update/$1', ['filter' => 'auth']);
 $routes->delete('salle/(:segment)', 'SalleController::delete/$1', ['filter' => 'auth']);
 $routes->post('salle/fftt/clubs', 'SalleController::ffttClubs', ['filter' => 'auth']);
 $routes->post('salle/fftt/sync', 'SalleController::ffttSync', ['filter' => 'auth']);
@@ -137,7 +138,7 @@ $routes->get('import-rencontres/compter-tables', 'ImportRencontresController::co
 // ── E008 Clubs / Associations ────────────────────────────────────────────────
 $routes->get('club', 'ClubController::index', ['filter' => 'adminauth']);
 $routes->get('club/liste', 'ClubController::liste', ['filter' => 'adminauth']);
-$routes->post('club/maj-bdd', 'ClubController::majBdd', ['filter' => 'adminauth']);
+$routes->put('club/(:segment)', 'ClubController::modifier/$1', ['filter' => 'adminauth']);
 $routes->post('club/fftt/clubs-dept', 'ClubController::getClubsDeptFftt', ['filter' => 'adminauth']);
 $routes->post('club/fftt/sync', 'ClubController::syncFfttClub', ['filter' => 'adminauth']);
 

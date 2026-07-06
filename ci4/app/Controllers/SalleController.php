@@ -33,6 +33,15 @@ class SalleController extends BaseController
         return !empty($_SESSION['utilisateur']['is_admin']);
     }
 
+    // Normalise sous la forme 00.00.00.00.00 (mêmes règles que
+    // ClubController::syncFfttClub pour le téléphone du correspondant).
+    private function normaliserTelephone(?string $telephone): ?string
+    {
+        $chiffres = preg_replace('/\D/', '', $telephone ?? '');
+
+        return strlen($chiffres) === 10 ? implode('.', str_split($chiffres, 2)) : null;
+    }
+
     public function index()
     {
         $moi     = $_SESSION['utilisateur'] ?? [];
@@ -57,10 +66,11 @@ class SalleController extends BaseController
         $pdo     = getPDO();
 
         $colsSalle = array_column($pdo->query('SHOW COLUMNS FROM Salle')->fetchAll(), 'Field');
-        if (!in_array('Cp', $colsSalle))    $pdo->exec("ALTER TABLE Salle ADD COLUMN Cp VARCHAR(10) NULL AFTER Adresse");
-        if (!in_array('Ville', $colsSalle)) $pdo->exec("ALTER TABLE Salle ADD COLUMN Ville VARCHAR(100) NULL AFTER Cp");
+        if (!in_array('Cp', $colsSalle))        $pdo->exec("ALTER TABLE Salle ADD COLUMN Cp VARCHAR(10) NULL AFTER Adresse");
+        if (!in_array('Ville', $colsSalle))     $pdo->exec("ALTER TABLE Salle ADD COLUMN Ville VARCHAR(100) NULL AFTER Cp");
+        if (!in_array('Telephone', $colsSalle)) $pdo->exec("ALTER TABLE Salle ADD COLUMN Telephone VARCHAR(20) NULL AFTER Ville");
 
-        $sql = 'SELECT s.Id_Salle, COALESCE(s.Nom, cl.Nom) AS Nom, s.Adresse, s.Id_Laposte, s.Id_Club,
+        $sql = 'SELECT s.Id_Salle, COALESCE(s.Nom, cl.Nom) AS Nom, s.Adresse, s.Telephone, s.Id_Laposte, s.Id_Club,
                        s.EstPrincipale, s.Cp, s.Ville, cl.Nom AS NomClub,
                        COALESCE(
                            NULLIF(CONCAT(lp.CodePostal, \' \', lp.Nom), \' \'),
@@ -158,68 +168,63 @@ class SalleController extends BaseController
         return $this->response->setJSON(['ok' => true, 'data' => $lignes, 'count' => count($lignes)]);
     }
 
-    public function save(): ResponseInterface
+    public function store(): ResponseInterface
     {
-
         if (!$this->isAdmin()) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Accès refusé.']);
         }
 
-        $lignes = json_decode($this->request->getPost('lignes') ?? '[]', true);
-        if (!is_array($lignes)) {
-            return $this->response->setJSON(['ok' => false, 'msg' => 'Données invalides.']);
+        $nom = trim($this->request->getPost('nom') ?? '');
+        if ($nom === '') {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Le nom est obligatoire.']);
         }
+        $adresse       = trim($this->request->getPost('adresse') ?? '') ?: null;
+        $telephone     = $this->normaliserTelephone($this->request->getPost('telephone'));
+        $cp            = trim($this->request->getPost('cp') ?? '') ?: null;
+        $ville         = trim($this->request->getPost('ville') ?? '') ?: null;
+        $idLaposte     = ($this->request->getPost('id_laposte') ?? '') !== '' ? (int) $this->request->getPost('id_laposte') : null;
+        $estPrincipale = $this->request->getPost('est_principale') ? 1 : 0;
 
-        $pdo   = getPDO();
-        $vider = !empty($this->request->getPost('vider'));
-        if ($vider) {
-            $pdo->exec('DELETE FROM Salle');
-            $pdo->exec('ALTER TABLE Salle AUTO_INCREMENT = 1');
-        }
-
-        $inserts = 0;
-        $updates = 0;
-        $erreurs = [];
-
-        $stmtInsert = $pdo->prepare(
-            'INSERT INTO Salle (Nom, Adresse, Cp, Ville, Id_Laposte, Id_Club, EstPrincipale) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        $pdo  = getPDO();
+        $stmt = $pdo->prepare(
+            'INSERT INTO Salle (Nom, Adresse, Telephone, Cp, Ville, Id_Laposte, Id_Club, EstPrincipale) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)'
         );
-        $stmtUpdate = $pdo->prepare(
-            'UPDATE Salle SET Nom=?, Adresse=?, Cp=?, Ville=?, Id_Laposte=?, Id_Club=?, EstPrincipale=? WHERE Id_Salle=?'
-        );
+        $stmt->execute([$nom, $adresse, $telephone, $cp, $ville, $idLaposte, $estPrincipale]);
 
-        foreach ($lignes as $l) {
-            $id            = (int) ($l['id_salle'] ?? 0);
-            $nom           = trim($l['nom'] ?? '');
-            $adresse       = trim($l['adresse'] ?? '') ?: null;
-            $cp            = trim($l['cp'] ?? '') ?: null;
-            $ville         = trim($l['ville'] ?? '') ?: null;
-            $idLaposte     = $l['id_laposte'] !== '' && $l['id_laposte'] !== null ? (int) $l['id_laposte'] : null;
-            $idClub        = ($l['id_club'] ?? '') !== '' ? trim($l['id_club']) : null;
-            $estPrincipale = !empty($l['est_principale']) ? 1 : 0;
+        return $this->response->setJSON(['ok' => true, 'msg' => 'Salle créée.', 'id_salle' => (int) $pdo->lastInsertId()]);
+    }
 
-            if ($nom === '') {
-                $erreurs[] = "Ligne id=$id : le nom est obligatoire.";
-                continue;
-            }
-
-            try {
-                if ($id === 0) {
-                    $stmtInsert->execute([$nom, $adresse, $cp, $ville, $idLaposte, $idClub, $estPrincipale]);
-                    $inserts++;
-                } else {
-                    $stmtUpdate->execute([$nom, $adresse, $cp, $ville, $idLaposte, $idClub, $estPrincipale, $id]);
-                    $updates++;
-                }
-            } catch (\PDOException $ex) {
-                $erreurs[] = "Ligne id=$id : " . $ex->getMessage();
-            }
+    public function update($id = null): ResponseInterface
+    {
+        if (!$this->isAdmin()) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Accès refusé.']);
         }
 
-        $msg = "Mise à jour terminée : $inserts insérée(s), $updates modifiée(s).";
-        if ($erreurs) $msg .= ' Erreurs : ' . implode(' | ', $erreurs);
+        $id = (int) $id;
+        if ($id === 0) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Id invalide.']);
+        }
 
-        return $this->response->setJSON(['ok' => empty($erreurs), 'msg' => $msg]);
+        $input = $this->request->getRawInput();
+        $nom   = trim($input['nom'] ?? '');
+        if ($nom === '') {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Le nom est obligatoire.']);
+        }
+        $adresse       = trim($input['adresse'] ?? '') ?: null;
+        $telephone     = $this->normaliserTelephone($input['telephone'] ?? null);
+        $cp            = trim($input['cp'] ?? '') ?: null;
+        $ville         = trim($input['ville'] ?? '') ?: null;
+        $idLaposte     = ($input['id_laposte'] ?? '') !== '' ? (int) $input['id_laposte'] : null;
+        $idClub        = ($input['id_club'] ?? '') !== '' ? trim($input['id_club']) : null;
+        $estPrincipale = !empty($input['est_principale']) ? 1 : 0;
+
+        $pdo  = getPDO();
+        $stmt = $pdo->prepare(
+            'UPDATE Salle SET Nom=?, Adresse=?, Telephone=?, Cp=?, Ville=?, Id_Laposte=?, Id_Club=?, EstPrincipale=? WHERE Id_Salle=?'
+        );
+        $stmt->execute([$nom, $adresse, $telephone, $cp, $ville, $idLaposte, $idClub, $estPrincipale, $id]);
+
+        return $this->response->setJSON(['ok' => true, 'msg' => 'Salle mise à jour.']);
     }
 
     public function delete($id = null): ResponseInterface
