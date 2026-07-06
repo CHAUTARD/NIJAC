@@ -14,7 +14,7 @@
 body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
 
 /* ── En-tête ── */
-#page-header { background:var(--nom-green); color:#fff; padding:.65rem 1.25rem; font-size:.9rem; font-weight:600; display:flex; align-items:center; gap:.75rem; flex-shrink:0; }
+#page-header { background:var(--nom-green); color:#fff; padding:.5rem 1.25rem; font-size:.9rem; font-weight:600; display:flex; align-items:center; gap:.75rem; flex-shrink:0; }
 
 /* ── Toolbar ── */
 #toolbar { background:#f8fafc; border-bottom:1px solid #dde5f0; padding:.3rem 1rem; display:flex; align-items:center; justify-content:space-between; font-size:.85rem; flex-shrink:0; }

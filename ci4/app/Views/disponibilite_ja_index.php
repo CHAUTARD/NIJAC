@@ -25,7 +25,7 @@
         #page-header {
             background: var(--nijac-blue);
             color: #fff;
-            padding: .6rem 1.25rem;
+            padding: .5rem 1.25rem;
             display: flex;
             align-items: center;
             flex-wrap: wrap;

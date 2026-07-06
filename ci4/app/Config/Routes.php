@@ -255,24 +255,10 @@ $routes->post('fftt-test/scan-dept-nat', 'FfttTestController::scanDeptNat', ['fi
 // ── E099 Administration base de données ──────────────────────────────────────
 // Admin uniquement (filtre "adminauth"), + restriction supplémentaire
 // login === 'CHAUTARD' vérifiée manuellement dans le contrôleur (même règle
-// que E018). Outil "bris de glace" : accès SQL direct total pour ce seul compte.
+// que E018). Outil "bris de glace" : requêteur SQL libre, sans restriction.
 $routes->get('db-admin', 'DbAdminController::index', ['filter' => 'adminauth']);
 $routes->get('db-admin/tables', 'DbAdminController::tables', ['filter' => 'adminauth']);
-$routes->get('db-admin/describe', 'DbAdminController::describe', ['filter' => 'adminauth']);
-$routes->get('db-admin/browse', 'DbAdminController::browse', ['filter' => 'adminauth']);
-$routes->get('db-admin/get-row', 'DbAdminController::getRow', ['filter' => 'adminauth']);
-$routes->post('db-admin/insert', 'DbAdminController::insert', ['filter' => 'adminauth']);
-$routes->post('db-admin/update', 'DbAdminController::update', ['filter' => 'adminauth']);
-$routes->post('db-admin/delete', 'DbAdminController::delete', ['filter' => 'adminauth']);
 $routes->post('db-admin/sql', 'DbAdminController::sql', ['filter' => 'adminauth']);
-$routes->post('db-admin/add-column', 'DbAdminController::addColumn', ['filter' => 'adminauth']);
-$routes->post('db-admin/modify-column', 'DbAdminController::modifyColumn', ['filter' => 'adminauth']);
-$routes->post('db-admin/drop-column', 'DbAdminController::dropColumn', ['filter' => 'adminauth']);
-$routes->get('db-admin/export-csv', 'DbAdminController::exportCsv', ['filter' => 'adminauth']);
-$routes->post('db-admin/truncate', 'DbAdminController::truncate', ['filter' => 'adminauth']);
-$routes->post('db-admin/add-index', 'DbAdminController::addIndex', ['filter' => 'adminauth']);
-$routes->post('db-admin/drop-index', 'DbAdminController::dropIndex', ['filter' => 'adminauth']);
-$routes->post('db-admin/rename-column', 'DbAdminController::renameColumn', ['filter' => 'adminauth']);
 
 // ── Déconnexion ──────────────────────────────────────────────────────────────
 $routes->get('logout', 'LogoutController::index');

@@ -544,8 +544,8 @@
         <form id="form-nouveau-ja" novalidate>
           <div class="row g-3">
             <div class="col-md-2">
-              <label class="form-label fw-semibold">N° JA</label>
-              <input type="text" class="form-control form-control-sm" id="nja-id" disabled placeholder="Auto">
+              <label class="form-label fw-semibold" id="nja-id-label">N° Licence <span class="text-danger">*</span></label>
+              <input type="number" class="form-control form-control-sm" id="nja-id" min="1" placeholder="N° licence FFTT">
             </div>
             <div class="col-md-2">
               <label class="form-label fw-semibold">Grade <span class="text-danger">*</span></label>
@@ -730,13 +730,17 @@ function renderGrille() {
             $tr.append(makeTd(l.num_compte_ebp,    idx, 'num_compte_ebp', false));
             $tr.append(makeCpTd(l,    idx));
             $tr.append(makeVilleTd(l, idx));
-            // Bouton lien disponibilité
+            // Boutons lien dispo / adresse — masqués si le JA n'a pas d'email
             const $tdLien = $('<td>').css({textAlign:'center', verticalAlign:'middle', padding:'.2rem'});
-            const dispoCls   = l.nb_dispo > 0 ? 'btn-success'         : 'btn-outline-secondary';
-            const dispoTitle = l.nb_dispo > 0 ? `Disponibilités saisies (${l.nb_dispo} journée(s))` : 'Aucune disponibilité saisie — cliquez pour ouvrir';
-            const adrTitle = l.id_laposte ? 'Envoyer la demande de mise à jour d\'adresse' : 'Adresse manquante — envoyer la demande';
-            $tdLien.html(`<button class="btn btn-sm ${dispoCls} btn-lien-dispo" data-id="${l.id}" title="${dispoTitle}"><i class="bi bi-calendar2-check"></i></button>`
-                + ` <button class="btn btn-sm ${l.id_laposte ? 'btn-outline-secondary' : 'btn-warning'} btn-lien-adresse" data-id="${l.id}" data-nom="${escHtml(l.prenom + ' ' + l.nom)}" data-email="${escHtml(l.email ?? '')}" title="${adrTitle}"><i class="bi bi-geo-alt"></i></button>`);
+            if (l.email) {
+                const dispoCls   = l.nb_dispo > 0 ? 'btn-success'         : 'btn-outline-secondary';
+                const dispoTitle = l.nb_dispo > 0 ? `Disponibilités saisies (${l.nb_dispo} journée(s))` : 'Aucune disponibilité saisie — cliquez pour ouvrir';
+                const adrTitle = l.id_laposte ? 'Envoyer la demande de mise à jour d\'adresse' : 'Adresse manquante — envoyer la demande';
+                $tdLien.html(`<button class="btn btn-sm ${dispoCls} btn-lien-dispo" data-id="${l.id}" title="${dispoTitle}"><i class="bi bi-calendar2-check"></i></button>`
+                    + ` <button class="btn btn-sm ${l.id_laposte ? 'btn-outline-secondary' : 'btn-warning'} btn-lien-adresse" data-id="${l.id}" data-nom="${escHtml(l.prenom + ' ' + l.nom)}" data-email="${escHtml(l.email ?? '')}" title="${adrTitle}"><i class="bi bi-geo-alt"></i></button>`);
+            } else {
+                $tdLien.html('<span class="text-muted small" title="Email manquant">—</span>');
+            }
             $tr.append($tdLien);
             $body.append($tr);
         });
@@ -1196,7 +1200,8 @@ function ouvrirModaleJa(record) {
         njaEditId = record.id;
         $('#modal-nouveau-ja-titre').html('<i class="bi bi-pencil-fill me-2"></i>Modifier le Juge-Arbitre');
         $('#btn-enregistrer-ja').html('<i class="bi bi-check-lg me-1"></i>Enregistrer');
-        $('#nja-id').val(record.id);
+        $('#nja-id-label').html('N° Licence');
+        $('#nja-id').val(record.id).prop('disabled', true);
         $('#nja-grade').val(record.grade || '');
         $('#nja-nom').val(record.nom || '');
         $('#nja-prenom').val(record.prenom || '');
@@ -1218,7 +1223,8 @@ function ouvrirModaleJa(record) {
         njaEditId = null;
         $('#modal-nouveau-ja-titre').html('<i class="bi bi-person-plus-fill me-2"></i>Créer un nouveau Juge-Arbitre');
         $('#btn-enregistrer-ja').html('<i class="bi bi-check-lg me-1"></i>Créer le JA');
-        $('#nja-id').val('');
+        $('#nja-id-label').html('N° Licence <span class="text-danger">*</span>');
+        $('#nja-id').val('').prop('disabled', false);
         $('#nja-actif').prop('checked', true);
         $('#nja-id-club').html('<option value="">— Sélectionnez d\'abord un département —</option>').prop('disabled', false);
     }
@@ -1306,8 +1312,17 @@ $('#btn-enregistrer-ja').on('click', function () {
         return;
     }
 
+    let idJa = njaEditId;
+    if (!idJa) {
+        idJa = parseInt($('#nja-id').val(), 10);
+        if (!idJa || idJa <= 0) {
+            toast('Le N° JA (numéro de licence FFTT) est obligatoire à la création.', false);
+            return;
+        }
+    }
+
     const record = {
-        id:              njaEditId || 0,
+        id:              idJa,
         grade,
         nom,
         prenom,

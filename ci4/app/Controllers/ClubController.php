@@ -167,11 +167,15 @@ class ClubController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => "Club $numClub introuvable dans l'API FFTT."]);
             }
 
+            // L'API FFTT renvoie parfois un tableau vide (ou sa forme sérialisée "[]")
+            // pour un champ d'adresse non renseigné plutôt qu'une chaîne vide.
+            $nettoyerAdresse = static fn ($v) => is_array($v) ? '' : (trim((string) $v) === '[]' ? '' : trim((string) $v));
+
             $nomClub    = trim((string) ($detail['nom'] ?? ''));
             $nomsalle   = trim((string) ($detail['nomsalle'] ?? ''));
-            $adr1       = trim((string) ($detail['adressesalle1'] ?? ''));
-            $adr2       = is_array($detail['adressesalle2'] ?? []) ? '' : trim((string) $detail['adressesalle2']);
-            $adr3       = is_array($detail['adressesalle3'] ?? []) ? '' : trim((string) $detail['adressesalle3']);
+            $adr1       = $nettoyerAdresse($detail['adressesalle1'] ?? '');
+            $adr2       = $nettoyerAdresse($detail['adressesalle2'] ?? '');
+            $adr3       = $nettoyerAdresse($detail['adressesalle3'] ?? '');
             $adresse    = trim(implode(' ', array_filter([$adr1, $adr2, $adr3]))) ?: null;
             $cpSalle    = trim((string) ($detail['codepsalle'] ?? ''));
             $villeSalle = mb_strtoupper(trim((string) ($detail['villesalle'] ?? '')), 'UTF-8');

@@ -35,9 +35,7 @@ class AdresseJaController extends BaseController
 
     private function startSession(): void
     {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
+        demarrerSessionNijac();
     }
 
     private function tryJson(\Closure $fn): ResponseInterface

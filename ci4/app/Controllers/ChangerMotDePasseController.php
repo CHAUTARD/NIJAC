@@ -26,9 +26,7 @@ class ChangerMotDePasseController extends BaseController
 
     public function index()
     {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
+        demarrerSessionNijac();
 
         $moi    = $_SESSION['utilisateur'];
         $retour = !empty($moi['is_admin']) ? site_url('admin-menu') : site_url('nominateur-menu');
@@ -69,9 +67,7 @@ class ChangerMotDePasseController extends BaseController
                         $pdo->prepare('UPDATE Utilisateur SET Password = ?, ChangeLogin = 0 WHERE Id_Utilisateur = ?')
                             ->execute([$hash, $moi['id']]);
 
-                        if (session_status() === PHP_SESSION_NONE) {
-                            session_start();
-                        }
+                        demarrerSessionNijac();
                         $_SESSION['utilisateur']['change_login'] = false;
                         session_write_close();
 

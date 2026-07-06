@@ -77,9 +77,7 @@ class DisponibiliteJaController extends BaseController
         // Page publique, mais accessible aussi depuis un onglet ouvert par un
         // nominateur déjà connecté (E021, target="_blank" — même session
         // navigateur) : on lit la session si elle existe, sans l'exiger.
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
+        demarrerSessionNijac();
         $u = $_SESSION['utilisateur'] ?? [];
         session_write_close();
 

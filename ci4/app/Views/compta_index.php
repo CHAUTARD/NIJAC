@@ -22,7 +22,7 @@
         #page-header {
             background: #2e7d32;
             color: #fff;
-            padding: .65rem 1.25rem;
+            padding: .5rem 1.25rem;
             font-size: .9rem;
             font-weight: 600;
             display: flex;

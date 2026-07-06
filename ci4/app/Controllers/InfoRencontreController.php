@@ -39,9 +39,7 @@ class InfoRencontreController extends BaseController
      */
     private function resolveContext(?string $jaTokenRaw): array
     {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
+        demarrerSessionNijac();
 
         if (!isset($_SESSION['utilisateur'])) {
             return ['redirect' => site_url('login')];
@@ -57,7 +55,30 @@ class InfoRencontreController extends BaseController
         }
 
         if (($moi['role'] ?? '') === 'JA') {
-            $idJa = $moi['id_ja'] ?? $moi['login'];
+            $idJa = $moi['id_ja'] ?? null;
+            if (!$idJa) {
+                // Id_JA absent de la session (compte créé avant l'ajout de ce champ,
+                // ou la correspondance par nom avait échoué à la connexion — voir
+                // AuthController::index()) : on retente une résolution par nom ici
+                // et on la met en cache en session, pour éviter de comparer plus bas
+                // le login (une chaîne) à Id_JA (un entier) — ce qui ne matchait
+                // jamais et déconnectait l'utilisateur à chaque navigation sur cet
+                // écran, seul écran autorisé pour le rôle JA.
+                $stmtIdJa = getPDO()->prepare('SELECT Id_JA FROM ja WHERE UPPER(TRIM(Nom)) = UPPER(TRIM(?)) LIMIT 1');
+                $stmtIdJa->execute([$moi['login'] ?? '']);
+                $idJa = $stmtIdJa->fetchColumn() ?: null;
+                if ($idJa) {
+                    $_SESSION['utilisateur']['id_ja'] = $idJa;
+                }
+            }
+            if (!$idJa) {
+                // Toujours introuvable : compte JA non lié à une fiche `ja` valide.
+                // On termine la session pour éviter une boucle de redirection avec
+                // AuthController (qui renverrait un utilisateur déjà connecté ici).
+                session_destroy();
+
+                return ['redirect' => site_url('login')];
+            }
         } elseif (in_array($moi['role'] ?? '', ['Administrateur', 'Nominateur'], true) && $idJaToken) {
             $idJa = $idJaToken;
         } else {

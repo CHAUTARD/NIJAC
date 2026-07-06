@@ -50,7 +50,7 @@ if (!$isProduction) {
 
 // ── Constantes communes ───────────────────────────────────────────────────────
 define('DB_CHARSET',   'utf8mb4');
-define('APP_VERSION', '0.2.06');
+define('APP_VERSION', '0.2.07');
 
 // Seed secret pour l'obfuscation des identifiants JA dans les URL publiques
 // (doit rester identique entre génération et décodage)
@@ -61,6 +61,28 @@ function getFfttAppKey(): string { return rot47($_ENV['FFTT_APP_KEY'] ?? ''); }
 
 function getSmtpUser(): string     { return rot47($_ENV['SMTP_USER']     ?? ''); }
 function getSmtpPassword(): string { return rot47($_ENV['SMTP_PASSWORD'] ?? ''); }
+
+/**
+ * Démarre (ou reprend) la session PHP native, avec une durée de vie
+ * prolongée à la place du défaut PHP (session.gc_maxlifetime ~1440s/24min).
+ * Sans ça, une simple pause dans la saisie (désidératas, disponibilités,
+ * formulaire long...) suffit à faire nettoyer le fichier de session par le
+ * garbage collector PHP, et l'utilisateur se retrouve déconnecté et renvoyé
+ * vers /login à la requête suivante. À appeler à la place de session_start()
+ * partout où la session native est utilisée (filtres Auth/AdminAuth, actions
+ * publiques tokenisées...).
+ */
+function demarrerSessionNijac(): void
+{
+    if (session_status() !== PHP_SESSION_NONE) {
+        return;
+    }
+
+    $dureeSecondes = 6 * 3600; // 6 heures
+    ini_set('session.gc_maxlifetime', (string) $dureeSecondes);
+    session_set_cookie_params(['lifetime' => $dureeSecondes]);
+    session_start();
+}
 
 /**
  * Retourne une instance PDO partagée (singleton).

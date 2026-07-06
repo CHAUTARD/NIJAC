@@ -238,9 +238,17 @@ class JugearbitreController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => 'Données invalides.']);
         }
 
-        $inserts = 0;
-        $updates = 0;
-        $erreurs = [];
+        $inserts       = 0;
+        $updates       = 0;
+        $erreurs       = [];
+        $avertissements = [];
+
+        // Id_Club a une contrainte FK vers Club : un code présent dans l'Excel FFTT
+        // mais pas encore synchronisé dans la table Club (nouveau club, renommage,
+        // fusion...) ferait échouer l'INSERT/UPDATE en bloc. On le détecte en amont
+        // et on enregistre quand même le JA sans club (à corriger manuellement),
+        // plutôt que de perdre toute la ligne pour une seule référence orpheline.
+        $clubsValides = array_flip(array_column($pdo->query('SELECT Id_Club FROM Club')->fetchAll(), 'Id_Club'));
 
         $stmtCheck  = $pdo->prepare('SELECT COUNT(*) FROM ja WHERE Id_JA = ?');
         $stmtInsert = $pdo->prepare(
@@ -284,6 +292,11 @@ class JugearbitreController extends BaseController
                 continue;
             }
 
+            if ($idClub !== null && !isset($clubsValides[$idClub])) {
+                $avertissements[] = "$nom $prenom : club « $idClub » inconnu (pas encore synchronisé) — enregistré sans club.";
+                $idClub = null;
+            }
+
             try {
                 if ($id > 0) {
                     $stmtCheck->execute([$id]);
@@ -304,6 +317,9 @@ class JugearbitreController extends BaseController
         }
 
         $msg = "Mise à jour terminée : $inserts insérés, $updates mis à jour.";
+        if ($avertissements) {
+            $msg .= ' Avertissements : ' . implode(' | ', $avertissements);
+        }
         if ($erreurs) {
             $msg .= ' Erreurs : ' . implode(' | ', $erreurs);
         }

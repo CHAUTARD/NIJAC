@@ -20,9 +20,7 @@ class AuthController extends BaseController
 
     public function index()
     {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
+        demarrerSessionNijac();
 
         // Déjà connecté : redirection selon le rôle (comme index.php legacy)
         if (isset($_SESSION['utilisateur'])) {

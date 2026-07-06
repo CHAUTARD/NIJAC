@@ -65,14 +65,35 @@
         #page-header {
             background: var(--nijac-blue);
             color: #fff;
-            padding: .65rem 1.25rem;
+            padding: .5rem 1.25rem;
             font-size: .9rem;
             font-weight: 600;
         }
 
+        #page-footer {
+            background: #e8eef7;
+            border-top: 1px solid #c8d4e8;
+            padding: .25rem 1rem;
+            font-size: .8rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        #status-bar { color: #374151; min-height: 18px; }
+        .footer-copyright { color: #6b7280; white-space: nowrap; }
+        .footer-logo { height: 20px; width: auto; opacity: .75; }
+        #page-footer.pf-status-left {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+        }
+        #page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
+        #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
+
         #menu-grid {
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
+            grid-template-columns: repeat(6, 1fr);
             gap: 16px;
             padding: 24px;
             flex: 1;
@@ -272,7 +293,7 @@
         <?php endif; ?>
 
         <?php if ($isChautard): ?>
-        <a href="<?= site_url('db-admin') ?>" class="menu-btn btn-dbadmin" target="_blank" style="background: repeating-linear-gradient(45deg, #fce4ec, #fce4ec 10px, #ffcdd2 10px, #ffcdd2 20px); border: 2px solid #c62828;">
+        <a href="<?= site_url('db-admin') ?>" class="menu-btn btn-dbadmin" style="background: repeating-linear-gradient(45deg, #fce4ec, #fce4ec 10px, #ffcdd2 10px, #ffcdd2 20px); border: 2px solid #c62828;">
             <span class="btn-code">E099</span>
             <div class="btn-icon"><img src="<?= base_url('img/database.png') ?>" alt="Base de données"></div>
             <span>Base de données</span>
@@ -280,13 +301,16 @@
         </a>
         <?php endif; ?>
 
-        <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da; grid-column: 5;">
+        <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da; grid-column: 6;">
             <div class="btn-icon"><i class="bi bi-box-arrow-right" style="color:#842029;"></i></div>
             <span style="color:#842029;">Se déconnecter</span>
             <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
         </a>
 
     </div>
+
+    <!-- Pied de page : recopié de includes/footer.php -->
+    <?= view('partials/page_footer', ['pfStatusAlign' => 'left']) ?>
 
     <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
     <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>

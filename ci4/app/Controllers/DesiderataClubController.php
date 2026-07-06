@@ -36,9 +36,7 @@ class DesiderataClubController extends BaseController
 
     private function startSession(): void
     {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
+        demarrerSessionNijac();
     }
 
     /**
