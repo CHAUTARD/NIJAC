@@ -286,6 +286,22 @@
 
 </div><!-- #content -->
 
+<!-- ── Popup désignation d'un arbitre (R3M/R4M, club recevant) ── -->
+<div class="modal fade" id="modal-designer-arbitre" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title mb-0"><i class="bi bi-person-plus me-2"></i>Désigner un arbitre du club recevant</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+      </div>
+      <div class="modal-body">
+        <div id="da-rencontre-label" class="text-muted mb-2" style="font-size:.85rem;"></div>
+        <div id="da-liste-arbitres"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <?= view('partials/page_footer', ['pfStatusAlign' => 'left']) ?>
 
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
@@ -747,6 +763,15 @@ function chargerListeRencontres() {
     });
 }
 
+/** Retourne true si la date (YYYY-MM-DD…) de la rencontre est strictement dans le passé. */
+function dateEstDepassee(dateStr) {
+    if (!dateStr) return false;
+    const d = new Date(dateStr.substring(0, 10));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return d < today;
+}
+
 /* Calcule la luminosité d'une couleur hex et retourne '#fff' ou '#111' selon le contraste */
 function textColorFor(hex) {
     const c = hex.replace('#', '');
@@ -793,9 +818,16 @@ function renderListeRencontres() {
         const bg    = rc.DivisionColor && /^#[0-9a-fA-F]{6}$/.test(rc.DivisionColor)
                       ? rc.DivisionColor : '#1a3a6b';
         const fg    = textColorFor(bg);
-        const arb   = rc.ArbitrageObligatoire == 1
-            ? '<i class="bi bi-check-circle-fill text-success"></i>'
-            : '<span class="text-muted">—</span>';
+        const eligibleDesignation = (rc.DivisionCode === 'R3M' || rc.DivisionCode === 'R4M')
+            && !rc.NbNominations && dateEstDepassee(rc.Date);
+        const arb   = eligibleDesignation
+            ? `<button type="button" class="btn btn-sm btn-outline-primary py-0 px-1 btn-designer-arbitre"
+                       data-id="${rc.Id_Rencontre}" title="Désigner un arbitre du club recevant">
+                   <i class="bi bi-person-plus"></i>
+               </button>`
+            : (rc.ArbitrageObligatoire == 1
+                ? '<i class="bi bi-check-circle-fill text-success"></i>'
+                : '<span class="text-muted">—</span>');
         const nom   = rc.NbNominations > 0
             ? `<span class="badge bg-success">${rc.NbNominations}</span>`
             : '<span class="text-muted">—</span>';
@@ -825,6 +857,64 @@ $('#btn-refresh-renc').on('click', chargerListeRencontres);
 
 // Chargement initial
 chargerListeRencontres();
+
+/* ── Désignation directe d'un arbitre (R3M/R4M, club recevant) ────────────── */
+let daIdRencontre = null;
+
+function chargerCandidatsArbitre() {
+    $('#da-liste-arbitres').html('<div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm me-2"></span>Chargement…</div>');
+
+    $.get(`${IMPORT_RENC_BASE}/candidats-arbitre`, { id_rencontre: daIdRencontre }, function (r) {
+        if (!r.ok) {
+            $('#da-liste-arbitres').html(`<div class="alert alert-danger mb-0">${esc(r.msg)}</div>`);
+            return;
+        }
+        if (!r.arbitres.length) {
+            $('#da-liste-arbitres').html('<div class="alert alert-warning mb-0">Aucun arbitre actif trouvé pour le club recevant.</div>');
+            return;
+        }
+        const rows = r.arbitres.map(a => `
+            <button type="button" class="list-group-item list-group-item-action btn-choisir-arbitre" data-id="${a.Id_JA}">
+                <strong>${esc(a.Prenom)} ${esc(a.Nom)}</strong>
+                <span class="text-muted ms-2" style="font-size:.8rem;">${esc(a.Grade ?? '')}</span>
+            </button>`).join('');
+        $('#da-liste-arbitres').html(`<div class="list-group">${rows}</div>`);
+    }, 'json').fail(function () {
+        $('#da-liste-arbitres').html('<div class="alert alert-danger mb-0">Erreur réseau.</div>');
+    });
+}
+
+$(document).on('click', '.btn-designer-arbitre', function () {
+    daIdRencontre = +$(this).data('id');
+    const rc = toutesRencontres.find(r => +r.Id_Rencontre === daIdRencontre);
+    const date = rc?.Date ? rc.Date.substring(0, 10).split('-').reverse().join('/') : '';
+    $('#da-rencontre-label').html(rc
+        ? `<strong>${esc(rc.NomDom)}</strong> vs ${esc(rc.NomExt ?? '—')} — ${esc(rc.DivisionCode)} — ${esc(date)}`
+        : '');
+
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-designer-arbitre')).show();
+    chargerCandidatsArbitre();
+});
+
+$(document).on('click', '.btn-choisir-arbitre', function () {
+    const idJa = +$(this).data('id');
+    $('.btn-choisir-arbitre').prop('disabled', true);
+    $(this).html('<span class="spinner-border spinner-border-sm me-2"></span>Envoi de la convocation…');
+
+    $.post(`${IMPORT_RENC_BASE}/designer-arbitre`, { id_rencontre: daIdRencontre, id_ja: idJa }, function (r) {
+        if (r.ok) {
+            nijacToast(r.msg ?? 'Arbitre désigné.', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('modal-designer-arbitre'))?.hide();
+            chargerListeRencontres();
+        } else {
+            nijacToast(r.msg ?? 'Erreur lors de la désignation.', 'danger');
+            chargerCandidatsArbitre();
+        }
+    }, 'json').fail(function () {
+        nijacToast('Erreur réseau.', 'danger');
+        chargerCandidatsArbitre();
+    });
+});
 </script>
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>

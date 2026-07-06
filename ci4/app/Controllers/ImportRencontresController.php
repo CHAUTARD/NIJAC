@@ -555,6 +555,166 @@ class ImportRencontresController extends BaseController
         });
     }
 
+    /**
+     * Liste les JA actifs du club recevant d'une rencontre, pour la popup de
+     * désignation directe (R3M/R4M — arbitrage non fourni par la CRA, c'est
+     * au club recevant de désigner l'un de ses arbitres).
+     */
+    public function candidatsArbitre(): ResponseInterface
+    {
+        return $this->tryJson(function () {
+            $idRenc = (int) ($this->request->getGet('id_rencontre') ?? 0);
+            if (!$idRenc) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Rencontre manquante']);
+            }
+
+            $pdo  = getPDO();
+            $stmt = $pdo->prepare(
+                'SELECT ed.Id_Club, dv.Division
+                 FROM rencontre r
+                 JOIN division dv ON dv.Id_Division = r.Id_Division
+                 JOIN equipe   ed ON ed.Id_Equipe   = r.Id_EquipeDom
+                 WHERE r.Id_Rencontre = ?'
+            );
+            $stmt->execute([$idRenc]);
+            $renc = $stmt->fetch();
+            if (!$renc) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Rencontre introuvable']);
+            }
+            if (!in_array($renc['Division'], ['R3M', 'R4M'], true)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Désignation directe réservée aux R3M/R4M']);
+            }
+
+            $stmtJa = $pdo->prepare('SELECT Id_JA, Nom, Prenom, Grade FROM ja WHERE Id_Club = ? AND Actif = 1 ORDER BY Nom, Prenom');
+            $stmtJa->execute([$renc['Id_Club']]);
+
+            return $this->response->setJSON(['ok' => true, 'arbitres' => $stmtJa->fetchAll()]);
+        });
+    }
+
+    /**
+     * Désigne un JA du club recevant sur une rencontre R3M/R4M sans arbitre
+     * nominé, et lui envoie immédiatement la convocation — même logique que
+     * InfoRencontreController::designerJaPourRencontre() (E030, auto-désignation
+     * du JA connecté), adaptée ici au choix par l'admin d'un JA quelconque du
+     * club recevant. La disponibilité est générée automatiquement (Reponse='P',
+     * comme en E030) : ces arbitres officient leur propre match, sans saisie
+     * préalable de disponibilité.
+     */
+    public function designerArbitre(): ResponseInterface
+    {
+        return $this->tryJson(function () {
+            $pdo    = getPDO();
+            $idRenc = (int) ($this->request->getPost('id_rencontre') ?? 0);
+            $idJa   = (int) ($this->request->getPost('id_ja') ?? 0);
+            if (!$idRenc || !$idJa) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Paramètres manquants']);
+            }
+
+            $stmtJa = $pdo->prepare('SELECT Id_JA, Nom, Prenom, Email, Id_Club FROM ja WHERE Id_JA = ? AND Actif = 1');
+            $stmtJa->execute([$idJa]);
+            $ja = $stmtJa->fetch();
+            if (!$ja) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Arbitre introuvable']);
+            }
+
+            $stmtR = $pdo->prepare(
+                'SELECT r.Id_Rencontre, r.Date, r.Heure, r.Journee, r.Poule,
+                        dv.Division, RIGHT(dv.Division, 1) AS SexeCode,
+                        ed.Nom AS NomDom, ev.Nom AS NomExt,
+                        s.Nom AS SalleNom, s.Adresse AS SalleAdresse,
+                        lps.CodePostal AS SalleCP, lps.Nom AS SalleVille,
+                        cl.CorNom AS CorrNom, cl.CorEmail AS CorrEmail, cl.CorTelephone AS CorrTel
+                 FROM rencontre r
+                 JOIN division dv   ON dv.Id_Division = r.Id_Division
+                 JOIN equipe   ed   ON ed.Id_Equipe   = r.Id_EquipeDom
+                 LEFT JOIN equipe ev  ON ev.Id_Equipe   = r.Id_EquipeExt
+                 LEFT JOIN salle s    ON s.Id_Salle     = r.Id_Salle
+                 LEFT JOIN laposte lps ON lps.Id_LaPoste = s.Id_Laposte
+                 LEFT JOIN club cl    ON cl.Id_Club     = ed.Id_Club
+                 WHERE r.Id_Rencontre = ? AND ed.Id_Club = ?'
+            );
+            $stmtR->execute([$idRenc, $ja['Id_Club']]);
+            $renc = $stmtR->fetch();
+            if (!$renc) {
+                return $this->response->setJSON(['ok' => false, 'msg' => "Cet arbitre n'appartient pas au club recevant de cette rencontre"]);
+            }
+            if (!in_array($renc['Division'], ['R3M', 'R4M'], true)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Désignation directe réservée aux R3M/R4M']);
+            }
+
+            $already = $pdo->prepare('SELECT Id_Nomination FROM nomination WHERE Id_Rencontre = ?');
+            $already->execute([$idRenc]);
+            if ($already->fetch()) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Un arbitre est déjà désigné pour cette rencontre']);
+            }
+
+            $dispo = $pdo->prepare('SELECT Id_Disponible FROM disponible WHERE Id_JA = ? AND Id_Rencontre = ?');
+            $dispo->execute([$idJa, $idRenc]);
+            $idDispo = $dispo->fetchColumn();
+            if (!$idDispo) {
+                $pdo->prepare("INSERT INTO disponible (Id_JA, Id_Rencontre, DateCompetition, Reponse, DateReponse) VALUES (?, ?, ?, 'P', CURDATE())")
+                    ->execute([$idJa, $idRenc, $renc['Date']]);
+                $idDispo = (int) $pdo->lastInsertId();
+            }
+
+            $pdo->prepare('INSERT INTO nomination (Id_Rencontre, Id_Disponible, DateNomination, Valide, EmailEnvoye) VALUES (?, ?, CURDATE(), 1, 0)')
+                ->execute([$idRenc, $idDispo]);
+            $idNomination = (int) $pdo->lastInsertId();
+
+            $msgRow    = $pdo->query("SELECT Sujet, Message FROM messagerie WHERE Type = 'Convocation' LIMIT 1")->fetch();
+            $emailSent = false;
+            if ($msgRow && !empty($ja['Email'])) {
+                $marqueurs = construireMarqueursMessage($ja, $_SESSION['utilisateur'] ?? [], [
+                    'id_nomination' => $idNomination,
+                    'sexe_code'     => $renc['SexeCode']     ?? null,
+                    'date'          => $renc['Date']         ?? null,
+                    'heure'         => $renc['Heure']        ?? null,
+                    'journee'       => $renc['Journee']      ?? null,
+                    'poule'         => $renc['Poule']        ?? null,
+                    'division'      => $renc['Division']     ?? null,
+                    'dom'           => $renc['NomDom']       ?? null,
+                    'ext'           => $renc['NomExt']       ?? null,
+                    'salle_nom'     => $renc['SalleNom']     ?? null,
+                    'salle_adresse' => $renc['SalleAdresse'] ?? null,
+                    'salle_cp'      => $renc['SalleCP']      ?? null,
+                    'salle_ville'   => $renc['SalleVille']   ?? null,
+                    'corr_nom'      => $renc['CorrNom']      ?? null,
+                    'corr_email'    => $renc['CorrEmail']    ?? null,
+                    'corr_tel'      => $renc['CorrTel']      ?? null,
+                ]);
+                $rendu = remplacerMarqueursMessage($msgRow['Sujet'], $msgRow['Message'], $marqueurs);
+                $sujet = $rendu['sujet'];
+                $corps = $rendu['corps'];
+                try {
+                    $dest    = getEmailDestinataire($ja['Email']);
+                    $isHtml  = strip_tags($corps) !== $corps;
+                    $mail    = getNijacMailer();
+                    $mail->isHTML($isHtml);
+                    $mail->addAddress($dest, $ja['Prenom'] . ' ' . $ja['Nom']);
+                    $modeDev       = isModeDeveloppement();
+                    $mail->Subject = ($modeDev && $dest !== $ja['Email']) ? "[DEV] $sujet" : $sujet;
+                    $mail->Body    = $corps;
+                    if ($isHtml) {
+                        $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $corps));
+                    }
+                    $mail->send();
+                    enregistrerEnvois(1);
+                    $pdo->prepare('UPDATE nomination SET EmailEnvoye = 1 WHERE Id_Nomination = ?')->execute([$idNomination]);
+                    $emailSent = true;
+                } catch (\Exception $e) {
+                    error_log('[NIJAC] import_rencontres.php designerArbitre mail : ' . $e->getMessage());
+                }
+            }
+
+            $msg = $emailSent
+                ? 'Arbitre désigné. La convocation lui a été envoyée par email.'
+                : "Arbitre désigné, mais l'envoi de la convocation a échoué (voir logs).";
+
+            return $this->response->setJSON(['ok' => true, 'msg' => $msg, 'ja' => ['nom' => $ja['Nom'], 'prenom' => $ja['Prenom']]]);
+        });
+    }
+
     public function compterTables(): ResponseInterface
     {
         return $this->tryJson(function () {

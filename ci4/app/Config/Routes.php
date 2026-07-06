@@ -134,6 +134,8 @@ $routes->post('import-rencontres/charger-divisions', 'ImportRencontresController
 $routes->post('import-rencontres/importer-division', 'ImportRencontresController::importerDivision', ['filter' => 'adminauth']);
 $routes->get('import-rencontres/liste-rencontres', 'ImportRencontresController::listeRencontres', ['filter' => 'adminauth']);
 $routes->get('import-rencontres/compter-tables', 'ImportRencontresController::compterTables', ['filter' => 'adminauth']);
+$routes->get('import-rencontres/candidats-arbitre', 'ImportRencontresController::candidatsArbitre', ['filter' => 'adminauth']);
+$routes->post('import-rencontres/designer-arbitre', 'ImportRencontresController::designerArbitre', ['filter' => 'adminauth']);
 
 // ── E008 Clubs / Associations ────────────────────────────────────────────────
 $routes->get('club', 'ClubController::index', ['filter' => 'adminauth']);

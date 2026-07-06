@@ -421,7 +421,7 @@
     </div>
 
     <!-- Déconnexion -->
-    <div class="menu-btn-wrap">
+    <div class="menu-btn-wrap" style="grid-column: 5;">
         <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;">
             <div class="btn-icon"><i class="bi bi-box-arrow-right" style="color:#842029;"></i></div>
             <span style="color:#842029;">Se déconnecter</span>
