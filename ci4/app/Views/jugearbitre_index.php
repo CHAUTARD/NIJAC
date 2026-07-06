@@ -290,6 +290,9 @@
             </a>
         </div>
     </div>
+    <button class="menu-item" id="btn-maj-bdd" title="Enregistre en base les données actuellement chargées en mémoire — utile pour réessayer après un import Excel resté en erreur.">
+        <i class="bi bi-database-fill-up"></i>Mettre à jour la Base de données
+    </button>
     <div id="toggle-actif" style="margin-left:.5rem">
         <button id="btn-tous">Tous</button>
         <button id="btn-actifs"       class="active">Actifs seulement</button>
@@ -831,6 +834,21 @@ $(document).on('click', function () {
 $('#win-menu-drop').on('click', '.drop-item', function () {
     $('#win-menu-drop').removeClass('open');
     $('#win-menu-trigger').removeClass('open');
+});
+
+// ── Mettre à jour la BDD (bouton de secours, ex. après échec réseau d'un import) ──
+$('#btn-maj-bdd').on('click', function () {
+    if (!lignes.length) { toast('Aucune donnée à enregistrer.', false); return; }
+    nijacConfirm(`Mettre à jour la base de données avec ${lignes.length} JA ?`, function () {
+        spinner(true);
+        $.post(`${JUGEARBITRE_BASE}/maj-bdd`, {
+            lignes: JSON.stringify(lignes),
+        }, function (res) {
+            spinner(false);
+            toast(res.msg, res.ok);
+            if (res.ok) chargerListe();
+        }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
+    });
 });
 
 <?php if ($isAdmin): ?>

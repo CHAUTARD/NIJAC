@@ -267,15 +267,15 @@ class JugearbitreController extends BaseController
             $id        = (int) ($l['id'] ?? 0);
             $nom       = trim($l['nom'] ?? '');
             $prenom    = trim($l['prenom'] ?? '');
-            $email     = $l['email'] !== '' && $l['email'] !== null ? $l['email'] : null;
-            $tel       = $this->formaterTelephone($l['telephone'] !== '' && $l['telephone'] !== null ? $l['telephone'] : null);
+            $email     = ($l['email'] ?? '') !== '' ? $l['email'] : null;
+            $tel       = $this->formaterTelephone(($l['telephone'] ?? '') !== '' ? $l['telephone'] : null);
             $grade     = trim($l['grade'] ?? '');
             $actif     = !empty($l['actif']) ? 1 : 0;
             $defisc    = !empty($l['defiscalisation']) ? 1 : 0;
             $nationale = !empty($l['nationale']) ? 1 : 0;
             $idClub    = ($l['id_club'] ?? '') !== '' ? trim($l['id_club']) : null;
-            $idLap     = $l['id_laposte'] !== '' && $l['id_laposte'] !== null ? (int) $l['id_laposte'] : null;
-            $cpteEbp   = $l['num_compte_ebp'] !== '' && $l['num_compte_ebp'] !== null ? trim($l['num_compte_ebp']) : null;
+            $idLap     = ($l['id_laposte'] ?? '') !== '' ? (int) $l['id_laposte'] : null;
+            $cpteEbp   = ($l['num_compte_ebp'] ?? '') !== '' ? trim($l['num_compte_ebp']) : null;
             // Cp/Ville sont NOT NULL en base : chaîne vide plutôt que null si inconnu
             $cp    = trim((string) ($l['cp'] ?? ''));
             $ville = trim((string) ($l['ville'] ?? ''));
@@ -740,9 +740,15 @@ class JugearbitreController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => 'Seul le format .xlsx est accepté.']);
         }
 
-        $spreadsheet = IOFactory::load($file->getTempName());
-        $sheet       = $spreadsheet->getActiveSheet();
-        $maxRow      = $sheet->getHighestRow();
+        set_time_limit(180);
+
+        try {
+            $spreadsheet = IOFactory::load($file->getTempName());
+        } catch (\Throwable $e) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Fichier illisible ou corrompu : ' . $e->getMessage()]);
+        }
+        $sheet  = $spreadsheet->getActiveSheet();
+        $maxRow = $sheet->getHighestRow();
 
         // Charger tous les clubs pour enrichir nom_club
         $clubsMap = [];
