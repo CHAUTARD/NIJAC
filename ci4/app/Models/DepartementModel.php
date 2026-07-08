@@ -13,7 +13,7 @@ class DepartementModel extends Model
     protected $returnType     = 'array';
     protected $useSoftDeletes = false;
 
-    protected $allowedFields = ['code', 'nom', 'code_region'];
+    protected $allowedFields = ['code', 'nom', 'code_region', 'Limitrophe'];
 
     protected $useTimestamps = false;
 }

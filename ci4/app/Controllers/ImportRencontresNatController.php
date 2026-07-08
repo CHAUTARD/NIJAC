@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use Alamirault\FFTTApi\Service\FFTTApi as FfttApiLib;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
@@ -94,7 +95,13 @@ class ImportRencontresNatController extends BaseController
         return isset($items[0]) ? $items : [$items];
     }
 
-    /** Retourne les cx_poule réels d'une division depuis action=poule. */
+    /**
+     * Utilisent le client bas niveau (getFfttRawClient(), pas FfttApiLib)
+     * comme ImportRencontresController::chargerDivisions() : la façade
+     * FFTTApi n'expose pas xml_division, et ses méthodes de poules/rencontres
+     * partent d'un objet Equipe déjà connu, pas d'un ID de division FFTT
+     * choisi librement.
+     */
     private function getCxPoules(object $api, string $divFftt): array
     {
         $r     = $api->request('xml_result_equ', ['action' => 'poule', 'D1' => $divFftt, 'auto' => '1', 'type' => 'E']);
@@ -174,22 +181,25 @@ class ImportRencontresNatController extends BaseController
         return $result;
     }
 
-    /** Retourne l'ID organisme de la ligue depuis la config ou l'API. */
-    private function getOrgId(object $api): string
+    /**
+     * Retourne l'ID organisme de la ligue depuis la config ou l'API — utilise
+     * FfttApiLib (listOrganismes), contrairement à
+     * getDivisionsNationales()/getCxPoules()/getRencontresDivision() qui
+     * utilisent le client bas niveau (xml_division absent de la façade, voir
+     * ImportRencontresController::chargerDivisions()). Autonome (ne prend
+     * plus de client en paramètre).
+     */
+    private function getOrgId(): string
     {
         $stored = getConfig('fftt_organisme_id', '');
         if ($stored !== '') {
             return $stored;
         }
         $region = mb_strtolower(getConfig('region', 'Normandie'), 'UTF-8');
-        $rep    = $api->request('xml_organisme', ['type' => 'L']);
-        foreach ($this->ffttItemsNat($rep, 'organisme') as $org) {
-            $lib = mb_strtolower((string) ($org['libelle'] ?? ''), 'UTF-8');
-            if (str_contains($lib, $region)) {
-                $id = (string) ($org['id'] ?? $org['ident'] ?? $org['idorga'] ?? '');
-                if ($id !== '') {
-                    return $id;
-                }
+        $api    = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+        foreach ($api->listOrganismes('L') as $org) {
+            if (str_contains(mb_strtolower($org->getLibelle(), 'UTF-8'), $region)) {
+                return (string) $org->getId();
             }
         }
 
@@ -261,18 +271,17 @@ class ImportRencontresNatController extends BaseController
     {
         return $this->tryJson(function () {
             set_time_limit(120);
-            $api   = getFfttApi();
+            $api   = new FfttApiLib(getFfttAppId(), getFfttAppKey());
             $depts = getDeptActifs();
             $clubs = [];
             foreach ($depts as $dept) {
-                $list = $api->getClubsDepartement($dept['code']);
+                $list = $api->listClubsByDepartement((int) $dept['code']);
                 foreach ($list as $c) {
-                    $num = trim((string) ($c['numero'] ?? $c['numclu'] ?? ''));
-                    $nom = trim((string) ($c['nom'] ?? ''));
+                    $num = trim($c->getNumero());
                     if ($num === '') {
                         continue;
                     }
-                    $clubs[] = ['numclu' => $num, 'nom' => $nom, 'dept' => (string) $dept['code']];
+                    $clubs[] = ['numclu' => $num, 'nom' => trim($c->getNom()), 'dept' => (string) $dept['code']];
                 }
             }
 
@@ -287,8 +296,10 @@ class ImportRencontresNatController extends BaseController
             if ($numclu === '') {
                 return $this->response->setJSON(['ok' => false, 'err' => 'numclu manquant']);
             }
-            $api     = getFfttApi();
-            $equipes = $api->getEquipesClub($numclu);
+            $api     = getFfttRawClient();
+            $reponse = $api->request('xml_equipe', ['numclu' => $numclu]);
+            $items   = $reponse['equipe'] ?? [];
+            $equipes = isset($items[0]) ? $items : ($items ? [$items] : []);
             $raw     = mb_convert_encoding((string) $api->lastRaw(), 'UTF-8', 'UTF-8');
             $payload = ['ok' => true, 'equipes' => $equipes, 'raw' => $raw];
             $json    = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
@@ -312,25 +323,10 @@ class ImportRencontresNatController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => 'numclu manquant']);
             }
 
-            // Divisions nationales actives (phase à venir) — cachées en session pour éviter
-            // un appel API par club (plusieurs centaines de clubs à scanner)
-            if (empty($_SESSION['nat_div_ids'])) {
-                $apiOrg                 = getFfttApi();
-                $orgId                  = $this->getOrgId($apiOrg);
-                $_SESSION['nat_div_ids'] = [];
-                if ($orgId !== '') {
-                    $divMap = $this->getDivisionsNationales($apiOrg, $orgId);
-                    foreach ($divMap as $divs) {
-                        foreach ($divs as $div) {
-                            $_SESSION['nat_div_ids'][$div['iddivision']] = $div['code'];
-                        }
-                    }
-                }
-            }
             $phaseFiltre = trim($this->request->getPost('phase') ?? ''); // "1", "2" ou "" = toutes
 
-            $api      = getFfttApi();
-            $equipes  = $api->getEquipesClub($numclu);
+            $api      = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+            $equipes  = $api->listEquipesByClub($numclu);
             $divIdMap = $this->getDivIdMap($pdo);
 
             $stmtClubIns = $pdo->prepare('INSERT IGNORE INTO club (Id_Club, Nom) VALUES (?,?)');
@@ -344,11 +340,11 @@ class ImportRencontresNatController extends BaseController
             $nonMatch   = [];
 
             foreach ($equipes as $eq) {
-                $lib = trim((string) ($eq['libequipe'] ?? $eq['libelle'] ?? ''));
+                $lib = trim($eq->getLibelle());
                 if ($lib === '') {
                     continue;
                 }
-                $ndiv = trim((string) ($eq['libdivision'] ?? $eq['ndivision'] ?? $eq['division'] ?? ''));
+                $ndiv = trim($eq->getDivision());
 
                 // Détection par nom de division (seule méthode fiable — D1 est un ID local incompatible)
                 $divCode = null;
@@ -400,8 +396,8 @@ class ImportRencontresNatController extends BaseController
         return $this->tryJson(function () {
             $pdo = getPDO();
             set_time_limit(300);
-            $api   = getFfttApi();
-            $orgId = $this->getOrgId($api);
+            $api   = getFfttRawClient();
+            $orgId = $this->getOrgId();
             if ($orgId === '') {
                 return $this->response->setJSON(['ok' => false, 'err' => 'Organisme ligue introuvable.']);
             }
@@ -567,8 +563,8 @@ class ImportRencontresNatController extends BaseController
         return $this->tryJson(function () {
             $pdo = getPDO();
             set_time_limit(300);
-            $api   = getFfttApi();
-            $orgId = $this->getOrgId($api);
+            $api   = getFfttRawClient();
+            $orgId = $this->getOrgId();
             if ($orgId === '') {
                 return $this->response->setJSON(['ok' => false, 'err' => 'Organisme introuvable.']);
             }

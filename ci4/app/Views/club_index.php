@@ -166,11 +166,22 @@
     <label for="sel-dept" style="font-size:.85rem;font-weight:700;color:#444;white-space:nowrap;margin:0;">
         <i class="bi bi-map me-1"></i>Département
     </label>
+    <?php
+        $codesRegion = array_column($deptActifs, 'code');
+        $deptsAutres = array_filter($tousDepts, fn ($d) => !in_array($d['code'], $codesRegion, true));
+    ?>
     <select id="sel-dept" class="form-select form-select-sm w-auto">
         <option value="">— Tous —</option>
+        <optgroup label="Région">
         <?php foreach ($deptActifs as $d): ?>
         <option value="<?= esc($d['code']) ?>"><?= esc($d['code']) ?> — <?= esc($d['nom']) ?></option>
         <?php endforeach; ?>
+        </optgroup>
+        <optgroup label="Autres départements">
+        <?php foreach ($deptsAutres as $d): ?>
+        <option value="<?= esc($d['code']) ?>"><?= esc($d['code']) ?> — <?= esc($d['nom']) ?></option>
+        <?php endforeach; ?>
+        </optgroup>
     </select>
     <button class="menu-item" id="btn-plusieurs-salles" title="Afficher uniquement les clubs ayant plusieurs salles" style="border-color:transparent;">
         <i class="bi bi-door-open me-1"></i>Plusieurs salles
@@ -270,8 +281,8 @@
             <label class="input-group-text" for="sync-fftt-dept"><i class="bi bi-map me-1"></i>Département</label>
             <select id="sync-fftt-dept" class="form-select">
               <option value="">— Choisir —</option>
-              <?php foreach ($deptActifs as $d): ?>
-              <option value="<?= (int) $d['code'] ?>"><?= (int) $d['code'] ?> — <?= esc($d['nom']) ?></option>
+              <?php foreach ($tousDepts as $d): ?>
+              <option value="<?= esc($d['code']) ?>"><?= esc($d['code']) ?> — <?= esc($d['nom']) ?></option>
               <?php endforeach; ?>
             </select>
           </div>
@@ -601,6 +612,9 @@ $('#search-input').on('input', function () {
 });
 
 // ── Synchronisation FFTT ─────────────────────────────────────────────────────
+// L'API FFTT bloque les requêtes trop rapprochées (anti-flood) : au-delà de
+// quelques appels xml_club_detail par seconde elle cesse de répondre.
+const SYNC_FFTT_DELAI_MS = 600;
 let syncFfttEnCours = false;
 
 $('#modal-sync-fftt').on('hidden.bs.modal', function () {
@@ -620,7 +634,8 @@ function resetSyncFftt() {
 }
 
 $('#btn-lancer-sync-fftt').on('click', function () {
-    const dep = $('#sync-fftt-dept').val();
+    const dep      = $('#sync-fftt-dept').val();
+    const depLabel = $('#sync-fftt-dept option:selected').text();
     if (!dep) { nijacToast('Sélectionnez un département.', 'warning'); return; }
 
     syncFfttEnCours = true;
@@ -655,7 +670,8 @@ $('#btn-lancer-sync-fftt').on('click', function () {
                 $('#sync-fftt-step3').show();
                 $('#sync-fftt-resume').html(
                     `<i class="bi bi-check-circle-fill me-2"></i>` +
-                    `Synchronisation terminée — <strong>${cntClubs}</strong> club(s), ` +
+                    `Synchronisation terminée pour le département <strong>${depLabel}</strong> — ` +
+                    `<strong>${cntClubs}</strong> club(s), ` +
                     `<strong>${cntSalles}</strong> salle(s), ` +
                     `<strong>${cntCors}</strong> correspondant(s)` +
                     (cntErreurs ? `, <strong>${cntErreurs}</strong> erreur(s)` : '') + '.'
@@ -693,12 +709,12 @@ $('#btn-lancer-sync-fftt').on('click', function () {
                     $('#sync-fftt-log').append(line).scrollTop(9999);
                 }
                 done++;
-                traiterClub();
+                setTimeout(traiterClub, SYNC_FFTT_DELAI_MS);
             }, 'json').fail(() => {
                 cntErreurs++;
                 $('#sync-cnt-erreurs').text(cntErreurs);
                 done++;
-                traiterClub();
+                setTimeout(traiterClub, SYNC_FFTT_DELAI_MS);
             });
         }
 

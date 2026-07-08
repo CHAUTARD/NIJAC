@@ -11,7 +11,8 @@
     },
     "require": {
         "php": "^8.2",
-        "codeigniter4/framework": "^4.7"
+        "codeigniter4/framework": "^4.7",
+        "alamirault/fftt-api": "^0.1.4"
     },
     "require-dev": {
         "fakerphp/faker": "^1.9",
@@ -35,7 +36,23 @@
     "config": {
         "optimize-autoloader": true,
         "preferred-install": "dist",
-        "sort-packages": true
+        "sort-packages": true,
+        "audit": {
+            "ignore": [
+                "GHSA-cwxw-98qj-8qjx",
+                "GHSA-wpwq-4j6v-78m3",
+                "GHSA-q559-8m2m-g699",
+                "GHSA-25mq-v84q-4j7r",
+                "GHSA-w248-ffj2-4v5q",
+                "GHSA-f2wf-25xc-69c9",
+                "GHSA-cwmx-hcrq-mhc3",
+                "GHSA-vm85-hxw5-5432",
+                "GHSA-hq7v-mx3g-29hw",
+                "GHSA-34xg-wgjx-8xph",
+                "GHSA-wxmh-65f7-jcvw",
+                "GHSA-q7rv-6hp3-vh96"
+            ]
+        }
     },
     "scripts": {
         "test": "phpunit"

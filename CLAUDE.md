@@ -6,7 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 NIJAC is a PHP/MySQL web app for managing and nominating table-tennis referees (Juges-Arbitres, JA) for the Normandy League. Stack: PHP 8.2+, CodeIgniter 4, MySQL/MariaDB, Bootstrap 5, jQuery 3, no front-end build step.
 
-The application is entirely implemented in `ci4/` (CodeIgniter 4). There is no more legacy stand-alone-PHP-page app — it was fully replaced by the CI4 port (see `git log` around "Version avec Ci4"). The repository root still holds shared, framework-agnostic pieces the CI4 app depends on: `config/` (`db.php`, `app_config.php`, `helpers.php`), `Classes/` (`Obfuscator.php`, `SecurePasswordHasher.php`, `Distance.php`, `FfttApi.php`), and `asset/` (CSS/JS served straight from the root, not from `ci4/public/`).
+The application is entirely implemented in `ci4/` (CodeIgniter 4). There is no more legacy stand-alone-PHP-page app — it was fully replaced by the CI4 port (see `git log` around "Version avec Ci4"). The repository root still holds shared, framework-agnostic pieces the CI4 app depends on: `config/` (`db.php`, `app_config.php`, `helpers.php`), `Classes/` (`Obfuscator.php`, `SecurePasswordHasher.php`, `Distance.php`), and `asset/` (CSS/JS served straight from the root, not from `ci4/public/`).
+
+### FFTT API client
+
+All FFTT calls go through the composer package `alamirault/fftt-api` (ci4/composer.json — pulls in Guzzle 6.x, an EOL branch with known CVEs; see `config.audit.ignore` in that file). Two entry points, both authenticated with `getFfttAppId()`/`getFfttAppKey()` (config/db.php, ROT47-decoded from `.env`):
+
+- **High-level facade** — `new \Alamirault\FFTTApi\Service\FFTTApi(getFfttAppId(), getFfttAppKey())`, instantiated directly at each call site (no shared factory). Covers clubs, joueurs, organismes, épreuves, équipes, classement, actualités.
+- **Low-level raw client** — `getFfttRawClient()` (config/app_config.php) returns `App\Libraries\FfttRawClient`, for endpoints the facade doesn't expose: `xml_division`, `xml_result_equ` with the `cx_poule` mechanic, `xml_poule` (endpoint doesn't actually exist server-side), `xml_chp_renc`, `xml_licence`, and any raw field the typed facade models drop (e.g. `xml_club_detail` returning multiple salles for one club, or `xml_licence_b` fields — email/Cp/Ville — the facade's `JoueurDetails` doesn't expose). Built on the library's own `UriGenerator` (same auth scheme as the facade) + Guzzle directly, so it stays a thin wrapper rather than reimplementing auth.
+
+`Classes/FfttApi.php` (raw cURL, separate `serie`/app-key signing scheme) has been removed — every controller that used it (`ClubController`, `SalleController`, `JugearbitreController`, `ImportRencontresController`, `ImportRencontresNatController`, `FfttTestController` / E018) now uses one or both of the above.
 
 ## Documentation
 
@@ -72,7 +81,6 @@ Standard CodeIgniter 4 MVC: `ci4/app/Config/Routes.php` maps each URL to a `Cont
 | `Classes/Obfuscator.php` | Bi-directional integer ↔ 8-char token (bcmath + Knuth multiplicative hash, seed = `OBFUSCATOR_SEED = 167`) — used to expose JA IDs in public URLs without leaking real PKs |
 | `Classes/SecurePasswordHasher.php` | bcrypt wrapper — use `::hash($plain)` and `::verify($plain, $hash)` |
 | `Classes/Distance.php` | GPS distance calculation between two lat/lon points |
-| `Classes/FfttApi.php` | FFTT web-service client, required by `config/app_config.php` |
 | `tools/rot47.php` | Standalone CLI (`php tools/rot47.php valeur`) to pre-compute a ROT47-encoded value to paste into `.env` — not called by the app itself; the `rot47()` function it demonstrates is duplicated inside `config/db.php`, which the app does use |
 
 Every CI4 controller pulls in `config/db.php` (and most also `config/app_config.php`, some also `config/helpers.php`) via `require_once __DIR__ . '/../../../config/xxx.php';` in its constructor — that relative path is `ci4/app/Controllers/` → repo root.

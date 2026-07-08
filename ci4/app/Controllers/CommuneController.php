@@ -17,6 +17,7 @@ class CommuneController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
+        require_once __DIR__ . '/../../../config/app_config.php';
     }
 
     public function index()
@@ -29,6 +30,7 @@ class CommuneController extends BaseController
             'departement'  => $moi['id_departement'] ?? '',
             'changeLogin'  => !empty($moi['change_login']),
             'departements' => $pdo->query('SELECT code, nom FROM departement ORDER BY code')->fetchAll(),
+            'deptActifs'   => getDeptActifs(),
         ];
 
         return view('commune_index', $data);
@@ -42,6 +44,7 @@ class CommuneController extends BaseController
         $offset     = max(0, (int) ($_GET['offset'] ?? 0));
         $sansCoords = !empty($_GET['sans_coords'] ?? '');
         $dept       = trim($_GET['dept'] ?? '');
+        $region     = !empty($_GET['region'] ?? '');
         $limit      = 500;
 
         $where  = $sansCoords ? '(lp.Latitude IS NULL OR lp.Longitude IS NULL OR lp.Latitude = 0 OR lp.Longitude = 0)' : '1';
@@ -50,6 +53,14 @@ class CommuneController extends BaseController
         if ($dept !== '') {
             $where  .= ' AND LEFT(lp.CodePostal, 2) = ?';
             $params[] = $dept;
+        } elseif ($region) {
+            $codes = array_column(getDeptActifs(), 'code');
+            if (!$codes) {
+                return $this->response->setJSON(['ok' => true, 'data' => [], 'total' => 0, 'offset' => $offset, 'limit' => $limit]);
+            }
+            $ph      = implode(',', array_fill(0, count($codes), '?'));
+            $where  .= " AND LEFT(lp.CodePostal, 2) IN ($ph)";
+            foreach ($codes as $c) $params[] = $c;
         }
 
         if ($q !== '') {

@@ -264,6 +264,9 @@
         <option value="<?= esc($d['code']) ?>"><?= esc($d['code']) ?> — <?= esc($d['nom']) ?></option>
         <?php endforeach; ?>
     </select>
+    <button class="menu-item" id="btn-filtre-region" title="Cliquer pour n'afficher que les communes de la région, ou toutes les communes" style="border-color:transparent;">
+        <i class="bi bi-geo-alt me-1"></i><span id="lbl-filtre-region">Région</span>
+    </button>
     <input type="search" id="search-input" placeholder="🔍 Code postal ou commune…">
 </div>
 
@@ -491,6 +494,7 @@ let searchTimer      = null;
 let fichiersCSV      = [];
 let sansCoords       = false;
 let deptFilter       = '';
+let filtreEnRegion   = true; // true = En région uniquement (par défaut), false = Tous
 let ligneSelectionnee = null;
 
 function spinner(show) { $('#spinner').toggleClass('show', show); }
@@ -575,7 +579,7 @@ function chargerListe(offset = 0) {
     spinner(true);
     currentOffset     = offset;
     ligneSelectionnee = null;
-    $.get(`${COMMUNE_BASE}/data`, { q: searchTerm, offset, sans_coords: sansCoords ? 1 : 0, dept: deptFilter }, function (res) {
+    $.get(`${COMMUNE_BASE}/data`, { q: searchTerm, offset, sans_coords: sansCoords ? 1 : 0, dept: deptFilter, region: filtreEnRegion ? 1 : 0 }, function (res) {
         spinner(false);
         if (!res.ok) { toast(res.msg, false); return; }
         lignes    = res.data;
@@ -596,6 +600,22 @@ $('#search-input').on('input', function () {
 
 $('#sel-dept').on('change', function () {
     deptFilter = $(this).val();
+    chargerListe(0);
+});
+
+function appliquerStyleFiltreRegion() {
+    $('#lbl-filtre-region').text(filtreEnRegion ? 'Région' : 'Tous');
+    $('#btn-filtre-region').css({
+        background:  filtreEnRegion ? '#166534' : '',
+        color:       filtreEnRegion ? '#fff'    : '',
+        borderColor: filtreEnRegion ? '#166534' : 'transparent',
+    });
+}
+appliquerStyleFiltreRegion();
+
+$('#btn-filtre-region').on('click', function () {
+    filtreEnRegion = !filtreEnRegion;
+    appliquerStyleFiltreRegion();
     chargerListe(0);
 });
 

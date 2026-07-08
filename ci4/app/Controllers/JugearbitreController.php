@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use Alamirault\FFTTApi\Service\FFTTApi as FfttApiLib;
 use CodeIgniter\HTTP\ResponseInterface;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
@@ -49,6 +50,7 @@ class JugearbitreController extends BaseController
             'DateEnrichissementFFTT' => 'DATETIME NULL DEFAULT NULL',
             'Cp'                     => 'VARCHAR(10) NULL DEFAULT NULL',
             'Ville'                  => 'VARCHAR(100) NULL DEFAULT NULL',
+            'CodeDept'               => 'VARCHAR(3) NULL DEFAULT NULL',
         ];
         foreach ($ffttCols as $col => $def) {
             if (!in_array($col, $colsJa)) {
@@ -135,7 +137,7 @@ class JugearbitreController extends BaseController
                     j.Grade, j.Actif, j.Id_Club, j.Id_LaPoste,
                     j.Defiscalisation, j.Nationale, j.NumCompteEBP,
                     j.Classement, j.DateValidationFFTT, j.GradeFFTT, j.DateEnrichissementFFTT,
-                    j.Cp, j.Ville,
+                    j.Cp, j.Ville, j.CodeDept,
                     (SELECT cl.Nom FROM Club cl WHERE cl.Id_Club = j.Id_Club LIMIT 1) AS NomClub,
                     COALESCE(j.Cp,    (SELECT lp.CodePostal FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1)) AS CodePostalJA,
                     COALESCE(j.Ville, (SELECT lp.Nom        FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1)) AS VilleJA,
@@ -158,6 +160,7 @@ class JugearbitreController extends BaseController
             'Actif'                  => $r['Actif'],
             'Id_Club'                => $r['Id_Club'],
             'Id_LaPoste'             => $r['Id_LaPoste'],
+            'CodeDept'               => $r['CodeDept'],
             'NumCompteEBP'           => $r['NumCompteEBP'],
             'Defiscalisation'        => $r['Defiscalisation'],
             'Nationale'              => $r['Nationale'],
@@ -338,15 +341,31 @@ class JugearbitreController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => 'Département manquant.']);
         }
 
-        $api   = getFfttApi();
-        $clubs = $api->getClubsDepartement($dep);
+        $api   = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+        $clubs = $api->listClubsByDepartement((int) $dep);
 
         return $this->response->setJSON(['ok' => true, 'clubs' => array_map(static fn ($c) => [
-            'numero' => $c['numero'] ?? $c['numclu'] ?? '',
-            'nom'    => $c['nom'] ?? $c['nomclub'] ?? '',
+            'numero' => $c->getNumero(),
+            'nom'    => $c->getNom(),
         ], $clubs)]);
     }
 
+    // xml_licence_b renvoie un tableau vide (pas une chaîne) pour un champ
+    // absent — un (string) direct dessus lève "Array to string conversion".
+    private function ffttStr($valeur): string
+    {
+        return trim(is_array($valeur) ? '' : (string) $valeur);
+    }
+
+    /**
+     * listJoueursByClub (FfttApiLib) pour la liste des licences, puis
+     * xml_licence_b via le client bas niveau (getFfttRawClient(), pas
+     * retrieveJoueurDetails()) pour le détail : accède au tableau brut plutôt
+     * qu'au modèle JoueurDetails typé, qui n'expose pas email/Cp/Ville — ces
+     * champs pré-remplissent l'adresse d'un nouveau JA quand l'API FFTT les
+     * fournit (en pratique souvent absents de la réponse elle-même, quels
+     * que soient les identifiants applicatifs utilisés).
+     */
     public function importFfttClub(): ResponseInterface
     {
         if (!$this->isAdmin()) {
@@ -362,14 +381,15 @@ class JugearbitreController extends BaseController
         }
 
         set_time_limit(180);
-        $api         = getFfttApi();
-        $membres     = $api->getLicenciesClub($numClub);
+        $apiLib      = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+        $apiRaw      = getFfttRawClient();
+        $membres     = $apiLib->listJoueursByClub($numClub);
         $trouves     = [];
         $erreurs     = 0;
         $erreursMsgs = [];
 
         foreach ($membres as $m) {
-            $licence = trim((string) ($m['licence'] ?? ''));
+            $licence = trim($m->getLicence());
             if ($licence === '') {
                 continue;
             }
@@ -378,9 +398,9 @@ class JugearbitreController extends BaseController
                 $lb = null;
                 for ($tentative = 0; $tentative < 2; $tentative++) {
                     try {
-                        $lb = $api->getLicenceB($licence);
+                        $lb = $apiRaw->request('xml_licence_b', ['licence' => $licence, 'club' => $numClub])['licence'] ?? null;
                         break;
-                    } catch (\RuntimeException $e) {
+                    } catch (\Throwable $e) {
                         if ($tentative === 0) {
                             usleep(600_000);
                         } else {
@@ -392,17 +412,17 @@ class JugearbitreController extends BaseController
                     continue;
                 }
 
-                $ja  = trim((string) ($lb['ja'] ?? ''));
-                $arb = trim((string) ($lb['arb'] ?? ''));
+                $ja  = $this->ffttStr($lb['ja'] ?? '');
+                $arb = $this->ffttStr($lb['arb'] ?? '');
                 if ($ja === '' && $arb === '') {
                     continue;
                 }
 
                 $grade  = $ja ?: $arb;
-                $nom    = mb_strtoupper(trim((string) ($lb['nom'] ?? '')), 'UTF-8');
-                $prenom = trim((string) ($lb['prenom'] ?? ''));
-                $email  = trim((string) ($lb['email'] ?? ''));
-                $idClub = trim((string) ($lb['numclub'] ?? $numClub));
+                $nom    = mb_strtoupper($this->ffttStr($lb['nom'] ?? ''), 'UTF-8');
+                $prenom = $this->ffttStr($lb['prenom'] ?? '');
+                $email  = $this->ffttStr($lb['email'] ?? '');
+                $idClub = $this->ffttStr($lb['numclub'] ?? '') ?: $numClub;
 
                 // Seuls JA1, JA2, JA3 — les AR sont exclus
                 if (!preg_match('/^JA[123]$/i', $grade)) {
@@ -412,7 +432,7 @@ class JugearbitreController extends BaseController
                 $gradeNorm = strtoupper($grade);
 
                 // Actif = saison couverte par la licence encore en cours (1er juillet → 30 juin)
-                $dateValidStr = trim((string) ($lb['validation'] ?? ''));
+                $dateValidStr = $this->ffttStr($lb['validation'] ?? '');
                 $actif        = 0;
                 if ($dateValidStr !== '' && preg_match('/(\d{1,2})\/(\d{2})\/(\d{4})/', $dateValidStr, $mv)) {
                     $validated     = new \DateTime($mv[3] . '-' . $mv[2] . '-' . str_pad($mv[1], 2, '0', STR_PAD_LEFT));
@@ -423,10 +443,10 @@ class JugearbitreController extends BaseController
                 }
 
                 // Résolution CP / Ville / Id_LaPoste depuis les données FFTT
-                $cpFFTT    = trim((string) ($lb['cp'] ?? ''));
-                $villeFFTT = normaliserVille((string) ($lb['ville'] ?? ''));
+                $cpFFTT    = $this->ffttStr($lb['cp'] ?? '');
+                $villeFFTT = normaliserVille($this->ffttStr($lb['ville'] ?? ''));
                 $idLaPoste = null;
-                $cpFinal   = $cpFFTT !== '' ? $cpFFTT : '';
+                $cpFinal   = $cpFFTT;
                 $villeFinal = $villeFFTT;
                 if ($cpFFTT !== '') {
                     $stmtLap = $pdo->prepare('SELECT Id_LaPoste, Nom FROM laposte WHERE CodePostal = ? LIMIT 1');
@@ -457,7 +477,7 @@ class JugearbitreController extends BaseController
                         $idLaPoste, $cpFinal, $villeFinal]);
                     $trouves[] = ['licence' => $licence, 'nom' => $nom, 'prenom' => $prenom, 'grade' => $gradeNorm, 'statut' => 'nouveau'];
                 }
-            } catch (\RuntimeException $e) {
+            } catch (\Throwable $e) {
                 $erreurs++;
                 $msg = $e->getMessage();
                 error_log("[NIJAC] import_fftt_club $numClub licence=$licence : $msg");
@@ -485,14 +505,15 @@ class JugearbitreController extends BaseController
         }
 
         set_time_limit(180);
-        $api         = getFfttApi();
-        $membres     = $api->getLicenciesClub($numClub);
+        $apiLib      = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+        $apiRaw      = getFfttRawClient();
+        $membres     = $apiLib->listJoueursByClub($numClub);
         $trouves     = [];
         $erreurs     = 0;
         $erreursMsgs = [];
 
         foreach ($membres as $m) {
-            $licence = trim((string) ($m['licence'] ?? ''));
+            $licence = trim($m->getLicence());
             if ($licence === '') {
                 continue;
             }
@@ -501,9 +522,9 @@ class JugearbitreController extends BaseController
                 $lb = null;
                 for ($tentative = 0; $tentative < 2; $tentative++) {
                     try {
-                        $lb = $api->getLicenceB($licence);
+                        $lb = $apiRaw->request('xml_licence_b', ['licence' => $licence, 'club' => $numClub])['licence'] ?? null;
                         break;
-                    } catch (\RuntimeException $e) {
+                    } catch (\Throwable $e) {
                         if ($tentative === 0) {
                             usleep(600_000);
                         } else {
@@ -515,8 +536,8 @@ class JugearbitreController extends BaseController
                     continue;
                 }
 
-                $ja  = trim((string) ($lb['ja'] ?? ''));
-                $arb = trim((string) ($lb['arb'] ?? ''));
+                $ja  = $this->ffttStr($lb['ja'] ?? '');
+                $arb = $this->ffttStr($lb['arb'] ?? '');
                 if ($ja === '' && $arb === '') {
                     continue;
                 }
@@ -526,12 +547,12 @@ class JugearbitreController extends BaseController
                 }
 
                 $gradeNorm = strtoupper($grade);
-                $nom       = mb_strtoupper(trim((string) ($lb['nom'] ?? '')), 'UTF-8');
-                $prenom    = trim((string) ($lb['prenom'] ?? ''));
-                $email     = trim((string) ($lb['email'] ?? ''));
-                $idClub    = trim((string) ($lb['numclub'] ?? $numClub));
+                $nom       = mb_strtoupper($this->ffttStr($lb['nom'] ?? ''), 'UTF-8');
+                $prenom    = $this->ffttStr($lb['prenom'] ?? '');
+                $email     = $this->ffttStr($lb['email'] ?? '');
+                $idClub    = $this->ffttStr($lb['numclub'] ?? '') ?: $numClub;
 
-                $dateValidStr = trim((string) ($lb['validation'] ?? ''));
+                $dateValidStr = $this->ffttStr($lb['validation'] ?? '');
                 $actif        = 0;
                 if ($dateValidStr !== '' && preg_match('/(\d{1,2})\/(\d{2})\/(\d{4})/', $dateValidStr, $mv)) {
                     $validated     = new \DateTime($mv[3] . '-' . $mv[2] . '-' . str_pad($mv[1], 2, '0', STR_PAD_LEFT));
@@ -541,8 +562,8 @@ class JugearbitreController extends BaseController
                     $actif = new \DateTime('today') <= new \DateTime($seasonEndYear . '-06-30') ? 1 : 0;
                 }
 
-                $cpFFTT    = trim((string) ($lb['cp'] ?? ''));
-                $villeFFTT = normaliserVille((string) ($lb['ville'] ?? ''));
+                $cpFFTT    = $this->ffttStr($lb['cp'] ?? '');
+                $villeFFTT = normaliserVille($this->ffttStr($lb['ville'] ?? ''));
                 $idLaPoste = null;
                 $cpFinal   = $cpFFTT;
                 $villeFinal = $villeFFTT;
@@ -573,7 +594,7 @@ class JugearbitreController extends BaseController
                     'ville'      => $villeFinal,
                     'en_base'    => $enBase,
                 ];
-            } catch (\RuntimeException $e) {
+            } catch (\Throwable $e) {
                 $erreurs++;
                 $msg = $e->getMessage();
                 error_log("[NIJAC] scan_fftt_club $numClub licence=$licence : $msg");
@@ -712,16 +733,20 @@ class JugearbitreController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => 'id_ja manquant.']);
         }
 
-        $api = getFfttApi();
-        $lic = $api->getLicenceB($idJa);
-        if (!$lic) {
+        $api = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+        try {
+            $lic = $api->retrieveJoueurDetails($idJa);
+        } catch (\Throwable $e) {
             return $this->response->setJSON(['ok' => false, 'msg' => "Licence $idJa introuvable dans l'API FFTT."]);
         }
+        if (is_array($lic)) {
+            return $this->response->setJSON(['ok' => false, 'msg' => "Plusieurs fiches trouvées pour la licence $idJa dans l'API FFTT."]);
+        }
 
-        $classement = isset($lic['point']) && $lic['point'] !== '' ? (int) $lic['point'] : null;
-        $dateValid  = isset($lic['validation']) && $lic['validation'] !== '' ? (string) $lic['validation'] : null;
-        $arb        = isset($lic['arb']) && $lic['arb'] !== '' ? trim((string) $lic['arb']) : null;
-        $ja         = isset($lic['ja']) && $lic['ja'] !== '' ? trim((string) $lic['ja']) : null;
+        $classement = (int) $lic->getPointsLicence();
+        $dateValid  = $lic->getDateValidation()?->format('d/m/Y');
+        $arb        = $lic->getDiplomeArbitre() ?: null;
+        $ja         = $lic->getDiplomeJugeArbitre() ?: null;
         $gradeFFTT  = $ja ?? $arb ?? null;
 
         // CP, Ville et Id_LaPoste volontairement exclus : les données FFTT sont moins fiables que la BDD locale
@@ -734,8 +759,8 @@ class JugearbitreController extends BaseController
             'classement' => $classement,
             'date_valid' => $dateValid,
             'grade_fftt' => $gradeFFTT,
-            'nom_fftt'   => ($lic['nom'] ?? '') . ' ' . ($lic['prenom'] ?? ''),
-            'club_fftt'  => $lic['nomclub'] ?? '',
+            'nom_fftt'   => $lic->getNom() . ' ' . $lic->getPrenom(),
+            'club_fftt'  => $lic->getNomClub(),
         ]);
     }
 

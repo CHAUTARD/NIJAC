@@ -45,7 +45,6 @@ class ConfigurationController extends BaseController
             $emailDev          = getConfig('email_developpement', 'patrick.chautard@free.fr');
             $deptsActifs       = getConfig('departements_actifs', '14,27,50,61,76');
             $reglesDepts       = getConfig('regles_departements', '{"76":["27"]}');
-            $deptsLimitrophes  = getConfig('departements_limitrophes', '60,80,95,78,28,53,72,35');
             $urlLigue          = getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr');
             $indemniteForfait  = getConfig('indemnite_forfaitaire', '25.00');
             $fraisKm           = getConfig('frais_kilometrique', '0.30');
@@ -67,7 +66,6 @@ class ConfigurationController extends BaseController
             $emailDev         = 'patrick.chautard@free.fr';
             $deptsActifs      = '14,27,50,61,76';
             $reglesDepts      = '{"76":["27"]}';
-            $deptsLimitrophes = '60,80,95,78,28,53,72,35';
             $urlLigue         = 'https://www.ligue-normandie-tt.fr';
             $indemniteForfait = '25.00';
             $fraisKm          = '0.30';
@@ -94,7 +92,6 @@ class ConfigurationController extends BaseController
             'deptsActifs'       => $deptsActifs,
             'deptsActifsArray'  => $deptsActifsArray,
             'reglesDepts'       => $reglesDepts,
-            'deptsLimitrophes'  => $deptsLimitrophes,
             'urlLigue'          => $urlLigue,
             'indemniteForfait'  => $indemniteForfait,
             'fraisKm'           => $fraisKm,
@@ -185,18 +182,6 @@ class ConfigurationController extends BaseController
                 foreach ($depts as $d) {
                     if (!in_array($d, $deptsValides, true)) {
                         return $this->response->setJSON(['ok' => false, 'msg' => "Département « $d » non reconnu."]);
-                    }
-                }
-                $valeur = implode(',', $depts);
-            }
-
-            // Validation départements_limitrophes : liste de numéros séparés par virgule
-            if ($cle === 'departements_limitrophes') {
-                $deptsValides = ['28', '35', '53', '60', '72', '78', '80', '95'];
-                $depts        = array_filter(array_map('trim', explode(',', $valeur)));
-                foreach ($depts as $d) {
-                    if (!in_array($d, $deptsValides, true)) {
-                        return $this->response->setJSON(['ok' => false, 'msg' => "Département limitrophe « $d » non reconnu."]);
                     }
                 }
                 $valeur = implode(',', $depts);

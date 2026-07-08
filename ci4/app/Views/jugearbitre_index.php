@@ -315,6 +315,9 @@
         <?php endforeach; ?>
         <?php endif; ?>
     </select>
+    <button class="menu-item" id="btn-filtre-region" title="Cliquer pour n'afficher que les JA de la région, ou tous les JA" style="border-color:transparent;">
+        <i class="bi bi-geo-alt me-1"></i><span id="lbl-filtre-region">Région</span>
+    </button>
     <input type="search" id="search-input" placeholder="🔍 Rechercher…">
 </div>
 
@@ -644,10 +647,12 @@ const DISPONIBILITE_JA_BASE = '<?= site_url('disponibilite-ja') ?>';
 let lignes     = [];
 let filtreActif   = true;   // false = tous, true = actifs seulement
 let filtreErreursCp = false; // true = uniquement les lignes sans id_laposte
+let filtreEnRegion = true; // true = En région uniquement (par défaut), false = Tous
 const sortState = { col: 'nom', asc: true };
 let searchTerm = '';
 const isAdmin  = <?= $isAdmin ? 'true' : 'false' ?>;
 let deptFiltre = <?= json_encode($deptUser) ?>; // nominateur : filtré sur son dept
+const DEPTS_REGION = new Set(<?= json_encode(array_column($deptActifs, 'code')) ?>);
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
 function spinner(show) { $('#spinner').toggleClass('show', show); }
@@ -656,12 +661,17 @@ function setStatus(msg, ok = true) {
     $('#status-bar').html(msg).css('color', ok ? '#374151' : '#c00');
 }
 
+function deptDeJA(l) {
+    return String(l.cp ?? '').substring(0, 2);
+}
+
 // ── Tri & Recherche ───────────────────────────────────────────────────────────
 function lignesFiltreesTriees() {
     const term = searchTerm.toLowerCase();
     let source = [...lignes];
     if (filtreActif)     source = source.filter(l => l.actif === 1);
     if (filtreErreursCp) source = source.filter(l => l.id_laposte == null);
+    if (filtreEnRegion)  source = source.filter(l => DEPTS_REGION.has(deptDeJA(l)));
     let result = term
         ? source.filter(l =>
             String(l.id              ?? '').toLowerCase().includes(term) ||
@@ -808,6 +818,7 @@ function chargerListe() {
             grade:           r.Grade,
             actif:           +r.Actif,
             id_club:         r.Id_Club,
+            codedept:        r.CodeDept ?? '',
             nom_club:        r.NomClub ?? '',
             id_laposte:       r.Id_LaPoste,
             num_compte_ebp:   r.NumCompteEBP ?? '',
@@ -929,12 +940,13 @@ function lancerProgressionClubs(dep, depText, modeScan) {
 
                 if (modeScan) {
                     // Afficher l'étape de sélection
-                    afficherSelectionJAs(_scanJAs, totalMembres, totalErreurs, logLines);
+                    afficherSelectionJAs(_scanJAs, totalMembres, totalErreurs, logLines, depText);
                 } else {
                     $('#import-fftt-step3').show();
                     $('#import-fftt-resume').html(
                         `<i class="bi bi-check-circle-fill me-2"></i>` +
-                        `Import terminé — <strong>${totalNouveaux}</strong> nouveau(x) JA, ` +
+                        `Import terminé pour le département <strong>${escHtml(depText)}</strong> — ` +
+                        `<strong>${totalNouveaux}</strong> nouveau(x) JA, ` +
                         `<strong>${totalMaj}</strong> mis à jour, ` +
                         `<strong>${totalMembres}</strong> membres vérifiés` +
                         (totalErreurs ? `, <strong>${totalErreurs}</strong> erreur(s) API` : '') + '.'
@@ -1004,7 +1016,7 @@ function lancerProgressionClubs(dep, depText, modeScan) {
 }
 
 // ── Afficher l'écran de sélection des JAs (limitrophes) ──────────────────────
-function afficherSelectionJAs(jas, totalMembres, totalErreurs, logLines) {
+function afficherSelectionJAs(jas, totalMembres, totalErreurs, logLines, depText) {
     const $list = $('#import-fftt-2b-list').empty();
 
     if (!jas.length) {
@@ -1029,7 +1041,7 @@ function afficherSelectionJAs(jas, totalMembres, totalErreurs, logLines) {
         });
     }
 
-    const sousTitre = `${jas.length} JA(s) trouvé(s) — ${totalMembres} membres vérifiés` +
+    const sousTitre = `${jas.length} JA(s) trouvé(s) dans <strong>${escHtml(depText)}</strong> — ${totalMembres} membres vérifiés` +
         (totalErreurs ? ` — <span class="text-danger">${totalErreurs} erreur(s)</span>` : '');
     $('#import-fftt-2b-sous-titre').html(sousTitre);
     $('#import-fftt-2b-erreurs').hide();
@@ -1112,6 +1124,22 @@ $(function () {
 $('#sel-dept').on('change', function () {
     deptFiltre = $(this).val();
     chargerListe();
+});
+
+function appliquerStyleFiltreRegion() {
+    $('#lbl-filtre-region').text(filtreEnRegion ? 'Région' : 'Tous');
+    $('#btn-filtre-region').css({
+        background:  filtreEnRegion ? '#166534' : '',
+        color:       filtreEnRegion ? '#fff'    : '',
+        borderColor: filtreEnRegion ? '#166534' : 'transparent',
+    });
+}
+appliquerStyleFiltreRegion();
+
+$('#btn-filtre-region').on('click', function () {
+    filtreEnRegion = !filtreEnRegion;
+    appliquerStyleFiltreRegion();
+    renderGrille();
 });
 
 // ── Recherche ─────────────────────────────────────────────────────────────────
@@ -1217,7 +1245,7 @@ function ouvrirModaleJa(record) {
         if (njaIdLaPoste && (record.cp || record.ville)) {
             $('#nja-laposte-msg').text(`✓ ${record.cp} ${record.ville}`).css('color', '#065f46');
         }
-        $('#nja-dept').val('');
+        $('#nja-dept').val(record.codedept || '');
         njaChargerClubs('', record.id_club || '');
     } else {
         njaEditId = null;

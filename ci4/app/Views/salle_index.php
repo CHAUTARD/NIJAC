@@ -172,6 +172,9 @@
         <option value="<?= (int) $d['code'] ?>"><?= (int) $d['code'] ?> — <?= esc($d['nom']) ?></option>
         <?php endforeach; ?>
     </select>
+    <button class="menu-item" id="btn-filtre-region" title="Cliquer pour n'afficher que les salles de la région, ou toutes les salles" style="border-color:transparent;">
+        <i class="bi bi-geo-alt me-1"></i><span id="lbl-filtre-region">Région</span>
+    </button>
 <?php else: ?>
     <span style="padding:.2rem .6rem; background:#fff3cd; border:1px solid #ffc107; border-radius:4px; font-size:.82rem; color:#856404;">
         <i class="bi bi-eye-fill me-1"></i>Consultation — département <?= esc($departement) ?>
@@ -339,6 +342,7 @@ const LAPOSTE_BASE = '<?= site_url('laposte') ?>';
 
 const IS_ADMIN  = <?= $isAdmin ? 'true' : 'false' ?>;
 const DEPT_USER = <?= json_encode($deptUser) ?>;
+const DEPTS_REGION = new Set(<?= json_encode(array_column($deptActifs, 'code')) ?>);
 
 let lignes     = [];
 let clubs      = [];
@@ -346,6 +350,7 @@ let rowActive  = null;
 const sortState = { col: 'nom_club', asc: true };
 let searchTerm = '';
 let deptFiltre = IS_ADMIN ? '' : (DEPT_USER ?? '');
+let filtreEnRegion = true; // true = En région uniquement (par défaut), false = Tous
 
 function spinner(show) { $('#spinner').toggleClass('show', show); }
 
@@ -353,10 +358,15 @@ function setStatus(msg, ok = true) {
     $('#status-bar').html(msg).css('color', ok ? '#374151' : '#c00');
 }
 
+function deptDeSalle(l) {
+    return String(l.cp ?? '').substring(0, 2);
+}
+
 function lignesFiltreesTriees() {
     const term = searchTerm.toLowerCase();
-    let result = term
-        ? lignes.filter(l =>
+    let result = [...lignes];
+    if (IS_ADMIN && filtreEnRegion) result = result.filter(l => DEPTS_REGION.has(deptDeSalle(l)));
+    if (term) result = result.filter(l =>
             String(l.id_salle   ?? '').toLowerCase().includes(term) ||
             String(l.nom        ?? '').toLowerCase().includes(term) ||
             String(l.adresse    ?? '').toLowerCase().includes(term) ||
@@ -364,8 +374,7 @@ function lignesFiltreesTriees() {
             String(l.cp         ?? '').toLowerCase().includes(term) ||
             String(l.ville      ?? '').toLowerCase().includes(term) ||
             String(l.id_club    ?? '').toLowerCase().includes(term) ||
-            String(l.nom_club   ?? '').toLowerCase().includes(term))
-        : [...lignes];
+            String(l.nom_club   ?? '').toLowerCase().includes(term));
 
     const numFields = ['id_salle', 'id_laposte'];
     result.sort((a, b) => {
@@ -411,6 +420,7 @@ function renderGrille() {
         if (IS_ADMIN) $tr.append(makeActionsTd(idx));
 
         $tr.on('click', function () { selectionnerLigne(idx); });
+        if (IS_ADMIN) $tr.on('dblclick', function () { ouvrirModalModifierSalle(idx); });
         $body.append($tr);
     });
 
@@ -685,6 +695,22 @@ $('#search-input').on('input', function () {
 $('#sel-dept').on('change', function () {
     deptFiltre = $(this).val();
     chargerListe();
+});
+
+function appliquerStyleFiltreRegion() {
+    $('#lbl-filtre-region').text(filtreEnRegion ? 'Région' : 'Tous');
+    $('#btn-filtre-region').css({
+        background:  filtreEnRegion ? '#166534' : '',
+        color:       filtreEnRegion ? '#fff'    : '',
+        borderColor: filtreEnRegion ? '#166534' : 'transparent',
+    });
+}
+appliquerStyleFiltreRegion();
+
+$('#btn-filtre-region').on('click', function () {
+    filtreEnRegion = !filtreEnRegion;
+    appliquerStyleFiltreRegion();
+    renderGrille();
 });
 
 let syncEnCours = false;

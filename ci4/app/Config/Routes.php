@@ -253,6 +253,9 @@ $routes->post('fftt-test/test-chp-renc', 'FfttTestController::testChpRenc', ['fi
 $routes->post('fftt-test/test-result-equ', 'FfttTestController::testResultEqu', ['filter' => 'adminauth']);
 $routes->post('fftt-test/test-equipe-nat', 'FfttTestController::testEquipeNat', ['filter' => 'adminauth']);
 $routes->post('fftt-test/scan-dept-nat', 'FfttTestController::scanDeptNat', ['filter' => 'adminauth']);
+// Test générique de la librairie alamirault/fftt-api (composer) — voir
+// avertissement sécurité dans FfttTestController::testViaLibrary().
+$routes->post('fftt-test/test-lib', 'FfttTestController::testViaLibrary', ['filter' => 'adminauth']);
 
 // ── E099 Administration base de données ──────────────────────────────────────
 // Admin uniquement (filtre "adminauth"), + restriction supplémentaire

@@ -90,7 +90,7 @@
             padding: .35rem .4rem; border-radius: 5px;
         }
         .epreuve-item:hover { background: #f7faff; }
-        .epreuve-item label { cursor: pointer; font-size: .84rem; margin: 0; line-height: 1.3; }
+        .epreuve-item span { font-size: .84rem; margin: 0; line-height: 1.3; }
         .epreuve-item .intitule { font-weight: 600; }
         .epreuve-item .ep-id    { font-size: .74rem; color: #6b7280; margin-left: .25rem; }
 
@@ -206,24 +206,13 @@
             <span id="lbl-nb-epreuves" class="text-muted fw-normal ms-1" style="font-size:.82rem;"></span>
         </div>
 
-        <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-            <input type="search" id="filtre-epreuves" class="form-control form-control-sm"
-                   placeholder="Filtrer par nom…" style="max-width:280px;">
-            <button class="btn btn-sm btn-success" id="btn-tout-cocher">
-                <i class="bi bi-check2-all me-1"></i>Tout sélectionner
-            </button>
-            <button class="btn btn-sm btn-outline-secondary" id="btn-tout-decocher">
-                <i class="bi bi-x-lg me-1"></i>Tout désélectionner
-            </button>
-        </div>
-
-        <div style="max-height:380px;overflow-y:auto;border:1px solid #e0e8f0;border-radius:6px;padding:.5rem .6rem;">
+        <div style="border:1px solid #e0e8f0;border-radius:6px;padding:.5rem .6rem;">
             <div id="liste-epreuves"></div>
         </div>
 
         <div class="mt-3 d-flex align-items-center gap-3 flex-wrap">
             <button id="btn-importer" class="btn btn-success" disabled>
-                <i class="bi bi-cloud-upload me-1"></i>Importer les rencontres des épreuves cochées
+                <i class="bi bi-cloud-upload me-1"></i>Importer les rencontres
                 <span id="spinner-div" class="spinner-border spinner-border-sm ms-2 d-none"></span>
             </button>
             <span class="text-muted" style="font-size:.82rem;">(Les doublons seront ignorés)</span>
@@ -251,7 +240,7 @@
         <div class="d-flex gap-2 mb-2 flex-wrap align-items-center">
             <input type="search" id="filtre-renc" class="form-control form-control-sm"
                    placeholder="Filtrer…" style="max-width:240px;">
-            <select id="filtre-div" class="form-select form-select-sm" style="max-width:160px;">
+            <select id="filtre-div" class="form-select form-select-sm" style="max-width:280px;">
                 <option value="">Toutes les divisions</option>
             </select>
             <button id="btn-refresh-renc" class="btn btn-sm btn-outline-secondary ms-auto">
@@ -437,59 +426,53 @@ function chargerEpreuves() {
             $('#liste-epreuves').html(`<div class="text-danger">${esc(r.msg)}</div>`);
             return;
         }
-        epreuves = r.epreuves ?? [];
+        // On ne conserve que le Championnat de France par Équipes Féminin et
+        // Masculin (le contrôleur a déjà dédoublonné les épreuves FED_ en ne
+        // gardant que le idepreuve le plus élevé par intitulé).
+        const NOMS_RETENUS = [
+            'FED_Championnat de France par Equipes Féminin',
+            'FED_Championnat de France par Equipes Masculin',
+        ];
+        epreuves = (r.epreuves ?? []).filter(ep => {
+            const intitule = (ep.intitule ?? ep.libelle ?? '').trim().toLowerCase();
+            return NOMS_RETENUS.some(n => n.toLowerCase() === intitule);
+        });
         $('#lbl-nb-epreuves').text(`(${epreuves.length} épreuve(s))`);
         renderEpreuves();
+        majBtnImportEpreuves();
         majBtnDivisions();
     }, 'json').fail(function () {
         $('#liste-epreuves').html('<div class="text-danger">Erreur réseau.</div>');
     });
 }
 
-/** Retourne true si l'épreuve doit être cochée par défaut. */
-function epreuveParDefaut(intitule) {
-    const s = intitule.toUpperCase();
-    return s.startsWith('FED_') && !s.includes('ANTILLES') && !s.includes('GUYANE');
-}
-
 function renderEpreuves() {
-    const filtre = $('#filtre-epreuves').val().trim().toLowerCase();
-    const $list  = $('#liste-epreuves').empty();
-    let nb = 0;
+    const $list = $('#liste-epreuves').empty();
 
-    epreuves.forEach((ep, i) => {
+    if (!epreuves.length) {
+        $list.html('<div class="text-muted py-2 px-1">Aucune épreuve Championnat de France par Équipes trouvée.</div>');
+        return;
+    }
+
+    epreuves.forEach((ep) => {
         const intitule = (ep.intitule ?? ep.libelle ?? '');
-        if (filtre && !intitule.toLowerCase().includes(filtre)) return;
-        nb++;
-        const cochee = epreuveParDefaut(intitule);
-        const id = `chk-ep-${i}`;
         $list.append(`
             <div class="epreuve-item">
-                <input type="checkbox" class="chk-epreuve form-check-input flex-shrink-0"
-                       id="${id}" data-idx="${i}" ${cochee ? 'checked' : ''} style="margin-top:.15rem;">
-                <label for="${id}">
+                <i class="bi bi-check-circle-fill text-success flex-shrink-0" style="margin-top:.15rem;"></i>
+                <span>
                     <span class="intitule">${esc(intitule)}</span>
                     <span class="ep-id">(${esc(ep.idepreuve ?? '')})</span>
-                </label>
+                </span>
             </div>`);
     });
-
-    if (!nb) $list.html('<div class="text-muted py-2 px-1">Aucune épreuve correspondante.</div>');
 }
 
-$('#filtre-epreuves').on('input', function () { renderEpreuves(); majBtnImportEpreuves(); });
-
-$('#btn-tout-cocher').on('click',   function () { $('.chk-epreuve').prop('checked', true);  majBtnImportEpreuves(); });
-$('#btn-tout-decocher').on('click', function () { $('.chk-epreuve').prop('checked', false); majBtnImportEpreuves(); });
-
-$(document).on('change', '.chk-epreuve', majBtnImportEpreuves);
-
 function majBtnImportEpreuves() {
-    const nb = $('.chk-epreuve:checked').length;
+    const nb = epreuves.length;
     $('#btn-importer').prop('disabled', nb === 0).text(
         nb > 0
-            ? `Importer les rencontres des ${nb} épreuve(s) cochée(s)`
-            : 'Importer les rencontres des épreuves cochées'
+            ? `Importer les rencontres (${nb} épreuve${nb > 1 ? 's' : ''})`
+            : 'Importer les rencontres'
     );
     $('#btn-importer').append(
         '<span id="spinner-div" class="spinner-border spinner-border-sm ms-2 d-none"></span>'
@@ -508,9 +491,7 @@ function nijacConfirmPromise(msg) {
 }
 
 $('#btn-importer').on('click', async function () {
-    const checkedIdx = $('.chk-epreuve:checked').map(function () {
-        return +$(this).attr('data-idx');
-    }).get();
+    const checkedIdx = epreuves.map((_, i) => i);
     if (!checkedIdx.length) return;
 
     const conf = await nijacConfirmPromise(
@@ -819,7 +800,7 @@ function renderListeRencontres() {
                       ? rc.DivisionColor : '#1a3a6b';
         const fg    = textColorFor(bg);
         const eligibleDesignation = (rc.DivisionCode === 'R3M' || rc.DivisionCode === 'R4M')
-            && !rc.NbNominations && dateEstDepassee(rc.Date);
+            && +rc.NbNominations === 0 && dateEstDepassee(rc.Date);
         const arb   = eligibleDesignation
             ? `<button type="button" class="btn btn-sm btn-outline-primary py-0 px-1 btn-designer-arbitre"
                        data-id="${rc.Id_Rencontre}" title="Désigner un arbitre du club recevant">

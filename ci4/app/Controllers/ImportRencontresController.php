@@ -2,6 +2,8 @@
 
 namespace App\Controllers;
 
+use Alamirault\FFTTApi\Model\Enums\TypeEpreuveEnum;
+use Alamirault\FFTTApi\Service\FFTTApi as FfttApiLib;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
@@ -177,49 +179,27 @@ class ImportRencontresController extends BaseController
     {
 
         return $this->tryJson(function () {
-            $region  = trim(getConfig('region', 'Normandie'));
-            $api     = getFfttApi();
-            $reponse = $api->request('xml_organisme', ['type' => 'L']);
-            $items   = $this->ffttItems($reponse, 'organisme');
+            $region = trim(getConfig('region', 'Normandie'));
+            $api    = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+            $items  = $api->listOrganismes('L');
 
             $regionN = mb_strtolower($region, 'UTF-8');
             $trouve  = null;
-            $champId = static function (array $org): string {
-                foreach (['id', 'ident', 'idorga', 'numero', 'numorg'] as $f) {
-                    if (isset($org[$f]) && (string) $org[$f] !== '') {
-                        return (string) $org[$f];
-                    }
-                }
-
-                return '';
-            };
-
             foreach ($items as $org) {
-                $libelle = (string) ($org['libelle'] ?? '');
-                if (mb_strpos(mb_strtolower($libelle, 'UTF-8'), $regionN) !== false) {
-                    $trouve = ['id' => $champId($org), 'libelle' => $libelle];
+                if (mb_strpos(mb_strtolower($org->getLibelle(), 'UTF-8'), $regionN) !== false) {
+                    $trouve = ['id' => (string) $org->getId(), 'libelle' => $org->getLibelle()];
                     break;
                 }
             }
 
-            $clesPremier = !empty($items) ? array_keys($items[0]) : [];
-
-            if ($trouve && $trouve['id'] !== '') {
-                return $this->response->setJSON(['ok' => true, 'ligue' => $trouve, 'total' => count($items)]);
-            }
             if ($trouve) {
-                return $this->response->setJSON([
-                    'ok'     => false,
-                    'msg'    => "Ligue « {$trouve['libelle']} » trouvée mais champ ID introuvable. Clés disponibles : " . implode(', ', $clesPremier),
-                    'ligues' => array_column($items, 'libelle'),
-                    'debug'  => $items[0] ?? [],
-                ]);
+                return $this->response->setJSON(['ok' => true, 'ligue' => $trouve, 'total' => count($items)]);
             }
 
             return $this->response->setJSON([
                 'ok'     => false,
                 'msg'    => "Aucune ligue « $region » parmi " . count($items) . ' ligues.',
-                'ligues' => array_column($items, 'libelle'),
+                'ligues' => array_map(static fn ($o) => $o->getLibelle(), $items),
             ]);
         });
     }
@@ -233,18 +213,16 @@ class ImportRencontresController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Organisme manquant.']);
             }
 
-            $api     = getFfttApi();
-            $reponse = $api->request('xml_epreuve', ['organisme' => $organisme, 'type' => 'E']);
-            $items   = $this->ffttItems($reponse, 'epreuve');
+            $api   = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+            $items = $api->listEpreuves((int) $organisme, TypeEpreuveEnum::Equipe);
 
             // Pour les épreuves FED_ : dédoublonner par intitulé, garder le idepreuve le plus grand
             $fed    = [];
             $autres = [];
             foreach ($items as $ep) {
-                $intitule = (string) ($ep['intitule'] ?? $ep['libelle'] ?? '');
-                $idEp     = (int) ($ep['idepreuve'] ?? $ep['ident'] ?? 0);
+                $intitule = $ep->getLibelle();
                 if (stripos($intitule, 'FED_') === 0) {
-                    if (!isset($fed[$intitule]) || $idEp > (int) ($fed[$intitule]['idepreuve'] ?? $fed[$intitule]['ident'] ?? 0)) {
+                    if (!isset($fed[$intitule]) || $ep->getIdEpreuve() > $fed[$intitule]->getIdEpreuve()) {
                         $fed[$intitule] = $ep;
                     }
                 } else {
@@ -253,7 +231,10 @@ class ImportRencontresController extends BaseController
             }
             $items = array_merge(array_values($fed), $autres);
 
-            return $this->response->setJSON(['ok' => true, 'epreuves' => $items]);
+            return $this->response->setJSON(['ok' => true, 'epreuves' => array_map(static fn ($e) => [
+                'idepreuve' => $e->getIdEpreuve(),
+                'intitule'  => $e->getLibelle(),
+            ], $items)]);
         });
     }
 
@@ -270,7 +251,7 @@ class ImportRencontresController extends BaseController
             if ($divFftt === '') {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'division_fftt manquant']);
             }
-            $api        = getFfttApi();
+            $api        = getFfttRawClient();
             $resultats  = [];
             $cxPoules   = [];
             $pouleItems = [];
@@ -315,6 +296,17 @@ class ImportRencontresController extends BaseController
         });
     }
 
+    /**
+     * Utilise le client bas niveau (getFfttRawClient()), comme les méthodes
+     * suivantes (importerDivision, debugResultEqu) : la façade FFTTApi de
+     * alamirault/fftt-api n'expose pas xml_division (aucune méthode
+     * listDivisions()/équivalent), et ses méthodes de poules/rencontres
+     * (listEquipePouleByLienDivision, listRencontrePouleByLienDivision)
+     * partent d'un objet Equipe déjà connu (Club → equipe → lienDivision),
+     * pas d'un ID de division FFTT choisi librement comme le fait ce flux
+     * d'import (Ligue → Épreuve → Division → Poules, indépendamment de tout
+     * club).
+     */
     public function chargerDivisions(): ResponseInterface
     {
 
@@ -325,7 +317,7 @@ class ImportRencontresController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Paramètres manquants.']);
             }
 
-            $api     = getFfttApi();
+            $api     = getFfttRawClient();
             $reponse = $api->request('xml_division', ['organisme' => $organisme, 'epreuve' => $epreuve, 'type' => 'E']);
             $items   = $this->ffttItems($reponse, 'division');
 
@@ -369,7 +361,7 @@ class ImportRencontresController extends BaseController
             $divCode     = (string) $divInfo['Division'];
             $isNationale = str_starts_with($divCode, 'N');
 
-            $api = getFfttApi();
+            $api = getFfttRawClient();
 
             // Étape 1 : liste des poules (libellés + cx_poule via champ 'lien')
             $rPoules    = $api->request('xml_result_equ', ['action' => 'poule', 'D1' => $divFftt, 'auto' => '1', 'type' => 'E']);

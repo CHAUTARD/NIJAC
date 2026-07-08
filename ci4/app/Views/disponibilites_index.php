@@ -250,21 +250,14 @@ $(function () {
 });
 
 function chargerJA(dept) {
-    // Si 76 → inclure aussi l'Eure (27)
-    const depts = (dept === '76') ? ['76', '27'] : [dept];
-
     $('#placeholder').hide();
     $('#liste-ja').hide().empty();
     $('#spinner-dept').show();
-
-    const infoTxt = (dept === '76')
-        ? 'Seine-Maritime (76) — Eure (27) incluse'
-        : DEPT_NOMS[dept] || dept;
-    $('#info-dept').text(infoTxt);
+    $('#info-dept').text(DEPT_NOMS[dept] || dept);
 
     $.ajax({
         url: `${DISPO_BASE}/ja-dept`,
-        data: { depts: depts.join(',') },
+        data: { dept: dept },
         dataType: 'json'
     }).done(function (r) {
         $('#spinner-dept').hide();
@@ -287,8 +280,9 @@ function chargerJA(dept) {
 
         const $liste = $('#liste-ja').empty();
 
-        // Afficher dans l'ordre : dept principal en premier
-        const ordre = depts.concat(Object.keys(groupes).filter(d => !depts.includes(d)));
+        // Afficher dans l'ordre : dept principal en premier, puis les éventuels
+        // départements inclus renvoyés par le serveur (ex. 27 pour un 76).
+        const ordre = [dept].concat(Object.keys(groupes).filter(d => d !== dept));
         ordre.forEach(d => {
             const jas = groupes[d];
             if (!jas || !jas.length) return;

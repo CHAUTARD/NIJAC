@@ -2,6 +2,8 @@
 
 namespace App\Controllers;
 
+use Alamirault\FFTTApi\Exception\ClubNotFoundException;
+use Alamirault\FFTTApi\Service\FFTTApi as FfttApiLib;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
@@ -45,12 +47,17 @@ class ClubController extends BaseController
     public function index()
     {
         $moi = $_SESSION['utilisateur'] ?? [];
+        $pdo = getPDO();
 
         $data = [
             'nomComplet'  => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
             'departement' => $moi['id_departement'] ?? '',
             'changeLogin' => !empty($moi['change_login']),
             'deptActifs'  => getDeptActifs(),
+            'tousDepts'   => $pdo->query(
+                "SELECT code, nom FROM departement
+                 ORDER BY CASE WHEN code IN ('2A','2B') THEN 20 ELSE CAST(code AS UNSIGNED) END, code"
+            )->fetchAll(),
         ];
 
         return view('club_index', $data);
@@ -138,14 +145,14 @@ class ClubController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Département manquant.']);
             }
 
-            $api   = getFfttApi();
-            $clubs = $api->getClubsDepartement($dep);
+            $api   = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+            $clubs = $api->listClubsByDepartement((int) $dep);
 
-            $clubs = array_filter($clubs, static fn ($c) => ($c['numero'] ?? $c['numclu'] ?? '') !== '');
+            $clubs = array_filter($clubs, static fn ($c) => $c->getNumero() !== '');
 
             return $this->response->setJSON(['ok' => true, 'clubs' => array_map(static fn ($c) => [
-                'numero' => $c['numero'] ?? $c['numclu'] ?? '',
-                'nom'    => $c['nom'] ?? '',
+                'numero' => $c->getNumero(),
+                'nom'    => $c->getNom(),
             ], $clubs)]);
         });
     }
@@ -161,28 +168,27 @@ class ClubController extends BaseController
             }
 
             set_time_limit(30);
-            $api    = getFfttApi();
-            $detail = $api->getClubDetail($numClub);
-            if (empty($detail)) {
+            $api = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+            try {
+                $detail = $api->retrieveClubDetails($numClub);
+            } catch (ClubNotFoundException) {
                 return $this->response->setJSON(['ok' => false, 'msg' => "Club $numClub introuvable dans l'API FFTT."]);
             }
 
-            // L'API FFTT renvoie parfois un tableau vide (ou sa forme sérialisée "[]")
-            // pour un champ d'adresse non renseigné plutôt qu'une chaîne vide.
-            $nettoyerAdresse = static fn ($v) => is_array($v) ? '' : (trim((string) $v) === '[]' ? '' : trim((string) $v));
-
-            $nomClub    = trim((string) ($detail['nom'] ?? ''));
-            $nomsalle   = trim((string) ($detail['nomsalle'] ?? ''));
-            $adr1       = $nettoyerAdresse($detail['adressesalle1'] ?? '');
-            $adr2       = $nettoyerAdresse($detail['adressesalle2'] ?? '');
-            $adr3       = $nettoyerAdresse($detail['adressesalle3'] ?? '');
+            // ClubDetails normalise déjà côté lib le cas "tableau vide au lieu de
+            // chaîne" renvoyé par l'API FFTT pour un champ d'adresse non renseigné.
+            $nomClub    = trim($detail->getNom());
+            $nomsalle   = trim($detail->getNomSalle() ?? '');
+            $adr1       = trim($detail->getAdresseSalle1() ?? '');
+            $adr2       = trim($detail->getAdresseSalle2() ?? '');
+            $adr3       = trim($detail->getAdresseSalle3() ?? '');
             $adresse    = trim(implode(' ', array_filter([$adr1, $adr2, $adr3]))) ?: null;
-            $cpSalle    = trim((string) ($detail['codepsalle'] ?? ''));
-            $villeSalle = mb_strtoupper(trim((string) ($detail['villesalle'] ?? '')), 'UTF-8');
-            $nomCor     = mb_strtoupper(trim(is_array($detail['nomcor'] ?? []) ? '' : (string) $detail['nomcor']), 'UTF-8');
-            $prenomCor  = trim(is_array($detail['prenomcor'] ?? []) ? '' : (string) $detail['prenomcor']);
-            $mailCor    = trim(is_array($detail['mailcor'] ?? []) ? '' : (string) $detail['mailcor']);
-            $telCor     = trim(is_array($detail['telcor'] ?? []) ? '' : (string) $detail['telcor']);
+            $cpSalle    = trim($detail->getCodePostaleSalle() ?? '');
+            $villeSalle = mb_strtoupper(trim($detail->getVilleSalle() ?? ''), 'UTF-8');
+            $nomCor     = mb_strtoupper(trim($detail->getNomCoordo() ?? ''), 'UTF-8');
+            $prenomCor  = trim($detail->getPrenomCoordo() ?? '');
+            $mailCor    = trim($detail->getMailCoordo() ?? '');
+            $telCor     = trim($detail->getTelCoordo() ?? '');
             // Formatage XX.XX.XX.XX.XX
             $telDigits = preg_replace('/[^0-9]/', '', $telCor);
             if (strlen($telDigits) === 10) {

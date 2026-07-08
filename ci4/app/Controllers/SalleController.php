@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use Alamirault\FFTTApi\Service\FFTTApi as FfttApiLib;
 use CodeIgniter\HTTP\ResponseInterface;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
@@ -257,10 +258,10 @@ class SalleController extends BaseController
         }
 
         $pdo   = getPDO();
-        $api   = getFfttApi();
-        $clubs = $api->getClubsDepartement($dep);
+        $api   = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+        $clubs = $api->listClubsByDepartement((int) $dep);
 
-        $numeros = array_values(array_filter(array_map(fn ($c) => $c['numero'] ?? $c['numclu'] ?? '', $clubs)));
+        $numeros = array_values(array_filter(array_map(fn ($c) => $c->getNumero(), $clubs)));
         if ($numeros) {
             $ph     = implode(',', array_fill(0, count($numeros), '?'));
             $stmtEx = $pdo->prepare("SELECT Id_Club FROM Club WHERE Id_Club IN ($ph)");
@@ -272,8 +273,8 @@ class SalleController extends BaseController
 
         $result = array_values(array_filter(
             array_map(fn ($c) => [
-                'numero' => $c['numero'] ?? $c['numclu'] ?? '',
-                'nom'    => $c['nom'] ?? '',
+                'numero' => $c->getNumero(),
+                'nom'    => $c->getNom(),
             ], $clubs),
             fn ($c) => $c['numero'] !== '' && in_array($c['numero'], $existants, true)
         ));
@@ -281,6 +282,14 @@ class SalleController extends BaseController
         return $this->response->setJSON(['ok' => true, 'clubs' => $result]);
     }
 
+    /**
+     * Utilise le client bas niveau (getFfttRawClient(), pas FfttApiLib) :
+     * xml_club_detail peut renvoyer plusieurs salles pour un même club
+     * (tableaux nomsalle[]/adressesalle1[]/…, boucle $nbSalles ci-dessous) —
+     * le modèle ClubDetails typé de alamirault/fftt-api ne représente qu'une
+     * seule salle par club et traiterait ces champs multi-valués comme
+     * absents.
+     */
     public function ffttSync(): ResponseInterface
     {
 
@@ -295,8 +304,8 @@ class SalleController extends BaseController
 
         set_time_limit(30);
         $pdo    = getPDO();
-        $api    = getFfttApi();
-        $detail = $api->getClubDetail($numClub);
+        $api    = getFfttRawClient();
+        $detail = $api->request('xml_club_detail', ['club' => $numClub])['club'] ?? [];
         if (empty($detail)) {
             return $this->response->setJSON(['ok' => true, 'op' => null, 'msg' => "Club $numClub : aucune donnée FFTT"]);
         }

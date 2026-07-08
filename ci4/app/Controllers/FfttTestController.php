@@ -2,15 +2,19 @@
 
 namespace App\Controllers;
 
+use Alamirault\FFTTApi\Model\Enums\TypeEpreuveEnum;
+use Alamirault\FFTTApi\Model\Equipe;
+use Alamirault\FFTTApi\Service\FFTTApi as FfttApiLib;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
  * NIJAC – Test API FFTT (E018), portage CI4 de fftt_test.php.
  *
  * Interface de diagnostic de l'API FFTT (Smartping v2) — appel manuel de
- * chaque endpoint, lecture seule, aucune écriture en base. Réutilise la même
- * classe partagée Classes/FfttApi.php (factory getFfttApi()) que les écrans
- * d'import réels (E007, E008, E005, E011, E017).
+ * chaque endpoint, lecture seule, aucune écriture en base. Utilise
+ * alamirault/fftt-api (façade FFTTApi pour les endpoints couverts,
+ * App\Libraries\FfttRawClient/getFfttRawClient() pour les autres), comme les
+ * écrans d'import réels (E007, E008, E005, E011, E017).
  *
  * Accès Administrateur + restriction supplémentaire login === 'CHAUTARD'
  * (même règle que E099), vérifiée manuellement en plus du filtre "adminauth".
@@ -69,8 +73,8 @@ class FfttTestController extends BaseController
 
         try {
             $trace[] = ['étape' => '1. Credentials', 'app_id' => getFfttAppId(), 'app_key_len' => strlen(getFfttAppKey())];
-            $api     = getFfttApi();
-            $trace[] = ['étape' => '2. FfttApi instanciée', 'serial' => getConfig('fftt_serial', '(non généré)')];
+            $api     = getFfttRawClient();
+            $trace[] = ['étape' => '2. FfttRawClient instancié'];
 
             $result = $fn($api, $trace, $phpWarnings);
             ob_end_clean();
@@ -102,7 +106,7 @@ class FfttTestController extends BaseController
     /**
      * Retourne [iddivision => code] des divisions nationales actives.
      */
-    private function fetchNatDivIds(\FfttApi $api, string $phase, array &$debug): array
+    private function fetchNatDivIds(\App\Libraries\FfttRawClient $api, string $phase, array &$debug): array
     {
         $debug = [];
 
@@ -275,22 +279,47 @@ class FfttTestController extends BaseController
         return $this->rawJson(['ok' => true, 'msg' => 'PHP répond correctement', 'php' => PHP_VERSION, 'warnings' => []]);
     }
 
+    /**
+     * Migré vers alamirault/fftt-api (listClubsByDepartement, même endpoint
+     * xml_club_dep2) — ne passe plus par runAction()/Classes\FfttApi.php,
+     * dont le trace format (lastUrl/lastHttp/serial) n'a pas d'équivalent
+     * sur la façade de la lib.
+     */
     public function testClubsDep(): ResponseInterface
     {
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
 
-        return $this->runAction(function ($api, &$trace, &$warnings) {
-            $dep     = trim($this->request->getPost('dep') ?? '76');
-            $trace[] = ['étape' => '3. Appel xml_club_dep2', 'dep' => $dep];
-            $clubs   = $api->getClubsDepartement($dep);
-            $trace[] = ['étape' => '4. Réponse reçue', 'count' => count($clubs)];
+        $trace = [
+            ['étape' => '1. Credentials', 'app_id' => getFfttAppId(), 'app_key_len' => strlen(getFfttAppKey())],
+        ];
 
-            return ['ok' => true, 'count' => count($clubs), 'data' => array_slice($clubs, 0, 5), 'trace' => $trace, 'warnings' => $warnings];
-        });
+        try {
+            $dep     = trim($this->request->getPost('dep') ?? '76');
+            $api     = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+            $trace[] = ['étape' => '2. Appel xml_club_dep2 (alamirault/fftt-api)', 'dep' => $dep];
+            $clubs   = $api->listClubsByDepartement((int) $dep);
+            $trace[] = ['étape' => '3. Réponse reçue', 'count' => count($clubs)];
+
+            $data = array_map(
+                static fn ($c) => ['numero' => $c->getNumero(), 'nom' => $c->getNom()],
+                array_slice($clubs, 0, 5)
+            );
+
+            return $this->rawJson(['ok' => true, 'count' => count($clubs), 'data' => $data, 'trace' => $trace, 'warnings' => []]);
+        } catch (\Throwable $e) {
+            $trace[] = ['étape' => 'Exception', 'class' => get_class($e), 'message' => $e->getMessage()];
+
+            return $this->rawJson(['ok' => false, 'msg' => $e->getMessage(), 'trace' => $trace, 'warnings' => []]);
+        }
     }
 
+    /**
+     * xml_licence (base SPID) n'a pas d'équivalent sur la façade FFTTApi de
+     * alamirault/fftt-api (seul xml_licence_b est exposé, voir testLicenceB())
+     * — appel direct via le client bas niveau.
+     */
     public function testLicence(): ResponseInterface
     {
         if ($guard = $this->guardChautard()) {
@@ -303,7 +332,7 @@ class FfttTestController extends BaseController
                 return ['ok' => false, 'msg' => 'Numéro de licence requis', 'trace' => $trace];
             }
             $trace[] = ['étape' => '3. Appel xml_licence', 'licence' => $licence];
-            $data    = $api->getLicence($licence);
+            $data    = $api->request('xml_licence', ['licence' => $licence])['licence'] ?? null;
             $trace[] = ['étape' => '4. Réponse reçue', 'vide' => ($data === null)];
 
             return ['ok' => true, 'data' => $data, 'url' => $api->lastUrl(), 'http' => $api->lastHttp(), 'trace' => $trace, 'warnings' => $warnings];
@@ -316,17 +345,22 @@ class FfttTestController extends BaseController
             return $guard;
         }
 
-        return $this->runAction(function ($api, &$trace, &$warnings) {
+        $trace = [['étape' => '1. Credentials', 'app_id' => getFfttAppId(), 'app_key_len' => strlen(getFfttAppKey())]];
+
+        try {
             $club = trim($this->request->getPost('club') ?? '');
             if ($club === '') {
-                return ['ok' => false, 'msg' => 'Numéro de club requis', 'trace' => $trace];
+                return $this->rawJson(['ok' => false, 'msg' => 'Numéro de club requis', 'trace' => $trace]);
             }
-            $trace[] = ['étape' => '3. Appel xml_equipe', 'club' => $club];
-            $data    = $api->getEquipesClub($club);
-            $trace[] = ['étape' => '4. Réponse reçue', 'count' => count($data)];
+            $api     = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+            $trace[] = ['étape' => '2. Appel xml_equipe (alamirault/fftt-api)', 'club' => $club];
+            $data    = $api->listEquipesByClub($club);
+            $trace[] = ['étape' => '3. Réponse reçue', 'count' => count($data)];
 
-            return ['ok' => true, 'count' => count($data), 'data' => $data, 'trace' => $trace, 'warnings' => $warnings];
-        });
+            return $this->rawJson(['ok' => true, 'count' => count($data), 'data' => $this->serialiserLib($data), 'trace' => $trace, 'warnings' => []]);
+        } catch (\Throwable $e) {
+            return $this->rawJson(['ok' => false, 'msg' => $e->getMessage(), 'trace' => $trace, 'warnings' => []]);
+        }
     }
 
     public function testClubDetail(): ResponseInterface
@@ -335,44 +369,62 @@ class FfttTestController extends BaseController
             return $guard;
         }
 
-        return $this->runAction(function ($api, &$trace, &$warnings) {
+        $trace = [['étape' => '1. Credentials', 'app_id' => getFfttAppId(), 'app_key_len' => strlen(getFfttAppKey())]];
+
+        try {
             $club = trim($this->request->getPost('club') ?? '');
             if ($club === '') {
-                return ['ok' => false, 'msg' => 'Numéro de club requis', 'trace' => $trace];
+                return $this->rawJson(['ok' => false, 'msg' => 'Numéro de club requis', 'trace' => $trace]);
             }
-            $trace[] = ['étape' => '3. Appel xml_club_detail', 'club' => $club];
-            $data    = $api->getClubDetail($club);
-            $trace[] = ['étape' => '4. Réponse reçue', 'clés' => array_keys($data)];
+            $api     = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+            $trace[] = ['étape' => '2. Appel xml_club_detail (alamirault/fftt-api)', 'club' => $club];
+            $data    = $api->retrieveClubDetails($club);
+            $trace[] = ['étape' => '3. Réponse reçue'];
 
-            return ['ok' => true, 'data' => $data, 'url' => $api->lastUrl(), 'http' => $api->lastHttp(), 'trace' => $trace, 'warnings' => $warnings];
-        });
+            return $this->rawJson(['ok' => true, 'data' => $this->serialiserLib($data), 'trace' => $trace, 'warnings' => []]);
+        } catch (\Throwable $e) {
+            return $this->rawJson(['ok' => false, 'msg' => $e->getMessage(), 'trace' => $trace, 'warnings' => []]);
+        }
     }
 
+    /**
+     * Migré vers alamirault/fftt-api. Sert aussi à visualiser en direct la
+     * limite documentée sur SalleController::ffttSync() (non migré) : le
+     * modèle ClubDetails ne représente qu'une seule salle par club — un club
+     * à plusieurs salles renverra ici les mêmes valeurs qu'avant (la lib les
+     * traite comme absentes) plutôt que la liste complète que renvoie
+     * xml_club_detail brut pour ces clubs-là.
+     */
     public function debugClubSalle(): ResponseInterface
     {
         if ($guard = $this->guardChautard()) {
             return $guard;
         }
 
-        return $this->runAction(function ($api, &$trace, &$warnings) {
+        $trace = [['étape' => '1. Credentials', 'app_id' => getFfttAppId(), 'app_key_len' => strlen(getFfttAppKey())]];
+
+        try {
             $club = trim($this->request->getPost('club') ?? '');
             if ($club === '') {
-                return ['ok' => false, 'msg' => 'Numéro de club requis', 'trace' => $trace];
+                return $this->rawJson(['ok' => false, 'msg' => 'Numéro de club requis', 'trace' => $trace]);
             }
-            $data        = $api->getClubDetail($club);
-            $champsSalle = ['nomsalle', 'adressesalle1', 'adressesalle2', 'adressesalle3', 'codepsalle', 'villesalle'];
-            $analyse     = [];
-            foreach ($champsSalle as $champ) {
-                $val = $data[$champ] ?? null;
-                $analyse[$champ] = [
-                    'type'   => gettype($val),
-                    'count'  => is_array($val) ? count($val) : null,
-                    'valeur' => $val,
-                ];
+            $api  = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+            $data = $api->retrieveClubDetails($club);
+
+            $champsSalle = [
+                'nomSalle' => $data->getNomSalle(), 'adresseSalle1' => $data->getAdresseSalle1(),
+                'adresseSalle2' => $data->getAdresseSalle2(), 'adresseSalle3' => $data->getAdresseSalle3(),
+                'codePostaleSalle' => $data->getCodePostaleSalle(), 'villeSalle' => $data->getVilleSalle(),
+            ];
+            $analyse = [];
+            foreach ($champsSalle as $champ => $val) {
+                $analyse[$champ] = ['type' => gettype($val), 'valeur' => $val];
             }
 
-            return ['ok' => true, 'club' => $club, 'analyse' => $analyse, 'trace' => $trace, 'warnings' => $warnings];
-        });
+            return $this->rawJson(['ok' => true, 'club' => $club, 'analyse' => $analyse, 'trace' => $trace, 'warnings' => []]);
+        } catch (\Throwable $e) {
+            return $this->rawJson(['ok' => false, 'msg' => $e->getMessage(), 'trace' => $trace, 'warnings' => []]);
+        }
     }
 
     public function testLicenceB(): ResponseInterface
@@ -381,19 +433,42 @@ class FfttTestController extends BaseController
             return $guard;
         }
 
-        return $this->runAction(function ($api, &$trace, &$warnings) {
+        $trace = [['étape' => '1. Credentials', 'app_id' => getFfttAppId(), 'app_key_len' => strlen(getFfttAppKey())]];
+
+        try {
             $licence = trim($this->request->getPost('licence') ?? '');
             if ($licence === '') {
-                return ['ok' => false, 'msg' => 'Numéro de licence requis', 'trace' => $trace];
+                return $this->rawJson(['ok' => false, 'msg' => 'Numéro de licence requis', 'trace' => $trace]);
             }
-            $trace[] = ['étape' => '3. Appel xml_licence_b', 'licence' => $licence];
-            $data    = $api->request('xml_licence_b', ['licence' => $licence]);
-            $trace[] = ['étape' => '4. Réponse reçue', 'clés' => array_keys($data)];
+            $api     = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+            $trace[] = ['étape' => '2. Appel xml_licence_b (alamirault/fftt-api)', 'licence' => $licence];
+            $data    = $api->retrieveJoueurDetails($licence);
+            $trace[] = ['étape' => '3. Réponse reçue'];
 
-            return ['ok' => true, 'data' => $data, 'url' => $api->lastUrl(), 'http' => $api->lastHttp(), 'trace' => $trace, 'warnings' => $warnings];
-        });
+            return $this->rawJson(['ok' => true, 'data' => $this->serialiserLib($data), 'trace' => $trace, 'warnings' => []]);
+        } catch (\Throwable $e) {
+            return $this->rawJson(['ok' => false, 'msg' => $e->getMessage(), 'trace' => $trace, 'warnings' => []]);
+        }
     }
 
+    /** Normalise un item FFTT (objet unique ou liste) en tableau indexé. */
+    private function ffttItems(array $data, string $key): array
+    {
+        $items = $data[$key] ?? [];
+        if (empty($items)) {
+            return [];
+        }
+
+        return isset($items[0]) ? $items : [$items];
+    }
+
+    /**
+     * Appel direct via le client bas niveau (pas FfttApiLib) : lit le champ
+     * "echelon" (grade d'arbitrage) directement dans xml_liste_joueur_o, un
+     * seul appel par club — le modèle Joueur typé de la façade FFTTApi
+     * n'expose pas ce champ, le détecter demanderait un appel xml_licence_b
+     * par licencié (des centaines par département au lieu d'un par club).
+     */
     public function testArbitresDep(): ResponseInterface
     {
         if ($guard = $this->guardChautard()) {
@@ -404,8 +479,29 @@ class FfttTestController extends BaseController
             $dep     = trim($this->request->getPost('dep') ?? '76');
             $trace[] = ['étape' => '3. Récupération clubs + membres', 'dep' => $dep];
             set_time_limit(120);
-            $arbitres = $api->getArbitresDepartement($dep);
-            $trace[]  = ['étape' => '4. Terminé', 'arbitres_trouvés' => count($arbitres)];
+
+            $clubs    = $this->ffttItems($api->request('xml_club_dep2', ['dep' => $dep]), 'club');
+            $arbitres = [];
+            foreach ($clubs as $club) {
+                $numClub = $club['numero'] ?? $club['numclu'] ?? '';
+                if ($numClub === '') {
+                    continue;
+                }
+                try {
+                    $membres = $this->ffttItems($api->request('xml_liste_joueur_o', ['club' => $numClub]), 'joueur');
+                    foreach ($membres as $m) {
+                        $echelon = $m['echelon'] ?? [];
+                        if (!empty($echelon)) {
+                            $m['_club_nom'] = $club['nom'] ?? '';
+                            $m['_echelon']  = is_array($echelon) ? implode(', ', $echelon) : (string) $echelon;
+                            $arbitres[]     = $m;
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // Un club en erreur ne bloque pas les autres
+                }
+            }
+            $trace[] = ['étape' => '4. Terminé', 'arbitres_trouvés' => count($arbitres)];
 
             return ['ok' => true, 'count' => count($arbitres), 'data' => $arbitres, 'trace' => $trace, 'warnings' => $warnings];
         });
@@ -417,19 +513,28 @@ class FfttTestController extends BaseController
             return $guard;
         }
 
-        return $this->runAction(function ($api, &$trace, &$warnings) {
+        $trace = [['étape' => '1. Credentials', 'app_id' => getFfttAppId(), 'app_key_len' => strlen(getFfttAppKey())]];
+
+        try {
             $club = trim($this->request->getPost('club') ?? '');
             if ($club === '') {
-                return ['ok' => false, 'msg' => 'Numéro de club requis', 'trace' => $trace];
+                return $this->rawJson(['ok' => false, 'msg' => 'Numéro de club requis', 'trace' => $trace]);
             }
-            $trace[]  = ['étape' => '3. Appel xml_liste_joueur_o', 'club' => $club];
-            $membres  = $api->getLicenciesClub($club);
-            $trace[]  = ['étape' => '4. Réponse reçue', 'count' => count($membres)];
-            $exemple  = $membres[0] ?? null;
-            $champs   = $exemple ? array_keys($exemple) : [];
+            $api     = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+            $trace[] = ['étape' => '2. Appel xml_liste_joueur_o (alamirault/fftt-api)', 'club' => $club];
+            $membres = $api->listJoueursByClub($club);
+            $trace[] = ['étape' => '3. Réponse reçue', 'count' => count($membres)];
+            $exemple = $membres[0] ?? null;
 
-            return ['ok' => true, 'count' => count($membres), 'champs' => $champs, 'data' => $exemple, 'trace' => $trace];
-        });
+            return $this->rawJson([
+                'ok' => true, 'count' => count($membres),
+                'champs' => $exemple ? array_keys($this->serialiserLib($exemple)) : [],
+                'data' => $exemple ? $this->serialiserLib($exemple) : null,
+                'trace' => $trace,
+            ]);
+        } catch (\Throwable $e) {
+            return $this->rawJson(['ok' => false, 'msg' => $e->getMessage(), 'trace' => $trace]);
+        }
     }
 
     public function testOrganisme(): ResponseInterface
@@ -438,12 +543,19 @@ class FfttTestController extends BaseController
             return $guard;
         }
 
-        return $this->runAction(function ($api, &$trace, &$warnings) {
-            $type = trim($this->request->getPost('type') ?? 'L');
-            $data = $api->request('xml_organisme', ['type' => $type]);
+        $trace = [['étape' => '1. Credentials', 'app_id' => getFfttAppId(), 'app_key_len' => strlen(getFfttAppKey())]];
 
-            return ['ok' => true, 'data' => $data, 'url' => $api->lastUrl(), 'http' => $api->lastHttp(), 'trace' => $trace, 'warnings' => $warnings];
-        });
+        try {
+            $type    = trim($this->request->getPost('type') ?? 'L');
+            $api     = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+            $trace[] = ['étape' => '2. Appel xml_organisme (alamirault/fftt-api)', 'type' => $type];
+            $data    = $api->listOrganismes($type);
+            $trace[] = ['étape' => '3. Réponse reçue', 'count' => count($data)];
+
+            return $this->rawJson(['ok' => true, 'data' => $this->serialiserLib($data), 'trace' => $trace, 'warnings' => []]);
+        } catch (\Throwable $e) {
+            return $this->rawJson(['ok' => false, 'msg' => $e->getMessage(), 'trace' => $trace, 'warnings' => []]);
+        }
     }
 
     public function testEpreuve(): ResponseInterface
@@ -452,18 +564,31 @@ class FfttTestController extends BaseController
             return $guard;
         }
 
-        return $this->runAction(function ($api, &$trace, &$warnings) {
+        $trace = [['étape' => '1. Credentials', 'app_id' => getFfttAppId(), 'app_key_len' => strlen(getFfttAppKey())]];
+
+        try {
             $org  = trim($this->request->getPost('organisme') ?? '');
             $type = trim($this->request->getPost('type') ?? 'E');
             if ($org === '') {
-                return ['ok' => false, 'msg' => 'ID organisme requis'];
+                return $this->rawJson(['ok' => false, 'msg' => 'ID organisme requis', 'trace' => $trace]);
             }
-            $data = $api->request('xml_epreuve', ['organisme' => $org, 'type' => $type]);
+            $api     = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+            $trace[] = ['étape' => '2. Appel xml_epreuve (alamirault/fftt-api)', 'organisme' => $org, 'type' => $type];
+            $data    = $api->listEpreuves((int) $org, $type === 'I' ? TypeEpreuveEnum::Individuel : TypeEpreuveEnum::Equipe);
+            $trace[] = ['étape' => '3. Réponse reçue', 'count' => count($data)];
 
-            return ['ok' => true, 'data' => $data, 'url' => $api->lastUrl(), 'http' => $api->lastHttp(), 'trace' => $trace, 'warnings' => $warnings];
-        });
+            return $this->rawJson(['ok' => true, 'data' => $this->serialiserLib($data), 'trace' => $trace, 'warnings' => []]);
+        } catch (\Throwable $e) {
+            return $this->rawJson(['ok' => false, 'msg' => $e->getMessage(), 'trace' => $trace, 'warnings' => []]);
+        }
     }
 
+    /**
+     * Appel direct via le client bas niveau, comme les méthodes suivantes
+     * (testPoule, testRencontre, testRencontrePoule, testChpRenc,
+     * testResultEqu) : xml_division n'est pas exposé par la façade FFTTApi
+     * de alamirault/fftt-api (voir ImportRencontresController::chargerDivisions()).
+     */
     public function testDivision(): ResponseInterface
     {
         if ($guard = $this->guardChautard()) {
@@ -600,6 +725,14 @@ class FfttTestController extends BaseController
         });
     }
 
+    /**
+     * fetchNatDivIds() utilise le client bas niveau (xml_organisme +
+     * xml_division, ce dernier absent de la façade FFTTApi), mais xml_equipe
+     * passe par FfttApiLib (listEquipesByClub). Les objets Equipe sont
+     * reconvertis dans le même format de tableau qu'attendent
+     * extractD1()/detectNatCode(), pour réutiliser cette logique de
+     * détection telle quelle.
+     */
     public function testEquipeNat(): ResponseInterface
     {
         if ($guard = $this->guardChautard()) {
@@ -612,19 +745,21 @@ class FfttTestController extends BaseController
                 return ['ok' => false, 'msg' => 'N° club requis'];
             }
 
-            $trace[]     = ['étape' => '3. Chargement divisions nationales actives'];
+            $trace[]     = ['étape' => '3. Chargement divisions nationales actives (xml_division, client bas niveau)'];
             $natDivDebug = [];
             $natDivIds   = $this->fetchNatDivIds($api, '', $natDivDebug);
             $trace[]     = ['étape' => '4. Divisions actives', 'count' => count($natDivIds), 'ids' => $natDivIds, 'debug' => $natDivDebug];
 
-            $trace[]  = ['étape' => '5. xml_equipe', 'numclu' => $numclu];
-            $equipes  = $api->getEquipesClub($numclu);
-            $trace[]  = ['étape' => '6. Réponse', 'nb_equipes' => count($equipes)];
+            $apiLib  = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+            $trace[] = ['étape' => '5. xml_equipe (alamirault/fftt-api)', 'numclu' => $numclu];
+            $equipes = $apiLib->listEquipesByClub($numclu);
+            $trace[] = ['étape' => '6. Réponse', 'nb_equipes' => count($equipes)];
 
             $analyse = [];
-            foreach ($equipes as $eq) {
-                $lib     = trim((string) ($eq['libequipe'] ?? $eq['libelle'] ?? ''));
-                $ndiv    = trim((string) ($eq['libdivision'] ?? $eq['ndivision'] ?? $eq['division'] ?? $eq['libelledivision'] ?? ''));
+            foreach ($equipes as $eqObj) {
+                $eq      = ['libequipe' => $eqObj->getLibelle(), 'libdivision' => $eqObj->getDivision(), 'liendivision' => $eqObj->getLienDivision()];
+                $lib     = trim($eq['libequipe']);
+                $ndiv    = trim($eq['libdivision']);
                 $d1      = $this->extractD1($eq);
                 $divCode = $this->detectNatCode($eq);
 
@@ -648,12 +783,16 @@ class FfttTestController extends BaseController
 
             return [
                 'ok' => true, 'analyse' => $analyse, 'nat_div_ids' => $natDivIds,
-                'url' => $api->lastUrl(), 'http' => $api->lastHttp(),
-                'trace' => $trace, 'warnings' => $warnings, 'xml_brut' => $api->lastRaw(),
+                'trace' => $trace, 'warnings' => $warnings,
             ];
         });
     }
 
+    /**
+     * Même approche que testEquipeNat() : fetchNatDivIds() utilise le client
+     * bas niveau (xml_division absent de la façade FFTTApi), clubs et
+     * équipes passent par FfttApiLib.
+     */
     public function scanDeptNat(): ResponseInterface
     {
         if ($guard = $this->guardChautard()) {
@@ -665,13 +804,14 @@ class FfttTestController extends BaseController
             $phase = trim($this->request->getPost('phase') ?? '');
             set_time_limit(300);
 
-            $trace[]     = ['étape' => '3. Chargement divisions nationales actives', 'phase' => $phase ?: 'toutes'];
+            $trace[]     = ['étape' => '3. Chargement divisions nationales actives (xml_division, client bas niveau)', 'phase' => $phase ?: 'toutes'];
             $natDivDebug = [];
             $natDivIds   = $this->fetchNatDivIds($api, $phase, $natDivDebug);
             $trace[]     = ['étape' => '4. Divisions actives', 'count' => count($natDivIds), 'ids' => $natDivIds, 'debug' => $natDivDebug];
 
-            $trace[] = ['étape' => '5. Clubs du département', 'dep' => $dep];
-            $clubs   = $api->getClubsDepartement($dep);
+            $apiLib  = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+            $trace[] = ['étape' => '5. Clubs du département (alamirault/fftt-api)', 'dep' => $dep];
+            $clubs   = $apiLib->listClubsByDepartement((int) $dep);
             $trace[] = ['étape' => '6. ' . count($clubs) . ' club(s) à scanner'];
 
             $filtreD1 = !empty($natDivIds);
@@ -681,8 +821,8 @@ class FfttTestController extends BaseController
             $detail    = [];
 
             foreach ($clubs as $c) {
-                $numclu  = trim((string) ($c['numero'] ?? $c['numclu'] ?? ''));
-                $nomClub = trim((string) ($c['nom'] ?? ''));
+                $numclu  = trim($c->getNumero());
+                $nomClub = trim($c->getNom());
                 if ($numclu === '') {
                     continue;
                 }
@@ -690,19 +830,17 @@ class FfttTestController extends BaseController
                 $clubTrace = ['numclu' => $numclu, 'nom' => $nomClub, 'equipes' => [], 'erreur' => null];
 
                 try {
-                    $equipes = $api->getEquipesClub($numclu);
-                    $clubTrace['url_equipe']  = $api->lastUrl();
-                    $clubTrace['http_equipe'] = $api->lastHttp();
-                    $clubTrace['nb_equipes']  = count($equipes);
-                    $clubTrace['raw_equipe']  = substr($api->lastRaw(), 0, 800);
+                    $equipesObj = $apiLib->listEquipesByClub($numclu);
+                    $clubTrace['nb_equipes'] = count($equipesObj);
                     $nationales = [];
 
-                    foreach ($equipes as $eq) {
-                        $lib = trim((string) ($eq['libequipe'] ?? $eq['libelle'] ?? ''));
+                    foreach ($equipesObj as $eqObj) {
+                        $eq  = ['libequipe' => $eqObj->getLibelle(), 'libdivision' => $eqObj->getDivision(), 'liendivision' => $eqObj->getLienDivision()];
+                        $lib = trim($eq['libequipe']);
                         if ($lib === '') {
                             continue;
                         }
-                        $ndiv = trim((string) ($eq['libdivision'] ?? $eq['ndivision'] ?? $eq['division'] ?? ''));
+                        $ndiv = trim($eq['libdivision']);
 
                         $eqTrace = ['lib' => $lib, 'ndiv' => $ndiv, 'd1' => $this->extractD1($eq) ?: '—', 'statut' => '', 'code' => null, 'brut' => $eq];
 
@@ -743,5 +881,121 @@ class FfttTestController extends BaseController
                 'trace' => $trace, 'warnings' => $warnings,
             ];
         });
+    }
+
+    /** Sérialise récursivement un objet/tableau de modèles alamirault/fftt-api via leurs getters publics. */
+    private function serialiserLib(mixed $valeur): mixed
+    {
+        if (is_array($valeur)) {
+            return array_map([$this, 'serialiserLib'], $valeur);
+        }
+        if ($valeur instanceof \DateTime) {
+            return $valeur->format('Y-m-d H:i:s');
+        }
+        if (is_object($valeur)) {
+            if ($valeur instanceof \BackedEnum) {
+                return $valeur->value;
+            }
+            $out = [];
+            foreach (get_class_methods($valeur) as $m) {
+                if (str_starts_with($m, 'get') && (new \ReflectionMethod($valeur, $m))->getNumberOfParameters() === 0) {
+                    $out[lcfirst(substr($m, 3))] = $this->serialiserLib($valeur->$m());
+                }
+            }
+
+            return $out;
+        }
+
+        return $valeur;
+    }
+
+    /** Première équipe d'un club (nécessaire pour les méthodes de la lib qui prennent un objet Equipe). */
+    private function premiereEquipeLib(FfttApiLib $api, string $club): Equipe
+    {
+        if ($club === '') {
+            throw new \InvalidArgumentException('N° club requis.');
+        }
+        $equipes = $api->listEquipesByClub($club);
+        if (!$equipes) {
+            throw new \RuntimeException("Aucune équipe trouvée pour le club $club.");
+        }
+
+        return $equipes[0];
+    }
+
+    /**
+     * Test générique de la librairie alamirault/fftt-api (composer), qui a
+     * entièrement remplacé Classes/FfttApi.php (supprimé) dans toute
+     * l'application — Club, Jugearbitre, Salle, ImportRencontres*, E018.
+     * Réutilise les mêmes identifiants (getFfttAppId()/getFfttAppKey()).
+     * Un seul point d'entrée ('methode' en POST) qui couvre toutes les
+     * méthodes publiques de la façade FFTTApi, sérialisées génériquement via
+     * serialiserLib().
+     *
+     * ATTENTION SÉCURITÉ : alamirault/fftt-api 0.1.4 impose
+     * guzzlehttp/guzzle ^6.3, branche EOL avec plusieurs CVE connues (voir
+     * ci4/composer.json → config.audit.ignore pour la liste). Cette
+     * dépendance est désormais présente sur tous les chemins d'écriture en
+     * production (import club/salle/JA/rencontres), pas seulement sur ce
+     * diagnostic — à surveiller si la librairie amont ne met pas à jour sa
+     * contrainte Guzzle.
+     */
+    public function testViaLibrary(): ResponseInterface
+    {
+        if ($guard = $this->guardChautard()) {
+            return $guard;
+        }
+
+        $methode = trim($this->request->getPost('methode') ?? 'apercu');
+        $p       = fn (string $cle, string $defaut = '') => trim((string) ($this->request->getPost($cle) ?? $defaut));
+
+        try {
+            $api = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+
+            $resultat = match ($methode) {
+                'apercu' => [
+                    'organismes' => array_slice($api->listOrganismes(), 0, 5),
+                    'clubs'      => array_slice($api->listClubsByDepartement((int) $p('dep', '76')), 0, 5),
+                ],
+                'organismes'              => $api->listOrganismes($p('type', 'Z')),
+                'clubs-dep'               => $api->listClubsByDepartement((int) $p('dep', '76')),
+                'clubs-nom'               => $api->listClubsByName($p('nom')),
+                'club-details'            => $api->retrieveClubDetails($p('club')),
+                'joueurs-club'            => $api->listJoueursByClub($p('club')),
+                'joueurs-nom'             => $api->listJoueursByNom($p('nom'), $p('prenom')),
+                'joueur-details'          => $api->retrieveJoueurDetails($p('licence'), $p('club') ?: null),
+                'classement'              => $api->retrieveClassement($p('licence')),
+                'historique'              => $api->listHistorique($p('licence')),
+                'parties'                 => $api->listPartiesJoueurByLicence($p('licence')),
+                'parties-non-validees'    => $api->listUnvalidatedPartiesJoueurByLicence($p('licence')),
+                'points-virtuels'         => $api->retrieveVirtualPoints($p('licence')),
+                'equipes-club'            => $api->listEquipesByClub($p('club'), $p('type') ?: null),
+                'equipe-poule'            => $api->listEquipePouleByLienDivision(
+                    $p('lien_division') ?: $this->premiereEquipeLib($api, $p('club'))->getLienDivision()
+                ),
+                'rencontres-poule'        => $api->listRencontrePouleByLienDivision(
+                    $p('lien_division') ?: $this->premiereEquipeLib($api, $p('club'))->getLienDivision()
+                ),
+                'prochaines-rencontres'   => $api->listProchainesRencontresEquipe($this->premiereEquipeLib($api, $p('club'))),
+                'club-details-par-equipe' => $api->retrieveClubDetailsByEquipe($this->premiereEquipeLib($api, $p('club'))),
+                'rencontre-details'       => $api->retrieveRencontreDetailsByLien($p('lien'), $p('club_a'), $p('club_b')),
+                'actualites'              => $api->listActualites(),
+                'epreuves'                => $api->listEpreuves(
+                    (int) $p('organisme'),
+                    $p('type_epreuve') === 'I' ? TypeEpreuveEnum::Individuel : TypeEpreuveEnum::Equipe
+                ),
+                default => throw new \InvalidArgumentException("Méthode inconnue : $methode"),
+            };
+
+            return $this->rawJson(['ok' => true, 'methode' => $methode, 'data' => $this->serialiserLib($resultat)]);
+        } catch (\Throwable $e) {
+            return $this->rawJson([
+                'ok'      => false,
+                'methode' => $methode,
+                'msg'     => $e->getMessage(),
+                'class'   => get_class($e),
+                'fichier' => $e->getFile() . ':' . $e->getLine(),
+            ]);
+        }
     }
 }

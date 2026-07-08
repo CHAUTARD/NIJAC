@@ -44,12 +44,21 @@ class DisponibilitesController extends BaseController
 
     public function jaDept(): ResponseInterface
     {
-        $depts = array_filter(array_map('trim', explode(',', $this->request->getGet('depts') ?? '')));
-        if (!$depts) {
+        $dept = trim((string) ($this->request->getGet('dept') ?? ''));
+        if ($dept === '') {
             return $this->response->setJSON(['ok' => false, 'err' => 'Aucun département']);
         }
 
-        $pdo          = getPDO();
+        // Ex. un nominateur du 76 (Seine-Maritime) voit aussi le 27 (Eure) —
+        // règle définie dans configuration.regles_departements, jamais en dur.
+        $depts = getDepartementsAutorises($dept);
+
+        $pdo = getPDO();
+        $colsJa = array_column($pdo->query('SHOW COLUMNS FROM ja')->fetchAll(\PDO::FETCH_ASSOC), 'Field');
+        if (!in_array('CodeDept', $colsJa)) {
+            $pdo->exec('ALTER TABLE ja ADD COLUMN CodeDept VARCHAR(3) NULL DEFAULT NULL');
+        }
+
         $placeholders = implode(',', array_fill(0, count($depts), '?'));
         $stmt         = $pdo->prepare("
             SELECT ja.Id_JA,
@@ -59,14 +68,14 @@ class DisponibilitesController extends BaseController
                    cl.Nom      AS Club,
                    lp.CodePostal AS Cp,
                    lp.Nom        AS Ville,
-                   LEFT(lp.CodePostal, 2) AS Dept,
+                   ja.CodeDept AS Dept,
                    (SELECT COUNT(*) FROM disponible d WHERE d.Id_JA = ja.Id_JA) AS HasDispo
             FROM ja
             LEFT JOIN Club    cl ON cl.Id_Club    = ja.Id_Club
             LEFT JOIN laposte lp ON lp.Id_LaPoste = ja.Id_LaPoste
             WHERE ja.Actif = 1
-              AND LEFT(lp.CodePostal, 2) IN ($placeholders)
-            ORDER BY LEFT(lp.CodePostal, 2), ja.Nom, ja.Prenom
+              AND ja.CodeDept IN ($placeholders)
+            ORDER BY ja.CodeDept, ja.Nom, ja.Prenom
         ");
         $stmt->execute(array_values($depts));
 
