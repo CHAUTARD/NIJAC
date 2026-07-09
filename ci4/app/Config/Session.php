@@ -62,7 +62,11 @@ class Session extends BaseConfig
      * IMPORTANT: You are REQUIRED to set a valid save path!
      */
     // Volontairement vide : CI4 se rabat alors sur ini_get('session.save_path')
-    // (déjà F:/wamp64/tmp, vérifié) SANS appeler ini_set(). C'est important car
+    // SANS appeler ini_set(). Ce chemin est fixé dynamiquement au fil de la
+    // requête par demarrerSessionNijac() (config/db.php) vers un sous-dossier
+    // dédié (.../tmp/nijac_sessions), isolé du session.save_path par défaut de
+    // PHP — celui-ci est partagé par tous les vhosts WAMP et son GC supprimait
+    // parfois les sessions NIJAC avant l'isolation. C'est important car
     // CI4 déclenche automatiquement son propre service Session pour certaines
     // requêtes HTML (storePreviousURL(), fonctionnalité interne) même quand on
     // ne l'utilise pas explicitement ; si une session native est déjà active

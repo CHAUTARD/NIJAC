@@ -50,7 +50,7 @@ if (!$isProduction) {
 
 // ── Constantes communes ───────────────────────────────────────────────────────
 define('DB_CHARSET',   'utf8mb4');
-define('APP_VERSION', '0.2.09');
+define('APP_VERSION', '0.2.10');
 
 // Seed secret pour l'obfuscation des identifiants JA dans les URL publiques
 // (doit rester identique entre génération et décodage)
@@ -71,12 +71,36 @@ function getSmtpPassword(): string { return rot47($_ENV['SMTP_PASSWORD'] ?? '');
  * vers /login à la requête suivante. À appeler à la place de session_start()
  * partout où la session native est utilisée (filtres Auth/AdminAuth, actions
  * publiques tokenisées...).
+ *
+ * Isole aussi les fichiers de session NIJAC dans un sous-dossier dédié
+ * plutôt que le session.save_path par défaut de PHP (F:/wamp64/tmp en local
+ * WAMP), qui est PARTAGÉ par tous les vhosts de la machine. Chacun de ces
+ * autres projets utilise le gc_maxlifetime par défaut (~1440s) : quand LEUR
+ * garbage collector se déclenche (même sans rapport avec NIJAC), il supprime
+ * tout fichier de ce dossier partagé plus vieux que LEUR propre
+ * gc_maxlifetime — y compris les sessions NIJAC, malgré l'ini_set()
+ * ci-dessous qui ne protège que les requêtes NIJAC elles-mêmes. C'était la
+ * cause des déconnexions aléatoires vers /login en pleine utilisation. Le
+ * GC fichier de PHP ne parcourt pas les sous-dossiers d'un save_path
+ * "classique" (sans préfixe "N;"), donc un sous-dossier dédié met NIJAC à
+ * l'abri du GC des autres projets.
  */
 function demarrerSessionNijac(): void
 {
     if (session_status() !== PHP_SESSION_NONE) {
         return;
     }
+
+    $base = rtrim((string) ini_get('session.save_path'), '/\\');
+    if ($base === '') {
+        $base = sys_get_temp_dir();
+    }
+    $sessionDir = $base . DIRECTORY_SEPARATOR . 'nijac_sessions';
+    if (is_dir($sessionDir) || @mkdir($sessionDir, 0700, true)) {
+        session_save_path($sessionDir);
+    }
+    // Sinon (dossier non créable) : on continue avec le save_path par défaut
+    // plutôt que de bloquer l'application.
 
     $dureeSecondes = 6 * 3600; // 6 heures
     ini_set('session.gc_maxlifetime', (string) $dureeSecondes);
