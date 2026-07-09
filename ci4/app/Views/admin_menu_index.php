@@ -316,17 +316,5 @@
     <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
     <script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
     <script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
-
-    <script>
-    'use strict';
-
-    $('#lnk-logout').on('click', function (e) {
-        e.preventDefault();
-        const href = this.href;
-        nijacConfirm('Voulez-vous vous déconnecter ?', function () {
-            window.location.href = href;
-        }, null, { type: 'question', title: 'Déconnexion', confirmLabel: 'Se déconnecter' });
-    });
-    </script>
 </body>
 </html>
