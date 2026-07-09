@@ -714,7 +714,13 @@ function rafraichirEtatTables(afficherMsg) {
     });
 }
 
-$('#btn-vider').on('click', function () { rafraichirEtatTables(true); });
+$('#btn-vider').on('click', function () {
+    if ($('#msg-vidage').is(':visible')) {
+        $('#msg-vidage').stop(true).hide();
+        return;
+    }
+    rafraichirEtatTables(true);
+});
 
 // Couleur au chargement de la page
 rafraichirEtatTables(false);

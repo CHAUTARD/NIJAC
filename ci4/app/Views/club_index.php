@@ -74,7 +74,7 @@
             text-align: left;
         }
 
-        #tbl-clubs tbody tr { border-bottom: 1px solid #e0e8f0; }
+        #tbl-clubs tbody tr { border-bottom: 1px solid #e0e8f0; cursor: pointer; }
         #tbl-clubs tbody tr:nth-child(even) { background: #f7faff; }
         #tbl-clubs tbody tr:hover   { background: #dce8f8; }
         #tbl-clubs tbody tr.en-region { background: #d1fae5; }
@@ -461,6 +461,10 @@ function makeTd(val, field) {
 }
 
 $('#tbody-grille').on('click', '.btn-modifier-club', function () {
+    ouvrirModaleModifClub(+$(this).attr('data-idx'));
+});
+
+$('#tbody-grille').on('dblclick', 'tr[data-idx]', function () {
     ouvrirModaleModifClub(+$(this).attr('data-idx'));
 });
 

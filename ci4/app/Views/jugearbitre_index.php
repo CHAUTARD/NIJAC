@@ -306,12 +306,12 @@
     <select id="sel-dept" class="form-select form-select-sm w-auto">
         <option value="">— Tous —</option>
         <?php foreach ($deptActifs as $d): ?>
-        <option value="<?= (int) $d['code'] ?>"><?= (int) $d['code'] ?> — <?= esc($d['nom']) ?></option>
+        <option value="<?= (int) $d['code'] ?>" <?= ((string) (int) $d['code'] === (string) (int) $deptUser) ? 'selected' : '' ?>><?= (int) $d['code'] ?> — <?= esc($d['nom']) ?></option>
         <?php endforeach; ?>
         <?php if ($deptLimitrophes): ?>
         <option disabled>── Limitrophes ──</option>
         <?php foreach ($deptLimitrophes as $d): ?>
-        <option value="<?= (int) $d['code'] ?>"><?= (int) $d['code'] ?> — <?= esc($d['nom']) ?> (<?= esc($d['region']) ?>)</option>
+        <option value="<?= (int) $d['code'] ?>" <?= ((string) (int) $d['code'] === (string) (int) $deptUser) ? 'selected' : '' ?>><?= (int) $d['code'] ?> — <?= esc($d['nom']) ?> (<?= esc($d['region']) ?>)</option>
         <?php endforeach; ?>
         <?php endif; ?>
     </select>
@@ -651,7 +651,7 @@ let filtreEnRegion = true; // true = En région uniquement (par défaut), false 
 const sortState = { col: 'nom', asc: true };
 let searchTerm = '';
 const isAdmin  = <?= $isAdmin ? 'true' : 'false' ?>;
-let deptFiltre = <?= json_encode($deptUser) ?>; // nominateur : filtré sur son dept
+let deptFiltre = <?= json_encode($deptUser) ?>; // filtré par défaut sur le département de l'utilisateur connecté (admin inclus)
 const DEPTS_REGION = new Set(<?= json_encode(array_column($deptActifs, 'code')) ?>);
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────

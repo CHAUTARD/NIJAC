@@ -83,12 +83,22 @@ class DisponibiliteJaController extends BaseController
 
         $idJa = $this->resolveIdJa();
 
+        // Bouton de retour de la toolbar : vers le menu correspondant au rôle
+        // réel de la session (Nominateur -> menu nominateur, Administrateur ->
+        // menu administrateur), pas systématiquement admin. Absent si la page
+        // est ouverte sans session (accès public par un JA).
+        $tbSwitchTo = match ($u['role'] ?? '') {
+            'Administrateur' => 'admin',
+            'Nominateur'      => 'nominateur',
+            default           => null,
+        };
+
         return view('disponibilite_ja_index', [
             'idJa'        => $idJa,
             'nomComplet'  => isset($u['prenom'], $u['nom']) ? $u['prenom'] . ' ' . $u['nom'] : '',
             'departement' => $u['id_departement'] ?? '',
             'changeLogin' => !empty($u['change_login']),
-            'isAdmin'     => !empty($u['is_admin']),
+            'tbSwitchTo'  => $tbSwitchTo,
         ]);
     }
 

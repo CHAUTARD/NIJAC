@@ -2,8 +2,6 @@
 
 namespace App\Controllers;
 
-use Alamirault\FFTTApi\Model\Enums\TypeEpreuveEnum;
-use Alamirault\FFTTApi\Service\FFTTApi as FfttApiLib;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
@@ -180,14 +178,13 @@ class ImportRencontresController extends BaseController
 
         return $this->tryJson(function () {
             $region = trim(getConfig('region', 'Normandie'));
-            $api    = new FfttApiLib(getFfttAppId(), getFfttAppKey());
-            $items  = $api->listOrganismes('L');
+            $items  = getFfttRawClient()->listOrganismes('L');
 
             $regionN = mb_strtolower($region, 'UTF-8');
             $trouve  = null;
             foreach ($items as $org) {
-                if (mb_strpos(mb_strtolower($org->getLibelle(), 'UTF-8'), $regionN) !== false) {
-                    $trouve = ['id' => (string) $org->getId(), 'libelle' => $org->getLibelle()];
+                if (mb_strpos(mb_strtolower($org['libelle'] ?? '', 'UTF-8'), $regionN) !== false) {
+                    $trouve = ['id' => (string) $org['id'], 'libelle' => $org['libelle']];
                     break;
                 }
             }
@@ -199,7 +196,7 @@ class ImportRencontresController extends BaseController
             return $this->response->setJSON([
                 'ok'     => false,
                 'msg'    => "Aucune ligue « $region » parmi " . count($items) . ' ligues.',
-                'ligues' => array_map(static fn ($o) => $o->getLibelle(), $items),
+                'ligues' => array_map(static fn ($o) => $o['libelle'] ?? '', $items),
             ]);
         });
     }
@@ -213,16 +210,15 @@ class ImportRencontresController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Organisme manquant.']);
             }
 
-            $api   = new FfttApiLib(getFfttAppId(), getFfttAppKey());
-            $items = $api->listEpreuves((int) $organisme, TypeEpreuveEnum::Equipe);
+            $items = getFfttRawClient()->listEpreuves((int) $organisme, 'E');
 
             // Pour les épreuves FED_ : dédoublonner par intitulé, garder le idepreuve le plus grand
             $fed    = [];
             $autres = [];
             foreach ($items as $ep) {
-                $intitule = $ep->getLibelle();
+                $intitule = $ep['libelle'] ?? '';
                 if (stripos($intitule, 'FED_') === 0) {
-                    if (!isset($fed[$intitule]) || $ep->getIdEpreuve() > $fed[$intitule]->getIdEpreuve()) {
+                    if (!isset($fed[$intitule]) || $ep['idepreuve'] > $fed[$intitule]['idepreuve']) {
                         $fed[$intitule] = $ep;
                     }
                 } else {
@@ -232,8 +228,8 @@ class ImportRencontresController extends BaseController
             $items = array_merge(array_values($fed), $autres);
 
             return $this->response->setJSON(['ok' => true, 'epreuves' => array_map(static fn ($e) => [
-                'idepreuve' => $e->getIdEpreuve(),
-                'intitule'  => $e->getLibelle(),
+                'idepreuve' => $e['idepreuve'],
+                'intitule'  => $e['libelle'],
             ], $items)]);
         });
     }

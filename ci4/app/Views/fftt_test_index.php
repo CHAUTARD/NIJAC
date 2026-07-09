@@ -94,7 +94,7 @@
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="tab-lib-btn" data-bs-toggle="tab" data-bs-target="#tab-lib" type="button" role="tab">
-                <i class="bi bi-box-seam me-1"></i>Librairie alamirault/fftt-api
+                <i class="bi bi-box-seam me-1"></i>Appel générique FfttRawClient
             </button>
         </li>
     </ul>
@@ -118,7 +118,7 @@
     <div class="col-lg-6">
     <!-- Test 1 : clubs par département -->
     <div class="card mb-3">
-        <div class="card-header fw-semibold"><i class="bi bi-building me-2"></i>Clubs par département <small class="text-muted fw-normal">(alamirault/fftt-api)</small></div>
+        <div class="card-header fw-semibold"><i class="bi bi-building me-2"></i>Clubs par département <small class="text-muted fw-normal">(listClubsByDepartement)</small></div>
         <div class="card-body">
             <div class="input-group mb-2" style="max-width:300px">
                 <span class="input-group-text">Département</span>
@@ -439,14 +439,13 @@
     </div>
 
     <div class="tab-pane fade" id="tab-lib" role="tabpanel">
-    <div class="alert alert-warning small mb-3">
-        <i class="bi bi-exclamation-triangle-fill me-1"></i>
-        Librairie composer <code>alamirault/fftt-api</code> — utilisée dans toute l'application
-        (Club, Salle, Jugearbitre, ImportRencontres*), mêmes identifiants (<code>getFfttAppId()</code>/<code>getFfttAppKey()</code>).
-        Pour les endpoints non couverts par sa façade (xml_division, cx_poule…), voir l'onglet
-        « Exploration Rencontres » et <code>App\Libraries\FfttRawClient</code> (client bas niveau).
-        Dépend de <code>guzzlehttp/guzzle ^6.3</code> (branche EOL, CVE connues, voir <code>ci4/composer.json</code>
-        → <code>config.audit.ignore</code>).
+    <div class="alert alert-info small mb-3">
+        <i class="bi bi-info-circle-fill me-1"></i>
+        <code>App\Libraries\FfttRawClient</code> (cURL natif, pas de dépendance Composer) — utilisé dans
+        toute l'application (Club, Salle, Jugearbitre, ImportRencontres*), mêmes identifiants
+        (<code>getFfttAppId()</code>/<code>getFfttAppKey()</code>). Seules les méthodes réellement utilisées
+        en production sont testables ici ; pour un endpoint FFTT brut quelconque (xml_division, cx_poule…),
+        voir l'onglet « Exploration Rencontres ».
     </div>
     <div class="row">
 
@@ -460,23 +459,10 @@
                     <option value="apercu">Aperçu — organismes + clubs du département</option>
                     <option value="organismes">listOrganismes — organismes (type)</option>
                     <option value="clubs-dep">listClubsByDepartement — clubs d'un département (dep)</option>
-                    <option value="clubs-nom">listClubsByName — clubs par nom (nom)</option>
                     <option value="club-details">retrieveClubDetails — détail d'un club (club)</option>
                     <option value="joueurs-club">listJoueursByClub — joueurs d'un club (club)</option>
-                    <option value="joueurs-nom">listJoueursByNom — joueurs par nom (nom, prenom)</option>
                     <option value="joueur-details">retrieveJoueurDetails — détail joueur (licence, club optionnel)</option>
-                    <option value="classement">retrieveClassement — classement (licence)</option>
-                    <option value="historique">listHistorique — historique classement (licence)</option>
-                    <option value="parties">listPartiesJoueurByLicence — parties jouées (licence)</option>
-                    <option value="parties-non-validees">listUnvalidatedPartiesJoueurByLicence — parties non validées (licence)</option>
-                    <option value="points-virtuels">retrieveVirtualPoints — points virtuels (licence)</option>
                     <option value="equipes-club">listEquipesByClub — équipes d'un club (club, type optionnel)</option>
-                    <option value="equipe-poule">listEquipePouleByLienDivision — équipes d'une poule (club, ou lien_division)</option>
-                    <option value="rencontres-poule">listRencontrePouleByLienDivision — rencontres d'une poule (club, ou lien_division)</option>
-                    <option value="prochaines-rencontres">listProchainesRencontresEquipe — prochaines rencontres (club → 1ère équipe)</option>
-                    <option value="club-details-par-equipe">retrieveClubDetailsByEquipe — détail club via équipe (club → 1ère équipe)</option>
-                    <option value="rencontre-details">retrieveRencontreDetailsByLien — détail rencontre (lien, club_a, club_b)</option>
-                    <option value="actualites">listActualites — actualités FFTT</option>
                     <option value="epreuves">listEpreuves — épreuves d'un organisme (organisme, type_epreuve)</option>
                 </select>
                 <div class="form-text">Seuls les champs pertinents pour la méthode choisie sont utilisés.</div>
@@ -486,8 +472,6 @@
                 <div class="col-6"><label class="form-label small mb-0">Club</label><input type="text" id="lib-club" class="form-control form-control-sm" placeholder="09760221"></div>
                 <div class="col-6"><label class="form-label small mb-0">Département</label><input type="text" id="lib-dep" class="form-control form-control-sm" value="76" maxlength="3"></div>
                 <div class="col-6"><label class="form-label small mb-0">Licence</label><input type="text" id="lib-licence" class="form-control form-control-sm" placeholder="7646282"></div>
-                <div class="col-6"><label class="form-label small mb-0">Nom</label><input type="text" id="lib-nom" class="form-control form-control-sm"></div>
-                <div class="col-6"><label class="form-label small mb-0">Prénom</label><input type="text" id="lib-prenom" class="form-control form-control-sm"></div>
                 <div class="col-6"><label class="form-label small mb-0">Organisme (id)</label><input type="text" id="lib-organisme" class="form-control form-control-sm"></div>
                 <div class="col-6">
                     <label class="form-label small mb-0">Type épreuve</label>
@@ -497,10 +481,6 @@
                     </select>
                 </div>
                 <div class="col-6"><label class="form-label small mb-0">Type (organisme/équipe)</label><input type="text" id="lib-type" class="form-control form-control-sm" placeholder="Z, L… / N1M…"></div>
-                <div class="col-12"><label class="form-label small mb-0">Lien division</label><input type="text" id="lib-lien-division" class="form-control form-control-sm" placeholder="laissé vide = déduit du club"></div>
-                <div class="col-12"><label class="form-label small mb-0">Lien rencontre</label><input type="text" id="lib-lien" class="form-control form-control-sm"></div>
-                <div class="col-6"><label class="form-label small mb-0">Club équipe A</label><input type="text" id="lib-club-a" class="form-control form-control-sm"></div>
-                <div class="col-6"><label class="form-label small mb-0">Club équipe B</label><input type="text" id="lib-club-b" class="form-control form-control-sm"></div>
             </div>
 
             <button class="btn btn-warning" onclick="testerLib()"><i class="bi bi-play-fill me-1"></i>Tester</button>
@@ -563,15 +543,9 @@ function testerLib() {
         club:          $('#lib-club').val(),
         dep:           $('#lib-dep').val(),
         licence:       $('#lib-licence').val(),
-        nom:           $('#lib-nom').val(),
-        prenom:        $('#lib-prenom').val(),
         organisme:     $('#lib-organisme').val(),
         type_epreuve:  $('#lib-type-epreuve').val(),
         type:          $('#lib-type').val(),
-        lien_division: $('#lib-lien-division').val(),
-        lien:          $('#lib-lien').val(),
-        club_a:        $('#lib-club-a').val(),
-        club_b:        $('#lib-club-b').val(),
     }, 'lib');
 }
 

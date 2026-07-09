@@ -2,7 +2,6 @@
 
 namespace App\Controllers;
 
-use Alamirault\FFTTApi\Service\FFTTApi as FfttApiLib;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
@@ -96,11 +95,11 @@ class ImportRencontresNatController extends BaseController
     }
 
     /**
-     * Utilisent le client bas niveau (getFfttRawClient(), pas FfttApiLib)
-     * comme ImportRencontresController::chargerDivisions() : la façade
-     * FFTTApi n'expose pas xml_division, et ses méthodes de poules/rencontres
-     * partent d'un objet Equipe déjà connu, pas d'un ID de division FFTT
-     * choisi librement.
+     * Appelle xml_result_equ directement via getFfttRawClient()->request(),
+     * comme ImportRencontresController::chargerDivisions() : cet endpoint
+     * (poules/rencontres à partir d'un ID de division FFTT choisi librement,
+     * indépendamment de tout club) n'a pas de méthode dédiée sur
+     * FfttRawClient, seulement request().
      */
     private function getCxPoules(object $api, string $divFftt): array
     {
@@ -182,12 +181,9 @@ class ImportRencontresNatController extends BaseController
     }
 
     /**
-     * Retourne l'ID organisme de la ligue depuis la config ou l'API — utilise
-     * FfttApiLib (listOrganismes), contrairement à
-     * getDivisionsNationales()/getCxPoules()/getRencontresDivision() qui
-     * utilisent le client bas niveau (xml_division absent de la façade, voir
-     * ImportRencontresController::chargerDivisions()). Autonome (ne prend
-     * plus de client en paramètre).
+     * Retourne l'ID organisme de la ligue depuis la config ou l'API
+     * (getFfttRawClient()->listOrganismes()). Autonome (ne prend plus de
+     * client en paramètre).
      */
     private function getOrgId(): string
     {
@@ -196,10 +192,9 @@ class ImportRencontresNatController extends BaseController
             return $stored;
         }
         $region = mb_strtolower(getConfig('region', 'Normandie'), 'UTF-8');
-        $api    = new FfttApiLib(getFfttAppId(), getFfttAppKey());
-        foreach ($api->listOrganismes('L') as $org) {
-            if (str_contains(mb_strtolower($org->getLibelle(), 'UTF-8'), $region)) {
-                return (string) $org->getId();
+        foreach (getFfttRawClient()->listOrganismes('L') as $org) {
+            if (str_contains(mb_strtolower($org['libelle'] ?? '', 'UTF-8'), $region)) {
+                return (string) $org['id'];
             }
         }
 
@@ -271,17 +266,17 @@ class ImportRencontresNatController extends BaseController
     {
         return $this->tryJson(function () {
             set_time_limit(120);
-            $api   = new FfttApiLib(getFfttAppId(), getFfttAppKey());
+            $api   = getFfttRawClient();
             $depts = getDeptActifs();
             $clubs = [];
             foreach ($depts as $dept) {
                 $list = $api->listClubsByDepartement((int) $dept['code']);
                 foreach ($list as $c) {
-                    $num = trim($c->getNumero());
+                    $num = trim($c['numero'] ?? '');
                     if ($num === '') {
                         continue;
                     }
-                    $clubs[] = ['numclu' => $num, 'nom' => trim($c->getNom()), 'dept' => (string) $dept['code']];
+                    $clubs[] = ['numclu' => $num, 'nom' => trim($c['nom'] ?? ''), 'dept' => (string) $dept['code']];
                 }
             }
 
@@ -325,8 +320,7 @@ class ImportRencontresNatController extends BaseController
 
             $phaseFiltre = trim($this->request->getPost('phase') ?? ''); // "1", "2" ou "" = toutes
 
-            $api      = new FfttApiLib(getFfttAppId(), getFfttAppKey());
-            $equipes  = $api->listEquipesByClub($numclu);
+            $equipes  = getFfttRawClient()->listEquipesByClub($numclu);
             $divIdMap = $this->getDivIdMap($pdo);
 
             $stmtClubIns = $pdo->prepare('INSERT IGNORE INTO club (Id_Club, Nom) VALUES (?,?)');
@@ -340,11 +334,11 @@ class ImportRencontresNatController extends BaseController
             $nonMatch   = [];
 
             foreach ($equipes as $eq) {
-                $lib = trim($eq->getLibelle());
+                $lib = trim($eq['libequipe'] ?? '');
                 if ($lib === '') {
                     continue;
                 }
-                $ndiv = trim($eq->getDivision());
+                $ndiv = trim($eq['libdivision'] ?? '');
 
                 // Détection par nom de division (seule méthode fiable — D1 est un ID local incompatible)
                 $divCode = null;

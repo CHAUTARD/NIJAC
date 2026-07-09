@@ -45,7 +45,7 @@ class AuthController extends BaseController
                     $pdo = getPDO();
 
                     $stmt = $pdo->prepare(
-                        'SELECT Id_Utilisateur, Password, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin, Email
+                        'SELECT Id_Utilisateur, Login, Password, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin, Email
                          FROM Utilisateur
                          WHERE Login = :login
                          LIMIT 1'
@@ -59,7 +59,11 @@ class AuthController extends BaseController
 
                         $_SESSION['utilisateur'] = [
                             'id'             => $row['Id_Utilisateur'],
-                            'login'          => $login,
+                            // Casse canonique de la base (Login a une collation *_ci,
+                            // insensible à la casse) — pas la saisie brute de l'utilisateur,
+                            // dont la casse peut différer et casser les comparaisons
+                            // strictes === 'CHAUTARD' (E018, E099, isChautard E002/E017).
+                            'login'          => $row['Login'],
                             'nom'            => $row['Nom'],
                             'prenom'         => $row['Prenom'],
                             'role'           => $row['Role'],

@@ -10,12 +10,14 @@ The application is entirely implemented in `ci4/` (CodeIgniter 4). There is no m
 
 ### FFTT API client
 
-All FFTT calls go through the composer package `alamirault/fftt-api` (ci4/composer.json — pulls in Guzzle 6.x, an EOL branch with known CVEs; see `config.audit.ignore` in that file). Two entry points, both authenticated with `getFfttAppId()`/`getFfttAppKey()` (config/db.php, ROT47-decoded from `.env`):
+All FFTT calls go through `App\Libraries\FfttRawClient` (`ci4/app/Libraries/FfttRawClient.php`), instantiated via `getFfttRawClient()` (config/app_config.php), authenticated with `getFfttAppId()`/`getFfttAppKey()` (config/db.php, ROT47-decoded from `.env`). Plain PHP cURL, no Composer runtime dependency — production only has FTP access (no Composer, no shell), so this was a deliberate choice: any future change to this feature deploys like any other PHP file, no `vendor/` sync step.
 
-- **High-level facade** — `new \Alamirault\FFTTApi\Service\FFTTApi(getFfttAppId(), getFfttAppKey())`, instantiated directly at each call site (no shared factory). Covers clubs, joueurs, organismes, épreuves, équipes, classement, actualités.
-- **Low-level raw client** — `getFfttRawClient()` (config/app_config.php) returns `App\Libraries\FfttRawClient`, for endpoints the facade doesn't expose: `xml_division`, `xml_result_equ` with the `cx_poule` mechanic, `xml_poule` (endpoint doesn't actually exist server-side), `xml_chp_renc`, `xml_licence`, and any raw field the typed facade models drop (e.g. `xml_club_detail` returning multiple salles for one club, or `xml_licence_b` fields — email/Cp/Ville — the facade's `JoueurDetails` doesn't expose). Built on the library's own `UriGenerator` (same auth scheme as the facade) + Guzzle directly, so it stays a thin wrapper rather than reimplementing auth.
+Two ways to call it:
 
-`Classes/FfttApi.php` (raw cURL, separate `serie`/app-key signing scheme) has been removed — every controller that used it (`ClubController`, `SalleController`, `JugearbitreController`, `ImportRencontresController`, `ImportRencontresNatController`, `FfttTestController` / E018) now uses one or both of the above.
+- **7 typed convenience methods** — `listClubsByDepartement()`, `retrieveClubDetails()`, `listOrganismes()`, `listEpreuves()`, `listEquipesByClub()`, `retrieveJoueurDetails()`, `listJoueursByClub()` — cover every FFTT call actually used by production screens (E005, E007, E008, E011, E017). Each returns a plain associative array (or array of arrays) with the raw FFTT field names (e.g. `numero`, `nom`, `nomsalle`, `libequipe`) — no typed model objects.
+- **`request(string $action, array $params = []): array`** — for any other raw endpoint: `xml_division`, `xml_result_equ` (poules/rencontres by division ID or `cx_poule`), `xml_chp_renc`, `xml_licence` (base SPID, distinct from `xml_licence_b`), or any field a convenience method doesn't surface (e.g. `xml_club_detail` returning multiple salles for one club — see `SalleController::ffttSync()`). `lastUrl()`/`lastHttp()`/`lastRaw()` expose the last request's details for diagnostics (see E018).
+
+Previously used the composer package `alamirault/fftt-api` (typed facade + Guzzle 6.x, an EOL branch with known CVEs) and, before that, `Classes/FfttApi.php` (raw cURL, a different `serie`/app-key signing scheme) — both removed. E018 (FfttTestController, `testViaLibrary()`) only exercises the 7 production-used methods; it no longer covers the old facade's diagnostic-only surface (classement, historique, parties, Elo-style virtual points, regex-parsed rencontre details, actualités...), none of which backed a real screen.
 
 ## Documentation
 

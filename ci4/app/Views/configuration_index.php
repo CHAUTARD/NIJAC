@@ -197,7 +197,7 @@
         .table-config thead th[style*="width:90px"] { cursor: default; }
         .table-config thead th[style*="width:90px"]:hover { background: #e8eef7; }
 
-        .table-config tbody tr { border-bottom: 1px solid #e0e8f0; }
+        .table-config tbody tr { border-bottom: 1px solid #e0e8f0; cursor: pointer; }
         .table-config tbody tr:nth-child(even) { background: #f7faff; }
         .table-config tbody tr:hover { background: #dce8f8; }
         .table-config tbody tr.selected { background: #b8d0f0 !important; }
@@ -537,41 +537,41 @@
 
             <hr style="margin:1.2rem 0;">
             <p style="font-size:.85rem;color:#374151;margin-bottom:1rem;">
-                <i class="bi bi-calendar2-range me-1"></i><strong>Phases de saison</strong> — bornes utilisées pour le filtre rapide dans E025 (format MM-JJ).
+                <i class="bi bi-calendar2-range me-1"></i><strong>Phases de saison</strong> — bornes utilisées pour le filtre rapide dans E025 (format MM/JJ).
             </p>
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
                 <div class="email-dev-group">
-                    <label><i class="bi bi-1-circle me-1"></i>Phase 1 — début (ex. MM-JJ)</label>
+                    <label><i class="bi bi-1-circle me-1"></i>Phase 1 — début (ex. MM/JJ)</label>
                     <div class="email-dev-row">
-                        <input type="text" id="input-phase1-debut" maxlength="5" placeholder="MM-JJ"
+                        <input type="text" id="input-phase1-debut" maxlength="5" placeholder="MM/JJ"
                                value="<?= esc($phase1Debut) ?>" autocomplete="off">
                         <button id="btn-phase1-debut"><i class="bi bi-floppy-fill me-1"></i>Enregistrer</button>
                     </div>
                     <div id="msg-phase1-debut"></div>
                 </div>
                 <div class="email-dev-group">
-                    <label><i class="bi bi-1-circle me-1"></i>Phase 1 — fin (ex. MM-JJ)</label>
+                    <label><i class="bi bi-1-circle me-1"></i>Phase 1 — fin (ex. MM/JJ)</label>
                     <div class="email-dev-row">
-                        <input type="text" id="input-phase1-fin" maxlength="5" placeholder="MM-JJ"
+                        <input type="text" id="input-phase1-fin" maxlength="5" placeholder="MM/JJ"
                                value="<?= esc($phase1Fin) ?>" autocomplete="off">
                         <button id="btn-phase1-fin"><i class="bi bi-floppy-fill me-1"></i>Enregistrer</button>
                     </div>
                     <div id="msg-phase1-fin"></div>
                 </div>
                 <div class="email-dev-group">
-                    <label><i class="bi bi-2-circle me-1"></i>Phase 2 — début (ex. MM-JJ)</label>
+                    <label><i class="bi bi-2-circle me-1"></i>Phase 2 — début (ex. MM/JJ)</label>
                     <div class="email-dev-row">
-                        <input type="text" id="input-phase2-debut" maxlength="5" placeholder="MM-JJ"
+                        <input type="text" id="input-phase2-debut" maxlength="5" placeholder="MM/JJ"
                                value="<?= esc($phase2Debut) ?>" autocomplete="off">
                         <button id="btn-phase2-debut"><i class="bi bi-floppy-fill me-1"></i>Enregistrer</button>
                     </div>
                     <div id="msg-phase2-debut"></div>
                 </div>
                 <div class="email-dev-group">
-                    <label><i class="bi bi-2-circle me-1"></i>Phase 2 — fin (ex. MM-JJ)</label>
+                    <label><i class="bi bi-2-circle me-1"></i>Phase 2 — fin (ex. MM/JJ)</label>
                     <div class="email-dev-row">
-                        <input type="text" id="input-phase2-fin" maxlength="5" placeholder="MM-JJ"
+                        <input type="text" id="input-phase2-fin" maxlength="5" placeholder="MM/JJ"
                                value="<?= esc($phase2Fin) ?>" autocomplete="off">
                         <button id="btn-phase2-fin"><i class="bi bi-floppy-fill me-1"></i>Enregistrer</button>
                     </div>
@@ -779,6 +779,42 @@
 </div>
 
 </div><!-- /tab-content -->
+
+<!-- Modale : modifier un paramètre (onglet Gestion complète, double-clic sur une ligne) -->
+<div class="modal fade" id="modal-modifier-config" tabindex="-1" aria-labelledby="modal-modifier-config-titre" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:480px">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#1a3a6b;color:#fff;">
+                <h5 class="modal-title" id="modal-modifier-config-titre">
+                    <i class="bi bi-sliders me-2"></i>Modifier le paramètre
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="font-size:.88rem;">
+                <input type="hidden" id="mod-config-idx">
+                <div class="mb-2">
+                    <label class="form-label fw-semibold" style="font-size:.82rem;">Clé <span class="text-danger">*</span></label>
+                    <input type="text" id="mod-config-cle" class="form-control form-control-sm" style="font-family:monospace;">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold" style="font-size:.82rem;">Valeur</label>
+                    <input type="text" id="mod-config-valeur" class="form-control form-control-sm">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold" style="font-size:.82rem;">Description</label>
+                    <textarea id="mod-config-description" class="form-control form-control-sm" rows="2"></textarea>
+                </div>
+                <div id="mod-config-msg" style="font-size:.8rem;min-height:18px;margin-top:.4rem;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary btn-sm" id="mod-config-btn-ok">
+                    <i class="bi bi-floppy-fill me-1"></i>Valider
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <?= view('partials/page_footer', ['pfStatusAlign' => 'left']) ?>
 
@@ -1010,9 +1046,9 @@ $('#btn-sauvegarder-code-analytique').on('click', function () {
 
 function validerPhaseMD($input, $msg) {
     const val = $input.val().trim();
-    if (!/^\d{2}-\d{2}$/.test(val)) {
+    if (!/^\d{2}\/\d{2}$/.test(val)) {
         $input.addClass('is-invalid');
-        $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Format MM-JJ attendu (ex. 09-01).</span>');
+        $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Format MM/JJ attendu (ex. 09/01).</span>');
         return false;
     }
     $input.removeClass('is-invalid');
@@ -1468,6 +1504,52 @@ function supprimerLigneConfig(idx) {
 $('#btn-table-ajouter').on('click', function () {
     configRows.push({ cle: '', valeur: '', description: '', _nouveau: true });
     renderTableConfig();
+});
+
+// ── Modification par double-clic (modale) ─────────────────────────────────────
+$(document).on('dblclick', '#tbody-config tr[data-idx]', function () {
+    ouvrirModaleModifConfig(+$(this).attr('data-idx'));
+});
+
+function ouvrirModaleModifConfig(idx) {
+    const r = configRows[idx];
+    if (!r) return;
+    $('#mod-config-idx').val(idx);
+    $('#mod-config-cle').val(r.cle ?? '');
+    $('#mod-config-valeur').attr('type', PWD_KEYS.includes(r.cle) ? 'password' : 'text').val(r.valeur ?? '');
+    $('#mod-config-description').val(r.description ?? '');
+    $('#mod-config-msg').text('');
+    const el = document.getElementById('modal-modifier-config');
+    let modal = bootstrap.Modal.getInstance(el);
+    if (!modal) modal = new bootstrap.Modal(el);
+    modal.show();
+    el.addEventListener('shown.bs.modal', () => {
+        $('#mod-config-valeur').trigger('focus').trigger('select');
+    }, { once: true });
+}
+
+$('#modal-modifier-config').on('keydown', function (e) {
+    if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') { e.preventDefault(); $('#mod-config-btn-ok').trigger('click'); }
+});
+
+$('#mod-config-btn-ok').on('click', function () {
+    $('#mod-config-msg').text('');
+    const idx = +$('#mod-config-idx').val();
+    const r   = configRows[idx];
+    if (!r) return;
+
+    const cle = $('#mod-config-cle').val().trim();
+    if (!cle) {
+        $('#mod-config-msg').html('<span class="text-danger">La clé est obligatoire.</span>');
+        return;
+    }
+
+    r.cle         = cle;
+    r.valeur      = $('#mod-config-valeur').val();
+    r.description = $('#mod-config-description').val();
+
+    bootstrap.Modal.getInstance(document.getElementById('modal-modifier-config')).hide();
+    sauvegarderLigneConfig(idx);
 });
 
 $(function () {

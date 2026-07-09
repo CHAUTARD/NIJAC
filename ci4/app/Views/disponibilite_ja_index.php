@@ -81,7 +81,7 @@
         }
         #toolbar .ts-pwd-warning:hover { color: #900; }
         #btn-switch-admin {
-            display: <?= $isAdmin ? 'inline-flex' : 'none' ?>;
+            display: inline-flex;
             align-items: center;
             gap: .35rem;
             padding: .25rem .75rem;
@@ -94,6 +94,21 @@
             cursor: pointer;
             text-decoration: none;
         }
+        #btn-switch-nominateur {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .25rem .75rem;
+            background: #2e7d32;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: .82rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        #btn-switch-nominateur:hover { background: #1b5e20; color: #fff; }
 
         /* ── Barre saison ────────────────────────────────────────────────── */
         #barre-saison {
@@ -385,7 +400,7 @@
         <input type="checkbox" id="chk-defisc" style="width:1.1rem;height:1.1rem;cursor:pointer;accent-color:#2e7d32;">
         Défiscalisation
     </label>
-    <a href="/JA/Plaquette_Defiscalisation.pdf" target="_blank"
+    <a href="<?= base_url('Documentation/Plaquette_Defiscalisation.pdf') ?>" target="_blank"
        class="btn btn-sm ms-1"
        style="background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:.84rem;font-weight:700;"
        title="Ouvrir la plaquette de défiscalisation (PDF)">
@@ -399,7 +414,7 @@
 </div>
 
 <!-- Toolbar utilisateur (visible seulement si une session existe déjà) -->
-<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowLabel' => false, 'tbSwitchTo' => 'admin']) ?>
+<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowLabel' => false, 'tbSwitchTo' => $tbSwitchTo]) ?>
 
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 

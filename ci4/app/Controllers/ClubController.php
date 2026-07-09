@@ -2,8 +2,6 @@
 
 namespace App\Controllers;
 
-use Alamirault\FFTTApi\Exception\ClubNotFoundException;
-use Alamirault\FFTTApi\Service\FFTTApi as FfttApiLib;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
@@ -145,14 +143,13 @@ class ClubController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Département manquant.']);
             }
 
-            $api   = new FfttApiLib(getFfttAppId(), getFfttAppKey());
-            $clubs = $api->listClubsByDepartement((int) $dep);
+            $clubs = getFfttRawClient()->listClubsByDepartement((int) $dep);
 
-            $clubs = array_filter($clubs, static fn ($c) => $c->getNumero() !== '');
+            $clubs = array_filter($clubs, static fn ($c) => ($c['numero'] ?? '') !== '');
 
             return $this->response->setJSON(['ok' => true, 'clubs' => array_map(static fn ($c) => [
-                'numero' => $c->getNumero(),
-                'nom'    => $c->getNom(),
+                'numero' => $c['numero'],
+                'nom'    => $c['nom'],
             ], $clubs)]);
         });
     }
@@ -168,27 +165,27 @@ class ClubController extends BaseController
             }
 
             set_time_limit(30);
-            $api = new FfttApiLib(getFfttAppId(), getFfttAppKey());
-            try {
-                $detail = $api->retrieveClubDetails($numClub);
-            } catch (ClubNotFoundException) {
+            $detail = getFfttRawClient()->retrieveClubDetails($numClub);
+            if (empty($detail['numero'])) {
                 return $this->response->setJSON(['ok' => false, 'msg' => "Club $numClub introuvable dans l'API FFTT."]);
             }
 
-            // ClubDetails normalise déjà côté lib le cas "tableau vide au lieu de
-            // chaîne" renvoyé par l'API FFTT pour un champ d'adresse non renseigné.
-            $nomClub    = trim($detail->getNom());
-            $nomsalle   = trim($detail->getNomSalle() ?? '');
-            $adr1       = trim($detail->getAdresseSalle1() ?? '');
-            $adr2       = trim($detail->getAdresseSalle2() ?? '');
-            $adr3       = trim($detail->getAdresseSalle3() ?? '');
+            // Un champ d'adresse non renseigné revient de l'API FFTT comme un
+            // tableau vide plutôt qu'une chaîne vide (particularité du parsing
+            // XML→JSON de SimpleXML sur un élément sans contenu) — normalisé ici.
+            $s          = static fn ($v) => is_array($v) ? '' : trim((string) $v);
+            $nomClub    = $s($detail['nom']       ?? '');
+            $nomsalle   = $s($detail['nomsalle']  ?? '');
+            $adr1       = $s($detail['adressesalle1'] ?? '');
+            $adr2       = $s($detail['adressesalle2'] ?? '');
+            $adr3       = $s($detail['adressesalle3'] ?? '');
             $adresse    = trim(implode(' ', array_filter([$adr1, $adr2, $adr3]))) ?: null;
-            $cpSalle    = trim($detail->getCodePostaleSalle() ?? '');
-            $villeSalle = mb_strtoupper(trim($detail->getVilleSalle() ?? ''), 'UTF-8');
-            $nomCor     = mb_strtoupper(trim($detail->getNomCoordo() ?? ''), 'UTF-8');
-            $prenomCor  = trim($detail->getPrenomCoordo() ?? '');
-            $mailCor    = trim($detail->getMailCoordo() ?? '');
-            $telCor     = trim($detail->getTelCoordo() ?? '');
+            $cpSalle    = $s($detail['codepsalle'] ?? '');
+            $villeSalle = mb_strtoupper($s($detail['villesalle'] ?? ''), 'UTF-8');
+            $nomCor     = mb_strtoupper($s($detail['nomcor']     ?? ''), 'UTF-8');
+            $prenomCor  = $s($detail['prenomcor']  ?? '');
+            $mailCor    = $s($detail['mailcor']    ?? '');
+            $telCor     = $s($detail['telcor']     ?? '');
             // Formatage XX.XX.XX.XX.XX
             $telDigits = preg_replace('/[^0-9]/', '', $telCor);
             if (strlen($telDigits) === 10) {

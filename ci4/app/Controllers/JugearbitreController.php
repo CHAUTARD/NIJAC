@@ -2,7 +2,6 @@
 
 namespace App\Controllers;
 
-use Alamirault\FFTTApi\Service\FFTTApi as FfttApiLib;
 use CodeIgniter\HTTP\ResponseInterface;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
@@ -108,7 +107,7 @@ class JugearbitreController extends BaseController
             'departement'     => $moi['id_departement'] ?? '',
             'changeLogin'     => !empty($moi['change_login']),
             'isAdmin'         => $this->isAdmin(),
-            'deptUser'        => $this->isAdmin() ? '' : ($moi['id_departement'] ?? ''),
+            'deptUser'        => $moi['id_departement'] ?? '',
             'deptActifs'      => getDeptActifs(),
             'deptLimitrophes' => getDepartementsLimitrophes(),
         ];
@@ -341,12 +340,11 @@ class JugearbitreController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => 'Département manquant.']);
         }
 
-        $api   = new FfttApiLib(getFfttAppId(), getFfttAppKey());
-        $clubs = $api->listClubsByDepartement((int) $dep);
+        $clubs = getFfttRawClient()->listClubsByDepartement((int) $dep);
 
         return $this->response->setJSON(['ok' => true, 'clubs' => array_map(static fn ($c) => [
-            'numero' => $c->getNumero(),
-            'nom'    => $c->getNom(),
+            'numero' => $c['numero'],
+            'nom'    => $c['nom'],
         ], $clubs)]);
     }
 
@@ -358,13 +356,12 @@ class JugearbitreController extends BaseController
     }
 
     /**
-     * listJoueursByClub (FfttApiLib) pour la liste des licences, puis
-     * xml_licence_b via le client bas niveau (getFfttRawClient(), pas
-     * retrieveJoueurDetails()) pour le détail : accède au tableau brut plutôt
-     * qu'au modèle JoueurDetails typé, qui n'expose pas email/Cp/Ville — ces
-     * champs pré-remplissent l'adresse d'un nouveau JA quand l'API FFTT les
-     * fournit (en pratique souvent absents de la réponse elle-même, quels
-     * que soient les identifiants applicatifs utilisés).
+     * listJoueursByClub pour la liste des licences, puis xml_licence_b en
+     * appel direct (request(), pas retrieveJoueurDetails()) pour le détail :
+     * accède au tableau brut, qui expose email/Cp/Ville — ces champs
+     * pré-remplissent l'adresse d'un nouveau JA quand l'API FFTT les fournit
+     * (en pratique souvent absents de la réponse elle-même, quels que soient
+     * les identifiants applicatifs utilisés).
      */
     public function importFfttClub(): ResponseInterface
     {
@@ -381,15 +378,14 @@ class JugearbitreController extends BaseController
         }
 
         set_time_limit(180);
-        $apiLib      = new FfttApiLib(getFfttAppId(), getFfttAppKey());
         $apiRaw      = getFfttRawClient();
-        $membres     = $apiLib->listJoueursByClub($numClub);
+        $membres     = $apiRaw->listJoueursByClub($numClub);
         $trouves     = [];
         $erreurs     = 0;
         $erreursMsgs = [];
 
         foreach ($membres as $m) {
-            $licence = trim($m->getLicence());
+            $licence = trim($m['licence'] ?? '');
             if ($licence === '') {
                 continue;
             }
@@ -505,15 +501,14 @@ class JugearbitreController extends BaseController
         }
 
         set_time_limit(180);
-        $apiLib      = new FfttApiLib(getFfttAppId(), getFfttAppKey());
         $apiRaw      = getFfttRawClient();
-        $membres     = $apiLib->listJoueursByClub($numClub);
+        $membres     = $apiRaw->listJoueursByClub($numClub);
         $trouves     = [];
         $erreurs     = 0;
         $erreursMsgs = [];
 
         foreach ($membres as $m) {
-            $licence = trim($m->getLicence());
+            $licence = trim($m['licence'] ?? '');
             if ($licence === '') {
                 continue;
             }
@@ -733,20 +728,18 @@ class JugearbitreController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => 'id_ja manquant.']);
         }
 
-        $api = new FfttApiLib(getFfttAppId(), getFfttAppKey());
-        try {
-            $lic = $api->retrieveJoueurDetails($idJa);
-        } catch (\Throwable $e) {
+        $lic = getFfttRawClient()->retrieveJoueurDetails($idJa);
+        if (empty($lic)) {
             return $this->response->setJSON(['ok' => false, 'msg' => "Licence $idJa introuvable dans l'API FFTT."]);
         }
-        if (is_array($lic)) {
+        if (array_is_list($lic)) {
             return $this->response->setJSON(['ok' => false, 'msg' => "Plusieurs fiches trouvées pour la licence $idJa dans l'API FFTT."]);
         }
 
-        $classement = (int) $lic->getPointsLicence();
-        $dateValid  = $lic->getDateValidation()?->format('d/m/Y');
-        $arb        = $lic->getDiplomeArbitre() ?: null;
-        $ja         = $lic->getDiplomeJugeArbitre() ?: null;
+        $classement = (int) $this->ffttStr($lic['point'] ?? '');
+        $dateValid  = $this->ffttStr($lic['validation'] ?? '') ?: null;
+        $arb        = $this->ffttStr($lic['arb'] ?? '') ?: null;
+        $ja         = $this->ffttStr($lic['ja'] ?? '') ?: null;
         $gradeFFTT  = $ja ?? $arb ?? null;
 
         // CP, Ville et Id_LaPoste volontairement exclus : les données FFTT sont moins fiables que la BDD locale
@@ -759,8 +752,8 @@ class JugearbitreController extends BaseController
             'classement' => $classement,
             'date_valid' => $dateValid,
             'grade_fftt' => $gradeFFTT,
-            'nom_fftt'   => $lic->getNom() . ' ' . $lic->getPrenom(),
-            'club_fftt'  => $lic->getNomClub(),
+            'nom_fftt'   => $this->ffttStr($lic['nom'] ?? '') . ' ' . $this->ffttStr($lic['prenom'] ?? ''),
+            'club_fftt'  => $this->ffttStr($lic['nomclub'] ?? ''),
         ]);
     }
 

@@ -2,7 +2,6 @@
 
 namespace App\Controllers;
 
-use Alamirault\FFTTApi\Service\FFTTApi as FfttApiLib;
 use CodeIgniter\HTTP\ResponseInterface;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
@@ -258,10 +257,9 @@ class SalleController extends BaseController
         }
 
         $pdo   = getPDO();
-        $api   = new FfttApiLib(getFfttAppId(), getFfttAppKey());
-        $clubs = $api->listClubsByDepartement((int) $dep);
+        $clubs = getFfttRawClient()->listClubsByDepartement((int) $dep);
 
-        $numeros = array_values(array_filter(array_map(fn ($c) => $c->getNumero(), $clubs)));
+        $numeros = array_values(array_filter(array_map(fn ($c) => $c['numero'] ?? '', $clubs)));
         if ($numeros) {
             $ph     = implode(',', array_fill(0, count($numeros), '?'));
             $stmtEx = $pdo->prepare("SELECT Id_Club FROM Club WHERE Id_Club IN ($ph)");
@@ -273,8 +271,8 @@ class SalleController extends BaseController
 
         $result = array_values(array_filter(
             array_map(fn ($c) => [
-                'numero' => $c->getNumero(),
-                'nom'    => $c->getNom(),
+                'numero' => $c['numero'] ?? '',
+                'nom'    => $c['nom'] ?? '',
             ], $clubs),
             fn ($c) => $c['numero'] !== '' && in_array($c['numero'], $existants, true)
         ));
@@ -283,12 +281,10 @@ class SalleController extends BaseController
     }
 
     /**
-     * Utilise le client bas niveau (getFfttRawClient(), pas FfttApiLib) :
-     * xml_club_detail peut renvoyer plusieurs salles pour un même club
-     * (tableaux nomsalle[]/adressesalle1[]/…, boucle $nbSalles ci-dessous) —
-     * le modèle ClubDetails typé de alamirault/fftt-api ne représente qu'une
-     * seule salle par club et traiterait ces champs multi-valués comme
-     * absents.
+     * Appelle xml_club_detail directement via getFfttRawClient()->request(),
+     * pas la méthode retrieveClubDetails() (qui suppose une seule salle) :
+     * cet endpoint peut renvoyer plusieurs salles pour un même club
+     * (tableaux nomsalle[]/adressesalle1[]/…, boucle $nbSalles ci-dessous).
      */
     public function ffttSync(): ResponseInterface
     {

@@ -148,6 +148,19 @@
 'use strict';
 
 const BASE = '<?= site_url('stats-ja') ?>';
+// Format d'affichage E015 (MM/JJ) — converti en MM-JJ pour la comparaison
+// avec les dates ISO (AAAA-MM-JJ) du <input type="date">.
+const PHASE1_DEBUT = <?= json_encode($phase1Debut) ?>;
+const PHASE2_DEBUT = <?= json_encode($phase2Debut) ?>;
+const PHASE1_DEBUT_ISO = PHASE1_DEBUT.replace('/', '-');
+const PHASE2_DEBUT_ISO = PHASE2_DEBUT.replace('/', '-');
+
+/** début < fin ET début (MM-JJ) correspondant à un début de phase configuré. */
+function periodeValide(debut, fin) {
+    if (!debut || !fin || debut >= fin) return false;
+    const mmddDebut = debut.slice(5);
+    return mmddDebut === PHASE1_DEBUT_ISO || mmddDebut === PHASE2_DEBUT_ISO;
+}
 
 let _rows   = [];
 const sortState = { col: 'nb_arbitrages', asc: false };
@@ -205,6 +218,10 @@ function charger() {
     const debut = $('#filtre-debut').val();
     const fin   = $('#filtre-fin').val();
     if (!debut || !fin) { nijacToast('Veuillez renseigner les deux dates.', 'warning'); return; }
+    if (!periodeValide(debut, fin)) {
+        nijacToast(`La date de début doit être antérieure à la date de fin et correspondre à un début de phase (${PHASE1_DEBUT} ou ${PHASE2_DEBUT}).`, 'warning');
+        return;
+    }
 
     $('#table-wrap, #empty-msg').hide();
     $('#loading').show();
@@ -251,6 +268,11 @@ $('#filtre-debut, #filtre-fin').on('change', function () {
 $('#btn-export-csv').on('click', function () {
     const debut = $('#filtre-debut').val();
     const fin   = $('#filtre-fin').val();
+    if (!debut || !fin) { nijacToast('Veuillez renseigner les deux dates.', 'warning'); return; }
+    if (!periodeValide(debut, fin)) {
+        nijacToast(`La date de début doit être antérieure à la date de fin et correspondre à un début de phase (${PHASE1_DEBUT} ou ${PHASE2_DEBUT}).`, 'warning');
+        return;
+    }
     window.open(`${BASE}/export-csv?debut=${encodeURIComponent(debut)}&fin=${encodeURIComponent(fin)}`);
 });
 
