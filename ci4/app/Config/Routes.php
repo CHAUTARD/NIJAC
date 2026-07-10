@@ -16,6 +16,8 @@ $routes->get('admin-menu', 'AdminMenuController::index', ['filter' => 'adminauth
 
 // ── E020 Menu nominateur ─────────────────────────────────────────────────────
 $routes->get('nominateur-menu', 'NominateurMenuController::index', ['filter' => 'auth']);
+$routes->get('nominateur-menu/convocations-a-envoyer', 'NominateurMenuController::convocationsAEnvoyer', ['filter' => 'auth']);
+$routes->get('nominateur-menu/rencontres-sans-ja', 'NominateurMenuController::rencontresSansJa', ['filter' => 'auth']);
 
 // ── E012 Régions (pilote migration CI4) ────────────────────────────────────
 $routes->get('region', 'RegionController::index', ['filter' => 'adminauth']);

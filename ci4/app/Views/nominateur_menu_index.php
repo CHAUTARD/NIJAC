@@ -166,6 +166,26 @@
         /* Alerte si valeur > 0 */
         .dc-alert  { background: #fff8f0; }
 
+        /* Carte cliquable (détail au clic) */
+        .dc-clickable { cursor: pointer; transition: box-shadow .12s, transform .12s; }
+        .dc-clickable:hover { box-shadow: 0 3px 10px rgba(0,0,0,.16); transform: translateY(-1px); }
+
+        #modal-convocations .conv-row,
+        #modal-rencontres-sans-ja .conv-row {
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+            padding: .4rem 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: .85rem;
+        }
+        #modal-convocations .conv-date,
+        #modal-rencontres-sans-ja .conv-date { font-weight: 700; color: #1a3a6b; min-width: 90px; }
+        #modal-convocations .conv-ja   { font-weight: 600; flex: 1; }
+        #modal-convocations .conv-renc,
+        #modal-rencontres-sans-ja .conv-renc { color: #666; font-size: .78rem; }
+        #modal-rencontres-sans-ja .conv-equipes { font-weight: 600; flex: 1; }
+
         /* ── Grille de boutons ── */
         #menu-grid {
             display: grid;
@@ -318,7 +338,7 @@
         </div>
 
         <!-- Convocations à envoyer -->
-        <div class="dash-card dc-purple<?= $stats['convocations_envoyer'] > 0 ? ' dc-alert' : '' ?>">
+        <div class="dash-card dc-purple dc-clickable<?= $stats['convocations_envoyer'] > 0 ? ' dc-alert' : '' ?>" id="card-convocations-envoyer">
             <div class="dc-icon"><i class="bi bi-envelope-exclamation"></i></div>
             <div class="dc-label">Convocations à envoyer</div>
             <div class="dc-value"><?= (int) $stats['convocations_envoyer'] ?></div>
@@ -326,7 +346,7 @@
         </div>
 
         <!-- Rencontres sans JA -->
-        <div class="dash-card dc-red<?= $stats['rencontres_sans_ja'] > 0 ? ' dc-alert' : '' ?>">
+        <div class="dash-card dc-red dc-clickable<?= $stats['rencontres_sans_ja'] > 0 ? ' dc-alert' : '' ?>" id="card-rencontres-sans-ja">
             <div class="dc-icon"><i class="bi bi-exclamation-triangle-fill"></i></div>
             <div class="dc-label">Rencontres sans JA</div>
             <div class="dc-value"><?= (int) $stats['rencontres_sans_ja'] ?></div>
@@ -428,6 +448,48 @@
 
 </div>
 
+<!-- Modale détail « Convocations à envoyer » -->
+<div class="modal fade" id="modal-convocations" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2" style="background:#6a1b9a;color:#fff;">
+                <h6 class="modal-title mb-0"><i class="bi bi-envelope-exclamation me-2"></i>Convocations à envoyer</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modal-convocations-body">
+                <div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div></div>
+            </div>
+            <div class="modal-footer py-2">
+                <a href="<?= site_url('nomination') ?>" class="btn btn-sm btn-primary">
+                    <i class="bi bi-person-check-fill me-1"></i>Aller à la Nomination (E022)
+                </a>
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fermer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modale détail « Rencontres sans JA » -->
+<div class="modal fade" id="modal-rencontres-sans-ja" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2" style="background:#c62828;color:#fff;">
+                <h6 class="modal-title mb-0"><i class="bi bi-exclamation-triangle-fill me-2"></i>Rencontres sans JA</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modal-rencontres-sans-ja-body">
+                <div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div></div>
+            </div>
+            <div class="modal-footer py-2">
+                <a href="<?= site_url('nomination') ?>" class="btn btn-sm btn-primary">
+                    <i class="bi bi-person-check-fill me-1"></i>Aller à la Nomination (E022)
+                </a>
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fermer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Pied de page : recopié de includes/footer.php -->
 <?= view('partials/page_footer', ['pfStatusAlign' => 'left']) ?>
 
@@ -435,5 +497,60 @@
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
+<script>
+'use strict';
+
+function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatDateFr(s) {
+    if (!s) return '';
+    const d = new Date(s + 'T00:00:00');
+    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+$('#card-convocations-envoyer').on('click', function () {
+    const $body = $('#modal-convocations-body').html('<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div></div>');
+    new bootstrap.Modal('#modal-convocations').show();
+
+    $.getJSON('<?= site_url('nominateur-menu/convocations-a-envoyer') ?>', function (r) {
+        if (!r.ok || !r.data.length) {
+            $body.html('<div class="text-center text-muted py-4"><i class="bi bi-check-circle fs-2 d-block mb-2"></i>Aucune convocation en attente d\'envoi.</div>');
+            return;
+        }
+        $body.html(r.data.map(c => `
+            <div class="conv-row">
+                <span class="conv-date"><i class="bi bi-calendar3 me-1"></i>${escHtml(formatDateFr(c.Date))}</span>
+                <span class="conv-ja"><i class="bi bi-person-fill me-1"></i>${escHtml(c.Prenom)} ${escHtml(c.Nom)}</span>
+                <span class="conv-renc">J${escHtml(c.Journee)} — ${escHtml(c.Division)} — ${escHtml(c.NomDom)} vs ${escHtml(c.NomExt || '?')}</span>
+            </div>
+        `).join(''));
+    }).fail(function () {
+        $body.html('<div class="text-center text-danger py-4">Erreur de communication.</div>');
+    });
+});
+
+$('#card-rencontres-sans-ja').on('click', function () {
+    const $body = $('#modal-rencontres-sans-ja-body').html('<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div></div>');
+    new bootstrap.Modal('#modal-rencontres-sans-ja').show();
+
+    $.getJSON('<?= site_url('nominateur-menu/rencontres-sans-ja') ?>', function (r) {
+        if (!r.ok || !r.data.length) {
+            $body.html('<div class="text-center text-muted py-4"><i class="bi bi-check-circle fs-2 d-block mb-2"></i>Toutes les rencontres à venir ont un JA nominé.</div>');
+            return;
+        }
+        $body.html(r.data.map(c => `
+            <div class="conv-row">
+                <span class="conv-date"><i class="bi bi-calendar3 me-1"></i>${escHtml(formatDateFr(c.Date))}</span>
+                <span class="conv-equipes">${escHtml(c.NomDom)} vs ${escHtml(c.NomExt || '?')}</span>
+                <span class="conv-renc">J${escHtml(c.Journee)} — ${escHtml(c.Division)}</span>
+            </div>
+        `).join(''));
+    }).fail(function () {
+        $body.html('<div class="text-center text-danger py-4">Erreur de communication.</div>');
+    });
+});
+</script>
 </body>
 </html>
