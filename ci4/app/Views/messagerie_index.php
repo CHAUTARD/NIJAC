@@ -215,10 +215,11 @@
                         <th>Type</th>
                         <th>Sujet</th>
                         <th>Source</th>
+                        <th title="Nominateur en copie">Cc</th>
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
-                    <tr><td colspan="3" class="text-center text-muted py-3">Chargement…</td></tr>
+                    <tr><td colspan="4" class="text-center text-muted py-3">Chargement…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -244,6 +245,11 @@
         <div class="mb-2">
             <label class="form-label" for="txt-sujet">Sujet :</label>
             <input type="text" id="txt-sujet" class="form-control form-control-sm" maxlength="150" autocomplete="off">
+        </div>
+
+        <div class="mb-2 form-check">
+            <input class="form-check-input" type="checkbox" id="chk-cc">
+            <label class="form-check-label" for="chk-cc">Mettre le nominateur en copie (Cc) lors de l'envoi</label>
         </div>
 
         <div class="mb-2 flex-grow-1 d-flex flex-column">
@@ -434,7 +440,7 @@ function chargerListe(selectId = null) {
     $.get(`${MESSAGERIE_BASE}/data`, function (res) {
         const $body = $('#tbody-liste').empty();
         if (!res.ok || !res.data.length) {
-            $body.append('<tr><td colspan="3" class="text-center text-muted py-3">Aucun message.</td></tr>');
+            $body.append('<tr><td colspan="4" class="text-center text-muted py-3">Aucun message.</td></tr>');
             return;
         }
         res.data.forEach(m => {
@@ -447,13 +453,15 @@ function chargerListe(selectId = null) {
             } else {
                 sourceLabel = '<span class="badge" style="background:#1a7f4b">Personnalisé</span>';
             }
+            const ccLabel = parseInt(m.Cc) === 1 ? '<i class="bi bi-check-lg text-success"></i>' : '';
             const $tr = $('<tr>')
                 .attr('data-id', m.Id_Messagerie)
                 .attr('data-sys', estSys ? '1' : '0')
                 .append(
                     $('<td>').text(m.Type),
                     $('<td>').text(m.Sujet),
-                    $('<td>').html(sourceLabel)
+                    $('<td>').html(sourceLabel),
+                    $('<td class="text-center">').html(ccLabel)
                 )
                 .on('click', function () { selectionnerLigne($(this)); });
             $body.append($tr);
@@ -480,10 +488,12 @@ function selectionnerLigne($tr) {
         $('#cbo-type').val(m.Type);
         $('#txt-sujet').val(m.Sujet);
         $('#txt-message').val(m.Message || '');
+        $('#chk-cc').prop('checked', parseInt(m.Cc) === 1);
 
         const locked = estSys && !IS_ADMIN;
         $('#cbo-type, #txt-sujet, #txt-message').prop('readonly', locked);
         $('#cbo-type').prop('disabled', locked);
+        $('#chk-cc').prop('disabled', locked);
         $('#btn-enregistrer').prop('disabled', locked);
         $('#btn-supprimer').prop('disabled', locked);
         // Actif si message système (pour tous) ou message d'un autre utilisateur (admin)
@@ -504,6 +514,7 @@ $('#btn-nouveau').on('click', function () {
     $('#cbo-type').prop('disabled', false).val($('#cbo-type option:first').val());
     $('#txt-sujet').prop('readonly', false).val('').trigger('focus');
     $('#txt-message').prop('readonly', false).val('');
+    $('#chk-cc').prop('disabled', false).prop('checked', false);
     $('#btn-enregistrer').prop('disabled', false);
     $('#btn-supprimer').prop('disabled', true);
     $('#btn-dupliquer').prop('disabled', true);
@@ -534,6 +545,7 @@ $('#btn-enregistrer').on('click', function () {
         type:    $('#cbo-type').val(),
         sujet:   $('#txt-sujet').val().trim(),
         message: $('#txt-message').val().trim(),
+        cc:      $('#chk-cc').is(':checked') ? '1' : '0',
     };
     const url    = isNew ? MESSAGERIE_BASE : `${MESSAGERIE_BASE}/${currentId}`;
     const method = isNew ? 'POST' : 'PUT';

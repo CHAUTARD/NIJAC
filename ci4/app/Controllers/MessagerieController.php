@@ -27,6 +27,15 @@ class MessagerieController extends BaseController
     {
         require_once __DIR__ . '/../../../config/db.php';
         require_once __DIR__ . '/../../../config/app_config.php';
+
+        // Auto-migration (comme DesiderataClubController pour salle.Cp) : colonne
+        // Cc ajoutée en base de dev sans passer par initTableConfiguration() —
+        // se crée seule ici au premier chargement de l'écran en production.
+        $pdo  = getPDO();
+        $cols = array_column($pdo->query('SHOW COLUMNS FROM messagerie')->fetchAll(\PDO::FETCH_ASSOC), 'Field');
+        if (!in_array('Cc', $cols, true)) {
+            $pdo->exec('ALTER TABLE messagerie ADD COLUMN Cc TINYINT(1) NOT NULL DEFAULT 0 AFTER Id_Utilisateur');
+        }
     }
 
     private function isAdmin(): bool
@@ -84,7 +93,7 @@ class MessagerieController extends BaseController
 
         if ($isAdmin) {
             $rows = $pdo->query(
-                "SELECT m.Id_Messagerie, m.Type, m.Sujet, m.Message, m.Id_Utilisateur,
+                "SELECT m.Id_Messagerie, m.Type, m.Sujet, m.Message, m.Id_Utilisateur, m.Cc,
                         CONCAT(u.Nom, ' ', u.Prenom) AS NomUtilisateur,
                         (m.Id_Messagerie BETWEEN 1 AND $nbSys) AS EstSysteme
                  FROM messagerie m
@@ -93,7 +102,7 @@ class MessagerieController extends BaseController
             )->fetchAll();
         } else {
             $stmt = $pdo->prepare(
-                "SELECT Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, NULL AS NomUtilisateur,
+                "SELECT Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, Cc, NULL AS NomUtilisateur,
                         (Id_Messagerie BETWEEN 1 AND $nbSys) AS EstSysteme
                  FROM messagerie
                  WHERE Id_Messagerie BETWEEN 1 AND $nbSys OR Id_Utilisateur IS NULL OR Id_Utilisateur = ?
@@ -109,7 +118,7 @@ class MessagerieController extends BaseController
     public function show($id = null): ResponseInterface
     {
         $id   = (int) $id;
-        $stmt = getPDO()->prepare('SELECT Id_Messagerie, Type, Sujet, Message FROM messagerie WHERE Id_Messagerie = ?');
+        $stmt = getPDO()->prepare('SELECT Id_Messagerie, Type, Sujet, Message, Cc FROM messagerie WHERE Id_Messagerie = ?');
         $stmt->execute([$id]);
         $row = $stmt->fetch();
 
@@ -129,8 +138,8 @@ class MessagerieController extends BaseController
         }
 
         $idUser = $this->isAdmin() ? null : $this->idCurrentUser();
-        $stmt   = $pdo->prepare('INSERT INTO messagerie (Id_Utilisateur, Type, Sujet, Message) VALUES (?, ?, ?, ?)');
-        $stmt->execute([$idUser, $fields['type'], $fields['sujet'], $fields['message']]);
+        $stmt   = $pdo->prepare('INSERT INTO messagerie (Id_Utilisateur, Type, Sujet, Message, Cc) VALUES (?, ?, ?, ?, ?)');
+        $stmt->execute([$idUser, $fields['type'], $fields['sujet'], $fields['message'], $fields['cc']]);
 
         return $this->response->setJSON(['ok' => true, 'msg' => 'Message créé.', 'id' => (int) $pdo->lastInsertId()]);
     }
@@ -158,8 +167,8 @@ class MessagerieController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => 'Vous ne pouvez modifier que vos propres messages.']);
         }
 
-        $stmt = $pdo->prepare('UPDATE messagerie SET Type=?, Sujet=?, Message=? WHERE Id_Messagerie=?');
-        $stmt->execute([$fields['type'], $fields['sujet'], $fields['message'], $id]);
+        $stmt = $pdo->prepare('UPDATE messagerie SET Type=?, Sujet=?, Message=?, Cc=? WHERE Id_Messagerie=?');
+        $stmt->execute([$fields['type'], $fields['sujet'], $fields['message'], $fields['cc'], $id]);
 
         return $this->response->setJSON(['ok' => true, 'msg' => 'Message mis à jour.', 'id' => $id]);
     }
@@ -170,7 +179,7 @@ class MessagerieController extends BaseController
         $id  = (int) $id;
         $pdo = getPDO();
 
-        $src = $pdo->prepare('SELECT Type, Sujet, Message FROM messagerie WHERE Id_Messagerie = ?');
+        $src = $pdo->prepare('SELECT Type, Sujet, Message, Cc FROM messagerie WHERE Id_Messagerie = ?');
         $src->execute([$id]);
         $orig = $src->fetch();
 
@@ -178,8 +187,8 @@ class MessagerieController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => 'Message introuvable.']);
         }
 
-        $stmt = $pdo->prepare('INSERT INTO messagerie (Id_Utilisateur, Type, Sujet, Message) VALUES (?, ?, ?, ?)');
-        $stmt->execute([$this->idCurrentUser(), $orig['Type'], $orig['Sujet'], $orig['Message']]);
+        $stmt = $pdo->prepare('INSERT INTO messagerie (Id_Utilisateur, Type, Sujet, Message, Cc) VALUES (?, ?, ?, ?, ?)');
+        $stmt->execute([$this->idCurrentUser(), $orig['Type'], $orig['Sujet'], $orig['Message'], $orig['Cc']]);
 
         return $this->response->setJSON(['ok' => true, 'msg' => 'Message copié. Vous pouvez maintenant le personnaliser.', 'id' => (int) $pdo->lastInsertId()]);
     }
@@ -229,6 +238,8 @@ class MessagerieController extends BaseController
             return 'Type invalide.';
         }
 
-        return ['type' => $type, 'sujet' => $sujet, 'message' => $message];
+        $cc = (($input['cc'] ?? '0') === '1') ? 1 : 0;
+
+        return ['type' => $type, 'sujet' => $sujet, 'message' => $message, 'cc' => $cc];
     }
 }

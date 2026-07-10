@@ -43,10 +43,6 @@ class ImportRencontresNatController extends BaseController
                     UNIQUE KEY uq_nom_div (Nom(150), id_division)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             ');
-            $cols = array_column($pdo0->query('SHOW COLUMNS FROM equipe_nationale')->fetchAll(), 'Field');
-            if (!in_array('CodeDept', $cols)) {
-                $pdo0->exec('ALTER TABLE equipe_nationale ADD COLUMN CodeDept VARCHAR(3) NULL AFTER Rang');
-            }
         } catch (\PDOException $e) {
         }
     }

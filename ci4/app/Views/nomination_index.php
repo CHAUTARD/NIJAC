@@ -49,6 +49,11 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 .renc-item .renc-ico { font-size:1rem; flex-shrink:0; }
 .renc-item.attribue .renc-ico { color:#3949ab; }
 .renc-item:not(.attribue) .renc-ico { color:#bbb; }
+.renc-item .renc-check { flex-shrink:0; width:16px; height:16px; cursor:pointer; }
+.renc-item .renc-check-placeholder { flex-shrink:0; width:16px; display:inline-block; }
+.renc-envoi-badge { font-size:.65rem; font-weight:700; padding:.1rem .4rem; border-radius:10px; white-space:nowrap; display:inline-block; }
+.renc-envoi-badge.envoye { background:#e8f5e9; color:#2e7d32; }
+.renc-envoi-badge.a-envoyer { background:#fff3e0; color:#e65100; }
 
 /* ── Colonne droite — candidats JA ── */
 #col-candidats { flex:1; display:flex; flex-direction:column; overflow:hidden; }
@@ -264,6 +269,7 @@ let journeeCourante = null;  // {Journee, Date}
 let rencontres      = [];    // tableau rencontres de la journée (avec VenueLat/VenueLon)
 let jaList          = [];    // tous les JA disponibles pour la journée (chargé une fois)
 let nominations     = {};    // {Id_Rencontre: {Id_JA, Nom, Prenom}} — état local
+let selectionEnvoi  = new Set(); // Id_Rencontre cochés pour l'envoi de convocation
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function ajax(action, params) {
@@ -361,6 +367,10 @@ function chargerRencontres() {
                     nominations[rc.Id_Rencontre] = { Id_JA: rc.IdJaAffecte, Nom: rc.NomJaAffecte || '', Prenom: '' };
                 }
             });
+            // Présélection : convocations déjà validées et pas encore envoyées
+            selectionEnvoi = new Set(
+                rencontres.filter(rc => rc.Valide == 1 && rc.EmailEnvoye != 1).map(rc => rc.Id_Rencontre)
+            );
             if (j.ok) jaList = j.data;
             renderRencontres();
             mettreAJourInfoJournee();
@@ -386,8 +396,19 @@ function renderRencontres() {
         const poule    = rc.Poule ? `Poule ${escHtml(rc.Poule)}` : '';
         const salle    = rc.NomSalle ? escHtml(rc.NomSalle) + ' — ' : '';
         const lieu     = salle + [rc.CpSalle, rc.VilleSalle].filter(Boolean).map(escHtml).join(' ');
+        const valide   = rc.Valide == 1;
+        const envoye   = rc.EmailEnvoye == 1;
+        const checkbox = valide
+            ? `<input type="checkbox" class="renc-check" data-id="${rc.Id_Rencontre}" ${selectionEnvoi.has(rc.Id_Rencontre) ? 'checked' : ''} title="Sélectionner pour l'envoi de la convocation">`
+            : '<span class="renc-check-placeholder"></span>';
+        const envoiBadge = valide
+            ? (envoye
+                ? '<span class="ms-2 renc-envoi-badge envoye"><i class="bi bi-check-circle-fill me-1"></i>Envoyée</span>'
+                : '<span class="ms-2 renc-envoi-badge a-envoyer"><i class="bi bi-envelope-exclamation-fill me-1"></i>À envoyer</span>')
+            : '';
         $liste.append(`
             <div class="renc-item ${attr ? 'attribue' : ''}" data-id="${rc.Id_Rencontre}">
+                ${checkbox}
                 <span class="renc-div" style="background:${escHtml(divColor)}">${escHtml(rc.DivisionCode || '')}</span>
                 <div class="renc-corps">
                     <div class="renc-equipes">${escHtml(rc.NomDom)} vs ${escHtml(rc.NomExt || '?')}</div>
@@ -395,6 +416,7 @@ function renderRencontres() {
                         ${heure ? `<i class="bi bi-clock" style="font-size:.68rem"></i> ${heure}` : ''}
                         ${poule ? `<span class="ms-2">${poule}</span>` : ''}
                         ${lieu  ? `<span class="ms-2"><i class="bi bi-geo-alt" style="font-size:.68rem"></i> ${lieu}</span>` : ''}
+                        ${envoiBadge}
                     </div>
                     ${attr ? `<div class="renc-ja"><i class="bi bi-person-check me-1"></i>${escHtml(nomJa)}</div>` : ''}
                 </div>
@@ -405,6 +427,13 @@ function renderRencontres() {
 
     $('#liste-rencontres').off('click', '.renc-item').on('click', '.renc-item', function () {
         selectionnerRencontre(parseInt($(this).data('id')));
+    });
+
+    $('#liste-rencontres').off('click', '.renc-check').on('click', '.renc-check', function (e) {
+        e.stopPropagation();
+        const id = parseInt($(this).data('id'));
+        if (this.checked) selectionEnvoi.add(id); else selectionEnvoi.delete(id);
+        mettreAJourBoutons();
     });
 
     const nb    = rencontres.length;
@@ -566,6 +595,15 @@ function viderCandidats() {
 }
 
 // ── Affecter / Retirer ────────────────────────────────────────────────────────
+// Affecter/retirer un JA réinitialise Valide/EmailEnvoye côté serveur
+// (affecterNomination()/DELETE) — répercuté ici pour garder le badge et la
+// case à cocher de chaque rencontre cohérents sans recharger toute la page.
+function reinitialiserValidation(idRenc) {
+    const rc = rencontres.find(r => r.Id_Rencontre === idRenc);
+    if (rc) { rc.Valide = 0; rc.EmailEnvoye = 0; }
+    selectionEnvoi.delete(idRenc);
+}
+
 function affecterJa(idRenc, idJa, nom, prenom) {
     ajax('affecter-ja', {
         method: 'POST',
@@ -573,11 +611,13 @@ function affecterJa(idRenc, idJa, nom, prenom) {
     }).done(function (r) {
         if (!r.ok) { nijacToast('Erreur : ' + r.err, 'danger'); return; }
         nominations[idRenc] = { Id_JA: idJa, Nom: nom, Prenom: prenom };
+        reinitialiserValidation(idRenc);
 
         // Affectations automatiques dans la même salle
         const auto = r.autoAffectes || [];
         auto.forEach(function (idAuto) {
             nominations[idAuto] = { Id_JA: idJa, Nom: nom, Prenom: prenom };
+            reinitialiserValidation(idAuto);
         });
         if (auto.length > 0) {
             nijacToast(`Affectation automatique : ${escHtml(prenom)} ${escHtml(nom)} a également été affecté(e) à ${auto.length} autre(s) rencontre(s) dans la même salle.`, 'info', 6000);
@@ -600,6 +640,7 @@ function retirerJa(idRenc) {
     }).done(function (r) {
         if (!r.ok) { nijacToast('Erreur : ' + r.err, 'danger'); return; }
         delete nominations[idRenc];
+        reinitialiserValidation(idRenc);
         renderRencontres();
         mettreAJourBoutons();
         mettreAJourInfoJournee();
@@ -612,13 +653,15 @@ function mettreAJourBoutons() {
     const total    = rencontres.length;
     const attrib   = Object.keys(nominations).length;
     const toutFait = (total > 0 && attrib === total);
+    const validees = rencontres.filter(rc => rc.Valide == 1).length;
 
-    // Valider visible quand tout est attribué
+    // Valider visible quand tout est attribué (y compris pour re-valider après une modification)
     $('#btn-valider').toggle(toutFait);
     // Récap visible dès qu'il y a au moins une attribution
     $('#btn-recap').toggle(attrib > 0);
-    // Envoyer visible si journée validée (on vérifie une nomination Valide)
-    $('#btn-envoyer').hide(); // rafraîchi après validation
+    // Envoyer visible dès qu'au moins une nomination est validée — persiste au
+    // rechargement de la page, pas seulement juste après avoir cliqué Valider
+    $('#btn-envoyer').toggle(validees > 0).prop('disabled', selectionEnvoi.size === 0);
 
     if (toutFait) {
         $('#msg-actions').text('Toutes les rencontres sont attribuées — vous pouvez valider.');
@@ -668,20 +711,33 @@ function validerNominations() {
         }
     }).done(function (r) {
         if (!r.ok) { nijacToast('Erreur : ' + r.err, 'danger'); return; }
-        $('#btn-valider').hide();
-        $('#btn-envoyer').show();
-        $('#msg-actions').html('<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Nominations validées — vous pouvez envoyer les convocations.</span>');
+        rencontres.forEach(rc => {
+            if (nominations[rc.Id_Rencontre]) {
+                rc.Valide      = 1;
+                rc.EmailEnvoye = 0;
+                selectionEnvoi.add(rc.Id_Rencontre);
+            }
+        });
+        renderRencontres();
+        mettreAJourBoutons();
+        $('#msg-actions').html('<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Nominations validées — sélectionnez les convocations à envoyer ci-contre.</span>');
     });
 }
 
 // ── Envoi des convocations ────────────────────────────────────────────────────
 function envoyerConvocations() {
-    nijacConfirm('Envoyer les convocations par e-mail à tous les JA nominés ?', function () {
+    if (selectionEnvoi.size === 0) {
+        nijacToast('Sélectionnez au moins une convocation à envoyer.', 'warning');
+        return;
+    }
+    const ids = [...selectionEnvoi];
+    nijacConfirm(`Envoyer ${ids.length} convocation${ids.length > 1 ? 's' : ''} par e-mail ?`, function () {
         ajax('envoyer-convocations', {
             method: 'POST',
             data: {
                 journee: journeeCourante.Journee,
-                date:    journeeCourante.Date
+                date:    journeeCourante.Date,
+                ids:     JSON.stringify(ids)
             }
         }).done(function (r) {
             if (!r.ok) { nijacToast('Erreur : ' + r.err, 'danger'); return; }
@@ -703,7 +759,9 @@ function envoyerConvocations() {
                 (erreurs > 0 ? ` <span class="text-danger">${erreurs} échec${erreurs > 1 ? 's' : ''}.</span>` : '')
             );
             new bootstrap.Modal('#modalLiens').show();
-            if (envoyes > 0 || (r.liens || []).length > 0) $('#btn-envoyer').hide();
+            // Recharger depuis le serveur pour refléter le statut d'envoi réel
+            // (un échec d'email individuel ne marque pas EmailEnvoye côté serveur)
+            chargerRencontres();
         });
     }, null, { type: 'question', title: 'Envoi des convocations', confirmLabel: 'Envoyer' });
 }

@@ -314,9 +314,12 @@
         <!-- Corps -->
         <div id="panel-message-body">
 
-            <div class="mb-2" id="grp-cc" style="display:none;">
-                <label class="form-label" for="txt-cc">Cc :</label>
-                <input type="email" id="txt-cc" class="form-control form-control-sm" maxlength="150">
+            <div class="mb-2 d-flex align-items-center gap-2" id="grp-cc">
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="chk-cc">
+                    <label class="form-check-label" for="chk-cc">Cc :</label>
+                </div>
+                <input type="email" id="txt-cc" class="form-control form-control-sm" style="max-width:280px;" maxlength="150">
             </div>
 
             <div class="mb-2">
@@ -509,12 +512,18 @@ $('.type-tab').on('click', function () {
     }
 });
 
+$('#chk-cc').on('change', function () {
+    $('#txt-cc').prop('disabled', !this.checked);
+});
+
 function chargerModele(type) {
     const m = MODELES[type] || { sujet: '', message: '', cc: false };
     $('#txt-sujet').val(m.sujet || '');
     $('#txt-message').val(m.message || '');
-    $('#grp-cc').toggle(!!m.cc);
-    $('#txt-cc').val(m.cc ? MON_EMAIL : '');
+    // Cc coché par défaut selon le modèle (E026), mais toujours modifiable
+    // avant l'envoi — la case reste visible même si le modèle a Cc désactivé.
+    $('#chk-cc').prop('checked', !!m.cc);
+    $('#txt-cc').val(MON_EMAIL).prop('disabled', !m.cc);
     // Afficher/masquer les sections du cartouche selon le type actif
     $('#cart-convocation').toggle(type === 'Convocation');
     $('#cart-liste-nom').toggle(type === 'Liste nomination');
@@ -799,7 +808,7 @@ function demarrerEnvoi(sujet, message, ids) {
                 type:    typeActif,
                 sujet, message,
                 saison:  saisonCourante ?? '',
-                cc:      $('#grp-cc').is(':visible') ? $('#txt-cc').val().trim() : '',
+                cc:      $('#chk-cc').is(':checked') ? $('#txt-cc').val().trim() : '',
             };
             if (typeActif === 'Convocation') {
                 postData.id_nomination = id;

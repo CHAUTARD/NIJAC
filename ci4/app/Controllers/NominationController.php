@@ -419,8 +419,19 @@ class NominationController extends BaseController
             }
             $journee = (int) $journeeRaw;
 
+            // Sélection des rencontres dont la convocation doit être envoyée
+            // (cases cochées côté E022) — obligatoire, pour ne jamais renvoyer
+            // toute la journée par erreur.
+            $idsRencontre = array_values(array_unique(array_filter(
+                array_map('intval', json_decode($this->request->getPost('ids') ?? '[]', true) ?: [])
+            )));
+            if (!$idsRencontre) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Aucune convocation sélectionnée']);
+            }
+
             // Récupérer les nominations + email JA
-            $stmt = $pdo->prepare('
+            $placeholders = implode(',', array_fill(0, count($idsRencontre), '?'));
+            $stmt = $pdo->prepare("
                 SELECT n.Id_Nomination, n.Id_Rencontre, ja.Id_JA, ja.Nom, ja.Prenom, ja.Email,
                        ed.Nom AS NomDom, ee.Nom AS NomExt,
                        r.Date, r.Heure, r.Journee, r.Poule, dv.Division, RIGHT(dv.Division, 1) AS SexeCode
@@ -433,8 +444,9 @@ class NominationController extends BaseController
                 JOIN division dv  ON dv.Id_Division   = r.Id_Division
                 WHERE r.Journee = ? AND r.Date = ?
                   AND n.Valide = 1
-            ');
-            $stmt->execute([$journee, $date]);
+                  AND r.Id_Rencontre IN ($placeholders)
+            ");
+            $stmt->execute([$journee, $date, ...$idsRencontre]);
             $nominations = $stmt->fetchAll();
 
             $moi     = $_SESSION['utilisateur'] ?? [];
@@ -455,8 +467,8 @@ class NominationController extends BaseController
                     // Charger le template 'Convocation' depuis messagerie
                     static $tplConv = null;
                     if ($tplConv === null) {
-                        $r       = $pdo->query("SELECT Sujet, Message FROM messagerie WHERE Type='Convocation' ORDER BY Id_Messagerie LIMIT 1")->fetch();
-                        $tplConv = $r ?: ['Sujet' => 'Convocation — {DIVISION} — {DATE}', 'Message' => ''];
+                        $r       = $pdo->query("SELECT Sujet, Message, Cc FROM messagerie WHERE Type='Convocation' ORDER BY Id_Messagerie LIMIT 1")->fetch();
+                        $tplConv = $r ?: ['Sujet' => 'Convocation — {DIVISION} — {DATE}', 'Message' => '', 'Cc' => 0];
                     }
 
                     $marqueurs = construireMarqueursMessage($nom, $moi, [
@@ -490,6 +502,9 @@ class NominationController extends BaseController
                         $mail = getNijacMailer();
                         $mail->isHTML(strip_tags($corps) !== $corps);
                         $mail->addAddress($dest, $nom['Prenom'] . ' ' . $nom['Nom']);
+                        if (!empty($tplConv['Cc']) && !empty($moi['email'])) {
+                            $mail->addCC(getEmailDestinataire($moi['email']), trim(($moi['prenom'] ?? '') . ' ' . ($moi['nom'] ?? '')));
+                        }
                         $mail->Subject = ($modeDev && $dest !== $nom['Email'])
                             ? "[DEV → {$nom['Email']}] $sujet" : $sujet;
                         if ($mail->ContentType === 'text/html') {

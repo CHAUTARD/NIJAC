@@ -397,9 +397,6 @@
             <span>Centre d'envoi</span>
             <span class="btn-desc">Envoyer les messages aux JA et correspondants</span>
         </a>
-        <?php if ($stats['convocations_envoyer'] > 0): ?>
-            <span class="btn-badge"><?= (int) $stats['convocations_envoyer'] ?></span>
-        <?php endif; ?>
     </div>
 
     <div class="menu-btn-wrap">
