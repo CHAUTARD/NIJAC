@@ -98,7 +98,7 @@
     <label class="fw-bold" style="font-size:.82rem;">Période :</label>
     <input type="date" id="filtre-debut" class="form-control form-control-sm" style="width:145px;" value="<?= esc($defaultDebut) ?>">
     <span class="text-muted">→</span>
-    <input type="date" id="filtre-fin"   class="form-control form-control-sm" style="width:145px;" value="<?= esc($defaultFin) ?>">
+    <input type="date" id="filtre-fin"   class="form-control form-control-sm" style="width:145px;" value="<?= esc($defaultFin) ?>" max="<?= esc(date('Y-m-d')) ?>">
     <button class="btn btn-sm btn-primary" id="btn-charger">
         <i class="bi bi-search me-1"></i>Afficher
     </button>
@@ -148,18 +148,25 @@
 'use strict';
 
 const BASE = '<?= site_url('stats-ja') ?>';
-// Format d'affichage E015 (MM/JJ) — converti en MM-JJ pour la comparaison
-// avec les dates ISO (AAAA-MM-JJ) du <input type="date">.
-const PHASE1_DEBUT = <?= json_encode($phase1Debut) ?>;
-const PHASE2_DEBUT = <?= json_encode($phase2Debut) ?>;
-const PHASE1_DEBUT_ISO = PHASE1_DEBUT.replace('/', '-');
-const PHASE2_DEBUT_ISO = PHASE2_DEBUT.replace('/', '-');
 
-/** début < fin ET début (MM-JJ) correspondant à un début de phase configuré. */
+/** Date du jour locale (AAAA-MM-JJ) — pas toISOString(), qui est en UTC et peut décaler d'un jour selon le fuseau horaire. */
+function aujourdhuiLocal() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+/** début non postérieur à la fin (un jour unique est une période valide) ET fin non postérieure à aujourd'hui. */
 function periodeValide(debut, fin) {
-    if (!debut || !fin || debut >= fin) return false;
-    const mmddDebut = debut.slice(5);
-    return mmddDebut === PHASE1_DEBUT_ISO || mmddDebut === PHASE2_DEBUT_ISO;
+    if (!debut || !fin || debut > fin) return false;
+    return fin <= aujourdhuiLocal();
+}
+
+/** Message adapté à la cause réelle de l'échec de periodeValide(). */
+function messagePeriodeInvalide(debut, fin) {
+    if (debut > fin) {
+        return 'La date de début doit être antérieure à la date de fin.';
+    }
+    return 'La date de fin ne peut pas être postérieure à la date du jour.';
 }
 
 let _rows   = [];
@@ -219,7 +226,7 @@ function charger() {
     const fin   = $('#filtre-fin').val();
     if (!debut || !fin) { nijacToast('Veuillez renseigner les deux dates.', 'warning'); return; }
     if (!periodeValide(debut, fin)) {
-        nijacToast(`La date de début doit être antérieure à la date de fin et correspondre à un début de phase (${PHASE1_DEBUT} ou ${PHASE2_DEBUT}).`, 'warning');
+        nijacToast(messagePeriodeInvalide(debut, fin), 'warning');
         return;
     }
 
@@ -270,7 +277,7 @@ $('#btn-export-csv').on('click', function () {
     const fin   = $('#filtre-fin').val();
     if (!debut || !fin) { nijacToast('Veuillez renseigner les deux dates.', 'warning'); return; }
     if (!periodeValide(debut, fin)) {
-        nijacToast(`La date de début doit être antérieure à la date de fin et correspondre à un début de phase (${PHASE1_DEBUT} ou ${PHASE2_DEBUT}).`, 'warning');
+        nijacToast(messagePeriodeInvalide(debut, fin), 'warning');
         return;
     }
     window.open(`${BASE}/export-csv?debut=${encodeURIComponent(debut)}&fin=${encodeURIComponent(fin)}`);

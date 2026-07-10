@@ -62,26 +62,41 @@ class StatsJaController extends BaseController
         return $anneeDebut . '-' . $mmddDebut;
     }
 
-    /** Parmi les débuts de phase donnés (MM-JJ), la prochaine date calendaire strictement future. */
-    private function prochaineDateDebut(array $debuts, string $mmddToday, int $anneeToday): string
+    /**
+     * Parmi les phases données (paires [mmddDebut, mmddFin]), les dates
+     * calendaires (AAAA-MM-JJ) de l'occurrence la plus récemment terminée
+     * avant aujourd'hui (ex. pendant la coupure estivale, entre la fin de
+     * phase2 et le début de phase1).
+     *
+     * @param array<int, array{0: string, 1: string}> $phases
+     * @return array{0: string, 1: string} [dateDebut, dateFin]
+     */
+    private function phasePrecedente(array $phases, string $mmddToday, int $anneeToday): array
     {
-        $candidats = array_map(
-            fn (string $d) => ($d > $mmddToday ? $anneeToday : $anneeToday + 1) . '-' . $d,
-            $debuts
-        );
-        sort($candidats);
+        $candidats = [];
+        foreach ($phases as [$mmddDebut, $mmddFin]) {
+            $anneeFin       = ($mmddFin <= $mmddToday) ? $anneeToday : $anneeToday - 1;
+            $wraparound     = $mmddDebut > $mmddFin;
+            $anneeDebut     = $wraparound ? $anneeFin - 1 : $anneeFin;
+            $candidats[]    = [$anneeDebut . '-' . $mmddDebut, $anneeFin . '-' . $mmddFin];
+        }
+
+        usort($candidats, fn (array $a, array $b) => $b[1] <=> $a[1]);
 
         return $candidats[0];
     }
 
     /**
-     * Date de début par défaut du filtre, calculée à partir des dates de
-     * phase configurées (E015, MM/JJ, normalisées via phaseCfg()) plutôt que
-     * fixée au 1er septembre :
-     * date de début de la phase en cours si aujourd'hui y tombe, sinon date
-     * de début de la prochaine phase (ex. pendant la coupure estivale).
+     * Période par défaut du filtre, calculée à partir des dates de phase
+     * configurées (E015, MM/JJ, normalisées via phaseCfg()) : dates de la
+     * phase en cours si aujourd'hui y tombe (début de phase → aujourd'hui,
+     * la phase n'étant pas encore terminée) ; sinon dates complètes de la
+     * dernière phase terminée (ex. pendant la coupure estivale) — jamais une
+     * date de fin future, cf. periodeValide().
+     *
+     * @return array{0: string, 1: string} [dateDebut, dateFin]
      */
-    private function defaultDebutParPhase(): string
+    private function periodeDefautParPhase(): array
     {
         $phase1Debut = $this->phaseCfg('phase1_debut', '09/01');
         $phase1Fin   = $this->phaseCfg('phase1_fin', '01/31');
@@ -91,57 +106,64 @@ class StatsJaController extends BaseController
         $today      = new \DateTimeImmutable('today');
         $mmddToday  = $today->format('m-d');
         $anneeToday = (int) $today->format('Y');
+        $aujourdhui = $today->format('Y-m-d');
 
         if ($this->phaseContientDate($phase1Debut, $phase1Fin, $mmddToday)) {
-            return $this->dateDebutPhase($phase1Debut, $phase1Fin, $mmddToday, $anneeToday);
+            return [$this->dateDebutPhase($phase1Debut, $phase1Fin, $mmddToday, $anneeToday), $aujourdhui];
         }
         if ($this->phaseContientDate($phase2Debut, $phase2Fin, $mmddToday)) {
-            return $this->dateDebutPhase($phase2Debut, $phase2Fin, $mmddToday, $anneeToday);
+            return [$this->dateDebutPhase($phase2Debut, $phase2Fin, $mmddToday, $anneeToday), $aujourdhui];
         }
 
-        return $this->prochaineDateDebut([$phase1Debut, $phase2Debut], $mmddToday, $anneeToday);
+        return $this->phasePrecedente(
+            [[$phase1Debut, $phase1Fin], [$phase2Debut, $phase2Fin]],
+            $mmddToday,
+            $anneeToday
+        );
     }
 
     /**
-     * Valide le couple de dates du filtre : début strictement antérieur à
-     * fin, et début correspondant (en MM-JJ, indépendamment de l'année) à un
-     * début de phase configuré (E015).
+     * Valide le couple de dates du filtre : début non postérieur à la fin
+     * (un jour unique est une période valide — cf. le jour même d'un début
+     * de phase, où periodeDefautParPhase() renvoie début = fin = aujourd'hui),
+     * et fin non postérieure à aujourd'hui. Les dates ne sont plus
+     * contraintes à un début de phase (E015) — celui-ci ne sert plus qu'à
+     * calculer la période par défaut proposée au chargement.
      */
     private function periodeValide(string $dateDebut, string $dateFin): bool
     {
-        if ($dateDebut >= $dateFin) {
+        if ($dateDebut > $dateFin) {
             return false;
         }
 
-        $mmddDebut   = substr($dateDebut, 5, 5);
-        $phase1Debut = $this->phaseCfg('phase1_debut', '09/01');
-        $phase2Debut = $this->phaseCfg('phase2_debut', '02/01');
-
-        return in_array($mmddDebut, [$phase1Debut, $phase2Debut], true);
+        return $dateFin <= date('Y-m-d');
     }
 
-    private function messagePeriodeInvalide(): string
+    /**
+     * Message d'erreur adapté à la cause réelle de l'échec de periodeValide().
+     */
+    private function messagePeriodeInvalide(string $dateDebut, string $dateFin): string
     {
-        return 'La date de début doit être antérieure à la date de fin et correspondre à un début de phase ('
-            . getConfig('phase1_debut', '09/01') . ' ou ' . getConfig('phase2_debut', '02/01') . ').';
+        if ($dateDebut > $dateFin) {
+            return 'La date de début doit être antérieure à la date de fin.';
+        }
+
+        return 'La date de fin ne peut pas être postérieure à la date du jour.';
     }
 
     public function index()
     {
         $u = $_SESSION['utilisateur'] ?? [];
 
-        // Période par défaut : début de la phase en cours (E015) → aujourd'hui
+        // Période par défaut (E015) : phase en cours, ou dernière phase terminée
+        [$defaultDebut, $defaultFin] = $this->periodeDefautParPhase();
         $data = [
             'nomComplet'   => trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? '')),
             'departement'  => $u['id_departement'] ?? '',
             'changeLogin'  => !empty($u['change_login']),
             'isAdmin'      => !empty($u['is_admin']),
-            'defaultDebut' => $this->defaultDebutParPhase(),
-            'defaultFin'   => date('Y-m-d'),
-            // Format d'affichage E015 (MM/JJ) — converties en MM-JJ côté JS pour
-            // la comparaison avec les dates ISO du <input type="date">.
-            'phase1Debut'  => getConfig('phase1_debut', '09/01'),
-            'phase2Debut'  => getConfig('phase2_debut', '02/01'),
+            'defaultDebut' => $defaultDebut,
+            'defaultFin'   => $defaultFin,
         ];
 
         return view('stats_ja_index', $data);
@@ -203,11 +225,12 @@ class StatsJaController extends BaseController
             $u     = $_SESSION['utilisateur'] ?? [];
             $depts = getDepartementsAutorises($u['id_departement'] ?? null);
 
-            $dateDebut = $this->request->getGet('debut') ?? $this->defaultDebutParPhase();
-            $dateFin   = $this->request->getGet('fin') ?? date('Y-m-d');
+            [$defautDebut, $defautFin] = $this->periodeDefautParPhase();
+            $dateDebut = $this->request->getGet('debut') ?? $defautDebut;
+            $dateFin   = $this->request->getGet('fin') ?? $defautFin;
 
             if (!$this->periodeValide($dateDebut, $dateFin)) {
-                return $this->response->setJSON(['ok' => false, 'msg' => $this->messagePeriodeInvalide()]);
+                return $this->response->setJSON(['ok' => false, 'msg' => $this->messagePeriodeInvalide($dateDebut, $dateFin)]);
             }
 
             [$sql, $params] = $this->buildQuery(
@@ -262,11 +285,12 @@ class StatsJaController extends BaseController
         $u     = $_SESSION['utilisateur'] ?? [];
         $depts = getDepartementsAutorises($u['id_departement'] ?? null);
 
-        $dateDebut = $this->request->getGet('debut') ?? $this->defaultDebutParPhase();
-        $dateFin   = $this->request->getGet('fin') ?? date('Y-m-d');
+        [$defautDebut, $defautFin] = $this->periodeDefautParPhase();
+        $dateDebut = $this->request->getGet('debut') ?? $defautDebut;
+        $dateFin   = $this->request->getGet('fin') ?? $defautFin;
 
         if (!$this->periodeValide($dateDebut, $dateFin)) {
-            return $this->response->setJSON(['ok' => false, 'msg' => $this->messagePeriodeInvalide()]);
+            return $this->response->setJSON(['ok' => false, 'msg' => $this->messagePeriodeInvalide($dateDebut, $dateFin)]);
         }
 
         [$sql, $params] = $this->buildQuery(

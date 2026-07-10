@@ -243,14 +243,14 @@
 
         <a href="<?= site_url('import-rencontres') ?>" class="menu-btn btn-club">
             <span class="btn-code">E011</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Competition.png') ?>" alt="Import Rencontres"></div>
-            <span>Import Rencontres</span>
-            <span class="btn-desc">Importer les rencontres depuis un fichier FFTT</span>
+            <div class="btn-icon"><img src="<?= base_url('img/Competition.png') ?>" alt="Import Rencontres Régionales"></div>
+            <span>Import Rencontres Régionales</span>
+            <span class="btn-desc">Importer les rencontres Régionales depuis un fichier FFTT</span>
         </a>
 
         <a href="<?= site_url('import-rencontres-nat') ?>" class="menu-btn btn-club">
             <span class="btn-code">E017</span>
-            <div class="btn-icon"><img src="<?= base_url('img/ImportExcel_32.png') ?>" alt="Import Nationales"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/ImportNat.png') ?>" alt="Import Nationales"></div>
             <span>Import Rencontres Nationales</span>
             <span class="btn-desc">Importer les rencontres de divisions Nationales</span>
         </a>
