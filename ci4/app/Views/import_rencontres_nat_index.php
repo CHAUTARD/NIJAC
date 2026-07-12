@@ -137,6 +137,51 @@
         </div>
     </div>
 
+    <ul class="nav nav-tabs" id="nat-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tab-excel-btn" data-bs-toggle="tab" data-bs-target="#tab-excel" type="button" role="tab">
+                <i class="bi bi-file-earmark-excel me-1"></i>Importation Excel
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-api-btn" data-bs-toggle="tab" data-bs-target="#tab-api" type="button" role="tab">
+                <i class="bi bi-cloud-download me-1"></i>Importation par API
+            </button>
+        </li>
+    </ul>
+    <div class="tab-content border border-top-0 rounded-bottom p-3 mb-3" style="background:#fff;">
+
+    <div class="tab-pane fade show active" id="tab-excel" role="tabpanel">
+
+    <!-- Étape 1 (Excel) : sélection + analyse du fichier -->
+    <div class="card mb-3">
+        <div class="card-header fw-semibold"><i class="bi bi-file-earmark-excel me-2"></i>1. Analyser un fichier Excel ou texte FFTT</div>
+        <div class="card-body">
+            <p class="text-muted small mb-2">
+                Analyse un fichier déposé dans <code>Importation/Rencontres/Nationale/</code> (calendrier des
+                journées + poules par division), et insère les équipes dans la table <code>equipe_nationale</code>.
+                Utile en début de saison, quand l'API FFTT n'a pas encore les poules/rencontres alimentées.
+                Deux formats acceptés : <code>.xlsx</code> (fichier FFTT à plusieurs feuilles), ou <code>.txt</code>
+                (recopié/nettoyé à la main depuis un PDF de poules — un bloc <code>CALENDRIER</code>, puis un
+                bloc <code>NATIONALE x Y</code>/<code>POULE n</code> par poule, une équipe <code>rang;nom[;Id_Club]</code>
+                par ligne, le 3<sup>e</sup> champ étant optionnel).
+            </p>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <select id="sel-fichier-excel" class="form-select form-select-sm w-auto">
+                    <option value="">— Chargement… —</option>
+                </select>
+                <button id="btn-analyser-excel" class="btn btn-primary" disabled>
+                    <i class="bi bi-search me-1"></i>Analyser
+                </button>
+                <span id="analyse-excel-status" class="text-muted small"></span>
+            </div>
+        </div>
+    </div>
+
+    </div><!-- /#tab-excel -->
+
+    <div class="tab-pane fade" id="tab-api" role="tabpanel">
+
     <!-- Étape 0 : scanner les clubs de la région -->
     <div class="card mb-3">
         <div class="card-header fw-semibold"><i class="bi bi-search me-2"></i>Rechercher les équipes nationales des clubs de <?= esc($regionNom) ?></div>
@@ -194,8 +239,25 @@
         </div>
     </div>
 
-    <!-- Étape 2 : association équipes → clubs -->
-    <div id="section-assoc" style="display:none;" class="card mb-3">
+    </div><!-- /#tab-api -->
+
+    </div><!-- /.tab-content -->
+
+    <!-- Cartouche Ordre des rencontres (issu de l'analyse Excel/texte), affiché avant l'association -->
+    <div id="section-calendrier-excel" class="card mb-3">
+        <div class="card-header fw-semibold d-flex align-items-center gap-2">
+            <i class="bi bi-calendar3 me-1"></i>Ordre des rencontres
+            <span id="lbl-saison-excel" class="badge bg-secondary" style="display:none;"></span>
+            <span id="cal-hint-excel" class="text-muted small">Analysez d'abord un fichier à l'étape 1.</span>
+            <button class="btn btn-sm btn-outline-secondary ms-auto" id="btn-toggle-cal-excel" style="font-size:.78rem; display:none;">
+                <i class="bi bi-chevron-down"></i> Afficher
+            </button>
+        </div>
+        <div id="cal-content-excel" class="card-body" style="display:none;"></div>
+    </div>
+
+    <!-- Étape 2 : association équipes → clubs (partagée par les deux onglets) -->
+    <div id="section-assoc" class="card mb-3">
         <div class="card-header fw-semibold"><i class="bi bi-link-45deg me-2"></i>2. Association équipes → département / club de <?= esc($regionNom) ?></div>
         <div class="card-body">
             <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
@@ -208,42 +270,55 @@
                 <label class="mb-0" style="font-size:.82rem;">
                     <input type="checkbox" id="chk-sans-dept" class="form-check-input me-1">Sans département
                 </label>
+                <button id="btn-export-txt" class="btn btn-outline-secondary btn-sm ms-auto" disabled
+                        title="Enregistre un fichier .txt dans Importation/Rencontres/Nationale/">
+                    <i class="bi bi-save me-1"></i>Exporter en .txt
+                </button>
             </div>
             <div style="max-height:55vh; overflow:auto; border:1px solid #d0d8e8; border-radius:6px;">
                 <table id="tbl-assoc">
                     <thead><tr>
                         <th style="width:55px;">Division</th>
                         <th style="width:35px;">P.</th>
-                        <th>Nom équipe nationale</th>
+                        <th style="width:75px;">N° Club</th>
+                        <th style="width:280px;">Club (<?= esc($regionNom) ?>)</th>
+                        <th>Équipe</th>
                         <th style="width:70px; text-align:center;">Dépt</th>
-                        <th style="width:300px;">Club (<?= esc($regionNom) ?>)</th>
                         <th style="width:55px; text-align:center;">Sauver</th>
                     </tr></thead>
                     <tbody id="tbody-assoc">
-                        <tr><td colspan="6" class="text-center text-muted py-3">Chargez les équipes depuis l'API FFTT.</td></tr>
+                        <tr><td colspan="7" class="text-center text-muted py-3">Chargez les équipes depuis l'API FFTT.</td></tr>
                     </tbody>
                 </table>
-            </div>
-            <div class="mt-2 d-flex gap-2 flex-wrap">
-                <button id="btn-hors-region" class="btn btn-outline-secondary" disabled>
-                    <i class="bi bi-geo-alt me-1"></i>Assigner Hors Région
-                </button>
             </div>
         </div>
     </div>
 
-    <!-- Étape 3 : import rencontres -->
-    <div id="section-import" style="display:none;" class="card mb-3">
-        <div class="card-header fw-semibold"><i class="bi bi-calendar2-check me-2"></i>3. Importer les rencontres (receveur = club de <?= esc($regionNom) ?>)</div>
+    <!-- Étape 3 : import rencontres depuis le fichier Excel/texte (pas d'appel FFTT) -->
+    <div id="section-import-excel" class="card mb-3">
+        <div class="card-header fw-semibold"><i class="bi bi-calendar2-check me-2"></i>3. Importer les rencontres depuis le fichier Excel/texte (receveur = club de <?= esc($regionNom) ?>)</div>
         <div class="card-body">
             <p class="text-muted small mb-2">
-                Importe depuis l'API FFTT toutes les rencontres nationales où <strong>l'équipe à domicile</strong>
-                est un club de la région. L'adversaire peut être <?= esc($regionGentile) ?> ou hors région.
+                Reconstitue les rencontres à partir des dates et de l'ordre des rencontres du fichier analysé
+                à l'étape 1, appliqués à chaque poule associée à l'étape 2. Ne crée une rencontre que si
+                <strong>l'équipe à domicile</strong> est un club de la région.
             </p>
-            <button id="btn-importer" class="btn btn-success" disabled>
-                <i class="bi bi-cloud-upload me-1"></i>Importer les rencontres
+            <button id="btn-importer-excel" class="btn btn-success" disabled>
+                <i class="bi bi-cloud-upload me-1"></i>Importer les rencontres (Excel/texte)
             </button>
-            <div id="res-import" class="mt-2"></div>
+            <span id="import-excel-hint" class="text-muted small ms-2">Analysez d'abord un fichier à l'étape 1.</span>
+            <div id="res-import-excel" class="mt-2"></div>
+        </div>
+    </div>
+
+    <!-- Étape 4 : fichiers Excel/texte disponibles -->
+    <div class="card mb-3">
+        <div class="card-header fw-semibold"><i class="bi bi-file-earmark-text me-2"></i>4. Fichiers Excel/texte disponibles</div>
+        <div class="card-body">
+            <p class="text-muted small mb-2">Fichiers présents dans <code>Importation/Rencontres/Nationale/</code> :</p>
+            <ul id="liste-fichiers-nat" class="list-unstyled mb-0" style="font-size:.85rem;">
+                <li class="text-muted">Chargement…</li>
+            </ul>
         </div>
     </div>
 
@@ -259,8 +334,11 @@
 'use strict';
 
 const NAT_BASE = '<?= site_url('import-rencontres-nat') ?>';
+const NAT_DIR_URL = '<?= base_url('Importation/Rencontres/Nationale/') ?>';
 
 let equipes = [];
+let currentSaison = '';
+let lastJournees  = [];
 const DEPTS_NORM = <?= json_encode(array_map('strval', $deptsNorm)) ?>;
 const ALL_DEPTS  = <?= json_encode((object) $allDepts) ?>;
 const REGION_NOM     = <?= json_encode($regionNom) ?>;
@@ -270,6 +348,14 @@ function spinner(v) { $('#spinner').toggleClass('show', v); }
 function isNorm(d)  { return d && DEPTS_NORM.includes(String(d)); }
 function deptName(d){ return (d && ALL_DEPTS[d]) ? ALL_DEPTS[d] : (d || ''); }
 function esc(s)     { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// Fige un instantané de l'état sauvegardé en base (CodeDept/Id_Club) au moment du chargement,
+// pour distinguer les valeurs affichées (éditées en local, pas encore enregistrées) de ce qui
+// est réellement en base : seul cet instantané détermine la coloration verte des lignes.
+function stampSaved(list) {
+    list.forEach(e => { e.SavedCodeDept = e.CodeDept; e.SavedIdClub = e.Id_Club; });
+    return list;
+}
 
 function deptBadge(dept) {
     if (!dept) return '<span style="font-size:.7rem;color:#9ca3af;">—</span>';
@@ -290,7 +376,8 @@ $('#btn-charger').on('click', async function () {
         let html = `<div class="alert alert-success py-2">
             <i class="bi bi-check-circle me-1"></i>
             <strong>${s.divisions} division(s)</strong> traitées —
-            <strong>${s.equipes} équipe(s)</strong> nouvelles insérées.`;
+            <strong>${s.equipes} équipe(s)</strong> nouvelles insérées` +
+            (s.associations > 0 ? ` — <strong>${s.associations}</strong> association(s) club/département automatique(s)` : '') + `.`;
         if (s.erreurs?.length) html += `<br><span class="text-warning">${s.erreurs.length} erreur(s) : ${s.erreurs.map(e=>esc(e)).join(', ')}</span>`;
         html += '</div>';
         $('#res-charger').html(html);
@@ -307,9 +394,8 @@ $('#btn-charger').on('click', async function () {
 function chargerEquipes() {
     $.getJSON(`${NAT_BASE}/equipes`, function(r) {
         if (!r.ok) { nijacToast('Erreur chargement équipes.', 'danger'); return; }
-        equipes = r.equipes;
-        $('#section-assoc, #section-import').show();
-        $('#btn-hors-region, #btn-importer').prop('disabled', false);
+        equipes = stampSaved(r.equipes);
+        $('#btn-export-txt').prop('disabled', !equipes.length);
         renderAssoc();
     });
 }
@@ -328,30 +414,34 @@ function renderAssoc() {
     $('#lbl-assoc-count').text(`${avecDept}/${total} avec dépt — ${normands} ${REGION_GENTILE} — ${avecClub} avec club`);
 
     const $body = $('#tbody-assoc').empty();
-    if (!data.length) { $body.append('<tr><td colspan="6" class="text-center text-muted py-3">Aucune équipe.</td></tr>'); return; }
+    if (!data.length) { $body.append('<tr><td colspan="7" class="text-center text-muted py-3">Aucune équipe.</td></tr>'); return; }
 
     data.forEach(e => {
-        const norm   = isNorm(e.CodeDept);
-        const haClub = !!e.Id_Club;
-        const rowOk  = e.CodeDept && (!norm || haClub);
-        const clubCell = norm ? `
-            <div class="club-search-wrap" data-id="${e.Id_EquipeNat}">
-                <div class="club-display ${haClub?'':'empty'}">${haClub ? esc(e.NomClub)+` <small class="text-muted">(#${e.Id_Club})</small>` : '— non associé —'}</div>
+        const norm      = isNorm(e.CodeDept);
+        const haClub    = !!e.Id_Club;
+        const savedNorm = isNorm(e.SavedCodeDept);
+        const rowOk     = !!e.SavedCodeDept && (!savedNorm || !!e.SavedIdClub);
+        const clubCell = `
+            <div class="club-search-wrap" data-id="${e.Id_EquipeNat}" data-nom="${esc(e.Nom)}">
+                <div class="club-display ${haClub?'':'empty'}">${haClub ? esc(e.NomClub) : '— non associé —'}</div>
                 <button class="btn btn-xs btn-outline-secondary btn-changer-club py-0 px-1" style="font-size:.76rem;"><i class="bi bi-search"></i></button>
                 ${haClub ? `<button class="btn btn-xs btn-outline-danger btn-effacer-club py-0 px-1" style="font-size:.76rem;"><i class="bi bi-x"></i></button>` : ''}
                 <div class="club-popup"><input class="club-popup-input" placeholder="Chercher…" autocomplete="off"><div class="club-results"></div></div>
-            </div>` : `<span class="text-muted" style="font-size:.78rem;">${esc(deptName(e.CodeDept))}</span>`;
+            </div>`;
 
         const $tr = $('<tr>').addClass(rowOk?'assoc-ok':'').attr('data-id', e.Id_EquipeNat);
         $tr.html(`
             <td><span class="badge-div bdiv-${esc(e.id_division)}">${esc(e.id_division)}</span></td>
             <td style="text-align:center;">${e.Poule||'—'}</td>
+            <td class="cell-num-club" style="text-align:center;">
+                <input type="text" class="input-numclub form-control form-control-sm text-center px-1" value="${haClub ? esc(e.Id_Club) : ''}" placeholder="N° club" maxlength="8" style="width:80px;font-size:.8rem;" data-id="${e.Id_EquipeNat}">
+            </td>
+            <td>${clubCell}</td>
             <td style="font-weight:600;">${esc(e.Nom)}</td>
             <td style="text-align:center;">
                 <input type="text" class="input-dept form-control form-control-sm text-center px-1" value="${esc(e.CodeDept??'')}" placeholder="76" maxlength="3" style="width:58px;display:inline-block;" data-id="${e.Id_EquipeNat}">
                 <span class="dept-badge ms-1" data-id="${e.Id_EquipeNat}">${deptBadge(e.CodeDept)}</span>
             </td>
-            <td>${clubCell}</td>
             <td style="text-align:center;">
                 <button class="btn btn-sm btn-success btn-sauver py-0" data-id="${e.Id_EquipeNat}" data-dept="${esc(e.CodeDept??'')}" data-club="${e.Id_Club??''}"><i class="bi bi-floppy"></i></button>
             </td>`);
@@ -362,53 +452,83 @@ function renderAssoc() {
 $(document).on('input', '.input-dept', function() {
     const idEn = +$(this).attr('data-id');
     const dept = $(this).val().trim().toUpperCase();
-    const norm = isNorm(dept);
-    $(this).closest('tr').find(`.dept-badge[data-id="${idEn}"]`).html(deptBadge(dept||null));
+    const $tr  = $(this).closest('tr');
+    $tr.find(`.dept-badge[data-id="${idEn}"]`).html(deptBadge(dept||null));
     const eq = equipes.find(e => +e.Id_EquipeNat === idEn);
-    if (eq) { eq.CodeDept = dept||null; if (!norm) { eq.Id_Club=null; eq.NomClub=null; } }
-    const $clubCell = $(this).closest('tr').find('td').eq(4);
-    if (!norm) {
-        $clubCell.html(`<span class="text-muted" style="font-size:.78rem;">${esc(deptName(dept))}</span>`);
-        $(this).closest('tr').find('.btn-sauver').attr('data-club','');
-    } else if (!$clubCell.find('.club-search-wrap').length) {
-        $clubCell.html(`<div class="club-search-wrap" data-id="${idEn}"><div class="club-display empty">— non associé —</div><button class="btn btn-xs btn-outline-secondary btn-changer-club py-0 px-1" style="font-size:.76rem;"><i class="bi bi-search"></i></button><div class="club-popup"><input class="club-popup-input" placeholder="Chercher…" autocomplete="off"><div class="club-results"></div></div></div>`);
-    }
+    if (eq) { eq.CodeDept = dept||null; }
 });
 
 let searchTimer = null;
+// Retire le dernier mot de la requête s'il ne fait que 2 caractères (souvent un sigle/suffixe
+// qui ne correspond à rien dans le nom du club en base, et qui empêche sinon de trouver le club).
+function trimShortTrailingWord(q) {
+    return q.replace(/\s+\S{2}$/, '').trim();
+}
+function searchClubs($input, onDone) {
+    const q = trimShortTrailingWord($input.val().trim());
+    const $res = $input.siblings('.club-results').empty();
+    const prevXhr = $input.data('searchXhr');
+    if (prevXhr && prevXhr.abort) prevXhr.abort(); // annule une recherche précédente encore en vol (évite qu'une réponse plus lente écrase des résultats plus récents)
+    if (q.length < 2) { onDone && onDone(); return; }
+    const xhr = $.getJSON(`${NAT_BASE}/recherche-club`, {q}, function(r) {
+        $res.empty();
+        if (!r.ok || !r.clubs.length) { $res.html('<div class="club-result text-muted">Aucun club.</div>'); onDone && onDone(); return; }
+        r.clubs.forEach(c => $('<div class="club-result">').html(`<strong>${esc(c.Nom)}</strong> <small class="text-muted">#${c.Id_Club}</small>`).attr({'data-id-club':c.Id_Club,'data-nom-club':c.Nom}).appendTo($res));
+        onDone && onDone();
+    });
+    $input.data('searchXhr', xhr);
+}
 $(document).on('input', '.club-popup-input', function() {
-    const q = $(this).val().trim();
-    const $res = $(this).siblings('.club-results').empty();
+    const $input = $(this);
     clearTimeout(searchTimer);
-    if (q.length < 2) return;
-    searchTimer = setTimeout(() => {
-        $.getJSON(`${NAT_BASE}/recherche-club`, {q}, function(r) {
-            $res.empty();
-            if (!r.ok || !r.clubs.length) { $res.html('<div class="club-result text-muted">Aucun club.</div>'); return; }
-            r.clubs.forEach(c => $('<div class="club-result">').html(`<strong>${esc(c.Nom)}</strong> <small class="text-muted">#${c.Id_Club}</small>`).attr({'data-id-club':c.Id_Club,'data-nom-club':c.Nom}).appendTo($res));
-        });
-    }, 280);
+    searchTimer = setTimeout(() => searchClubs($input), 280);
+});
+// Entrée = valide immédiatement le nom saisi et sélectionne le premier club trouvé
+$(document).on('keydown', '.club-popup-input', function(e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const $input = $(this);
+    clearTimeout(searchTimer);
+    searchClubs($input, function() {
+        const $first = $input.siblings('.club-results').find('.club-result[data-id-club]').first();
+        if ($first.length) pickClubResult($first);
+    });
 });
 
 $(document).on('click', '.btn-changer-club', function(e) {
     e.stopPropagation();
     $('.club-popup').removeClass('open');
-    $(this).closest('.club-search-wrap').find('.club-popup').addClass('open').find('.club-popup-input').val('').trigger('focus');
-    $(this).closest('.club-search-wrap').find('.club-results').empty();
+    const $wrap = $(this).closest('.club-search-wrap');
+    const nomBase = ($wrap.attr('data-nom') || '').replace(/\s+\d+$/, '').trim();
+    $wrap.find('.club-popup').addClass('open').find('.club-popup-input').val(nomBase).trigger('focus').trigger('input');
+    $wrap.find('.club-results').empty();
 });
 $(document).on('click', function() { $('.club-popup').removeClass('open'); });
 $(document).on('click', '.club-popup', e => e.stopPropagation());
 
-$(document).on('click', '.club-result', function() {
-    const $wrap = $(this).closest('.club-search-wrap');
+function deptFromIdClub(idClub) {
+    return String(idClub ?? '').substr(2, 2);
+}
+
+function pickClubResult($result) {
+    const $wrap = $result.closest('.club-search-wrap');
+    const $tr   = $wrap.closest('tr');
     const idEn  = +$wrap.attr('data-id');
-    const idClub = $(this).attr('data-id-club');
-    const nom    = $(this).attr('data-nom-club');
+    const idClub = $result.attr('data-id-club');
+    const nom    = $result.attr('data-nom-club');
+    const dept   = deptFromIdClub(idClub);
     const eq = equipes.find(e => +e.Id_EquipeNat === idEn);
-    if (eq) { eq.Id_Club=idClub; eq.NomClub=nom; }
-    $wrap.find('.club-display').removeClass('empty').html(esc(nom)+` <small class="text-muted">(#${idClub})</small>`);
-    $wrap.closest('tr').find('.btn-sauver').attr('data-club', idClub);
+    if (eq) { eq.Id_Club=idClub; eq.NomClub=nom; eq.CodeDept=dept; }
+    $wrap.find('.club-display').removeClass('empty').html(esc(nom));
+    $tr.find('.input-numclub').val(idClub);
+    $tr.find('.input-dept').val(dept);
+    $tr.find('.dept-badge').html(deptBadge(dept));
+    $tr.find('.btn-sauver').attr('data-club', idClub).attr('data-dept', dept);
     $wrap.find('.club-popup').removeClass('open');
+}
+
+$(document).on('click', '.club-result', function() {
+    pickClubResult($(this));
 });
 
 $(document).on('click', '.btn-effacer-club', function() {
@@ -420,48 +540,205 @@ $(document).on('click', '.btn-effacer-club', function() {
     renderAssoc();
 });
 
+// ── Saisie directe du n° de club ──────────────────────────────────────────────
+$(document).on('change', '.input-numclub', function() {
+    const $input = $(this);
+    const idEn   = +$input.attr('data-id');
+    const numero = $input.val().trim().toUpperCase();
+    const $tr    = $input.closest('tr');
+    const eq     = equipes.find(e => +e.Id_EquipeNat === idEn);
+    $input.val(numero);
+
+    if (numero === '') {
+        if (eq) { eq.Id_Club = null; eq.NomClub = null; }
+        $tr.find('.btn-sauver').attr('data-club', '');
+        renderAssoc();
+        return;
+    }
+
+    $input.prop('disabled', true);
+    $.getJSON(`${NAT_BASE}/club-par-numero`, {numero}, function(r) {
+        $input.prop('disabled', false);
+        if (!r.ok) {
+            nijacToast(r.err || 'Club introuvable.', 'danger');
+            $input.val(eq?.Id_Club ?? '');
+            return;
+        }
+        const dept = deptFromIdClub(r.club.Id_Club);
+        if (eq) { eq.Id_Club = r.club.Id_Club; eq.NomClub = r.club.Nom; eq.CodeDept = dept; }
+        $input.val(r.club.Id_Club);
+        $tr.find('.club-display').removeClass('empty').html(esc(r.club.Nom));
+        $tr.find('.input-dept').val(dept);
+        $tr.find('.dept-badge').html(deptBadge(dept));
+        $tr.find('.btn-sauver').attr('data-club', r.club.Id_Club).attr('data-dept', dept);
+    }).fail(() => { $input.prop('disabled', false); nijacToast('Erreur réseau.', 'danger'); });
+});
+
 $(document).on('click', '.btn-sauver', function() {
     const $btn  = $(this);
     const idEn  = +$btn.attr('data-id');
     const dept  = $btn.closest('tr').find('.input-dept').val().trim();
-    const norm  = isNorm(dept);
-    const idClub = norm ? $btn.attr('data-club') : '';
+    const idClub = $btn.attr('data-club') || '';
     $btn.prop('disabled', true);
     $.post(`${NAT_BASE}/sauvegarder-assoc`, {id_equipe_nat:idEn, code_dept:dept, id_club:idClub}, function(r) {
         $btn.prop('disabled', false);
-        if (r.ok) { const eq=equipes.find(e=>+e.Id_EquipeNat===idEn); if(eq){eq.CodeDept=dept||null; if(!norm){eq.Id_Club=null;eq.NomClub=null;}} renderAssoc(); }
-        else nijacToast('Erreur : ' + r.err, 'danger');
+        if (r.ok) {
+            const eq = equipes.find(e => +e.Id_EquipeNat === idEn);
+            if (eq) { eq.CodeDept = dept || null; eq.SavedCodeDept = eq.CodeDept; eq.SavedIdClub = idClub || null; }
+            renderAssoc();
+        } else nijacToast('Erreur : ' + r.err, 'danger');
     }, 'json').fail(() => { $btn.prop('disabled', false); nijacToast('Erreur réseau.', 'danger'); });
 });
 
 $('#sel-div-filtre, #chk-sans-dept').on('change', renderAssoc);
 
-$('#btn-hors-region').on('click', function() {
+// ── Export .txt (calendrier persisté + équipes/poules/N° Club de l'étape 2) ──
+// Généré et enregistré côté serveur (Importation/Rencontres/Nationale/YYYYMMJJ_Poules_Nationales.txt),
+// pour rester réutilisable indépendamment de la session/du navigateur en cours.
+$('#btn-export-txt').on('click', async function () {
     $(this).prop('disabled', true);
-    $.post(`${NAT_BASE}/hors-region`, {}, function(r) {
-        $('#btn-hors-region').prop('disabled', false);
-        if (!r.ok) { nijacToast('Erreur Hors Région : '+(r.err??''), 'danger'); return; }
-        if (r.clubs_crees > 0 || r.equipes_assignees > 0)
-            nijacToast(`Hors Région : ${r.clubs_crees} club(s) créé(s), ${r.equipes_assignees} équipe(s) assignée(s).`, 'success');
-        chargerEquipes();
-    }, 'json').fail(() => nijacToast('Erreur réseau.', 'danger'));
+    try {
+        const r = await $.post(`${NAT_BASE}/exporter-txt`, {}, null, 'json');
+        if (!r.ok) { nijacToast('Erreur export : ' + r.err, 'danger'); return; }
+        nijacToast(`Fichier enregistré : ${r.fichier}`, 'success');
+    } catch (e) {
+        nijacToast('Erreur réseau.', 'danger');
+    } finally {
+        $(this).prop('disabled', !equipes.length);
+    }
 });
 
-// ── 3. Import rencontres ──────────────────────────────────────────────────────
-$('#btn-importer').on('click', async function() {
+// Charger les équipes existantes au démarrage si table non vide
+$.getJSON(`${NAT_BASE}/equipes`, function(r) {
+    if (r.ok && r.equipes.length) {
+        equipes = stampSaved(r.equipes);
+        $('#btn-export-txt').prop('disabled', false);
+        renderAssoc();
+    }
+});
+
+// ── Onglet Importation Excel ──────────────────────────────────────────────────
+function fmtDateNat(iso) {
+    const p = String(iso).split('-');
+    return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso;
+}
+
+function afficherCalendrierExcel(journees) {
+    if (!journees.length) { $('#cal-content-excel').html('<p class="text-muted mb-0">Aucune journée détectée.</p>'); return; }
+    let th1 = '', th2 = '';
+    journees.forEach(j => {
+        const matchs = j.matchs.map(m => `${m[0]}-${m[1]}`).join(' / ');
+        th1 += `<th style="text-align:center; white-space:nowrap; padding:.25rem .5rem;">J${j.journee}<br><span style="font-weight:400; font-size:.78rem;">${fmtDateNat(j.date)}</span></th>`;
+        th2 += `<td style="text-align:center; font-size:.8rem; color:#4b5563; white-space:nowrap; padding:.2rem .5rem;">${matchs}</td>`;
+    });
+    $('#cal-content-excel').html(`
+        <div style="overflow-x:auto;">
+          <table style="border-collapse:collapse; border:1px solid #d0d8e8; font-size:.84rem; background:#fff; border-radius:6px; overflow:hidden;">
+            <thead><tr style="background:#e8eef7; color:#1a3a6b;">${th1}</tr></thead>
+            <tbody><tr>${th2}</tr></tbody>
+          </table>
+        </div>`);
+}
+
+$('#btn-toggle-cal-excel').on('click', function () {
+    const $c = $('#cal-content-excel');
+    const open = $c.is(':visible');
+    $c.toggle(!open);
+    $(this).html(open ? '<i class="bi bi-chevron-down"></i> Afficher' : '<i class="bi bi-chevron-up"></i> Masquer');
+});
+
+// Liste des fichiers Excel/texte disponibles (étape 1 + liste de l'étape 4)
+$.getJSON(`${NAT_BASE}/fichiers-excel`, function (r) {
+    const $sel  = $('#sel-fichier-excel').empty();
+    const $list = $('#liste-fichiers-nat').empty();
+    if (!r.ok || !r.fichiers.length) {
+        $sel.append('<option value="">— Aucun fichier .xlsx disponible —</option>');
+        $list.append('<li class="text-muted">Aucun fichier.</li>');
+        return;
+    }
+    $sel.append('<option value="">— Choisir un fichier —</option>');
+    r.fichiers.forEach(f => {
+        $sel.append(`<option value="${esc(f)}">${esc(f)}</option>`);
+        $list.append(`<li><a href="${NAT_DIR_URL}${encodeURIComponent(f)}" target="_blank" rel="noopener"><i class="bi bi-file-earmark me-1"></i>${esc(f)}</a></li>`);
+    });
+    $('#btn-analyser-excel').prop('disabled', false);
+}).fail(() => {
+    $('#sel-fichier-excel').empty().append('<option value="">— Erreur de chargement —</option>');
+    $('#liste-fichiers-nat').empty().append('<li class="text-danger">Erreur de chargement.</li>');
+    nijacToast('Erreur réseau lors du chargement de la liste des fichiers Excel.', 'danger');
+});
+
+// Calendrier persisté (table nationale_calendrier) : restaure le cartouche "Ordre des rencontres"
+// et active l'étape 3, même après un rechargement de page (sans nouvelle analyse cette session).
+$.getJSON(`${NAT_BASE}/calendrier`, function (r) {
+    if (!r.ok || !r.journees.length) return;
+    currentSaison = r.saison;
+    lastJournees  = r.journees;
+    if (currentSaison) { $('#lbl-saison-excel').text('Saison ' + currentSaison).show(); }
+    $('#cal-hint-excel').hide();
+    $('#btn-toggle-cal-excel').show();
+    afficherCalendrierExcel(r.journees);
+    $('#btn-importer-excel').prop('disabled', false);
+    $('#import-excel-hint').hide();
+});
+
+$('#sel-fichier-excel').on('change', function () {
+    $('#btn-analyser-excel').prop('disabled', !this.value);
+});
+
+$('#btn-analyser-excel').on('click', async function () {
+    const fichier = $('#sel-fichier-excel').val();
+    if (!fichier) return;
+    $(this).prop('disabled', true);
+    spinner(true);
+    $('#analyse-excel-status').text('Analyse en cours…');
+    try {
+        const r = await $.post(`${NAT_BASE}/analyser-excel`, { fichier }, null, 'json');
+        spinner(false);
+        if (!r.ok) { $('#analyse-excel-status').text(''); nijacToast('Erreur analyse : ' + r.err, 'danger'); return; }
+
+        currentSaison = r.data.saison;
+        lastJournees  = r.data.journees;
+        $('#lbl-saison-excel').text('Saison ' + r.data.saison).show();
+        $('#cal-hint-excel').hide();
+        $('#btn-toggle-cal-excel').show();
+        afficherCalendrierExcel(r.data.journees);
+        $('#cal-content-excel').hide();
+        $('#btn-toggle-cal-excel').html('<i class="bi bi-chevron-down"></i> Afficher');
+
+        let statusMsg = `${r.data.pools.length} poule(s), ${r.data.journees.length} journée(s).`;
+        if (r.auto_assoc > 0) statusMsg += ` ${r.auto_assoc} association(s) copiée(s) automatiquement.`;
+        if (r.erreurs?.length) statusMsg += ` ⚠ ${r.erreurs.join(', ')}`;
+        $('#analyse-excel-status').text(statusMsg);
+        if (r.data.journees.length) {
+            $('#btn-importer-excel').prop('disabled', false);
+            $('#import-excel-hint').hide();
+        }
+        chargerEquipes();
+    } catch (e) {
+        spinner(false);
+        $('#analyse-excel-status').text('');
+        nijacToast('Erreur réseau.', 'danger');
+    } finally {
+        $(this).prop('disabled', false);
+    }
+});
+
+// ── 3 (Excel). Import rencontres depuis le fichier Excel ─────────────────────
+$('#btn-importer-excel').on('click', async function() {
     const conf = await new Promise(resolve => nijacConfirm(
-        `Importer les rencontres nationales (receveur = club ${REGION_GENTILE}) ?\nLes doublons seront ignorés.`,
+        `Importer les rencontres à partir du calendrier enregistré (receveur = club ${REGION_GENTILE}) ?\nLes doublons seront ignorés.`,
         () => resolve(true), () => resolve(false)
     ));
     if (!conf) return;
 
     $(this).prop('disabled', true);
     spinner(true);
-    $('#res-import').html('<em class="text-muted small">Import en cours…</em>');
+    $('#res-import-excel').html('<em class="text-muted small">Import en cours…</em>');
     try {
-        const r = await $.post(`${NAT_BASE}/importer`, {}, null, 'json');
+        const r = await $.post(`${NAT_BASE}/importer-excel`, {}, null, 'json');
         spinner(false);
-        if (!r.ok) { $('#res-import').html(`<div class="alert alert-danger py-2">${esc(r.err)}</div>`); return; }
+        if (!r.ok) { $('#res-import-excel').html(`<div class="alert alert-danger py-2">${esc(r.err)}</div>`); return; }
         const s = r.stats;
         let html = `<div class="d-flex flex-wrap gap-2 mb-2">
             <div class="stat-card"><div class="sv text-success">${s.rencontres_creees}</div><div class="sl">Rencontres créées</div></div>
@@ -481,18 +758,13 @@ $('#btn-importer').on('click', async function() {
             const rows = s.log.map(l => `<div><i class="bi ${icons[l.type]??'bi-dot'}" style="font-size:.7rem;"></i> ${esc(l.val)}</div>`).join('');
             html += `<div class="log-detail mt-1">${rows}</div>`;
         }
-        $('#res-import').html(html);
+        $('#res-import-excel').html(html);
     } catch(e) {
         spinner(false);
-        $('#res-import').html('<div class="alert alert-danger py-2">Erreur réseau.</div>');
+        $('#res-import-excel').html('<div class="alert alert-danger py-2">Erreur réseau.</div>');
     } finally {
         $(this).prop('disabled', false);
     }
-});
-
-// Charger les équipes existantes au démarrage si table non vide
-$.getJSON(`${NAT_BASE}/equipes`, function(r) {
-    if (r.ok && r.equipes.length) { equipes=r.equipes; $('#section-assoc,#section-import').show(); $('#btn-hors-region,#btn-importer').prop('disabled', false); renderAssoc(); }
 });
 
 // ── 0b. Debug xml_equipe ──────────────────────────────────────────────────────
@@ -610,9 +882,8 @@ $('#btn-scanner').on('click', async function () {
         if (trouves > 0) {
             $.getJSON(`${NAT_BASE}/equipes`, function(r2) {
                 if (r2.ok && r2.equipes.length) {
-                    equipes = r2.equipes;
-                    $('#section-assoc,#section-import').show();
-                    $('#btn-hors-region,#btn-importer').prop('disabled', false);
+                    equipes = stampSaved(r2.equipes);
+                    $('#btn-export-txt').prop('disabled', false);
                     renderAssoc();
                 }
             });

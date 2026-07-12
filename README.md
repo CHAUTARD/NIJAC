@@ -23,7 +23,7 @@ Le détail complet de chaque écran (fonctionnalités, fichier source) est dispo
 | E011 | Import Rencontres | Import fichiers Excel FFTT dans la table rencontre (upsert) |
 | E015 | Configuration | Paramètres applicatifs (état logiciel, SMTP, frais kilométriques…) |
 | E016 | Saison / Nettoyage | Sauvegarde SQL + vidage des tables de saison, restauration depuis backup |
-| E017 | Import Rencontres Nationales | Import fichier FFTT à 6 feuilles (N1M/N2M/N3M/N1D/N2D) |
+| E017 | Import Rencontres Nationales | Import via API FFTT ou fichier Excel FFTT à 6 feuilles (N1M/N2M/N3M/N1F/N2F) |
 | E020 | Menu nominateur | Tableau de bord (JA actifs, nominations, convocations, rencontres sans JA) |
 | E021 | Disponibilités JA | Saisie par département (règle 76 → 27 automatique), fiche par journée |
 | E022 | Nomination | Affectation JA ↔ rencontres avec règles métier, validation des nominations |

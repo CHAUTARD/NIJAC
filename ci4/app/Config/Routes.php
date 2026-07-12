@@ -147,8 +147,12 @@ $routes->post('club/fftt/clubs-dept', 'ClubController::getClubsDeptFftt', ['filt
 $routes->post('club/fftt/sync', 'ClubController::syncFfttClub', ['filter' => 'adminauth']);
 
 // ── E017 Import Rencontres Nationales ────────────────────────────────────────
-// Admin uniquement (comme includes/admin_required.php côté legacy — la
-// SPECIFICATION.md décrit à tort un import de fichier Excel multi-feuilles).
+// Admin uniquement (comme includes/admin_required.php côté legacy). Deux onglets pour
+// alimenter la table equipe_nationale (import via API FFTT, ou importation d'un fichier
+// Excel FFTT multi-feuilles/texte — méthode originelle de cet écran, utile en début de
+// saison quand l'API n'a pas encore les poules) : ils partagent la section d'association
+// équipe → club. L'import des rencontres elles-mêmes (importer-excel) ne se fait qu'à
+// partir du calendrier lu dans le fichier Excel/texte — pas d'appel FFTT pour cette étape.
 $routes->get('import-rencontres-nat', 'ImportRencontresNatController::index', ['filter' => 'adminauth']);
 $routes->post('import-rencontres-nat/reset-cache', 'ImportRencontresNatController::resetNatCache', ['filter' => 'adminauth']);
 $routes->get('import-rencontres-nat/clubs-region', 'ImportRencontresNatController::listerClubsRegion', ['filter' => 'adminauth']);
@@ -157,9 +161,13 @@ $routes->post('import-rencontres-nat/scanner-club', 'ImportRencontresNatControll
 $routes->post('import-rencontres-nat/charger-depuis-api', 'ImportRencontresNatController::chargerDepuisApi', ['filter' => 'adminauth']);
 $routes->get('import-rencontres-nat/equipes', 'ImportRencontresNatController::listeEquipes', ['filter' => 'adminauth']);
 $routes->get('import-rencontres-nat/recherche-club', 'ImportRencontresNatController::rechercheClub', ['filter' => 'adminauth']);
+$routes->get('import-rencontres-nat/club-par-numero', 'ImportRencontresNatController::clubParNumero', ['filter' => 'adminauth']);
 $routes->post('import-rencontres-nat/sauvegarder-assoc', 'ImportRencontresNatController::sauvegarderAssoc', ['filter' => 'adminauth']);
-$routes->post('import-rencontres-nat/hors-region', 'ImportRencontresNatController::assignerHorsRegion', ['filter' => 'adminauth']);
-$routes->post('import-rencontres-nat/importer', 'ImportRencontresNatController::importerRencontres', ['filter' => 'adminauth']);
+$routes->get('import-rencontres-nat/fichiers-excel', 'ImportRencontresNatController::listerFichiersExcel', ['filter' => 'adminauth']);
+$routes->post('import-rencontres-nat/analyser-excel', 'ImportRencontresNatController::analyserExcel', ['filter' => 'adminauth']);
+$routes->post('import-rencontres-nat/importer-excel', 'ImportRencontresNatController::importerRencontresExcel', ['filter' => 'adminauth']);
+$routes->get('import-rencontres-nat/calendrier', 'ImportRencontresNatController::calendrier', ['filter' => 'adminauth']);
+$routes->post('import-rencontres-nat/exporter-txt', 'ImportRencontresNatController::exporterTxt', ['filter' => 'adminauth']);
 
 // ── E021 Disponibilités JA ───────────────────────────────────────────────────
 $routes->get('disponibilites', 'DisponibilitesController::index', ['filter' => 'auth']);

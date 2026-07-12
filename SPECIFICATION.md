@@ -526,30 +526,131 @@ Préparer l'application pour une nouvelle saison : sauvegarde SQL puis vidage de
 
 ## E017 – Import Rencontres Nationales
 
-**Fichier :** `import_rencontres_nat.php`  
+**Fichier :** `ImportRencontresNatController.php`  
 **Accès :** Administrateur uniquement
 
 ### Objectif
-Importer les rencontres des divisions nationales depuis un fichier Excel FFTT multi-feuilles.
+Alimenter la table `equipe_nationale` (équipes des divisions nationales N1M/N2M/N3M/N1F/N2F et leur
+club/département d'origine) et associer chaque équipe à un club NIJAC de la région. Deux onglets,
+alimentant la même table :
 
-### Structure du fichier
-- 6 feuilles : `N1M`, `N2M`, `N3M`, `N1D`, `N2D` (+ éventuellement une feuille supplémentaire)
-- Colonnes : Saison, Journée, Date, Équipe domicile, Équipe visiteur
+- **Import via API** : interroge l'API FFTT en direct (scan des clubs de la région pour détecter leurs
+  équipes nationales, puis chargement des divisions via `xml_epreuve`/`xml_division`).
+- **Importation Excel/texte** : analyse un fichier déposé dans `Importation/Rencontres/Nationale/`
+  (calendrier des journées + poules par division et par rang), au choix au format `.xlsx` (fichier FFTT
+  à plusieurs feuilles — feuille 1 = calendrier, feuilles suivantes = poules) ou `.txt` (voir "Structure
+  du fichier texte" ci-dessous). Méthode originelle de cet écran, utile en début de saison quand l'API
+  FFTT n'a pas encore les poules alimentées. `parseNatFichier()` dispatche vers `parseNatExcel()` ou
+  `parseNatTxt()` selon l'extension ; les deux retournent la même structure interne
+  (`saison`/`journees`/`pools`/`avertissements`).
+
+L'import des **rencontres** elles-mêmes (une fois les équipes associées à un club) se fait uniquement à
+partir du calendrier persisté (table `nationale_calendrier`, action `importer-excel`) : aucun appel FFTT
+pour cette étape, la date de chaque rencontre est déduite de la journée et de l'ordre de rang, appliqués
+à chaque poule associée à l'étape 2. L'onglet API ne sert donc qu'à alimenter `equipe_nationale` (étapes
+0/1) ; il n'a pas d'équivalent « importer les rencontres depuis l'API » — cette action a été retirée au
+profit de la seule source Excel/texte.
+
+### Persistance du calendrier (table `nationale_calendrier`)
+`analyserExcel()` écrit le calendrier (`data.journees`) dans cette table à chaque analyse réussie
+(`TRUNCATE` puis réinsertion complète — un seul calendrier actif à la fois, commun à toutes les
+divisions/poules) : `Journee` (clé primaire), `Date`, `Ordre` (colonne `JSON`, ex: `[[1,8],[2,7],[3,6],[4,5]]`).
+La saison (ex: "2026/2027") est stockée dans `configuration` sous la clé `nat_saison`. Cette persistance
+remplace l'ancienne mémorisation côté navigateur (perdue au rechargement de la page) et permet à
+`importerRencontresExcel()` de fonctionner sans avoir à reproposer le fichier d'origine — `getCalendrierPersiste()`
+relit cette table. L'action GET `calendrier` restitue `{saison, journees}` au chargement de la page pour
+réafficher le cartouche « Ordre des rencontres », réactiver l'étape 3 et permettre l'export .txt de
+l'étape 2 sans nouvelle analyse.
+
+### Structure du fichier Excel (`.xlsx`)
+- Feuille 1 : calendrier (colonne A = n° journée, B = date, C = "Ordre des Rencontres" au format `rang-rang / rang-rang…`)
+- Feuilles suivantes : une par division nationale, poules identifiées par un en-tête `POULE n`, équipes listées par rang
+
+### Structure du fichier texte (`.txt`)
+Alternative au `.xlsx`, utile quand seul un PDF de poules est disponible (recopié/nettoyé à la main —
+chaque équipe sur sa propre ligne, donc aucun risque de colonnes fusionnées comme lors d'une conversion
+PDF→texte brute) :
+
+```
+SAISON 2026/2027
+
+CALENDRIER
+1;19-sept;1-8/2-7/3-6/4-5
+2;3-oct;7-1/6-2/5-3/8-4
+...
+
+NATIONALE 1 MESSIEURS
+POULE 1
+1;OUISTREHAM AP 1;07760123
+2;PONTAULT COMBAULT UMS TT 1
+...
+
+POULE 2
+1;NICE CAVIGAL 1
+...
+
+NATIONALE 2 MESSIEURS
+POULE 1
+...
+```
+
+- `CALENDRIER` bascule le parseur en lecture des journées : une ligne par journée, `n° journée;date;ordre
+  des rencontres` (séparateur `;` ou tabulation).
+- Une ligne reconnue comme intitulé de division (`NATIONALE x MESSIEURS/DAMES`, même détection que pour le
+  `.xlsx`) bascule vers la lecture des poules de cette division ; `POULE n` démarre une nouvelle poule,
+  chaque ligne suivante `rang;nom équipe[;Id_Club]` lui est rattachée. Le 3ᵉ champ (`Id_Club`, numéro FFTT
+  à 8 caractères) est optionnel : à ne renseigner que pour les équipes dont le club est déjà connu
+  (typiquement les clubs de la région, receveurs), pour éviter l'association manuelle de l'étape 2 —
+  `analyser-excel` l'écrit dans `equipe_nationale.Id_Club`/`CodeDept` (dérivé des caractères 3-4 de
+  l'Id_Club) sans écraser une association déjà faite si le fichier ne le précise pas.
+- Une poule avec moins de 2 équipes n'est pas retenue et remonte en avertissement plutôt que d'être importée.
+- Les lignes commençant par `#` sont ignorées (commentaires), ainsi que toute ligne ne correspondant à
+  aucun des motifs ci-dessus.
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `liste_fichiers` | GET | Liste les fichiers disponibles dans `/Importation/` |
-| `analyser` | POST | Analyse un fichier et retourne les équipes non associées |
-| `liste_equipes` | GET | Liste les équipes nationales connues |
-| `recherche_club` | GET | Recherche un club pour l'association |
-| `sauvegarder_assoc` | POST | Sauvegarde l'association équipe nationale → club |
-| `assigner_hors_region` | POST | Marque une équipe comme hors région (pas de JA) |
-| `importer` | POST | Exécute l'import en base |
-| `remplir_rencontres` | POST | Complète les rencontres existantes avec les données nationales |
+| `clubs-region` | GET | Liste les clubs de la région (onglet API) |
+| `scanner-club` | POST | Détecte les équipes nationales d'un club (onglet API) |
+| `charger-depuis-api` | POST | Charge les équipes nationales depuis l'API FFTT (onglet API) |
+| `fichiers-excel` | GET | Liste les fichiers `.xlsx`/`.txt` disponibles dans `Importation/Rencontres/Nationale/` (alimente le sélecteur de l'étape 1 et la liste de liens de téléchargement de l'étape 4) |
+| `analyser-excel` | POST | Analyse un fichier `.xlsx` ou `.txt`, insère les équipes dans `equipe_nationale` et persiste le calendrier dans `nationale_calendrier` (onglet Excel/texte) |
+| `importer-excel` | POST | Importe les rencontres (receveur = club de la région) à partir du calendrier persisté (`nationale_calendrier`) — aucun fichier à reproposer (onglet Excel/texte) |
+| `calendrier` | GET | Restitue le calendrier persisté (`{saison, journees}`), pour réafficher le cartouche/étape 3 après un rechargement de page |
+| `exporter-txt` | POST | Enregistre l'état courant (calendrier + équipes/N° Club) dans `Importation/Rencontres/Nationale/YYYYMMJJ_Poules_Nationales.txt` (étape 2) |
+| `equipes` | GET | Liste les équipes nationales connues (association, partagée par les deux onglets) |
+| `recherche-club` | GET | Recherche un club pour l'association |
+| `sauvegarder-assoc` | POST | Sauvegarde l'association équipe nationale → club/département |
 
 ### Règle spécifique
-Avant l'import, toutes les équipes non reconnues doivent être associées manuellement à un club NIJAC ou marquées « hors région ». L'import est bloqué tant que des équipes restent sans association.
+Seules les rencontres où l'équipe à domicile est associée à un club de la région sont importées ; l'équipe
+adverse peut être normande ou hors région. Les rencontres déjà présentes (même date + mêmes équipes) sont ignorées.
+L'ordre des rencontres (ex. `1-8 / 2-7 / 3-6 / 4-5`) est un ordre générique de rang appliqué à chaque poule
+(division/poule/rang enregistrés dans `equipe_nationale`) — pas de date par rencontre individuelle dans le
+fichier, seulement une date par journée.
+
+### Association automatique équipe → club
+À chaque chargement (API ou Excel), pour chaque équipe sans club, une recherche exacte est faite dans la
+table `club` sur le nom de l'équipe une fois le numéro final retiré (ex : "IGNY AP 1" → "IGNY AP"). Si un
+seul club correspond, il est associé automatiquement et le département est dérivé du numéro FFTT du club
+(caractères 3-4, ex : `07760123` → `76`). En cas d'ambiguïté (0 ou plusieurs clubs correspondants),
+l'équipe reste à associer manuellement dans le tableau (colonnes N° Club / Club / Dépt).
+
+### Export .txt de l'étape 2
+Le bouton « Exporter en .txt » de l'étape 2 (action `exporter-txt`) génère côté serveur, à partir du
+calendrier persisté (`nationale_calendrier`/`configuration.nat_saison`) et de `equipe_nationale`
+(équipes groupées par division/poule/rang avec leur `Id_Club` actuel, colonne N° Club), un fichier au
+format documenté ci-dessus, et l'enregistre directement dans `Importation/Rencontres/Nationale/` sous le
+nom `YYYYMMJJ_Poules_Nationales.txt` (date du jour). Permet de sauvegarder les associations club faites
+manuellement, pour réimport ultérieur (saison suivante, ou après une purge accidentelle) sans avoir à
+les refaire — le fichier réapparaît alors directement dans la liste de l'étape 1.
+
+### Liste des fichiers de l'étape 4
+L'étape 4 liste tous les fichiers `.xlsx`/`.txt` présents dans `Importation/Rencontres/Nationale/` (même
+source que le sélecteur de l'étape 1, action `fichiers-excel`), chacun en lien de téléchargement direct.
+Ce dossier est servi tel quel par le `.htaccess` racine (dossiers/fichiers réels non proxifiés vers CI4,
+voir CLAUDE.md) : le téléchargement du fichier lui-même ne passe donc pas par le filtre `adminauth` —
+seul l'appel qui liste les noms de fichiers y est soumis.
 
 ---
 
