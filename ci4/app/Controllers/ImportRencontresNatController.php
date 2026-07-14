@@ -59,6 +59,25 @@ class ImportRencontresNatController extends BaseController
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             ');
 
+            // Colonne club.EquipeNom (nom de base utilisé pour les équipes de ce club, ex.
+            // "ROUEN SPO" pour "ROUEN SPO 2") — persistée dès qu'une équipe est associée à ce
+            // club (voir autoMatchClubs()/sauvegarderAssoc()), pour que les imports des saisons
+            // suivantes retrouvent le club directement au lieu de re-demander une association manuelle.
+            $colsClub = array_column($pdo0->query('SHOW COLUMNS FROM club')->fetchAll(), 'Field');
+            if (!in_array('EquipeNom', $colsClub, true)) {
+                $pdo0->exec('ALTER TABLE club ADD COLUMN EquipeNom VARCHAR(100) NULL');
+            }
+            // Un nom d'équipe ne doit désigner qu'un seul club. Try/catch isolé : si des doublons
+            // existent déjà en base, on laisse la contrainte non posée plutôt que de faire échouer
+            // toute la migration (calendrier, dédoublonnage equipe_nationale...) qui suit.
+            $hasUqEquipeNom = (bool) $pdo0->query("SHOW INDEX FROM club WHERE Key_name = 'uq_club_equipenom'")->fetch();
+            if (!$hasUqEquipeNom) {
+                try {
+                    $pdo0->exec('ALTER TABLE club ADD UNIQUE KEY uq_club_equipenom (EquipeNom)');
+                } catch (\PDOException $e) {
+                }
+            }
+
             // Table déjà existante avant l'ajout de la contrainte unique (versions antérieures
             // du code) : chaque rechargement (API ou Excel) accumulait alors un doublon par
             // équipe au lieu de faire l'upsert. On dédoublonne une fois puis on pose l'index.
@@ -573,6 +592,7 @@ class ImportRencontresNatController extends BaseController
 
     /**
      * Recherche automatiquement, pour chaque équipe sans club, un club de la table `club` dont le nom
+     * d'équipe (EquipeNom, renseigné par une association précédente) ou, à défaut, le nom officiel
      * correspond exactement au nom de l'équipe une fois le numéro final retiré (ex: "IGNY AP 1" →
      * "IGNY AP"). N'associe que si la recherche renvoie un seul club (pas d'ambiguïté). Le département
      * est dérivé du numéro FFTT du club (SUBSTRING(Id_Club, 3, 2), même convention que
@@ -585,8 +605,9 @@ class ImportRencontresNatController extends BaseController
             return 0;
         }
 
-        $stmtClub = $pdo->prepare('SELECT Id_Club FROM club WHERE Nom = ?');
-        $stmtUpd  = $pdo->prepare('UPDATE equipe_nationale SET Id_Club = ?, CodeDept = ? WHERE Id_EquipeNat = ?');
+        $stmtClub    = $pdo->prepare('SELECT Id_Club FROM club WHERE EquipeNom = ? OR Nom = ?');
+        $stmtUpd     = $pdo->prepare('UPDATE equipe_nationale SET Id_Club = ?, CodeDept = ? WHERE Id_EquipeNat = ?');
+        $stmtEquipe  = $pdo->prepare('UPDATE club SET EquipeNom = ? WHERE Id_Club = ?');
 
         $assoc = 0;
         foreach ($rows as $r) {
@@ -594,13 +615,20 @@ class ImportRencontresNatController extends BaseController
             if ($base === '') {
                 continue;
             }
-            $stmtClub->execute([$base]);
+            $stmtClub->execute([$base, $base]);
             $matches = $stmtClub->fetchAll(\PDO::FETCH_COLUMN);
             if (count($matches) !== 1) {
                 continue; // aucun club, ou plusieurs candidats ambigus : laissé à l'association manuelle
             }
             $idClub = $matches[0];
             $stmtUpd->execute([$idClub, substr($idClub, 2, 2), $r['Id_EquipeNat']]);
+            try {
+                // EquipeNom est UNIQUE : si un autre club porte déjà ce nom de base (collision
+                // rare après le retrait du numéro final), on garde l'association Id_Club faite
+                // ci-dessus et on ignore juste cette écriture secondaire.
+                $stmtEquipe->execute([$base, $idClub]);
+            } catch (\PDOException $e) {
+            }
             $assoc++;
         }
 
@@ -1228,10 +1256,32 @@ class ImportRencontresNatController extends BaseController
             if ($idEn <= 0) {
                 return $this->response->setJSON(['ok' => false, 'err' => 'Id invalide.']);
             }
-            getPDO()->prepare('UPDATE equipe_nationale SET CodeDept=?, Id_Club=? WHERE Id_EquipeNat=?')
+            $pdo = getPDO();
+            $pdo->prepare('UPDATE equipe_nationale SET CodeDept=?, Id_Club=? WHERE Id_EquipeNat=?')
                 ->execute([$codeDept, $idClub, $idEn]);
 
-            return $this->response->setJSON(['ok' => true]);
+            // Persiste le nom de base de l'équipe sur le club associé, pour que l'import de la
+            // saison suivante retrouve ce club automatiquement (voir autoMatchClubs()). EquipeNom
+            // est UNIQUE : si un autre club porte déjà ce nom de base, l'association Id_Club
+            // ci-dessus reste valide, on prévient juste que le nom n'a pas pu être mémorisé.
+            $warn = null;
+            if ($idClub !== null) {
+                $stmtNom = $pdo->prepare('SELECT Nom FROM equipe_nationale WHERE Id_EquipeNat = ?');
+                $stmtNom->execute([$idEn]);
+                $nom = $stmtNom->fetchColumn();
+                if ($nom !== false) {
+                    $base = trim((string) preg_replace('/\s+\d+$/', '', $nom));
+                    if ($base !== '') {
+                        try {
+                            $pdo->prepare('UPDATE club SET EquipeNom = ? WHERE Id_Club = ?')->execute([$base, $idClub]);
+                        } catch (\PDOException $e) {
+                            $warn = "Nom d'équipe « $base » déjà utilisé par un autre club — non mémorisé pour les imports futurs.";
+                        }
+                    }
+                }
+            }
+
+            return $this->response->setJSON(['ok' => true, 'warn' => $warn]);
         });
     }
 

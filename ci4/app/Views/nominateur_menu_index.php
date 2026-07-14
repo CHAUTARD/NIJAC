@@ -404,7 +404,7 @@
     <div class="menu-btn-wrap">
         <a href="<?= site_url('messagerie') ?>" class="menu-btn btn-messagerie">
             <span class="btn-code">E026</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Correspondant.png') ?>" alt="Messagerie"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Messagerie.png') ?>" alt="Messagerie"></div>
             <span>Messagerie</span>
             <span class="btn-desc">Préparer les messages pour JA et correspondants de club</span>
         </a>

@@ -202,6 +202,17 @@
 
     <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbSwitchTo' => 'nominateur']) ?>
 
+    <?php if ($ffttJoursExpiration !== null && $ffttJoursExpiration <= 60): ?>
+    <div class="alert alert-<?= $ffttJoursExpiration < 0 ? 'danger' : 'warning' ?> d-flex align-items-center gap-2 mb-0" style="border-radius:0;font-size:.85rem;">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <?php if ($ffttJoursExpiration >= 0): ?>
+            Les identifiants de l'API FFTT expirent dans <strong><?= $ffttJoursExpiration ?></strong> jour(s). Pensez à en demander la prolongation auprès de la FFTT.
+        <?php else: ?>
+            Les identifiants de l'API FFTT ont expiré il y a <strong><?= abs($ffttJoursExpiration) ?></strong> jour(s). Demandez leur prolongation auprès de la FFTT dès que possible.
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
     <?php require __DIR__ . '/_modal_mdp.php'; ?>
 
     <div id="menu-grid">

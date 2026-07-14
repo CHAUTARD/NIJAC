@@ -36,6 +36,11 @@ class MessagerieController extends BaseController
         if (!in_array('Cc', $cols, true)) {
             $pdo->exec('ALTER TABLE messagerie ADD COLUMN Cc TINYINT(1) NOT NULL DEFAULT 0 AFTER Id_Utilisateur');
         }
+
+        // Gabarit système du rappel d'expiration API FFTT (voir config/app_config.php) — créé ici
+        // pour qu'il soit visible/éditable dès l'ouverture de cet écran, avant même que la fenêtre
+        // des 60 jours ne déclenche l'envoi réel à la connexion admin (AuthController::index()).
+        assurerTemplateExpirationFfttApi($pdo);
     }
 
     private function isAdmin(): bool

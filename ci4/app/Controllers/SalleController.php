@@ -42,6 +42,9 @@ class SalleController extends BaseController
         return strlen($chiffres) === 10 ? implode('.', str_split($chiffres, 2)) : null;
     }
 
+    /** Codes département FFTT (xml_club_dep2) pour la Corse, distincts des codes INSEE 2A/2B utilisés partout ailleurs dans l'appli. */
+    private const DEPT_FFTT_CORSE = ['2A' => '98', '2B' => '99'];
+
     public function index()
     {
         $moi     = $_SESSION['utilisateur'] ?? [];
@@ -256,8 +259,9 @@ class SalleController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => 'Département manquant.']);
         }
 
-        $pdo   = getPDO();
-        $clubs = getFfttRawClient()->listClubsByDepartement((int) $dep);
+        $pdo     = getPDO();
+        $depFftt = self::DEPT_FFTT_CORSE[strtoupper($dep)] ?? $dep;
+        $clubs   = getFfttRawClient()->listClubsByDepartement($depFftt);
 
         $numeros = array_values(array_filter(array_map(fn ($c) => $c['numero'] ?? '', $clubs)));
         if ($numeros) {

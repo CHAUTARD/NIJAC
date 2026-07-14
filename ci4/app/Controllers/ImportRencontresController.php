@@ -27,7 +27,27 @@ class ImportRencontresController extends BaseController
 
         // Garantit que la clé "region" existe en configuration
         try {
-            getPDO()->exec("INSERT IGNORE INTO configuration (cle, valeur) VALUES ('region', 'Normandie')");
+            $pdo0 = getPDO();
+            $pdo0->exec("INSERT IGNORE INTO configuration (cle, valeur) VALUES ('region', 'Normandie')");
+
+            // Colonne club.EquipeNom (nom de base utilisé pour les équipes de ce club, ex.
+            // "ROUEN SPO" pour "ROUEN SPO 2") — persistée dès qu'une équipe est résolue vers ce
+            // club dans importerDivision(), pour que les imports des saisons suivantes retrouvent
+            // le club directement au lieu de créer un club "fictif" faute de code FFTT.
+            $colsClub = array_column($pdo0->query('SHOW COLUMNS FROM club')->fetchAll(), 'Field');
+            if (!in_array('EquipeNom', $colsClub, true)) {
+                $pdo0->exec('ALTER TABLE club ADD COLUMN EquipeNom VARCHAR(100) NULL');
+            }
+            // Un nom d'équipe ne doit désigner qu'un seul club. Try/catch isolé : si des doublons
+            // existent déjà en base, on laisse la contrainte non posée plutôt que de faire échouer
+            // le reste de la migration.
+            $hasUqEquipeNom = (bool) $pdo0->query("SHOW INDEX FROM club WHERE Key_name = 'uq_club_equipenom'")->fetch();
+            if (!$hasUqEquipeNom) {
+                try {
+                    $pdo0->exec('ALTER TABLE club ADD UNIQUE KEY uq_club_equipenom (EquipeNom)');
+                } catch (\PDOException $e) {
+                }
+            }
         } catch (\PDOException $e) {
         }
     }
@@ -396,9 +416,11 @@ class ImportRencontresController extends BaseController
 
             $stats = ['poules' => [], 'equipes_creees' => 0, 'rencontres_creees' => 0, 'doublons' => 0, 'erreurs' => [], 'log' => []];
 
-            $stmtClubIns   = $pdo->prepare('INSERT IGNORE INTO club (Id_Club, Nom) VALUES (?,?)');
-            $stmtClubByNom = $pdo->prepare('SELECT Id_Club FROM club WHERE Nom=? LIMIT 1');
-            $stmtClubById  = $pdo->prepare('SELECT Id_Club FROM club WHERE Id_Club=? LIMIT 1');
+            $stmtClubIns          = $pdo->prepare('INSERT IGNORE INTO club (Id_Club, Nom) VALUES (?,?)');
+            $stmtClubByNom        = $pdo->prepare('SELECT Id_Club FROM club WHERE Nom=? LIMIT 1');
+            $stmtClubById         = $pdo->prepare('SELECT Id_Club FROM club WHERE Id_Club=? LIMIT 1');
+            $stmtClubByEquipeNom  = $pdo->prepare('SELECT Id_Club FROM club WHERE EquipeNom=? OR Nom=? LIMIT 1');
+            $stmtClubEquipeNom    = $pdo->prepare('UPDATE club SET EquipeNom=? WHERE Id_Club=?');
             $stmtNatChk    = $pdo->prepare('SELECT 1 FROM equipe_nationale WHERE Nom=? AND id_division=? LIMIT 1');
             $stmtNatIns    = $pdo->prepare(
                 'INSERT INTO equipe_nationale (Nom, id_division, Poule, Rang, Id_Club, Id_Equipe) VALUES (?,?,?,0,?,?)'
@@ -440,8 +462,8 @@ class ImportRencontresController extends BaseController
                 }
 
                 // xml_result_equ ne fournit pas de code équipe → club fictif basé sur nom
-                $nomClubDom = preg_replace('/\s+\d+$/', '', $libDom);
-                $nomClubExt = preg_replace('/\s+\d+$/', '', $libExt);
+                $nomClubDom = trim((string) preg_replace('/\s+\d+$/', '', $libDom));
+                $nomClubExt = trim((string) preg_replace('/\s+\d+$/', '', $libExt));
                 $clubDom    = strtoupper(substr(preg_replace('/[^A-Z0-9]/i', '', $nomClubDom), 0, 8));
                 $clubExt    = strtoupper(substr(preg_replace('/[^A-Z0-9]/i', '', $nomClubExt), 0, 8));
                 if ($clubDom === '') {
@@ -455,19 +477,38 @@ class ImportRencontresController extends BaseController
                 // (INSERT IGNORE peut être ignoré si Nom UNIQUE déjà pris par un autre Id_Club)
                 foreach ([['dom', &$clubDom, $nomClubDom], ['ext', &$clubExt, $nomClubExt]] as [, &$idVar, $nom]) {
                     $nomTronc = mb_substr($nom, 0, 100);
-                    $stmtClubIns->execute([$idVar, $nomTronc]);
-                    if ($pdo->lastInsertId()) {
-                        $stats['log'][] = ['type' => 'club', 'op' => 'créé', 'val' => "$idVar — $nom"];
+
+                    // Affectation automatique : un club déjà associé à ce nom d'équipe (import
+                    // précédent, voir EquipeNom) ou portant ce nom officiel est réutilisé directement,
+                    // sans créer de club fictif.
+                    $stmtClubByEquipeNom->execute([$nomTronc, $nomTronc]);
+                    $existant = $stmtClubByEquipeNom->fetchColumn();
+                    if ($existant) {
+                        $idVar = $existant;
                     } else {
-                        // INSERT ignoré : vérifier si notre Id_Club existe, sinon chercher par Nom
-                        $stmtClubById->execute([$idVar]);
-                        if (!$stmtClubById->fetchColumn()) {
-                            $stmtClubByNom->execute([$nomTronc]);
-                            $found = $stmtClubByNom->fetchColumn();
-                            if ($found) {
-                                $idVar = $found;
+                        $stmtClubIns->execute([$idVar, $nomTronc]);
+                        if ($pdo->lastInsertId()) {
+                            $stats['log'][] = ['type' => 'club', 'op' => 'créé', 'val' => "$idVar — $nom"];
+                        } else {
+                            // INSERT ignoré : vérifier si notre Id_Club existe, sinon chercher par Nom
+                            $stmtClubById->execute([$idVar]);
+                            if (!$stmtClubById->fetchColumn()) {
+                                $stmtClubByNom->execute([$nomTronc]);
+                                $found = $stmtClubByNom->fetchColumn();
+                                if ($found) {
+                                    $idVar = $found;
+                                }
                             }
                         }
+                    }
+                    // Persiste le nom de base ("ROUEN SPO" pour "ROUEN SPO 2") sur le club résolu,
+                    // pour que les imports des saisons suivantes le retrouvent directement au lieu
+                    // de recréer un club fictif faute de code FFTT. EquipeNom est UNIQUE : si un
+                    // autre club porte déjà ce nom (collision rare), on garde l'Id_Club résolu
+                    // ci-dessus et on ignore juste cette écriture secondaire.
+                    try {
+                        $stmtClubEquipeNom->execute([$nomTronc, $idVar]);
+                    } catch (\PDOException $e) {
                     }
                 }
                 unset($idVar);

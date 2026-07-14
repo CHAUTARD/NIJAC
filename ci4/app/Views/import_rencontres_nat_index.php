@@ -586,6 +586,7 @@ $(document).on('click', '.btn-sauver', function() {
             const eq = equipes.find(e => +e.Id_EquipeNat === idEn);
             if (eq) { eq.CodeDept = dept || null; eq.SavedCodeDept = eq.CodeDept; eq.SavedIdClub = idClub || null; }
             renderAssoc();
+            if (r.warn) nijacToast(r.warn, 'warning');
         } else nijacToast('Erreur : ' + r.err, 'danger');
     }, 'json').fail(() => { $btn.prop('disabled', false); nijacToast('Erreur réseau.', 'danger'); });
 });

@@ -15,6 +15,7 @@ class AuthController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
+        require_once __DIR__ . '/../../../config/app_config.php';
         require_once __DIR__ . '/../../../Classes/SecurePasswordHasher.php';
     }
 
@@ -79,6 +80,13 @@ class AuthController extends BaseController
                             );
                             $stmtIdJa->execute([':nom' => $row['Nom']]);
                             $_SESSION['utilisateur']['id_ja'] = $stmtIdJa->fetchColumn() ?: null;
+                        }
+
+                        // Pas de cron sur ce projet (déploiement FTP) : le rappel d'expiration des
+                        // identifiants API FFTT se déclenche à la connexion d'un administrateur
+                        // plutôt qu'à chaque chargement du menu admin (voir verifierRappelExpirationFfttApi()).
+                        if ($row['Role'] === 'Administrateur') {
+                            verifierRappelExpirationFfttApi();
                         }
 
                         $redirect = $this->redirectForRole($row['Role']);

@@ -34,6 +34,9 @@ class JugearbitreController extends BaseController
         return !empty($_SESSION['utilisateur']['is_admin']);
     }
 
+    /** Codes département FFTT (xml_club_dep2) pour la Corse, distincts des codes INSEE 2A/2B utilisés partout ailleurs dans l'appli. */
+    private const DEPT_FFTT_CORSE = ['2A' => '98', '2B' => '99'];
+
     /**
      * Auto-migration colonnes enrichissement FFTT sur `ja` — exécutée avant
      * chaque action, comme le fait jugearbitre.php (uniquement pour les
@@ -340,7 +343,8 @@ class JugearbitreController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => 'Département manquant.']);
         }
 
-        $clubs = getFfttRawClient()->listClubsByDepartement((int) $dep);
+        $depFftt = self::DEPT_FFTT_CORSE[strtoupper($dep)] ?? $dep;
+        $clubs   = getFfttRawClient()->listClubsByDepartement($depFftt);
 
         return $this->response->setJSON(['ok' => true, 'clubs' => array_map(static fn ($c) => [
             'numero' => $c['numero'],

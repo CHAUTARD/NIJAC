@@ -65,11 +65,16 @@
 
     <!-- Statut de la configuration -->
     <?php $configured = ($appId !== '' && $appKey !== ''); ?>
-    <div class="alert alert-<?= $configured ? 'success' : 'danger' ?> d-flex align-items-center gap-2 mb-4">
+    <div id="credentials-banner" class="alert alert-<?= $configured ? 'success' : 'danger' ?> d-flex align-items-center gap-2 mb-4"
+         data-app-key="<?= esc($appKey) ?>"
+         title="Double-cliquer pour afficher temporairement le mot de passe (App Key)">
         <i class="bi bi-<?= $configured ? 'check-circle-fill' : 'x-circle-fill' ?>"></i>
         <?php if ($configured): ?>
-            Credentials FFTT chargés — App ID : <strong><?= esc($appId) ?></strong>
-            &nbsp;|&nbsp; Serial : <strong><?= $serial ?: '<em>sera généré au premier appel</em>' ?></strong>
+            <span>
+                Credentials FFTT chargés — App ID : <strong><?= esc($appId) ?></strong>
+                &nbsp;|&nbsp; Serial : <strong><?= $serial ?: '<em>sera généré au premier appel</em>' ?></strong>
+                &nbsp;|&nbsp; App Key : <strong id="credentials-appkey">••••••••</strong>
+            </span>
         <?php else: ?>
             Credentials FFTT non configurés. Renseignez <code>FFTT_APP_ID</code> et <code>FFTT_APP_KEY</code> dans <code>.env</code>.
         <?php endif; ?>
@@ -872,6 +877,17 @@ function lancerScanDept() {
         $c.html('<div class="alert alert-danger py-2">Erreur réseau.</div>');
     });
 }
+
+// ── Affichage temporaire du mot de passe (App Key) sur double-clic du bandeau credentials ──
+let credentialsMaskTimer = null;
+$('#credentials-banner').on('dblclick', function() {
+    const appKey = $(this).attr('data-app-key');
+    if (!appKey) return;
+    const $span = $('#credentials-appkey');
+    $span.text(appKey);
+    clearTimeout(credentialsMaskTimer);
+    credentialsMaskTimer = setTimeout(() => $span.text('••••••••'), 15000);
+});
 </script>
 </body>
 </html>

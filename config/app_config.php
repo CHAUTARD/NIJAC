@@ -110,6 +110,134 @@ function getEmailDestinataire(string $email): string
 }
 
 /**
+ * Retourne le nombre de jours restants avant l'expiration des identifiants API FFTT
+ * (clé de config 'fftt_api_expiration', format YYYY-MM-DD — voir E015/E018), ou null si
+ * la clé n'est pas configurée. Négatif si la date est déjà dépassée.
+ */
+function getFfttApiJoursAvantExpiration(): ?int
+{
+    $exp = getConfig('fftt_api_expiration', '');
+    if ($exp === '') {
+        return null;
+    }
+    $date = \DateTime::createFromFormat('Y-m-d', $exp);
+    if (!$date) {
+        return null;
+    }
+
+    return (int) (new \DateTime('today'))->diff($date)->format('%r%a');
+}
+
+/**
+ * Ajoute une valeur à l'ENUM messagerie.Type si elle n'y est pas déjà (ex. pour un nouveau type
+ * de message système) — relit l'ENUM existant via SHOW COLUMNS pour ne perdre aucune valeur déjà
+ * en place, même lecture dynamique que MessagerieController::typesValides().
+ */
+function ajouterTypeMessagerie(\PDO $pdo, string $type): void
+{
+    $col = $pdo->query("SHOW COLUMNS FROM messagerie WHERE Field = 'Type'")->fetch();
+    if (!$col || !preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
+        return;
+    }
+    $types = array_map('trim', str_getcsv($m[1], ',', "'"));
+    if (in_array($type, $types, true)) {
+        return;
+    }
+    $types[]  = $type;
+    $enumList = implode(',', array_map(fn ($t) => $pdo->quote($t), $types));
+    $pdo->exec("ALTER TABLE messagerie MODIFY COLUMN Type ENUM($enumList) NOT NULL DEFAULT 'Disponibilites'");
+}
+
+/**
+ * Garantit l'existence du type de message système "Expiration FFTT API" (ENUM messagerie.Type +
+ * une ligne de gabarit par défaut, marqueurs {DATE_EXPIRATION}/{DELAI}) — éditable ensuite comme
+ * les autres modèles système via E026 (Id_Utilisateur NULL = protégé en écriture pour les non-admin,
+ * voir MessagerieController). Idempotente, appelée à la fois par MessagerieController (pour que le
+ * gabarit apparaisse dès l'ouverture de l'écran) et par verifierRappelExpirationFfttApi() (filet de
+ * sécurité si E026 n'a jamais été ouvert avant la fenêtre des 60 jours).
+ */
+function assurerTemplateExpirationFfttApi(\PDO $pdo): void
+{
+    ajouterTypeMessagerie($pdo, 'Expiration FFTT API');
+
+    $existe = $pdo->query("SELECT 1 FROM messagerie WHERE Type = 'Expiration FFTT API' LIMIT 1")->fetch();
+    if ($existe) {
+        return;
+    }
+
+    $pdo->prepare('INSERT INTO messagerie (Type, Sujet, Message, Id_Utilisateur, Cc) VALUES (?, ?, ?, NULL, 0)')
+        ->execute([
+            'Expiration FFTT API',
+            'Expiration des identifiants API FFTT le {DATE_EXPIRATION}',
+            "Les identifiants de l'API FFTT (Code Appli / Mot de passe) utilisés par NIJAC expirent le {DATE_EXPIRATION} ({DELAI}).\n\n"
+            . "Merci de faire la demande de prolongation auprès de la FFTT, puis de mettre à jour :\n"
+            . "- le fichier .env (FFTT_APP_ID / FFTT_APP_KEY)\n"
+            . "- la clé de configuration « fftt_api_expiration » (écran Configuration générale, E015)",
+        ]);
+}
+
+/**
+ * Envoie un rappel par email aux administrateurs actifs quand l'expiration des identifiants
+ * API FFTT approche (2 mois, soit 60 jours) ou est dépassée — à demander à prolonger auprès de
+ * la FFTT, puis à reporter dans .env (FFTT_APP_ID/FFTT_APP_KEY) et dans la clé de config
+ * 'fftt_api_expiration'. Sujet/corps viennent du gabarit système "Expiration FFTT API" de la
+ * table `messagerie` (éditable via E026), avec les marqueurs {DATE_EXPIRATION}/{DELAI} — voir
+ * assurerTemplateExpirationFfttApi(). Envoyé au plus une fois par date d'expiration (mémorisé
+ * dans la clé 'fftt_api_expiration_email_envoye') pour ne pas spammer à chaque connexion admin
+ * (voir AuthController::index(), seul appelant). Best-effort : erreurs SMTP/BDD avalées, ce
+ * rappel ne doit jamais faire échouer la connexion.
+ */
+function verifierRappelExpirationFfttApi(): void
+{
+    try {
+        $exp = getConfig('fftt_api_expiration', '');
+        if ($exp === '') {
+            return;
+        }
+        $joursRestants = getFfttApiJoursAvantExpiration();
+        if ($joursRestants === null || $joursRestants > 60) {
+            return;
+        }
+        if (getConfig('fftt_api_expiration_email_envoye', '') === $exp) {
+            return; // déjà envoyé pour cette date d'expiration
+        }
+
+        $pdo = getPDO();
+        assurerTemplateExpirationFfttApi($pdo);
+
+        $tpl = $pdo->query("SELECT Sujet, Message FROM messagerie WHERE Type = 'Expiration FFTT API' LIMIT 1")->fetch();
+        if (!$tpl) {
+            return;
+        }
+
+        $dateFmt   = (\DateTime::createFromFormat('Y-m-d', $exp))->format('d/m/Y');
+        $delai     = $joursRestants >= 0 ? "dans $joursRestants jour(s)" : ('depuis ' . abs($joursRestants) . ' jour(s)');
+        $marqueurs = ['{DATE_EXPIRATION}' => $dateFmt, '{DELAI}' => $delai];
+        $rendu     = remplacerMarqueursMessage($tpl['Sujet'], $tpl['Message'], $marqueurs);
+
+        $emails = $pdo->query(
+            "SELECT Email FROM utilisateur WHERE Role = 'Administrateur' AND Actif = 1 AND Email IS NOT NULL AND Email <> ''"
+        )->fetchAll(\PDO::FETCH_COLUMN);
+
+        foreach ($emails as $email) {
+            try {
+                $mail = getNijacMailer();
+                $mail->isHTML(strip_tags($rendu['corps']) !== $rendu['corps']);
+                $mail->addAddress(getEmailDestinataire($email));
+                $mail->Subject = $rendu['sujet'];
+                $mail->Body    = $rendu['corps'];
+                $mail->send();
+            } catch (\Throwable $e) {
+            }
+        }
+
+        $pdo->prepare('INSERT INTO configuration (cle, valeur) VALUES (?, ?) ON DUPLICATE KEY UPDATE valeur = VALUES(valeur)')
+            ->execute(['fftt_api_expiration_email_envoye', $exp]);
+    } catch (\Throwable $e) {
+    }
+}
+
+/**
  * Construit la table de correspondance des marqueurs {XXX} des modèles de
  * message (table `messagerie`) — source unique remplaçant les listes de
  * marqueurs dupliquées et divergentes qui existaient dans

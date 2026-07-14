@@ -199,6 +199,7 @@
             <tr>
                 <th style="width:120px" data-field="id_club">N° FFTT<span class="sort-icon"></span></th>
                 <th data-field="nom">Nom club<span class="sort-icon"></span></th>
+                <th style="width:180px" data-field="equipe_nom" title="Nom de base utilisé pour les équipes de ce club dans les imports FFTT (ex. « ROUEN SPO » pour « ROUEN SPO 2 »)">Nom équipe<span class="sort-icon"></span></th>
                 <th style="width:200px" data-field="cor_nom">Correspondant<span class="sort-icon"></span></th>
                 <th style="width:220px" data-field="cor_email">Email correspondant<span class="sort-icon"></span></th>
                 <th style="width:150px" data-field="cor_tel">Téléphone correspondant<span class="sort-icon"></span></th>
@@ -206,7 +207,7 @@
             </tr>
         </thead>
         <tbody id="tbody-grille">
-            <tr><td colspan="6" class="text-center text-muted py-3">Chargement…</td></tr>
+            <tr><td colspan="7" class="text-center text-muted py-3">Chargement…</td></tr>
         </tbody>
     </table>
 </div>
@@ -236,6 +237,11 @@
                 <div class="mb-2">
                     <label class="form-label fw-semibold" style="font-size:.82rem;">Nom du club <span class="text-danger">*</span></label>
                     <input type="text" id="mod-club-nom" class="form-control form-control-sm">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold" style="font-size:.82rem;">Nom équipe (imports FFTT)</label>
+                    <input type="text" id="mod-club-equipe-nom" class="form-control form-control-sm" placeholder="ex. ROUEN SPO">
+                    <div class="form-text" style="font-size:.75rem;">Nom de base utilisé pour retrouver ce club lors des imports de rencontres Nationale/Régionale — renseigné automatiquement dès qu'une équipe lui est associée.</div>
                 </div>
                 <div class="mb-2">
                     <label class="form-label fw-semibold" style="font-size:.82rem;">Correspondant</label>
@@ -373,6 +379,7 @@ function lignesFiltreesTriees() {
     if (term) result = result.filter(l =>
         String(l.id_club     ?? '').toLowerCase().includes(term) ||
         String(l.nom         ?? '').toLowerCase().includes(term) ||
+        String(l.equipe_nom  ?? '').toLowerCase().includes(term) ||
         String(l.cor_nom     ?? '').toLowerCase().includes(term) ||
         String(l.cor_email   ?? '').toLowerCase().includes(term));
 
@@ -419,7 +426,7 @@ function renderGrille() {
 
     if (!rows.length) {
         const msg = searchTerm ? 'Aucun résultat pour cette recherche.' : 'Aucun club.';
-        $body.append(`<tr><td colspan="6" class="text-center text-muted py-3">${msg}</td></tr>`);
+        $body.append(`<tr><td colspan="7" class="text-center text-muted py-3">${msg}</td></tr>`);
         setStatus(searchTerm ? `0 résultat sur ${lignes.length} club(s).` : 'Aucun club enregistré.');
         return;
     }
@@ -439,6 +446,7 @@ function construireLigne(l) {
     else if (dept) $tr.addClass('en-region');
     $tr.append(makeTd(l.id_club,     'id_club'));
     $tr.append(makeTd(l.nom,         'nom'));
+    $tr.append(makeTd(l.equipe_nom,  'equipe_nom'));
     $tr.append(makeTd(l.cor_nom,     'cor_nom'));
     $tr.append(makeTd(l.cor_email,   'cor_email'));
     $tr.append(makeTd(l.cor_tel,     'cor_tel'));
@@ -474,6 +482,7 @@ function ouvrirModaleModifClub(idx) {
     $('#mod-club-idx').val(idx);
     $('#mod-club-id').text(l.id_club ?? '');
     $('#mod-club-nom').val(l.nom ?? '');
+    $('#mod-club-equipe-nom').val(l.equipe_nom ?? '');
     $('#mod-club-cor-nom').val(l.cor_nom ?? '');
     $('#mod-club-cor-email').val(l.cor_email ?? '');
     $('#mod-club-cor-tel').val(l.cor_tel ?? '');
@@ -496,10 +505,11 @@ $('#mod-club-btn-ok').on('click', function () {
     const idx      = +$('#mod-club-idx').val();
     const l        = lignes[idx];
     if (!l) return;
-    const nom      = $('#mod-club-nom').val().trim();
-    const corNom   = $('#mod-club-cor-nom').val().trim();
-    const corEmail = $('#mod-club-cor-email').val().trim();
-    const corTel   = $('#mod-club-cor-tel').val().trim();
+    const nom       = $('#mod-club-nom').val().trim();
+    const equipeNom = $('#mod-club-equipe-nom').val().trim();
+    const corNom    = $('#mod-club-cor-nom').val().trim();
+    const corEmail  = $('#mod-club-cor-email').val().trim();
+    const corTel    = $('#mod-club-cor-tel').val().trim();
 
     if (!nom) {
         $('#mod-club-msg').html('<span class="text-danger">Le nom du club est obligatoire.</span>');
@@ -510,17 +520,18 @@ $('#mod-club-btn-ok').on('click', function () {
     $.ajax({
         url: `${CLUB_BASE}/${encodeURIComponent(l.id_club)}`,
         method: 'PUT',
-        data: { nom, cor_nom: corNom, cor_email: corEmail, cor_tel: corTel },
+        data: { nom, equipe_nom: equipeNom, cor_nom: corNom, cor_email: corEmail, cor_tel: corTel },
         dataType: 'json',
     }).done(function (res) {
         spinner(false);
         if (res.ok) {
             toast(res.msg, true);
             bootstrap.Modal.getInstance(document.getElementById('modal-modifier-club')).hide();
-            l.nom       = nom;
-            l.cor_nom   = corNom;
-            l.cor_email = corEmail;
-            l.cor_tel   = corTel;
+            l.nom        = nom;
+            l.equipe_nom = equipeNom;
+            l.cor_nom    = corNom;
+            l.cor_email  = corEmail;
+            l.cor_tel    = corTel;
             invaliderCacheRendu();
             renderGrille();
         } else {
@@ -538,6 +549,7 @@ function chargerListe() {
         lignes = res.data.map(r => ({
             id_club:      r.Id_Club,
             nom:          r.Nom,
+            equipe_nom:   r.EquipeNom ?? '',
             nb_salles:    +(r.NbSalles ?? 0),
             cor_nom:      r.CorNom      ?? '',
             cor_email:    r.CorEmail    ?? '',

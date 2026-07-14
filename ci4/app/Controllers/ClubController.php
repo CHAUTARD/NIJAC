@@ -66,16 +66,30 @@ class ClubController extends BaseController
         return $this->tryJson(function () {
             $pdo = getPDO();
 
-            // Auto-migration colonnes correspondant
+            // Auto-migration colonnes correspondant + EquipeNom (nom de base utilisé pour les
+            // équipes de ce club dans les imports FFTT, ex. "ROUEN SPO" pour "ROUEN SPO 2" — distinct
+            // du nom officiel du club, sert à l'association équipe → club dans E011/E017).
             $colsClub = array_column($pdo->query('SHOW COLUMNS FROM Club')->fetchAll(), 'Field');
             $corCols  = [
                 'CorNom'       => 'VARCHAR(100) NULL',
                 'CorEmail'     => 'VARCHAR(150) NULL',
                 'CorTelephone' => 'VARCHAR(20) NULL',
+                'EquipeNom'    => 'VARCHAR(100) NULL',
             ];
             foreach ($corCols as $col => $def) {
                 if (!in_array($col, $colsClub)) {
                     $pdo->exec("ALTER TABLE Club ADD COLUMN $col $def");
+                }
+            }
+            // Un nom d'équipe ne doit désigner qu'un seul club (utilisé pour l'affectation
+            // automatique en E011/E017). Posée séparément avec son propre try/catch : si des
+            // doublons existent déjà en base, on ne veut pas faire planter le chargement de
+            // l'écran, juste laisser la contrainte non posée jusqu'à correction manuelle.
+            $hasUqEquipeNom = (bool) $pdo->query("SHOW INDEX FROM Club WHERE Key_name = 'uq_club_equipenom'")->fetch();
+            if (!$hasUqEquipeNom) {
+                try {
+                    $pdo->exec('ALTER TABLE Club ADD UNIQUE KEY uq_club_equipenom (EquipeNom)');
+                } catch (\PDOException $e) {
                 }
             }
             // Copie unique Correspondant → Club (si la table Correspondant existe encore
@@ -93,7 +107,7 @@ class ClubController extends BaseController
             }
 
             $rows = $pdo->query(
-                'SELECT c.Id_Club, c.Nom,
+                'SELECT c.Id_Club, c.Nom, c.EquipeNom,
                         c.CorNom, c.CorEmail, c.CorTelephone,
                         (SELECT COUNT(*) FROM Salle s2 WHERE s2.Id_Club = c.Id_Club) AS NbSalles
                  FROM Club c
@@ -110,17 +124,27 @@ class ClubController extends BaseController
             $pdo   = getPDO();
             $input = $this->request->getRawInput();
 
-            $nom      = trim($input['nom'] ?? '');
-            $corNom   = trim($input['cor_nom'] ?? '') ?: null;
-            $corEmail = trim($input['cor_email'] ?? '') ?: null;
-            $corTel   = trim($input['cor_tel'] ?? '') ?: null;
+            $nom       = trim($input['nom'] ?? '');
+            $equipeNom = trim($input['equipe_nom'] ?? '') ?: null;
+            $corNom    = trim($input['cor_nom'] ?? '') ?: null;
+            $corEmail  = trim($input['cor_email'] ?? '') ?: null;
+            $corTel    = trim($input['cor_tel'] ?? '') ?: null;
 
             if ($nom === '') {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Le nom du club est obligatoire.']);
             }
 
-            $stmt = $pdo->prepare('UPDATE Club SET Nom=?, CorNom=?, CorEmail=?, CorTelephone=? WHERE Id_Club=?');
-            $stmt->execute([$nom, $corNom, $corEmail, $corTel, $idClub]);
+            if ($equipeNom !== null) {
+                $chkEquipe = $pdo->prepare('SELECT Nom FROM Club WHERE EquipeNom = ? AND Id_Club <> ?');
+                $chkEquipe->execute([$equipeNom, $idClub]);
+                $autreClub = $chkEquipe->fetchColumn();
+                if ($autreClub !== false) {
+                    return $this->response->setJSON(['ok' => false, 'msg' => "Ce nom d'équipe est déjà utilisé par le club « $autreClub »."]);
+                }
+            }
+
+            $stmt = $pdo->prepare('UPDATE Club SET Nom=?, EquipeNom=?, CorNom=?, CorEmail=?, CorTelephone=? WHERE Id_Club=?');
+            $stmt->execute([$nom, $equipeNom, $corNom, $corEmail, $corTel, $idClub]);
 
             if ($stmt->rowCount() === 0) {
                 $chk = $pdo->prepare('SELECT COUNT(*) FROM Club WHERE Id_Club = ?');
@@ -134,6 +158,9 @@ class ClubController extends BaseController
         });
     }
 
+    /** Codes département FFTT (xml_club_dep2) pour la Corse, distincts des codes INSEE 2A/2B utilisés partout ailleurs dans l'appli. */
+    private const DEPT_FFTT_CORSE = ['2A' => '98', '2B' => '99'];
+
     public function getClubsDeptFftt(): ResponseInterface
     {
 
@@ -143,7 +170,8 @@ class ClubController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Département manquant.']);
             }
 
-            $clubs = getFfttRawClient()->listClubsByDepartement((int) $dep);
+            $depFftt = self::DEPT_FFTT_CORSE[strtoupper($dep)] ?? $dep;
+            $clubs   = getFfttRawClient()->listClubsByDepartement($depFftt);
 
             $clubs = array_filter($clubs, static fn ($c) => ($c['numero'] ?? '') !== '');
 
