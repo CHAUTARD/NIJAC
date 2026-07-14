@@ -193,7 +193,9 @@
 
 <?= view('partials/page_header', [
     'phIcon' => 'envelope-fill', 'phTitle' => 'Gestion des messages', 'phCode' => 'E026',
-    'phCrumbLabel' => 'Nominateur', 'phCrumbUrl' => site_url('nominateur-menu'), 'phBackUrl' => site_url('nominateur-menu'),
+    'phCrumbLabel' => $isCsr ? 'CSR' : 'Nominateur',
+    'phCrumbUrl'   => site_url($isCsr ? 'csr-menu' : 'nominateur-menu'),
+    'phBackUrl'    => site_url($isCsr ? 'csr-menu' : 'nominateur-menu'),
     'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
 ]) ?>
 
@@ -233,7 +235,7 @@
             <input type="text" id="txt-id" class="form-control form-control-sm" readonly tabindex="-1">
         </div>
 
-        <div class="mb-2">
+        <div class="mb-2<?= $isCsr ? ' d-none' : '' ?>">
             <label class="form-label" for="cbo-type">Type :</label>
             <select id="cbo-type" class="form-select form-select-sm" style="max-width:280px">
                 <?php foreach ($enumTypes as $v): ?>
@@ -242,12 +244,12 @@
             </select>
         </div>
 
-        <div class="mb-2">
+        <div class="mb-2<?= $isCsr ? ' d-none' : '' ?>">
             <label class="form-label" for="txt-sujet">Sujet :</label>
             <input type="text" id="txt-sujet" class="form-control form-control-sm" maxlength="150" autocomplete="off">
         </div>
 
-        <div class="mb-2 form-check">
+        <div class="mb-2 form-check<?= $isCsr ? ' d-none' : '' ?>">
             <input class="form-check-input" type="checkbox" id="chk-cc">
             <label class="form-check-label" for="chk-cc">Mettre le nominateur en copie (Cc) lors de l'envoi</label>
         </div>
@@ -264,16 +266,16 @@
 
         <!-- Boutons -->
         <div id="panel-boutons">
-            <button class="btn btn-sm btn-nouveau px-3" id="btn-nouveau">
+            <button class="btn btn-sm btn-nouveau px-3<?= $isCsr ? ' d-none' : '' ?>" id="btn-nouveau">
                 <i class="bi bi-plus-circle me-1"></i>Nouveau
             </button>
             <button class="btn btn-sm btn-enregistrer px-3" id="btn-enregistrer">
                 <i class="bi bi-floppy me-1"></i>Enregistrer
             </button>
-            <button class="btn btn-sm btn-supprimer px-3" id="btn-supprimer" disabled>
+            <button class="btn btn-sm btn-supprimer px-3<?= $isCsr ? ' d-none' : '' ?>" id="btn-supprimer" disabled>
                 <i class="bi bi-trash3 me-1"></i>Supprimer
             </button>
-            <button class="btn btn-sm px-3" id="btn-dupliquer" disabled
+            <button class="btn btn-sm px-3<?= $isCsr ? ' d-none' : '' ?>" id="btn-dupliquer" disabled
                     style="background:#fff3cd;border:1px solid #ffc107;font-weight:600;"
                     title="Copier ce message pour le personnaliser">
                 <i class="bi bi-copy me-1"></i>Copier pour personnaliser
@@ -332,7 +334,7 @@
                 <code data-marqueur="{URL_ADRESSE_JA}" class="me-2">{URL_ADRESSE_JA}</code>
             </div>
             <div>
-                <span class="badge me-1 fw-normal" style="background:#c2185b;">Désidératas club (E027)</span>
+                <span class="badge me-1 fw-normal" style="background:#c2185b;">Désidératas club (E027 / E035 CSR)</span>
                 <code data-marqueur="{NOM_CLUB}" class="me-2">{NOM_CLUB}</code>
                 <code data-marqueur="{CORR_NOM}" class="me-2">{CORR_NOM}</code>
                 <code data-marqueur="{URL_DESIDERATA}" class="me-2">{URL_DESIDERATA}</code>
@@ -370,6 +372,7 @@
 
 const MESSAGERIE_BASE = '<?= site_url('messagerie') ?>';
 const IS_ADMIN         = <?= $isAdmin ? 'true' : 'false' ?>;
+const IS_CSR            = <?= $isCsr ? 'true' : 'false' ?>;
 const ID_CURRENT_USER  = <?= (int) $idCurrentUser ?>;
 
 function escHtml(s) {
@@ -490,7 +493,7 @@ function selectionnerLigne($tr) {
         $('#txt-message').val(m.Message || '');
         $('#chk-cc').prop('checked', parseInt(m.Cc) === 1);
 
-        const locked = estSys && !IS_ADMIN;
+        const locked = estSys && !IS_ADMIN && !IS_CSR;
         $('#cbo-type, #txt-sujet, #txt-message').prop('readonly', locked);
         $('#cbo-type').prop('disabled', locked);
         $('#chk-cc').prop('disabled', locked);

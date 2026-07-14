@@ -234,6 +234,7 @@
                 <option value="Administrateur">Administrateur</option>
                 <option value="Nominateur" selected>Nominateur</option>
                 <option value="JA">JA</option>
+                <option value="CSR">CSR</option>
             </select>
         </div>
 

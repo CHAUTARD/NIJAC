@@ -229,8 +229,8 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'clipboard2-check', 'phTitle' => 'Désidératas clubs (PN à R4)', 'phCode' => 'E027',
-    'phCrumbLabel' => 'Nominateur', 'phCrumbUrl' => site_url('nominateur-menu'), 'phBackUrl' => site_url('nominateur-menu'),
+    'phIcon' => 'clipboard2-check', 'phTitle' => 'Désidératas clubs (R3 et R4)', 'phCode' => 'E027',
+    'phCrumbLabel' => 'CSR', 'phCrumbUrl' => site_url('csr-menu'), 'phBackUrl' => site_url('csr-menu'),
     'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
 ]) ?>
 

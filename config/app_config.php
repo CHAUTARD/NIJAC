@@ -129,23 +129,43 @@ function getFfttApiJoursAvantExpiration(): ?int
 }
 
 /**
- * Ajoute une valeur à l'ENUM messagerie.Type si elle n'y est pas déjà (ex. pour un nouveau type
- * de message système) — relit l'ENUM existant via SHOW COLUMNS pour ne perdre aucune valeur déjà
- * en place, même lecture dynamique que MessagerieController::typesValides().
+ * Ajoute une valeur à l'ENUM d'une colonne si elle n'y est pas déjà — relit l'ENUM existant via
+ * SHOW COLUMNS pour ne perdre aucune valeur déjà en place. $defaut doit correspondre au DEFAULT
+ * actuel de la colonne (MySQL exige de le repréciser sur un MODIFY COLUMN). $table/$colonne ne
+ * sont jamais fournis par l'utilisateur (toujours des littéraux au point d'appel).
  */
-function ajouterTypeMessagerie(\PDO $pdo, string $type): void
+function ajouterValeurEnum(\PDO $pdo, string $table, string $colonne, string $valeur, string $defaut): void
 {
-    $col = $pdo->query("SHOW COLUMNS FROM messagerie WHERE Field = 'Type'")->fetch();
+    $col = $pdo->query("SHOW COLUMNS FROM $table WHERE Field = '$colonne'")->fetch();
     if (!$col || !preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
         return;
     }
-    $types = array_map('trim', str_getcsv($m[1], ',', "'"));
-    if (in_array($type, $types, true)) {
+    $valeurs = array_map('trim', str_getcsv($m[1], ',', "'"));
+    if (in_array($valeur, $valeurs, true)) {
         return;
     }
-    $types[]  = $type;
-    $enumList = implode(',', array_map(fn ($t) => $pdo->quote($t), $types));
-    $pdo->exec("ALTER TABLE messagerie MODIFY COLUMN Type ENUM($enumList) NOT NULL DEFAULT 'Disponibilites'");
+    $valeurs[] = $valeur;
+    $enumList  = implode(',', array_map(fn ($v) => $pdo->quote($v), $valeurs));
+    $pdo->exec("ALTER TABLE $table MODIFY COLUMN $colonne ENUM($enumList) NOT NULL DEFAULT " . $pdo->quote($defaut));
+}
+
+/**
+ * Ajoute une valeur à l'ENUM messagerie.Type si elle n'y est pas déjà (ex. pour un nouveau type
+ * de message système), même lecture dynamique que MessagerieController::typesValides().
+ */
+function ajouterTypeMessagerie(\PDO $pdo, string $type): void
+{
+    ajouterValeurEnum($pdo, 'messagerie', 'Type', $type, 'Disponibilites');
+}
+
+/**
+ * Ajoute le rôle 'CSR' (Commission Sportive Régionale) à l'ENUM utilisateur.Role s'il n'y est pas
+ * déjà — permet de créer des comptes CSR depuis E009 (Gestion des utilisateurs) sans migration
+ * manuelle. Idempotente, appelée par UtilisateurController.
+ */
+function assurerRoleCsr(\PDO $pdo): void
+{
+    ajouterValeurEnum($pdo, 'utilisateur', 'Role', 'CSR', 'JA');
 }
 
 /**

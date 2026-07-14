@@ -36,6 +36,7 @@ class Filters extends BaseFilters
         'performance'   => PerformanceMetrics::class,
         'adminauth'     => \App\Filters\AdminAuth::class,
         'auth'          => \App\Filters\Auth::class,
+        'csrauth'       => \App\Filters\CsrAuth::class,
         'canonicalhost' => \App\Filters\CanonicalHost::class,
     ];
 

@@ -17,6 +17,9 @@ class UtilisateurController extends BaseController
         require_once __DIR__ . '/../../../config/app_config.php';
         require_once __DIR__ . '/../../../Classes/SecurePasswordHasher.php';
         $this->utilisateurModel = new UtilisateurModel();
+
+        // Auto-migration : rôle CSR (Commission Sportive Régionale), voir config/app_config.php.
+        assurerRoleCsr(getPDO());
     }
 
     public function index()
@@ -118,7 +121,7 @@ class UtilisateurController extends BaseController
         $nom      = trim($input['nom'] ?? '');
         $prenom   = trim($input['prenom'] ?? '');
         $role     = trim($input['role'] ?? '');
-        $dept     = (int) ($input['dept'] ?? 0);
+        $dept     = (int) ($input['dept'] ?? 0) ?: null; // 0 = "— Tous les départements —" → NULL (FK departement.code)
         $mdp      = $input['mdp'] ?? '';
         $email    = trim($input['email'] ?? '');
         $actif    = ($input['actif'] ?? '0') === '1' ? 1 : 0;
@@ -130,7 +133,7 @@ class UtilisateurController extends BaseController
         if ($isNew && $mdp === '') {
             return 'Un mot de passe est obligatoire pour un nouvel utilisateur.';
         }
-        if (!in_array($role, ['Administrateur', 'Nominateur', 'JA'], true)) {
+        if (!in_array($role, ['Administrateur', 'Nominateur', 'JA', 'CSR'], true)) {
             return 'Rôle invalide.';
         }
         if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {

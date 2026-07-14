@@ -191,13 +191,15 @@ $routes->get('desiderata-club/charger', 'DesiderataClubController::charger');
 $routes->post('desiderata-club/enregistrer', 'DesiderataClubController::enregistrer');
 
 // ── E027 Désidératas clubs ───────────────────────────────────────────────────
-$routes->get('desiderata-clubs', 'DesiderataClubsController::index', ['filter' => 'auth']);
-$routes->get('desiderata-clubs/liste', 'DesiderataClubsController::liste', ['filter' => 'auth']);
-$routes->get('desiderata-clubs/departements', 'DesiderataClubsController::departements', ['filter' => 'auth']);
-$routes->get('desiderata-clubs/detail', 'DesiderataClubsController::detail', ['filter' => 'auth']);
-$routes->get('desiderata-clubs/ja-club', 'DesiderataClubsController::jaClub', ['filter' => 'auth']);
-$routes->get('desiderata-clubs/apercu', 'DesiderataClubsController::apercu', ['filter' => 'auth']);
-$routes->post('desiderata-clubs/envoyer', 'DesiderataClubsController::envoyer', ['filter' => 'auth']);
+// Rôle CSR (Commission Sportive Régionale) ou Administrateur — plus accessible au Nominateur
+// (voir CsrAuth.php), retiré du menu nominateur au profit du menu CSR (E034).
+$routes->get('desiderata-clubs', 'DesiderataClubsController::index', ['filter' => 'csrauth']);
+$routes->get('desiderata-clubs/liste', 'DesiderataClubsController::liste', ['filter' => 'csrauth']);
+$routes->get('desiderata-clubs/departements', 'DesiderataClubsController::departements', ['filter' => 'csrauth']);
+$routes->get('desiderata-clubs/detail', 'DesiderataClubsController::detail', ['filter' => 'csrauth']);
+$routes->get('desiderata-clubs/ja-club', 'DesiderataClubsController::jaClub', ['filter' => 'csrauth']);
+$routes->get('desiderata-clubs/apercu', 'DesiderataClubsController::apercu', ['filter' => 'csrauth']);
+$routes->post('desiderata-clubs/envoyer', 'DesiderataClubsController::envoyer', ['filter' => 'csrauth']);
 
 // ── E025 Comptabilité frais JA ───────────────────────────────────────────────
 $routes->get('compta', 'ComptaController::index', ['filter' => 'auth']);
@@ -311,3 +313,13 @@ $routes->post('disponibilite-ja/token', 'DisponibiliteJaController::token');
 $routes->get('disponibilite-ja/lire-note', 'DisponibiliteJaController::lireNote');
 $routes->post('disponibilite-ja/sauvegarder-note', 'DisponibiliteJaController::sauvegarderNote');
 $routes->post('disponibilite-ja/sauvegarder-defiscalisation', 'DisponibiliteJaController::sauvegarderDefiscalisation');
+
+// ── E034 Menu CSR ────────────────────────────────────────────────────────────
+// Rôle CSR (Commission Sportive Régionale) ou Administrateur — voir CsrAuth.php.
+$routes->get('csr-menu', 'CsrMenuController::index', ['filter' => 'csrauth']);
+
+// ── E035 Club CSR (envoi email) ──────────────────────────────────────────────
+$routes->get('club-csr', 'ClubCsrController::index', ['filter' => 'csrauth']);
+$routes->get('club-csr/liste', 'ClubCsrController::liste', ['filter' => 'csrauth']);
+$routes->put('club-csr/(:segment)', 'ClubCsrController::modifier/$1', ['filter' => 'csrauth']);
+$routes->post('club-csr/envoyer', 'ClubCsrController::envoyer', ['filter' => 'csrauth']);

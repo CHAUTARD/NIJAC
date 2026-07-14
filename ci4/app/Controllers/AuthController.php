@@ -216,6 +216,7 @@ class AuthController extends BaseController
         return match ($role) {
             'Administrateur' => site_url('admin-menu'),
             'JA'              => site_url('info-rencontre'),
+            'CSR'             => site_url('csr-menu'),
             default           => site_url('nominateur-menu'),
         };
     }

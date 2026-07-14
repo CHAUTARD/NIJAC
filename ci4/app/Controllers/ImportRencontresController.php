@@ -232,6 +232,16 @@ class ImportRencontresController extends BaseController
 
             $items = getFfttRawClient()->listEpreuves((int) $organisme, 'E');
 
+            // Ne conserver que les épreuves des saisons récentes : la FFTT numérote idepreuve de
+            // façon croissante et continue toutes saisons confondues, donc les anciennes saisons
+            // encombrent la liste sans intérêt. Seuil configurable (clé 'fftt_epreuve_min',
+            // éditable dans Configuration générale E015 — à relever à chaque nouvelle saison).
+            $seuilEpreuve = (int) getConfig('fftt_epreuve_min', '18369');
+            $items        = array_values(array_filter(
+                $items,
+                static fn ($e) => (int) ($e['idepreuve'] ?? 0) > $seuilEpreuve
+            ));
+
             // Pour les épreuves FED_ : dédoublonner par intitulé, garder le idepreuve le plus grand
             $fed    = [];
             $autres = [];

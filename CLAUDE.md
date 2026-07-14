@@ -65,6 +65,7 @@ Every screen has a code `EXXXX`. It's hard-coded directly into each view's `<tit
 | E001–E019 | Admin / paramétrage |
 | E020–E029 | Nominateur |
 | E030–E033 | JA / public (fiche JA, convocation, disponibilité, changement mdp) |
+| E034–E039 | CSR (Commission Sportive Régionale) |
 | E099 | Administration BDD (accès restreint) |
 
 ## Architecture
@@ -119,7 +120,7 @@ $_SESSION['utilisateur'] = [
     'login'          => string,
     'nom'            => string,
     'prenom'         => string,
-    'role'           => 'Administrateur' | 'Nominateur' | 'JA',
+    'role'           => 'Administrateur' | 'Nominateur' | 'JA' | 'CSR',
     'is_admin'       => bool,
     'id_departement' => string,    // e.g. '76'
     'change_login'   => bool,      // forces password change on next login
@@ -130,7 +131,8 @@ $_SESSION['utilisateur'] = [
 ### Access control convention
 
 - Admin-only routes: `['filter' => 'adminauth']` in `Routes.php`
-- Nominateur + admin routes: `['filter' => 'auth']` in `Routes.php` (also redirects role `JA` to its own screen)
+- Nominateur + admin routes: `['filter' => 'auth']` in `Routes.php` (also redirects role `JA` to its own screen — role `CSR` is neither `JA` nor blocked, so it also passes this filter, though it has no menu link into these screens)
+- CSR-only routes (E034, E035, E027): `['filter' => 'csrauth']` — role `CSR` or `Administrateur` (see `CsrAuth.php`). E027 used to be under `auth` (Administrateur + Nominateur); it moved to `csrauth` and was dropped from the Nominateur menu (E020) when the CSR role was introduced.
 - Admin-only AJAX actions within a shared controller: checked individually inside the method, same idea as before (e.g. `SalleController`/`JugearbitreController`/`MessagerieController` use route filter `auth` but gate specific write actions to admin in code)
 - E018 (FfttTestController) and E099 (DbAdminController) extra restriction, checked manually in the controller: `$_SESSION['utilisateur']['login'] === 'CHAUTARD'`
 - Public (tokenized or fully open) routes have no filter at all in `Routes.php` — e.g. E023 `desiderata-club`, E029 `adresse-ja` (index), E031 `convocation-ja`, E032 `disponibilite-ja`, E030 `info-rencontre` (session checked manually in-controller because both filters would redirect role `JA` away)
@@ -138,6 +140,7 @@ $_SESSION['utilisateur'] = [
 ### Database conventions
 
 - Auto-column-add pattern: controllers check `DESCRIBE ja` / `SHOW COLUMNS FROM` at request time and issue `ALTER TABLE ADD COLUMN IF NOT EXISTS` before using new columns. No CI4 migration files are used for this — everything is in `config/app_config.php` or inline in the controller.
+- Auto-enum-extend pattern: `ajouterValeurEnum($pdo, $table, $colonne, $valeur, $defaut)` in `config/app_config.php` adds a value to an existing `ENUM` column if missing (re-reads the current definition via `SHOW COLUMNS` first, so no existing value is lost) — used for `messagerie.Type` (new system message types, e.g. `assurerTemplateExpirationFfttApi()`) and `utilisateur.Role` (`assurerRoleCsr()`, called from `UtilisateurController`). The CSR role (E035) doesn't get its own message type: it reuses `Id_Messagerie = 6` (Réengagements), the same message already sent by E027 — see `MessagerieController::ID_MESSAGE_CSR`.
 - `laposte` table is the INSEE commune reference (CodePostal, Nom, GPS). JA rows link to it via `Id_LaPoste`; `Cp` and `Ville` columns on `ja` are fallback denormalized copies.
 - Department filtering rule for Seine-Maritime (76): automatically includes Eure (27), configured in `regles_departements` JSON in the `configuration` table.
 - Always call `getDepartementsAutorises($id_departement)` to resolve the full list of departments for a given user — never hardcode department rules.

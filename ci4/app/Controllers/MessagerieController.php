@@ -23,6 +23,9 @@ class MessagerieController extends BaseController
 {
     private const NB_MESSAGES_SYSTEME = 6;
 
+    /** Message destiné aux correspondants de club (Réengagements) — seul message visible/éditable par le rôle CSR, voir isCsr(). */
+    private const ID_MESSAGE_CSR = 6;
+
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
@@ -46,6 +49,12 @@ class MessagerieController extends BaseController
     private function isAdmin(): bool
     {
         return !empty($_SESSION['utilisateur']['is_admin']);
+    }
+
+    /** Rôle CSR (Commission Sportive Régionale) — ne voit/modifie que le message n°6 (Réengagements), déjà utilisé par E027 pour les correspondants de club. */
+    private function isCsr(): bool
+    {
+        return ($_SESSION['utilisateur']['role'] ?? '') === 'CSR';
     }
 
     /**
@@ -82,6 +91,7 @@ class MessagerieController extends BaseController
             'departement'   => $moi['id_departement'] ?? '',
             'changeLogin'   => !empty($moi['change_login']),
             'isAdmin'       => $this->isAdmin(),
+            'isCsr'         => $this->isCsr(),
             'idCurrentUser' => $this->idCurrentUser(),
             'enumTypes'     => $this->typesValides($pdo),
         ];
@@ -95,6 +105,16 @@ class MessagerieController extends BaseController
         $idCurrentUser = $this->idCurrentUser();
         $pdo           = getPDO();
         $nbSys         = self::NB_MESSAGES_SYSTEME;
+
+        if ($this->isCsr()) {
+            $stmt = $pdo->prepare(
+                'SELECT Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, Cc, NULL AS NomUtilisateur, 1 AS EstSysteme
+                 FROM messagerie WHERE Id_Messagerie = ?'
+            );
+            $stmt->execute([self::ID_MESSAGE_CSR]);
+
+            return $this->response->setJSON(['ok' => true, 'data' => $stmt->fetchAll()]);
+        }
 
         if ($isAdmin) {
             $rows = $pdo->query(
@@ -127,6 +147,10 @@ class MessagerieController extends BaseController
         $stmt->execute([$id]);
         $row = $stmt->fetch();
 
+        if ($row && $this->isCsr() && $id !== self::ID_MESSAGE_CSR) {
+            $row = false; // le rôle CSR ne voit que le message n°6 (Réengagements)
+        }
+
         return $this->response->setJSON(
             $row ? ['ok' => true, 'data' => $row] : ['ok' => false, 'msg' => 'Introuvable']
         );
@@ -134,6 +158,9 @@ class MessagerieController extends BaseController
 
     public function store(): ResponseInterface
     {
+        if ($this->isCsr()) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Le rôle CSR ne peut pas créer de nouveau message.']);
+        }
 
         $pdo    = getPDO();
         $fields = $this->extractFields($this->request->getPost(), $pdo);
@@ -152,17 +179,32 @@ class MessagerieController extends BaseController
     public function update($id = null): ResponseInterface
     {
 
-        $id     = (int) $id;
-        $pdo    = getPDO();
-        $fields = $this->extractFields($this->request->getRawInput(), $pdo);
+        $id  = (int) $id;
+        $pdo = getPDO();
 
+        $row = $pdo->prepare('SELECT Id_Utilisateur, Type FROM messagerie WHERE Id_Messagerie = ?');
+        $row->execute([$id]);
+        $existing = $row->fetch();
+
+        // Le rôle CSR ne modifie que le champ Message du message n°6 (Réengagements) — Type/Sujet/Cc
+        // restent figés côté serveur quel que soit le contenu envoyé par le client.
+        if ($this->isCsr()) {
+            if (!$existing || $id !== self::ID_MESSAGE_CSR) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Introuvable.']);
+            }
+            $message = trim($this->request->getRawInput()['message'] ?? '');
+            if ($message === '') {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Le message ne peut pas être vide.']);
+            }
+            $pdo->prepare('UPDATE messagerie SET Message=? WHERE Id_Messagerie=?')->execute([$message, $id]);
+
+            return $this->response->setJSON(['ok' => true, 'msg' => 'Message mis à jour.', 'id' => $id]);
+        }
+
+        $fields = $this->extractFields($this->request->getRawInput(), $pdo);
         if (is_string($fields)) {
             return $this->response->setJSON(['ok' => false, 'msg' => $fields]);
         }
-
-        $row = $pdo->prepare('SELECT Id_Utilisateur FROM messagerie WHERE Id_Messagerie = ?');
-        $row->execute([$id]);
-        $existing = $row->fetch();
 
         $isAdmin = $this->isAdmin();
         if ($existing && ($existing['Id_Utilisateur'] === null || ($id >= 1 && $id <= self::NB_MESSAGES_SYSTEME)) && !$isAdmin) {
@@ -180,6 +222,9 @@ class MessagerieController extends BaseController
 
     public function duplicate($id = null): ResponseInterface
     {
+        if ($this->isCsr()) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Le rôle CSR ne peut pas dupliquer de message.']);
+        }
 
         $id  = (int) $id;
         $pdo = getPDO();
@@ -200,6 +245,9 @@ class MessagerieController extends BaseController
 
     public function delete($id = null): ResponseInterface
     {
+        if ($this->isCsr()) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Le rôle CSR ne peut pas supprimer de message.']);
+        }
 
         $id  = (int) $id;
         $pdo = getPDO();
