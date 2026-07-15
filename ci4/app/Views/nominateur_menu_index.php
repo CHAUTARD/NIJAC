@@ -430,7 +430,7 @@
     <!-- Déconnexion -->
     <div class="menu-btn-wrap" style="grid-column: 5;">
         <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;">
-            <div class="btn-icon"><i class="bi bi-box-arrow-right" style="color:#842029;"></i></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Quitter.png') ?>" alt="Se déconnecter"></div>
             <span style="color:#842029;">Se déconnecter</span>
             <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
         </a>

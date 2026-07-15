@@ -268,14 +268,14 @@
 
         <a href="<?= site_url('region') ?>" class="menu-btn btn-region">
             <span class="btn-code">E012</span>
-            <div class="btn-icon"><i class="bi bi-map-fill" style="font-size:6rem;color:#3949ab;"></i></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Regions.png') ?>" alt="Régions"></div>
             <span>Régions</span>
             <span class="btn-desc">Gérer les régions et leur gentilé</span>
         </a>
 
         <a href="<?= site_url('departement') ?>" class="menu-btn btn-departement">
             <span class="btn-code">E013</span>
-            <div class="btn-icon"><i class="bi bi-geo-alt-fill" style="font-size:6rem;color:#0277bd;"></i></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Departement.png') ?>" alt="Départements"></div>
             <span>Départements</span>
             <span class="btn-desc">Gérer les départements et leur région</span>
         </a>
@@ -313,7 +313,7 @@
         <?php endif; ?>
 
         <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da; grid-column: 6;">
-            <div class="btn-icon"><i class="bi bi-box-arrow-right" style="color:#842029;"></i></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Quitter.png') ?>" alt="Se déconnecter"></div>
             <span style="color:#842029;">Se déconnecter</span>
             <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
         </a>
