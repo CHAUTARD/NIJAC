@@ -121,7 +121,7 @@ class UtilisateurController extends BaseController
         $nom      = trim($input['nom'] ?? '');
         $prenom   = trim($input['prenom'] ?? '');
         $role     = trim($input['role'] ?? '');
-        $dept     = (int) ($input['dept'] ?? 0) ?: null; // 0 = "— Tous les départements —" → NULL (FK departement.code)
+        $dept     = (int) ($input['dept'] ?? 0);
         $mdp      = $input['mdp'] ?? '';
         $email    = trim($input['email'] ?? '');
         $actif    = ($input['actif'] ?? '0') === '1' ? 1 : 0;
@@ -130,11 +130,20 @@ class UtilisateurController extends BaseController
         if ($login === '') {
             return 'Le login ne peut pas être vide.';
         }
+        if ($nom === '') {
+            return 'Le nom ne peut pas être vide.';
+        }
+        if ($prenom === '') {
+            return 'Le prénom ne peut pas être vide.';
+        }
         if ($isNew && $mdp === '') {
             return 'Un mot de passe est obligatoire pour un nouvel utilisateur.';
         }
         if (!in_array($role, ['Administrateur', 'Nominateur', 'JA', 'CSR'], true)) {
             return 'Rôle invalide.';
+        }
+        if ($dept <= 0) {
+            return 'Le département est obligatoire.';
         }
         if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return 'Adresse email invalide.';

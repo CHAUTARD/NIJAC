@@ -209,17 +209,17 @@
         </div>
 
         <div class="mb-2">
-            <label class="form-label" for="txt-login">Login :</label>
+            <label class="form-label" for="txt-login">Login (*) :</label>
             <input type="text" id="txt-login" class="form-control form-control-sm" maxlength="50" autocomplete="off">
         </div>
 
         <div class="mb-2">
-            <label class="form-label" for="txt-nom">Nom :</label>
+            <label class="form-label" for="txt-nom">Nom (*) :</label>
             <input type="text" id="txt-nom" class="form-control form-control-sm" maxlength="100">
         </div>
 
         <div class="mb-2">
-            <label class="form-label" for="txt-prenom">Prénom :</label>
+            <label class="form-label" for="txt-prenom">Prénom (*) :</label>
             <input type="text" id="txt-prenom" class="form-control form-control-sm" maxlength="100">
         </div>
 
@@ -229,7 +229,7 @@
         </div>
 
         <div class="mb-2">
-            <label class="form-label" for="cbo-role">Rôle :</label>
+            <label class="form-label" for="cbo-role">Rôle (*) :</label>
             <select id="cbo-role" class="form-select form-select-sm">
                 <option value="Administrateur">Administrateur</option>
                 <option value="Nominateur" selected>Nominateur</option>
@@ -239,9 +239,9 @@
         </div>
 
         <div class="mb-2">
-            <label class="form-label" for="cbo-dept">Département :</label>
+            <label class="form-label" for="cbo-dept">Département (*) :</label>
             <select id="cbo-dept" class="form-select form-select-sm" style="max-width:280px">
-                <option value="0">— Tous les départements —</option>
+                <option value="">— Sélectionner —</option>
                 <?php foreach ($deptActifs as $d): ?>
                 <option value="<?= (int) $d['code'] ?>"><?= (int) $d['code'] ?> — <?= esc($d['nom']) ?></option>
                 <?php endforeach; ?>
@@ -250,7 +250,7 @@
 
         <div class="mb-2">
             <label class="form-label" for="txt-mdp">
-                Mot de passe :
+                Mot de passe (*) :
                 <small class="fw-normal text-muted" id="mdp-hint">(laisser vide = inchangé)</small>
             </label>
             <div class="input-group" style="max-width:320px">
@@ -287,6 +287,9 @@
                 <i class="bi bi-trash3 me-1"></i>Supprimer
             </button>
         </div>
+
+        <!-- Légende champs obligatoires -->
+        <div class="small text-muted mt-2">(*) Champs obligatoires (mot de passe obligatoire uniquement à la création)</div>
 
         <!-- Statut -->
         <div id="form-status" class="mt-3 small fw-bold"></div>
@@ -377,7 +380,7 @@ $('#btn-nouveau').on('click', function () {
     $('#txt-prenom').val('');
     $('#txt-email').val('');
     $('#cbo-role').val('Nominateur');
-    $('#cbo-dept').val(0);
+    $('#cbo-dept').val('');
     $('#txt-mdp').val('Change_On_Install');
     $('#chk-actif').prop('checked', true);
     $('#chk-change-login').prop('checked', true);
