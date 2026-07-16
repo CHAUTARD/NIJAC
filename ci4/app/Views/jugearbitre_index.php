@@ -1195,7 +1195,7 @@ $(document).on('click', '.btn-lien-adresse', function (e) {
     }
 
     nijacConfirm(
-        `Envoyer le message de demande d'adresse à <strong>${nom}</strong> ?`,
+        `Envoyer le message de demande d'adresse à ${nom} ?`,
         function () {
             $.post('<?= site_url('adresse-ja/envoyer-demande-adresse') ?>', { id_ja: id }, function (r) {
                 if (r.ok) {

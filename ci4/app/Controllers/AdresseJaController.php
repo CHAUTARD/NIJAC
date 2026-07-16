@@ -21,6 +21,8 @@ use CodeIgniter\HTTP\ResponseInterface;
  */
 class AdresseJaController extends BaseController
 {
+    private const ID_MESSAGE_DEMANDE_ADRESSE = 5;
+
     private \Obfuscator $obf;
 
     public function __construct()
@@ -141,11 +143,11 @@ class AdresseJaController extends BaseController
                     return $this->response->setJSON(['ok' => false, 'err' => "Ce JA n'a pas d'adresse email."]);
                 }
 
-                $stmtMsg = $pdo->prepare("SELECT Sujet, Message FROM messagerie WHERE Type = 'Demande adresse' ORDER BY Id_Messagerie LIMIT 1");
-                $stmtMsg->execute();
+                $stmtMsg = $pdo->prepare("SELECT Sujet, Message FROM messagerie WHERE Id_Messagerie = ?");
+                $stmtMsg->execute([self::ID_MESSAGE_DEMANDE_ADRESSE]);
                 $modele = $stmtMsg->fetch();
                 if (!$modele) {
-                    return $this->response->setJSON(['ok' => false, 'err' => 'Modèle "Demande adresse" introuvable en base.']);
+                    return $this->response->setJSON(['ok' => false, 'err' => 'Modèle "Demande adresse" (Id_Messagerie=' . self::ID_MESSAGE_DEMANDE_ADRESSE . ') introuvable en base.']);
                 }
 
                 $marqueurs = construireMarqueursMessage($ja, $moi);
