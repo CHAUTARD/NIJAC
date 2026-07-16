@@ -1200,7 +1200,6 @@ $(document).on('click', '.btn-lien-adresse', function (e) {
             $.post('<?= site_url('adresse-ja/envoyer-demande-adresse') ?>', { id_ja: id }, function (r) {
                 if (r.ok) {
                     nijacToast(`Message envoyé à ${r.nom}.`, 'success');
-                    if (r.url) window.open(r.url, '_blank');
                 } else {
                     nijacToast('Erreur : ' + (r.err || 'inconnue'), 'danger');
                 }
