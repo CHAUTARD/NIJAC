@@ -20,6 +20,8 @@ use CodeIgniter\HTTP\ResponseInterface;
  */
 class ImportRencontresController extends BaseController
 {
+    private const ID_MESSAGE_CONVOCATION = 3;
+
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
@@ -701,7 +703,8 @@ class ImportRencontresController extends BaseController
                 ->execute([$idRenc, $idDispo]);
             $idNomination = (int) $pdo->lastInsertId();
 
-            $msgRow    = $pdo->query("SELECT Sujet, Message FROM messagerie WHERE Type = 'Convocation' LIMIT 1")->fetch();
+            $idUtilisateurCourant = (int) ($_SESSION['utilisateur']['id'] ?? 0);
+            $msgRow    = resoudreModeleMessagerie($pdo, self::ID_MESSAGE_CONVOCATION, $idUtilisateurCourant);
             $emailSent = false;
             if ($msgRow && !empty($ja['Email'])) {
                 $marqueurs = construireMarqueursMessage($ja, $_SESSION['utilisateur'] ?? [], [

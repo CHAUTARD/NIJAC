@@ -57,15 +57,9 @@ class MessagerieController extends BaseController
         return ($_SESSION['utilisateur']['role'] ?? '') === 'CSR';
     }
 
-    /**
-     * Réplique à l'identique messagerie.php legacy : la session ne contient
-     * pas de clé 'id_utilisateur' (seulement 'id', voir CLAUDE.md), donc cette
-     * valeur vaut toujours 0 côté legacy. Conservé tel quel pour un portage
-     * fidèle — voir la tâche de fond ouverte pour corriger ce bug d'origine.
-     */
     private function idCurrentUser(): int
     {
-        return (int) ($_SESSION['utilisateur']['id_utilisateur'] ?? 0);
+        return (int) ($_SESSION['utilisateur']['id'] ?? 0);
     }
 
     private function typesValides(\PDO $pdo): array

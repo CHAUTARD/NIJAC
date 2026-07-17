@@ -143,9 +143,8 @@ class AdresseJaController extends BaseController
                     return $this->response->setJSON(['ok' => false, 'err' => "Ce JA n'a pas d'adresse email."]);
                 }
 
-                $stmtMsg = $pdo->prepare("SELECT Sujet, Message FROM messagerie WHERE Id_Messagerie = ?");
-                $stmtMsg->execute([self::ID_MESSAGE_DEMANDE_ADRESSE]);
-                $modele = $stmtMsg->fetch();
+                $idUtilisateurCourant = (int) ($_SESSION['utilisateur']['id'] ?? 0);
+                $modele = resoudreModeleMessagerie($pdo, self::ID_MESSAGE_DEMANDE_ADRESSE, $idUtilisateurCourant);
                 if (!$modele) {
                     return $this->response->setJSON(['ok' => false, 'err' => 'Modèle "Demande adresse" (Id_Messagerie=' . self::ID_MESSAGE_DEMANDE_ADRESSE . ') introuvable en base.']);
                 }

@@ -338,6 +338,34 @@ function remplacerMarqueursMessage(string $sujet, string $corps, array $marqueur
 }
 
 /**
+ * Résout le modèle de messagerie à utiliser pour un envoi automatique : d'abord
+ * la version personnalisée du Nominateur courant (même Sujet que le modèle
+ * système $idMessagerieSysteme, mais Id_Utilisateur = lui), sinon le modèle
+ * système par défaut (Id_Utilisateur = 1). Les versions personnalisées sont
+ * créées via le bouton "Dupliquer" de E024 (MessagerieController::duplicate).
+ */
+function resoudreModeleMessagerie(\PDO $pdo, int $idMessagerieSysteme, int $idUtilisateurCourant): ?array
+{
+    $stmt = $pdo->prepare('SELECT Sujet, Message, Cc FROM messagerie WHERE Id_Messagerie = ?');
+    $stmt->execute([$idMessagerieSysteme]);
+    $systeme = $stmt->fetch();
+    if (!$systeme) {
+        return null;
+    }
+
+    if ($idUtilisateurCourant > 0) {
+        $stmt = $pdo->prepare('SELECT Sujet, Message, Cc FROM messagerie WHERE Sujet = ? AND Id_Utilisateur = ?');
+        $stmt->execute([$systeme['Sujet'], $idUtilisateurCourant]);
+        $perso = $stmt->fetch();
+        if ($perso) {
+            return $perso;
+        }
+    }
+
+    return $systeme;
+}
+
+/**
  * Vérifie si l'utilisateur peut envoyer $nb emails supplémentaires.
  * Utilise une fenêtre glissante stockée en session.
  *

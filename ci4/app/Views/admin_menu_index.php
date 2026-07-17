@@ -297,7 +297,7 @@
         <?php if ($isChautard): ?>
         <a href="<?= site_url('fftt-test') ?>" class="menu-btn btn-configuration">
             <span class="btn-code">E018</span>
-            <div class="btn-icon"><i class="bi bi-plug-fill" style="font-size:6rem;color:#0d6efd;"></i></div>
+            <div class="btn-icon"><img src="<?= base_url('img/TestAPI.png') ?>" alt="Test API FFTT"></div>
             <span>Test API FFTT</span>
             <span class="btn-desc">Vérifier la connexion à l'API FFTT</span>
         </a>

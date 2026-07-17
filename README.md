@@ -157,7 +157,7 @@ La session stocke `$_SESSION['utilisateur']` avec les clés `is_admin`, `id_depa
 
 | Étape | Action |
 |---|---|
-| Développement | Lancer WAMP, accéder à `http://localhost/NIJAC/` |
+| Développement | Lancer WAMP, accéder à `http://nijac/` (vhost dédié, voir `httpd-vhosts.conf` et le fichier `hosts`) |
 | Mise en production | Créer `.env.production` à la racine (ou `NIJAC_ENV=production` dans Apache), adapter les constantes de `config/db.php` |
 | Emails | Basculer `etat_logiciel` → `Opérationnel` dans la table `configuration` (E015) |
 

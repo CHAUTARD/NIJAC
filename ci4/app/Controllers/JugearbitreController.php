@@ -44,12 +44,11 @@ class JugearbitreController extends BaseController
      */
     private function ensureFfttColumns(\PDO $pdo): void
     {
-        $colsJa   = array_column($pdo->query('SHOW COLUMNS FROM ja')->fetchAll(), 'Field');
+        $colsInfo = $pdo->query('SHOW COLUMNS FROM ja')->fetchAll();
+        $colsJa   = array_column($colsInfo, 'Field');
         $ffttCols = [
             'Classement'             => 'INT NULL DEFAULT NULL',
             'DateValidationFFTT'     => 'VARCHAR(10) NULL DEFAULT NULL',
-            'GradeFFTT'              => "VARCHAR(20) NULL DEFAULT NULL COMMENT 'Grade arbitrage retourné par xml_licence_b'",
-            'DateEnrichissementFFTT' => 'DATETIME NULL DEFAULT NULL',
             'Cp'                     => 'VARCHAR(10) NULL DEFAULT NULL',
             'Ville'                  => 'VARCHAR(100) NULL DEFAULT NULL',
             'CodeDept'               => 'VARCHAR(3) NULL DEFAULT NULL',
@@ -58,6 +57,14 @@ class JugearbitreController extends BaseController
             if (!in_array($col, $colsJa)) {
                 $pdo->exec("ALTER TABLE ja ADD COLUMN $col $def");
             }
+        }
+
+        // Corrige un schéma existant plus strict que prévu ci-dessus (ex: CodeDept
+        // créé NOT NULL sans défaut ailleurs) — l'INSERT de l'import FFTT club ne
+        // renseigne pas cette colonne et échouerait sinon (1364).
+        $codeDept = current(array_filter($colsInfo, static fn ($c) => $c['Field'] === 'CodeDept'));
+        if ($codeDept && strtoupper($codeDept['Null']) === 'NO' && $codeDept['Default'] === null) {
+            $pdo->exec('ALTER TABLE ja MODIFY COLUMN CodeDept VARCHAR(3) NULL DEFAULT NULL');
         }
     }
 
@@ -138,7 +145,7 @@ class JugearbitreController extends BaseController
             'SELECT j.Id_JA, j.Nom, j.Prenom, j.Email, j.Telephone,
                     j.Grade, j.Actif, j.Id_Club, j.Id_LaPoste,
                     j.Defiscalisation, j.Nationale, j.NumCompteEBP,
-                    j.Classement, j.DateValidationFFTT, j.GradeFFTT, j.DateEnrichissementFFTT,
+                    j.Classement, j.DateValidationFFTT,
                     j.Cp, j.Ville, j.CodeDept,
                     (SELECT cl.Nom FROM Club cl WHERE cl.Id_Club = j.Id_Club LIMIT 1) AS NomClub,
                     COALESCE(j.Cp,    (SELECT lp.CodePostal FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1)) AS CodePostalJA,
@@ -172,8 +179,6 @@ class JugearbitreController extends BaseController
             'Ville'                  => $r['VilleJA'],
             'Classement'             => $r['Classement'],
             'DateValidationFFTT'     => $r['DateValidationFFTT'],
-            'GradeFFTT'              => $r['GradeFFTT'],
-            'DateEnrichissementFFTT' => $r['DateEnrichissementFFTT'],
         ], $rows);
 
         return $this->response->setJSON(['ok' => true, 'data' => $rows]);
@@ -442,6 +447,10 @@ class JugearbitreController extends BaseController
                     $actif = new \DateTime('today') <= new \DateTime($seasonEndYear . '-06-30') ? 1 : 0;
                 }
 
+                // Classement (point) et DateValidationFFTT — mêmes champs que enrichirFftt()
+                $classement = (int) $this->ffttStr($lb['point'] ?? '');
+                $dateValid  = $dateValidStr ?: null;
+
                 // Résolution CP / Ville / Id_LaPoste depuis les données FFTT
                 $cpFFTT    = $this->ffttStr($lb['cp'] ?? '');
                 $villeFFTT = normaliserVille($this->ffttStr($lb['ville'] ?? ''));
@@ -462,19 +471,19 @@ class JugearbitreController extends BaseController
                 $exists->execute([$licence]);
                 if ($exists->fetchColumn()) {
                     $pdo->prepare(
-                        'UPDATE ja SET GradeFFTT=?, Actif=?, DateEnrichissementFFTT=NOW(),
+                        'UPDATE ja SET Actif=?, Classement=?, DateValidationFFTT=?,
                          Cp = COALESCE(Cp, ?), Ville = COALESCE(Ville, ?), Id_LaPoste = COALESCE(Id_LaPoste, ?)
                          WHERE Id_JA=?'
-                    )->execute([$gradeNorm, $actif, $cpFinal, $villeFinal, $idLaPoste, $licence]);
+                    )->execute([$actif, $classement, $dateValid, $cpFinal, $villeFinal, $idLaPoste, $licence]);
                     $trouves[] = ['licence' => $licence, 'nom' => $nom, 'prenom' => $prenom, 'grade' => $gradeNorm, 'statut' => 'mis_a_jour'];
                 } else {
                     $pdo->prepare(
-                        'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Grade, GradeFFTT, Actif, Id_Club,
-                                         Defiscalisation, Nationale, DateEnrichissementFFTT,
+                        'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Grade, Actif, Id_Club,
+                                         Defiscalisation, Nationale, Classement, DateValidationFFTT,
                                          Id_LaPoste, Cp, Ville)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NOW(), ?, ?, ?)'
-                    )->execute([$licence, $nom, $prenom, $email ?: null, $gradeNorm, $gradeNorm, $actif, $idClub,
-                        $idLaPoste, $cpFinal, $villeFinal]);
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)'
+                    )->execute([$licence, $nom, $prenom, $email ?: null, $gradeNorm, $actif, $idClub,
+                        $classement, $dateValid, $idLaPoste, $cpFinal, $villeFinal]);
                     $trouves[] = ['licence' => $licence, 'nom' => $nom, 'prenom' => $prenom, 'grade' => $gradeNorm, 'statut' => 'nouveau'];
                 }
             } catch (\Throwable $e) {
@@ -561,6 +570,10 @@ class JugearbitreController extends BaseController
                     $actif = new \DateTime('today') <= new \DateTime($seasonEndYear . '-06-30') ? 1 : 0;
                 }
 
+                // Classement (point) et DateValidationFFTT — mêmes champs que enrichirFftt()
+                $classement = (int) $this->ffttStr($lb['point'] ?? '');
+                $dateValid  = $dateValidStr ?: null;
+
                 $cpFFTT    = $this->ffttStr($lb['cp'] ?? '');
                 $villeFFTT = normaliserVille($this->ffttStr($lb['ville'] ?? ''));
                 $idLaPoste = null;
@@ -581,17 +594,19 @@ class JugearbitreController extends BaseController
                 $enBase = (bool) $stmtEx->fetchColumn();
 
                 $trouves[] = [
-                    'licence'    => $licence,
-                    'nom'        => $nom,
-                    'prenom'     => $prenom,
-                    'email'      => $email,
-                    'grade'      => $gradeNorm,
-                    'actif'      => $actif,
-                    'id_club'    => $idClub,
-                    'id_laposte' => $idLaPoste,
-                    'cp'         => $cpFinal,
-                    'ville'      => $villeFinal,
-                    'en_base'    => $enBase,
+                    'licence'         => $licence,
+                    'nom'             => $nom,
+                    'prenom'          => $prenom,
+                    'email'           => $email,
+                    'grade'           => $gradeNorm,
+                    'actif'           => $actif,
+                    'id_club'         => $idClub,
+                    'id_laposte'      => $idLaPoste,
+                    'cp'              => $cpFinal,
+                    'ville'           => $villeFinal,
+                    'classement'      => $classement,
+                    'date_validation' => $dateValid,
+                    'en_base'         => $enBase,
                 ];
             } catch (\Throwable $e) {
                 $erreurs++;
@@ -634,6 +649,8 @@ class JugearbitreController extends BaseController
             $idLaPoste  = $ja['id_laposte'] ?? null;
             $cpFinal    = trim((string) ($ja['cp'] ?? ''));
             $villeFinal = trim((string) ($ja['ville'] ?? ''));
+            $classement = (int) ($ja['classement'] ?? 0);
+            $dateValid  = trim((string) ($ja['date_validation'] ?? '')) ?: null;
 
             if ($licence === '' || $grade === '') {
                 continue;
@@ -643,18 +660,18 @@ class JugearbitreController extends BaseController
             $stmtEx->execute([$licence]);
             if ($stmtEx->fetchColumn()) {
                 $pdo->prepare(
-                    'UPDATE ja SET GradeFFTT=?, Actif=?, DateEnrichissementFFTT=NOW(),
+                    'UPDATE ja SET Actif=?, Classement=?, DateValidationFFTT=?,
                      Cp = COALESCE(Cp, ?), Ville = COALESCE(Ville, ?), Id_LaPoste = COALESCE(Id_LaPoste, ?)
                      WHERE Id_JA=?'
-                )->execute([$grade, $actif, $cpFinal, $villeFinal, $idLaPoste, $licence]);
+                )->execute([$actif, $classement, $dateValid, $cpFinal, $villeFinal, $idLaPoste, $licence]);
                 $maj++;
             } else {
                 $pdo->prepare(
-                    'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Grade, GradeFFTT, Actif, Id_Club,
-                                     Defiscalisation, Nationale, DateEnrichissementFFTT,
+                    'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Grade, Actif, Id_Club,
+                                     Defiscalisation, Nationale, Classement, DateValidationFFTT,
                                      Id_LaPoste, Cp, Ville)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NOW(), ?, ?, ?)'
-                )->execute([$licence, $nom, $prenom, $email, $grade, $grade, $actif, $idClub, $idLaPoste, $cpFinal, $villeFinal]);
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)'
+                )->execute([$licence, $nom, $prenom, $email, $grade, $actif, $idClub, $classement, $dateValid, $idLaPoste, $cpFinal, $villeFinal]);
                 $nouveaux++;
             }
         }
@@ -742,20 +759,16 @@ class JugearbitreController extends BaseController
 
         $classement = (int) $this->ffttStr($lic['point'] ?? '');
         $dateValid  = $this->ffttStr($lic['validation'] ?? '') ?: null;
-        $arb        = $this->ffttStr($lic['arb'] ?? '') ?: null;
-        $ja         = $this->ffttStr($lic['ja'] ?? '') ?: null;
-        $gradeFFTT  = $ja ?? $arb ?? null;
 
         // CP, Ville et Id_LaPoste volontairement exclus : les données FFTT sont moins fiables que la BDD locale
         $pdo->prepare(
-            'UPDATE ja SET Classement=?, DateValidationFFTT=?, GradeFFTT=?, DateEnrichissementFFTT=NOW() WHERE Id_JA=?'
-        )->execute([$classement, $dateValid, $gradeFFTT, $idJa]);
+            'UPDATE ja SET Classement=?, DateValidationFFTT=? WHERE Id_JA=?'
+        )->execute([$classement, $dateValid, $idJa]);
 
         return $this->response->setJSON([
             'ok'         => true,
             'classement' => $classement,
             'date_valid' => $dateValid,
-            'grade_fftt' => $gradeFFTT,
             'nom_fftt'   => $this->ffttStr($lic['nom'] ?? '') . ' ' . $this->ffttStr($lic['prenom'] ?? ''),
             'club_fftt'  => $this->ffttStr($lic['nomclub'] ?? ''),
         ]);

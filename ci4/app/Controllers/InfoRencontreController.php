@@ -204,7 +204,7 @@ class InfoRencontreController extends BaseController
 
         $pdo    = getPDO();
         $stmtJa = $pdo->prepare(
-            'SELECT j.Id_JA, j.Nom, j.Prenom, j.Email, j.Telephone, j.Grade, j.GradeFFTT,
+            'SELECT j.Id_JA, j.Nom, j.Prenom, j.Email, j.Telephone, j.Grade,
                     j.Actif, j.Id_Club, j.Id_LaPoste, j.Defiscalisation, j.Nationale,
                     j.Classement, j.DateValidationFFTT,
                     COALESCE(j.Cp,    lp.CodePostal) AS CodePostal,

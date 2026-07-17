@@ -1,5 +1,7 @@
 # Credentials — ne jamais versionner
 .env
+NIJAC_Login.txt
+cj2.txt
 
 # Dépendances Composer
 vendor/

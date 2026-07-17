@@ -758,7 +758,7 @@ function renderGrille() {
 
     const info = searchTerm ? `${affichees.length} résultat(s) sur ${lignes.length}. ` : '';
     setStatus(`${info}Double-cliquez sur une ligne pour la modifier.`);
-    $('#lbl-count').text(`${lignes.length} JA`);
+    $('#lbl-count').text(`${affichees.length}/${lignes.length} JA`);
 }
 
 function makeTd(val, idx, field, readonly) {
@@ -829,8 +829,6 @@ function chargerListe() {
             ville:                  r.Ville ?? '',
             classement:               r.Classement ?? null,
             date_validation_fftt:     r.DateValidationFFTT ?? null,
-            grade_fftt:               r.GradeFFTT ?? null,
-            date_enrichissement_fftt: r.DateEnrichissementFFTT ?? null,
         }));
         renderGrille();
     }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });

@@ -262,6 +262,11 @@ function chargerTables() {
     });
 }
 
+// ── État de la dernière recherche SELECT (pour générer l'UPDATE au double-clic) ──
+let currentTable  = null; // nom de table si la requête est un simple "SELECT ... FROM `table`", sinon null
+let currentRows   = [];
+let currentPkCols = []; // colonne(s) de la clé primaire de currentTable
+
 function executerRequete(sqlOverride) {
     const sql = (sqlOverride !== undefined ? sqlOverride : $('#sql-input').val()).trim();
     if (!sql) { toast('Saisissez une requête SQL.', false); return; }
@@ -280,15 +285,47 @@ function executerRequete(sqlOverride) {
         }
 
         if (res.type === 'select') {
+            currentTable  = detecterTable(sql);
+            currentRows   = res.rows;
+            currentPkCols = [];
+            if (currentTable) chargerClePrimaire(currentTable).then(cols => currentPkCols = cols);
             afficherResultats(res.cols, res.rows);
             $('#result-meta').text(`${res.rows.length} ligne(s) — ${res.ms} ms`);
         } else {
+            currentTable  = null;
+            currentRows   = [];
+            currentPkCols = [];
             $('#tbl-result').hide();
             $('#empty-msg').show().html(`<i class="bi bi-check-circle-fill text-success fs-2 d-block mb-2"></i>${res.affected} ligne(s) affectée(s).`);
             $('#result-meta').text(`${res.ms} ms`);
         }
         setStatus('Prêt.');
     }, 'json').fail(() => { spinner(false); setStatus('Erreur réseau.', false); });
+}
+
+// Récupère la/les colonne(s) de la clé primaire d'une table (pour cibler l'UPDATE généré au double-clic).
+function chargerClePrimaire(table) {
+    return new Promise(resolve => {
+        $.post(`${DB_ADMIN_BASE}/sql`, { sql: `SHOW KEYS FROM \`${table}\` WHERE Key_name = 'PRIMARY'` }, function (res) {
+            resolve(res.ok && res.type === 'select' ? res.rows.map(r => r.Column_name) : []);
+        }, 'json').fail(() => resolve([]));
+    });
+}
+
+// Ne reconnaît que "SELECT ... FROM `table` [WHERE|ORDER|LIMIT|;...]" (une seule table,
+// pas de JOIN) — dans tous les autres cas (jointure, sous-requête...) le double-clic
+// pour générer l'UPDATE reste désactivé (currentTable = null) car les colonnes affichées
+// ne suffiraient pas à identifier une ligne d'une table précise.
+function detecterTable(sql) {
+    if (/\bjoin\b/i.test(sql)) return null;
+    const m = sql.match(/^\s*select\s+.*?\sfrom\s+`?(\w+)`?\s*(where|order\s+by|group\s+by|limit|;|$)/is);
+    return m ? m[1] : null;
+}
+
+// Représentation SQL d'une valeur JS (échappement des quotes, NULL géré à part).
+function litteralSql(val) {
+    if (val === null || val === undefined) return 'NULL';
+    return `'${String(val).replace(/'/g, "''")}'`;
 }
 
 function afficherResultats(cols, rows) {
@@ -302,15 +339,18 @@ function afficherResultats(cols, rows) {
     }
 
     cols.forEach(c => $head.append(`<th>${escHtml(c)}</th>`));
-    rows.forEach(row => {
+    rows.forEach((row, rowIdx) => {
         const $tr = $('<tr>');
         cols.forEach(c => {
             const val = row[c];
+            const $td = $('<td>').attr({ 'data-row-idx': rowIdx, 'data-col': c })
+                                  .attr('title', 'Double-cliquez pour générer l\'UPDATE de ce champ');
             if (val === null) {
-                $tr.append('<td class="is-null">NULL</td>');
+                $td.addClass('is-null').text('NULL');
             } else {
-                $tr.append(`<td>${escHtml(val)}</td>`);
+                $td.text(val);
             }
+            $tr.append($td);
         });
         $body.append($tr);
     });
@@ -318,6 +358,37 @@ function afficherResultats(cols, rows) {
     $('#empty-msg').hide();
     $('#tbl-result').show();
 }
+
+// ── Double-clic sur une cellule : génère l'UPDATE de ce champ pour cette ligne ──
+$(document).on('dblclick', '#tbl-result td', function () {
+    if (!currentTable) {
+        toast('Impossible de déterminer la table (requête trop complexe, ou dernier résultat non tabulaire).', false);
+        return;
+    }
+    if (!currentPkCols.length) {
+        toast('Impossible de déterminer la clé primaire de cette table.', false);
+        return;
+    }
+
+    const rowIdx = +$(this).data('row-idx');
+    const col    = $(this).data('col');
+    const row    = currentRows[rowIdx];
+    if (!row) return;
+
+    const whereClause = currentPkCols
+        .map(c => (row[c] === null ? `\`${c}\` IS NULL` : `\`${c}\` = ${litteralSql(row[c])}`))
+        .join(' AND ');
+
+    const sql = `UPDATE \`${currentTable}\` SET \`${col}\` = ${litteralSql(row[col])} WHERE ${whereClause};`;
+    $('#sql-input').val(sql);
+
+    // Sélectionne la valeur à modifier dans le SET pour une édition immédiate.
+    const debut = sql.indexOf(' = ') + 3;
+    const fin   = sql.indexOf(' WHERE ');
+    $('#sql-input').trigger('focus')[0].setSelectionRange(debut, fin);
+
+    toast('Ordre UPDATE généré — modifiez la valeur puis cliquez sur Exécuter.');
+});
 
 $('#btn-executer').on('click', () => executerRequete());
 $('#btn-effacer').on('click', function () {

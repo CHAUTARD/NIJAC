@@ -20,6 +20,8 @@ use CodeIgniter\HTTP\ResponseInterface;
  */
 class NominationController extends BaseController
 {
+    private const ID_MESSAGE_CONVOCATION = 3;
+
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
@@ -464,10 +466,12 @@ class NominationController extends BaseController
                 ];
 
                 if (!empty($nom['Email'])) {
-                    // Charger le template 'Convocation' depuis messagerie
+                    // Charger le template 'Convocation' depuis messagerie (personnalisé du
+                    // nominateur courant si présent, sinon modèle système)
                     static $tplConv = null;
                     if ($tplConv === null) {
-                        $r       = $pdo->query("SELECT Sujet, Message, Cc FROM messagerie WHERE Type='Convocation' ORDER BY Id_Messagerie LIMIT 1")->fetch();
+                        $idUtilisateurCourant = (int) ($moi['id'] ?? 0);
+                        $r       = resoudreModeleMessagerie($pdo, self::ID_MESSAGE_CONVOCATION, $idUtilisateurCourant);
                         $tplConv = $r ?: ['Sujet' => 'Convocation — {DIVISION} — {DATE}', 'Message' => '', 'Cc' => 0];
                     }
 
