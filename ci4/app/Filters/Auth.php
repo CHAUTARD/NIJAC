@@ -38,6 +38,16 @@ class Auth implements FilterInterface
 
     public function after(RequestInterface $request, ResponseInterface $response, $arguments = null)
     {
-        // no-op
+        // Empêche CodeIgniter\CodeIgniter::storePreviousURL() (appelé juste après
+        // les filtres "after" pour toute réponse HTML non-AJAX, donc à chaque F5)
+        // de démarrer le service Session de CI4 : celui-ci force
+        // session.use_strict_mode=1, et comme son FileHandler ne reconnaît pas le
+        // fichier de la session native (format "sess_<id>" vs "PHPSESSID<id>"),
+        // PHP régénère un nouvel ID de session et réémet le cookie PHPSESSID — la
+        // requête AJAX suivante (ex: chargerListe()) part alors avec un ID sans
+        // $_SESSION['utilisateur'], et le filtre la redirige vers /login (mal
+        // interprété côté JS comme une "erreur réseau"). storePreviousURL() ne
+        // touche à rien si $_SESSION n'est plus défini.
+        unset($_SESSION);
     }
 }

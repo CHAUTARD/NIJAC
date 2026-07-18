@@ -206,7 +206,7 @@ class InfoRencontreController extends BaseController
         $stmtJa = $pdo->prepare(
             'SELECT j.Id_JA, j.Nom, j.Prenom, j.Email, j.Telephone, j.Grade,
                     j.Actif, j.Id_Club, j.Id_LaPoste, j.Defiscalisation, j.Nationale,
-                    j.Classement, j.DateValidationFFTT,
+                    j.DateValidationFFTT,
                     COALESCE(j.Cp,    lp.CodePostal) AS CodePostal,
                     COALESCE(j.Ville, lp.Nom)        AS Ville,
                     cl.Nom AS NomClub
@@ -282,6 +282,10 @@ class InfoRencontreController extends BaseController
         $rencontresR3R4 = $stmtR3R4->fetchAll();
 
         session_write_close();
+        // Empêche CodeIgniter\CodeIgniter::storePreviousURL() (appelé pour toute
+        // réponse HTML non-AJAX, donc à chaque F5) de démarrer le service Session
+        // de CI4 — voir Auth.php pour le détail du conflit avec la session native.
+        unset($_SESSION);
 
         return view('info_rencontre_index', [
             'ja'             => $ja,

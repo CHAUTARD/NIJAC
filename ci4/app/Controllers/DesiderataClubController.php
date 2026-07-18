@@ -75,6 +75,10 @@ class DesiderataClubController extends BaseController
         }
 
         session_write_close();
+        // Empêche CodeIgniter\CodeIgniter::storePreviousURL() (appelé pour toute
+        // réponse HTML non-AJAX, donc à chaque F5) de démarrer le service Session
+        // de CI4 — voir Auth.php pour le détail du conflit avec la session native.
+        unset($_SESSION);
 
         return view('desiderata_club_index', [
             'club'   => $club,

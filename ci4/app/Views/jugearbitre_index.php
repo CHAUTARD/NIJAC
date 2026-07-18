@@ -276,6 +276,9 @@
             <button class="drop-item" id="btn-importer">
                 <i class="bi bi-file-earmark-spreadsheet"></i>Importer depuis fichier FFTT (102_*.xlsx)
             </button>
+            <button class="drop-item" id="btn-enrichir-manquants" data-bs-toggle="modal" data-bs-target="#modal-enrichir-manquants">
+                <i class="bi bi-cloud-check-fill"></i>Compléter Date Validation FFTT / Actif (manquants)
+            </button>
             <hr class="drop-sep">
             <?php endif; ?>
             <button class="drop-item" id="btn-import-ebp">
@@ -333,6 +336,7 @@
                 <th style="width:210px" data-field="email">Email<span class="sort-icon"></span></th>
                 <th style="width:120px" data-field="telephone">Téléphone<span class="sort-icon"></span></th>
                 <th style="width:65px"  data-field="actif">Actif<span class="sort-icon"></span></th>
+                <th style="width:100px" data-field="date_validation_fftt">Date Validation<span class="sort-icon"></span></th>
                 <th style="width:75px"  data-field="id_club">N° Club<span class="sort-icon"></span></th>
                 <th style="width:200px" data-field="nom_club">Nom du club<span class="sort-icon"></span></th>
                 <th style="width:90px"  data-field="defiscalisation">Défiscalisation<span class="sort-icon"></span></th>
@@ -533,6 +537,67 @@
     </div>
   </div>
 </div>
+
+<!-- Modale Compléter Date Validation FFTT / Actif (manquants) -->
+<div class="modal fade" id="modal-enrichir-manquants" tabindex="-1" aria-labelledby="modal-enrichir-manquants-titre" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#0d6efd;color:#fff;">
+        <h5 class="modal-title" id="modal-enrichir-manquants-titre"><i class="bi bi-cloud-check-fill me-2"></i>Compléter Date Validation FFTT / Actif</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" id="btn-fermer-enrichir-manquants"></button>
+      </div>
+      <div class="modal-body">
+
+        <!-- Étape 1 : confirmation -->
+        <div id="enrichir-manquants-step1">
+          <p class="text-muted small mb-3">
+            Recherche tous les JA dont la <strong>Date Validation FFTT</strong> n'est pas renseignée,
+            interroge l'API FFTT (<code>xml_licence_b</code>) pour chacun, et met à jour
+            <strong>Date Validation FFTT</strong> et <strong>Actif</strong> en conséquence.
+          </p>
+          <button class="btn btn-primary" id="btn-lancer-enrichir-manquants">
+            <i class="bi bi-play-fill me-1"></i>Lancer la mise à jour
+          </button>
+        </div>
+
+        <!-- Étape 2 : progression -->
+        <div id="enrichir-manquants-step2" style="display:none;">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span id="enrichir-manquants-label" class="fw-semibold small text-primary">Préparation…</span>
+            <span id="enrichir-manquants-pct" class="small text-muted">0 %</span>
+          </div>
+          <div class="progress mb-3" style="height:18px;">
+            <div id="enrichir-manquants-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                 style="width:0%" role="progressbar"></div>
+          </div>
+          <div class="row text-center mb-3">
+            <div class="col-4">
+              <div class="fw-bold fs-5 text-info" id="cnt-em-maj">0</div>
+              <div class="small text-muted">Mis à jour</div>
+            </div>
+            <div class="col-4">
+              <div class="fw-bold fs-5 text-secondary" id="cnt-em-introuvables">0</div>
+              <div class="small text-muted">Introuvables (API)</div>
+            </div>
+            <div class="col-4">
+              <div class="fw-bold fs-5 text-warning" id="cnt-em-erreurs">0</div>
+              <div class="small text-muted">Erreurs</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Étape 3 : résumé final -->
+        <div id="enrichir-manquants-step3" style="display:none;">
+          <div class="alert alert-success mb-0" id="enrichir-manquants-resume"></div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fermer</button>
+      </div>
+    </div>
+  </div>
+</div>
 <?php endif; ?>
 
 <!-- Modale Nouveau JA -->
@@ -601,11 +666,16 @@
               <label class="form-label fw-semibold">N° Compte EBP</label>
               <input type="text" class="form-control form-control-sm" id="nja-cpte-ebp" placeholder="">
             </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Date Validation FFTT</label>
+              <input type="date" class="form-control form-control-sm" id="nja-date-validation-fftt">
+            </div>
             <div class="col-12">
               <div class="d-flex gap-4 mt-1">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="nja-actif" checked>
-                  <label class="form-check-label" for="nja-actif">Actif</label>
+                <div class="d-flex align-items-center gap-2">
+                  <span class="fw-semibold">Actif</span>
+                  <span id="nja-actif-badge" class="badge-inactif">Non</span>
+                  <span class="text-muted small">(recalculé à l'enregistrement depuis la Date Validation FFTT ci-dessus — non modifiable directement)</span>
                 </div>
                 <div class="form-check">
                   <input class="form-check-input" type="checkbox" id="nja-defisc">
@@ -733,6 +803,7 @@ function renderGrille() {
             $tr.append(makeTd(l.email,            idx, 'email',           false));
             $tr.append(makeTd(l.telephone,        idx, 'telephone',       false));
             $tr.append(makeTdHtml(actifHtml,      idx, 'actif'));
+            $tr.append(makeTd(l.date_validation_fftt, idx, 'date_validation_fftt', true));
             $tr.append(makeTd(l.id_club,          idx, 'id_club',         true));
             $tr.append(makeTd(l.nom_club,         idx, 'nom_club',        true));
             $tr.append(makeTdHtml(defiscHtml,     idx, 'defiscalisation'));
@@ -827,7 +898,6 @@ function chargerListe() {
             nb_dispo:               +r.NbDispo,
             cp:                     r.CP    ?? '',
             ville:                  r.Ville ?? '',
-            classement:               r.Classement ?? null,
             date_validation_fftt:     r.DateValidationFFTT ?? null,
         }));
         renderGrille();
@@ -865,6 +935,109 @@ $('#btn-maj-bdd').on('click', function () {
 });
 
 <?php if ($isAdmin): ?>
+// ── Compléter Date Validation FFTT / Actif pour les JA sans date renseignée ───
+let enrichirManquantsEnCours = false;
+
+$('#modal-enrichir-manquants').on('hidden.bs.modal', function () {
+    if (!enrichirManquantsEnCours) resetEnrichirManquants();
+});
+
+function resetEnrichirManquants() {
+    $('#enrichir-manquants-step1').show();
+    $('#enrichir-manquants-step2, #enrichir-manquants-step3').hide();
+    $('#enrichir-manquants-bar').css('width', '0%');
+    $('#enrichir-manquants-label').text('Préparation…');
+    $('#enrichir-manquants-pct').text('0 %');
+    ['cnt-em-maj', 'cnt-em-introuvables', 'cnt-em-erreurs'].forEach(id => $(`#${id}`).text('0'));
+    enrichirManquantsEnCours = false;
+}
+
+$('#btn-lancer-enrichir-manquants').on('click', function () {
+    lancerEnrichissementManquants();
+});
+
+function lancerEnrichissementManquants() {
+    enrichirManquantsEnCours = true;
+    $('#enrichir-manquants-step1').hide();
+    $('#enrichir-manquants-step2').show();
+    $('#btn-fermer-enrichir-manquants').prop('disabled', true);
+    $('#enrichir-manquants-label').text('Récupération des JA sans date…');
+
+    $.get(`${JUGEARBITRE_BASE}/fftt/manquants-liste`, function (res) {
+        if (!res.ok) {
+            nijacToast('Erreur : ' + (res.err || res.msg), 'danger');
+            enrichirManquantsEnCours = false;
+            $('#btn-fermer-enrichir-manquants').prop('disabled', false);
+            resetEnrichirManquants();
+            return;
+        }
+
+        const ids   = res.ids;
+        const total = ids.length;
+        let done = 0, maj = 0, introuvables = 0, erreurs = 0;
+
+        if (!total) {
+            $('#btn-fermer-enrichir-manquants').prop('disabled', false);
+            $('#enrichir-manquants-step2').hide();
+            $('#enrichir-manquants-step3').show();
+            $('#enrichir-manquants-resume').html('<i class="bi bi-check-circle-fill me-2"></i>Aucun JA sans Date Validation FFTT — rien à faire.');
+            enrichirManquantsEnCours = false;
+            return;
+        }
+
+        function traiterSuivant() {
+            if (done >= total) {
+                enrichirManquantsEnCours = false;
+                $('#btn-fermer-enrichir-manquants').prop('disabled', false);
+                $('#enrichir-manquants-step2').hide();
+                $('#enrichir-manquants-step3').show();
+                $('#enrichir-manquants-resume').html(
+                    `<i class="bi bi-check-circle-fill me-2"></i>` +
+                    `Traitement terminé — <strong>${maj}</strong> mis à jour, ` +
+                    `<strong>${introuvables}</strong> introuvable(s) dans l'API FFTT` +
+                    (erreurs ? `, <strong>${erreurs}</strong> erreur(s)` : '') +
+                    ` sur <strong>${total}</strong> JA.`
+                );
+                if (maj > 0) chargerListe();
+                return;
+            }
+
+            const idJa = ids[done];
+            const pct  = Math.round(done / total * 100);
+            $('#enrichir-manquants-bar').css('width', pct + '%');
+            $('#enrichir-manquants-pct').text(pct + ' %');
+            $('#enrichir-manquants-label').text(`${done + 1} / ${total} — JA n° ${idJa}`);
+
+            $.post(`${JUGEARBITRE_BASE}/fftt/enrichir-manquants`, { id_ja: idJa }, function (r) {
+                if (r.ok) {
+                    if (r.statut === 'maj') maj++;
+                    else if (r.statut === 'introuvable') introuvables++;
+                    else erreurs++;
+                } else {
+                    erreurs++;
+                }
+                $('#cnt-em-maj').text(maj);
+                $('#cnt-em-introuvables').text(introuvables);
+                $('#cnt-em-erreurs').text(erreurs);
+                done++;
+                traiterSuivant();
+            }, 'json').fail(() => {
+                erreurs++;
+                $('#cnt-em-erreurs').text(erreurs);
+                done++;
+                traiterSuivant();
+            });
+        }
+
+        traiterSuivant();
+    }, 'json').fail(() => {
+        nijacToast('Erreur réseau lors de la récupération des JA sans date.', 'danger');
+        enrichirManquantsEnCours = false;
+        $('#btn-fermer-enrichir-manquants').prop('disabled', false);
+        resetEnrichirManquants();
+    });
+}
+
 // ── Import FFTT par département ───────────────────────────────────────────────
 const DEPT_ACTIFS_CODES = <?= json_encode(array_map('strval', array_column($deptActifs, 'code'))) ?>;
 let importFfttEnCours = false;
@@ -872,6 +1045,16 @@ let importFfttEnCours = false;
 
 function escHtml(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Conversion pour <input type="date"> (yyyy-mm-dd) <-> format stocké en base (jj/mm/aaaa, celui de l'API FFTT)
+function ddmmyyyyToIso(s) {
+    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(s ?? '').trim());
+    return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : '';
+}
+function isoToDdmmyyyy(s) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s ?? '').trim());
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
 }
 
 <?php if ($isAdmin): ?>
@@ -1235,7 +1418,8 @@ function ouvrirModaleJa(record) {
         $('#nja-cp').val(record.cp || '');
         $('#nja-ville').val(record.ville || '');
         $('#nja-cpte-ebp').val(record.num_compte_ebp || '');
-        $('#nja-actif').prop('checked', !!record.actif);
+        $('#nja-date-validation-fftt').val(ddmmyyyyToIso(record.date_validation_fftt));
+        $('#nja-actif-badge').attr('class', record.actif ? 'badge-actif' : 'badge-inactif').text(record.actif ? 'Oui' : 'Non');
         $('#nja-defisc').prop('checked', !!record.defiscalisation);
         $('#nja-nationale').prop('checked', !!record.nationale);
         njaIdLaPoste = record.id_laposte ?? null;
@@ -1250,7 +1434,7 @@ function ouvrirModaleJa(record) {
         $('#btn-enregistrer-ja').html('<i class="bi bi-check-lg me-1"></i>Créer le JA');
         $('#nja-id-label').html('N° Licence <span class="text-danger">*</span>');
         $('#nja-id').val('').prop('disabled', false);
-        $('#nja-actif').prop('checked', true);
+        $('#nja-actif-badge').attr('class', 'badge-inactif').text('Non');
         $('#nja-id-club').html('<option value="">— Sélectionnez d\'abord un département —</option>').prop('disabled', false);
     }
 
@@ -1358,7 +1542,7 @@ $('#btn-enregistrer-ja').on('click', function () {
         ville:           $('#nja-ville').val().trim() || null,
         id_laposte:      njaIdLaPoste,
         num_compte_ebp:  $('#nja-cpte-ebp').val().trim() || null,
-        actif:           $('#nja-actif').is(':checked') ? 1 : 0,
+        date_validation_fftt: isoToDdmmyyyy($('#nja-date-validation-fftt').val()) || null,
         defiscalisation: $('#nja-defisc').is(':checked') ? 1 : 0,
         nationale:       $('#nja-nationale').is(':checked') ? 1 : 0,
     };
@@ -1517,7 +1701,9 @@ $('#btn-importer').on('click', () => $('#file-input').val('').trigger('click'));
                 // Initialiser le tableau de lignes (id_laposte = null pour l'instant)
                 lignes = rows.map((r, i) => Object.assign({}, r, {
                     _idx:            i,
-                    actif:           +r.actif,
+                    // Actif n'est jamais fourni par l'import Excel : calculé uniquement depuis
+                    // Date Validation FFTT (voir calculerActif() côté serveur) — reste "Non" ici
+                    // tant que la synchro FFTT n'a pas tourné.
                     defiscalisation: r.defiscalisation != null ? +r.defiscalisation : 0,
                     nationale:       r.nationale       != null ? +r.nationale       : 0,
                     cp:              r.cp    ?? '',

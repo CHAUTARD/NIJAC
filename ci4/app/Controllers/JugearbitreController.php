@@ -47,7 +47,6 @@ class JugearbitreController extends BaseController
         $colsInfo = $pdo->query('SHOW COLUMNS FROM ja')->fetchAll();
         $colsJa   = array_column($colsInfo, 'Field');
         $ffttCols = [
-            'Classement'             => 'INT NULL DEFAULT NULL',
             'DateValidationFFTT'     => 'VARCHAR(10) NULL DEFAULT NULL',
             'Cp'                     => 'VARCHAR(10) NULL DEFAULT NULL',
             'Ville'                  => 'VARCHAR(100) NULL DEFAULT NULL',
@@ -145,7 +144,7 @@ class JugearbitreController extends BaseController
             'SELECT j.Id_JA, j.Nom, j.Prenom, j.Email, j.Telephone,
                     j.Grade, j.Actif, j.Id_Club, j.Id_LaPoste,
                     j.Defiscalisation, j.Nationale, j.NumCompteEBP,
-                    j.Classement, j.DateValidationFFTT,
+                    j.DateValidationFFTT,
                     j.Cp, j.Ville, j.CodeDept,
                     (SELECT cl.Nom FROM Club cl WHERE cl.Id_Club = j.Id_Club LIMIT 1) AS NomClub,
                     COALESCE(j.Cp,    (SELECT lp.CodePostal FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1)) AS CodePostalJA,
@@ -177,7 +176,6 @@ class JugearbitreController extends BaseController
             'NomClub'                => $r['NomClub'],
             'CP'                     => $r['CodePostalJA'],
             'Ville'                  => $r['VilleJA'],
-            'Classement'             => $r['Classement'],
             'DateValidationFFTT'     => $r['DateValidationFFTT'],
         ], $rows);
 
@@ -260,16 +258,30 @@ class JugearbitreController extends BaseController
         // plutôt que de perdre toute la ligne pour une seule référence orpheline.
         $clubsValides = array_flip(array_column($pdo->query('SELECT Id_Club FROM Club')->fetchAll(), 'Id_Club'));
 
+        // Actif n'est jamais accepté directement ici : toujours recalculé par
+        // calculerActif() depuis DateValidationFFTT — que celle-ci vienne de la
+        // synchro FFTT ou d'une correction manuelle saisie dans la modale
+        // Créer/Modifier JA (seule source qui envoie la clé date_validation_fftt).
+        // L'import Excel en masse ne l'envoie jamais : sur une mise à jour,
+        // Actif/DateValidationFFTT restent alors intacts (stmtUpdateSansDate)
+        // plutôt que d'être écrasés à vide pour des JA déjà synchronisés FFTT.
         $stmtCheck  = $pdo->prepare('SELECT COUNT(*) FROM ja WHERE Id_JA = ?');
         $stmtInsert = $pdo->prepare(
             'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Telephone, Grade, Actif,
                              Id_Club, Id_LaPoste, Defiscalisation, Nationale, NumCompteEBP,
-                             Cp, Ville)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                             Cp, Ville, DateValidationFFTT)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
-        $stmtUpdate = $pdo->prepare(
+        $stmtUpdateAvecDate = $pdo->prepare(
             'UPDATE ja SET Nom=?, Prenom=?, Email=?, Telephone=?, Grade=?,
                            Actif=?, Id_Club=?, Id_LaPoste=?,
+                           Defiscalisation=?, Nationale=?, NumCompteEBP=?,
+                           Cp=?, Ville=?, DateValidationFFTT=?
+             WHERE Id_JA=?'
+        );
+        $stmtUpdateSansDate = $pdo->prepare(
+            'UPDATE ja SET Nom=?, Prenom=?, Email=?, Telephone=?, Grade=?,
+                           Id_Club=?, Id_LaPoste=?,
                            Defiscalisation=?, Nationale=?, NumCompteEBP=?,
                            Cp=?, Ville=?
              WHERE Id_JA=?'
@@ -277,8 +289,8 @@ class JugearbitreController extends BaseController
         $stmtInsertAuto = $pdo->prepare(
             'INSERT INTO ja (Nom, Prenom, Email, Telephone, Grade, Actif,
                              Id_Club, Id_LaPoste, Defiscalisation, Nationale, NumCompteEBP,
-                             Cp, Ville)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                             Cp, Ville, DateValidationFFTT)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
 
         foreach ($lignes as $l) {
@@ -288,7 +300,6 @@ class JugearbitreController extends BaseController
             $email     = ($l['email'] ?? '') !== '' ? $l['email'] : null;
             $tel       = $this->formaterTelephone(($l['telephone'] ?? '') !== '' ? $l['telephone'] : null);
             $grade     = trim($l['grade'] ?? '');
-            $actif     = !empty($l['actif']) ? 1 : 0;
             $defisc    = !empty($l['defiscalisation']) ? 1 : 0;
             $nationale = !empty($l['nationale']) ? 1 : 0;
             $idClub    = ($l['id_club'] ?? '') !== '' ? trim($l['id_club']) : null;
@@ -297,6 +308,15 @@ class JugearbitreController extends BaseController
             // Cp/Ville sont NOT NULL en base : chaîne vide plutôt que null si inconnu
             $cp    = trim((string) ($l['cp'] ?? ''));
             $ville = trim((string) ($l['ville'] ?? ''));
+
+            // Format jj/mm/aaaa attendu (celui de l'API FFTT) — toute autre valeur est
+            // ignorée plutôt que stockée telle quelle. Actif est systématiquement
+            // recalculé à partir de cette date, jamais accepté directement.
+            $dateFournie  = array_key_exists('date_validation_fftt', $l);
+            $dateValidRaw = trim((string) ($l['date_validation_fftt'] ?? ''));
+            $dateValidStr = preg_match('#^\d{1,2}/\d{2}/\d{4}$#', $dateValidRaw) ? $dateValidRaw : '';
+            $actif        = $this->calculerActif($dateValidStr);
+            $dateValid    = $dateValidStr ?: null;
 
             if ($nom === '') {
                 continue;
@@ -311,14 +331,18 @@ class JugearbitreController extends BaseController
                 if ($id > 0) {
                     $stmtCheck->execute([$id]);
                     if ((int) $stmtCheck->fetchColumn() > 0) {
-                        $stmtUpdate->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $id]);
+                        if ($dateFournie) {
+                            $stmtUpdateAvecDate->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid, $id]);
+                        } else {
+                            $stmtUpdateSansDate->execute([$nom, $prenom, $email, $tel, $grade, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $id]);
+                        }
                         $updates++;
                     } else {
-                        $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville]);
+                        $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid]);
                         $inserts++;
                     }
                 } else {
-                    $stmtInsertAuto->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville]);
+                    $stmtInsertAuto->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid]);
                     $inserts++;
                 }
             } catch (\PDOException $ex) {
@@ -362,6 +386,32 @@ class JugearbitreController extends BaseController
     private function ffttStr($valeur): string
     {
         return trim(is_array($valeur) ? '' : (string) $valeur);
+    }
+
+    /**
+     * Seule règle de calcul d'Actif dans toute l'application, déduite de
+     * DateValidationFFTT. Le champ n'est jamais modifiable autrement (ni via
+     * la modale Créer/Modifier JA, ni via l'import Excel) : il n'existe que
+     * via cette fonction, appelée partout où DateValidationFFTT est écrit.
+     *
+     * Règle FFTT : une licence Compétition validée un jour donné reste valide
+     * jusqu'au 30 juin suivant (saison sportive du 1er juillet au 30 juin de
+     * l'année suivante) — une validation en juillet-décembre couvre donc
+     * jusqu'au 30 juin de l'année d'après, une validation en janvier-juin
+     * jusqu'au 30 juin de la même année (fin de la saison en cours).
+     */
+    private function calculerActif(string $dateValidStr): int
+    {
+        if ($dateValidStr === '' || !preg_match('/(\d{1,2})\/(\d{2})\/(\d{4})/', $dateValidStr, $mv)) {
+            return 0;
+        }
+
+        $validated     = new \DateTime($mv[3] . '-' . $mv[2] . '-' . str_pad($mv[1], 2, '0', STR_PAD_LEFT));
+        $seasonEndYear = (int) $validated->format('n') >= 7
+            ? (int) $validated->format('Y') + 1
+            : (int) $validated->format('Y');
+
+        return new \DateTime('today') <= new \DateTime($seasonEndYear . '-06-30') ? 1 : 0;
     }
 
     /**
@@ -436,20 +486,9 @@ class JugearbitreController extends BaseController
 
                 $gradeNorm = strtoupper($grade);
 
-                // Actif = saison couverte par la licence encore en cours (1er juillet → 30 juin)
                 $dateValidStr = $this->ffttStr($lb['validation'] ?? '');
-                $actif        = 0;
-                if ($dateValidStr !== '' && preg_match('/(\d{1,2})\/(\d{2})\/(\d{4})/', $dateValidStr, $mv)) {
-                    $validated     = new \DateTime($mv[3] . '-' . $mv[2] . '-' . str_pad($mv[1], 2, '0', STR_PAD_LEFT));
-                    $seasonEndYear = (int) $validated->format('n') >= 7
-                        ? (int) $validated->format('Y') + 1
-                        : (int) $validated->format('Y');
-                    $actif = new \DateTime('today') <= new \DateTime($seasonEndYear . '-06-30') ? 1 : 0;
-                }
-
-                // Classement (point) et DateValidationFFTT — mêmes champs que enrichirFftt()
-                $classement = (int) $this->ffttStr($lb['point'] ?? '');
-                $dateValid  = $dateValidStr ?: null;
+                $actif        = $this->calculerActif($dateValidStr);
+                $dateValid    = $dateValidStr ?: null;
 
                 // Résolution CP / Ville / Id_LaPoste depuis les données FFTT
                 $cpFFTT    = $this->ffttStr($lb['cp'] ?? '');
@@ -471,19 +510,19 @@ class JugearbitreController extends BaseController
                 $exists->execute([$licence]);
                 if ($exists->fetchColumn()) {
                     $pdo->prepare(
-                        'UPDATE ja SET Actif=?, Classement=?, DateValidationFFTT=?,
+                        'UPDATE ja SET Actif=?, DateValidationFFTT=?,
                          Cp = COALESCE(Cp, ?), Ville = COALESCE(Ville, ?), Id_LaPoste = COALESCE(Id_LaPoste, ?)
                          WHERE Id_JA=?'
-                    )->execute([$actif, $classement, $dateValid, $cpFinal, $villeFinal, $idLaPoste, $licence]);
+                    )->execute([$actif, $dateValid, $cpFinal, $villeFinal, $idLaPoste, $licence]);
                     $trouves[] = ['licence' => $licence, 'nom' => $nom, 'prenom' => $prenom, 'grade' => $gradeNorm, 'statut' => 'mis_a_jour'];
                 } else {
                     $pdo->prepare(
                         'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Grade, Actif, Id_Club,
-                                         Defiscalisation, Nationale, Classement, DateValidationFFTT,
+                                         Defiscalisation, Nationale, DateValidationFFTT,
                                          Id_LaPoste, Cp, Ville)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)'
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)'
                     )->execute([$licence, $nom, $prenom, $email ?: null, $gradeNorm, $actif, $idClub,
-                        $classement, $dateValid, $idLaPoste, $cpFinal, $villeFinal]);
+                        $dateValid, $idLaPoste, $cpFinal, $villeFinal]);
                     $trouves[] = ['licence' => $licence, 'nom' => $nom, 'prenom' => $prenom, 'grade' => $gradeNorm, 'statut' => 'nouveau'];
                 }
             } catch (\Throwable $e) {
@@ -561,18 +600,8 @@ class JugearbitreController extends BaseController
                 $idClub    = $this->ffttStr($lb['numclub'] ?? '') ?: $numClub;
 
                 $dateValidStr = $this->ffttStr($lb['validation'] ?? '');
-                $actif        = 0;
-                if ($dateValidStr !== '' && preg_match('/(\d{1,2})\/(\d{2})\/(\d{4})/', $dateValidStr, $mv)) {
-                    $validated     = new \DateTime($mv[3] . '-' . $mv[2] . '-' . str_pad($mv[1], 2, '0', STR_PAD_LEFT));
-                    $seasonEndYear = (int) $validated->format('n') >= 7
-                        ? (int) $validated->format('Y') + 1
-                        : (int) $validated->format('Y');
-                    $actif = new \DateTime('today') <= new \DateTime($seasonEndYear . '-06-30') ? 1 : 0;
-                }
-
-                // Classement (point) et DateValidationFFTT — mêmes champs que enrichirFftt()
-                $classement = (int) $this->ffttStr($lb['point'] ?? '');
-                $dateValid  = $dateValidStr ?: null;
+                $actif        = $this->calculerActif($dateValidStr);
+                $dateValid    = $dateValidStr ?: null;
 
                 $cpFFTT    = $this->ffttStr($lb['cp'] ?? '');
                 $villeFFTT = normaliserVille($this->ffttStr($lb['ville'] ?? ''));
@@ -604,7 +633,6 @@ class JugearbitreController extends BaseController
                     'id_laposte'      => $idLaPoste,
                     'cp'              => $cpFinal,
                     'ville'           => $villeFinal,
-                    'classement'      => $classement,
                     'date_validation' => $dateValid,
                     'en_base'         => $enBase,
                 ];
@@ -639,18 +667,19 @@ class JugearbitreController extends BaseController
         $maj      = 0;
 
         foreach ($licences as $ja) {
-            $licence    = trim((string) ($ja['licence'] ?? ''));
-            $nom        = trim((string) ($ja['nom'] ?? ''));
-            $prenom     = trim((string) ($ja['prenom'] ?? ''));
-            $email      = trim((string) ($ja['email'] ?? '')) ?: null;
-            $grade      = trim((string) ($ja['grade'] ?? ''));
-            $actif      = (int) ($ja['actif'] ?? 0);
-            $idClub     = trim((string) ($ja['id_club'] ?? ''));
-            $idLaPoste  = $ja['id_laposte'] ?? null;
-            $cpFinal    = trim((string) ($ja['cp'] ?? ''));
-            $villeFinal = trim((string) ($ja['ville'] ?? ''));
-            $classement = (int) ($ja['classement'] ?? 0);
-            $dateValid  = trim((string) ($ja['date_validation'] ?? '')) ?: null;
+            $licence      = trim((string) ($ja['licence'] ?? ''));
+            $nom          = trim((string) ($ja['nom'] ?? ''));
+            $prenom       = trim((string) ($ja['prenom'] ?? ''));
+            $email        = trim((string) ($ja['email'] ?? '')) ?: null;
+            $grade        = trim((string) ($ja['grade'] ?? ''));
+            $idClub       = trim((string) ($ja['id_club'] ?? ''));
+            $idLaPoste    = $ja['id_laposte'] ?? null;
+            $cpFinal      = trim((string) ($ja['cp'] ?? ''));
+            $villeFinal   = trim((string) ($ja['ville'] ?? ''));
+            $dateValidStr = trim((string) ($ja['date_validation'] ?? ''));
+            // Actif n'est jamais reçu du client : uniquement recalculé depuis la date FFTT (calculerActif()).
+            $actif        = $this->calculerActif($dateValidStr);
+            $dateValid    = $dateValidStr ?: null;
 
             if ($licence === '' || $grade === '') {
                 continue;
@@ -660,18 +689,18 @@ class JugearbitreController extends BaseController
             $stmtEx->execute([$licence]);
             if ($stmtEx->fetchColumn()) {
                 $pdo->prepare(
-                    'UPDATE ja SET Actif=?, Classement=?, DateValidationFFTT=?,
+                    'UPDATE ja SET Actif=?, DateValidationFFTT=?,
                      Cp = COALESCE(Cp, ?), Ville = COALESCE(Ville, ?), Id_LaPoste = COALESCE(Id_LaPoste, ?)
                      WHERE Id_JA=?'
-                )->execute([$actif, $classement, $dateValid, $cpFinal, $villeFinal, $idLaPoste, $licence]);
+                )->execute([$actif, $dateValid, $cpFinal, $villeFinal, $idLaPoste, $licence]);
                 $maj++;
             } else {
                 $pdo->prepare(
                     'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Grade, Actif, Id_Club,
-                                     Defiscalisation, Nationale, Classement, DateValidationFFTT,
+                                     Defiscalisation, Nationale, DateValidationFFTT,
                                      Id_LaPoste, Cp, Ville)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)'
-                )->execute([$licence, $nom, $prenom, $email, $grade, $actif, $idClub, $classement, $dateValid, $idLaPoste, $cpFinal, $villeFinal]);
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)'
+                )->execute([$licence, $nom, $prenom, $email, $grade, $actif, $idClub, $dateValid, $idLaPoste, $cpFinal, $villeFinal]);
                 $nouveaux++;
             }
         }
@@ -757,21 +786,102 @@ class JugearbitreController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => "Plusieurs fiches trouvées pour la licence $idJa dans l'API FFTT."]);
         }
 
-        $classement = (int) $this->ffttStr($lic['point'] ?? '');
-        $dateValid  = $this->ffttStr($lic['validation'] ?? '') ?: null;
+        $dateValidStr = $this->ffttStr($lic['validation'] ?? '');
+        $actif        = $this->calculerActif($dateValidStr);
+        $dateValid    = $dateValidStr ?: null;
 
         // CP, Ville et Id_LaPoste volontairement exclus : les données FFTT sont moins fiables que la BDD locale
         $pdo->prepare(
-            'UPDATE ja SET Classement=?, DateValidationFFTT=? WHERE Id_JA=?'
-        )->execute([$classement, $dateValid, $idJa]);
+            'UPDATE ja SET Actif=?, DateValidationFFTT=? WHERE Id_JA=?'
+        )->execute([$actif, $dateValid, $idJa]);
 
         return $this->response->setJSON([
             'ok'         => true,
-            'classement' => $classement,
+            'actif'      => $actif,
             'date_valid' => $dateValid,
             'nom_fftt'   => $this->ffttStr($lic['nom'] ?? '') . ' ' . $this->ffttStr($lic['prenom'] ?? ''),
             'club_fftt'  => $this->ffttStr($lic['nomclub'] ?? ''),
         ]);
+    }
+
+    /**
+     * Liste des Id_JA dont DateValidationFFTT n'est pas renseignée — appelée
+     * par le JS pour connaître le total avant de lancer la progression
+     * (un appel API FFTT par JA ensuite, voir enrichirFfttManquants()).
+     */
+    public function listeFfttManquants(): ResponseInterface
+    {
+        if (!$this->isAdmin()) {
+            return $this->response->setJSON(['ok' => false, 'err' => 'Accès refusé']);
+        }
+
+        $pdo = getPDO();
+        $this->ensureFfttColumns($pdo);
+
+        $idsJa = $pdo->query(
+            "SELECT Id_JA FROM ja WHERE DateValidationFFTT IS NULL OR DateValidationFFTT = ''"
+        )->fetchAll(\PDO::FETCH_COLUMN);
+
+        return $this->response->setJSON(['ok' => true, 'ids' => $idsJa]);
+    }
+
+    /**
+     * Complète DateValidationFFTT (et Actif, qui en dépend) pour un seul JA —
+     * appelée en boucle par le JS (un par un, barre de progression) pour
+     * chaque Id_JA renvoyé par listeFfttManquants(). Même règle de calcul
+     * d'Actif que importFfttClub()/scanFfttClub().
+     */
+    public function enrichirFfttManquants(): ResponseInterface
+    {
+        if (!$this->isAdmin()) {
+            return $this->response->setJSON(['ok' => false, 'err' => 'Accès refusé']);
+        }
+
+        $pdo = getPDO();
+        $this->ensureFfttColumns($pdo);
+
+        $idJa = trim((string) ($this->request->getPost('id_ja') ?? ''));
+        if ($idJa === '') {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'id_ja manquant.']);
+        }
+
+        $apiRaw = getFfttRawClient();
+
+        try {
+            $lic = null;
+            for ($tentative = 0; $tentative < 2; $tentative++) {
+                try {
+                    $lic = $apiRaw->retrieveJoueurDetails($idJa);
+                    break;
+                } catch (\Throwable $e) {
+                    if ($tentative === 0) {
+                        usleep(600_000);
+                    } else {
+                        throw $e;
+                    }
+                }
+            }
+
+            if (empty($lic) || array_is_list($lic)) {
+                return $this->response->setJSON(['ok' => true, 'statut' => 'introuvable']);
+            }
+
+            $dateValidStr = $this->ffttStr($lic['validation'] ?? '');
+            if ($dateValidStr === '') {
+                return $this->response->setJSON(['ok' => true, 'statut' => 'introuvable']);
+            }
+
+            $actif = $this->calculerActif($dateValidStr);
+
+            $pdo->prepare('UPDATE ja SET Actif=?, DateValidationFFTT=? WHERE Id_JA=?')
+                ->execute([$actif, $dateValidStr, $idJa]);
+
+            return $this->response->setJSON(['ok' => true, 'statut' => 'maj', 'actif' => $actif, 'date_valid' => $dateValidStr]);
+        } catch (\Throwable $e) {
+            error_log("[NIJAC] enrichir_fftt_manquants id_ja=$idJa : " . $e->getMessage());
+
+            return $this->response->setJSON(['ok' => true, 'statut' => 'erreur', 'msg' => mb_substr($e->getMessage(), 0, 120)]);
+        }
     }
 
     public function importerExcel(): ResponseInterface
@@ -809,30 +919,29 @@ class JugearbitreController extends BaseController
 
         $lignes = [];
         // Colonnes : A=Id_JA, B=Nom, C=Prénom, H=Id_Club, J=Grade,
-        //            N=Actif, R=CodePostal, S=Ville, T=Email, U=Téléphone(alt), V=Téléphone
+        //            R=CodePostal, S=Ville, T=Email, U=Téléphone(alt), V=Téléphone
+        // (Actif n'est pas lu ici : il n'est jamais fixé par l'import Excel, voir calculerActif().)
         for ($row = 3; $row <= $maxRow; $row++) {
             $grade = trim((string) $sheet->getCell('J' . $row)->getValue());
             if (strncasecmp($grade, 'JA', 2) !== 0) {
                 continue;
             }
 
-            $idJA     = trim((string) $sheet->getCell('A' . $row)->getValue());
-            $nom      = trim((string) $sheet->getCell('B' . $row)->getValue());
-            $prenom   = trim((string) $sheet->getCell('C' . $row)->getValue());
-            $idClub   = trim((string) $sheet->getCell('H' . $row)->getValue());
-            $actifRaw = trim((string) $sheet->getCell('N' . $row)->getValue());
-            $cp       = trim((string) $sheet->getCell('R' . $row)->getValue());
-            $ville    = trim((string) $sheet->getCell('S' . $row)->getValue());
-            $email    = trim((string) $sheet->getCell('T' . $row)->getValue());
-            $telU     = trim((string) $sheet->getCell('U' . $row)->getValue());
-            $telV     = trim((string) $sheet->getCell('V' . $row)->getValue());
+            $idJA   = trim((string) $sheet->getCell('A' . $row)->getValue());
+            $nom    = trim((string) $sheet->getCell('B' . $row)->getValue());
+            $prenom = trim((string) $sheet->getCell('C' . $row)->getValue());
+            $idClub = trim((string) $sheet->getCell('H' . $row)->getValue());
+            $cp     = trim((string) $sheet->getCell('R' . $row)->getValue());
+            $ville  = trim((string) $sheet->getCell('S' . $row)->getValue());
+            $email  = trim((string) $sheet->getCell('T' . $row)->getValue());
+            $telU   = trim((string) $sheet->getCell('U' . $row)->getValue());
+            $telV   = trim((string) $sheet->getCell('V' . $row)->getValue());
 
             if ($nom === '' && $prenom === '') {
                 continue;
             }
 
-            $tel   = $telV !== '' ? $telV : $telU;
-            $actif = strtolower(trim($actifRaw)) === 'actif' ? 1 : 0;
+            $tel = $telV !== '' ? $telV : $telU;
 
             $lignes[] = [
                 'id'         => $idJA !== '' ? (int) $idJA : 0,
@@ -841,7 +950,6 @@ class JugearbitreController extends BaseController
                 'email'      => $email !== '' ? $email : null,
                 'telephone'  => $this->formaterTelephone($tel !== '' ? $tel : null),
                 'grade'      => $grade,
-                'actif'      => $actif,
                 'id_club'    => $idClub !== '' ? $idClub : null,
                 'nom_club'   => $idClub !== '' ? ($clubsMap[$idClub] ?? '') : '',
                 'id_laposte' => null, // résolu côté JS avec progression

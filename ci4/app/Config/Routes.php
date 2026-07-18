@@ -123,6 +123,8 @@ $routes->post('jugearbitre/fftt/scan-club', 'JugearbitreController::scanFfttClub
 $routes->post('jugearbitre/fftt/import-selected', 'JugearbitreController::importFfttSelected', ['filter' => 'auth']);
 $routes->post('jugearbitre/import-csv-ebp', 'JugearbitreController::importCsvEbp', ['filter' => 'auth']);
 $routes->post('jugearbitre/fftt/enrichir', 'JugearbitreController::enrichirFftt', ['filter' => 'auth']);
+$routes->get('jugearbitre/fftt/manquants-liste', 'JugearbitreController::listeFfttManquants', ['filter' => 'auth']);
+$routes->post('jugearbitre/fftt/enrichir-manquants', 'JugearbitreController::enrichirFfttManquants', ['filter' => 'auth']);
 $routes->post('jugearbitre/import-excel', 'JugearbitreController::importerExcel', ['filter' => 'auth']);
 
 // ── E011 Import Rencontres FFTT ──────────────────────────────────────────────

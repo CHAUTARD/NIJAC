@@ -45,6 +45,9 @@ class AdminAuth implements FilterInterface
 
     public function after(RequestInterface $request, ResponseInterface $response, $arguments = null)
     {
-        // no-op
+        // Voir Auth.php pour le détail : empêche CodeIgniter\CodeIgniter::storePreviousURL()
+        // de démarrer le service Session de CI4 (session.use_strict_mode=1 forcé),
+        // qui régénère sinon le cookie PHPSESSID et casse la requête AJAX suivante.
+        unset($_SESSION);
     }
 }
