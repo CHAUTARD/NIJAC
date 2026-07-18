@@ -118,13 +118,12 @@ $routes->get('jugearbitre/clubs', 'JugearbitreController::clubsParDept', ['filte
 $routes->post('jugearbitre/laposte', 'JugearbitreController::majLaposte', ['filter' => 'auth']);
 $routes->post('jugearbitre/maj-bdd', 'JugearbitreController::majBdd', ['filter' => 'auth']);
 $routes->post('jugearbitre/fftt/clubs-dept', 'JugearbitreController::getClubsDept', ['filter' => 'auth']);
+$routes->post('jugearbitre/fftt/reset-actif-dept', 'JugearbitreController::reinitialiserActifDept', ['filter' => 'auth']);
 $routes->post('jugearbitre/fftt/import-club', 'JugearbitreController::importFfttClub', ['filter' => 'auth']);
 $routes->post('jugearbitre/fftt/scan-club', 'JugearbitreController::scanFfttClub', ['filter' => 'auth']);
 $routes->post('jugearbitre/fftt/import-selected', 'JugearbitreController::importFfttSelected', ['filter' => 'auth']);
 $routes->post('jugearbitre/import-csv-ebp', 'JugearbitreController::importCsvEbp', ['filter' => 'auth']);
 $routes->post('jugearbitre/fftt/enrichir', 'JugearbitreController::enrichirFftt', ['filter' => 'auth']);
-$routes->get('jugearbitre/fftt/manquants-liste', 'JugearbitreController::listeFfttManquants', ['filter' => 'auth']);
-$routes->post('jugearbitre/fftt/enrichir-manquants', 'JugearbitreController::enrichirFfttManquants', ['filter' => 'auth']);
 $routes->post('jugearbitre/import-excel', 'JugearbitreController::importerExcel', ['filter' => 'auth']);
 
 // ── E011 Import Rencontres FFTT ──────────────────────────────────────────────

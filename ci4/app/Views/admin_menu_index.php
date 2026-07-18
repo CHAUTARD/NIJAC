@@ -280,7 +280,7 @@
             <span class="btn-desc">Gérer les départements et leur région</span>
         </a>
 
-        <a href="<?= site_url('clean') ?>" class="menu-btn btn-saison" style="grid-column: 1;">
+        <a href="<?= site_url('clean') ?>" class="menu-btn btn-saison">
             <span class="btn-code">E016</span>
             <div class="btn-icon"><img src="<?= base_url('img/Nettoyage.png') ?>" alt="Saison"></div>
             <span>Saison</span>
@@ -292,6 +292,12 @@
             <div class="btn-icon"><img src="<?= base_url('img/Parametres.png') ?>" alt="Configuration"></div>
             <span>Configuration</span>
             <span class="btn-desc">Paramètres généraux de l'application</span>
+        </a>
+
+        <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;">
+            <div class="btn-icon"><img src="<?= base_url('img/Quitter.png') ?>" alt="Se déconnecter"></div>
+            <span style="color:#842029;">Se déconnecter</span>
+            <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
         </a>
 
         <?php if ($isChautard): ?>
@@ -311,12 +317,6 @@
             <span class="btn-desc">Administration directe de la base de données</span>
         </a>
         <?php endif; ?>
-
-        <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da; grid-column: 6;">
-            <div class="btn-icon"><img src="<?= base_url('img/Quitter.png') ?>" alt="Se déconnecter"></div>
-            <span style="color:#842029;">Se déconnecter</span>
-            <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
-        </a>
 
     </div>
 

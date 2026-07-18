@@ -58,6 +58,9 @@ class DisponibilitesController extends BaseController
         if (!in_array('CodeDept', $colsJa)) {
             $pdo->exec('ALTER TABLE ja ADD COLUMN CodeDept VARCHAR(3) NULL DEFAULT NULL');
         }
+        if (!in_array('DateValidationFFTT', $colsJa)) {
+            $pdo->exec('ALTER TABLE ja ADD COLUMN DateValidationFFTT VARCHAR(10) NULL DEFAULT NULL');
+        }
 
         $placeholders = implode(',', array_fill(0, count($depts), '?'));
         $stmt         = $pdo->prepare("
@@ -74,6 +77,7 @@ class DisponibilitesController extends BaseController
             LEFT JOIN Club    cl ON cl.Id_Club    = ja.Id_Club
             LEFT JOIN laposte lp ON lp.Id_LaPoste = ja.Id_LaPoste
             WHERE ja.Actif = 1
+              AND ja.DateValidationFFTT IS NOT NULL AND ja.DateValidationFFTT != ''
               AND ja.CodeDept IN ($placeholders)
             ORDER BY ja.CodeDept, ja.Nom, ja.Prenom
         ");

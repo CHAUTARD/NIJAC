@@ -161,6 +161,9 @@
     <button class="menu-item" id="btn-sync-fftt" data-bs-toggle="modal" data-bs-target="#modal-sync-fftt">
         <i class="bi bi-cloud-arrow-down-fill"></i>Synchroniser depuis FFTT
     </button>
+    <button class="menu-item" id="btn-import-club-numero" data-bs-toggle="modal" data-bs-target="#modal-import-club-numero">
+        <i class="bi bi-search"></i>Importer un club (N°)
+    </button>
     <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 club(s)</span>
     <span style="flex:1"></span>
     <label for="sel-dept" style="font-size:.85rem;font-weight:700;color:#444;white-space:nowrap;margin:0;">
@@ -334,6 +337,35 @@
           <div id="sync-fftt-log-final" style="max-height:260px;overflow-y:auto;font-size:.78rem;background:#f8fafc;border:1px solid #e0e8f0;border-radius:4px;padding:.5rem;font-family:monospace;"></div>
         </div>
 
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fermer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modale Import d'un club par numéro -->
+<div class="modal fade" id="modal-import-club-numero" tabindex="-1" aria-labelledby="modal-import-club-numero-titre" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#0d6efd;color:#fff;">
+        <h5 class="modal-title" id="modal-import-club-numero-titre"><i class="bi bi-search me-2"></i>Importer un club par numéro FFTT</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">
+          Récupère le club via <code>xml_club_detail</code> (nom du club, salle principale, correspondant)
+          et l'insère ou le met à jour en base — identique à la synchronisation par département, mais pour un seul club.
+        </p>
+        <div class="input-group mb-2">
+          <label class="input-group-text" for="import-club-numero-input"><i class="bi bi-hash me-1"></i>N° club</label>
+          <input type="text" class="form-control" id="import-club-numero-input" placeholder="09760168" maxlength="20">
+          <button class="btn btn-primary" id="btn-lancer-import-club-numero">
+            <i class="bi bi-play-fill me-1"></i>Importer
+          </button>
+        </div>
+        <div id="import-club-numero-resultat" class="small mt-2"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fermer</button>
@@ -742,6 +774,42 @@ $('#btn-lancer-sync-fftt').on('click', function () {
         $('#sync-fftt-step2').hide();
         $('#btn-fermer-sync-fftt').prop('disabled', false);
     });
+});
+
+// ── Import d'un club par numéro ───────────────────────────────────────────────
+$('#modal-import-club-numero').on('hidden.bs.modal', function () {
+    $('#import-club-numero-input').val('');
+    $('#import-club-numero-resultat').empty();
+});
+
+function lancerImportClubNumero() {
+    const numClub = $('#import-club-numero-input').val().trim();
+    if (!numClub) { nijacToast('Saisissez un numéro de club.', 'warning'); return; }
+
+    $('#btn-lancer-import-club-numero').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Import…');
+    $('#import-club-numero-resultat').empty();
+
+    $.post(`${CLUB_BASE}/fftt/sync`, { num_club: numClub }, function (r) {
+        $('#btn-lancer-import-club-numero').prop('disabled', false).html('<i class="bi bi-play-fill me-1"></i>Importer');
+        if (!r.ok) {
+            $('#import-club-numero-resultat').html(`<div class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>${r.msg}</div>`);
+            return;
+        }
+        const lignes = r.ops.length
+            ? r.ops.map(op => `<div class="text-success"><i class="bi bi-check-circle-fill me-1"></i>${op}</div>`).join('')
+            : '<div class="text-muted">Aucune modification (données déjà à jour ou absentes de la fiche FFTT).</div>';
+        $('#import-club-numero-resultat').html(lignes);
+        nijacToast(`Club ${r.club} importé.`, 'success');
+        chargerListe();
+    }, 'json').fail(() => {
+        $('#btn-lancer-import-club-numero').prop('disabled', false).html('<i class="bi bi-play-fill me-1"></i>Importer');
+        $('#import-club-numero-resultat').html('<div class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>Erreur réseau.</div>');
+    });
+}
+
+$('#btn-lancer-import-club-numero').on('click', lancerImportClubNumero);
+$('#import-club-numero-input').on('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); lancerImportClubNumero(); }
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
