@@ -866,7 +866,8 @@ class JugearbitreController extends BaseController
             $clubsMap[$c['Id_Club']] = $c['Nom'];
         }
 
-        $lignes = [];
+        $lignes           = [];
+        $idsClubManquants = [];
         while (($ligne = fgetcsv($handle)) !== false) {
             $grade = trim((string) ($ligne[$col['Grade Arb/Ja']] ?? ''));
             if (strncasecmp($grade, 'JA', 2) !== 0) {
@@ -893,6 +894,10 @@ class JugearbitreController extends BaseController
             $actif        = strtolower($actifRaw) === 'actif' ? 1 : 0;
             $dateValidStr = preg_match('#^\d{1,2}/\d{2}/\d{4}$#', $dateValidRaw) ? $dateValidRaw : '';
 
+            if ($idClub !== '' && !isset($clubsMap[$idClub])) {
+                $idsClubManquants[] = $idClub;
+            }
+
             $lignes[] = [
                 'id'                   => $idJA !== '' ? (int) $idJA : 0,
                 'nom'                  => mb_strtoupper($nom, 'UTF-8'),
@@ -903,7 +908,6 @@ class JugearbitreController extends BaseController
                 'actif'                => $actif,
                 'date_validation_fftt' => $dateValidStr !== '' ? $dateValidStr : null,
                 'id_club'              => $idClub !== '' ? $idClub : null,
-                'nom_club'             => $idClub !== '' ? ($clubsMap[$idClub] ?? '') : '',
                 'id_laposte'           => null, // résolu côté JS avec progression
                 'cp'                   => $cp,
                 'ville'                => $ville,
@@ -911,8 +915,31 @@ class JugearbitreController extends BaseController
         }
         fclose($handle);
 
+        // Clubs référencés par le CSV mais absents localement — créés à la
+        // volée depuis l'API FFTT (le N° club vient du CSV lui-même, comme le
+        // fait ClubController::syncFfttClub() depuis l'écran E005).
+        $clubsCrees = [];
+        foreach (array_unique($idsClubManquants) as $numClub) {
+            try {
+                $detail  = getFfttRawClient()->retrieveClubDetails($numClub);
+                $nomClub = $this->ffttStr($detail['nom'] ?? '');
+                if ($nomClub !== '') {
+                    $pdo->prepare('INSERT INTO Club (Id_Club, Nom) VALUES (?, ?)')->execute([$numClub, $nomClub]);
+                    $clubsMap[$numClub] = $nomClub;
+                    $clubsCrees[]       = ['id_club' => $numClub, 'nom' => $nomClub];
+                }
+            } catch (\Throwable $e) {
+                error_log("[NIJAC] import_excel_ja : club $numClub introuvable via API FFTT : " . $e->getMessage());
+            }
+        }
+
+        foreach ($lignes as &$l) {
+            $l['nom_club'] = $l['id_club'] !== null ? ($clubsMap[$l['id_club']] ?? '') : '';
+        }
+        unset($l);
+
         $lignes = $this->deduplicateJA($lignes, 'nom', 'prenom', 'grade');
 
-        return $this->response->setJSON(['ok' => true, 'data' => $lignes, 'count' => count($lignes)]);
+        return $this->response->setJSON(['ok' => true, 'data' => $lignes, 'count' => count($lignes), 'clubs_crees' => $clubsCrees]);
     }
 }

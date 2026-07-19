@@ -1519,6 +1519,10 @@ $('#btn-importer').on('click', () => $('#file-input').val('').trigger('click'));
                 const rows = res.data;
                 xlsxProgress(40, `${rows.length} JA trouvés — résolution des communes…`);
                 xlsxLog(`<i class="bi bi-check-circle-fill text-success"></i> <strong>${rows.length}</strong> Juge(s)-Arbitre(s) trouvé(s) dans le fichier.`);
+                if (res.clubs_crees && res.clubs_crees.length) {
+                    const noms = res.clubs_crees.map(c => c.nom).join(', ');
+                    xlsxLog(`<i class="bi bi-building-fill-add text-success"></i> <strong>${res.clubs_crees.length}</strong> club(s) créé(s) automatiquement via l'API FFTT : ${noms}`);
+                }
 
                 // Initialiser le tableau de lignes (id_laposte = null pour l'instant)
                 lignes = rows.map((r, i) => Object.assign({}, r, {
