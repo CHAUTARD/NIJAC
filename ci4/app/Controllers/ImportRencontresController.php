@@ -10,9 +10,9 @@ use CodeIgniter\HTTP\ResponseInterface;
  *
  * Flux : Ligue → Épreuves → Divisions → Poules → Rencontres → BDD.
  * Admin uniquement (filtre "adminauth", comme includes/admin_required.php
- * côté legacy — la SPECIFICATION.md mentionne à tort "Administrateur et
- * Nominateur", document déjà obsolète par ailleurs : la page actuelle appelle
- * l'API FFTT en direct, pas un import de fichier Excel comme décrit).
+ * côté legacy — voir SPECIFICATION.md, section E011, mise à jour pour
+ * refléter ce flux API FFTT direct au lieu de l'ancien import de fichier
+ * Excel).
  *
  * Pas de Model : appels API FFTT, résolution dynamique club/équipe/division,
  * upsert avec détection de doublons — trop éloigné du Query Builder simple.

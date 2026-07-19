@@ -20,6 +20,7 @@ class ClubController extends BaseController
     {
         require_once __DIR__ . '/../../../config/db.php';
         require_once __DIR__ . '/../../../config/app_config.php';
+        require_once __DIR__ . '/../../../config/helpers.php';
     }
 
     /**
@@ -198,22 +199,17 @@ class ClubController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => "Club $numClub introuvable dans l'API FFTT."]);
             }
 
-            // Un champ d'adresse non renseigné revient de l'API FFTT comme un
-            // tableau vide plutôt qu'une chaîne vide (particularité du parsing
-            // XML→JSON de SimpleXML sur un élément sans contenu) — normalisé ici.
-            $s          = static fn ($v) => is_array($v) ? '' : trim((string) $v);
-            $nomClub    = $s($detail['nom']       ?? '');
-            $nomsalle   = $s($detail['nomsalle']  ?? '');
-            $adr1       = $s($detail['adressesalle1'] ?? '');
-            $adr2       = $s($detail['adressesalle2'] ?? '');
-            $adr3       = $s($detail['adressesalle3'] ?? '');
+            $nomsalle   = ffttStr($detail['nomsalle']  ?? '');
+            $adr1       = ffttStr($detail['adressesalle1'] ?? '');
+            $adr2       = ffttStr($detail['adressesalle2'] ?? '');
+            $adr3       = ffttStr($detail['adressesalle3'] ?? '');
             $adresse    = trim(implode(' ', array_filter([$adr1, $adr2, $adr3]))) ?: null;
-            $cpSalle    = $s($detail['codepsalle'] ?? '');
-            $villeSalle = mb_strtoupper($s($detail['villesalle'] ?? ''), 'UTF-8');
-            $nomCor     = mb_strtoupper($s($detail['nomcor']     ?? ''), 'UTF-8');
-            $prenomCor  = $s($detail['prenomcor']  ?? '');
-            $mailCor    = $s($detail['mailcor']    ?? '');
-            $telCor     = $s($detail['telcor']     ?? '');
+            $cpSalle    = ffttStr($detail['codepsalle'] ?? '');
+            $villeSalle = mb_strtoupper(ffttStr($detail['villesalle'] ?? ''), 'UTF-8');
+            $nomCor     = mb_strtoupper(ffttStr($detail['nomcor']     ?? ''), 'UTF-8');
+            $prenomCor  = ffttStr($detail['prenomcor']  ?? '');
+            $mailCor    = ffttStr($detail['mailcor']    ?? '');
+            $telCor     = ffttStr($detail['telcor']     ?? '');
             // Formatage XX.XX.XX.XX.XX
             $telDigits = preg_replace('/[^0-9]/', '', $telCor);
             if (strlen($telDigits) === 10) {
@@ -223,16 +219,9 @@ class ClubController extends BaseController
             $ops = [];
 
             // ── 1. Club ────────────────────────────────────────────────────
-            if ($nomClub !== '') {
-                $chk = $pdo->prepare('SELECT COUNT(*) FROM Club WHERE Id_Club=?');
-                $chk->execute([$numClub]);
-                if ((int) $chk->fetchColumn() > 0) {
-                    $pdo->prepare('UPDATE Club SET Nom=? WHERE Id_Club=?')->execute([$nomClub, $numClub]);
-                    $ops[] = "Club mis à jour : $nomClub";
-                } else {
-                    $pdo->prepare('INSERT INTO Club (Id_Club, Nom) VALUES (?,?)')->execute([$numClub, $nomClub]);
-                    $ops[] = "Club créé : $nomClub";
-                }
+            $syncClub = synchroniserClubFftt($pdo, $numClub, $detail);
+            if ($syncClub !== null) {
+                $ops[] = $syncClub['cree'] ? "Club créé : {$syncClub['nom']}" : "Club mis à jour : {$syncClub['nom']}";
             }
 
             // ── 2. Salle principale ────────────────────────────────────────
@@ -276,7 +265,7 @@ class ClubController extends BaseController
                 $ops[] = "Correspondant mis à jour : $nomComplet";
             }
 
-            return $this->response->setJSON(['ok' => true, 'ops' => $ops, 'club' => $numClub, 'nom' => $nomClub]);
+            return $this->response->setJSON(['ok' => true, 'ops' => $ops, 'club' => $numClub, 'nom' => $syncClub['nom'] ?? '']);
         });
     }
 }

@@ -1614,6 +1614,25 @@ $('#btn-importer').on('click', () => $('#file-input').val('').trigger('click'));
             xlsxLog(`<i class="bi bi-check-circle-fill text-success"></i> <strong>${resolues}</strong> commune(s) résolue(s).`);
             if (multiples) xlsxLog(`<span class="text-warning"><i class="bi bi-exclamation-triangle-fill"></i> <strong>${multiples}</strong> CP avec plusieurs communes — à préciser (clic CP/Ville dans la grille).</span>`);
             if (inconnues) xlsxLog(`<span class="text-danger"><i class="bi bi-x-circle-fill"></i> <strong>${inconnues}</strong> commune(s) introuvable(s) — à corriger dans la grille.</span>`);
+            xlsxLog(`<hr class="my-1"><i class="bi bi-person-dash-fill text-primary"></i> Passage de tous les JA à Inactif avant import…`);
+            xlsxProgress(95, 'Réinitialisation des JA…');
+
+            $.post(`${JUGEARBITRE_BASE}/fftt/reset-actif-tous`, {}, function (resReset) {
+                if (resReset.ok) {
+                    xlsxLog(`<i class="bi bi-check-circle-fill text-success"></i> <strong>${resReset.maj}</strong> JA passé(s) à Inactif.`);
+                } else {
+                    xlsxLog(`<span class="text-warning"><i class="bi bi-exclamation-triangle-fill"></i> ${resReset.msg || resReset.err || 'Échec de la réinitialisation.'}</span>`);
+                }
+                enregistrerImportExcel();
+            }, 'json').fail(() => {
+                xlsxLog(`<span class="text-danger"><i class="bi bi-x-circle-fill"></i> Erreur réseau lors de la réinitialisation — import annulé.</span>`);
+                xlsxProgress(100, 'Erreur');
+                $('#xlsx-progress-bar').removeClass('bg-success progress-bar-animated').addClass('bg-danger');
+                $('#xlsx-footer').show();
+            });
+        }
+
+        function enregistrerImportExcel() {
             xlsxLog(`<hr class="my-1"><i class="bi bi-database-fill-up text-primary"></i> Enregistrement en base de données…`);
             xlsxProgress(98, 'Enregistrement en base…');
 

@@ -60,3 +60,41 @@ function trouverIdLaPoste(PDO $pdo, string $cp, string $ville): ?int
 
     return null;
 }
+
+/**
+ * Normalise un champ de réponse FFTT : un champ vide/absent revient comme un
+ * tableau vide plutôt qu'une chaîne (particularité du parsing XML→JSON de
+ * SimpleXML sur un élément sans contenu) — un (string) direct dessus lève
+ * "Array to string conversion".
+ */
+function ffttStr($valeur): string
+{
+    return trim(is_array($valeur) ? '' : (string) $valeur);
+}
+
+/**
+ * Assure la présence du club $numClub dans la table Club locale à partir
+ * d'une réponse déjà récupérée de retrieveClubDetails() / xml_club_detail
+ * (insert si absent, update du nom si déjà présent).
+ * Retourne ['nom' => string, 'cree' => bool], ou null si le champ "nom" de
+ * la réponse FFTT est vide/absent (club introuvable côté FFTT).
+ */
+function synchroniserClubFftt(PDO $pdo, string $numClub, array $detail): ?array
+{
+    $nomClub = ffttStr($detail['nom'] ?? '');
+    if ($nomClub === '') {
+        return null;
+    }
+
+    $chk = $pdo->prepare('SELECT COUNT(*) FROM Club WHERE Id_Club = ?');
+    $chk->execute([$numClub]);
+    $existeDeja = (int) $chk->fetchColumn() > 0;
+
+    if ($existeDeja) {
+        $pdo->prepare('UPDATE Club SET Nom = ? WHERE Id_Club = ?')->execute([$nomClub, $numClub]);
+    } else {
+        $pdo->prepare('INSERT INTO Club (Id_Club, Nom) VALUES (?, ?)')->execute([$numClub, $nomClub]);
+    }
+
+    return ['nom' => $nomClub, 'cree' => !$existeDeja];
+}

@@ -346,33 +346,38 @@ Définir les divisions sportives et leur niveau hiérarchique, utilisés pour cl
 
 ## E011 – Import Rencontres
 
-**Fichier :** `import_rencontres.php`  
-**Accès :** Administrateur et Nominateur
+**Fichier :** `ImportRencontresController` (CI4), portage de `import_rencontres.php`  
+**Accès :** Administrateur uniquement (`adminauth`) — pas "Administrateur et Nominateur"
+
+> Section réécrite pour refléter le portage CI4 : le mécanisme est passé d'un
+> upload de fichier Excel dans `/Importation/` à un appel direct de l'API
+> FFTT (flux Ligue → Épreuve → Division → Poules → Rencontres → BDD).
 
 ### Objectif
-Importer les rencontres de la saison régionale depuis des fichiers Excel FFTT déposés dans le dossier `/Importation/`.
+Importer les rencontres de la saison régionale directement depuis l'API FFTT (Smartping), sans passer par un fichier intermédiaire.
 
 ### Processus d'import
-1. Upload du fichier Excel dans `/Importation/`
-2. Aperçu des données avant import (colonnes détectées, nombre de lignes)
-3. Import avec upsert : mise à jour si la rencontre existe, création sinon
-4. Rapport : lignes importées, doublons ignorés, anomalies (club inconnu, salle manquante)
+1. Résolution automatique de la ligue régionale (`chercher-ligue`, recherche par nom dans la liste des organismes FFTT)
+2. Choix de l'épreuve (`charger-epreuves`, filtrée sur les épreuves récentes via le seuil `fftt_epreuve_min`, configurable en E015)
+3. Choix de la division FFTT à importer, avec correspondance automatique proposée vers une division NIJAC (`charger-divisions`)
+4. Import de la division sélectionnée : poules, tours, rencontres — upsert par club/équipe, création des équipes/rencontres manquantes (`importer-division`)
+5. Rapport détaillé (créations, doublons ignorés) renvoyé par l'appel d'import
 
 ### Actions AJAX
-| Action | Méthode | Description |
+| Route | Méthode | Description |
 |--------|---------|-------------|
-| `upload` | POST | Dépose le fichier Excel dans `/Importation/` |
-| `supprimer` | POST | Supprime un fichier de la liste |
-| `liste` | GET | Liste les fichiers disponibles dans `/Importation/` |
-| `apercu` | POST | Retourne un aperçu des données du fichier sélectionné |
-| `importer` | POST | Exécute l'import en base (upsert) |
-
-### Colonnes attendues dans le fichier FFTT
-Saison, Journée, Date, Division, Équipe domicile (Id_Club), Équipe visiteur, Id_Salle
+| `import-rencontres/chercher-ligue` | POST | Retrouve la ligue régionale (clé `region` en configuration) parmi les organismes FFTT |
+| `import-rencontres/charger-epreuves` | POST | Liste les épreuves d'un organisme, filtrées et dédoublonnées |
+| `import-rencontres/charger-divisions` | POST | Liste les divisions FFTT d'une épreuve, avec suggestion de correspondance vers une division NIJAC |
+| `import-rencontres/importer-division` | POST | Importe poules/rencontres d'une division FFTT vers la BDD (upsert) |
+| `import-rencontres/liste-rencontres` | GET | Liste les rencontres déjà importées |
+| `import-rencontres/candidats-arbitre` | GET | JA actifs du club recevant, pour désignation directe R3M/R4M |
+| `import-rencontres/designer-arbitre` | POST | Désigne un JA du club recevant sur une rencontre R3M/R4M et envoie sa convocation |
+| `import-rencontres/debug-result-equ` | POST | Action de débogage FFTT, non appelée par l'interface |
 
 ### Règles
-- Les rencontres dont la salle ou le club est inconnu sont signalées mais pas bloquées
-- Les doublons (même Saison + Journée + Division + Équipes) sont ignorés silencieusement
+- Les doublons (même Date + équipe domicile + équipe visiteur) sont ignorés silencieusement
+- La désignation directe (`designer-arbitre`) est réservée aux divisions R3M/R4M, où c'est au club recevant de désigner l'un de ses JA (pas d'arbitrage fourni par la CRA)
 
 ---
 
@@ -749,8 +754,8 @@ Consulter et modifier les disponibilités des JA par département et par journé
 ### Règle département 76
 La sélection du département 76 inclut automatiquement les JA du 27.
 
-### Tokenisation des liens
-Les liens vers `disponibilite_ja.php` utilisent un token obfusqué (8 caractères) au lieu de l'Id_JA réel, généré par `Obfuscator(OBFUSCATOR_SEED=167)`.
+### Lien vers la fiche de disponibilité
+Le lien généré depuis cet écran vers `disponibilite-ja` (E032) porte l'`Id_JA` réel en clair (`?id_ja=...`) — **pas** de token obfusqué : ni le fichier legacy `disponibilites.php` ni son portage CI4 n'importent `Classes/Obfuscator.php`. Seul le lien généré depuis E007 (Juge-Arbitre, action « token ») utilise un token obfusqué (`?ja=TOKEN`) vers ce même écran.
 
 ---
 

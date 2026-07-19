@@ -125,10 +125,11 @@ $routes->post('jugearbitre/fftt/import-selected', 'JugearbitreController::import
 $routes->post('jugearbitre/import-csv-ebp', 'JugearbitreController::importCsvEbp', ['filter' => 'auth']);
 $routes->post('jugearbitre/fftt/enrichir', 'JugearbitreController::enrichirFftt', ['filter' => 'auth']);
 $routes->post('jugearbitre/import-excel', 'JugearbitreController::importerExcel', ['filter' => 'auth']);
+$routes->post('jugearbitre/fftt/reset-actif-tous', 'JugearbitreController::reinitialiserActifTous', ['filter' => 'auth']);
 
 // ── E011 Import Rencontres FFTT ──────────────────────────────────────────────
-// Admin uniquement (comme includes/admin_required.php côté legacy — la
-// SPECIFICATION.md mentionne à tort "Administrateur et Nominateur").
+// Admin uniquement (comme includes/admin_required.php côté legacy — voir
+// SPECIFICATION.md, section E011).
 $routes->get('import-rencontres', 'ImportRencontresController::index', ['filter' => 'adminauth']);
 $routes->post('import-rencontres/chercher-ligue', 'ImportRencontresController::chercherLigue', ['filter' => 'adminauth']);
 $routes->post('import-rencontres/charger-epreuves', 'ImportRencontresController::chargerEpreuves', ['filter' => 'adminauth']);

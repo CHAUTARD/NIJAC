@@ -11,8 +11,8 @@ use CodeIgniter\HTTP\ResponseInterface;
  * Accessible à tout utilisateur authentifié (filtre "auth", pas "adminauth").
  * Un seul point d'API en lecture (JA actifs par département) ; le lien vers
  * la fiche de disponibilité utilise l'Id_JA réel dans l'URL, pas de token
- * Obfuscator — malgré ce que dit SPECIFICATION.md, le fichier legacy n'importe
- * jamais Classes/Obfuscator.php.
+ * Obfuscator — ni le fichier legacy ni ce portage n'importent
+ * Classes/Obfuscator.php (voir SPECIFICATION.md, section E021).
  *
  * Pas de Model : jointure ponctuelle Club/laposte pour une seule liste en
  * lecture — reste proche d'un Query Builder simple, mais gardé en raw PDO

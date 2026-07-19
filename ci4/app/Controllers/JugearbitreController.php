@@ -415,11 +415,22 @@ class JugearbitreController extends BaseController
         return $this->response->setJSON(['ok' => true, 'maj' => $stmt->rowCount()]);
     }
 
-    // xml_licence_b renvoie un tableau vide (pas une chaîne) pour un champ
-    // absent — un (string) direct dessus lève "Array to string conversion".
-    private function ffttStr($valeur): string
+    /**
+     * Réinitialise Actif=0 pour TOUS les JA (tous départements), appelée par le
+     * JS juste avant l'enregistrement en base de l'import CSV FFTT (102_*.csv,
+     * fichier national) — même principe que reinitialiserActifDept() pour
+     * l'import/scan API par département : les JA absents du nouveau fichier
+     * (donc jamais réactivés ensuite par maj-bdd()) restent Inactif.
+     */
+    public function reinitialiserActifTous(): ResponseInterface
     {
-        return trim(is_array($valeur) ? '' : (string) $valeur);
+        if (!$this->isAdmin()) {
+            return $this->response->setJSON(['ok' => false, 'err' => 'Accès refusé']);
+        }
+
+        $stmt = getPDO()->query('UPDATE ja SET Actif = 0');
+
+        return $this->response->setJSON(['ok' => true, 'maj' => $stmt->rowCount()]);
     }
 
     /**
@@ -475,17 +486,17 @@ class JugearbitreController extends BaseController
                     continue;
                 }
 
-                $ja  = $this->ffttStr($lb['ja'] ?? '');
-                $arb = $this->ffttStr($lb['arb'] ?? '');
+                $ja  = ffttStr($lb['ja'] ?? '');
+                $arb = ffttStr($lb['arb'] ?? '');
                 if ($ja === '' && $arb === '') {
                     continue;
                 }
 
                 $grade  = $ja ?: $arb;
-                $nom    = mb_strtoupper($this->ffttStr($lb['nom'] ?? ''), 'UTF-8');
-                $prenom = $this->ffttStr($lb['prenom'] ?? '');
-                $email  = $this->ffttStr($lb['email'] ?? '');
-                $idClub = $this->ffttStr($lb['numclub'] ?? '') ?: $numClub;
+                $nom    = mb_strtoupper(ffttStr($lb['nom'] ?? ''), 'UTF-8');
+                $prenom = ffttStr($lb['prenom'] ?? '');
+                $email  = ffttStr($lb['email'] ?? '');
+                $idClub = ffttStr($lb['numclub'] ?? '') ?: $numClub;
 
                 // Seuls JA1, JA2, JA3 — les AR sont exclus
                 if (!preg_match('/^JA[123]$/i', $grade)) {
@@ -494,12 +505,12 @@ class JugearbitreController extends BaseController
 
                 $gradeNorm = strtoupper($grade);
 
-                $dateValidStr = $this->ffttStr($lb['validation'] ?? '');
+                $dateValidStr = ffttStr($lb['validation'] ?? '');
                 $dateValid    = $dateValidStr ?: null;
 
                 // Résolution CP / Ville / Id_LaPoste depuis les données FFTT
-                $cpFFTT    = $this->ffttStr($lb['cp'] ?? '');
-                $villeFFTT = normaliserVille($this->ffttStr($lb['ville'] ?? ''));
+                $cpFFTT    = ffttStr($lb['cp'] ?? '');
+                $villeFFTT = normaliserVille(ffttStr($lb['ville'] ?? ''));
                 $idLaPoste = null;
                 $cpFinal   = $cpFFTT;
                 $villeFinal = $villeFFTT;
@@ -596,8 +607,8 @@ class JugearbitreController extends BaseController
                     continue;
                 }
 
-                $ja  = $this->ffttStr($lb['ja'] ?? '');
-                $arb = $this->ffttStr($lb['arb'] ?? '');
+                $ja  = ffttStr($lb['ja'] ?? '');
+                $arb = ffttStr($lb['arb'] ?? '');
                 if ($ja === '' && $arb === '') {
                     continue;
                 }
@@ -607,16 +618,16 @@ class JugearbitreController extends BaseController
                 }
 
                 $gradeNorm = strtoupper($grade);
-                $nom       = mb_strtoupper($this->ffttStr($lb['nom'] ?? ''), 'UTF-8');
-                $prenom    = $this->ffttStr($lb['prenom'] ?? '');
-                $email     = $this->ffttStr($lb['email'] ?? '');
-                $idClub    = $this->ffttStr($lb['numclub'] ?? '') ?: $numClub;
+                $nom       = mb_strtoupper(ffttStr($lb['nom'] ?? ''), 'UTF-8');
+                $prenom    = ffttStr($lb['prenom'] ?? '');
+                $email     = ffttStr($lb['email'] ?? '');
+                $idClub    = ffttStr($lb['numclub'] ?? '') ?: $numClub;
 
-                $dateValidStr = $this->ffttStr($lb['validation'] ?? '');
+                $dateValidStr = ffttStr($lb['validation'] ?? '');
                 $dateValid    = $dateValidStr ?: null;
 
-                $cpFFTT    = $this->ffttStr($lb['cp'] ?? '');
-                $villeFFTT = normaliserVille($this->ffttStr($lb['ville'] ?? ''));
+                $cpFFTT    = ffttStr($lb['cp'] ?? '');
+                $villeFFTT = normaliserVille(ffttStr($lb['ville'] ?? ''));
                 $idLaPoste = null;
                 $cpFinal   = $cpFFTT;
                 $villeFinal = $villeFFTT;
@@ -801,7 +812,7 @@ class JugearbitreController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => "Plusieurs fiches trouvées pour la licence $idJa dans l'API FFTT."]);
         }
 
-        $dateValidStr = $this->ffttStr($lic['validation'] ?? '');
+        $dateValidStr = ffttStr($lic['validation'] ?? '');
         $dateValid    = $dateValidStr ?: null;
 
         // CP, Ville et Id_LaPoste volontairement exclus : les données FFTT sont moins fiables que la BDD locale
@@ -812,8 +823,8 @@ class JugearbitreController extends BaseController
         return $this->response->setJSON([
             'ok'         => true,
             'date_valid' => $dateValid,
-            'nom_fftt'   => $this->ffttStr($lic['nom'] ?? '') . ' ' . $this->ffttStr($lic['prenom'] ?? ''),
-            'club_fftt'  => $this->ffttStr($lic['nomclub'] ?? ''),
+            'nom_fftt'   => ffttStr($lic['nom'] ?? '') . ' ' . ffttStr($lic['prenom'] ?? ''),
+            'club_fftt'  => ffttStr($lic['nomclub'] ?? ''),
         ]);
     }
 
@@ -870,7 +881,7 @@ class JugearbitreController extends BaseController
         $idsClubManquants = [];
         while (($ligne = fgetcsv($handle)) !== false) {
             $grade = trim((string) ($ligne[$col['Grade Arb/Ja']] ?? ''));
-            if (strncasecmp($grade, 'JA', 2) !== 0) {
+            if (!preg_match('/^JA1$/i', $grade)) {
                 continue;
             }
 
@@ -916,17 +927,16 @@ class JugearbitreController extends BaseController
         fclose($handle);
 
         // Clubs référencés par le CSV mais absents localement — créés à la
-        // volée depuis l'API FFTT (le N° club vient du CSV lui-même, comme le
-        // fait ClubController::syncFfttClub() depuis l'écran E005).
+        // volée depuis l'API FFTT (le N° club vient du CSV lui-même), via le
+        // même helper que ClubController::syncFfttClub() (écran E005).
         $clubsCrees = [];
         foreach (array_unique($idsClubManquants) as $numClub) {
             try {
-                $detail  = getFfttRawClient()->retrieveClubDetails($numClub);
-                $nomClub = $this->ffttStr($detail['nom'] ?? '');
-                if ($nomClub !== '') {
-                    $pdo->prepare('INSERT INTO Club (Id_Club, Nom) VALUES (?, ?)')->execute([$numClub, $nomClub]);
-                    $clubsMap[$numClub] = $nomClub;
-                    $clubsCrees[]       = ['id_club' => $numClub, 'nom' => $nomClub];
+                $detail = getFfttRawClient()->retrieveClubDetails($numClub);
+                $sync   = synchroniserClubFftt($pdo, $numClub, $detail);
+                if ($sync !== null) {
+                    $clubsMap[$numClub] = $sync['nom'];
+                    $clubsCrees[]       = ['id_club' => $numClub, 'nom' => $sync['nom']];
                 }
             } catch (\Throwable $e) {
                 error_log("[NIJAC] import_excel_ja : club $numClub introuvable via API FFTT : " . $e->getMessage());
