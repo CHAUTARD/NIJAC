@@ -11,10 +11,10 @@ use CodeIgniter\HTTP\ResponseInterface;
  * questionnaire de désidératas de saison (message système n°6) contenant un
  * lien vers le formulaire public E023 (site_url('desiderata-club')).
  *
- * Accessible rôle CSR (Commission Sportive Régionale) ou Administrateur (filtre "csrauth") —
- * plus accessible au Nominateur, dont le menu (E020) ne pointe plus vers cet écran. Pas de
- * Model : agrégations GROUP_CONCAT et filtrage dynamique par département — reste en raw PDO
- * comme le reste de cette famille d'écrans.
+ * Accessible Nominateur ou Administrateur (filtre "auth"), lien depuis le menu Nominateur
+ * (E020) — plus accessible depuis le menu CSR (E034). Pas de Model : agrégations
+ * GROUP_CONCAT et filtrage dynamique par département — reste en raw PDO comme le reste de
+ * cette famille d'écrans.
  */
 class DesiderataClubsController extends BaseController
 {

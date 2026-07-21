@@ -139,7 +139,6 @@
 
         .btn-club-csr   { background-color: #e0f2f1; }
         .btn-messagerie { background-color: #fff8e1; }
-        .btn-r34        { background-color: #fbe9e7; }
 
         .btn-code {
             position: absolute;
@@ -186,15 +185,6 @@
             <div class="btn-icon"><img src="<?= base_url('img/Messagerie.png') ?>" alt="Messagerie"></div>
             <span>Messagerie</span>
             <span class="btn-desc">Modifier le message envoyé aux correspondants de club</span>
-        </a>
-    </div>
-
-    <div class="menu-btn-wrap">
-        <a href="<?= site_url('desiderata-clubs') ?>" class="menu-btn btn-r34">
-            <span class="btn-code">E027</span>
-            <div class="btn-icon"><img src="<?= base_url('img/R3_4.png') ?>" alt="Désidératas clubs"></div>
-            <span>Désidératas clubs</span>
-            <span class="btn-desc">Envoi du questionnaire de désidératas (R3 et R4) aux clubs</span>
         </a>
     </div>
 

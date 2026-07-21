@@ -10,16 +10,43 @@
 <style>
     body { background: #f0f4f8; font-family: Arial, Helvetica, sans-serif; }
 
+    /* Grille à 3 colonnes symétriques (logo | carte | espaceur de même largeur) :
+       la carte reste centrée sur la page tout en laissant le logo à sa gauche. */
+    .contenu-principal {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 720px) 220px;
+        justify-content: center;
+        align-items: start;
+        gap: 1.5rem;
+        margin-top: 2rem;
+        padding: 0 1rem;
+    }
     #bandeau-normandie {
-        max-width: 520px;
-        margin: 1.5rem auto .5rem;
-        padding: 0 .5rem;
+        grid-column: 1;
+        grid-row: 1;
     }
     #bandeau-normandie img {
         width: 100%;
         display: block;
         border-radius: 8px;
         box-shadow: 0 2px 8px rgba(26,58,107,.2);
+    }
+    .contenu-principal > .card-adresse,
+    .contenu-principal > .alert-danger {
+        grid-column: 2;
+        grid-row: 1;
+    }
+    @media (max-width: 900px) {
+        .contenu-principal {
+            grid-template-columns: 220px;
+            justify-content: center;
+        }
+        #bandeau-normandie { grid-row: 1; margin: 0 auto; }
+        .contenu-principal > .card-adresse,
+        .contenu-principal > .alert-danger {
+            grid-column: 1;
+            grid-row: 2;
+        }
     }
 
     .page-header {
@@ -40,8 +67,9 @@
     }
 
     .card-adresse {
-        max-width: 520px;
-        margin: 2rem auto;
+        width: 100%;
+        max-width: 720px;
+        margin: 0;
         border-radius: .75rem;
         box-shadow: 0 4px 20px rgba(0,0,0,.12);
     }
@@ -61,7 +89,6 @@
         margin-bottom: 1.25rem;
     }
     .ja-identity .ja-nom { font-size: 1.15rem; font-weight: 700; color: #003087; }
-    .ja-identity .ja-grade { font-size: .85rem; color: #555; }
 
     .adresse-actuelle {
         background: #f8f9fa;
@@ -93,6 +120,19 @@
     #laposte-status.ok   { color: #065f46; }
     #laposte-status.err  { color: #c00; }
 
+    #aide-recherche {
+        background: #eef6ff;
+        border: 1px solid #b6d4f5;
+        border-radius: .5rem;
+        padding: .6rem .9rem;
+        margin-bottom: 1rem;
+        font-size: .82rem;
+        color: #1a3a6b;
+    }
+    #aide-recherche .titre { font-weight: 700; margin-bottom: .25rem; }
+    #aide-recherche ul { margin: 0; padding-left: 1.1rem; }
+    #aide-recherche li { margin-bottom: .15rem; }
+
     #btn-valider {
         width: 100%;
         padding: .65rem;
@@ -118,6 +158,8 @@
 
 <div class="container-fluid">
 
+<div class="contenu-principal">
+
 <div id="bandeau-normandie">
     <a href="https://www.ligue-normandie-tt.fr/" target="_blank" rel="noopener noreferrer">
         <img src="<?= base_url('img/FFTT_LIGUE.png') ?>" alt="FFTT – Ligue de Normandie">
@@ -125,7 +167,7 @@
 </div>
 
 <?php if ($erreur): ?>
-    <div class="alert alert-danger mt-4 mx-auto" style="max-width:520px">
+    <div class="alert alert-danger" style="max-width:520px">
         <i class="bi bi-exclamation-triangle-fill me-2"></i><?= esc($erreur) ?>
     </div>
 <?php else: ?>
@@ -139,7 +181,6 @@
         <!-- Identité JA -->
         <div class="ja-identity">
             <div class="ja-nom"><?= esc(mb_strtoupper($ja['Nom']) . ' ' . $ja['Prenom']) ?></div>
-            <div class="ja-grade"><?= esc($ja['Grade'] ?? '') ?></div>
         </div>
 
         <!-- Adresse actuelle -->
@@ -150,6 +191,19 @@
             <?php else: ?>
                 <span class="val none">Non renseignée</span>
             <?php endif; ?>
+        </div>
+
+        <!-- Aide à la recherche -->
+        <div id="aide-recherche">
+            <div class="titre"><i class="bi bi-info-circle me-1"></i>Comment trouver le bon code postal / la bonne ville ?</div>
+            <ul>
+                <li>Saisissez <strong>votre code postal seul</strong>, <strong>votre ville seule</strong>, ou les deux, puis cliquez sur <i class="bi bi-search"></i> (ou Entrée).</li>
+                <li>Si plusieurs communes correspondent, une liste de suggestions s'affiche — cliquez sur la bonne.</li>
+                <li>Pour une grande ville avec plusieurs codes postaux (ex : Rouen), indiquez le code postal exact figurant sur votre justificatif de domicile plutôt que le nom de la ville seul.</li>
+                <li>Pour une commune associée à une autre (ex : « Saint-Étienne-du-Rouvray »), essayez aussi une orthographe abrégée (« St Etienne du Rouvray »).</li>
+                <li>En cas de doute sur votre code postal, vous pouvez le vérifier sur
+                    <a href="https://www.dcode.fr/code-postal" target="_blank" rel="noopener noreferrer">dcode.fr <i class="bi bi-box-arrow-up-right"></i></a>.</li>
+            </ul>
         </div>
 
         <!-- Formulaire -->
@@ -206,6 +260,7 @@
 </div>
 
 <?php endif; ?>
+</div><!-- /contenu-principal -->
 </div>
 
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>

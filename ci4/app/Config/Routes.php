@@ -193,15 +193,16 @@ $routes->get('desiderata-club/charger', 'DesiderataClubController::charger');
 $routes->post('desiderata-club/enregistrer', 'DesiderataClubController::enregistrer');
 
 // ── E027 Désidératas clubs ───────────────────────────────────────────────────
-// Rôle CSR (Commission Sportive Régionale) ou Administrateur — plus accessible au Nominateur
-// (voir CsrAuth.php), retiré du menu nominateur au profit du menu CSR (E034).
-$routes->get('desiderata-clubs', 'DesiderataClubsController::index', ['filter' => 'csrauth']);
-$routes->get('desiderata-clubs/liste', 'DesiderataClubsController::liste', ['filter' => 'csrauth']);
-$routes->get('desiderata-clubs/departements', 'DesiderataClubsController::departements', ['filter' => 'csrauth']);
-$routes->get('desiderata-clubs/detail', 'DesiderataClubsController::detail', ['filter' => 'csrauth']);
-$routes->get('desiderata-clubs/ja-club', 'DesiderataClubsController::jaClub', ['filter' => 'csrauth']);
-$routes->get('desiderata-clubs/apercu', 'DesiderataClubsController::apercu', ['filter' => 'csrauth']);
-$routes->post('desiderata-clubs/envoyer', 'DesiderataClubsController::envoyer', ['filter' => 'csrauth']);
+// Nominateur ou Administrateur — retiré du menu CSR (E034), remis dans le menu
+// nominateur (E020). Rôle CSR toujours techniquement autorisé par le filtre
+// "auth" (comme partout ailleurs), mais sans lien de menu vers cet écran.
+$routes->get('desiderata-clubs', 'DesiderataClubsController::index', ['filter' => 'auth']);
+$routes->get('desiderata-clubs/liste', 'DesiderataClubsController::liste', ['filter' => 'auth']);
+$routes->get('desiderata-clubs/departements', 'DesiderataClubsController::departements', ['filter' => 'auth']);
+$routes->get('desiderata-clubs/detail', 'DesiderataClubsController::detail', ['filter' => 'auth']);
+$routes->get('desiderata-clubs/ja-club', 'DesiderataClubsController::jaClub', ['filter' => 'auth']);
+$routes->get('desiderata-clubs/apercu', 'DesiderataClubsController::apercu', ['filter' => 'auth']);
+$routes->post('desiderata-clubs/envoyer', 'DesiderataClubsController::envoyer', ['filter' => 'auth']);
 
 // ── E025 Comptabilité frais JA ───────────────────────────────────────────────
 $routes->get('compta', 'ComptaController::index', ['filter' => 'auth']);
