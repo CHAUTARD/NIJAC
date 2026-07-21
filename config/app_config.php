@@ -306,6 +306,7 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
         '{URL_LIGUE}'            => getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),
         '{URL_ADRESSE_JA}'       => $token !== '' ? (site_url('adresse-ja') . '?ja=' . $token) : '',
         '{URL_DISPONIBILITE_JA}' => $token !== '' ? (site_url('disponibilite-ja') . '?ja=' . $token) : '',
+        '{URL_INFO_RENCONTRE}'   => $token !== '' ? (site_url('info-rencontre') . '?ja=' . $token) : '',
         '{URL_CONVOCATION_JA}'   => !empty($idNomination) ? (site_url('convocation-ja') . '?nomination=' . $idNomination . '&cnv=' . $tokenNomination) : '',
         '{YEAR_PHASE}'           => getAnneePhase(),
         '{PHASE}'                => getConfig('phase', '1'),

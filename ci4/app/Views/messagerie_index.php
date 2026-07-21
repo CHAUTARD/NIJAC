@@ -301,6 +301,7 @@
                 <code data-marqueur="{URL_LIGUE}" class="me-2">{URL_LIGUE}</code>
                 <code data-marqueur="{YEAR_PHASE}" class="me-2">{YEAR_PHASE}</code>
                 <code data-marqueur="{PHASE}" class="me-2">{PHASE}</code>
+                <code data-marqueur="{URL_INFO_RENCONTRE}" class="me-2">{URL_INFO_RENCONTRE}</code>
             </div>
             <div class="mb-1">
                 <span class="badge me-1 fw-normal" style="background:#1a7f4b;">Convocation</span>
@@ -391,6 +392,7 @@ const MARQUEURS_EXEMPLE = {
     '{URL_LIGUE}':          'https://www.ligue-normandie-tt.fr',
     '{URL_ADRESSE_JA}':     <?= json_encode(site_url('adresse-ja') . '?ja=AbCd1234') ?>,
     '{URL_DISPONIBILITE_JA}': <?= json_encode(site_url('disponibilite-ja') . '?ja=AbCd1234') ?>,
+    '{URL_INFO_RENCONTRE}': <?= json_encode(site_url('info-rencontre') . '?ja=AbCd1234') ?>,
     '{URL_CONVOCATION_JA}': <?= json_encode(site_url('convocation-ja') . '?nomination=12345') ?>,
     '{YEAR_PHASE}':         <?= json_encode(getAnneePhase()) ?>,
     '{PHASE}':              <?= json_encode(getConfig('phase', '1')) ?>,

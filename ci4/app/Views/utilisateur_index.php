@@ -233,7 +233,6 @@
             <select id="cbo-role" class="form-select form-select-sm">
                 <option value="Administrateur">Administrateur</option>
                 <option value="Nominateur" selected>Nominateur</option>
-                <option value="JA">JA</option>
                 <option value="CSR">CSR</option>
             </select>
         </div>

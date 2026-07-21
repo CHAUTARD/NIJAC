@@ -139,7 +139,7 @@ class UtilisateurController extends BaseController
         if ($isNew && $mdp === '') {
             return 'Un mot de passe est obligatoire pour un nouvel utilisateur.';
         }
-        if (!in_array($role, ['Administrateur', 'Nominateur', 'JA', 'CSR'], true)) {
+        if (!in_array($role, ['Administrateur', 'Nominateur', 'CSR'], true)) {
             return 'Rôle invalide.';
         }
         if ($dept <= 0) {

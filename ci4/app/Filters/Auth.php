@@ -8,9 +8,9 @@ use CodeIgniter\HTTP\ResponseInterface;
 
 /**
  * Réplique includes/auth_required.php de l'app legacy NIJAC : accès réservé
- * aux sessions authentifiées (Administrateur OU Nominateur), contrairement à
- * AdminAuth.php qui exige en plus is_admin. Un rôle JA est redirigé vers son
- * unique écran autorisé (E030 — InfoRencontreController).
+ * aux sessions authentifiées (Administrateur, Nominateur ou CSR), contrairement
+ * à AdminAuth.php qui exige en plus is_admin. Le rôle JA n'a plus de session
+ * (voir AuthController) : son unique écran (E030) est public, tokenisé.
  *
  * Session native — voir AdminAuth.php pour le détail de cette contrainte.
  */
@@ -25,10 +25,6 @@ class Auth implements FilterInterface
 
         if (!$utilisateur) {
             return redirect()->to(site_url('login'));
-        }
-
-        if (($utilisateur['role'] ?? '') === 'JA') {
-            return redirect()->to(site_url('info-rencontre'));
         }
 
         session_write_close();

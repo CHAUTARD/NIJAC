@@ -5,15 +5,13 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Fiche personnelle du Juge-Arbitre connecté (E030), portage CI4 de
+ * NIJAC – Fiche personnelle du Juge-Arbitre (E030), portage CI4 de
  * JA/info_rencontre.php.
  *
- * Accès réservé aux JA connectés (rôle "JA"), OU au Nominateur/Admin consultant
- * la fiche d'un JA donné via un lien tokenisé (?ja=TOKEN, Obfuscator) — c'est
- * le seul écran où le rôle JA est autorisé. Pas de filtre de route "auth"
- * (celui-ci redirige justement tout rôle JA ailleurs) : la vérification de
- * session est refaite manuellement ici, comme le fait le legacy en incluant
- * auth_required.php avec $allowJa = true.
+ * Écran public, identifié par un lien tokenisé (?ja=TOKEN, Obfuscator) reçu
+ * par email — pas de rôle JA ni de login dédié. Pas de filtre de route
+ * "auth" : la vérification (token, ou session Administrateur/Nominateur pour
+ * consulter la fiche d'un JA depuis leur menu) est faite manuellement ici.
  */
 class InfoRencontreController extends BaseController
 {
@@ -30,22 +28,19 @@ class InfoRencontreController extends BaseController
     }
 
     /**
-     * Réplique la logique de sécurité + résolution d'Id_JA du fichier legacy :
-     *   - rôle JA connecté → sa propre fiche (id_ja de session)
-     *   - Administrateur/Nominateur + ?ja=TOKEN valide → fiche du JA ciblé
-     *   - sinon → redirection
+     * Résout le JA ciblé :
+     *   - ?ja=TOKEN valide → accès public, sans session (comme E029/E031/E032) —
+     *     c'est ainsi qu'un JA consulte sa propre fiche depuis un lien reçu par email,
+     *     il n'y a plus de rôle JA ni de login dédié (voir AuthController::index()).
+     *   - sinon, Administrateur/Nominateur connecté → son propre menu.
+     *   - sinon → redirection login.
      *
-     * @return array{redirect: string}|array{moi: array, idJa: int|string}
+     * @return array{redirect: string}|array{moi: array, idJa: int}
      */
     private function resolveContext(?string $jaTokenRaw): array
     {
         demarrerSessionNijac();
 
-        if (!isset($_SESSION['utilisateur'])) {
-            return ['redirect' => site_url('login')];
-        }
-
-        $moi       = $_SESSION['utilisateur'];
         $idJaToken = null;
         if ($jaTokenRaw !== null && $jaTokenRaw !== '') {
             $decoded = $this->obf->deobfuscate(trim($jaTokenRaw));
@@ -54,28 +49,19 @@ class InfoRencontreController extends BaseController
             }
         }
 
-        if (($moi['role'] ?? '') === 'JA') {
-            // Login EST le numéro de licence pour un compte JA (voir AuthController::index()) :
-            // repli fiable si 'id_ja' est absent de la session, sans requête supplémentaire.
-            $idJa = $moi['id_ja'] ?? ((int) ($moi['login'] ?? 0) ?: null);
-            if ($idJa) {
-                $_SESSION['utilisateur']['id_ja'] = $idJa;
-            }
-            if (!$idJa) {
-                // Toujours introuvable : compte JA non lié à une fiche `ja` valide.
-                // On termine la session pour éviter une boucle de redirection avec
-                // AuthController (qui renverrait un utilisateur déjà connecté ici).
-                session_destroy();
+        if ($idJaToken) {
+            return ['moi' => $_SESSION['utilisateur'] ?? [], 'idJa' => $idJaToken];
+        }
 
-                return ['redirect' => site_url('login')];
-            }
-        } elseif (in_array($moi['role'] ?? '', ['Administrateur', 'Nominateur'], true) && $idJaToken) {
-            $idJa = $idJaToken;
-        } else {
+        $moi = $_SESSION['utilisateur'] ?? null;
+        if (!$moi) {
+            return ['redirect' => site_url('login')];
+        }
+        if (in_array($moi['role'] ?? '', ['Administrateur', 'Nominateur'], true)) {
             return ['redirect' => site_url('nominateur-menu')];
         }
 
-        return ['moi' => $moi, 'idJa' => $idJa];
+        return ['redirect' => site_url('login')];
     }
 
     /**

@@ -48,49 +48,38 @@
 ### Objectif
 Point d'entrée unique de l'application. Authentifie l'utilisateur et initialise la session.
 
+> **CI4 (à jour) :** il n'y a plus de rôle `JA` ni de connexion JA du tout — voir `AuthController.php`. Un JA
+> n'utilise jamais E001 ; il accède directement à ses écrans (E029–E032) via un lien tokenisé (Obfuscator,
+> `?ja=TOKEN`) reçu par email. La description ci-dessous (login Nom + mot de passe licence) est l'ancien
+> comportement, conservée pour l'historique.
+
 ### Interface
-- Champ **Login** (texte) — pour un JA, il s'agit de son **Nom** de famille (voir plus bas)
-- Champ **Mot de passe** (password, bouton afficher/masquer) — pour un JA, il s'agit de son **numéro de licence**
+- Champ **Login** (texte) — identifiant Administrateur/Nominateur/CSR
+- Champ **Mot de passe** (password, bouton afficher/masquer)
 - Bouton **Se connecter**
 - Zone de statut (message d'erreur ou de succès)
 
 ### Comportement
 | Situation | Résultat |
 |-----------|----------|
-| Déjà connecté | Redirige immédiatement vers E002 (Admin), E020 (Nominateur) ou E030 (JA) |
+| Déjà connecté | Redirige immédiatement vers E002 (Admin), E020 (Nominateur) ou E034 (CSR) |
 | Login ou MDP vide | Message d'avertissement, pas d'appel base |
 | Identifiants invalides ou compte inactif | Message `Échec : Identifiants invalides.` |
 | Connexion réussie + rôle Admin | Redirection vers `admin_menu.php` (E002) |
-| Connexion réussie + rôle Nominateur | Redirection vers `Nominateur/menu.php` (E020) |
-| Connexion réussie + rôle JA | Redirection vers `JA/info_rencontre.php` (E030) |
+| Connexion réussie + rôle Nominateur ou CSR | Redirection vers `Nominateur/menu.php` (E020) ou menu CSR (E034) |
 | Erreur base de données | Message système, log PHP |
-
-### Connexion Juge-Arbitre (rôle `JA`)
-Si le login ne correspond à aucun `Utilisateur` existant, l'application tente une authentification JA :
-1. Recherche un `ja` actif dont `Nom` correspond au login saisi (comparaison insensible à la casse/espaces).
-2. Vérifie que le mot de passe saisi correspond exactement à `Id_JA` (le numéro de licence sert de mot de passe).
-3. **Contrôle d'accès métier** : le club du JA doit avoir au moins une rencontre en division `R3M`/`R4M` (ou `division.ArbitrageCRA = 1`, ou `equipe.JAdemande = 1`) dans une fenêtre de `CURDATE() ± 5 jours`. Sinon, l'accès est refusé et le compte `Utilisateur` associé (s'il existe) est supprimé.
-4. Si l'accès est autorisé et qu'aucun compte `Utilisateur` n'existe pour ce login, un compte est créé automatiquement : `Login = ja.Nom`, `Password = hash(licence)`, `Role = 'JA'`, `Id_Departement` déduit des 2 premiers chiffres du `Id_Club`, `Actif = 1`.
 
 ### Session créée
 ```php
-// Administrateur / Nominateur
 $_SESSION['utilisateur'] = [
     'id'             => int,
     'login'          => string,
     'nom'            => string,
     'prenom'         => string,
-    'role'           => 'Administrateur' | 'Nominateur',
+    'role'           => 'Administrateur' | 'Nominateur' | 'CSR',
     'id_departement' => string,
     'change_login'   => bool,
     'is_admin'       => bool,
-]
-
-// Juge-Arbitre (E030)
-$_SESSION['utilisateur'] = [
-    // ... mêmes clés que ci-dessus, avec :
-    'role'  => 'JA',
-    'id_ja' => string,   // numéro de licence (= Id_JA), utilisé comme identifiant métier
 ]
 ```
 
@@ -1023,10 +1012,10 @@ Permettre à un Juge-Arbitre de renseigner ou corriger son code postal et sa vil
 ## E030 – Fiche personnelle JA
 
 **Fichier :** `JA/info_rencontre.php`  
-**Accès :** Rôle `JA` (voir connexion E001) — dossier `JA/` ne contient que ce fichier ; pas de menu ni de formulaire de connexion dédiés, le login se fait via `index.php` (E001) et la déconnexion via `logout.php`
+**Accès (CI4, à jour) :** Page publique, tokenisée (`?ja=TOKEN`, Obfuscator) — même mécanisme que E029/E031/E032. Il n'y a plus de rôle `JA` ni de login dédié ; un Nominateur/Administrateur connecté peut aussi consulter la fiche d'un JA depuis son propre menu, via ce même token. Voir `InfoRencontreController::resolveContext()`.
 
 ### Objectif
-Page d'accueil du Juge-Arbitre connecté par Nom + numéro de licence : consultation de sa fiche, de ses prochaines nominations, et auto-désignation en masse sur les rencontres R3M/R4M à domicile de son club lorsque celui-ci a choisi l'**arbitrage club** (E023 : `equipe.SouhaitJA = 'Club'`).
+Page d'accueil du Juge-Arbitre : consultation de sa fiche, de ses prochaines nominations, et auto-désignation en masse sur les rencontres R3M/R4M à domicile de son club lorsque celui-ci a choisi l'**arbitrage club** (E023 : `equipe.SouhaitJA = 'Club'`).
 
 ### Interface
 - Fiche identité : Prénom / Nom, licence (`Id_JA`), club, domicile (`Cp`/`Ville` ou commune liée), bouton pour modifier l'adresse (même mécanisme que E029)
@@ -1038,11 +1027,11 @@ Page d'accueil du Juge-Arbitre connecté par Nom + numéro de licence : consulta
 |--------|---------|-------------|
 | `se_designer` | POST | Le JA se désigne lui-même sur une ou plusieurs rencontres (`ids` : tableau JSON d'`Id_Rencontre`) sans JA déjà nominé : crée la ligne `disponible` (Réponse = `P`) si absente, crée la `nomination` (`Valide = 1`) pour chacune, envoie l'email du modèle système `Convocation` ; retourne un résultat par rencontre |
 | `recherche_laposte` | POST | Identique à E029 |
-| `sauvegarder_adresse` | POST | Met à jour `Cp`/`Ville`/`Id_LaPoste` du JA connecté (identifié via la session, pas de paramètre `id_ja`) |
+| `sauvegarder_adresse` | POST | Met à jour `Cp`/`Ville`/`Id_LaPoste` du JA identifié par le token `?ja=TOKEN` |
 
 ### Règles
 - Toutes les actions POST exigent `csrfVerify(true)`
-- `se_designer` traite chaque rencontre indépendamment (fonction `designerJaPourRencontre()`) et refuse celles ayant déjà une nomination ou n'appartenant pas au club du JA connecté ; les autres rencontres de la sélection restent traitées
+- `se_designer` traite chaque rencontre indépendamment (fonction `designerJaPourRencontre()`) et refuse celles ayant déjà une nomination ou n'appartenant pas au club du JA ciblé par le token ; les autres rencontres de la sélection restent traitées
 
 ---
 
@@ -1109,7 +1098,7 @@ Les actions `rencontres_journee` et `sauvegarder_dispo_journee` du fichier legac
 ## E033 – Changement du mot de passe
 
 **Fichier :** `changer_mot_de_passe.php`  
-**Accès :** Tout utilisateur authentifié (Administrateur ou Nominateur) — le rôle JA n'y a pas accès (redirigé vers E030, comme partout ailleurs hors E030 lui-même)
+**Accès :** Tout utilisateur authentifié (Administrateur, Nominateur ou CSR) — sans objet pour un JA, qui n'a plus de login ni de mot de passe (voir E001/E030)
 
 ### Objectif
 Permet à l'utilisateur connecté de changer son propre mot de passe : saisie du mot de passe actuel (vérifié contre le hash en base), du nouveau mot de passe et de sa confirmation. Réinitialise le flag `ChangeLogin` (forçage de changement à la première connexion) une fois le changement effectué.

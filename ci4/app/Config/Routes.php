@@ -226,9 +226,10 @@ $routes->post('adresse-ja/recherche-laposte', 'AdresseJaController::rechercheLap
 $routes->post('adresse-ja/sauvegarder', 'AdresseJaController::sauvegarder');
 
 // ── E030 Fiche personnelle JA ────────────────────────────────────────────────
-// Accès réservé au rôle JA, ou au Nominateur/Admin via lien tokenisé ?ja=TOKEN.
-// Pas de filtre "auth"/"adminauth" (tous deux redirigent le rôle JA ailleurs) :
-// la vérification de session est faite manuellement dans le contrôleur.
+// Page PUBLIQUE (sans authentification), tokenisée par ?ja=TOKEN — comme
+// E029/E031/E032. Pas de rôle JA ni de login dédié (voir AuthController).
+// Pas de filtre de route : la résolution (token, ou session Nominateur/Admin)
+// est faite manuellement dans le contrôleur.
 $routes->get('info-rencontre', 'InfoRencontreController::index');
 $routes->post('info-rencontre/se-designer', 'InfoRencontreController::seDesigner');
 $routes->post('info-rencontre/recherche-laposte', 'InfoRencontreController::rechercheLaposte');

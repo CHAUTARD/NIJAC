@@ -97,7 +97,7 @@ Every CI4 controller pulls in `config/db.php` (and most also `config/app_config.
 | `ci4/app/Config/Security.php` | CSRF config — `csrfProtection = 'cookie'` (double-submit, no CI4 session dependency), `regenerate = false` (stable token per session, screens fire multiple sequential AJAX POSTs), header name `X-CSRF-Token` |
 | `ci4/app/Config/Database.php` | CI4 DB config — does **not** define its own credentials; `require_once`s the root `config/db.php` and copies `DB_HOST`/`DB_USER`/`DB_PASS`/`DB_NAME`/`DB_CHARSET`/`DB_PORT` into `$default` (single source of truth for DB config stays in the legacy file) |
 | `ci4/app/Filters/AdminAuth.php` | Redirects to `login` unless `$_SESSION['utilisateur']['is_admin']` is true. Starts the session with **native** `session_start()`, not CI4's Session service — CI4's `FileHandler` names session files `PHPSESSID<id>` (vs PHP's own `sess_<id>`), so using CI4's service would silently stop sharing sessions with anything reading the raw `$_SESSION` global the same way the old app did |
-| `ci4/app/Filters/Auth.php` | Redirects to `login` unless authenticated (any role); redirects role `JA` to `info-rencontre` (its only allowed screen) |
+| `ci4/app/Filters/Auth.php` | Redirects to `login` unless authenticated (Administrateur, Nominateur or CSR — there is no JA session, see Session structure below) |
 | `ci4/app/Controllers/BaseController.php` | Empty CI4 starter base — no shared NIJAC logic lives here (that's why every controller requires the config files itself) |
 
 ### View / header convention
@@ -120,22 +120,24 @@ $_SESSION['utilisateur'] = [
     'login'          => string,
     'nom'            => string,
     'prenom'         => string,
-    'role'           => 'Administrateur' | 'Nominateur' | 'JA' | 'CSR',
+    'role'           => 'Administrateur' | 'Nominateur' | 'CSR',
     'is_admin'       => bool,
     'id_departement' => string,    // e.g. '76'
     'change_login'   => bool,      // forces password change on next login
-    'email'          => string,    // Utilisateur.Email — Reply-To + Cc prefill in Centre d'envoi (E024), empty for JA role
+    'email'          => string,    // Utilisateur.Email — Reply-To + Cc prefill in Centre d'envoi (E024)
 ];
 ```
+
+There is no `JA` role/session: a JA never logs in. All JA-facing screens (E029–E032) are public routes, identified by an Obfuscator token (`?ja=TOKEN`) in a link emailed to them — see `construireMarqueursMessage()` in `config/app_config.php` for how those links are built, and `InfoRencontreController::resolveContext()` (E030) for the reference implementation of "token, else Nominateur/Admin session, else redirect".
 
 ### Access control convention
 
 - Admin-only routes: `['filter' => 'adminauth']` in `Routes.php`
-- Nominateur + admin routes: `['filter' => 'auth']` in `Routes.php` (also redirects role `JA` to its own screen — role `CSR` is neither `JA` nor blocked, so it also passes this filter, though it has no menu link into these screens)
+- Nominateur + admin routes: `['filter' => 'auth']` in `Routes.php` (role `CSR` also passes this filter, though it has no menu link into these screens)
 - CSR-only routes (E034, E035, E027): `['filter' => 'csrauth']` — role `CSR` or `Administrateur` (see `CsrAuth.php`). E027 used to be under `auth` (Administrateur + Nominateur); it moved to `csrauth` and was dropped from the Nominateur menu (E020) when the CSR role was introduced.
 - Admin-only AJAX actions within a shared controller: checked individually inside the method, same idea as before (e.g. `SalleController`/`JugearbitreController`/`MessagerieController` use route filter `auth` but gate specific write actions to admin in code)
 - E018 (FfttTestController) and E099 (DbAdminController) extra restriction, checked manually in the controller: `$_SESSION['utilisateur']['login'] === 'CHAUTARD'`
-- Public (tokenized or fully open) routes have no filter at all in `Routes.php` — e.g. E023 `desiderata-club`, E029 `adresse-ja` (index), E031 `convocation-ja`, E032 `disponibilite-ja`, E030 `info-rencontre` (session checked manually in-controller because both filters would redirect role `JA` away)
+- Public (tokenized or fully open) routes have no filter at all in `Routes.php` — e.g. E023 `desiderata-club`, E029 `adresse-ja`, E030 `info-rencontre`, E031 `convocation-ja`, E032 `disponibilite-ja` (all JA-facing screens; session checked manually in-controller only to let Nominateur/Admin reuse E030 from their own menu)
 
 ### Database conventions
 
