@@ -60,8 +60,6 @@ class AdresseJaController extends BaseController
             if ($decoded > 0) {
                 $idJa = $decoded;
             }
-        } elseif ((int) ($this->request->getGet('id_ja') ?? 0) > 0) {
-            $idJa = (int) $this->request->getGet('id_ja');
         }
 
         $pdo    = getPDO();

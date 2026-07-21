@@ -19,20 +19,32 @@ use CodeIgniter\HTTP\ResponseInterface;
  */
 class ConvocationJaController extends BaseController
 {
+    private \Obfuscator $obf;
+
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
         require_once __DIR__ . '/../../../config/app_config.php';
+        require_once __DIR__ . '/../../../Classes/Obfuscator.php';
+
+        $this->obf = new \Obfuscator(OBFUSCATOR_SEED);
     }
 
     public function index()
     {
         $pdo          = getPDO();
         $idNomination = (int) ($this->request->getGet('nomination') ?? 0);
+        $tokenCnv     = trim($this->request->getGet('cnv') ?? '');
         $idJa         = 0;
         $idRencontre  = 0;
 
-        if ($idNomination > 0) {
+        // Le lien est jetonné (comme adresse-ja/disponibilite-ja) depuis l'ajout
+        // du token ?cnv= : un ?nomination=N seul (anciens liens déjà envoyés par
+        // email avant ce changement) n'est plus suffisant pour consulter/saisir
+        // les frais d'une convocation.
+        $tokenValide = $idNomination > 0 && $tokenCnv !== '' && $this->obf->deobfuscate($tokenCnv) === $idNomination;
+
+        if ($tokenValide) {
             $row = $pdo->prepare('
                 SELECT d.Id_JA, n.Id_Rencontre
                 FROM nomination n JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
@@ -141,6 +153,8 @@ class ConvocationJaController extends BaseController
             }
         } elseif (!$idNomination) {
             $erreur = 'Paramètre nomination manquant.';
+        } elseif (!$tokenValide) {
+            $erreur = 'Lien de convocation invalide. Merci de redemander l\'envoi de votre convocation.';
         }
 
         $indemniteForfait = (float) getConfig('indemnite_forfaitaire', '25.00');
@@ -160,6 +174,7 @@ class ConvocationJaController extends BaseController
 
         return view('convocation_ja_index', [
             'idNomination'     => $idNomination,
+            'tokenCnv'         => $tokenValide ? $tokenCnv : '',
             'idJa'             => $idJa,
             'ja'               => $ja,
             'rencontre'        => $rencontre,
@@ -179,10 +194,14 @@ class ConvocationJaController extends BaseController
     public function sauvegarderFrais(): ResponseInterface
     {
         try {
-            $pdo    = getPDO();
-            $idNomP = (int) ($this->request->getPost('id_nomination') ?? 0);
+            $pdo      = getPDO();
+            $idNomP   = (int) ($this->request->getPost('id_nomination') ?? 0);
+            $tokenCnv = trim($this->request->getPost('cnv') ?? '');
             if (!$idNomP) {
                 return $this->response->setJSON(['ok' => false, 'err' => 'Paramètre id_nomination manquant.']);
+            }
+            if ($tokenCnv === '' || $this->obf->deobfuscate($tokenCnv) !== $idNomP) {
+                return $this->response->setJSON(['ok' => false, 'err' => "Lien de convocation invalide. Merci de redemander l'envoi de votre convocation."]);
             }
             $rowNom = $pdo->prepare('
                 SELECT d.Id_JA, n.Id_Rencontre

@@ -505,6 +505,7 @@ const BASE    = '<?= site_url('convocation-ja') ?>';
 const INDEM   = <?= json_encode((float) $indemniteForfait) ?>;
 const TAUX_KM = <?= json_encode((float) $tauxKm) ?>;
 const ID_NOMINATION = <?= (int) $idNomination ?>;
+const CNV_TOKEN = <?= json_encode($tokenCnv ?? '') ?>;
 
 function recalcTotal() {
     const peages = parseFloat($('#inp-peages').val()) || 0;
@@ -519,6 +520,7 @@ $('#btn-save-frais').on('click', function () {
     const $btn = $(this).prop('disabled', true);
     $.post(`${BASE}/sauvegarder-frais`, {
         id_nomination:       ID_NOMINATION,
+        cnv:                 CNV_TOKEN,
         peages:              $('#inp-peages').val(),
         km:                  $('#inp-km').val(),
         rapport_accueil:     $('#inp-rapport-accueil').val(),

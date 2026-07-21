@@ -98,10 +98,27 @@ class ComptaController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Dates obligatoires.']);
             }
 
+            $u     = $_SESSION['utilisateur'] ?? [];
+            $depts = getDepartementsAutorises($u['id_departement'] ?? null);
+            if (!$depts) {
+                return $this->response->setJSON(['ok' => true, 'data' => [], 'taux_km' => 0, 'indem' => 0]);
+            }
+            // PDO n'autorise pas de mélanger placeholders nommés et positionnels
+            // dans une même requête : les départements utilisent donc aussi des
+            // paramètres nommés (:d0, :d1, ...).
+            $deptParams = [];
+            $deptNamed  = [];
+            foreach (array_values($depts) as $i => $d) {
+                $key              = ':d' . $i;
+                $deptNamed[]      = $key;
+                $deptParams[$key] = $d;
+            }
+            $deptPh = implode(',', $deptNamed);
+
             $tauxKm    = (float) getConfig('frais_kilometrique', '0.30');
             $indemForf = (float) getConfig('indemnite_forfaitaire', '25.00');
 
-            $stmt = $pdo->prepare('
+            $stmt = $pdo->prepare("
                 SELECT
                     j.Id_JA,
                     j.Nom,
@@ -117,16 +134,20 @@ class ComptaController extends BaseController
                 JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
                 JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
                 JOIN ja j        ON j.Id_JA        = d.Id_JA
+                LEFT JOIN Club    cl ON cl.Id_Club    = j.Id_Club
+                LEFT JOIN salle   s  ON s.Id_Club     = cl.Id_Club AND s.EstPrincipale = 1
+                LEFT JOIN laposte lp ON lp.Id_LaPoste = s.Id_Laposte
                 WHERE (n.Valide = 1 OR n.Peage IS NOT NULL OR n.Kilometre IS NOT NULL)
                   AND r.Date BETWEEN :debut AND :fin
+                  AND LEFT(lp.CodePostal, 2) IN ($deptPh)
                 ORDER BY j.Nom, j.Prenom, r.Date
-            ');
-            $stmt->execute([
+            ");
+            $stmt->execute(array_merge([
                 ':taux'  => $tauxKm,
                 ':indem' => $indemForf,
                 ':debut' => $dateDebut,
                 ':fin'   => $dateFin,
-            ]);
+            ], $deptParams));
             $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
             foreach ($rows as &$r) {
@@ -150,6 +171,20 @@ class ComptaController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Dates obligatoires.']);
             }
 
+            $u     = $_SESSION['utilisateur'] ?? [];
+            $depts = getDepartementsAutorises($u['id_departement'] ?? null);
+            if (!$depts) {
+                return $this->response->setJSON(['ok' => true, 'csv' => '']);
+            }
+            $deptParams = [];
+            $deptNamed  = [];
+            foreach (array_values($depts) as $i => $d) {
+                $key              = ':d' . $i;
+                $deptNamed[]      = $key;
+                $deptParams[$key] = $d;
+            }
+            $deptPh = implode(',', $deptNamed);
+
             $tauxKm    = (float) getConfig('frais_kilometrique', '0.30');
             $indemForf = (float) getConfig('indemnite_forfaitaire', '25.00');
 
@@ -157,7 +192,7 @@ class ComptaController extends BaseController
             $cpte62511      = getConfig('compte_frais_km', '62511');
             $cpte62261      = getConfig('compte_prestations', '62261');
 
-            $stmt = $pdo->prepare('
+            $stmt = $pdo->prepare("
                 SELECT
                     j.Id_JA,
                     j.Nom,
@@ -170,18 +205,22 @@ class ComptaController extends BaseController
                 JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
                 JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
                 JOIN ja j        ON j.Id_JA        = d.Id_JA
+                LEFT JOIN Club    cl ON cl.Id_Club    = j.Id_Club
+                LEFT JOIN salle   s  ON s.Id_Club     = cl.Id_Club AND s.EstPrincipale = 1
+                LEFT JOIN laposte lp ON lp.Id_LaPoste = s.Id_Laposte
                 WHERE (n.Valide = 1 OR n.Peage IS NOT NULL OR n.Kilometre IS NOT NULL)
                   AND r.Date BETWEEN :debut AND :fin
+                  AND LEFT(lp.CodePostal, 2) IN ($deptPh)
                 GROUP BY j.Id_JA, j.Nom, j.Prenom, j.NumCompteEBP
                 HAVING (FraisKmPeages > 0 OR Prestations > 0)
                 ORDER BY j.Nom, j.Prenom
-            ');
-            $stmt->execute([
+            ");
+            $stmt->execute(array_merge([
                 ':taux'  => $tauxKm,
                 ':indem' => $indemForf,
                 ':debut' => $dateDebut,
                 ':fin'   => $dateFin,
-            ]);
+            ], $deptParams));
             $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
             $lignes = [];

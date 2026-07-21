@@ -560,7 +560,8 @@ profit de la seule source Excel/texte.
 `analyserExcel()` écrit le calendrier (`data.journees`) dans cette table à chaque analyse réussie
 (`TRUNCATE` puis réinsertion complète — un seul calendrier actif à la fois, commun à toutes les
 divisions/poules) : `Journee` (clé primaire), `Date`, `Ordre` (colonne `JSON`, ex: `[[1,8],[2,7],[3,6],[4,5]]`).
-La saison (ex: "2026/2027") est stockée dans `configuration` sous la clé `nat_saison`. Cette persistance
+La saison (ex: "2026/2027") est dérivée de la clé `configuration.saison` (format "AAAA-AAAA", converti en
+"AAAA/AAAA" — l'ancienne clé dédiée `nat_saison`, doublon de `saison`, a été supprimée). Cette persistance
 remplace l'ancienne mémorisation côté navigateur (perdue au rechargement de la page) et permet à
 `importerRencontresExcel()` de fonctionner sans avoir à reproposer le fichier d'origine — `getCalendrierPersiste()`
 relit cette table. L'action GET `calendrier` restitue `{saison, journees}` au chargement de la page pour
@@ -643,7 +644,7 @@ l'équipe reste à associer manuellement dans le tableau (colonnes N° Club / Cl
 
 ### Export .txt de l'étape 2
 Le bouton « Exporter en .txt » de l'étape 2 (action `exporter-txt`) génère côté serveur, à partir du
-calendrier persisté (`nationale_calendrier`/`configuration.nat_saison`) et de `equipe_nationale`
+calendrier persisté (`nationale_calendrier`/`configuration.saison`) et de `equipe_nationale`
 (équipes groupées par division/poule/rang avec leur `Id_Club` actuel, colonne N° Club), un fichier au
 format documenté ci-dessus, et l'enregistre directement dans `Importation/Rencontres/Nationale/` sous le
 nom `YYYYMMJJ_Poules_Nationales.txt` (date du jour). Permet de sauvegarder les associations club faites

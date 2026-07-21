@@ -211,6 +211,10 @@ class StatsJaController extends BaseController
                 $params[$key] = $d;
             }
             $sql .= ' AND LEFT(lp.CodePostal, 2) IN (' . implode(',', $deptNamed) . ')';
+        } else {
+            // Aucun département autorisé résolu : échouer fermé (aucune ligne)
+            // plutôt que d'omettre le filtre et exposer tous les départements.
+            $sql .= ' AND 1 = 0';
         }
 
         $sql .= $groupHaving;

@@ -340,9 +340,15 @@ class SalleController extends BaseController
         $stmtUpd = $pdo->prepare('UPDATE Salle SET Nom=?, Adresse=COALESCE(?,Adresse), Cp=COALESCE(?,Cp), Ville=COALESCE(?,Ville), Id_Laposte=COALESCE(?,Id_Laposte), EstPrincipale=? WHERE Id_Salle=?');
         $stmtIns = $pdo->prepare('INSERT INTO Salle (Nom, Adresse, Cp, Ville, Id_Laposte, Id_Club, EstPrincipale) VALUES (?,?,?,?,?,?,?)');
 
-        $stmtExist = $pdo->prepare('SELECT Id_Salle FROM Salle WHERE Id_Club=? ORDER BY EstPrincipale DESC, Id_Salle ASC');
+        $stmtExist = $pdo->prepare('SELECT Id_Salle, Nom FROM Salle WHERE Id_Club=? ORDER BY EstPrincipale DESC, Id_Salle ASC');
         $stmtExist->execute([$numClub]);
-        $idsSallesExist = array_column($stmtExist->fetchAll(), 'Id_Salle');
+        // Pool des salles existantes non encore appariées à une entrée FFTT de
+        // cette synchronisation — appariées par nom en priorité (voir boucle
+        // ci-dessous), avec repli sur l'ordre d'origine seulement si aucun nom
+        // ne correspond, pour ne pas écraser la mauvaise salle quand FFTT
+        // retourne ses salles dans un ordre différent de celui de la base.
+        $sallesRestantes = $stmtExist->fetchAll();
+        $normaliserNomSalle = static fn (string $s): string => mb_strtoupper(trim(preg_replace('/\s+/', ' ', $s)), 'UTF-8');
 
         $ops    = [];
         $cntNew = 0;
@@ -362,7 +368,21 @@ class SalleController extends BaseController
             $estPrinc = ($i === 0) ? 1 : 0;
 
             $idLaPoste = trouverIdLaPoste($pdo, $cp, $ville);
-            $idSalle   = $idsSallesExist[$i] ?? null;
+
+            $idSalle    = null;
+            $nomNormale = $normaliserNomSalle($nom);
+            foreach ($sallesRestantes as $k => $se) {
+                if ($normaliserNomSalle($se['Nom'] ?? '') === $nomNormale) {
+                    $idSalle = $se['Id_Salle'];
+                    unset($sallesRestantes[$k]);
+                    break;
+                }
+            }
+            if ($idSalle === null && $sallesRestantes) {
+                $k       = array_key_first($sallesRestantes);
+                $idSalle = $sallesRestantes[$k]['Id_Salle'];
+                unset($sallesRestantes[$k]);
+            }
 
             if ($idSalle) {
                 $stmtUpd->execute([$nom, $adresse, $cp ?: null, $ville ?: null, $idLaPoste, $estPrinc, $idSalle]);

@@ -72,6 +72,41 @@ class DisponibiliteJaController extends BaseController
         return (int) ($this->request->getGet('id_ja') ?? $this->request->getPost('id_ja') ?? 0);
     }
 
+    /**
+     * Comme resolveIdJa(), mais pour les actions sensibles (Note interne,
+     * Défiscalisation, saisie de disponibilité) : un ?id_ja=N en clair sans
+     * token n'est accepté que si l'appelant a une session authentifiée
+     * (usage documenté : lien utilisé directement depuis E021 par un
+     * nominateur déjà connecté). Sans token valide ni session, retourne 0 au
+     * lieu de faire confiance à n'importe quel entier deviné par un tiers.
+     */
+    private function resolveIdJaAutorise(): int
+    {
+        $tokenGet = trim($this->request->getGet('ja') ?? $this->request->getPost('ja') ?? '');
+        if ($tokenGet !== '') {
+            $decoded = $this->obf->deobfuscate($tokenGet);
+            if ($decoded > 0) {
+                return $decoded;
+            }
+        }
+
+        $idClair = (int) ($this->request->getGet('id_ja') ?? $this->request->getPost('id_ja') ?? 0);
+        if ($idClair > 0 && $this->sessionAuthentifiee()) {
+            return $idClair;
+        }
+
+        return 0;
+    }
+
+    private function sessionAuthentifiee(): bool
+    {
+        demarrerSessionNijac();
+        $ok = !empty($_SESSION['utilisateur']['role'] ?? null);
+        session_write_close();
+
+        return $ok;
+    }
+
     public function index()
     {
         // Page publique, mais accessible aussi depuis un onglet ouvert par un
@@ -235,15 +270,9 @@ class DisponibiliteJaController extends BaseController
             $jaRow->execute([$idJa]);
             $jaDept = $jaRow->fetchColumn() ?: '';
 
-            $depts = $jaDept ? [$jaDept] : [];
-            if ($jaDept === '76') {
-                $extra = trim(getConfig('dept_76_includes', '27'));
-                foreach (array_filter(array_map('trim', explode(',', $extra))) as $d) {
-                    if (!in_array($d, $depts)) {
-                        $depts[] = $d;
-                    }
-                }
-            }
+            // Règle de rattachement de département (ex: 76 inclut 27) définie dans
+            // configuration.regles_departements, jamais en dur — voir CLAUDE.md.
+            $depts = $jaDept ? getDepartementsAutorises($jaDept) : [];
 
             $deptClause = '';
             if ($depts) {
@@ -320,7 +349,7 @@ class DisponibiliteJaController extends BaseController
     {
         return $this->tryJson(function () {
             $pdo         = getPDO();
-            $idJa        = (int) ($this->request->getPost('id_ja') ?? 0);
+            $idJa        = $this->resolveIdJaAutorise();
             $journeeRaw  = $this->request->getPost('journee');
             $dateJournee = trim($this->request->getPost('date') ?? '');
             $statut      = strtoupper(trim($this->request->getPost('statut') ?? ''));
@@ -388,9 +417,9 @@ class DisponibiliteJaController extends BaseController
     public function lireNote(): ResponseInterface
     {
         return $this->tryJson(function () {
-            $id = (int) ($this->request->getGet('id_ja') ?? $this->request->getPost('id_ja') ?? 0);
+            $id = $this->resolveIdJaAutorise();
             if (!$id) {
-                return $this->response->setJSON(['ok' => false, 'err' => 'ID manquant']);
+                return $this->response->setJSON(['ok' => false, 'err' => 'ID manquant ou non autorisé']);
             }
             $stmt = getPDO()->prepare('SELECT Note FROM JA WHERE Id_JA = ?');
             $stmt->execute([$id]);
@@ -403,10 +432,10 @@ class DisponibiliteJaController extends BaseController
     public function sauvegarderNote(): ResponseInterface
     {
         return $this->tryJson(function () {
-            $id   = (int) ($this->request->getPost('id_ja') ?? 0);
+            $id   = $this->resolveIdJaAutorise();
             $note = trim($this->request->getPost('note') ?? '');
             if (!$id) {
-                return $this->response->setJSON(['ok' => false, 'err' => 'ID manquant']);
+                return $this->response->setJSON(['ok' => false, 'err' => 'ID manquant ou non autorisé']);
             }
             getPDO()->prepare('UPDATE JA SET Note = ? WHERE Id_JA = ?')
                 ->execute([$note === '' ? null : $note, $id]);
@@ -418,10 +447,10 @@ class DisponibiliteJaController extends BaseController
     public function sauvegarderDefiscalisation(): ResponseInterface
     {
         return $this->tryJson(function () {
-            $id     = (int) ($this->request->getPost('id_ja') ?? 0);
+            $id     = $this->resolveIdJaAutorise();
             $defisc = !empty($this->request->getPost('defiscalisation')) ? 1 : 0;
             if (!$id) {
-                return $this->response->setJSON(['ok' => false, 'err' => 'ID manquant']);
+                return $this->response->setJSON(['ok' => false, 'err' => 'ID manquant ou non autorisé']);
             }
             getPDO()->prepare('UPDATE JA SET Defiscalisation = ? WHERE Id_JA = ?')
                 ->execute([$defisc, $id]);

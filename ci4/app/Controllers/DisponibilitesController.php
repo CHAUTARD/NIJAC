@@ -55,13 +55,14 @@ class DisponibilitesController extends BaseController
 
         $pdo = getPDO();
         $colsJa = array_column($pdo->query('SHOW COLUMNS FROM ja')->fetchAll(\PDO::FETCH_ASSOC), 'Field');
-        if (!in_array('CodeDept', $colsJa)) {
-            $pdo->exec('ALTER TABLE ja ADD COLUMN CodeDept VARCHAR(3) NULL DEFAULT NULL');
-        }
         if (!in_array('DateValidationFFTT', $colsJa)) {
             $pdo->exec('ALTER TABLE ja ADD COLUMN DateValidationFFTT VARCHAR(10) NULL DEFAULT NULL');
         }
 
+        // Le département est dérivé du code postal (laposte), pas de ja.CodeDept :
+        // cette colonne n'est renseignée par aucun import/écran de l'application
+        // (voir JugearbitreController::majBdd) et un filtre dessus ne retournait
+        // donc jamais aucune ligne.
         $placeholders = implode(',', array_fill(0, count($depts), '?'));
         $stmt         = $pdo->prepare("
             SELECT ja.Id_JA,
@@ -71,15 +72,15 @@ class DisponibilitesController extends BaseController
                    cl.Nom      AS Club,
                    lp.CodePostal AS Cp,
                    lp.Nom        AS Ville,
-                   ja.CodeDept AS Dept,
+                   LEFT(lp.CodePostal, 2) AS Dept,
                    (SELECT COUNT(*) FROM disponible d WHERE d.Id_JA = ja.Id_JA) AS HasDispo
             FROM ja
             LEFT JOIN Club    cl ON cl.Id_Club    = ja.Id_Club
             LEFT JOIN laposte lp ON lp.Id_LaPoste = ja.Id_LaPoste
             WHERE ja.Actif = 1
               AND ja.DateValidationFFTT IS NOT NULL AND ja.DateValidationFFTT != ''
-              AND ja.CodeDept IN ($placeholders)
-            ORDER BY ja.CodeDept, ja.Nom, ja.Prenom
+              AND LEFT(lp.CodePostal, 2) IN ($placeholders)
+            ORDER BY LEFT(lp.CodePostal, 2), ja.Nom, ja.Prenom
         ");
         $stmt->execute(array_values($depts));
 

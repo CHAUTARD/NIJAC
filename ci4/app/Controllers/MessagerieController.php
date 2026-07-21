@@ -137,12 +137,24 @@ class MessagerieController extends BaseController
     public function show($id = null): ResponseInterface
     {
         $id   = (int) $id;
-        $stmt = getPDO()->prepare('SELECT Id_Messagerie, Type, Sujet, Message, Cc FROM messagerie WHERE Id_Messagerie = ?');
+        $stmt = getPDO()->prepare('SELECT Id_Messagerie, Type, Sujet, Message, Cc, Id_Utilisateur FROM messagerie WHERE Id_Messagerie = ?');
         $stmt->execute([$id]);
         $row = $stmt->fetch();
 
         if ($row && $this->isCsr() && $id !== self::ID_MESSAGE_CSR) {
             $row = false; // le rôle CSR ne voit que le message n°6 (Réengagements)
+        } elseif ($row && !$this->isAdmin() && !$this->isCsr()) {
+            // Même restriction que data() : un nominateur ne voit que les messages
+            // système et les siens, jamais le message personnel d'un autre nominateur.
+            $estSysteme = $id >= 1 && $id <= self::NB_MESSAGES_SYSTEME;
+            $estAMoi    = $row['Id_Utilisateur'] === null || (int) $row['Id_Utilisateur'] === $this->idCurrentUser();
+            if (!$estSysteme && !$estAMoi) {
+                $row = false;
+            }
+        }
+
+        if ($row) {
+            unset($row['Id_Utilisateur']);
         }
 
         return $this->response->setJSON(

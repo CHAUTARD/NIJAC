@@ -22,11 +22,15 @@ class NominationController extends BaseController
 {
     private const ID_MESSAGE_CONVOCATION = 3;
 
+    private \Obfuscator $obf;
+
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
         require_once __DIR__ . '/../../../config/app_config.php';
         require_once __DIR__ . '/../../../Classes/Obfuscator.php';
+
+        $this->obf = new \Obfuscator(OBFUSCATOR_SEED);
     }
 
     /**
@@ -46,6 +50,30 @@ class NominationController extends BaseController
     private function deptsAutorises(): array
     {
         return getDepartementsAutorises($_SESSION['utilisateur']['id_departement'] ?? null);
+    }
+
+    /**
+     * Vérifie que la rencontre $idRenc appartient à un club dont le
+     * département fait partie de $deptsAutorises — mêmes règles que
+     * journees()/rencontresJournee(), appliquées ici aux actions d'écriture
+     * (affecterJa/retirerJa/validerNominations/envoyerConvocations), qui ne
+     * filtraient auparavant que sur des paramètres non vides, sans jamais
+     * vérifier le périmètre du nominateur appelant.
+     */
+    private function rencontreAutorisee(\PDO $pdo, int $idRenc, array $deptsAutorises): bool
+    {
+        if (!$deptsAutorises) {
+            return false;
+        }
+        $ph   = implode(',', array_fill(0, count($deptsAutorises), '?'));
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM rencontre r
+            JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
+            WHERE r.Id_Rencontre = ? AND SUBSTRING(ed.Id_Club, 3, 2) IN ($ph)
+        ");
+        $stmt->execute(array_merge([$idRenc], $deptsAutorises));
+
+        return (int) $stmt->fetchColumn() > 0;
     }
 
     /**
@@ -236,10 +264,16 @@ class NominationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => 'Date manquante']);
             }
 
+            $deptsAutorises = $this->deptsAutorises();
+            if (!$deptsAutorises) {
+                return $this->response->setJSON(['ok' => true, 'data' => []]);
+            }
+
             $pdo     = getPDO();
             $jaCols  = array_column($pdo->query('DESCRIBE ja')->fetchAll(), 'Field');
             $hasNote = in_array('Note', $jaCols);
             $noteExpr = $hasNote ? 'ja.Note' : 'NULL';
+            $deptPh   = implode(',', array_fill(0, count($deptsAutorises), '?'));
 
             $stmt = $pdo->prepare("
                 SELECT
@@ -282,10 +316,11 @@ class NominationController extends BaseController
                 ) nbnom ON nbnom.Id_JA = ja.Id_JA
                 WHERE ja.Actif = 1
                   AND (dj.Id_JA IS NOT NULL OR dr.Id_JA IS NOT NULL)
+                  AND LEFT(lp_ja.CodePostal, 2) IN ($deptPh)
                 GROUP BY ja.Id_JA
                 ORDER BY ja.Nom, ja.Prenom
             ");
-            $stmt->execute([$date, $date, $date]);
+            $stmt->execute(array_merge([$date, $date, $date], $deptsAutorises));
 
             return $this->response->setJSON(['ok' => true, 'data' => $stmt->fetchAll()]);
         });
@@ -300,6 +335,10 @@ class NominationController extends BaseController
             $idJa   = (int) ($this->request->getPost('id_ja') ?? 0);
             if (!$idRenc || !$idJa) {
                 return $this->response->setJSON(['ok' => false, 'err' => 'Paramètres manquants']);
+            }
+
+            if (!$this->rencontreAutorisee($pdo, $idRenc, $this->deptsAutorises())) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Rencontre hors de votre périmètre']);
             }
 
             // Vérification règle : pas déjà affecté ce jour-là
@@ -378,11 +417,15 @@ class NominationController extends BaseController
     {
 
         return $this->tryJson(function () {
+            $pdo    = getPDO();
             $idRenc = (int) ($this->request->getPost('id_rencontre') ?? 0);
             if (!$idRenc) {
                 return $this->response->setJSON(['ok' => false, 'err' => 'Rencontre manquante']);
             }
-            getPDO()->prepare('DELETE FROM nomination WHERE Id_Rencontre = ?')->execute([$idRenc]);
+            if (!$this->rencontreAutorisee($pdo, $idRenc, $this->deptsAutorises())) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Rencontre hors de votre périmètre']);
+            }
+            $pdo->prepare('DELETE FROM nomination WHERE Id_Rencontre = ?')->execute([$idRenc]);
 
             return $this->response->setJSON(['ok' => true]);
         });
@@ -398,14 +441,24 @@ class NominationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => 'Paramètres manquants']);
             }
             $journee = (int) $journeeRaw;
-            getPDO()->prepare('
+
+            $deptsAutorises = $this->deptsAutorises();
+            if (!$deptsAutorises) {
+                return $this->response->setJSON(['ok' => true, 'affected' => 0]);
+            }
+            $deptPh = implode(',', array_fill(0, count($deptsAutorises), '?'));
+
+            $pdo  = getPDO();
+            $stmt = $pdo->prepare("
                 UPDATE nomination n
                 JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
+                JOIN equipe ed   ON ed.Id_Equipe    = r.Id_EquipeDom
                 SET n.Valide = 1
-                WHERE r.Journee = ? AND r.Date = ?
-            ')->execute([$journee, $date]);
+                WHERE r.Journee = ? AND r.Date = ? AND SUBSTRING(ed.Id_Club, 3, 2) IN ($deptPh)
+            ");
+            $stmt->execute(array_merge([$journee, $date], $deptsAutorises));
 
-            return $this->response->setJSON(['ok' => true]);
+            return $this->response->setJSON(['ok' => true, 'affected' => $stmt->rowCount()]);
         });
     }
 
@@ -431,6 +484,12 @@ class NominationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => 'Aucune convocation sélectionnée']);
             }
 
+            $deptsAutorises = $this->deptsAutorises();
+            if (!$deptsAutorises) {
+                return $this->response->setJSON(['ok' => true, 'envoyes' => 0, 'erreurs' => [], 'liens' => []]);
+            }
+            $deptPh = implode(',', array_fill(0, count($deptsAutorises), '?'));
+
             // Récupérer les nominations + email JA
             $placeholders = implode(',', array_fill(0, count($idsRencontre), '?'));
             $stmt = $pdo->prepare("
@@ -447,8 +506,9 @@ class NominationController extends BaseController
                 WHERE r.Journee = ? AND r.Date = ?
                   AND n.Valide = 1
                   AND r.Id_Rencontre IN ($placeholders)
+                  AND SUBSTRING(ed.Id_Club, 3, 2) IN ($deptPh)
             ");
-            $stmt->execute([$journee, $date, ...$idsRencontre]);
+            $stmt->execute([$journee, $date, ...$idsRencontre, ...$deptsAutorises]);
             $nominations = $stmt->fetchAll();
 
             $moi     = $_SESSION['utilisateur'] ?? [];
@@ -457,7 +517,8 @@ class NominationController extends BaseController
             $liens   = [];
 
             foreach ($nominations as $nom) {
-                $lien    = site_url('convocation-ja') . '?nomination=' . $nom['Id_Nomination'];
+                $lien    = site_url('convocation-ja') . '?nomination=' . $nom['Id_Nomination']
+                    . '&cnv=' . $this->obf->obfuscate((int) $nom['Id_Nomination']);
                 $liens[] = [
                     'nom'       => "{$nom['Prenom']} {$nom['Nom']}",
                     'email'     => $nom['Email'] ?? '',

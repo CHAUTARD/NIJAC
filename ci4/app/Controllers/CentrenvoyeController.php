@@ -68,21 +68,26 @@ class CentrenvoyeController extends BaseController
     public function journees(): ResponseInterface
     {
         $pdo    = getPDO();
+        $dept   = $this->dept();
         $saison = getConfig('saison') ?: null;
 
         if (!$saison) {
             return $this->response->setJSON(['ok' => true, 'data' => []]);
         }
 
-        $rows = $pdo->query('
+        $stmt = $pdo->prepare('
             SELECT r.Journee, r.Date,
                    COUNT(DISTINCT d.Id_JA) AS NbJA
             FROM rencontre r
+            JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
             LEFT JOIN nomination n ON n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
             LEFT JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+            WHERE SUBSTRING(ed.Id_Club, 3, 2) = ?
             GROUP BY r.Journee, r.Date
             ORDER BY r.Date, r.Journee
-        ')->fetchAll();
+        ');
+        $stmt->execute([$dept]);
+        $rows = $stmt->fetchAll();
 
         return $this->response->setJSON(['ok' => true, 'data' => $rows, 'saison' => $saison]);
     }
@@ -162,9 +167,10 @@ class CentrenvoyeController extends BaseController
                     LEFT JOIN laposte lps   ON lps.Id_LaPoste = s.Id_Laposte
                     LEFT JOIN Club co ON co.Id_Club = ed.Id_Club
                     WHERE r.Journee = ? AND r.Date = ? AND j.Actif = 1
+                      AND SUBSTRING(ed.Id_Club, 3, 2) = ?
                     ORDER BY j.Nom, j.Prenom
                 ');
-                $stmt->execute([$journee, $date]);
+                $stmt->execute([$journee, $date, $dept]);
                 $rows = $stmt->fetchAll();
                 break;
 

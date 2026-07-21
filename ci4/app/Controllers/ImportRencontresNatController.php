@@ -724,10 +724,6 @@ class ImportRencontresNatController extends BaseController
                 foreach ($data['journees'] as $j) {
                     $stmtCal->execute([$j['journee'], $j['date'], json_encode($j['matchs'])]);
                 }
-                if ($data['saison'] !== '') {
-                    $pdo->prepare('INSERT INTO configuration (cle, valeur) VALUES (?, ?) ON DUPLICATE KEY UPDATE valeur = VALUES(valeur)')
-                        ->execute(['nat_saison', $data['saison']]);
-                }
             }
 
             return $this->response->setJSON(['ok' => true, 'data' => $data, 'auto_assoc' => $autoAssoc, 'erreurs' => array_values($erreurs)]);
@@ -749,7 +745,10 @@ class ImportRencontresNatController extends BaseController
             ];
         }
 
-        return ['saison' => getConfig('nat_saison', ''), 'journees' => $journees];
+        // `nat_saison` a été retiré de `configuration` (doublon de `saison`, mêmes
+        // valeurs mais séparateur différent) — même format "AAAA/AAAA" que celui
+        // écrit dans les fichiers FFTT (voir SAISON ci-dessous, parseNatExcel/parseNatTxt).
+        return ['saison' => str_replace('-', '/', getConfig('saison', '')), 'journees' => $journees];
     }
 
     /**

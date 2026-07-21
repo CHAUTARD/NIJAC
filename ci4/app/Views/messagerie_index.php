@@ -300,6 +300,7 @@
                 <code data-marqueur="{UTI_PRENOM}" class="me-2">{UTI_PRENOM}</code>
                 <code data-marqueur="{URL_LIGUE}" class="me-2">{URL_LIGUE}</code>
                 <code data-marqueur="{YEAR_PHASE}" class="me-2">{YEAR_PHASE}</code>
+                <code data-marqueur="{PHASE}" class="me-2">{PHASE}</code>
             </div>
             <div class="mb-1">
                 <span class="badge me-1 fw-normal" style="background:#1a7f4b;">Convocation</span>
@@ -392,6 +393,7 @@ const MARQUEURS_EXEMPLE = {
     '{URL_DISPONIBILITE_JA}': <?= json_encode(site_url('disponibilite-ja') . '?ja=AbCd1234') ?>,
     '{URL_CONVOCATION_JA}': <?= json_encode(site_url('convocation-ja') . '?nomination=12345') ?>,
     '{YEAR_PHASE}':         <?= json_encode(getAnneePhase()) ?>,
+    '{PHASE}':              <?= json_encode(getConfig('phase', '1')) ?>,
     '{DATE}':               '15/03/2026',
     '{HEURE}':              '14:30',
     '{JOURNEE}':            '12',

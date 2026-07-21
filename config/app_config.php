@@ -272,6 +272,8 @@ function verifierRappelExpirationFfttApi(): void
  * @param array $moi  Utilisateur connecté ($_SESSION['utilisateur']) ; tableau vide pour un envoi sans session.
  * @param array $ctx  Contexte optionnel de la rencontre/convocation — toute clé absente laisse
  *                    le(s) marqueur(s) correspondant(s) vide(s) :
+ *                    {PHASE} : numéro de phase (config `phase`, saisi manuellement — distinct de {YEAR_PHASE}
+ *                    qui est calculé à partir de la date du jour, voir getAnneePhase()).
  *                    id_nomination, sexe_code ('F'|'M'), date, heure, journee, poule, division, dom, ext,
  *                    salle_nom, salle_adresse, salle_cp, salle_ville,
  *                    corr_nom, corr_email, corr_tel, liste_nominations (HTML de {LISTE_NOMINATIONS}).
@@ -284,6 +286,7 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
     $idJa         = (int)($ja['Id_JA'] ?? 0);
     $token        = $idJa > 0 ? (new \Obfuscator(OBFUSCATOR_SEED))->obfuscate($idJa) : '';
     $idNomination = $ctx['id_nomination'] ?? null;
+    $tokenNomination = !empty($idNomination) ? (new \Obfuscator(OBFUSCATOR_SEED))->obfuscate((int) $idNomination) : '';
 
     $sexe = match ($ctx['sexe_code'] ?? '') {
         'F'     => 'Féminin',
@@ -303,8 +306,9 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
         '{URL_LIGUE}'            => getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),
         '{URL_ADRESSE_JA}'       => $token !== '' ? (site_url('adresse-ja') . '?ja=' . $token) : '',
         '{URL_DISPONIBILITE_JA}' => $token !== '' ? (site_url('disponibilite-ja') . '?ja=' . $token) : '',
-        '{URL_CONVOCATION_JA}'   => !empty($idNomination) ? (site_url('convocation-ja') . '?nomination=' . $idNomination) : '',
+        '{URL_CONVOCATION_JA}'   => !empty($idNomination) ? (site_url('convocation-ja') . '?nomination=' . $idNomination . '&cnv=' . $tokenNomination) : '',
         '{YEAR_PHASE}'           => getAnneePhase(),
+        '{PHASE}'                => getConfig('phase', '1'),
         '{DATE}'                 => !empty($ctx['date']) ? date('d/m/Y', strtotime($ctx['date'])) : '',
         '{HEURE}'                => substr((string)($ctx['heure'] ?? ''), 0, 5),
         '{JOURNEE}'              => $ctx['journee']  ?? '',

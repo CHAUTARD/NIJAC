@@ -180,6 +180,7 @@
                         autocomplete="username"
                         autofocus
                     >
+                    <div class="form-text">JA : indiquez votre numéro de licence FFTT.</div>
                 </div>
 
                 <div class="mb-1">
@@ -196,6 +197,7 @@
                             <i id="eye-icon" class="bi bi-eye-slash"></i>
                         </button>
                     </div>
+                    <div class="form-text">JA : indiquez votre nom de famille.</div>
                 </div>
 
                 <div class="d-flex gap-2 mt-3">

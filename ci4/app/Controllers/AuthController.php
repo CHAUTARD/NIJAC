@@ -5,8 +5,9 @@ namespace App\Controllers;
 /**
  * NIJAC – Page de connexion (E001), portage CI4 de index.php.
  *
- * Réplique exactement la logique legacy : recherche Utilisateur par Login,
- * fallback JA Nom+Licence en 2 étapes, règle métier des rencontres R3/R4.
+ * Recherche Utilisateur par Login ; pour un JA, Login = numéro de licence et
+ * Password = Nom (inversé pour désambiguïser les homonymes), avec repli sur
+ * la table `ja` (licence + nom) et règle métier des rencontres R3/R4.
  * Session native (jamais le service Session de CI4) — voir AdminAuth.php
  * pour l'explication complète de l'incompatibilité des deux mécanismes.
  */
@@ -54,7 +55,20 @@ class AuthController extends BaseController
                     $stmt->execute([':login' => $login]);
                     $row = $stmt->fetch();
 
-                    if ($row && (bool) $row['Actif'] && \SecurePasswordHasher::verify($password, $row['Password'])) {
+                    // Pour un compte JA, Login est le numéro de licence (Id_JA de `ja`,
+                    // clé primaire donc naturellement unique) et Password est le hash du
+                    // Nom — inversé par rapport à Admin/Nominateur/CSR (Login = identifiant
+                    // choisi, Password = secret) pour éliminer toute ambiguïté entre deux JA
+                    // homonymes sans avoir besoin d'une colonne de désambiguïsation séparée.
+                    // Le Nom est donc comparé indépendamment de la casse, comme partout
+                    // ailleurs dans l'appli (UPPER/TRIM), d'où la normalisation ici plutôt
+                    // qu'un verify() direct sur la saisie brute (qui, lui, reste tel quel
+                    // pour les autres rôles).
+                    $passwordAVerifier = ($row && $row['Role'] === 'JA')
+                        ? mb_strtoupper(trim($password))
+                        : $password;
+
+                    if ($row && (bool) $row['Actif'] && \SecurePasswordHasher::verify($passwordAVerifier, $row['Password'])) {
                         session_unset();
                         session_regenerate_id(true);
 
@@ -75,11 +89,8 @@ class AuthController extends BaseController
                         ];
 
                         if ($row['Role'] === 'JA') {
-                            $stmtIdJa = $pdo->prepare(
-                                'SELECT Id_JA FROM ja WHERE UPPER(TRIM(Nom)) = UPPER(TRIM(:nom)) LIMIT 1'
-                            );
-                            $stmtIdJa->execute([':nom' => $row['Nom']]);
-                            $_SESSION['utilisateur']['id_ja'] = $stmtIdJa->fetchColumn() ?: null;
+                            // Login EST le numéro de licence pour un compte JA (voir plus haut).
+                            $_SESSION['utilisateur']['id_ja'] = (int) $row['Login'];
                         }
 
                         // Pas de cron sur ce projet (déploiement FTP) : le rappel d'expiration des
@@ -94,36 +105,26 @@ class AuthController extends BaseController
                         return redirect()->to($redirect);
                     }
 
-                    // ── Authentification JA : Nom + numéro de licence ────────────────
-                    $stmtJaNom = $pdo->prepare(
+                    // ── Authentification JA : numéro de licence (login) + Nom (mot de passe) ──
+                    $stmtJa = $pdo->prepare(
                         'SELECT Id_JA, Nom, Prenom, Email, Grade, Id_Club, SUBSTRING(Id_Club, 3, 2) AS Departement
                          FROM ja
-                         WHERE UPPER(TRIM(Nom)) = UPPER(TRIM(:nom)) AND Actif = 1
+                         WHERE TRIM(Id_JA) = TRIM(:licence) AND Actif = 1
                          LIMIT 1'
                     );
-                    $stmtJaNom->execute([':nom' => $login]);
-                    $jaNom = $stmtJaNom->fetch();
+                    $stmtJa->execute([':licence' => $login]);
+                    $jaLicence = $stmtJa->fetch() ?: null;
 
                     $ja = null;
 
-                    if (!$jaNom) {
-                        $status      = 'Nom « ' . htmlspecialchars($login) . ' » introuvable dans la liste des JA actifs.';
+                    if (!$jaLicence) {
+                        $status      = 'Numéro de licence « ' . htmlspecialchars($login) . ' » introuvable dans la liste des JA actifs.';
+                        $statutClass = 'text-danger';
+                    } elseif (mb_strtoupper(trim($jaLicence['Nom'])) !== mb_strtoupper(trim($password))) {
+                        $status      = 'Nom incorrect pour ce numéro de licence.';
                         $statutClass = 'text-danger';
                     } else {
-                        $stmtJa = $pdo->prepare(
-                            'SELECT Id_JA, Nom, Prenom, Email, Grade, Id_Club,
-                                    SUBSTRING(Id_Club, 3, 2) AS Departement
-                             FROM ja
-                             WHERE UPPER(TRIM(Nom)) = UPPER(TRIM(:nom)) AND TRIM(Id_JA) = TRIM(:licence) AND Actif = 1
-                             LIMIT 1'
-                        );
-                        $stmtJa->execute([':nom' => $login, ':licence' => $password]);
-                        $ja = $stmtJa->fetch() ?: null;
-                    }
-
-                    if ($jaNom && !$ja) {
-                        $status      = 'Numéro de licence incorrect pour le JA « ' . htmlspecialchars($jaNom['Nom']) . ' ».';
-                        $statutClass = 'text-danger';
+                        $ja = $jaLicence;
                     }
 
                     if ($ja) {
@@ -140,25 +141,30 @@ class AuthController extends BaseController
                         $stmtCheck->execute([':id_club' => $ja['Id_Club']]);
                         $nbRencontres = (int) $stmtCheck->fetchColumn();
 
+                        $loginJa = (string) $ja['Id_JA'];
+
                         if ($nbRencontres === 0) {
                             $pdo->prepare('DELETE FROM Utilisateur WHERE Login = :login AND Role = \'JA\'')
-                                ->execute([':login' => $ja['Nom']]);
+                                ->execute([':login' => $loginJa]);
                             $status      = 'Accès refusé : aucune rencontre R3/R4 pour votre club.';
                             $statutClass = 'text-danger';
                         } else {
                             $stmtU = $pdo->prepare(
                                 'SELECT Id_Utilisateur FROM Utilisateur WHERE Login = :login LIMIT 1'
                             );
-                            $stmtU->execute([':login' => $ja['Nom']]);
+                            $stmtU->execute([':login' => $loginJa]);
                             $utilisateur = $stmtU->fetch();
+                            $hashedPwd   = \SecurePasswordHasher::hash(mb_strtoupper(trim($ja['Nom'])));
 
                             if (!$utilisateur) {
-                                $hashedPwd = \SecurePasswordHasher::hash($password);
+                                // Login = numéro de licence : unique par construction (clé
+                                // primaire de `ja`), aucun risque de collision entre deux JA
+                                // homonymes, contrairement à l'ancien schéma basé sur le Nom.
                                 $pdo->prepare(
                                     'INSERT INTO Utilisateur (Login, Password, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin)
                                      VALUES (:login, :pwd, :nom, :prenom, \'JA\', :dept, 1, 0)'
                                 )->execute([
-                                    ':login'  => $ja['Nom'],
+                                    ':login'  => $loginJa,
                                     ':pwd'    => $hashedPwd,
                                     ':nom'    => $ja['Nom'],
                                     ':prenom' => $ja['Prenom'],
@@ -166,6 +172,9 @@ class AuthController extends BaseController
                                 ]);
                                 $idUtilisateur = (int) $pdo->lastInsertId();
                             } else {
+                                // Rafraîchit le hash (nom revérifié avec succès ci-dessus).
+                                $pdo->prepare('UPDATE Utilisateur SET Password = :pwd WHERE Id_Utilisateur = :id')
+                                    ->execute([':pwd' => $hashedPwd, ':id' => $utilisateur['Id_Utilisateur']]);
                                 $idUtilisateur = (int) $utilisateur['Id_Utilisateur'];
                             }
 
@@ -174,7 +183,7 @@ class AuthController extends BaseController
 
                             $_SESSION['utilisateur'] = [
                                 'id'             => $idUtilisateur,
-                                'login'          => $ja['Nom'],
+                                'login'          => $loginJa,
                                 'nom'            => $ja['Nom'],
                                 'prenom'         => $ja['Prenom'],
                                 'role'           => 'JA',

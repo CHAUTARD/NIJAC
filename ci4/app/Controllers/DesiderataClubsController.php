@@ -35,6 +35,19 @@ class DesiderataClubsController extends BaseController
         }
     }
 
+    /** Départements autorisés pour l'utilisateur courant (CSR/Administrateur) — jamais en dur, voir CLAUDE.md. */
+    private function deptsAutorises(): array
+    {
+        return array_map('intval', getDepartementsAutorises($_SESSION['utilisateur']['id_departement'] ?? null));
+    }
+
+    private function clubAutorise(string $idClub): bool
+    {
+        $depts = $this->deptsAutorises();
+
+        return $depts && in_array((int) substr($idClub, 2, 2), $depts, true);
+    }
+
     public function index()
     {
         $u = $_SESSION['utilisateur'] ?? [];
@@ -55,10 +68,15 @@ class DesiderataClubsController extends BaseController
             $saison = getConfig('saison', '');
             $dept   = (int) ($this->request->getGet('dept') ?? 0);
 
-            // Ne retenir que les clubs des départements actifs de la région (pas les clubs Hors région)
-            $deptsRegion = array_map('intval', array_column(getDeptActifs(), 'code'));
-            if (!$deptsRegion) {
+            // Départements autorisés pour l'utilisateur courant (CSR/Administrateur) —
+            // jamais getDeptActifs() (tous les départements actifs de la région), qui
+            // laissait un CSR d'un département voir les clubs de tous les autres.
+            $deptsAutorises = $this->deptsAutorises();
+            if (!$deptsAutorises) {
                 return $this->response->setJSON(['ok' => true, 'data' => [], 'saison' => $saison]);
+            }
+            if ($dept > 0 && !in_array($dept, $deptsAutorises, true)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Département hors de votre périmètre.']);
             }
 
             $sql = "SELECT c.Id_Club, c.Nom AS NomClub, c.CorNom, c.CorEmail,
@@ -76,9 +94,9 @@ class DesiderataClubsController extends BaseController
                 $sql     .= ' AND SUBSTRING(c.Id_Club, 3, 2) = ?';
                 $params[] = $dept;
             } else {
-                $ph       = implode(',', array_fill(0, count($deptsRegion), '?'));
+                $ph       = implode(',', array_fill(0, count($deptsAutorises), '?'));
                 $sql     .= " AND SUBSTRING(c.Id_Club, 3, 2) IN ($ph)";
-                $params   = array_merge($params, $deptsRegion);
+                $params   = array_merge($params, $deptsAutorises);
             }
             $sql .= ' GROUP BY c.Id_Club, c.Nom, c.CorNom, c.CorEmail,
                                c.DesiderataSaison, c.DesiderataDate, c.DesiderataEmailDate, c.DesiderataNote,
@@ -125,6 +143,9 @@ class DesiderataClubsController extends BaseController
             if ($idClub === '') {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Club manquant.']);
             }
+            if (!$this->clubAutorise($idClub)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Club hors de votre périmètre.']);
+            }
 
             $pdo   = getPDO();
             $stmtC = $pdo->prepare('SELECT Id_Club, Nom, DesiderataNote FROM club WHERE Id_Club = ?');
@@ -155,6 +176,9 @@ class DesiderataClubsController extends BaseController
             $idClub = trim($this->request->getGet('club') ?? '');
             if ($idClub === '') {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Club manquant.']);
+            }
+            if (!$this->clubAutorise($idClub)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Club hors de votre périmètre.']);
             }
 
             $pdo   = getPDO();
@@ -202,6 +226,9 @@ class DesiderataClubsController extends BaseController
             $idClub = trim($this->request->getGet('club') ?? '');
             $club   = null;
             if ($idClub !== '') {
+                if (!$this->clubAutorise($idClub)) {
+                    return $this->response->setJSON(['ok' => false, 'msg' => 'Club hors de votre périmètre.']);
+                }
                 $stmtC = $pdo->prepare('SELECT Id_Club, Nom, CorNom FROM club WHERE Id_Club = ?');
                 $stmtC->execute([$idClub]);
                 $club = $stmtC->fetch();
@@ -233,6 +260,11 @@ class DesiderataClubsController extends BaseController
             $ids = json_decode($this->request->getPost('ids') ?? '[]', true);
             if (!is_array($ids) || !$ids) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Aucun club sélectionné.']);
+            }
+
+            $ids = array_values(array_filter($ids, fn ($id) => $this->clubAutorise((string) $id)));
+            if (!$ids) {
+                return $this->response->setJSON(['ok' => false, 'msg' => "Aucun des clubs sélectionnés n'est dans votre périmètre."]);
             }
 
             $errRl = checkRateLimit(count($ids));
