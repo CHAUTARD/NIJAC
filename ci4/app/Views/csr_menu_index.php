@@ -79,7 +79,16 @@
             gap: 16px;
             padding: 16px 24px 24px;
             flex: 1;
+            /* Sans ça, l'unique ligne de cartes (peu de boutons ici, contrairement à
+               E002/E020) s'étire pour occuper tout l'espace vertical laissé par
+               flex:1, au lieu de ne prendre que la hauteur de son contenu. */
+            align-content: start;
         }
+
+        /* Grid stretche déjà .menu-btn-wrap à la hauteur de la ligne, mais le lien
+           .menu-btn qu'il contient ne suit pas automatiquement (display:block) —
+           d'où les deux cartes de hauteurs différentes selon la longueur du texte. */
+        .menu-btn-wrap { display: flex; }
 
         .menu-btn {
             display: flex;
@@ -127,6 +136,13 @@
             color: #555;
             margin-top: 4px;
             line-height: 1.3;
+            /* Place réservée pour 3 lignes max (au-delà : tronqué avec "…") — évite que
+               la carte grandisse selon la longueur du texte de description. */
+            max-height: 3.9em;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
         }
         .menu-btn:hover .btn-desc { color: #333; }
         .menu-btn:hover {

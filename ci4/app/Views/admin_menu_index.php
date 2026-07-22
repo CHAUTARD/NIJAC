@@ -45,7 +45,7 @@
 
         #toolbar .ts-pwd-warning:hover { color: #900; }
 
-        #btn-switch-nominateur {
+        #btn-switch-nominateur, #btn-switch-csr {
             display: inline-flex;
             align-items: center;
             gap: .35rem;
@@ -61,6 +61,8 @@
             transition: background .15s;
         }
         #btn-switch-nominateur:hover { background: #1b5e20; color: #fff; }
+        #btn-switch-csr { background: #6a1b9a; }
+        #btn-switch-csr:hover { background: #4a148c; color: #fff; }
 
         #page-header {
             background: var(--nijac-blue);
@@ -200,7 +202,7 @@
         </div>
     </div>
 
-    <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbSwitchTo' => 'nominateur']) ?>
+    <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowCsr' => true, 'tbSwitchTo' => 'nominateur']) ?>
 
     <?php if ($ffttJoursExpiration !== null && $ffttJoursExpiration <= 60): ?>
     <div class="alert alert-<?= $ffttJoursExpiration < 0 ? 'danger' : 'warning' ?> d-flex align-items-center gap-2 mb-0" style="border-radius:0;font-size:.85rem;">
