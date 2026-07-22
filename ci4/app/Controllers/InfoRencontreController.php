@@ -76,13 +76,12 @@ class InfoRencontreController extends BaseController
 
         $stmtR = $pdo->prepare(
             'SELECT r.Id_Rencontre, r.Date, r.Heure, r.Journee, r.Poule,
-                    dv.Division, RIGHT(dv.Division, 1) AS SexeCode,
+                    ed.Division, RIGHT(ed.Division, 1) AS SexeCode,
                     ed.Nom AS NomDom, ev.Nom AS NomExt,
                     s.Nom AS SalleNom, s.Adresse AS SalleAdresse,
                     lps.CodePostal AS SalleCP, lps.Nom AS SalleVille,
                     cl.CorNom AS CorrNom, cl.CorEmail AS CorrEmail, cl.CorTelephone AS CorrTel
              FROM rencontre r
-             JOIN division dv   ON dv.Id_Division = r.Id_Division
              JOIN equipe   ed   ON ed.Id_Equipe   = r.Id_EquipeDom
              LEFT JOIN equipe ev ON ev.Id_Equipe  = r.Id_EquipeExt
              LEFT JOIN salle s   ON s.Id_Salle    = r.Id_Salle
@@ -213,8 +212,8 @@ class InfoRencontreController extends BaseController
              JOIN Rencontre r ON r.Id_Rencontre = n.Id_Rencontre
              LEFT JOIN Salle s   ON s.Id_Salle   = r.Id_Salle
              LEFT JOIN laposte lps ON lps.Id_LaPoste = s.Id_LaPoste
-             LEFT JOIN Division d  ON d.Id_Division = r.Id_Division
              LEFT JOIN equipe ede ON ede.Id_Equipe = r.Id_EquipeDom
+             LEFT JOIN Division d  ON d.Division = ede.Division
              LEFT JOIN Club  ec  ON ec.Id_Club = ede.Id_Club
              LEFT JOIN equipe eve ON eve.Id_Equipe = r.Id_EquipeExt
              LEFT JOIN Club  ev  ON ev.Id_Club = eve.Id_Club
@@ -238,8 +237,8 @@ class InfoRencontreController extends BaseController
                     d_n.Id_JA AS IdJaAffecte,
                     CONCAT(ja_n.Prenom, ' ', ja_n.Nom) AS NomJaAffecte
              FROM rencontre r
-             JOIN division dv   ON dv.Id_Division = r.Id_Division
              JOIN equipe   ed   ON ed.Id_Equipe   = r.Id_EquipeDom
+             JOIN division dv   ON dv.Division = ed.Division
              LEFT JOIN equipe ev ON ev.Id_Equipe  = r.Id_EquipeExt
              LEFT JOIN salle   s_r  ON s_r.Id_Salle   = r.Id_Salle
              LEFT JOIN laposte lp_r ON lp_r.Id_LaPoste = s_r.Id_Laposte

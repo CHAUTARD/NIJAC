@@ -178,9 +178,9 @@
             <table id="tbl-divisions">
                 <thead>
                     <tr>
-                        <th style="width:50px" data-col="0">Ord<span class="sort-icon"></span></th>
-                        <th style="width:80px" data-col="1">Division<span class="sort-icon"></span></th>
-                        <th data-col="2">Nom<span class="sort-icon"></span></th>
+                        <th style="width:80px" data-col="0">Division<span class="sort-icon"></span></th>
+                        <th data-col="1">Nom<span class="sort-icon"></span></th>
+                        <th style="width:50px" data-col="2">Ord<span class="sort-icon"></span></th>
                         <th style="width:50px;text-align:center">Couleur</th>
                         <th style="width:120px;text-align:center" data-col="4">Arbitrage CRA<span class="sort-icon"></span></th>
                     </tr>
@@ -262,7 +262,7 @@
 'use strict';
 const DIVISION_BASE = '<?= site_url('division') ?>';
 let currentId = null;
-const sortState = { col: null, asc: true };
+const sortState = { col: '2', asc: true }; // 2 = colonne Ord, tri par défaut (voir DivisionController::data())
 
 function setStatus(msg, ok = true) {
     $('#form-status').text(msg)
@@ -283,11 +283,11 @@ function chargerListe(selectId = null) {
                 : '<span class="badge" style="background:#e65100;font-size:.75rem">Sur demande</span>';
             const couleur = `<span style="display:inline-block;width:16px;height:16px;border-radius:3px;border:1px solid #999;background:${d.Color || '#1565c0'}"></span>`;
             const $tr = $('<tr>')
-                .attr('data-id', d.Id_Division)
+                .attr('data-id', d.Division)
                 .append(
-                    $('<td class="text-center">').text(d.Ord),
                     $('<td>').text(d.Division),
                     $('<td>').text(d.Nom),
+                    $('<td class="text-center">').text(d.Ord),
                     $('<td class="text-center">').html(couleur),
                     $('<td class="text-center">').html(arb)
                 )
@@ -309,7 +309,7 @@ function selectionnerLigne($tr) {
     $.get(`${DIVISION_BASE}/data/${id}`, function (res) {
         if (!res.ok) return;
         const d = res.data;
-        currentId = parseInt(d.Id_Division);
+        currentId = d.Division;
         $('#txt-id').val(currentId);
         $('#txt-nom').val(d.Division);
         $('#num-ord').val(d.Ord);

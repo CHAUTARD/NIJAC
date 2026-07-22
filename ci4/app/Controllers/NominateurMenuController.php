@@ -159,14 +159,13 @@ class NominateurMenuController extends BaseController
         $deptPh = implode(',', array_fill(0, count($deptsAutorises), '?'));
 
         $stmt = $pdo->prepare("
-            SELECT r.Date, r.Heure, r.Journee, dv.Division,
+            SELECT r.Date, r.Heure, r.Journee, ed.Division,
                    ed.Nom AS NomDom, ee.Nom AS NomExt,
                    ja.Nom, ja.Prenom
             FROM nomination n
             JOIN rencontre r    ON r.Id_Rencontre   = n.Id_Rencontre
             JOIN equipe ed      ON ed.Id_Equipe      = r.Id_EquipeDom
             LEFT JOIN equipe ee ON ee.Id_Equipe      = r.Id_EquipeExt
-            JOIN division dv    ON dv.Id_Division    = r.Id_Division
             JOIN disponible dn  ON dn.Id_Disponible  = n.Id_Disponible
             JOIN ja             ON ja.Id_JA          = dn.Id_JA
             WHERE n.Valide = 1 AND n.EmailEnvoye = 0 AND r.Date >= CURDATE()
@@ -196,12 +195,11 @@ class NominateurMenuController extends BaseController
         $deptPh = implode(',', array_fill(0, count($deptsAutorises), '?'));
 
         $stmt = $pdo->prepare("
-            SELECT r.Date, r.Heure, r.Journee, dv.Division,
+            SELECT r.Date, r.Heure, r.Journee, ed.Division,
                    ed.Nom AS NomDom, ee.Nom AS NomExt
             FROM rencontre r
             JOIN equipe ed      ON ed.Id_Equipe = r.Id_EquipeDom
             LEFT JOIN equipe ee ON ee.Id_Equipe = r.Id_EquipeExt
-            JOIN division dv    ON dv.Id_Division = r.Id_Division
             WHERE r.Date >= CURDATE()
               AND SUBSTRING(ed.Id_Club, 3, 2) IN ($deptPh)
               AND NOT EXISTS (

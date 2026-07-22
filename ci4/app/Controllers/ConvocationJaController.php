@@ -102,8 +102,8 @@ class ConvocationJaController extends BaseController
                            COALESCE(lp_r.Latitude,  lp_c.Latitude)            AS VenueLat,
                            COALESCE(lp_r.Longitude, lp_c.Longitude)           AS VenueLon
                     FROM rencontre r
-                    JOIN  division d    ON d.Id_Division  = r.Id_Division
                     JOIN  equipe   ed   ON ed.Id_Equipe   = r.Id_EquipeDom
+                    JOIN  division d    ON d.Division  = ed.Division
                     LEFT JOIN equipe ee ON ee.Id_Equipe   = r.Id_EquipeExt
                     LEFT JOIN salle   s_r  ON s_r.Id_Salle  = r.id_Salle
                     LEFT JOIN laposte lp_r ON lp_r.Id_LaPoste = s_r.Id_Laposte

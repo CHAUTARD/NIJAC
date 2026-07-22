@@ -49,13 +49,13 @@ class ImportRencontresNatController extends BaseController
                 CREATE TABLE IF NOT EXISTS equipe_nationale (
                     Id_EquipeNat INT              AUTO_INCREMENT PRIMARY KEY,
                     Nom          VARCHAR(200)     NOT NULL,
-                    id_division  INT      NOT NULL,
+                    Division     VARCHAR(5)       NOT NULL,
                     Poule        TINYINT UNSIGNED NOT NULL DEFAULT 0,
                     Rang         TINYINT UNSIGNED NOT NULL DEFAULT 0,
                     CodeDept     VARCHAR(3)       NULL,
                     Id_Club      CHAR(8)          NULL,
                     Id_Equipe    INT              NULL,
-                    UNIQUE KEY uq_nom_div (Nom(150), id_division)
+                    UNIQUE KEY uq_nom_div (Nom(150), Division)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             ');
 
@@ -84,7 +84,7 @@ class ImportRencontresNatController extends BaseController
             $hasUniqueKey = (bool) $pdo0->query("SHOW INDEX FROM equipe_nationale WHERE Key_name = 'uq_nom_div'")->fetch();
             if (!$hasUniqueKey) {
                 $this->dedupliquerEquipeNationale($pdo0);
-                $pdo0->exec('ALTER TABLE equipe_nationale ADD UNIQUE KEY uq_nom_div (Nom(150), id_division)');
+                $pdo0->exec('ALTER TABLE equipe_nationale ADD UNIQUE KEY uq_nom_div (Nom(150), Division)');
             }
 
             // Calendrier des journées (feuille 1 / bloc CALENDRIER du fichier Excel/texte analysé à
@@ -105,7 +105,7 @@ class ImportRencontresNatController extends BaseController
     }
 
     /**
-     * Fusionne les doublons exacts (même Nom + id_division) d'equipe_nationale en une seule ligne
+     * Fusionne les doublons exacts (même Nom + Division) d'equipe_nationale en une seule ligne
      * par équipe : conserve la ligne au plus petit Id_EquipeNat, lui récupère un éventuel
      * Id_Club/CodeDept déjà renseigné sur l'un des doublons, puis supprime les autres.
      */
@@ -114,12 +114,12 @@ class ImportRencontresNatController extends BaseController
         $pdo->exec("
             UPDATE equipe_nationale en
             JOIN (
-                SELECT Nom, id_division,
+                SELECT Nom, Division,
                        MIN(Id_EquipeNat) AS keep_id,
                        MAX(Id_Club)      AS any_club,
                        MAX(CodeDept)     AS any_dept
                 FROM equipe_nationale
-                GROUP BY Nom, id_division
+                GROUP BY Nom, Division
                 HAVING COUNT(*) > 1
             ) g ON en.Id_EquipeNat = g.keep_id
             SET en.Id_Club  = COALESCE(en.Id_Club, g.any_club),
@@ -129,11 +129,11 @@ class ImportRencontresNatController extends BaseController
         $pdo->exec("
             DELETE en FROM equipe_nationale en
             JOIN (
-                SELECT Nom, id_division, MIN(Id_EquipeNat) AS keep_id
+                SELECT Nom, Division, MIN(Id_EquipeNat) AS keep_id
                 FROM equipe_nationale
-                GROUP BY Nom, id_division
+                GROUP BY Nom, Division
                 HAVING COUNT(*) > 1
-            ) g ON en.Nom = g.Nom AND en.id_division = g.id_division AND en.Id_EquipeNat <> g.keep_id
+            ) g ON en.Nom = g.Nom AND en.Division = g.Division AND en.Id_EquipeNat <> g.keep_id
         ");
     }
 
@@ -157,13 +157,13 @@ class ImportRencontresNatController extends BaseController
         }
     }
 
-    /** Retourne [code => Id_Division] depuis la table division (ex: ['N1M' => 3, 'N2M' => 5]). */
+    /** Retourne l'ensemble des codes de division valides, sous forme [code => code] (ex: ['N1M' => 'N1M', 'N2M' => 'N2M']). */
     private function getDivIdMap(\PDO $pdo): array
     {
-        $rows = $pdo->query('SELECT Id_Division, Division FROM division')->fetchAll();
+        $rows = $pdo->query('SELECT Division FROM division')->fetchAll();
         $map  = [];
         foreach ($rows as $r) {
-            $map[$r['Division']] = (int) $r['Id_Division'];
+            $map[$r['Division']] = $r['Division'];
         }
 
         return $map;
@@ -693,7 +693,7 @@ class ImportRencontresNatController extends BaseController
             // Id_Club/CodeDept ne sont écrasés que si le fichier en fournit un (COALESCE conserve toute
             // association déjà faite manuellement à l'étape 2 quand le fichier ne précise rien).
             $stmt = $pdo->prepare('
-                INSERT INTO equipe_nationale (Nom, id_division, Poule, Rang, Id_Club, CodeDept)
+                INSERT INTO equipe_nationale (Nom, Division, Poule, Rang, Id_Club, CodeDept)
                 VALUES (?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE Poule = VALUES(Poule), Rang = VALUES(Rang),
                     Id_Club = COALESCE(VALUES(Id_Club), Id_Club), CodeDept = COALESCE(VALUES(CodeDept), CodeDept)
@@ -773,34 +773,34 @@ class ImportRencontresNatController extends BaseController
             $deptsNorm = array_map('strval', array_column(getDeptActifs(), 'code'));
 
             // Équipes par division/poule/rang, depuis equipe_nationale (associations club à jour de l'étape 2)
-            $rows  = $pdo->query('SELECT Nom, id_division, Poule, Rang, Id_Club, CodeDept FROM equipe_nationale')->fetchAll();
+            $rows  = $pdo->query('SELECT Nom, Division, Poule, Rang, Id_Club, CodeDept FROM equipe_nationale')->fetchAll();
             $byPos = [];
             foreach ($rows as $r) {
-                $byPos[(int) $r['id_division']][(int) $r['Poule']][(int) $r['Rang']] = $r;
+                $byPos[$r['Division']][(int) $r['Poule']][(int) $r['Rang']] = $r;
             }
 
             $arbitrageMap = [];
-            foreach ($pdo->query('SELECT Id_Division, ArbitrageCRA FROM division')->fetchAll() as $r) {
-                $arbitrageMap[(int) $r['Id_Division']] = (int) $r['ArbitrageCRA'];
+            foreach ($pdo->query('SELECT Division, ArbitrageCRA FROM division')->fetchAll() as $r) {
+                $arbitrageMap[$r['Division']] = (int) $r['ArbitrageCRA'];
             }
 
-            $stmtEqChk = $pdo->prepare('SELECT Id_Equipe FROM equipe WHERE Nom=? AND Id_Division=? LIMIT 1');
-            $stmtEqIns = $pdo->prepare('INSERT INTO equipe (Nom, Id_Division, Id_Club, JAdemande) VALUES (?,?,?,0)');
+            $stmtEqChk = $pdo->prepare('SELECT Id_Equipe FROM equipe WHERE Nom=? AND Division=? LIMIT 1');
+            $stmtEqIns = $pdo->prepare('INSERT INTO equipe (Nom, Division, Id_Club, JAdemande) VALUES (?,?,?,0)');
             $stmtRcChk = $pdo->prepare('SELECT 1 FROM rencontre WHERE Date=? AND Id_EquipeDom=? AND Id_EquipeExt=? LIMIT 1');
-            $stmtRcIns = $pdo->prepare('INSERT INTO rencontre (Date,Heure,Id_Division,Poule,Id_EquipeDom,Id_EquipeExt,Phase,Journee,ArbitrageObligatoire) VALUES (?,?,?,?,?,?,?,?,?)');
+            $stmtRcIns = $pdo->prepare('INSERT INTO rencontre (Date,Heure,Poule,Id_EquipeDom,Id_EquipeExt,Phase,Journee,ArbitrageObligatoire) VALUES (?,?,?,?,?,?,?,?)');
 
             $stats = ['equipes_creees' => 0, 'rencontres_creees' => 0, 'doublons' => 0, 'ignores' => 0, 'erreurs' => [], 'log' => []];
 
             // Résout (ou crée) l'équipe NIJAC correspondant à une ligne equipe_nationale, retourne son Id_Equipe.
             // equipe.Nom est VARCHAR(100) (contrairement à equipe_nationale.Nom, VARCHAR(200)) : tronqué ici.
-            $resoudreEquipe = function (array $en, int $idDiv) use ($stmtEqChk, $stmtEqIns, $pdo, &$stats) {
+            $resoudreEquipe = function (array $en, string $divCode) use ($stmtEqChk, $stmtEqIns, $pdo, &$stats) {
                 $nom = mb_substr($en['Nom'], 0, 100);
-                $stmtEqChk->execute([$nom, $idDiv]);
+                $stmtEqChk->execute([$nom, $divCode]);
                 $id = $stmtEqChk->fetchColumn();
                 if ($id) {
                     return (int) $id;
                 }
-                $stmtEqIns->execute([$nom, $idDiv, $en['Id_Club']]);
+                $stmtEqIns->execute([$nom, $divCode, $en['Id_Club']]);
                 $id = (int) $pdo->lastInsertId();
                 if ($id) {
                     $stats['equipes_creees']++;
@@ -810,8 +810,8 @@ class ImportRencontresNatController extends BaseController
                 return $id;
             };
 
-            foreach ($byPos as $idDiv => $poules) {
-                $arbitrage = $arbitrageMap[$idDiv] ?? 0;
+            foreach ($byPos as $divCode => $poules) {
+                $arbitrage = $arbitrageMap[$divCode] ?? 0;
                 foreach ($poules as $poule => $equipesParRang) {
                     foreach ($data['journees'] as $j) {
                         foreach ($j['matchs'] as [$rangDom, $rangExt]) {
@@ -831,8 +831,8 @@ class ImportRencontresNatController extends BaseController
                                 continue;
                             }
 
-                            $idDom = $resoudreEquipe($dom, $idDiv);
-                            $idExt = $resoudreEquipe($ext, $idDiv);
+                            $idDom = $resoudreEquipe($dom, $divCode);
+                            $idExt = $resoudreEquipe($ext, $divCode);
                             if (!$idDom || !$idExt) {
                                 $stats['erreurs'][] = "Équipe non créée : {$dom['Nom']} / {$ext['Nom']}";
                                 continue;
@@ -844,7 +844,7 @@ class ImportRencontresNatController extends BaseController
                                 continue;
                             }
 
-                            $stmtRcIns->execute([$j['date'], '00:00:00', $idDiv, $poule, $idDom, $idExt, 1, $j['journee'], $arbitrage]);
+                            $stmtRcIns->execute([$j['date'], '00:00:00', $poule, $idDom, $idExt, 1, $j['journee'], $arbitrage]);
                             $stats['rencontres_creees']++;
                             $stats['log'][] = ['type' => 'rencontre', 'val' => "P{$poule} J{$j['journee']} — {$dom['Nom']} vs {$ext['Nom']} ({$j['date']})"];
                         }
@@ -909,10 +909,9 @@ class ImportRencontresNatController extends BaseController
                 'N1F' => 'NATIONALE 1 DAMES', 'N2F' => 'NATIONALE 2 DAMES',
             ];
             $rows = $pdo->query('
-                SELECT en.Nom, d.Division AS DivCode, en.Poule, en.Rang, en.Id_Club
+                SELECT en.Nom, en.Division AS DivCode, en.Poule, en.Rang, en.Id_Club
                 FROM equipe_nationale en
-                LEFT JOIN division d ON d.Id_Division = en.id_division
-                ORDER BY d.Division, en.Poule, en.Rang
+                ORDER BY en.Division, en.Poule, en.Rang
             ')->fetchAll();
 
             $currentDiv = null;
@@ -1066,7 +1065,7 @@ class ImportRencontresNatController extends BaseController
 
             $stmtClubIns = $pdo->prepare('INSERT IGNORE INTO club (Id_Club, Nom) VALUES (?,?)');
             $stmtNatIns  = $pdo->prepare('
-                INSERT INTO equipe_nationale (Nom, id_division, Poule, Rang, CodeDept, Id_Club)
+                INSERT INTO equipe_nationale (Nom, Division, Poule, Rang, CodeDept, Id_Club)
                 VALUES (?,?,?,0,?,?)
                 ON DUPLICATE KEY UPDATE CodeDept=VALUES(CodeDept), Id_Club=VALUES(Id_Club)
             ');
@@ -1141,7 +1140,7 @@ class ImportRencontresNatController extends BaseController
             $divIdMap = $this->getDivIdMap($pdo);
 
             $stmt = $pdo->prepare('
-                INSERT INTO equipe_nationale (Nom, id_division, Poule, Rang)
+                INSERT INTO equipe_nationale (Nom, Division, Poule, Rang)
                 VALUES (?, ?, ?, 0)
                 ON DUPLICATE KEY UPDATE Poule = VALUES(Poule)
             ');
@@ -1201,12 +1200,11 @@ class ImportRencontresNatController extends BaseController
     {
         return $this->tryJson(function () {
             $rows = getPDO()->query('
-                SELECT en.Id_EquipeNat, en.Nom, d.Division AS id_division, en.Poule, en.Rang,
+                SELECT en.Id_EquipeNat, en.Nom, en.Division AS id_division, en.Poule, en.Rang,
                        en.CodeDept, en.Id_Club,
                        (SELECT c.Nom FROM club c WHERE c.Id_Club = en.Id_Club LIMIT 1) AS NomClub
                 FROM equipe_nationale en
-                LEFT JOIN division d ON d.Id_Division = en.id_division
-                ORDER BY d.Division, en.Poule, en.Nom
+                ORDER BY en.Division, en.Poule, en.Nom
             ')->fetchAll();
 
             return $this->response->setJSON(['ok' => true, 'equipes' => $rows]);

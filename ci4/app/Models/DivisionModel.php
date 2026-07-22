@@ -7,8 +7,8 @@ use CodeIgniter\Model;
 class DivisionModel extends Model
 {
     protected $table            = 'division';
-    protected $primaryKey       = 'Id_Division';
-    protected $useAutoIncrement = true;
+    protected $primaryKey       = 'Division';
+    protected $useAutoIncrement = false;
 
     protected $returnType     = 'array';
     protected $useSoftDeletes = false;

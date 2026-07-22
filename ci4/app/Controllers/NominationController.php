@@ -181,8 +181,8 @@ class NominationController extends BaseController
             $stmt = $pdo->prepare("
                 SELECT DISTINCT r.Journee, r.Date
                 FROM rencontre r
-                JOIN division dv ON dv.Id_Division = r.Id_Division
                 JOIN equipe eq ON eq.Id_Equipe = r.Id_EquipeDom
+                JOIN division dv ON dv.Division = eq.Division
                 WHERE SUBSTRING(eq.Id_Club, 3, 2) IN ($deptPh)
                   AND (dv.ArbitrageCRA = 1 OR eq.JAdemande = 1)
                   AND r.Date >= CURDATE()
@@ -235,8 +235,8 @@ class NominationController extends BaseController
                     n.Valide,
                     n.EmailEnvoye
                 FROM rencontre r
-                JOIN  division dv   ON dv.Id_Division  = r.Id_Division
                 JOIN  equipe   ed   ON ed.Id_Equipe    = r.Id_EquipeDom
+                JOIN  division dv   ON dv.Division  = ed.Division
                 LEFT JOIN equipe ee ON ee.Id_Equipe    = r.Id_EquipeExt
                 LEFT JOIN salle   s_r  ON s_r.Id_Salle   = r.id_Salle
                 LEFT JOIN laposte lp_r ON lp_r.Id_LaPoste = s_r.Id_Laposte
@@ -495,14 +495,13 @@ class NominationController extends BaseController
             $stmt = $pdo->prepare("
                 SELECT n.Id_Nomination, n.Id_Rencontre, ja.Id_JA, ja.Nom, ja.Prenom, ja.Email,
                        ed.Nom AS NomDom, ee.Nom AS NomExt,
-                       r.Date, r.Heure, r.Journee, r.Poule, dv.Division, RIGHT(dv.Division, 1) AS SexeCode
+                       r.Date, r.Heure, r.Journee, r.Poule, ed.Division, RIGHT(ed.Division, 1) AS SexeCode
                 FROM nomination n
                 JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
                 JOIN rencontre r  ON r.Id_Rencontre  = n.Id_Rencontre
                 JOIN ja           ON ja.Id_JA         = d.Id_JA
                 JOIN equipe  ed   ON ed.Id_Equipe     = r.Id_EquipeDom
                 LEFT JOIN equipe ee ON ee.Id_Equipe   = r.Id_EquipeExt
-                JOIN division dv  ON dv.Id_Division   = r.Id_Division
                 WHERE r.Journee = ? AND r.Date = ?
                   AND n.Valide = 1
                   AND r.Id_Rencontre IN ($placeholders)

@@ -115,9 +115,9 @@ class DesiderataClubController extends BaseController
 
             $stmtE = $pdo->prepare(
                 "SELECT e.Id_Equipe, e.Nom AS NomEquipe, e.ReEngagement, e.JourSouhaite, e.SouhaitJA,
-                        d.Id_Division, d.Division, d.Nom AS NomDivision
+                        d.Division, d.Nom AS NomDivision
                  FROM equipe e
-                 JOIN division d ON d.Id_Division = e.Id_Division
+                 JOIN division d ON d.Division = e.Division
                  WHERE e.Id_Club = ? AND d.Ord BETWEEN 70 AND 150
                  ORDER BY d.Ord, e.Nom"
             );
@@ -190,7 +190,7 @@ class DesiderataClubController extends BaseController
                     'UPDATE equipe SET ReEngagement=?, JourSouhaite=?, SouhaitJA=?, DesiderataSaison=?
                      WHERE Id_Equipe=? AND Id_Club=?'
                 );
-                $stmtDivOf = $pdo->prepare('SELECT Id_Division FROM equipe WHERE Id_Equipe=? AND Id_Club=?');
+                $stmtDivOf = $pdo->prepare('SELECT Division FROM equipe WHERE Id_Equipe=? AND Id_Club=?');
 
                 foreach ($equipes as $eq) {
                     $idEquipe = (int) ($eq['id_equipe'] ?? 0);
@@ -207,8 +207,8 @@ class DesiderataClubController extends BaseController
                     // Synchronise JAdemande + ArbitrageObligatoire pour les équipes R3M/R4M
                     if ($sja !== null) {
                         $stmtDivOf->execute([$idEquipe, $club]);
-                        $idDiv = (int) $stmtDivOf->fetchColumn();
-                        if (in_array($idDiv, [1, 10], true)) { // R3M, R4M
+                        $divCode = (string) $stmtDivOf->fetchColumn();
+                        if (in_array($divCode, ['R3M', 'R4M'], true)) {
                             $jademande = $sja === 'CRA' ? 1 : 0;
                             $pdo->prepare('UPDATE equipe SET JAdemande=? WHERE Id_Equipe=?')->execute([$jademande, $idEquipe]);
                             if ($jademande === 1) {
@@ -218,7 +218,7 @@ class DesiderataClubController extends BaseController
                                 $pdo->prepare(
                                     'UPDATE rencontre r
                                      JOIN equipe e   ON e.Id_Equipe   = r.Id_EquipeDom
-                                     JOIN division d ON d.Id_Division = e.Id_Division
+                                     JOIN division d ON d.Division   = e.Division
                                      SET r.ArbitrageObligatoire = d.ArbitrageCRA
                                      WHERE r.Id_EquipeDom = ?'
                                 )->execute([$idEquipe]);

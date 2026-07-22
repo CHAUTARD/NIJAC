@@ -87,10 +87,9 @@ class ImportRencontresController extends BaseController
     }
 
     /**
-     * Tente de deviner l'Id_Division NIJAC depuis le libellé FFTT d'une division.
-     * IDs hardcodés d'après la table division actuelle.
+     * Tente de deviner le code de division NIJAC depuis le libellé FFTT d'une division.
      */
-    private function devinerIdDivision(string $libelle): ?int
+    private function devinerDivisionCode(string $libelle): ?string
     {
         // Supprimer le préfixe de ligue FFTT de la forme "L09_", "L17_", etc. (4 premiers caractères)
         $libelle = preg_replace('/^[A-Z]\d{2}_/u', '', $libelle);
@@ -99,28 +98,23 @@ class ImportRencontresController extends BaseController
         $fem = str_contains($l, 'dame') || str_contains($l, 'féminin') || str_contains($l, 'feminin');
 
         // Correspondance directe avec les codes NIJAC (ex. "R1M", "R2M", "PNF"…)
-        $map = [
-            'r1m' => 3, 'r2m' => 2, 'r3m' => 1, 'r4m' => 10,
-            'r1f' => 8, 'pnm' => 4, 'pnf' => 9,
-            'n1m' => 7, 'n2m' => 6, 'n3m' => 5,
-            'n1f' => 12, 'n2f' => 11,
-        ];
-        if (isset($map[$l])) {
-            return $map[$l];
+        $codes = ['r1m', 'r2m', 'r3m', 'r4m', 'r1f', 'pnm', 'pnf', 'n1m', 'n2m', 'n3m', 'n1f', 'n2f'];
+        if (in_array($l, $codes, true)) {
+            return strtoupper($l);
         }
 
         // Correspondance par mots-clés
         if (str_contains($l, 'pré-nationale') || str_contains($l, 'pre-nationale')) {
-            return $fem ? 9 : 4;   // PNF=9, PNM=4
+            return $fem ? 'PNF' : 'PNM';
         }
         if (str_contains($l, 'régionale') || str_contains($l, 'regionale')) {
             preg_match('/(\d+)/', $l, $m);
             $n = (int) ($m[1] ?? 0);
             if ($fem) {
-                return $n === 1 ? 8 : null;
+                return $n === 1 ? 'R1F' : null;
             }
 
-            return match ($n) { 1 => 3, 2 => 2, 3 => 1, 4 => 10, default => null };
+            return match ($n) { 1 => 'R1M', 2 => 'R2M', 3 => 'R3M', 4 => 'R4M', default => null };
         }
 
         return null;
@@ -178,7 +172,7 @@ class ImportRencontresController extends BaseController
             $phaseKey   = 'prep';
         }
 
-        $divsNijac = getPDO()->query('SELECT Id_Division, Division FROM division ORDER BY Division')->fetchAll();
+        $divsNijac = getPDO()->query('SELECT Division FROM division ORDER BY Division')->fetchAll();
 
         $data = [
             'nomComplet'    => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
@@ -350,11 +344,11 @@ class ImportRencontresController extends BaseController
             $items   = $this->ffttItems($reponse, 'division');
 
             $pdo       = getPDO();
-            $divsNijac = $pdo->query('SELECT Id_Division, Division FROM division ORDER BY Division')->fetchAll();
+            $divsNijac = $pdo->query('SELECT Division FROM division ORDER BY Division')->fetchAll();
 
             foreach ($items as &$div) {
                 $libelle                       = (string) ($div['libelle'] ?? '');
-                $div['id_division_nijac_auto'] = $this->devinerIdDivision($libelle);
+                $div['id_division_nijac_auto'] = $this->devinerDivisionCode($libelle);
             }
             unset($div);
 
@@ -369,24 +363,23 @@ class ImportRencontresController extends BaseController
         return $this->tryJson(function () {
             $pdo = getPDO();
 
-            $organisme  = trim($this->request->getPost('organisme') ?? '');
-            $epreuve    = trim($this->request->getPost('epreuve') ?? '');
-            $divFftt    = trim($this->request->getPost('division_fftt') ?? '');
-            $idDivNijac = (int) ($this->request->getPost('id_division') ?? 0);
-            $phase      = (int) ($this->request->getPost('phase') ?? 1);
+            $organisme = trim($this->request->getPost('organisme') ?? '');
+            $epreuve   = trim($this->request->getPost('epreuve') ?? '');
+            $divFftt   = trim($this->request->getPost('division_fftt') ?? '');
+            $divCode   = trim($this->request->getPost('id_division') ?? '');
+            $phase     = (int) ($this->request->getPost('phase') ?? 1);
 
-            if ($organisme === '' || $epreuve === '' || $divFftt === '' || $idDivNijac <= 0) {
+            if ($organisme === '' || $epreuve === '' || $divFftt === '' || $divCode === '') {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Paramètres manquants.']);
             }
 
-            $stmtDiv = $pdo->prepare('SELECT ArbitrageCRA, Division FROM division WHERE Id_Division=?');
-            $stmtDiv->execute([$idDivNijac]);
+            $stmtDiv = $pdo->prepare('SELECT ArbitrageCRA FROM division WHERE Division=?');
+            $stmtDiv->execute([$divCode]);
             $divInfo = $stmtDiv->fetch();
             if (!$divInfo) {
-                return $this->response->setJSON(['ok' => false, 'msg' => "Division NIJAC #$idDivNijac introuvable."]);
+                return $this->response->setJSON(['ok' => false, 'msg' => "Division NIJAC $divCode introuvable."]);
             }
             $arbitrage   = (int) $divInfo['ArbitrageCRA'];
-            $divCode     = (string) $divInfo['Division'];
             $isNationale = str_starts_with($divCode, 'N');
 
             $api = getFfttRawClient();
@@ -433,16 +426,16 @@ class ImportRencontresController extends BaseController
             $stmtClubById         = $pdo->prepare('SELECT Id_Club FROM club WHERE Id_Club=? LIMIT 1');
             $stmtClubByEquipeNom  = $pdo->prepare('SELECT Id_Club FROM club WHERE EquipeNom=? OR Nom=? LIMIT 1');
             $stmtClubEquipeNom    = $pdo->prepare('UPDATE club SET EquipeNom=? WHERE Id_Club=?');
-            $stmtNatChk    = $pdo->prepare('SELECT 1 FROM equipe_nationale WHERE Nom=? AND id_division=? LIMIT 1');
+            $stmtNatChk    = $pdo->prepare('SELECT 1 FROM equipe_nationale WHERE Nom=? AND Division=? LIMIT 1');
             $stmtNatIns    = $pdo->prepare(
-                'INSERT INTO equipe_nationale (Nom, id_division, Poule, Rang, Id_Club, Id_Equipe) VALUES (?,?,?,0,?,?)'
+                'INSERT INTO equipe_nationale (Nom, Division, Poule, Rang, Id_Club, Id_Equipe) VALUES (?,?,?,0,?,?)'
             );
-            $stmtEqChk = $pdo->prepare('SELECT Id_Equipe FROM equipe WHERE Nom=? AND Id_Division=? LIMIT 1');
-            $stmtEqIns = $pdo->prepare('INSERT INTO equipe (Nom, Id_Division, Id_Club, JAdemande) VALUES (?,?,?,0)');
+            $stmtEqChk = $pdo->prepare('SELECT Id_Equipe FROM equipe WHERE Nom=? AND Division=? LIMIT 1');
+            $stmtEqIns = $pdo->prepare('INSERT INTO equipe (Nom, Division, Id_Club, JAdemande) VALUES (?,?,?,0)');
             $stmtRcChk = $pdo->prepare('SELECT 1 FROM rencontre WHERE Date=? AND Id_EquipeDom=? AND Id_EquipeExt=? LIMIT 1');
             $stmtRcIns = $pdo->prepare(
-                'INSERT INTO rencontre (Date,Heure,Id_Division,Poule,Id_EquipeDom,Id_EquipeExt,Phase,Journee,ArbitrageObligatoire)
-                 VALUES (?,?,?,?,?,?,?,?,?)'
+                'INSERT INTO rencontre (Date,Heure,Poule,Id_EquipeDom,Id_EquipeExt,Phase,Journee,ArbitrageObligatoire)
+                 VALUES (?,?,?,?,?,?,?,?)'
             );
 
             foreach ($rencontres as $rc) {
@@ -526,16 +519,16 @@ class ImportRencontresController extends BaseController
                 unset($idVar);
 
                 foreach ([[$libDom, $clubDom, 'idDom'], [$libExt, $clubExt, 'idExt']] as [$lib, $club, $var]) {
-                    $stmtEqChk->execute([$lib, $idDivNijac]);
+                    $stmtEqChk->execute([$lib, $divCode]);
                     $$var = $stmtEqChk->fetchColumn();
                     if (!$$var) {
-                        $stmtEqIns->execute([$lib, $idDivNijac, $club]);
+                        $stmtEqIns->execute([$lib, $divCode, $club]);
                         $$var = (int) $pdo->lastInsertId();
                         if ($$var) {
                             $stats['equipes_creees']++;
                             $stats['log'][] = ['type' => 'equipe', 'op' => 'créée', 'val' => $lib];
                         } else {
-                            $stmtEqChk->execute([$lib, $idDivNijac]);
+                            $stmtEqChk->execute([$lib, $divCode]);
                             $$var = (int) $stmtEqChk->fetchColumn();
                         }
                     }
@@ -550,9 +543,9 @@ class ImportRencontresController extends BaseController
                 // Alimenter equipe_nationale si division Nationale (N1M, N2M…)
                 if ($isNationale) {
                     foreach ([[$libDom, $clubDom, $idDom], [$libExt, $clubExt, $idExt]] as [$lib, $club, $idEq]) {
-                        $stmtNatChk->execute([$lib, $idDivNijac]);
+                        $stmtNatChk->execute([$lib, $divCode]);
                         if (!$stmtNatChk->fetchColumn()) {
-                            $stmtNatIns->execute([$lib, $idDivNijac, $pouleNum, $club, $idEq]);
+                            $stmtNatIns->execute([$lib, $divCode, $pouleNum, $club, $idEq]);
                             $stats['log'][] = ['type' => 'nationale', 'op' => 'nat. ajoutée', 'val' => "$divCode P$pouleNum — $lib"];
                         }
                     }
@@ -565,7 +558,7 @@ class ImportRencontresController extends BaseController
                     continue;
                 }
 
-                $stmtRcIns->execute([$date, $heure, $idDivNijac, $pouleNum, $idDom, $idExt, $phase, $journee, $arbitrage]);
+                $stmtRcIns->execute([$date, $heure, $pouleNum, $idDom, $idExt, $phase, $journee, $arbitrage]);
                 $stats['rencontres_creees']++;
                 $stats['log'][] = ['type' => 'rencontre', 'op' => 'créée', 'val' => "P$pouleNum J$journee — $libDom vs $libExt ($date)"];
             }
@@ -586,8 +579,8 @@ class ImportRencontresController extends BaseController
                         r.ArbitrageObligatoire,
                         (SELECT COUNT(*) FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre) AS NbNominations
                  FROM rencontre r
-                 JOIN division dv ON dv.Id_Division = r.Id_Division
                  JOIN equipe   ed ON ed.Id_Equipe   = r.Id_EquipeDom
+                 JOIN division dv ON dv.Division = ed.Division
                  LEFT JOIN equipe ev ON ev.Id_Equipe = r.Id_EquipeExt
                  ORDER BY r.Date ASC, r.Heure ASC, dv.Ord ASC'
             )->fetchAll();
@@ -611,9 +604,8 @@ class ImportRencontresController extends BaseController
 
             $pdo  = getPDO();
             $stmt = $pdo->prepare(
-                'SELECT ed.Id_Club, dv.Division
+                'SELECT ed.Id_Club, ed.Division
                  FROM rencontre r
-                 JOIN division dv ON dv.Id_Division = r.Id_Division
                  JOIN equipe   ed ON ed.Id_Equipe   = r.Id_EquipeDom
                  WHERE r.Id_Rencontre = ?'
             );
@@ -661,13 +653,12 @@ class ImportRencontresController extends BaseController
 
             $stmtR = $pdo->prepare(
                 'SELECT r.Id_Rencontre, r.Date, r.Heure, r.Journee, r.Poule,
-                        dv.Division, RIGHT(dv.Division, 1) AS SexeCode,
+                        ed.Division, RIGHT(ed.Division, 1) AS SexeCode,
                         ed.Nom AS NomDom, ev.Nom AS NomExt,
                         s.Nom AS SalleNom, s.Adresse AS SalleAdresse,
                         lps.CodePostal AS SalleCP, lps.Nom AS SalleVille,
                         cl.CorNom AS CorrNom, cl.CorEmail AS CorrEmail, cl.CorTelephone AS CorrTel
                  FROM rencontre r
-                 JOIN division dv   ON dv.Id_Division = r.Id_Division
                  JOIN equipe   ed   ON ed.Id_Equipe   = r.Id_EquipeDom
                  LEFT JOIN equipe ev  ON ev.Id_Equipe   = r.Id_EquipeExt
                  LEFT JOIN salle s    ON s.Id_Salle     = r.Id_Salle

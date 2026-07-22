@@ -30,7 +30,7 @@ class DivisionController extends BaseController
     public function data(): ResponseInterface
     {
         $rows = $this->divisionModel
-            ->select('Id_Division, Division, Ord, Nom, Color, ArbitrageCRA')
+            ->select('Division, Ord, Nom, Color, ArbitrageCRA')
             ->orderBy('Ord', 'ASC')
             ->findAll();
 
@@ -39,10 +39,9 @@ class DivisionController extends BaseController
 
     public function show($id = null): ResponseInterface
     {
-        $id  = (int) $id;
         $row = $this->divisionModel
-            ->select('Id_Division, Division, Ord, Nom, Color, ArbitrageCRA')
-            ->find($id);
+            ->select('Division, Ord, Nom, Color, ArbitrageCRA')
+            ->find(trim((string) $id));
 
         return $this->response->setJSON(
             $row ? ['ok' => true, 'data' => $row] : ['ok' => false, 'msg' => 'Introuvable']
@@ -59,15 +58,14 @@ class DivisionController extends BaseController
         }
 
         $this->divisionModel->insert($fields);
-        $id = (int) $this->divisionModel->getInsertID();
 
-        return $this->response->setJSON(['ok' => true, 'msg' => 'Division créée.', 'id' => $id]);
+        return $this->response->setJSON(['ok' => true, 'msg' => 'Division créée.', 'id' => $fields['Division']]);
     }
 
     public function update($id = null): ResponseInterface
     {
 
-        $id     = (int) $id;
+        $id     = trim((string) $id);
         $fields = $this->extractFields($this->request->getRawInput());
 
         if ($fields === null) {
@@ -76,13 +74,13 @@ class DivisionController extends BaseController
 
         $this->divisionModel->update($id, $fields);
 
-        return $this->response->setJSON(['ok' => true, 'msg' => 'Division mise à jour.', 'id' => $id]);
+        return $this->response->setJSON(['ok' => true, 'msg' => 'Division mise à jour.', 'id' => $fields['Division']]);
     }
 
     public function delete($id = null): ResponseInterface
     {
 
-        $id = (int) $id;
+        $id = trim((string) $id);
         $this->divisionModel->delete($id);
 
         return $this->response->setJSON(['ok' => true, 'msg' => 'Division supprimée.']);

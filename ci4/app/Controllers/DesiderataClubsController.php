@@ -87,7 +87,7 @@ class DesiderataClubsController extends BaseController
                            GROUP_CONCAT(CONCAT(d.Division, '§', e.Nom) ORDER BY d.Ord SEPARATOR '||') AS DivisionsEquipes
                     FROM club c
                     JOIN equipe e   ON e.Id_Club = c.Id_Club
-                    JOIN division d ON d.Id_Division = e.Id_Division
+                    JOIN division d ON d.Division = e.Division
                     WHERE d.Ord BETWEEN 70 AND 150";
             $params = [];
             if ($dept > 0) {
@@ -157,9 +157,9 @@ class DesiderataClubsController extends BaseController
 
             $stmtE = $pdo->prepare(
                 "SELECT e.Id_Equipe, e.Nom AS NomEquipe, e.ReEngagement, e.JourSouhaite, e.SouhaitJA,
-                        d.Id_Division, d.Division, d.Nom AS NomDivision
+                        d.Division, d.Nom AS NomDivision
                  FROM equipe e
-                 JOIN division d ON d.Id_Division = e.Id_Division
+                 JOIN division d ON d.Division = e.Division
                  WHERE e.Id_Club = ? AND d.Ord BETWEEN 70 AND 150
                  ORDER BY d.Ord, e.Nom"
             );
@@ -203,8 +203,8 @@ class DesiderataClubsController extends BaseController
             unset($j);
 
             $stmtAC = $pdo->prepare(
-                "SELECT COUNT(*) FROM equipe e JOIN division d ON d.Id_Division = e.Id_Division
-                 WHERE e.Id_Club = ? AND d.Division IN ('R3M','R4M') AND e.SouhaitJA = 'Club'"
+                "SELECT COUNT(*) FROM equipe e
+                 WHERE e.Id_Club = ? AND e.Division IN ('R3M','R4M') AND e.SouhaitJA = 'Club'"
             );
             $stmtAC->execute([$idClub]);
             $arbitrageClub = (bool) $stmtAC->fetchColumn();

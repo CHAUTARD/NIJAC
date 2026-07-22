@@ -145,7 +145,7 @@ class CentrenvoyeController extends BaseController
                 $stmt = $pdo->prepare('
                     SELECT n.Id_Nomination, j.Id_JA, j.Nom, j.Prenom, j.Email,
                            r.Date, r.Heure, r.Journee, r.Poule,
-                           dv.Division, RIGHT(dv.Division, 1) AS SexeCode,
+                           ed.Division, RIGHT(ed.Division, 1) AS SexeCode,
                            ed.Nom AS NomDom, ee.Nom AS NomExt,
                            n.Id_Rencontre,
                            n.Kilometre,
@@ -162,7 +162,6 @@ class CentrenvoyeController extends BaseController
                     JOIN rencontre r        ON r.Id_Rencontre = n.Id_Rencontre
                     JOIN equipe ed          ON ed.Id_Equipe   = r.Id_EquipeDom
                     LEFT JOIN equipe ee     ON ee.Id_Equipe   = r.Id_EquipeExt
-                    JOIN division dv        ON dv.Id_Division = r.Id_Division
                     LEFT JOIN salle s       ON s.Id_Salle     = r.id_Salle
                     LEFT JOIN laposte lps   ON lps.Id_LaPoste = s.Id_Laposte
                     LEFT JOIN Club co ON co.Id_Club = ed.Id_Club
@@ -314,13 +313,12 @@ class CentrenvoyeController extends BaseController
         $listeNoms = '';
         if ($type === 'Liste nomination' && $saison) {
             $stmtNoms = $pdo->prepare('
-                SELECT r.Date, r.Heure, dv.Division, ed.Nom AS Dom, ee.Nom AS Ext
+                SELECT r.Date, r.Heure, ed.Division, ed.Nom AS Dom, ee.Nom AS Ext
                 FROM nomination n
                 JOIN disponible dn  ON dn.Id_Disponible = n.Id_Disponible
                 JOIN rencontre r    ON r.Id_Rencontre = n.Id_Rencontre
                 JOIN equipe ed      ON ed.Id_Equipe   = r.Id_EquipeDom
                 LEFT JOIN equipe ee ON ee.Id_Equipe   = r.Id_EquipeExt
-                JOIN division dv    ON dv.Id_Division = r.Id_Division
                 WHERE dn.Id_JA = ? ORDER BY r.Date, r.Heure
             ');
             $stmtNoms->execute([$idJa]);
@@ -426,7 +424,7 @@ class CentrenvoyeController extends BaseController
             SELECT n.Id_Nomination, j.Id_JA, j.Nom, j.Prenom, j.Email,
                    n.Id_Rencontre,
                    r.Date, r.Heure, r.Journee, r.Poule,
-                   dv.Division, RIGHT(dv.Division, 1) AS SexeCode,
+                   ed.Division, RIGHT(ed.Division, 1) AS SexeCode,
                    ed.Nom AS NomDom, ee.Nom AS NomExt,
                    s.Nom AS SalleNom, s.Adresse AS SalleAdresse,
                    lps.CodePostal AS SalleCP, lps.Nom AS SalleVille,
@@ -437,7 +435,6 @@ class CentrenvoyeController extends BaseController
             JOIN rencontre r        ON r.Id_Rencontre = n.Id_Rencontre
             JOIN equipe ed          ON ed.Id_Equipe   = r.Id_EquipeDom
             LEFT JOIN equipe ee     ON ee.Id_Equipe   = r.Id_EquipeExt
-            JOIN division dv        ON dv.Id_Division = r.Id_Division
             LEFT JOIN salle s       ON s.Id_Salle     = r.id_Salle
             LEFT JOIN laposte lps   ON lps.Id_LaPoste = s.Id_Laposte
             LEFT JOIN Club co       ON co.Id_Club     = ed.Id_Club
