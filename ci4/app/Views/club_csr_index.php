@@ -42,9 +42,9 @@
         }
         #toolbar .ts-pwd-warning:hover { color: #900; }
 
-        /* ── En-tête ── */
+        /* ── En-tête (violet, propre au rôle CSR — voir E034) ── */
         #page-header {
-            background: #00695c;
+            background: #6a1b9a;
             color: #fff;
             padding: .5rem 1.25rem;
             font-size: .9rem;

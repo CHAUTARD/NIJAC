@@ -21,7 +21,8 @@
         }
 
         #page-header {
-            background: #2e7d32;
+            /* Violet quand ouvert depuis le menu CSR (E034), vert Nominateur sinon — voir isCsr(). */
+            background: <?= $isCsr ? '#6a1b9a' : '#2e7d32' ?>;
             color: #fff;
             padding: .5rem 1.25rem;
             font-size: .9rem;

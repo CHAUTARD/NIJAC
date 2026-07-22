@@ -19,9 +19,9 @@
             flex-direction: column;
         }
 
-        /* ── En-tête (sarcelle, propre à E034/CSR) ── */
+        /* ── En-tête (violet, propre à E034/CSR — distinct du bleu Admin et du vert Nominateur) ── */
         #page-header {
-            background: #00695c;
+            background: #6a1b9a;
             color: #fff;
             padding: .5rem 1.25rem;
             font-size: .9rem;
