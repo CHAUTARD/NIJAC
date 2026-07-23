@@ -18,6 +18,7 @@ class CsrMenuController extends BaseController
             'nomComplet'  => trim(($u['nom'] ?? '') . ' ' . ($u['prenom'] ?? '')),
             'departement' => $u['id_departement'] ?? '',
             'changeLogin' => !empty($u['change_login']),
+            'isAdmin'     => !empty($u['is_admin']),
         ];
 
         return view('csr_menu_index', $data);

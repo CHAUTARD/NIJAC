@@ -24,6 +24,12 @@ ALTER TABLE equipe_nationale DROP FOREIGN KEY fk_equipenat_division;
 ALTER TABLE equipe_nationale DROP INDEX uq_nom_div;
 ALTER TABLE equipe_nationale ADD UNIQUE KEY uq_nom_div (Nom(150), Division);
 ALTER TABLE equipe_nationale DROP COLUMN Id_Division;
+-- Contrairement à equipe/rencontre, equipe_nationale.Id_Equipe est encore NULL pour la
+-- plupart des lignes tant que l'étape 3 (génération des rencontres) n'a pas tourné : on ne
+-- peut donc pas remplacer Division par la relation equipe_nationale->equipe->division sans
+-- casser l'affichage E017 en cours de saison. On garde la colonne Division mais on formalise
+-- la relation par une vraie FK vers division(Division), pour garantir l'intégrité référentielle.
+ALTER TABLE equipe_nationale ADD CONSTRAINT fk_equipenat_division FOREIGN KEY (Division) REFERENCES division(Division) ON UPDATE CASCADE;
 
 -- ── rencontre ─────────────────────────────────────────────────────────────
 -- Pas de colonne Division sur rencontre : la division se lit via l'équipe

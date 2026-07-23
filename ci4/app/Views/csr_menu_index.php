@@ -72,23 +72,37 @@
         }
         #toolbar .ts-pwd-warning:hover { color: #900; }
 
-        /* ── Grille de boutons (mêmes classes que E020/E002 pour une apparence cohérente) ── */
+        /* Visible seulement pour un Administrateur qui prévisualise le menu CSR (voir E020) — masqué pour le rôle CSR lui-même. */
+        #btn-switch-admin {
+            display: <?= $isAdmin ? 'inline-flex' : 'none' ?>;
+            align-items: center;
+            gap: .35rem;
+            padding: .25rem .75rem;
+            background: var(--nijac-blue);
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: .82rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background .15s;
+        }
+        #btn-switch-admin:hover { background: #0f2550; color: #fff; }
+
+        /* ── Grille de boutons (mêmes classes et même style que E002, pour une apparence
+           identique) ── */
         #menu-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 16px;
-            padding: 16px 24px 24px;
+            padding: 24px;
             flex: 1;
-            /* Sans ça, l'unique ligne de cartes (peu de boutons ici, contrairement à
-               E002/E020) s'étire pour occuper tout l'espace vertical laissé par
-               flex:1, au lieu de ne prendre que la hauteur de son contenu. */
+            /* Contrairement à E002/E020 (assez de boutons pour remplir 2 lignes), E034 n'a
+               qu'une seule ligne à moitié remplie : sans ça, elle s'étire pour occuper tout
+               l'espace vertical laissé par flex:1 au lieu de ne prendre que sa hauteur de contenu. */
             align-content: start;
         }
-
-        /* Grid stretche déjà .menu-btn-wrap à la hauteur de la ligne, mais le lien
-           .menu-btn qu'il contient ne suit pas automatiquement (display:block) —
-           d'où les deux cartes de hauteurs différentes selon la longueur du texte. */
-        .menu-btn-wrap { display: flex; }
 
         .menu-btn {
             display: flex;
@@ -128,30 +142,36 @@
             object-fit: contain;
         }
 
-        .menu-btn .btn-icon i { font-size: 6rem; line-height: 1; }
-        .menu-btn span { line-height: 1.25; margin-top: 10px; }
+        .menu-btn .btn-icon i {
+            font-size: 6rem;
+            line-height: 1;
+        }
+
+        .menu-btn span {
+            line-height: 1.25;
+            margin-top: 10px;
+        }
+
         .menu-btn .btn-desc {
             font-size: .72rem;
             font-weight: 400;
             color: #555;
             margin-top: 4px;
             line-height: 1.3;
-            /* Place réservée pour 3 lignes max (au-delà : tronqué avec "…") — évite que
-               la carte grandisse selon la longueur du texte de description. */
-            max-height: 3.9em;
-            overflow: hidden;
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            -webkit-box-orient: vertical;
         }
         .menu-btn:hover .btn-desc { color: #333; }
+
         .menu-btn:hover {
             filter: brightness(1.08);
             transform: translateY(-2px);
             box-shadow: 4px 6px 14px rgba(0,0,0,.22);
             color: #000;
         }
-        .menu-btn:active { transform: translateY(0); box-shadow: 1px 2px 4px rgba(0,0,0,.15); }
+
+        .menu-btn:active {
+            transform: translateY(0);
+            box-shadow: 1px 2px 4px rgba(0,0,0,.15);
+        }
 
         .btn-club-csr   { background-color: #e0f2f1; }
         .btn-messagerie { background-color: #fff8e1; }
@@ -179,39 +199,33 @@
 </div>
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
-<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
+<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbSwitchTo' => 'admin']) ?>
 
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Grille -->
 <div id="menu-grid">
 
-    <div class="menu-btn-wrap">
-        <a href="<?= site_url('club-csr') ?>" class="menu-btn btn-club-csr">
-            <span class="btn-code">E035</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Association.png') ?>" alt="Club CSR"></div>
-            <span>Club CSR</span>
-            <span class="btn-desc">Liste des clubs et envoi d'un email aux correspondants sélectionnés</span>
-        </a>
-    </div>
+    <a href="<?= site_url('club-csr') ?>" class="menu-btn btn-club-csr">
+        <span class="btn-code">E035</span>
+        <div class="btn-icon"><img src="<?= base_url('img/Association.png') ?>" alt="Club CSR"></div>
+        <span>Club CSR</span>
+        <span class="btn-desc">Liste des clubs et envoi d'un email aux correspondants sélectionnés</span>
+    </a>
 
-    <div class="menu-btn-wrap">
-        <a href="<?= site_url('messagerie') ?>" class="menu-btn btn-messagerie">
-            <span class="btn-code">E026</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Messagerie.png') ?>" alt="Messagerie"></div>
-            <span>Messagerie</span>
-            <span class="btn-desc">Modifier le message envoyé aux correspondants de club</span>
-        </a>
-    </div>
+    <a href="<?= site_url('messagerie') ?>" class="menu-btn btn-messagerie">
+        <span class="btn-code">E026</span>
+        <div class="btn-icon"><img src="<?= base_url('img/Messagerie.png') ?>" alt="Messagerie"></div>
+        <span>Messagerie</span>
+        <span class="btn-desc">Modifier le message envoyé aux correspondants de club</span>
+    </a>
 
     <!-- Déconnexion -->
-    <div class="menu-btn-wrap" style="grid-column: 5;">
-        <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;">
-            <div class="btn-icon"><i class="bi bi-box-arrow-right" style="color:#842029;"></i></div>
-            <span style="color:#842029;">Se déconnecter</span>
-            <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
-        </a>
-    </div>
+    <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da; grid-column: 5;">
+        <div class="btn-icon"><img src="<?= base_url('img/Quitter.png') ?>" alt="Se déconnecter"></div>
+        <span style="color:#842029;">Se déconnecter</span>
+        <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
+    </a>
 
 </div>
 
