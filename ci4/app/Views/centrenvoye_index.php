@@ -344,6 +344,9 @@
                     <code data-cible="message" data-marqueur="{UTI_NOM}">{UTI_NOM}</code>
                     <code data-cible="message" data-marqueur="{UTI_PRENOM}">{UTI_PRENOM}</code>
                     <code data-cible="message" data-marqueur="{URL_LIGUE}">{URL_LIGUE}</code>
+                    <code data-cible="message" data-marqueur="{YEAR_PHASE}">{YEAR_PHASE}</code>
+                    <code data-cible="message" data-marqueur="{PHASE}">{PHASE}</code>
+                    <code data-cible="message" data-marqueur="{URL_INFO_RENCONTRE}">{URL_INFO_RENCONTRE}</code>
                     <code data-cible="message" data-marqueur="{URL_DISPONIBILITE_JA}">{URL_DISPONIBILITE_JA}</code>
                 </div>
                 <div id="cart-convocation" style="display:none;margin-top:.2rem;">
