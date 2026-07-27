@@ -322,6 +322,14 @@
                 <input type="email" id="txt-cc" class="form-control form-control-sm" style="max-width:280px;" maxlength="150">
             </div>
 
+            <div class="mb-2 d-flex align-items-center gap-2" id="grp-replyto">
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="chk-replyto">
+                    <label class="form-check-label" for="chk-replyto">Reply-To :</label>
+                </div>
+                <input type="email" id="txt-replyto" class="form-control form-control-sm" style="max-width:280px;" readonly tabindex="-1">
+            </div>
+
             <div class="mb-2">
                 <label class="form-label" for="txt-sujet">Sujet :</label>
                 <input type="text" id="txt-sujet" class="form-control form-control-sm" maxlength="150">
@@ -519,14 +527,22 @@ $('#chk-cc').on('change', function () {
     $('#txt-cc').prop('disabled', !this.checked);
 });
 
+$('#chk-replyto').on('change', function () {
+    $('#txt-replyto').prop('disabled', !this.checked);
+});
+
 function chargerModele(type) {
-    const m = MODELES[type] || { sujet: '', message: '', cc: false };
+    const m = MODELES[type] || { sujet: '', message: '', cc: false, replyto: false };
     $('#txt-sujet').val(m.sujet || '');
     $('#txt-message').val(m.message || '');
     // Cc coché par défaut selon le modèle (E026), mais toujours modifiable
     // avant l'envoi — la case reste visible même si le modèle a Cc désactivé.
     $('#chk-cc').prop('checked', !!m.cc);
     $('#txt-cc').val(MON_EMAIL).prop('disabled', !m.cc);
+    // Reply-To coché par défaut selon le modèle (E026) — même principe que Cc,
+    // mais l'adresse est toujours celle du nominateur connecté (champ lecture seule).
+    $('#chk-replyto').prop('checked', !!m.replyto);
+    $('#txt-replyto').val(MON_EMAIL).prop('disabled', !m.replyto);
     // Afficher/masquer les sections du cartouche selon le type actif
     $('#cart-convocation').toggle(type === 'Convocation');
     $('#cart-liste-nom').toggle(type === 'Liste nomination');
@@ -812,6 +828,7 @@ function demarrerEnvoi(sujet, message, ids) {
                 sujet, message,
                 saison:  saisonCourante ?? '',
                 cc:      $('#chk-cc').is(':checked') ? $('#txt-cc').val().trim() : '',
+                reply_to: $('#chk-replyto').is(':checked') ? '1' : '0',
             };
             if (typeActif === 'Convocation') {
                 postData.id_nomination = id;

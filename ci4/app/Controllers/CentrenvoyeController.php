@@ -46,10 +46,10 @@ class CentrenvoyeController extends BaseController
         $pdo = getPDO();
 
         $modeles = [];
-        $rows    = $pdo->query('SELECT Type, Sujet, Message, Cc FROM messagerie ORDER BY Id_Messagerie')->fetchAll();
+        $rows    = $pdo->query('SELECT Type, Sujet, Message, Cc, ReplyTo FROM messagerie ORDER BY Id_Messagerie')->fetchAll();
         foreach ($rows as $r) {
             if (!isset($modeles[$r['Type']])) {
-                $modeles[$r['Type']] = ['sujet' => $r['Sujet'], 'message' => $r['Message'], 'cc' => (bool) $r['Cc']];
+                $modeles[$r['Type']] = ['sujet' => $r['Sujet'], 'message' => $r['Message'], 'cc' => (bool) $r['Cc'], 'replyto' => (bool) $r['ReplyTo']];
             }
         }
 
@@ -284,6 +284,7 @@ class CentrenvoyeController extends BaseController
         $idNomination = (int) ($this->request->getPost('id_nomination') ?? 0);
         $saison       = trim($this->request->getPost('saison') ?? '');
         $cc           = trim($this->request->getPost('cc') ?? '');
+        $replyTo      = $this->request->getPost('reply_to') === '1';
 
         $identifiant = ($type === 'Convocation') ? $idNomination : $idJa;
         if (!$identifiant || $sujet === '' || $message === '') {
@@ -369,13 +370,6 @@ class CentrenvoyeController extends BaseController
         $modeDev = isModeDeveloppement();
         $dest    = getEmailDestinataire($ja['Email']);
         $isHtml  = strip_tags($corps) !== $corps;
-
-        // Reply-To piloté par le modèle système du type envoyé (case ReplyTo, E026) —
-        // pas par le modèle personnalisé du nominateur : comportement uniforme quel
-        // que soit l'expéditeur, comme pour $modeles[$type]['cc'] dans index().
-        $stmtRt = $pdo->prepare('SELECT ReplyTo FROM messagerie WHERE Type = ? ORDER BY Id_Messagerie LIMIT 1');
-        $stmtRt->execute([$type]);
-        $replyTo = (bool) $stmtRt->fetchColumn();
 
         try {
             $mail = getNijacMailer();
