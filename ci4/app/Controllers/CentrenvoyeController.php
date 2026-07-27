@@ -370,11 +370,18 @@ class CentrenvoyeController extends BaseController
         $dest    = getEmailDestinataire($ja['Email']);
         $isHtml  = strip_tags($corps) !== $corps;
 
+        // Reply-To piloté par le modèle système du type envoyé (case ReplyTo, E026) —
+        // pas par le modèle personnalisé du nominateur : comportement uniforme quel
+        // que soit l'expéditeur, comme pour $modeles[$type]['cc'] dans index().
+        $stmtRt = $pdo->prepare('SELECT ReplyTo FROM messagerie WHERE Type = ? ORDER BY Id_Messagerie LIMIT 1');
+        $stmtRt->execute([$type]);
+        $replyTo = (bool) $stmtRt->fetchColumn();
+
         try {
             $mail = getNijacMailer();
             $mail->isHTML($isHtml);
             $mail->addAddress($dest, $ja['Prenom'] . ' ' . $ja['Nom']);
-            if (!empty($moi['email'])) {
+            if ($replyTo && !empty($moi['email'])) {
                 $mail->addReplyTo($moi['email'], $moi['nom'] . ' ' . $moi['prenom']);
             }
             if ($cc !== '' && filter_var($cc, FILTER_VALIDATE_EMAIL)) {

@@ -532,7 +532,7 @@ class NominationController extends BaseController
                     if ($tplConv === null) {
                         $idUtilisateurCourant = (int) ($moi['id'] ?? 0);
                         $r       = resoudreModeleMessagerie($pdo, self::ID_MESSAGE_CONVOCATION, $idUtilisateurCourant);
-                        $tplConv = $r ?: ['Sujet' => 'Convocation — {DIVISION} — {DATE}', 'Message' => '', 'Cc' => 0];
+                        $tplConv = $r ?: ['Sujet' => 'Convocation — {DIVISION} — {DATE}', 'Message' => '', 'Cc' => 0, 'ReplyTo' => 0];
                     }
 
                     $marqueurs = construireMarqueursMessage($nom, $moi, [
@@ -569,6 +569,9 @@ class NominationController extends BaseController
                         $mail->addAddress($dest, $nom['Prenom'] . ' ' . $nom['Nom']);
                         if (!empty($tplConv['Cc']) && !empty($moi['email'])) {
                             $mail->addCC(getEmailDestinataire($moi['email']), trim(($moi['prenom'] ?? '') . ' ' . ($moi['nom'] ?? '')));
+                        }
+                        if (!empty($tplConv['ReplyTo']) && !empty($moi['email'])) {
+                            $mail->addReplyTo($moi['email'], trim(($moi['prenom'] ?? '') . ' ' . ($moi['nom'] ?? '')));
                         }
                         $mail->Subject = ($modeDev && $dest !== $nom['Email'])
                             ? "[DEV → {$nom['Email']}] $sujet" : $sujet;

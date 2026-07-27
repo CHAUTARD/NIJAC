@@ -351,7 +351,7 @@ function remplacerMarqueursMessage(string $sujet, string $corps, array $marqueur
  */
 function resoudreModeleMessagerie(\PDO $pdo, int $idMessagerieSysteme, int $idUtilisateurCourant): ?array
 {
-    $stmt = $pdo->prepare('SELECT Sujet, Message, Cc FROM messagerie WHERE Id_Messagerie = ?');
+    $stmt = $pdo->prepare('SELECT Sujet, Message, Cc, ReplyTo FROM messagerie WHERE Id_Messagerie = ?');
     $stmt->execute([$idMessagerieSysteme]);
     $systeme = $stmt->fetch();
     if (!$systeme) {
@@ -359,7 +359,7 @@ function resoudreModeleMessagerie(\PDO $pdo, int $idMessagerieSysteme, int $idUt
     }
 
     if ($idUtilisateurCourant > 0) {
-        $stmt = $pdo->prepare('SELECT Sujet, Message, Cc FROM messagerie WHERE Sujet = ? AND Id_Utilisateur = ?');
+        $stmt = $pdo->prepare('SELECT Sujet, Message, Cc, ReplyTo FROM messagerie WHERE Sujet = ? AND Id_Utilisateur = ?');
         $stmt->execute([$systeme['Sujet'], $idUtilisateurCourant]);
         $perso = $stmt->fetch();
         if ($perso) {

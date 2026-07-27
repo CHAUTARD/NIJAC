@@ -40,6 +40,15 @@ class MessagerieController extends BaseController
             $pdo->exec('ALTER TABLE messagerie ADD COLUMN Cc TINYINT(1) NOT NULL DEFAULT 0 AFTER Id_Utilisateur');
         }
 
+        // Idem pour ReplyTo (Reply-To = email du nominateur courant) — ajoutée en fin de
+        // table, utilisée par NominationController::envoyerConvocations() (E022) et
+        // CentrenvoyeController::envoyerUn() (E024). Activée par défaut uniquement sur le
+        // message système n°3 "Convocation" (NominationController::ID_MESSAGE_CONVOCATION).
+        if (!in_array('ReplyTo', $cols, true)) {
+            $pdo->exec('ALTER TABLE messagerie ADD COLUMN ReplyTo TINYINT(1) NOT NULL DEFAULT 0');
+            $pdo->exec('UPDATE messagerie SET ReplyTo = 1 WHERE Id_Messagerie = 3');
+        }
+
         // Gabarit système du rappel d'expiration API FFTT (voir config/app_config.php) — créé ici
         // pour qu'il soit visible/éditable dès l'ouverture de cet écran, avant même que la fenêtre
         // des 60 jours ne déclenche l'envoi réel à la connexion admin (AuthController::index()).
@@ -102,7 +111,7 @@ class MessagerieController extends BaseController
 
         if ($this->isCsr()) {
             $stmt = $pdo->prepare(
-                'SELECT Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, Cc, NULL AS NomUtilisateur, 1 AS EstSysteme
+                'SELECT Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, Cc, ReplyTo, NULL AS NomUtilisateur, 1 AS EstSysteme
                  FROM messagerie WHERE Id_Messagerie = ?'
             );
             $stmt->execute([self::ID_MESSAGE_CSR]);
@@ -112,7 +121,7 @@ class MessagerieController extends BaseController
 
         if ($isAdmin) {
             $rows = $pdo->query(
-                "SELECT m.Id_Messagerie, m.Type, m.Sujet, m.Message, m.Id_Utilisateur, m.Cc,
+                "SELECT m.Id_Messagerie, m.Type, m.Sujet, m.Message, m.Id_Utilisateur, m.Cc, m.ReplyTo,
                         CONCAT(u.Nom, ' ', u.Prenom) AS NomUtilisateur,
                         (m.Id_Messagerie BETWEEN 1 AND $nbSys) AS EstSysteme
                  FROM messagerie m
@@ -121,7 +130,7 @@ class MessagerieController extends BaseController
             )->fetchAll();
         } else {
             $stmt = $pdo->prepare(
-                "SELECT Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, Cc, NULL AS NomUtilisateur,
+                "SELECT Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, Cc, ReplyTo, NULL AS NomUtilisateur,
                         (Id_Messagerie BETWEEN 1 AND $nbSys) AS EstSysteme
                  FROM messagerie
                  WHERE Id_Messagerie BETWEEN 1 AND $nbSys OR Id_Utilisateur IS NULL OR Id_Utilisateur = ?
@@ -137,7 +146,7 @@ class MessagerieController extends BaseController
     public function show($id = null): ResponseInterface
     {
         $id   = (int) $id;
-        $stmt = getPDO()->prepare('SELECT Id_Messagerie, Type, Sujet, Message, Cc, Id_Utilisateur FROM messagerie WHERE Id_Messagerie = ?');
+        $stmt = getPDO()->prepare('SELECT Id_Messagerie, Type, Sujet, Message, Cc, ReplyTo, Id_Utilisateur FROM messagerie WHERE Id_Messagerie = ?');
         $stmt->execute([$id]);
         $row = $stmt->fetch();
 
@@ -176,8 +185,8 @@ class MessagerieController extends BaseController
         }
 
         $idUser = $this->isAdmin() ? null : $this->idCurrentUser();
-        $stmt   = $pdo->prepare('INSERT INTO messagerie (Id_Utilisateur, Type, Sujet, Message, Cc) VALUES (?, ?, ?, ?, ?)');
-        $stmt->execute([$idUser, $fields['type'], $fields['sujet'], $fields['message'], $fields['cc']]);
+        $stmt   = $pdo->prepare('INSERT INTO messagerie (Id_Utilisateur, Type, Sujet, Message, Cc, ReplyTo) VALUES (?, ?, ?, ?, ?, ?)');
+        $stmt->execute([$idUser, $fields['type'], $fields['sujet'], $fields['message'], $fields['cc'], $fields['replyto']]);
 
         return $this->response->setJSON(['ok' => true, 'msg' => 'Message créé.', 'id' => (int) $pdo->lastInsertId()]);
     }
@@ -220,8 +229,8 @@ class MessagerieController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => 'Vous ne pouvez modifier que vos propres messages.']);
         }
 
-        $stmt = $pdo->prepare('UPDATE messagerie SET Type=?, Sujet=?, Message=?, Cc=? WHERE Id_Messagerie=?');
-        $stmt->execute([$fields['type'], $fields['sujet'], $fields['message'], $fields['cc'], $id]);
+        $stmt = $pdo->prepare('UPDATE messagerie SET Type=?, Sujet=?, Message=?, Cc=?, ReplyTo=? WHERE Id_Messagerie=?');
+        $stmt->execute([$fields['type'], $fields['sujet'], $fields['message'], $fields['cc'], $fields['replyto'], $id]);
 
         return $this->response->setJSON(['ok' => true, 'msg' => 'Message mis à jour.', 'id' => $id]);
     }
@@ -235,7 +244,7 @@ class MessagerieController extends BaseController
         $id  = (int) $id;
         $pdo = getPDO();
 
-        $src = $pdo->prepare('SELECT Type, Sujet, Message, Cc FROM messagerie WHERE Id_Messagerie = ?');
+        $src = $pdo->prepare('SELECT Type, Sujet, Message, Cc, ReplyTo FROM messagerie WHERE Id_Messagerie = ?');
         $src->execute([$id]);
         $orig = $src->fetch();
 
@@ -243,8 +252,8 @@ class MessagerieController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => 'Message introuvable.']);
         }
 
-        $stmt = $pdo->prepare('INSERT INTO messagerie (Id_Utilisateur, Type, Sujet, Message, Cc) VALUES (?, ?, ?, ?, ?)');
-        $stmt->execute([$this->idCurrentUser(), $orig['Type'], $orig['Sujet'], $orig['Message'], $orig['Cc']]);
+        $stmt = $pdo->prepare('INSERT INTO messagerie (Id_Utilisateur, Type, Sujet, Message, Cc, ReplyTo) VALUES (?, ?, ?, ?, ?, ?)');
+        $stmt->execute([$this->idCurrentUser(), $orig['Type'], $orig['Sujet'], $orig['Message'], $orig['Cc'], $orig['ReplyTo']]);
 
         return $this->response->setJSON(['ok' => true, 'msg' => 'Message copié. Vous pouvez maintenant le personnaliser.', 'id' => (int) $pdo->lastInsertId()]);
     }
@@ -297,8 +306,9 @@ class MessagerieController extends BaseController
             return 'Type invalide.';
         }
 
-        $cc = (($input['cc'] ?? '0') === '1') ? 1 : 0;
+        $cc      = (($input['cc'] ?? '0') === '1') ? 1 : 0;
+        $replyto = (($input['replyto'] ?? '0') === '1') ? 1 : 0;
 
-        return ['type' => $type, 'sujet' => $sujet, 'message' => $message, 'cc' => $cc];
+        return ['type' => $type, 'sujet' => $sujet, 'message' => $message, 'cc' => $cc, 'replyto' => $replyto];
     }
 }
