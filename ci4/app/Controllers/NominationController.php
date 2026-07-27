@@ -563,19 +563,18 @@ class NominationController extends BaseController
                     $modeDev = isModeDeveloppement();
                     $dest    = getEmailDestinataire($nom['Email']);
                     try {
-                        $mail = getNijacMailer();
-                        $mail->isHTML(strip_tags($corps) !== $corps);
+                        $isHtml = strip_tags($corps) !== $corps;
+                        $mail   = getNijacMailer();
+                        $mail->isHTML($isHtml);
                         $mail->addAddress($dest, $nom['Prenom'] . ' ' . $nom['Nom']);
                         if (!empty($tplConv['Cc']) && !empty($moi['email'])) {
                             $mail->addCC(getEmailDestinataire($moi['email']), trim(($moi['prenom'] ?? '') . ' ' . ($moi['nom'] ?? '')));
                         }
                         $mail->Subject = ($modeDev && $dest !== $nom['Email'])
                             ? "[DEV → {$nom['Email']}] $sujet" : $sujet;
-                        if ($mail->ContentType === 'text/html') {
-                            $mail->Body    = $corps;
+                        $mail->Body = $corps;
+                        if ($isHtml) {
                             $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $corps));
-                        } else {
-                            $mail->Body = nl2br(htmlspecialchars($corps, ENT_NOQUOTES, 'UTF-8'));
                         }
                         $mail->send();
                         $envoyes++;
