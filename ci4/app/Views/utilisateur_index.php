@@ -231,9 +231,9 @@
         <div class="mb-2">
             <label class="form-label" for="cbo-role">Rôle (*) :</label>
             <select id="cbo-role" class="form-select form-select-sm">
-                <option value="Administrateur">Administrateur</option>
-                <option value="Nominateur" selected>Nominateur</option>
-                <option value="CSR">CSR</option>
+                <?php foreach ($roles as $r): ?>
+                <option value="<?= esc($r) ?>" <?= $r === 'Nominateur' ? 'selected' : '' ?>><?= esc($r) ?></option>
+                <?php endforeach; ?>
             </select>
         </div>
 

@@ -192,12 +192,13 @@
     </div>
 
     <div id="panel-query">
-        <textarea id="sql-input" placeholder="SELECT * FROM ja LIMIT 50;" spellcheck="false"></textarea>
+        <textarea id="sql-input" placeholder="SELECT * FROM ja LIMIT 50;&#10;UPDATE ja SET ... WHERE ...;" spellcheck="false"></textarea>
 
         <div id="action-bar">
             <button class="btn btn-primary btn-sm" id="btn-executer">
                 <i class="bi bi-play-fill me-1"></i>Exécuter (Ctrl+Entrée)
             </button>
+            <span class="text-muted" style="font-size:.78rem;">Plusieurs requêtes séparées par « ; » sont exécutées à la suite.</span>
             <button class="btn btn-outline-secondary btn-sm" id="btn-effacer">
                 <i class="bi bi-eraser me-1"></i>Effacer
             </button>
@@ -277,37 +278,65 @@ function executerRequete(sqlOverride) {
     $.post(`${DB_ADMIN_BASE}/sql`, { sql }, function (res) {
         spinner(false);
         if (!res.ok) {
-            $('#tbl-result').hide();
-            $('#empty-msg').show().html(`<i class="bi bi-x-circle-fill text-danger fs-2 d-block mb-2"></i><span class="text-danger">${escHtml(res.msg)}</span>`);
-            $('#result-meta').text('');
+            const succes = (res.results || []).filter(r => r.ok);
+            if (succes.length) {
+                afficherResultatsMultiples(succes);
+            } else {
+                $('#tbl-result').hide();
+                $('#empty-msg').show().html(`<i class="bi bi-x-circle-fill text-danger fs-2 d-block mb-2"></i><span class="text-danger">${escHtml(res.msg)}</span>`);
+                $('#result-meta').text('');
+            }
             setStatus('Erreur : ' + res.msg, false);
             return;
         }
 
-        if (res.type === 'select') {
-            currentTable  = detecterTable(sql);
-            currentRows   = res.rows;
-            currentPkCols = [];
-            if (currentTable) chargerClePrimaire(currentTable).then(cols => currentPkCols = cols);
-            afficherResultats(res.cols, res.rows);
-            $('#result-meta').text(`${res.rows.length} ligne(s) — ${res.ms} ms`);
-        } else {
-            currentTable  = null;
-            currentRows   = [];
-            currentPkCols = [];
-            $('#tbl-result').hide();
-            $('#empty-msg').show().html(`<i class="bi bi-check-circle-fill text-success fs-2 d-block mb-2"></i>${res.affected} ligne(s) affectée(s).`);
-            $('#result-meta').text(`${res.ms} ms`);
-        }
+        afficherResultatsMultiples(res.results);
         setStatus('Prêt.');
     }, 'json').fail(() => { spinner(false); setStatus('Erreur réseau.', false); });
+}
+
+// Affiche le résultat d'une ou plusieurs requêtes exécutées à la suite : le tableau
+// central montre le dernier SELECT rencontré (pour permettre le double-clic → UPDATE),
+// et la barre de résultat récapitule chaque requête (nombre de lignes / affectées).
+function afficherResultatsMultiples(results) {
+    currentTable = null;
+    currentRows  = [];
+    currentPkCols = [];
+
+    let dernierSelect = null;
+    for (let j = results.length - 1; j >= 0; j--) {
+        if (results[j].type === 'select') { dernierSelect = results[j]; break; }
+    }
+
+    if (dernierSelect) {
+        currentTable = detecterTable(dernierSelect.sql);
+        currentRows  = dernierSelect.rows;
+        if (currentTable) chargerClePrimaire(currentTable).then(cols => currentPkCols = cols);
+        afficherResultats(dernierSelect.cols, dernierSelect.rows);
+    } else {
+        $('#tbl-result').hide();
+        $('#empty-msg').show().html(`<i class="bi bi-check-circle-fill text-success fs-2 d-block mb-2"></i>${results[results.length - 1].affected} ligne(s) affectée(s).`);
+    }
+
+    const totalMs = results.reduce((s, r) => s + r.ms, 0).toFixed(2);
+    if (results.length === 1) {
+        const r = results[0];
+        $('#result-meta').text(r.type === 'select' ? `${r.rows.length} ligne(s) — ${r.ms} ms` : `${r.ms} ms`);
+    } else {
+        const recap = results.map((r, i) => r.type === 'select'
+            ? `#${i + 1} SELECT : ${r.rows.length} ligne(s)`
+            : `#${i + 1} : ${r.affected} ligne(s) affectée(s)`
+        ).join(' · ');
+        $('#result-meta').text(`${results.length} requête(s) — ${recap} — ${totalMs} ms total`);
+    }
 }
 
 // Récupère la/les colonne(s) de la clé primaire d'une table (pour cibler l'UPDATE généré au double-clic).
 function chargerClePrimaire(table) {
     return new Promise(resolve => {
         $.post(`${DB_ADMIN_BASE}/sql`, { sql: `SHOW KEYS FROM \`${table}\` WHERE Key_name = 'PRIMARY'` }, function (res) {
-            resolve(res.ok && res.type === 'select' ? res.rows.map(r => r.Column_name) : []);
+            const r = res.ok && res.results && res.results[0];
+            resolve(r && r.type === 'select' ? r.rows.map(x => x.Column_name) : []);
         }, 'json').fail(() => resolve([]));
     });
 }

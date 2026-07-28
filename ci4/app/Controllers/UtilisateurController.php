@@ -32,9 +32,30 @@ class UtilisateurController extends BaseController
             'changeLogin' => !empty($moi['change_login']),
             'moiId'       => (int) ($moi['id'] ?? 0),
             'deptActifs'  => getDeptActifs(),
+            'roles'       => $this->rolesValides(),
         ];
 
         return view('utilisateur_index', $data);
+    }
+
+    /**
+     * Lit les valeurs possibles de l'ENUM utilisateur.Role directement en base, pour que la
+     * combobox Rôle (E009) et la validation de extractFields() restent synchronisées avec la
+     * colonne sans modification de code si un rôle est ajouté (voir ajouterValeurEnum() /
+     * assurerRoleCsr() dans config/app_config.php) — même pattern que MessagerieController::typesValides().
+     */
+    private function rolesValides(): array
+    {
+        $col   = getPDO()->query("SHOW COLUMNS FROM utilisateur WHERE Field = 'Role'")->fetch();
+        $roles = [];
+        if ($col && preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
+            foreach (str_getcsv($m[1], ',', "'") as $v) {
+                $roles[] = trim($v);
+            }
+            sort($roles, SORT_STRING | SORT_FLAG_CASE);
+        }
+
+        return $roles;
     }
 
     public function data(): ResponseInterface
@@ -139,7 +160,7 @@ class UtilisateurController extends BaseController
         if ($isNew && $mdp === '') {
             return 'Un mot de passe est obligatoire pour un nouvel utilisateur.';
         }
-        if (!in_array($role, ['Administrateur', 'Nominateur', 'CSR'], true)) {
+        if (!in_array($role, $this->rolesValides(), true)) {
             return 'Rôle invalide.';
         }
         if ($dept <= 0) {

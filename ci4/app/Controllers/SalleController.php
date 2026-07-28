@@ -310,7 +310,14 @@ class SalleController extends BaseController
             return $this->response->setJSON(['ok' => true, 'op' => null, 'msg' => "Club $numClub : aucune donnée FFTT"]);
         }
 
-        $toArr = fn ($v) => is_array($v) ? (isset($v[0]) ? $v : []) : ($v !== '' && $v !== null ? [(string) $v] : []);
+        // Convertit chaque champ FFTT en tableau de chaînes scalaires. FFTT peut renvoyer un
+        // élément imbriqué (array) au lieu d'une chaîne pour une entrée isolée du XML — sans
+        // le array_map ci-dessous, cet élément atteint trim()/PDO::execute() tel quel : trim()
+        // plante, et PDO convertit silencieusement un tableau bindé en la chaîne littérale
+        // "Array" au lieu de lever une erreur (bug constaté en prod sur Salle.Nom).
+        $toArr = fn ($v) => is_array($v)
+            ? (isset($v[0]) ? array_map(fn ($x) => is_array($x) ? '' : (string) $x, $v) : [])
+            : ($v !== '' && $v !== null ? [(string) $v] : []);
 
         $nomsalles = $toArr($detail['nomsalle'] ?? '');
         $adrs1     = $toArr($detail['adressesalle1'] ?? '');
@@ -358,10 +365,8 @@ class SalleController extends BaseController
             $nom = trim($nomsalles[$i] ?? '');
             if ($nom === '') continue;
             $adr1    = trim($adrs1[$i] ?? '');
-            $adr2Raw = $adrs2[$i] ?? '';
-            $adr2    = is_array($adr2Raw) ? '' : trim((string) $adr2Raw);
-            $adr3Raw = $adrs3[$i] ?? '';
-            $adr3    = is_array($adr3Raw) ? '' : trim((string) $adr3Raw);
+            $adr2    = trim($adrs2[$i] ?? '');
+            $adr3    = trim($adrs3[$i] ?? '');
             $adresse = trim(implode(' ', array_filter([$adr1, $adr2, $adr3]))) ?: null;
             $cp      = trim($cps[$i] ?? '');
             $ville   = mb_strtoupper(trim($villes[$i] ?? ''), 'UTF-8');

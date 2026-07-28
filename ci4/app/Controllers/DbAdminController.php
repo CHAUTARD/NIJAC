@@ -54,10 +54,14 @@ class DbAdminController extends BaseController
         }
 
         try {
-            $rows   = getPDO()->query('SHOW TABLE STATUS')->fetchAll();
+            $pdo    = getPDO();
+            $noms   = $pdo->query('SHOW TABLES')->fetchAll(\PDO::FETCH_COLUMN);
             $tables = array_map(
-                static fn ($r) => ['name' => $r['Name'], 'rows' => (int) $r['Rows']],
-                $rows
+                // SHOW TABLE STATUS ne donne qu'une estimation (stats InnoDB persistées, recalculées en
+                // tâche de fond après ~10% de lignes modifiées) : après un TRUNCATE + import en masse,
+                // ce nombre peut rester obsolète un moment. COUNT(*) est exact et ces tables restent petites.
+                static fn ($nom) => ['name' => $nom, 'rows' => (int) $pdo->query('SELECT COUNT(*) FROM `' . $nom . '`')->fetchColumn()],
+                $noms
             );
             usort($tables, static fn ($a, $b) => strcasecmp($a['name'], $b['name']));
 
@@ -73,28 +77,121 @@ class DbAdminController extends BaseController
             return $guard;
         }
 
-        $sql = trim($this->request->getPost('sql') ?? '');
-        if ($sql === '') {
+        $sqlInput   = trim($this->request->getPost('sql') ?? '');
+        $statements = $this->splitStatements($sqlInput);
+        if (!$statements) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Requête vide.']);
         }
 
-        try {
-            $pdo  = getPDO();
-            $t0   = microtime(true);
-            $stmt = $pdo->query($sql);
-            $ms   = round((microtime(true) - $t0) * 1000, 2);
+        $pdo     = getPDO();
+        $results = [];
+        foreach ($statements as $idx => $stmtSql) {
+            try {
+                $t0   = microtime(true);
+                $stmt = $pdo->query($stmtSql);
+                $ms   = round((microtime(true) - $t0) * 1000, 2);
 
-            $type = strtoupper((string) strtok(ltrim($sql), " \t\n"));
-            if (in_array($type, ['SELECT', 'SHOW', 'DESCRIBE', 'DESC', 'EXPLAIN'], true)) {
-                $rows = $stmt->fetchAll();
-                $cols = $rows ? array_keys($rows[0]) : [];
+                $type = strtoupper((string) strtok(ltrim($stmtSql), " \t\n"));
+                if (in_array($type, ['SELECT', 'SHOW', 'DESCRIBE', 'DESC', 'EXPLAIN'], true)) {
+                    $rows = $stmt->fetchAll();
+                    $cols = $rows ? array_keys($rows[0]) : [];
 
-                return $this->response->setJSON(['ok' => true, 'type' => 'select', 'cols' => $cols, 'rows' => $rows, 'ms' => $ms]);
+                    $results[] = ['ok' => true, 'type' => 'select', 'sql' => $stmtSql, 'cols' => $cols, 'rows' => $rows, 'ms' => $ms];
+                } else {
+                    $results[] = ['ok' => true, 'type' => 'write', 'sql' => $stmtSql, 'affected' => $stmt->rowCount(), 'ms' => $ms];
+                }
+            } catch (\Throwable $e) {
+                $results[] = ['ok' => false, 'sql' => $stmtSql, 'msg' => $e->getMessage()];
+
+                return $this->response->setJSON([
+                    'ok'      => false,
+                    'msg'     => sprintf('Requête %d/%d : %s', $idx + 1, count($statements), $e->getMessage()),
+                    'results' => $results,
+                ]);
+            }
+        }
+
+        return $this->response->setJSON(['ok' => true, 'results' => $results]);
+    }
+
+    /**
+     * Découpe une saisie en plusieurs ordres SQL séparés par ";", en ignorant les points-virgules
+     * situés à l'intérieur de littéraux ('...', "...", `...`) ou de commentaires (--, #, /* *\/).
+     *
+     * @return string[]
+     */
+    private function splitStatements(string $sql): array
+    {
+        $len        = strlen($sql);
+        $statements = [];
+        $buf        = '';
+        $quote      = null;
+        $i          = 0;
+
+        while ($i < $len) {
+            $ch = $sql[$i];
+
+            if ($quote !== null) {
+                if ($ch === '\\' && $quote !== '`' && $i + 1 < $len) {
+                    $buf .= $ch . $sql[$i + 1];
+                    $i   += 2;
+                    continue;
+                }
+                $buf .= $ch;
+                if ($ch === $quote) {
+                    if (($sql[$i + 1] ?? null) === $quote) {
+                        $buf .= $quote;
+                        $i   += 2;
+                        continue;
+                    }
+                    $quote = null;
+                }
+                $i++;
+                continue;
             }
 
-            return $this->response->setJSON(['ok' => true, 'type' => 'write', 'affected' => $stmt->rowCount(), 'ms' => $ms]);
-        } catch (\Throwable $e) {
-            return $this->response->setJSON(['ok' => false, 'msg' => $e->getMessage()]);
+            if ($ch === "'" || $ch === '"' || $ch === '`') {
+                $quote = $ch;
+                $buf  .= $ch;
+                $i++;
+                continue;
+            }
+
+            if (($ch === '-' && ($sql[$i + 1] ?? '') === '-') || $ch === '#') {
+                while ($i < $len && $sql[$i] !== "\n") {
+                    $i++;
+                }
+                continue;
+            }
+
+            if ($ch === '/' && ($sql[$i + 1] ?? '') === '*') {
+                $i += 2;
+                while ($i < $len && !($sql[$i] === '*' && ($sql[$i + 1] ?? '') === '/')) {
+                    $i++;
+                }
+                $i += 2;
+                continue;
+            }
+
+            if ($ch === ';') {
+                $trimmed = trim($buf);
+                if ($trimmed !== '') {
+                    $statements[] = $trimmed;
+                }
+                $buf = '';
+                $i++;
+                continue;
+            }
+
+            $buf .= $ch;
+            $i++;
         }
+
+        $trimmed = trim($buf);
+        if ($trimmed !== '') {
+            $statements[] = $trimmed;
+        }
+
+        return $statements;
     }
 }
