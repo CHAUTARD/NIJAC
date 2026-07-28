@@ -370,20 +370,20 @@
     </div>
 
     <div class="menu-btn-wrap">
-        <a href="<?= site_url('disponibilites') ?>" class="menu-btn btn-correspondant">
-            <span class="btn-code">E021</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Dispo.png') ?>" alt="Disponibilités JA"></div>
-            <span>Disponibilités JA</span>
-            <span class="btn-desc">Saisir ou modifier les disponibilités d'un JA par département</span>
-        </a>
-    </div>
-
-    <div class="menu-btn-wrap">
         <a href="<?= site_url('desiderata-clubs') ?>" class="menu-btn btn-r34">
             <span class="btn-code">E027</span>
             <div class="btn-icon"><img src="<?= base_url('img/R3_4.png') ?>" alt="Désidératas clubs"></div>
             <span>Désidératas clubs</span>
             <span class="btn-desc">Envoi du questionnaire de désidératas (PN à R4) aux clubs</span>
+        </a>
+    </div>
+
+    <div class="menu-btn-wrap">
+        <a href="<?= site_url('disponibilites') ?>" class="menu-btn btn-correspondant">
+            <span class="btn-code">E021</span>
+            <div class="btn-icon"><img src="<?= base_url('img/Dispo.png') ?>" alt="Disponibilités JA"></div>
+            <span>Disponibilités JA</span>
+            <span class="btn-desc">Saisir ou modifier les disponibilités d'un JA par département</span>
         </a>
     </div>
 
@@ -399,6 +399,15 @@
         <?php endif; ?>
     </div>
 
+    <div class="menu-btn-wrap">
+        <a href="<?= site_url('centrenvoye') ?>" class="menu-btn btn-envoi">
+            <span class="btn-code">E024</span>
+            <div class="btn-icon"><img src="<?= base_url('img/Centrenvoye.png') ?>" alt="Centre d'envoi"></div>
+            <span>Centre d'envoi</span>
+            <span class="btn-desc">Envoyer les messages aux JA et correspondants</span>
+        </a>
+    </div>
+
     <!-- Ligne 2 -->
 
     <div class="menu-btn-wrap">
@@ -407,15 +416,6 @@
             <div class="btn-icon"><img src="<?= base_url('img/Messagerie.png') ?>" alt="Messagerie"></div>
             <span>Messagerie</span>
             <span class="btn-desc">Préparer les messages pour JA et correspondants de club</span>
-        </a>
-    </div>
-
-    <div class="menu-btn-wrap">
-        <a href="<?= site_url('centrenvoye') ?>" class="menu-btn btn-envoi">
-            <span class="btn-code">E024</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Centrenvoye.png') ?>" alt="Centre d'envoi"></div>
-            <span>Centre d'envoi</span>
-            <span class="btn-desc">Envoyer les messages aux JA et correspondants</span>
         </a>
     </div>
 

@@ -86,20 +86,6 @@ class ImportRencontresNatController extends BaseController
                 $this->dedupliquerEquipeNationale($pdo0);
                 $pdo0->exec('ALTER TABLE equipe_nationale ADD UNIQUE KEY uq_nom_div (Nom(150), Division)');
             }
-
-            // Calendrier des journées (feuille 1 / bloc CALENDRIER du fichier Excel/texte analysé à
-            // l'étape 1) : un ordre générique de rang par journée (Ordre, JSON, ex: [[1,8],[2,7],...]),
-            // commun à toutes les divisions/poules. Persisté ici plutôt que gardé en mémoire côté page
-            // (JS) pour survivre à un rechargement de page ou une nouvelle session admin — c'est ce qui
-            // manquait auparavant et faisait disparaître le cartouche "Ordre des rencontres" et l'étape 3
-            // après un rechargement.
-            $pdo0->exec('
-                CREATE TABLE IF NOT EXISTS nationale_calendrier (
-                    Journee TINYINT UNSIGNED NOT NULL PRIMARY KEY,
-                    Date    DATE             NOT NULL,
-                    Ordre   JSON             NOT NULL
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            ');
         } catch (\PDOException $e) {
         }
     }
