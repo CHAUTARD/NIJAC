@@ -120,190 +120,6 @@
             gap: 1rem;
         }
 
-        /* ── Corps calendrier ────────────────────────────────────────────── */
-        #section-calendrier {
-            max-width: 860px;
-            margin: 0 auto;
-            padding: .75rem 1rem 5rem;
-            display: none;
-        }
-
-        /* ── Carte journée ───────────────────────────────────────────────── */
-        .journee-card {
-            background: #fff;
-            border: 1px solid #d0d8e8;
-            border-radius: 10px;
-            margin-bottom: .9rem;
-            overflow: hidden;
-            box-shadow: 0 1px 4px rgba(0,0,0,.07);
-            transition: box-shadow .15s;
-        }
-        .journee-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,.12); }
-
-        .journee-card.statut-O { border-left: 5px solid var(--col-dispo);   }
-        .journee-card.statut-P { border-left: 5px solid var(--col-partiel); }
-        .journee-card.statut-N { border-left: 5px solid var(--col-nodispo); }
-
-        .journee-body {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding: .7rem 1rem;
-            flex-wrap: wrap;
-        }
-
-        .j-info { flex: 1; min-width: 200px; }
-        .j-num  { font-size: .97rem; font-weight: 800; color: var(--nijac-blue); line-height: 1.4; }
-
-        .j-btns { display: flex; gap: .45rem; flex-wrap: wrap; }
-
-        .btn-statut {
-            display: inline-flex;
-            align-items: center;
-            gap: .35rem;
-            padding: .38rem .85rem;
-            border-radius: 20px;
-            border: 2px solid currentColor;
-            font-size: .82rem;
-            font-weight: 600;
-            cursor: pointer;
-            background: #fff;
-            transition: background .15s, color .15s, transform .08s;
-            white-space: nowrap;
-        }
-        .btn-statut:active { transform: scale(.96); }
-
-        .btn-statut.dispo  { color: var(--col-dispo);   }
-        .btn-statut.dispo.actif  {
-            background: var(--col-dispo);
-            color: #fff;
-        }
-        .btn-statut.partiel { color: var(--col-partiel); }
-        .btn-statut.partiel.actif {
-            background: var(--col-partiel);
-            color: #fff;
-        }
-        .btn-statut.nodispo { color: var(--col-nodispo); }
-        .btn-statut.nodispo.actif {
-            background: var(--col-nodispo);
-            color: #fff;
-        }
-
-        .j-selec-badge {
-            font-size: .75rem;
-            background: #e8f5e9;
-            color: var(--col-dispo);
-            border-radius: 10px;
-            padding: .1rem .55rem;
-            display: none;
-        }
-        .statut-P .j-selec-badge { display: inline; }
-
-        /* ── Panneau Partiel (rencontres) ────────────────────────────────── */
-        .panel-partiel {
-            border-top: 1px solid #e0e8f0;
-            background: #fafbfd;
-            display: none;
-        }
-        .panel-partiel.ouvert { display: block; }
-
-        .panel-partiel-titre {
-            padding: .45rem 1rem;
-            font-size: .8rem;
-            font-weight: 700;
-            color: var(--col-partiel);
-            border-bottom: 1px solid #eef0f4;
-            display: flex;
-            align-items: center;
-            gap: .5rem;
-        }
-        .panel-partiel-titre .sel-tout-btn {
-            margin-left: auto;
-            font-size: .75rem;
-            font-weight: 600;
-            color: var(--nijac-blue);
-            cursor: pointer;
-            text-decoration: underline dotted;
-            background: none;
-            border: none;
-            padding: 0;
-        }
-
-        .renc-row {
-            display: flex;
-            align-items: center;
-            gap: .75rem;
-            padding: .55rem 1rem;
-            border-bottom: 1px solid #eef0f4;
-            cursor: pointer;
-            transition: background .1s;
-        }
-        .renc-row:last-child { border-bottom: none; }
-        .renc-row:hover { background: #f0f4fa; }
-        .renc-row.selectionne { background: #e8f5e9; }
-        .renc-row.selectionne .renc-check { color: var(--col-dispo); }
-
-        .renc-check {
-            width: 22px;
-            height: 22px;
-            border: 2px solid #adb5bd;
-            border-radius: 5px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            color: transparent;
-            font-size: 1rem;
-            transition: border-color .1s, color .1s, background .1s;
-        }
-        .renc-row.selectionne .renc-check {
-            background: var(--col-dispo);
-            border-color: var(--col-dispo);
-            color: #fff;
-        }
-
-        .renc-info { flex: 1; min-width: 0; }
-        .renc-heure  { font-size: .8rem; color: #555; font-weight: 600; width: 42px; flex-shrink: 0; }
-        .renc-div    { font-size: .75rem; background: var(--nijac-blue); color: #fff;
-                       border-radius: 8px; padding: .1rem .45rem; white-space: nowrap; flex-shrink: 0; }
-        .renc-match  { font-size: .87rem; font-weight: 600; }
-        .renc-lieu   { font-size: .77rem; color: #666; margin-top: .1rem; }
-        .renc-lieu i { color: #e65100; }
-
-        .dist-badge {
-            font-size: .75rem;
-            font-weight: 700;
-            border-radius: 10px;
-            padding: .1rem .55rem;
-            flex-shrink: 0;
-            white-space: nowrap;
-        }
-        .dist-ok   { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
-        .dist-mid  { background: #fff8e1; color: #e65100; border: 1px solid #ffcc80; }
-        .dist-far  { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
-        .dist-none { background: #f5f5f5; color: #9e9e9e; border: 1px solid #e0e0e0; }
-
-        .j-dist {
-            font-size: .78rem;
-            color: #555;
-            margin-top: .2rem;
-        }
-        .j-dist .dist-badge { font-size: .72rem; }
-
-        /* ── Barre sticky de sauvegarde ──────────────────────────────────── */
-        #barre-save {
-            position: fixed;
-            bottom: 0; left: 0; right: 0;
-            background: #fff;
-            border-top: 2px solid #c8d4e8;
-            padding: .5rem 1.25rem;
-            display: none;
-            align-items: center;
-            gap: 1rem;
-            z-index: 150;
-        }
-        #lbl-recap-save { font-size: .83rem; color: #555; flex: 1; }
-
         .spin-sm {
             display: inline-block;
             width: 1rem; height: 1rem;
@@ -330,7 +146,6 @@
             width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
         }
         .dot-O { background: var(--col-dispo); }
-        .dot-P { background: var(--col-partiel); }
         .dot-N { background: var(--col-nodispo); }
         .dot-vide { background: #cbd5e1; border: 1px solid #94a3b8; }
 
@@ -373,7 +188,6 @@
         }
         .cal-jour.jour-journee:hover { filter: brightness(1.12); transform: scale(1.1); }
         .cal-jour.statut-O { background: var(--col-dispo);   color: #fff; }
-        .cal-jour.statut-P { background: var(--col-partiel); color: #fff; }
         .cal-jour.statut-N { background: var(--col-nodispo); color: #fff; }
         .cal-jour.statut-vide { background: #e2e8f0; color: #475569; }
         .cal-jour.today { outline: 2px solid var(--nijac-blue); outline-offset: 1px; }
@@ -446,39 +260,37 @@
     </div>
 </div>
 
-<!-- ── Modale Journée ──────────────────────────────────────────────────────── -->
+<!-- ── Modale Note / Département (ouverte au passage en Disponible) ─────────── -->
 <div class="modal fade" id="modal-journee" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header" style="background:var(--nijac-blue);color:#fff;padding:.6rem 1rem">
                 <h5 class="modal-title" id="mj-titre" style="font-size:.95rem;font-weight:700">
-                    <i class="bi bi-calendar-week me-2"></i>Journée
+                    <i class="bi bi-calendar-week me-2"></i>Disponible
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body p-0">
-                <div class="d-flex gap-2 flex-wrap p-3 border-bottom" id="mj-btns">
-                    <button class="btn-statut dispo"   data-statut="O" id="mj-btn-O">
-                        <i class="bi bi-check-circle"></i>Disponible
-                    </button>
-                    <button class="btn-statut partiel" data-statut="P" id="mj-btn-P">
-                        <i class="bi bi-exclamation-circle"></i>Partiel
-                    </button>
-                    <button class="btn-statut nodispo" data-statut="N" id="mj-btn-N">
-                        <i class="bi bi-x-circle"></i>Non disponible
-                    </button>
-                    <span id="mj-spin" class="spin-sm ms-auto align-self-center d-none"></span>
-                </div>
-                <div id="mj-panel-partiel" style="display:none">
-                    <div class="panel-partiel-titre">
-                        <i class="bi bi-geo-alt-fill"></i>Lieux qui reçoivent — cochez les rencontres
-                        <button class="sel-tout-btn" id="mj-sel-tout">Tout sélectionner</button>
+            <div class="modal-body">
+                <div id="mj-commentaire" class="alert alert-info py-2 px-3" style="font-size:.85rem;display:none"></div>
+                <div id="mj-departements" style="display:none" class="mb-3">
+                    <label class="form-label fw-bold" style="font-size:.85rem">Département(s) concerné(s)</label>
+                    <div class="d-flex flex-wrap gap-3">
+                        <?php foreach (['14', '27', '50', '61', '76'] as $d): ?>
+                        <label style="font-size:.85rem">
+                            <input type="checkbox" class="form-check-input me-1 mj-dept" value="<?= $d ?>"><?= $d ?>
+                        </label>
+                        <?php endforeach; ?>
                     </div>
-                    <div id="mj-renc-body" style="max-height:340px;overflow-y:auto"></div>
                 </div>
+                <label class="form-label fw-bold" style="font-size:.85rem">Note (facultatif)</label>
+                <textarea id="mj-note" class="form-control" rows="3" placeholder="Précision éventuelle…"></textarea>
             </div>
             <div class="modal-footer py-2">
+                <span id="mj-spin" class="spin-sm d-none me-auto"></span>
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fermer</button>
+                <button type="button" id="mj-btn-save" class="btn btn-primary btn-sm px-4">
+                    <i class="bi bi-floppy me-1"></i>Enregistrer
+                </button>
             </div>
         </div>
     </div>
@@ -502,23 +314,10 @@
     </div>
     <div class="cal-legende">
         <span class="cal-legende-item"><span class="cal-dot dot-O"></span>Disponible</span>
-        <span class="cal-legende-item"><span class="cal-dot dot-P"></span>Partiel</span>
         <span class="cal-legende-item"><span class="cal-dot dot-N"></span>Non disponible</span>
         <span class="cal-legende-item"><span class="cal-dot dot-vide"></span>Pas de réponse</span>
     </div>
     <div class="cal-mois-grille" id="cal-mois-grille"></div>
-</div>
-
-<!-- ── Calendrier des journées ───────────────────────────────────────────── -->
-<div id="section-calendrier"></div>
-
-<!-- ── Barre sticky de sauvegarde ────────────────────────────────────────── -->
-<div id="barre-save">
-    <span id="lbl-recap-save">Choisissez vos disponibilités pour chaque journée.</span>
-    <button id="btn-tout-sauvegarder" class="btn btn-success btn-sm px-4">
-        <i class="bi bi-floppy me-1"></i>Tout enregistrer
-    </button>
-    <span id="save-spinner" class="spin-sm d-none"></span>
 </div>
 
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
@@ -528,6 +327,9 @@
 'use strict';
 
 const BASE = '<?= site_url('disponibilite-ja') ?>';
+// Rejoué sur chaque appel d'écriture : resolveIdJaAutorise() (contrôleur) exige
+// ce token à chaque requête, un JA public n'ayant pas de session pour en tenir lieu.
+const TOKEN_JA = <?= json_encode($tokenJa) ?>;
 
 // Saison courante lue depuis la configuration (ex : "2026/2027")
 const CONFIG_SAISON = <?= json_encode(getConfig('saison') ?: '') ?>;
@@ -543,40 +345,18 @@ const CONFIG_PHASE = <?= strpos(getAnneePhase(), '-') !== false ? 2 : 1 ?>;
 
 let idJaCourant  = null;
 let nomJaCourant = '';
+let jaDept       = '';
 
-let etatJournees = {};
+let etatDates = {};
 
-const JOURS      = ['dim.','lun.','mar.','mer.','jeu.','ven.','sam.'];
-const MOIS       = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
 const JOURS_LONG = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
 const MOIS_LONG  = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-
-function distBadge(km, label) {
-    if (km === null || km === undefined || km === '') {
-        return `<span class="dist-badge dist-none" title="Lieu inconnu"><i class="bi bi-geo-alt"></i> —</span>`;
-    }
-    const v   = +km;
-    const cls = v <= 40 ? 'dist-ok' : (v <= 80 ? 'dist-mid' : 'dist-far');
-    const txt = label !== undefined ? label : `${v} km`;
-    return `<span class="dist-badge ${cls}" title="${v} km du domicile du JA"><i class="bi bi-signpost-split"></i> ${txt}</span>`;
-}
-
-function formatDateCourt(d) {
-    if (!d) return '';
-    const [y, m, j] = d.split('-').map(Number);
-    const wd = new Date(y, m-1, j).getDay();
-    return `${JOURS[wd]} ${j} ${MOIS[m-1]}. ${y}`;
-}
 
 function formatDateLong(d) {
     if (!d) return '';
     const [y, m, j] = d.split('-').map(Number);
     const wd = new Date(y, m-1, j).getDay();
     return `${JOURS_LONG[wd]} ${j} ${MOIS_LONG[m-1]}`;
-}
-
-function cle(saison, journee, date) {
-    return `${saison}_J${journee}_${date}`;
 }
 
 function chargerInfosJA() {
@@ -590,6 +370,7 @@ function chargerInfosJA() {
         } else {
             $('#ja-ib-grade').hide();
         }
+        jaDept = (r.data.Cp || '').substring(0, 2);
         const hasloc = r.data.Cp || r.data.Ville;
         if (hasloc) {
             $('#ja-ib-cp').text(r.data.Cp || '');
@@ -608,6 +389,7 @@ function chargerInfosJA() {
 $('#chk-defisc').on('change', function () {
     $.post(`${BASE}/sauvegarder-defiscalisation`, {
         id_ja:           idJaCourant,
+        ja:              TOKEN_JA,
         defiscalisation: this.checked ? 1 : 0,
     }, function (r) {
         if (!r.ok) toast('Erreur défiscalisation : ' + r.err, false);
@@ -617,7 +399,7 @@ $('#chk-defisc').on('change', function () {
 $('#modal-note').on('show.bs.modal', function () {
     $('#note-texte').val('').prop('disabled', true);
     $('#note-spin').removeClass('d-none');
-    $.getJSON(`${BASE}/lire-note`, { id_ja: idJaCourant }, function (r) {
+    $.getJSON(`${BASE}/lire-note`, { id_ja: idJaCourant, ja: TOKEN_JA }, function (r) {
         $('#note-spin').addClass('d-none');
         $('#note-texte').val(r.ok ? (r.note || '') : '').prop('disabled', false).trigger('focus');
     });
@@ -629,6 +411,7 @@ $('#btn-save-note').on('click', function () {
     $('#btn-save-note').prop('disabled', true);
     $.post(`${BASE}/sauvegarder-note`, {
         id_ja: idJaCourant,
+        ja:    TOKEN_JA,
         note:  note,
     }, function (r) {
         $('#note-spin').addClass('d-none');
@@ -648,317 +431,39 @@ $('#btn-save-note').on('click', function () {
 
 function chargerJournees() {
     if (!idJaCourant) return;
-    $('#barre-save').css('display','flex');
-    $('#barre-spin').show();
-    $('#section-calendrier').show().html(
-        '<div class="text-muted text-center py-5"><span class="spin-sm me-2"></span>Chargement des journées…</div>'
+    $('#section-cal-grille').show();
+    $('#cal-mois-grille').html(
+        '<div class="text-muted text-center py-5"><span class="spin-sm me-2"></span>Chargement du calendrier…</div>'
     );
 
     $.getJSON(`${BASE}/journees`, {
         id_ja: idJaCourant,
     }, function (r) {
-        $('#barre-spin').hide();
         if (!r.ok) {
-            $('#section-calendrier').html(`<div class="alert alert-danger m-3">${r.err}</div>`);
+            $('#cal-mois-grille').html(`<div class="alert alert-danger m-3">${r.err}</div>`);
             return;
         }
         if (!r.data.length) {
-            $('#section-calendrier').html(
-                '<div class="alert alert-info m-3"><i class="bi bi-info-circle me-2"></i>Aucune rencontre pour cette saison.</div>'
+            $('#cal-mois-grille').html(
+                '<div class="alert alert-info m-3"><i class="bi bi-info-circle me-2"></i>Aucune date de championnat régional programmée.</div>'
             );
             return;
         }
-        const saison = 'courante';
-        r.data.forEach(function (j) {
-            const k = cle(saison, j.Journee, j.Date);
-            if (!etatJournees[k]) {
-                etatJournees[k] = {
-                    statut: j.Statut || null,
-                    rencontres: [],
-                    modifie: false,
-                    date: j.Date,
-                };
-            }
+        etatDates = {};
+        r.data.forEach(function (d) {
+            etatDates[d.Id_CompetitionRegionale] = {
+                id: d.Id_CompetitionRegionale,
+                date: d.Date,
+                heure: d.Heure,
+                commentaire: d.Commentaire || '',
+                statut: d.Statut || null,
+                departement: d.Departement || '',
+                note: d.Note || '',
+            };
         });
-        renderCalendrier(r.data, 'courante');
-        majRecapSave();
         renderCalendrierMensuel();
-        afficherVueInitiale();
     });
 }
-
-function renderCalendrier(journees, saison) {
-    const $zone = $('#section-calendrier').empty();
-
-    journees.forEach(function (j) {
-        const k      = cle(saison, j.Journee, j.Date);
-        const statut = etatJournees[k]?.statut || null;
-        const nbSel  = etatJournees[k]?.rencontres?.length || 0;
-        const nb     = +j.NbRencontres;
-        const date   = j.Date;
-
-        const dateTitre = formatDateLong(date);
-
-        let distHtml = '';
-        if (nb >= 20 && j.MinKm !== null && j.MinKm !== undefined && j.MinKm !== '') {
-            const dMin = +j.MinKm, dMax = +j.MaxKm;
-            distHtml = `<div class="j-dist">` +
-                (dMin === dMax
-                    ? distBadge(dMin)
-                    : `${distBadge(dMin, dMin+' km')} – ${distBadge(dMax, dMax+' km')}`) +
-                `</div>`;
-        }
-
-        const $card = $(`<div class="journee-card${statut?' statut-'+statut:''}" data-journee="${j.Journee}" data-date="${date}" data-saison="${saison}">`);
-
-        $card.append(`
-            <div class="journee-body">
-                <div class="j-info">
-                    <div class="j-num">
-                        <i class="bi bi-calendar-week me-1"></i>Journée ${j.Journee} — ${dateTitre}
-                        <span class="j-selec-badge ms-2">${nbSel}/${nb} lieu${nbSel>1?'x':''}</span>
-                    </div>
-                    ${distHtml}
-                </div>
-                <div class="j-btns">
-                    <button class="btn-statut dispo${statut==='O'?' actif':''}"
-                            data-statut="O" data-journee="${j.Journee}" data-date="${date}" data-saison="${saison}">
-                        <i class="bi bi-check-circle${statut==='O'?'-fill':''}"></i>Disponible
-                    </button>
-                    <button class="btn-statut partiel${statut==='P'?' actif':''}"
-                            data-statut="P" data-journee="${j.Journee}" data-date="${date}" data-saison="${saison}">
-                        <i class="bi bi-exclamation-circle${statut==='P'?'-fill':''}"></i>Partiel
-                    </button>
-                    <button class="btn-statut nodispo${statut==='N'?' actif':''}"
-                            data-statut="N" data-journee="${j.Journee}" data-date="${date}" data-saison="${saison}">
-                        <i class="bi bi-x-circle${statut==='N'?'-fill':''}"></i>Non disponible
-                    </button>
-                </div>
-            </div>
-            <div class="panel-partiel${statut==='P'?' ouvert':''}" data-journee="${j.Journee}" data-date="${date}" data-saison="${saison}">
-                <div class="panel-partiel-titre">
-                    <i class="bi bi-geo-alt-fill"></i>Lieux qui reçoivent — cochez les rencontres que vous aimeriez arbitrer
-                    <button class="sel-tout-btn" data-journee="${j.Journee}" data-date="${date}" data-saison="${saison}">Tout sélectionner</button>
-                </div>
-                <div class="panel-partiel-body" data-journee="${j.Journee}" data-date="${date}" data-saison="${saison}">
-                    <div class="text-muted text-center py-3"><span class="spin-sm me-2"></span>Chargement…</div>
-                </div>
-            </div>
-        `);
-
-        $zone.append($card);
-
-        if (statut === 'P') {
-            chargerRencontresJournee(j.Journee, date, saison);
-        }
-    });
-}
-
-$(document).on('click', '.btn-statut', function () {
-    const $btn    = $(this);
-    const statut  = $btn.data('statut');
-    const journee = +$btn.data('journee');
-    const date    = $btn.data('date');
-    const saison  = $btn.data('saison');
-    const k       = cle(saison, journee, date);
-    const $card   = $(`.journee-card[data-journee="${journee}"][data-date="${date}"][data-saison="${saison}"]`);
-    const $panel  = $(`.panel-partiel[data-journee="${journee}"][data-date="${date}"][data-saison="${saison}"]`);
-
-    const ancien = etatJournees[k]?.statut;
-    if (ancien === statut) return;
-
-    if (!etatJournees[k]) etatJournees[k] = { statut: null, rencontres: [], modifie: false, date };
-    etatJournees[k].statut  = statut;
-    etatJournees[k].modifie = true;
-    if (statut !== 'P') etatJournees[k].rencontres = [];
-
-    $card.removeClass('statut-O statut-P statut-N').addClass('statut-' + statut);
-
-    $card.find('.btn-statut').each(function () {
-        const s = $(this).data('statut');
-        const cls = s === 'D' ? 'dispo' : (s === 'P' ? 'partiel' : 'nodispo');
-        $(this).removeClass('actif')
-               .find('i').removeClass('bi-check-circle-fill bi-exclamation-circle-fill bi-x-circle-fill')
-                          .addClass(s==='D'?'bi-check-circle':(s==='P'?'bi-exclamation-circle':'bi-x-circle'));
-    });
-    $btn.addClass('actif');
-    $btn.find('i')
-        .removeClass('bi-check-circle bi-exclamation-circle bi-x-circle')
-        .addClass(statut==='O'?'bi-check-circle-fill':(statut==='P'?'bi-exclamation-circle-fill':'bi-x-circle-fill'));
-
-    if (statut === 'P') {
-        $panel.addClass('ouvert');
-        chargerRencontresJournee(journee, date, saison);
-    } else {
-        $panel.removeClass('ouvert');
-    }
-
-    majRecapSave();
-    sauvegarderJournee(journee, date, saison);
-});
-
-function chargerRencontresJournee(journee, date, saison) {
-    const $body = $(`.panel-partiel-body[data-journee="${journee}"][data-date="${date}"][data-saison="${saison}"]`);
-    if ($body.data('loaded')) return;
-
-    $.getJSON(`${BASE}/rencontres-journee`, {
-        id_ja:    idJaCourant,
-        journee:  journee,
-        date:     date,
-    }, function (r) {
-        if (!r.ok) {
-            $body.html(`<div class="alert alert-danger m-2">${r.err}</div>`);
-            return;
-        }
-        $body.data('loaded', true);
-
-        const k = cle(saison, journee, date);
-        const selBDD = r.data
-            .filter(renc => renc.ReponseDisp === 'O')
-            .map(renc => +renc.Id_Rencontre);
-        if (selBDD.length > 0 && (!etatJournees[k].rencontres || etatJournees[k].rencontres.length === 0)) {
-            etatJournees[k].rencontres = selBDD;
-        }
-
-        renderRencontresPartiel($body, r.data, journee, date, saison);
-        majBadgeJournee(journee, date, saison);
-    });
-}
-
-function renderRencontresPartiel($body, rencontres, journee, date, saison) {
-    $body.empty();
-    const k   = cle(saison, journee, date);
-    const sel = new Set(etatJournees[k]?.rencontres || []);
-
-    rencontres.forEach(function (r) {
-        const id    = +r.Id_Rencontre;
-        const actif = sel.has(id);
-
-        let lieu = '';
-        if (r.NomSalle) {
-            lieu = `<i class="bi bi-geo-alt-fill" style="color:var(--col-partiel)"></i> ${r.NomSalle}`;
-            if (r.VilleSalle) lieu += ` — ${r.CpSalle ? r.CpSalle + ' ' : ''}${r.VilleSalle}`;
-        } else if (r.VilleSalle) {
-            lieu = `<i class="bi bi-geo-alt" style="color:var(--col-partiel)"></i> ${r.CpSalle ? r.CpSalle + ' ' : ''}${r.VilleSalle}`;
-        }
-
-        $body.append(`
-            <div class="renc-row${actif?' selectionne':''}" data-id="${id}" data-journee="${journee}" data-date="${date}" data-saison="${saison}">
-                <div class="renc-check"><i class="bi bi-check-lg"></i></div>
-                <div class="renc-heure">${(r.Heure||'').substring(0,5)}</div>
-                <div class="renc-div">${r.DivisionCode}</div>
-                <div class="renc-info">
-                    <div class="renc-match">${r.NomDom || '—'} <span style="color:#999;font-size:.8em">vs</span> ${r.NomExt || '—'}</div>
-                    ${lieu ? `<div class="renc-lieu">${lieu}</div>` : ''}
-                </div>
-                ${distBadge(r.DistanceKm)}
-            </div>
-        `);
-    });
-}
-
-$(document).on('click', '.renc-row', function () {
-    const $row    = $(this);
-    const id      = +$row.data('id');
-    const journee = +$row.data('journee');
-    const date    = $row.data('date');
-    const saison  = $row.data('saison');
-    const k       = cle(saison, journee, date);
-
-    $row.toggleClass('selectionne');
-    const actif = $row.hasClass('selectionne');
-
-    if (!etatJournees[k]) etatJournees[k] = { statut: 'P', rencontres: [], modifie: false, date };
-    const idx = etatJournees[k].rencontres.indexOf(id);
-    if (actif && idx === -1)  etatJournees[k].rencontres.push(id);
-    if (!actif && idx !== -1) etatJournees[k].rencontres.splice(idx, 1);
-    etatJournees[k].modifie = true;
-
-    majBadgeJournee(journee, date, saison);
-    majRecapSave();
-    sauvegarderJournee(journee, date, saison);
-});
-
-$(document).on('click', '.sel-tout-btn', function (e) {
-    e.stopPropagation();
-    const journee = +$(this).data('journee');
-    const date    = $(this).data('date');
-    const saison  = $(this).data('saison');
-    const k       = cle(saison, journee, date);
-    const $rows   = $(`.renc-row[data-journee="${journee}"][data-date="${date}"][data-saison="${saison}"]`);
-
-    const toutSelec = $rows.length > 0 && $rows.toArray().every(el => $(el).hasClass('selectionne'));
-
-    if (toutSelec) {
-        $rows.removeClass('selectionne');
-        etatJournees[k].rencontres = [];
-        $(this).text('Tout sélectionner');
-    } else {
-        const ids = [];
-        $rows.each(function () {
-            $(this).addClass('selectionne');
-            ids.push(+$(this).data('id'));
-        });
-        etatJournees[k].rencontres = ids;
-        $(this).text('Tout désélectionner');
-    }
-    etatJournees[k].modifie = true;
-    majBadgeJournee(journee, date, saison);
-    majRecapSave();
-    sauvegarderJournee(journee, date, saison);
-});
-
-function majBadgeJournee(journee, date, saison) {
-    const k       = cle(saison, journee, date);
-    const nb      = (etatJournees[k]?.rencontres || []).length;
-    const $badge  = $(`.journee-card[data-journee="${journee}"][data-date="${date}"][data-saison="${saison}"] .j-selec-badge`);
-    const nbRenc  = $(`.panel-partiel-body[data-journee="${journee}"][data-date="${date}"][data-saison="${saison}"] .renc-row`).length;
-    $badge.text(`${nb}/${nbRenc} lieu${nb>1?'x':''}`);
-    const toutSelec = nb > 0 && nb === nbRenc;
-    $(`.sel-tout-btn[data-journee="${journee}"][data-date="${date}"][data-saison="${saison}"]`)
-        .text(toutSelec ? 'Tout désélectionner' : 'Tout sélectionner');
-}
-
-function majRecapSave() {
-    let nbOui = 0, nbPartiel = 0, nbNon = 0;
-    Object.values(etatJournees).forEach(function (e) {
-        if (e.statut === 'O') nbOui++;
-        else if (e.statut === 'P') nbPartiel++;
-        else if (e.statut === 'N') nbNon++;
-    });
-    const total = nbOui + nbPartiel + nbNon;
-    const parts = [];
-    if (nbOui)   parts.push(`<span style="color:var(--col-dispo);font-weight:700">${nbOui} disponible${nbOui>1?'s':''}</span>`);
-    if (nbPartiel) parts.push(`<span style="color:var(--col-partiel);font-weight:700">${nbPartiel} partielle${nbPartiel>1?'s':''}</span>`);
-    if (nbNon)     parts.push(`<span style="color:var(--col-nodispo);font-weight:700">${nbNon} non disponible${nbNon>1?'s':''}</span>`);
-    const txt = parts.length
-        ? parts.join(', ') + ` sur ${Object.keys(etatJournees).length} journée${Object.keys(etatJournees).length>1?'s':''}`
-        : 'Aucun choix enregistré — les journées non sélectionnées restent sans réponse.';
-    $('#lbl-recap-save').html(txt);
-}
-
-function sauvegarderJournee(journee, date, saison) {
-    const k = cle(saison, journee, date);
-    const e = etatJournees[k];
-    if (!e || !e.statut) return;
-
-    $.post(`${BASE}/sauvegarder-dispo-journee`, {
-        id_ja:      idJaCourant,
-        journee:    journee,
-        date:       date,
-        statut:     e.statut,
-        rencontres: e.rencontres,
-    }, function (r) {
-        if (!r.ok) toast('Erreur : ' + r.err, false);
-        else rafraichirCalSiActif();
-    }, 'json');
-}
-
-$('#btn-tout-sauvegarder').on('click', function () {
-    const nb = Object.values(etatJournees).filter(e => e.statut).length;
-    if (!nb) { toast('Aucune disponibilité à enregistrer.', false); return; }
-    toast(`✓ ${nb} journée${nb>1?'s':''} enregistrée${nb>1?'s':''}. Merci !`);
-});
 
 const MOIS_NOMS = ['Janvier','Février','Mars','Avril','Mai','Juin',
                    'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
@@ -967,15 +472,9 @@ const JOURS_COURTS = ['L','M','M','J','V','S','D'];
 let jourDetailMap = {};
 
 function renderCalendrierMensuel() {
-    const saison = 'courante';
-
     jourDetailMap = {};
-    Object.entries(etatJournees).forEach(([k, e]) => {
-        const m = k.match(/^(.+)_J(\d+)_(\d{4}-\d{2}-\d{2})$/);
-        if (!m) return;
-        const [, s, jn, date] = m;
-        if (s !== saison) return;
-        jourDetailMap[date] = { journee: +jn, saison: s, statut: e.statut || 'vide' };
+    Object.values(etatDates).forEach(e => {
+        jourDetailMap[e.date] = { id: e.id, statut: e.statut || 'vide', heure: e.heure };
     });
 
     const today = new Date();
@@ -1032,8 +531,9 @@ function buildMonthGrid(annee, mois, today) {
         const $jour = $(`<div class="${cls}">${j}</div>`);
 
         if (detail) {
-            $jour.attr('title', `Journée ${detail.journee} — ${formatDateLong(dateStr)}\nCliquez pour modifier`);
-            $jour.on('click', () => ouvrirModaleJournee(dateStr, detail));
+            $jour.attr('data-id', detail.id);
+            $jour.attr('title', `${formatDateLong(dateStr)}${detail.heure ? ' — ' + detail.heure.substring(0,5) : ''}\nCliquez pour ${libelleClicSuivant(detail.statut === 'vide' ? null : detail.statut)}`);
+            $jour.on('click', () => toggleDate(detail.id));
         }
 
         $grid.append($jour);
@@ -1043,194 +543,102 @@ function buildMonthGrid(annee, mois, today) {
     return $wrap;
 }
 
+function libelleClicSuivant(statut) {
+    if (statut === 'O') return 'indiquer non disponible';
+    if (statut === 'N') return 'effacer la réponse';
+    return 'indiquer disponible';
+}
+
+// Cycle à 3 états : pas de réponse → Disponible → Non disponible → pas de réponse…
+function toggleDate(idComp) {
+    const e = etatDates[idComp];
+    if (!e) return;
+    const nouveau = e.statut === 'O' ? 'N' : (e.statut === 'N' ? null : 'O');
+    e.statut = nouveau;
+    if (nouveau !== 'O') { e.note = ''; e.departement = ''; }
+
+    const cls = nouveau || 'vide';
+    jourDetailMap[e.date].statut = cls;
+    $(`.cal-jour[data-id="${idComp}"]`)
+        .removeClass('statut-O statut-N statut-vide')
+        .addClass('statut-' + cls)
+        .attr('title', `${formatDateLong(e.date)}${e.heure ? ' — ' + e.heure.substring(0,5) : ''}\nCliquez pour ${libelleClicSuivant(nouveau)}`);
+
+    sauvegarderDate(idComp, nouveau === 'O');
+}
+
+function sauvegarderDate(idComp, ouvrirPopupSiDispo) {
+    const e = etatDates[idComp];
+
+    $.post(`${BASE}/sauvegarder-dispo-journee`, {
+        id_ja: idJaCourant,
+        ja: TOKEN_JA,
+        date: e.date,
+        statut: e.statut || 'VIDE',
+        note: e.note || '',
+        departements: e.departement ? e.departement.split(',') : [],
+    }, function (r) {
+        if (!r.ok) { toast('Erreur : ' + r.err, false); return; }
+        if (ouvrirPopupSiDispo) ouvrirPopupNote(idComp);
+    }, 'json').fail(function () {
+        toast('Erreur réseau.', false);
+    });
+}
+
 let modalJournee = null;
 
-function ouvrirModaleJournee(dateStr, detail) {
-    const { journee, saison, statut } = detail;
-    const k = cle(saison, journee, dateStr);
+function ouvrirPopupNote(idComp) {
+    const e = etatDates[idComp];
 
-    $('#mj-titre').html(`<i class="bi bi-calendar-week me-2"></i>Journée ${journee} — ${formatDateLong(dateStr)}`);
+    $('#mj-titre').html(`<i class="bi bi-calendar-week me-2"></i>Disponible — ${formatDateLong(e.date)}`);
 
-    majBtnsModale(statut === 'vide' ? null : statut);
-
-    if (statut === 'P') {
-        $('#mj-panel-partiel').show();
-        chargerRencontresModale(journee, dateStr, saison, k);
+    if (e.commentaire) {
+        $('#mj-commentaire').text(e.commentaire).show();
+        $('#mj-departements').show();
+        const sel = new Set((e.departement || '').split(',').filter(Boolean));
+        if (!sel.size && jaDept) sel.add(jaDept);
+        $('.mj-dept').each(function () { $(this).prop('checked', sel.has($(this).val())); });
     } else {
-        $('#mj-panel-partiel').hide().data('loaded', false);
-        $('#mj-renc-body').empty();
+        $('#mj-commentaire').hide();
+        $('#mj-departements').hide();
     }
-
-    $('#modal-journee').data({ journee, date: dateStr, saison, k });
+    $('#mj-note').val(e.note || '');
+    $('#modal-journee').data('idComp', idComp);
 
     if (!modalJournee) modalJournee = new bootstrap.Modal($('#modal-journee')[0]);
     modalJournee.show();
 }
 
-function majBtnsModale(statut) {
-    ['O','P','N'].forEach(s => {
-        const $b = $(`#mj-btn-${s}`);
-        $b.toggleClass('actif', s === statut);
-        const icons = { O: ['bi-check-circle','bi-check-circle-fill'],
-                        P: ['bi-exclamation-circle','bi-exclamation-circle-fill'],
-                        N: ['bi-x-circle','bi-x-circle-fill'] };
-        $b.find('i').removeClass(icons[s][0] + ' ' + icons[s][1])
-                    .addClass(s === statut ? icons[s][1] : icons[s][0]);
-    });
-}
+$('#mj-btn-save').on('click', function () {
+    const idComp = $('#modal-journee').data('idComp');
+    const e = etatDates[idComp];
+    e.note = $('#mj-note').val().trim();
+    e.departement = $('.mj-dept:checked').map(function () { return this.value; }).get().join(',');
 
-$('#mj-btns').on('click', '.btn-statut', function (e) {
-    e.stopPropagation();
-    const $btn   = $(this);
-    const statut = $btn.data('statut');
-    const { journee, date, saison, k } = $('#modal-journee').data();
-
-    if (!etatJournees[k]) etatJournees[k] = { statut: null, rencontres: [], modifie: false, date };
-    const ancien = etatJournees[k].statut;
-    if (ancien === statut) return;
-
-    etatJournees[k].statut  = statut;
-    etatJournees[k].modifie = true;
-    if (statut !== 'P') etatJournees[k].rencontres = [];
-
-    majBtnsModale(statut);
-
-    if (statut === 'P') {
-        $('#mj-panel-partiel').show();
-        chargerRencontresModale(journee, date, saison, k);
-    } else {
-        $('#mj-panel-partiel').hide().data('loaded', false);
-        $('#mj-renc-body').empty();
-    }
-
-    majRecapSave();
-    sauvegarderJournee(journee, date, saison);
-
-    if (statut === 'O' || statut === 'N') {
-        modalJournee.hide();
-    }
-
-    jourDetailMap[date].statut = statut;
-    $(`.cal-jour.jour-journee[title*="${formatDateLong(date)}"]`)
-        .removeClass('statut-O statut-P statut-N statut-vide')
-        .addClass('statut-' + statut);
-});
-
-function chargerRencontresModale(journee, date, saison, k) {
-    if ($('#mj-panel-partiel').data('loaded')) return;
-
-    $('#mj-renc-body').html('<div class="text-muted text-center py-3"><span class="spin-sm me-2"></span>Chargement…</div>');
-
-    $.getJSON(`${BASE}/rencontres-journee`, {
-        id_ja:  idJaCourant,
-        journee, date,
+    $('#mj-spin').removeClass('d-none');
+    $('#mj-btn-save').prop('disabled', true);
+    $.post(`${BASE}/sauvegarder-dispo-journee`, {
+        id_ja: idJaCourant,
+        ja: TOKEN_JA,
+        date: e.date,
+        statut: 'O',
+        note: e.note,
+        departements: e.departement ? e.departement.split(',') : [],
     }, function (r) {
-        if (!r.ok) {
-            $('#mj-renc-body').html(`<div class="alert alert-danger m-2">${r.err}</div>`);
-            return;
+        $('#mj-spin').addClass('d-none');
+        $('#mj-btn-save').prop('disabled', false);
+        if (r.ok) {
+            modalJournee.hide();
+            toast('Disponibilité enregistrée.');
+        } else {
+            toast('Erreur : ' + r.err, false);
         }
-        $('#mj-panel-partiel').data('loaded', true);
-
-        const selBDD = r.data.filter(renc => renc.ReponseDisp === 'O').map(renc => +renc.Id_Rencontre);
-        if (!etatJournees[k]) etatJournees[k] = { statut: 'P', rencontres: [], modifie: false, date };
-        if (selBDD.length && !etatJournees[k].rencontres.length) etatJournees[k].rencontres = selBDD;
-
-        renderRencontresModale(r.data, journee, date, saison, k);
-        majBadgeModale(k);
+    }, 'json').fail(function () {
+        $('#mj-spin').addClass('d-none');
+        $('#mj-btn-save').prop('disabled', false);
+        toast('Erreur réseau.', false);
     });
-}
-
-function renderRencontresModale(rencontres, journee, date, saison, k) {
-    const $body = $('#mj-renc-body').empty();
-    const sel   = new Set(etatJournees[k]?.rencontres || []);
-
-    rencontres.forEach(function (r) {
-        const id    = +r.Id_Rencontre;
-        const actif = sel.has(id);
-
-        let lieu = '';
-        if (r.NomSalle) {
-            lieu = `<i class="bi bi-geo-alt-fill" style="color:var(--col-partiel)"></i> ${r.NomSalle}`;
-            if (r.VilleSalle) lieu += ` — ${r.CpSalle ? r.CpSalle + ' ' : ''}${r.VilleSalle}`;
-        } else if (r.VilleSalle) {
-            lieu = `<i class="bi bi-geo-alt" style="color:var(--col-partiel)"></i> ${r.CpSalle ? r.CpSalle + ' ' : ''}${r.VilleSalle}`;
-        }
-
-        const $row = $(`
-            <div class="renc-row${actif?' selectionne':''}" data-id="${id}" data-journee="${journee}" data-date="${date}" data-saison="${saison}" data-modal="1">
-                <div class="renc-check"><i class="bi bi-check-lg"></i></div>
-                <div class="renc-heure">${(r.Heure||'').substring(0,5)}</div>
-                <div class="renc-div">${r.DivisionCode}</div>
-                <div class="renc-info">
-                    <div class="renc-match">${r.NomDom || '—'} <span style="color:#999;font-size:.8em">vs</span> ${r.NomExt || '—'}</div>
-                    ${lieu ? `<div class="renc-lieu">${lieu}</div>` : ''}
-                </div>
-                ${distBadge(r.DistanceKm)}
-            </div>
-        `);
-        $body.append($row);
-    });
-}
-
-$('#mj-renc-body').on('click', '.renc-row', function (e) {
-    e.stopPropagation();
-    const $row    = $(this);
-    const id      = +$row.data('id');
-    const journee = +$row.data('journee');
-    const date    = $row.data('date');
-    const saison  = $row.data('saison');
-    const k       = cle(saison, journee, date);
-
-    $row.toggleClass('selectionne');
-    const actif = $row.hasClass('selectionne');
-
-    if (!etatJournees[k]) etatJournees[k] = { statut: 'P', rencontres: [], modifie: false, date };
-    const idx = etatJournees[k].rencontres.indexOf(id);
-    if (actif && idx === -1)  etatJournees[k].rencontres.push(id);
-    if (!actif && idx !== -1) etatJournees[k].rencontres.splice(idx, 1);
-    etatJournees[k].modifie = true;
-
-    majBadgeModale(k);
-    majRecapSave();
-    sauvegarderJournee(journee, date, saison);
 });
-
-$('#mj-sel-tout').on('click', function () {
-    const { journee, date, saison, k } = $('#modal-journee').data();
-    const $rows = $('#mj-renc-body .renc-row');
-    const toutSelec = $rows.length && $rows.toArray().every(el => $(el).hasClass('selectionne'));
-
-    if (toutSelec) {
-        $rows.removeClass('selectionne');
-        etatJournees[k].rencontres = [];
-        $(this).text('Tout sélectionner');
-    } else {
-        const ids = [];
-        $rows.each(function () { $(this).addClass('selectionne'); ids.push(+$(this).data('id')); });
-        etatJournees[k].rencontres = ids;
-        $(this).text('Tout désélectionner');
-    }
-    etatJournees[k].modifie = true;
-    majBadgeModale(k);
-    majRecapSave();
-    sauvegarderJournee(journee, date, saison);
-});
-
-function majBadgeModale(k) {
-    const nb    = (etatJournees[k]?.rencontres || []).length;
-    const total = $('#mj-renc-body .renc-row').length;
-    const toutSelec = nb > 0 && nb === total;
-    $('#mj-sel-tout').text(toutSelec ? 'Tout désélectionner' : 'Tout sélectionner');
-}
-
-function afficherVueInitiale() {
-    $('#section-calendrier').hide();
-    $('#section-cal-grille').show();
-}
-
-function rafraichirCalSiActif() {
-    renderCalendrierMensuel();
-}
 
 $(function () {
     const idJaUrl = <?= (int) $idJa ?>;

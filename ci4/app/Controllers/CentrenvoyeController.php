@@ -9,7 +9,7 @@ use CodeIgniter\HTTP\ResponseInterface;
  *
  * Accessible à tout utilisateur authentifié (filtre "auth", pas "adminauth") :
  * envoie les 4 types de messages (Disponibilités, Rappel dispo, Convocation,
- * Liste nomination) + Demande adresse aux JA actifs du département connecté.
+ * Liste nomination) + Demande adresse aux JA1 actifs du département connecté.
  *
  * Pas de Model : requêtes dynamiques (jointures multiples selon le type,
  * substitution de marqueurs, envoi PHPMailer, rate limiting) trop éloignées
@@ -102,36 +102,38 @@ class CentrenvoyeController extends BaseController
         $date    = trim((string) ($this->request->getGet('date') ?? ''));
 
         switch ($type) {
-            // ── Disponibilités : tous JA actifs du dept ─────────────────
+            // ── Disponibilités : tous JA1 actifs du dept ────────────────
             case 'Disponibilites':
-                $stmt = $pdo->prepare('
+                $stmt = $pdo->prepare("
                     SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
                            lp.CodePostal AS CP
                     FROM ja j
                     LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
                     WHERE j.Actif = 1
+                      AND j.Grade = 'JA1'
                       AND LEFT(lp.CodePostal, 2) = ?
                     ORDER BY j.Nom, j.Prenom
-                ');
+                ");
                 $stmt->execute([$dept]);
                 $rows = $stmt->fetchAll();
                 break;
 
-            // ── Rappel dispo : JA sans dispo dans la saison courante ────
+            // ── Rappel dispo : JA1 sans dispo dans la saison courante ───
             case 'Rappel dispo':
-                $stmt = $pdo->prepare('
+                $stmt = $pdo->prepare("
                     SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
                            lp.CodePostal AS CP
                     FROM ja j
                     LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
                     WHERE j.Actif = 1
+                      AND j.Grade = 'JA1'
                       AND LEFT(lp.CodePostal, 2) = ?
                       AND NOT EXISTS (
                           SELECT 1 FROM disponible d
                           WHERE d.Id_JA = j.Id_JA
                       )
                     ORDER BY j.Nom, j.Prenom
-                ');
+                ");
                 $stmt->execute([$dept]);
                 $rows = $stmt->fetchAll();
                 break;
@@ -142,7 +144,7 @@ class CentrenvoyeController extends BaseController
                     $rows = [];
                     break;
                 }
-                $stmt = $pdo->prepare('
+                $stmt = $pdo->prepare("
                     SELECT n.Id_Nomination, j.Id_JA, j.Nom, j.Prenom, j.Email,
                            r.Date, r.Heure, r.Journee, r.Poule,
                            ed.Division, RIGHT(ed.Division, 1) AS SexeCode,
@@ -166,16 +168,17 @@ class CentrenvoyeController extends BaseController
                     LEFT JOIN laposte lps   ON lps.Id_LaPoste = s.Id_Laposte
                     LEFT JOIN Club co ON co.Id_Club = ed.Id_Club
                     WHERE r.Journee = ? AND r.Date = ? AND j.Actif = 1
+                      AND j.Grade = 'JA1'
                       AND SUBSTRING(ed.Id_Club, 3, 2) = ?
                     ORDER BY j.Nom, j.Prenom
-                ');
+                ");
                 $stmt->execute([$journee, $date, $dept]);
                 $rows = $stmt->fetchAll();
                 break;
 
-            // ── Liste nomination : JA ayant des nominations dans la phase ─
+            // ── Liste nomination : JA1 ayant des nominations dans la phase ─
             case 'Liste nomination':
-                $stmt = $pdo->prepare('
+                $stmt = $pdo->prepare("
                     SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
                            COUNT(n.Id_Nomination) AS NbNominations
                     FROM ja j
@@ -183,26 +186,27 @@ class CentrenvoyeController extends BaseController
                     JOIN disponible dn ON dn.Id_JA = j.Id_JA
                     JOIN nomination n ON n.Id_Disponible = dn.Id_Disponible
                     WHERE j.Actif = 1
+                      AND j.Grade = 'JA1'
                       AND LEFT(lp.CodePostal, 2) = ?
                     GROUP BY j.Id_JA, j.Nom, j.Prenom, j.Email
                     ORDER BY j.Nom, j.Prenom
-                ');
+                ");
                 $stmt->execute([$dept]);
                 $rows = $stmt->fetchAll();
                 break;
 
-            // ── Demande adresse : JA actifs ou sans id_laposte ──────────
+            // ── Demande adresse : JA1 actifs ou sans id_laposte ─────────
             case 'Demande adresse':
-                $stmt = $pdo->prepare('
+                $stmt = $pdo->prepare("
                     SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
                            COALESCE(lp.CodePostal, j.Cp)  AS Cp,
                            COALESCE(lp.Nom,        j.Ville) AS Ville,
                            (j.Id_LaPoste IS NOT NULL AND j.Id_LaPoste > 0) AS HasAdresse
                     FROM ja j
                     LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
-                    WHERE j.Actif = 1 AND (j.Id_LaPoste IS NULL OR j.Id_LaPoste = 0)
+                    WHERE j.Actif = 1 AND j.Grade = 'JA1' AND (j.Id_LaPoste IS NULL OR j.Id_LaPoste = 0)
                     ORDER BY j.Nom, j.Prenom
-                ');
+                ");
                 $stmt->execute();
                 $rows = $stmt->fetchAll();
                 break;

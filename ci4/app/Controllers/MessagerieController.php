@@ -53,6 +53,7 @@ class MessagerieController extends BaseController
         // pour qu'il soit visible/éditable dès l'ouverture de cet écran, avant même que la fenêtre
         // des 60 jours ne déclenche l'envoi réel à la connexion admin (AuthController::index()).
         assurerTemplateExpirationFfttApi($pdo);
+        assurerTemplateDispoRegionale($pdo);
     }
 
     private function isAdmin(): bool

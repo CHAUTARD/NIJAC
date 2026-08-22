@@ -197,6 +197,33 @@ function assurerTemplateExpirationFfttApi(\PDO $pdo): void
 }
 
 /**
+ * Garantit l'existence du message système n°8 "Dispo régionale" (ENUM messagerie.Type +
+ * une ligne de gabarit, marqueur {URL_DISPO_REGIONALE_JA}) — invite un JA à saisir ses
+ * disponibilités pour le championnat régional (E036, dispo-regionale-ja), éditable ensuite
+ * comme les autres modèles système via E026. Id_Messagerie fixé à 8 explicitement (demandé),
+ * l'AUTO_INCREMENT de la table ayant déjà dépassé cette valeur. Idempotente.
+ */
+function assurerTemplateDispoRegionale(\PDO $pdo): void
+{
+    ajouterTypeMessagerie($pdo, 'Dispo régionale');
+
+    $existe = $pdo->query('SELECT 1 FROM messagerie WHERE Id_Messagerie = 8')->fetch();
+    if ($existe) {
+        return;
+    }
+
+    $pdo->prepare('INSERT INTO messagerie (Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, Cc) VALUES (8, ?, ?, ?, NULL, 0)')
+        ->execute([
+            'Dispo régionale',
+            'Championnat Régional {YEAR_PHASE} - Vos disponibilités',
+            "Bonjour {PRENOM} {NOM},\n\n"
+            . "Merci de bien vouloir renseigner vos disponibilités pour le Championnat Régional par équipes {YEAR_PHASE} "
+            . "en suivant ce lien :\n{URL_DISPO_REGIONALE_JA}\n\n"
+            . "Sportivement,\n{UTI_PRENOM} {UTI_NOM}",
+        ]);
+}
+
+/**
  * Envoie un rappel par email aux administrateurs actifs quand l'expiration des identifiants
  * API FFTT approche (2 mois, soit 60 jours) ou est dépassée — à demander à prolonger auprès de
  * la FFTT, puis à reporter dans .env (FFTT_APP_ID/FFTT_APP_KEY) et dans la clé de config
@@ -306,6 +333,7 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
         '{URL_LIGUE}'            => getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),
         '{URL_ADRESSE_JA}'       => $token !== '' ? (site_url('adresse-ja') . '?ja=' . $token) : '',
         '{URL_DISPONIBILITE_JA}' => $token !== '' ? (site_url('disponibilite-ja') . '?ja=' . $token) : '',
+        '{URL_DISPO_REGIONALE_JA}' => $token !== '' ? (site_url('dispo-regionale-ja') . '?ja=' . $token) : '',
         '{URL_INFO_RENCONTRE}'   => $token !== '' ? (site_url('info-rencontre') . '?ja=' . $token) : '',
         '{URL_CONVOCATION_JA}'   => !empty($idNomination) ? (site_url('convocation-ja') . '?nomination=' . $idNomination . '&cnv=' . $tokenNomination) : '',
         '{YEAR_PHASE}'           => getAnneePhase(),

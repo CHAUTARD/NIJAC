@@ -36,6 +36,14 @@ $routes->post('departement', 'DepartementController::store', ['filter' => 'admin
 $routes->put('departement/(:segment)', 'DepartementController::update/$1', ['filter' => 'adminauth']);
 $routes->delete('departement/(:segment)', 'DepartementController::delete/$1', ['filter' => 'adminauth']);
 
+// ── E014 Calendrier championnat régional ────────────────────────────────────
+$routes->get('competition-regionale', 'CompetitionRegionaleController::index', ['filter' => 'adminauth']);
+$routes->get('competition-regionale/data', 'CompetitionRegionaleController::data', ['filter' => 'adminauth']);
+$routes->get('competition-regionale/data/(:segment)', 'CompetitionRegionaleController::show/$1', ['filter' => 'adminauth']);
+$routes->post('competition-regionale', 'CompetitionRegionaleController::store', ['filter' => 'adminauth']);
+$routes->put('competition-regionale/(:segment)', 'CompetitionRegionaleController::update/$1', ['filter' => 'adminauth']);
+$routes->delete('competition-regionale/(:segment)', 'CompetitionRegionaleController::delete/$1', ['filter' => 'adminauth']);
+
 // ── E009 Utilisateurs ────────────────────────────────────────────────────────
 $routes->get('utilisateur', 'UtilisateurController::index', ['filter' => 'adminauth']);
 $routes->get('utilisateur/data', 'UtilisateurController::data', ['filter' => 'adminauth']);
@@ -308,7 +316,6 @@ $routes->get('disponibilite-ja', 'DisponibiliteJaController::index');
 $routes->get('disponibilite-ja/liste-ja', 'DisponibiliteJaController::listeJa');
 $routes->get('disponibilite-ja/ja', 'DisponibiliteJaController::ja');
 $routes->get('disponibilite-ja/journees', 'DisponibiliteJaController::journees');
-$routes->get('disponibilite-ja/rencontres-journee', 'DisponibiliteJaController::rencontresJournee');
 $routes->post('disponibilite-ja/sauvegarder-dispo-journee', 'DisponibiliteJaController::sauvegarderDispoJournee');
 // "token" est public dans ce fichier (contrairement à E029/adresse_ja.php) :
 // le legacy n'y appelle jamais auth_required.php pour cette action précise.
@@ -327,3 +334,26 @@ $routes->get('club-csr', 'ClubCsrController::index', ['filter' => 'csrauth']);
 $routes->get('club-csr/liste', 'ClubCsrController::liste', ['filter' => 'csrauth']);
 $routes->put('club-csr/(:segment)', 'ClubCsrController::modifier/$1', ['filter' => 'csrauth']);
 $routes->post('club-csr/envoyer', 'ClubCsrController::envoyer', ['filter' => 'csrauth']);
+
+// ── E036 Disponibilités JA Championnat Régional ─────────────────────────────
+// Page PUBLIQUE (sans authentification), tokenisée par ?ja=TOKEN — comme
+// E029/E030/E031/E032. Remplace le formulaire Excel envoyé par email (message
+// système n°8, voir assurerTemplateDispoRegionale()).
+$routes->get('dispo-regionale-ja', 'DispoRegionaleJaController::index');
+$routes->post('dispo-regionale-ja/sauvegarder', 'DispoRegionaleJaController::sauvegarder');
+
+// ── E037 Disponibilité JA v2 ─────────────────────────────────────────────────
+// Copie de E032 pour utilisation ultérieure (nom provisoire) — pas encore liée
+// à un menu. Page PUBLIQUE (sans authentification) — accessible via ?ja=TOKEN
+// ou ?id_ja=N.
+$routes->get('disponibilite-ja-v2', 'DisponibiliteJaV2Controller::index');
+$routes->get('disponibilite-ja-v2/liste-ja', 'DisponibiliteJaV2Controller::listeJa');
+$routes->get('disponibilite-ja-v2/ja', 'DisponibiliteJaV2Controller::ja');
+$routes->get('disponibilite-ja-v2/journees', 'DisponibiliteJaV2Controller::journees');
+$routes->get('disponibilite-ja-v2/rencontres-journee', 'DisponibiliteJaV2Controller::rencontresJournee');
+$routes->post('disponibilite-ja-v2/sauvegarder-dispo-journee', 'DisponibiliteJaV2Controller::sauvegarderDispoJournee');
+$routes->get('disponibilite-ja-v2/token', 'DisponibiliteJaV2Controller::token');
+$routes->post('disponibilite-ja-v2/token', 'DisponibiliteJaV2Controller::token');
+$routes->get('disponibilite-ja-v2/lire-note', 'DisponibiliteJaV2Controller::lireNote');
+$routes->post('disponibilite-ja-v2/sauvegarder-note', 'DisponibiliteJaV2Controller::sauvegarderNote');
+$routes->post('disponibilite-ja-v2/sauvegarder-defiscalisation', 'DisponibiliteJaV2Controller::sauvegarderDefiscalisation');

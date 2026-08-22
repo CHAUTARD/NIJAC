@@ -2,6 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+# Régles du projet
+Commence chaque réponse par mon prénom.
+Adapte-toi au style du code retour.
+Les réponse toujours en Français.
+
 ## Project overview
 
 NIJAC is a PHP/MySQL web app for managing and nominating table-tennis referees (Juges-Arbitres, JA) for the Normandy League. Stack: PHP 8.2+, CodeIgniter 4, MySQL/MariaDB, Bootstrap 5, jQuery 3, no front-end build step.
@@ -58,7 +63,7 @@ Served from the root `asset/` folder via `base_url('asset/js/...')` — not dupl
 
 ## Screen numbering
 
-Every screen has a code `EXXXX`. It's hard-coded directly into each view's `<title>`/header markup (no shared header partial — see "View / header convention" below) and referenced in the matching `Routes.php` comment block. When creating a new screen, assign the next available code and add it to `Ecrans.md` and `SPECIFICATION.md`.
+Every screen has a code `EXXX`. It's hard-coded directly into each view's `<title>`/header markup (no shared header partial — see "View / header convention" below) and referenced in the matching `Routes.php` comment block. When creating a new screen, assign the next available code and add it to `Ecrans.md` and `SPECIFICATION.md`.
 
 | Range | Domain |
 |-------|--------|
@@ -174,5 +179,3 @@ Both menu views (`admin_menu_index.php` E002 and `nominateur_menu_index.php` E02
     <span class="btn-desc">Description courte</span>
 </a>
 ```
-
-Discution en Français

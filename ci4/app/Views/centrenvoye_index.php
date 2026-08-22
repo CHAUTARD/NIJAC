@@ -495,11 +495,11 @@ const MODELES  = <?= json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS) ?>;
 const MON_EMAIL = <?= json_encode($monEmail, JSON_HEX_TAG | JSON_HEX_APOS) ?>;
 
 const TITRES_JA = {
-    'Disponibilites':  'JA actifs du département',
-    'Rappel dispo':    'JA sans disponibilités saisies',
-    'Convocation':     'JA nominés — journée sélectionnée',
-    'Liste nomination':'JA avec nominations dans la phase',
-    'Demande adresse': 'JA actifs ou sans adresse domicile',
+    'Disponibilites':  'JA1 actifs du département',
+    'Rappel dispo':    'JA1 sans disponibilités saisies',
+    'Convocation':     'JA1 nominés — journée sélectionnée',
+    'Liste nomination':'JA1 avec nominations dans la phase',
+    'Demande adresse': 'JA1 actifs ou sans adresse domicile',
 };
 
 let typeActif  = 'Disponibilites';

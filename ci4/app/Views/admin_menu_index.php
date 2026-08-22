@@ -180,6 +180,7 @@
         .btn-dbadmin      { background-color: #fce4ec; }
         .btn-region       { background-color: #e8eaf6; }
         .btn-departement  { background-color: #e1f5fe; }
+        .btn-competition-regionale { background-color: #f3e5f5; }
 
         .btn-code {
             position: absolute;
@@ -280,6 +281,13 @@
             <div class="btn-icon"><img src="<?= base_url('img/Departement.png') ?>" alt="Départements"></div>
             <span>Départements</span>
             <span class="btn-desc">Gérer les départements et leur région</span>
+        </a>
+
+        <a href="<?= site_url('competition-regionale') ?>" class="menu-btn btn-competition-regionale">
+            <span class="btn-code">E014</span>
+            <div class="btn-icon"><img src="<?= base_url('img/Calendrier_Regional.png') ?>" alt="Calendrier championnat régional"></div>
+            <span>Calendrier Régional</span>
+            <span class="btn-desc">Saisir les dates du championnat régional</span>
         </a>
 
         <a href="<?= site_url('clean') ?>" class="menu-btn btn-saison">
