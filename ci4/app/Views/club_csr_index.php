@@ -187,6 +187,9 @@
     <button class="menu-item" id="btn-filtre-region" title="Cliquer pour n'afficher que les clubs de la région, ou tous les clubs" style="border-color:transparent;">
         <i class="bi bi-geo-alt me-1"></i><span id="lbl-filtre-region">Région</span>
     </button>
+    <button class="menu-item" id="btn-filtre-regional" title="Cliquer pour n'afficher que les clubs ayant une équipe Régionale/Pré-Nationale, ou tous les clubs" style="border-color:transparent;">
+        <i class="bi bi-trophy me-1"></i><span id="lbl-filtre-regional">R4-PN</span>
+    </button>
     <input type="search" id="search-input" placeholder="🔍 Rechercher…">
 </div>
 
@@ -282,7 +285,8 @@ let lignes         = [];
 const sortState    = { col: 'id_club', asc: true };
 let searchTerm     = '';
 let deptFiltre     = '';   // filtré côté JS
-let filtreEnRegion = true; // true = En région uniquement (par défaut), false = Tous
+let filtreEnRegion = true;  // true = En région uniquement (par défaut), false = Tous
+let filtreRegional = false; // true = clubs avec équipe Régionale/Pré-Nationale uniquement, false = tous (par défaut)
 const selection    = new Set(); // Id_Club sélectionnés (persiste entre filtrages)
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
@@ -298,6 +302,7 @@ function lignesFiltreesTriees() {
     let result = [...lignes];
     if (deptFiltre)     result = result.filter(l => deptDeClub(l.id_club) === deptFiltre);
     if (filtreEnRegion) result = result.filter(l => DEPTS_REGION.has(deptDeClub(l.id_club)));
+    if (filtreRegional) result = result.filter(l => l.est_regional);
     if (term) result = result.filter(l =>
         String(l.id_club     ?? '').toLowerCase().includes(term) ||
         String(l.nom         ?? '').toLowerCase().includes(term) ||
@@ -324,6 +329,7 @@ function renderGrille() {
         const msg = searchTerm ? 'Aucun résultat pour cette recherche.' : 'Aucun club.';
         $body.append(`<tr><td colspan="8" class="text-center text-muted py-3">${msg}</td></tr>`);
         setStatus(searchTerm ? `0 résultat sur ${lignes.length} club(s).` : 'Aucun club enregistré.');
+        $('#lbl-count').text(`0 / ${lignes.length} club(s)`);
         majBarreSelection();
         return;
     }
@@ -332,7 +338,7 @@ function renderGrille() {
 
     const info = searchTerm ? `${rows.length} résultat(s) sur ${lignes.length}. ` : '';
     setStatus(`${info}Prêt.`);
-    $('#lbl-count').text(`${lignes.length} club(s)`);
+    $('#lbl-count').text(`${rows.length} / ${lignes.length} club(s)`);
     majBarreSelection();
 }
 
@@ -501,6 +507,7 @@ function chargerListe() {
             cor_nom:      r.CorNom      ?? '',
             cor_email:    r.CorEmail    ?? '',
             cor_tel:      r.CorTelephone ?? '',
+            est_regional: !!(+r.EstRegional),
         }));
         renderGrille();
     }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
@@ -528,6 +535,23 @@ appliquerStyleFiltreRegion();
 $('#btn-filtre-region').on('click', function () {
     filtreEnRegion = !filtreEnRegion;
     appliquerStyleFiltreRegion();
+    renderGrille();
+});
+
+// ── Filtre club régional (bascule) ───────────────────────────────────────────
+function appliquerStyleFiltreRegional() {
+    $('#lbl-filtre-regional').text('R4-PN');
+    $('#btn-filtre-regional').css({
+        background:  filtreRegional ? '#166534' : '',
+        color:       filtreRegional ? '#fff'    : '',
+        borderColor: filtreRegional ? '#166534' : 'transparent',
+    });
+}
+appliquerStyleFiltreRegional();
+
+$('#btn-filtre-regional').on('click', function () {
+    filtreRegional = !filtreRegional;
+    appliquerStyleFiltreRegional();
     renderGrille();
 });
 

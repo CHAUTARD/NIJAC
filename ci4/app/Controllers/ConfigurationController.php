@@ -40,6 +40,9 @@ class ConfigurationController extends BaseController
         $u = $_SESSION['utilisateur'] ?? [];
 
         $pdo = getPDO();
+        // Auto-heal : la ligne n'est sinon créée qu'à la première sauvegarde
+        // totale (E016) ou au premier enregistrement manuel de ce champ.
+        $pdo->exec("INSERT IGNORE INTO configuration (cle, valeur) VALUES ('backup_full_garder', '5')");
         try {
             $etatCourant       = getConfig('etat_logiciel', 'Developpement');
             $emailDev          = getConfig('email_developpement', 'patrick.chautard@free.fr');
@@ -61,6 +64,7 @@ class ConfigurationController extends BaseController
             $smtpProdCredsOk   = getSmtpUser() !== '' && getSmtpPassword() !== '';
             $smtpProdFrom      = getConfig('smtp_from', '');
             $smtpProdFromName  = getConfig('smtp_from_name', '');
+            $backupFullGarder  = getConfig('backup_full_garder', '5');
         } catch (\Throwable $e) {
             $etatCourant      = 'Developpement';
             $emailDev         = 'patrick.chautard@free.fr';
@@ -79,6 +83,7 @@ class ConfigurationController extends BaseController
             $smtpProdHost = $smtpProdPort = $smtpProdFrom = $smtpProdFromName = '';
             $smtpProdSecure  = 'tls';
             $smtpProdCredsOk = getSmtpUser() !== '' && getSmtpPassword() !== '';
+            $backupFullGarder = '5';
         }
         $deptsActifsArray = array_map('trim', explode(',', $deptsActifs));
 
@@ -108,6 +113,7 @@ class ConfigurationController extends BaseController
             'smtpProdCredsOk'   => $smtpProdCredsOk,
             'smtpProdFrom'      => $smtpProdFrom,
             'smtpProdFromName'  => $smtpProdFromName,
+            'backupFullGarder'  => $backupFullGarder,
         ];
 
         return view('configuration_index', $data);
@@ -173,6 +179,14 @@ class ConfigurationController extends BaseController
                     return $this->response->setJSON(['ok' => false, 'msg' => 'Valeur numérique positive attendue.']);
                 }
                 $valeur = number_format((float) $valeurNum, 2, '.', '');
+            }
+
+            // Validation entier positif pour le nombre de sauvegardes totales à conserver
+            if ($cle === 'backup_full_garder') {
+                if ($valeur === '' || !ctype_digit($valeur) || (int) $valeur < 1) {
+                    return $this->response->setJSON(['ok' => false, 'msg' => 'Nombre entier positif attendu.']);
+                }
+                $valeur = (string) (int) $valeur;
             }
 
             // Validation départements_actifs : liste de numéros séparés par virgule

@@ -42,18 +42,6 @@ class ClubCsrController extends BaseController
     /** Auto-migration colonnes Club — même liste que ClubController::liste(). */
     private function assurerColonnesClub(\PDO $pdo): void
     {
-        $colsClub = array_column($pdo->query('SHOW COLUMNS FROM Club')->fetchAll(), 'Field');
-        $cols     = [
-            'CorNom'       => 'VARCHAR(100) NULL',
-            'CorEmail'     => 'VARCHAR(150) NULL',
-            'CorTelephone' => 'VARCHAR(20) NULL',
-            'EquipeNom'    => 'VARCHAR(100) NULL',
-        ];
-        foreach ($cols as $col => $def) {
-            if (!in_array($col, $colsClub, true)) {
-                $pdo->exec("ALTER TABLE Club ADD COLUMN $col $def");
-            }
-        }
         $hasUqEquipeNom = (bool) $pdo->query("SHOW INDEX FROM Club WHERE Key_name = 'uq_club_equipenom'")->fetch();
         if (!$hasUqEquipeNom) {
             try {
@@ -88,11 +76,21 @@ class ClubCsrController extends BaseController
             $pdo = getPDO();
             $this->assurerColonnesClub($pdo);
 
+            // Tous les clubs par défaut (filtre "Club Régional" appliqué côté vue) — EstRegional
+            // signale un club ayant au moins une équipe en Régionale (code Division commençant
+            // par R, ex. R1M) ou Pré-Nationale (PN, ex. PNM) — codes définis dans la table
+            // division, voir E011/E017.
             $rows = $pdo->query(
-                'SELECT c.Id_Club, c.Nom, c.EquipeNom,
-                        c.CorNom, c.CorEmail, c.CorTelephone
+                "SELECT c.Id_Club, c.Nom, c.EquipeNom,
+                        c.CorNom, c.CorEmail, c.CorTelephone,
+                        EXISTS (
+                            SELECT 1 FROM equipe e
+                            JOIN division d ON d.Division = e.Division
+                            WHERE e.Id_Club = c.Id_Club
+                              AND (d.Division LIKE 'R%' OR d.Division LIKE 'PN%')
+                        ) AS EstRegional
                  FROM Club c
-                 ORDER BY c.Nom'
+                 ORDER BY c.Nom"
             )->fetchAll();
 
             return $this->response->setJSON(['ok' => true, 'data' => $rows]);

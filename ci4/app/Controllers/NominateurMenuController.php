@@ -45,11 +45,8 @@ class NominateurMenuController extends BaseController
             if ($deptsAutorises) {
                 $stmt = $pdo->prepare("
                     SELECT COUNT(*) FROM ja j
-                    LEFT JOIN Club    cl ON cl.Id_Club    = j.Id_Club
-                    LEFT JOIN Salle   s  ON s.Id_Club     = cl.Id_Club AND s.EstPrincipale = 1
-                    LEFT JOIN laposte lp ON lp.Id_LaPoste = s.Id_Laposte
                     WHERE j.Actif = 1
-                      AND LEFT(lp.CodePostal, 2) IN ($deptPh)
+                      AND j.CodeDept IN ($deptPh)
                 ");
                 $stmt->execute($deptsAutorises);
                 $stats['ja_actifs'] = (int) $stmt->fetchColumn();

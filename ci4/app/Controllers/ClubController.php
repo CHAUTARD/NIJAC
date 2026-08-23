@@ -159,6 +159,29 @@ class ClubController extends BaseController
         });
     }
 
+    public function supprimer(string $idClub): ResponseInterface
+    {
+        return $this->tryJson(function () use ($idClub) {
+            $pdo = getPDO();
+
+            try {
+                $stmt = $pdo->prepare('DELETE FROM Club WHERE Id_Club = ?');
+                $stmt->execute([$idClub]);
+            } catch (\PDOException $e) {
+                if ($e->getCode() === '23000') {
+                    return $this->response->setJSON(['ok' => false, 'msg' => 'Impossible de supprimer : ce club est encore utilisé (équipe, salle ou JA rattaché).']);
+                }
+                throw $e;
+            }
+
+            if ($stmt->rowCount() === 0) {
+                return $this->response->setJSON(['ok' => false, 'msg' => "Club $idClub introuvable."]);
+            }
+
+            return $this->response->setJSON(['ok' => true, 'msg' => 'Club supprimé.']);
+        });
+    }
+
     /** Codes département FFTT (xml_club_dep2) pour la Corse, distincts des codes INSEE 2A/2B utilisés partout ailleurs dans l'appli. */
     private const DEPT_FFTT_CORSE = ['2A' => '98', '2B' => '99'];
 

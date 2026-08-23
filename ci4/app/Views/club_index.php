@@ -460,6 +460,7 @@ function renderGrille() {
         const msg = searchTerm ? 'Aucun résultat pour cette recherche.' : 'Aucun club.';
         $body.append(`<tr><td colspan="7" class="text-center text-muted py-3">${msg}</td></tr>`);
         setStatus(searchTerm ? `0 résultat sur ${lignes.length} club(s).` : 'Aucun club enregistré.');
+        $('#lbl-count').text(`0 / ${lignes.length} club(s)`);
         return;
     }
 
@@ -467,7 +468,7 @@ function renderGrille() {
 
     const info = searchTerm ? `${total} résultat(s) sur ${lignes.length}. ` : '';
     setStatus(`${info}Prêt.`);
-    $('#lbl-count').text(`${lignes.length} club(s)`);
+    $('#lbl-count').text(`${total} / ${lignes.length} club(s)`);
 }
 
 function construireLigne(l) {
@@ -484,9 +485,14 @@ function construireLigne(l) {
     $tr.append(makeTd(l.cor_tel,     'cor_tel'));
     const $tdActions = $('<td class="text-center">');
     $tdActions.append(
-        $('<button type="button" class="btn btn-sm btn-outline-primary btn-modifier-club" title="Modifier">')
+        $('<button type="button" class="btn btn-sm btn-outline-primary btn-modifier-club me-1" title="Modifier">')
             .attr('data-idx', idx)
             .html('<i class="bi bi-pencil-fill"></i>')
+    );
+    $tdActions.append(
+        $('<button type="button" class="btn btn-sm btn-outline-danger btn-supprimer-club" title="Supprimer">')
+            .attr('data-idx', idx)
+            .html('<i class="bi bi-trash-fill"></i>')
     );
     $tr.append($tdActions);
     return $tr;
@@ -502,6 +508,33 @@ function makeTd(val, field) {
 
 $('#tbody-grille').on('click', '.btn-modifier-club', function () {
     ouvrirModaleModifClub(+$(this).attr('data-idx'));
+});
+
+$('#tbody-grille').on('click', '.btn-supprimer-club', function (e) {
+    e.stopPropagation();
+    const l = lignes[+$(this).attr('data-idx')];
+    if (!l) return;
+
+    nijacConfirm(
+        `Supprimer le club « ${l.nom ?? l.id_club} » (${l.id_club}) ?`,
+        function () {
+            $.ajax({
+                url: `${CLUB_BASE}/${encodeURIComponent(l.id_club)}`,
+                method: 'DELETE',
+            }).done(function (res) {
+                if (res.ok) {
+                    nijacToast(res.msg, 'success');
+                    chargerListe();
+                } else {
+                    nijacToast(res.msg, 'danger');
+                }
+            }).fail(function () {
+                nijacToast('Erreur réseau.', 'danger');
+            });
+        },
+        null,
+        { type: 'danger', title: 'Supprimer le club', confirmLabel: 'Supprimer' }
+    );
 });
 
 $('#tbody-grille').on('dblclick', 'tr[data-idx]', function () {

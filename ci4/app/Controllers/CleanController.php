@@ -23,6 +23,7 @@ class CleanController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
+        require_once __DIR__ . '/../../../config/app_config.php';
         require_once __DIR__ . '/../../../Classes/SecurePasswordHasher.php';
     }
 
@@ -284,13 +285,7 @@ class CleanController extends BaseController
         });
     }
 
-    /**
-     * Sauvegarde + vidage de la phase en cours. ATTENTION : `Equipe_Nationale`
-     * est vidée (voir plus bas) mais absente de $tables ci-dessous, donc son
-     * contenu n'est jamais inclus dans le dump — bug déjà présent dans
-     * clean.php, reproduit à l'identique (voir le message envoyé à l'utilisateur
-     * pour le signalement complet).
-     */
+    /** Sauvegarde + vidage de la phase en cours (tables de $tables ci-dessous, ordre alphabétique). */
     public function executer(): ResponseInterface
     {
 
@@ -302,7 +297,7 @@ class CleanController extends BaseController
             $pdo    = getPDO();
             $moi    = $this->moi();
             $sqlDir = $this->sqlDir();
-            $tables = ['JA', 'Disponible', 'Equipe', 'Rencontre', 'Nomination'];
+            $tables = ['Competition_Regionale', 'Disponible', 'Equipe', 'Equipe_Nationale', 'JA', 'Nomination', 'Rencontre'];
 
             if (!is_dir($sqlDir) && !mkdir($sqlDir, 0755, true)) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Impossible de créer le répertoire /SQL/.']);
@@ -348,7 +343,7 @@ class CleanController extends BaseController
 
             // Nettoyage dans l'ordre des dépendances FK
             $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
-            foreach (['Nomination', 'Disponible', 'Rencontre', 'Equipe_Nationale', 'Equipe'] as $t) {
+            foreach (['Nomination', 'Disponible', 'Rencontre', 'Equipe_Nationale', 'Equipe', 'Competition_Regionale'] as $t) {
                 $pdo->exec("DELETE FROM `$t`");
             }
             // JA : désactivation plutôt que suppression
@@ -434,6 +429,16 @@ class CleanController extends BaseController
 
             if (file_put_contents($filepath, $sql) === false) {
                 return $this->response->setJSON(['ok' => false, 'msg' => "Impossible d'écrire le fichier de sauvegarde."]);
+            }
+
+            // Ne garde que les N sauvegardes totales les plus récentes (paramètre
+            // 'backup_full_garder', auto-créé à 5 s'il n'existe pas encore)
+            $pdo->exec("INSERT IGNORE INTO configuration (cle, valeur) VALUES ('backup_full_garder', '5')");
+            $garder  = (int) getConfig('backup_full_garder', '5');
+            $anciens = glob($sqlDir . '/Full_*.sql') ?: [];
+            usort($anciens, fn ($a, $b) => filemtime($b) - filemtime($a));
+            foreach (array_slice($anciens, $garder) as $f) {
+                unlink($f);
             }
 
             return $this->response->setJSON([

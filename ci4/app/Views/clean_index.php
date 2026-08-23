@@ -381,8 +381,8 @@
                 <li>Si la sauvegarde échoue, <strong>aucune suppression</strong> n'est effectuée.</li>
             </ul>
             <div class="tables-badge">
-                <span>JA</span><span>Disponible</span><span>Equipe</span>
-                <span>Equipe_Nationale</span><span>Rencontre</span><span>Nomination</span>
+                <span>Competition_Regionale</span><span>Disponible</span><span>Equipe</span>
+                <span>Equipe_Nationale</span><span>JA</span><span>Nomination</span><span>Rencontre</span>
             </div>
         </div>
 
@@ -409,8 +409,8 @@
                 <li>Opération irréversible — assurez-vous du fichier choisi.</li>
             </ul>
             <div class="tables-badge">
-                <span>JA</span><span>Disponible</span><span>Equipe</span>
-                <span>Equipe_Nationale</span><span>Rencontre</span><span>Nomination</span>
+                <span>Competition_Regionale</span><span>Disponible</span><span>Equipe</span>
+                <span>Equipe_Nationale</span><span>JA</span><span>Nomination</span><span>Rencontre</span>
             </div>
         </div>
 
@@ -639,7 +639,7 @@ $('#btn-executer').on('click', function () {
     if (!pwdOk) return;
     nijacConfirm(
         'DERNIÈRE CONFIRMATION\n\n' +
-        '• Les tables Disponible, Equipe, Equipe_Nationale, Rencontre et Nomination seront vidées.\n' +
+        '• Les tables Competition_Regionale, Disponible, Equipe, Equipe_Nationale, Nomination et Rencontre seront vidées.\n' +
         '• Tous les JA seront désactivés (Actif = 0) mais conservés.\n' +
         '• Les fichiers .xlsx du dossier Importation/Rencontres seront supprimés.\n\n' +
         'Une sauvegarde sera effectuée avant le nettoyage.\n\n' +
@@ -663,7 +663,7 @@ function executerNettoyage() {
                 `<div class="result-ok">
                    ✅ <strong>Nouvelle phase démarrée !</strong><br>
                    Sauvegarde&nbsp;: <code>${res.fichier}</code> (${res.lignes} lignes)<br>
-                   Tables Disponible, Equipe, Equipe_Nationale, Rencontre, Nomination vidées.<br>
+                   Tables Competition_Regionale, Disponible, Equipe, Equipe_Nationale, Nomination, Rencontre vidées.<br>
                    ${res.ja_desactives} JA désactivé(s) (conservés en base).<br>
                    ${res.xlsx_supprimes} fichier(s) .xlsx supprimé(s) de Importation/Rencontres.
                  </div>`
@@ -738,8 +738,9 @@ $('#btn-restaurer').on('click', function () {
     nijacConfirm(
         'RESTAURATION\n\n' +
         'Le fichier « ' + fichier + ' » va écraser\n' +
-        'les données actuelles des tables JA, Disponible,\n' +
-        'Equipe, Rencontre et Nomination.\n\n' +
+        'les données actuelles des tables Competition_Regionale,\n' +
+        'Disponible, Equipe, Equipe_Nationale, JA, Nomination\n' +
+        'et Rencontre.\n\n' +
         'Cette opération est IRRÉVERSIBLE.',
         function () { restaurerFichier(fichier); },
         null,

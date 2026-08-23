@@ -135,7 +135,14 @@
             white-space: nowrap;
             position: sticky;
             top: 0;
+            cursor: pointer;
+            user-select: none;
         }
+        #tbl-result thead th:hover { background: #24488c; }
+        #tbl-result thead th .sort-icon { margin-left: .3rem; opacity: .5; font-size: .72rem; }
+        #tbl-result thead th.sort-asc .sort-icon::after  { content: '▲'; opacity: 1; }
+        #tbl-result thead th.sort-desc .sort-icon::after { content: '▼'; opacity: 1; }
+        #tbl-result thead th:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
         #tbl-result tbody tr:nth-child(even) { background: #f7faff; }
         #tbl-result tbody tr:hover { background: #dce8f8; }
         #tbl-result td { padding: .3rem .6rem; border-bottom: 1px solid #e8edf5; white-space: nowrap; }
@@ -357,6 +364,8 @@ function litteralSql(val) {
     return `'${String(val).replace(/'/g, "''")}'`;
 }
 
+let resultSortState = { col: null, asc: true };
+
 function afficherResultats(cols, rows) {
     const $head = $('#tbl-result-head').empty();
     const $body = $('#tbl-result-body').empty();
@@ -367,9 +376,10 @@ function afficherResultats(cols, rows) {
         return;
     }
 
-    cols.forEach(c => $head.append(`<th>${escHtml(c)}</th>`));
+    resultSortState = { col: null, asc: true };
+    cols.forEach((c, idx) => $head.append(`<th data-idx="${idx}">${escHtml(c)}<span class="sort-icon"></span></th>`));
     rows.forEach((row, rowIdx) => {
-        const $tr = $('<tr>');
+        const $tr = $('<tr>').attr('data-row-idx', rowIdx);
         cols.forEach(c => {
             const val = row[c];
             const $td = $('<td>').attr({ 'data-row-idx': rowIdx, 'data-col': c })
@@ -386,6 +396,10 @@ function afficherResultats(cols, rows) {
 
     $('#empty-msg').hide();
     $('#tbl-result').show();
+
+    nijacSortableTable('#tbl-result thead th[data-idx]', 'idx', resultSortState, function () {
+        nijacSortRows('#tbl-result-body', +resultSortState.col, resultSortState.asc);
+    });
 }
 
 // ── Double-clic sur une cellule : génère l'UPDATE de ce champ pour cette ligne ──
@@ -438,5 +452,6 @@ $(function () { chargerTables(); });
 </script>
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-sortable-table.js') ?>"></script>
 </body>
 </html>

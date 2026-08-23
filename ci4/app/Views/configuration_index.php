@@ -133,16 +133,16 @@
             margin-bottom: .3rem; display: block;
         }
         .email-dev-row { display: flex; gap: .6rem; align-items: center; }
-        #input-email-dev, #input-url-ligue, #input-indemnite, #input-frais-km {
+        #input-email-dev, #input-url-ligue, #input-indemnite, #input-frais-km, #input-backup-full-garder {
             flex: 1; min-width: 0;
             border: 2px solid #c8d4e8; border-radius: 6px;
             padding: .42rem .75rem; font-size: .9rem;
             transition: border-color .2s;
         }
         #input-email-dev:focus, #input-url-ligue:focus,
-        #input-indemnite:focus, #input-frais-km:focus { outline: none; border-color: #1a3a6b; }
+        #input-indemnite:focus, #input-frais-km:focus, #input-backup-full-garder:focus { outline: none; border-color: #1a3a6b; }
         #input-email-dev.is-invalid, #input-url-ligue.is-invalid,
-        #input-indemnite.is-invalid, #input-frais-km.is-invalid { border-color: #dc2626; }
+        #input-indemnite.is-invalid, #input-frais-km.is-invalid, #input-backup-full-garder.is-invalid { border-color: #dc2626; }
         #btn-sauvegarder-email {
             padding: .42rem 1.4rem;
             font-size: .88rem; font-weight: 700;
@@ -662,6 +662,35 @@
         </div>
     </div>
 
+    <!-- ── Paramètre : Sauvegardes ── -->
+    <div class="param-card">
+        <div class="param-card-head">
+            <i class="bi bi-archive-fill param-icon"></i>
+            <div>
+                <h2>Sauvegardes</h2>
+                <small>Sauvegarde totale de la base (E016)</small>
+            </div>
+        </div>
+        <div class="param-card-body">
+
+            <div class="email-dev-group">
+                <label for="input-backup-full-garder">
+                    <i class="bi bi-clock-history me-1"></i>Nombre de sauvegardes totales à conserver
+                </label>
+                <div class="email-dev-row">
+                    <input type="number" id="input-backup-full-garder" step="1" min="1"
+                           value="<?= esc($backupFullGarder) ?>"
+                           autocomplete="off">
+                    <button id="btn-sauvegarder-backup-full-garder">
+                        <i class="bi bi-floppy-fill me-1"></i>Enregistrer
+                    </button>
+                </div>
+                <div id="msg-result-backup-full-garder"></div>
+            </div>
+
+        </div>
+    </div>
+
     <!-- ── Paramètre : Configuration SMTP ── -->
     <div class="param-card" style="grid-column:1 / -1">
         <div class="param-card-head">
@@ -1004,6 +1033,43 @@ $('#btn-sauvegarder-frais-km').on('click', function () {
 $('#input-indemnite, #input-frais-km').on('input', function () {
     $(this).removeClass('is-invalid');
     $(this).closest('.email-dev-group').find('[id^=msg-result]').text('');
+});
+
+// ── Enregistrement nombre de sauvegardes totales à conserver ────────────────
+$('#btn-sauvegarder-backup-full-garder').on('click', function () {
+    const $input = $('#input-backup-full-garder');
+    const $msg   = $('#msg-result-backup-full-garder');
+    const val    = $input.val().trim();
+    if (val === '' || !/^\d+$/.test(val) || parseInt(val, 10) < 1) {
+        $input.addClass('is-invalid');
+        $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Nombre entier positif attendu.</span>');
+        return;
+    }
+    $input.removeClass('is-invalid');
+
+    spinner(true);
+    $(this).prop('disabled', true);
+    $msg.text('');
+
+    $.post(`${BASE}/enregistrer`, { cle: 'backup_full_garder', valeur: val }, function (res) {
+        spinner(false);
+        $('#btn-sauvegarder-backup-full-garder').prop('disabled', false);
+        if (res.ok) {
+            $msg.html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+            $input.val(res.valeur);
+        } else {
+            $input.addClass('is-invalid');
+            $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+        }
+    }, 'json').fail(() => {
+        spinner(false);
+        $('#btn-sauvegarder-backup-full-garder').prop('disabled', false);
+        $msg.html('<span class="text-danger">Erreur réseau.</span>');
+    });
+});
+$('#input-backup-full-garder').on('input', function () {
+    $(this).removeClass('is-invalid');
+    $('#msg-result-backup-full-garder').text('');
 });
 
 function sauvegarderTexte(cle, $input, $msg, $btn) {

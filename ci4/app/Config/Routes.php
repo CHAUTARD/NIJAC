@@ -153,6 +153,7 @@ $routes->post('import-rencontres/designer-arbitre', 'ImportRencontresController:
 $routes->get('club', 'ClubController::index', ['filter' => 'adminauth']);
 $routes->get('club/liste', 'ClubController::liste', ['filter' => 'adminauth']);
 $routes->put('club/(:segment)', 'ClubController::modifier/$1', ['filter' => 'adminauth']);
+$routes->delete('club/(:segment)', 'ClubController::supprimer/$1', ['filter' => 'adminauth']);
 $routes->post('club/fftt/clubs-dept', 'ClubController::getClubsDeptFftt', ['filter' => 'adminauth']);
 $routes->post('club/fftt/sync', 'ClubController::syncFfttClub', ['filter' => 'adminauth']);
 

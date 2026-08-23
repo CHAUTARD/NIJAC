@@ -128,6 +128,20 @@ class JugearbitreController extends BaseController
         $pdo = getPDO();
         $this->ensureFfttColumns($pdo);
 
+        // Auto-heal : CodeDept n'était renseigné nulle part avant l'ajout du
+        // filtre E020 sur ja.CodeDept — comble les valeurs manquantes à chaque
+        // chargement de la liste, même logique de résolution que whereDept
+        // ci-dessous (Id_Club en priorité, sinon Cp/laposte).
+        $pdo->exec(
+            "UPDATE ja j
+             SET j.CodeDept = LEFT(
+                 CASE
+                     WHEN j.Id_Club IS NOT NULL AND j.Id_Club <> '' THEN SUBSTRING(j.Id_Club, 3, 2)
+                     ELSE COALESCE(NULLIF(j.Cp, ''), (SELECT lp.CodePostal FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1))
+                 END, 2)
+             WHERE j.CodeDept IS NULL"
+        );
+
         $dept = $this->request->getGet('dept');
         $dept = ($dept !== null && $dept !== '') ? $dept : null;
 
@@ -234,6 +248,31 @@ class JugearbitreController extends BaseController
         return $this->response->setJSON(['ok' => true]);
     }
 
+    /**
+     * Résout le département (2 chiffres) d'un JA — même priorité que whereDept
+     * dans liste() : Id_Club (positions 3-4), sinon Cp, sinon code postal de
+     * Id_LaPoste.
+     */
+    private function resolveCodeDept(\PDO $pdo, ?string $idClub, string $cp, ?int $idLap): ?string
+    {
+        if ($idClub !== null && $idClub !== '') {
+            return substr($idClub, 2, 2);
+        }
+        if ($cp !== '') {
+            return substr($cp, 0, 2);
+        }
+        if ($idLap !== null) {
+            $stmt = $pdo->prepare('SELECT CodePostal FROM laposte WHERE Id_LaPoste = ? LIMIT 1');
+            $stmt->execute([$idLap]);
+            $cpLap = (string) $stmt->fetchColumn();
+            if ($cpLap !== '') {
+                return substr($cpLap, 0, 2);
+            }
+        }
+
+        return null;
+    }
+
     public function majBdd(): ResponseInterface
     {
 
@@ -270,28 +309,28 @@ class JugearbitreController extends BaseController
         $stmtInsert = $pdo->prepare(
             'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Telephone, Grade, Actif,
                              Id_Club, Id_LaPoste, Defiscalisation, Nationale, NumCompteEBP,
-                             Cp, Ville, DateValidationFFTT)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                             Cp, Ville, DateValidationFFTT, CodeDept)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $stmtUpdateAvecDate = $pdo->prepare(
             'UPDATE ja SET Nom=?, Prenom=?, Email=?, Telephone=?, Grade=?,
                            Actif=?, Id_Club=?, Id_LaPoste=?,
                            Defiscalisation=?, Nationale=?, NumCompteEBP=?,
-                           Cp=?, Ville=?, DateValidationFFTT=?
+                           Cp=?, Ville=?, DateValidationFFTT=?, CodeDept=?
              WHERE Id_JA=?'
         );
         $stmtUpdateSansDate = $pdo->prepare(
             'UPDATE ja SET Nom=?, Prenom=?, Email=?, Telephone=?, Grade=?,
                            Actif=?, Id_Club=?, Id_LaPoste=?,
                            Defiscalisation=?, Nationale=?, NumCompteEBP=?,
-                           Cp=?, Ville=?
+                           Cp=?, Ville=?, CodeDept=?
              WHERE Id_JA=?'
         );
         $stmtInsertAuto = $pdo->prepare(
             'INSERT INTO ja (Nom, Prenom, Email, Telephone, Grade, Actif,
                              Id_Club, Id_LaPoste, Defiscalisation, Nationale, NumCompteEBP,
-                             Cp, Ville, DateValidationFFTT)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                             Cp, Ville, DateValidationFFTT, CodeDept)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
 
         foreach ($lignes as $l) {
@@ -327,22 +366,24 @@ class JugearbitreController extends BaseController
                 $idClub = null;
             }
 
+            $codeDept = $this->resolveCodeDept($pdo, $idClub, $cp, $idLap);
+
             try {
                 if ($id > 0) {
                     $stmtCheck->execute([$id]);
                     if ((int) $stmtCheck->fetchColumn() > 0) {
                         if ($dateFournie) {
-                            $stmtUpdateAvecDate->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid, $id]);
+                            $stmtUpdateAvecDate->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid, $codeDept, $id]);
                         } else {
-                            $stmtUpdateSansDate->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $id]);
+                            $stmtUpdateSansDate->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $codeDept, $id]);
                         }
                         $updates++;
                     } else {
-                        $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid]);
+                        $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid, $codeDept]);
                         $inserts++;
                     }
                 } else {
-                    $stmtInsertAuto->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid]);
+                    $stmtInsertAuto->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid, $codeDept]);
                     $inserts++;
                 }
             } catch (\PDOException $ex) {
