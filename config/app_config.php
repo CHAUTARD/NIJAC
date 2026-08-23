@@ -169,6 +169,16 @@ function assurerRoleCsr(\PDO $pdo): void
 }
 
 /**
+ * Ajoute le rôle 'Defiscalisateur' à l'ENUM utilisateur.Role s'il n'y est pas déjà — permet de
+ * créer des comptes Défiscalisateur depuis E009 sans migration manuelle. Idempotente, appelée
+ * par UtilisateurController, même principe que assurerRoleCsr().
+ */
+function assurerRoleDefiscalisateur(\PDO $pdo): void
+{
+    ajouterValeurEnum($pdo, 'utilisateur', 'Role', 'Defiscalisateur', 'Nominateur');
+}
+
+/**
  * Garantit l'existence du type de message système "Expiration FFTT API" (ENUM messagerie.Type +
  * une ligne de gabarit par défaut, marqueurs {DATE_EXPIRATION}/{DELAI}) — éditable ensuite comme
  * les autres modèles système via E026 (Id_Utilisateur NULL = protégé en écriture pour les non-admin,

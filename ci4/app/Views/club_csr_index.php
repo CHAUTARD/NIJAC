@@ -153,12 +153,6 @@
 
 <!-- MenuStrip -->
 <div id="menu-strip">
-    <button class="menu-item" id="btn-tout-selectionner">
-        <i class="bi bi-check2-square me-1"></i>Tout sélectionner
-    </button>
-    <button class="menu-item" id="btn-tout-deselectionner">
-        <i class="bi bi-square me-1"></i>Tout désélectionner
-    </button>
     <button class="menu-item" id="btn-envoyer" disabled style="background:#00695c;color:#fff;border-color:#00695c;">
         <i class="bi bi-envelope-fill me-1"></i>Envoyer un Email à tous <span id="lbl-selection">(0)</span>
     </button>
@@ -399,16 +393,6 @@ $('#chk-all').on('change', function () {
         $(this).closest('tr').toggleClass('club-selected', check);
     });
     majBarreSelection();
-});
-
-$('#btn-tout-selectionner').on('click', function () {
-    lignesFiltreesTriees().forEach(l => selection.add(l.id_club));
-    renderGrille();
-});
-
-$('#btn-tout-deselectionner').on('click', function () {
-    selection.clear();
-    renderGrille();
 });
 
 $('#btn-envoyer').on('click', function () {

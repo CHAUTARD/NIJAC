@@ -117,8 +117,9 @@ class AuthController extends BaseController
     private function redirectForRole(string $role): string
     {
         return match ($role) {
-            'Administrateur' => site_url('admin-menu'),
+            'Administrateur'  => site_url('admin-menu'),
             'CSR'             => site_url('csr-menu'),
+            'Defiscalisateur' => site_url('defiscalisateur-menu'),
             default           => site_url('nominateur-menu'),
         };
     }

@@ -20,6 +20,8 @@ class UtilisateurController extends BaseController
 
         // Auto-migration : rôle CSR (Commission Sportive Régionale), voir config/app_config.php.
         assurerRoleCsr(getPDO());
+        // Auto-migration : rôle Defiscalisateur, voir config/app_config.php.
+        assurerRoleDefiscalisateur(getPDO());
     }
 
     public function index()

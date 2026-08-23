@@ -286,6 +286,16 @@
             box-shadow: 0 1px 4px rgba(0,0,0,.25);
         }
         .menu-btn-wrap { position: relative; }
+
+        #zone-deconnexion {
+            padding: 0 24px 24px;
+            display: flex;
+            justify-content: center;
+        }
+        #zone-deconnexion .menu-btn {
+            max-width: 260px;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -437,15 +447,16 @@
         </a>
     </div>
 
-    <!-- Déconnexion -->
-    <div class="menu-btn-wrap" style="grid-column: 5;">
-        <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;">
-            <div class="btn-icon"><img src="<?= base_url('img/Quitter.png') ?>" alt="Se déconnecter"></div>
-            <span style="color:#842029;">Se déconnecter</span>
-            <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
-        </a>
-    </div>
 
+</div>
+
+<!-- Déconnexion : ligne à part, centrée -->
+<div id="zone-deconnexion">
+    <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;">
+        <div class="btn-icon"><img src="<?= base_url('img/Quitter.png') ?>" alt="Se déconnecter"></div>
+        <span style="color:#842029;">Se déconnecter</span>
+        <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
+    </a>
 </div>
 
 <!-- Modale détail « Convocations à envoyer » -->

@@ -5,13 +5,15 @@
  * Optionnel : $tbId (def. 'toolbar'), $tbShowLabel (def. true — préfixe "Utilisateur : "),
  *             $tbShowPwdWarning (def. true — nécessite $changeLogin dans le <style> de la vue pour le CSS ts-pwd-warning),
  *             $tbSwitchTo (def. null — 'admin' pour le bouton "Menu administrateur", 'nominateur' pour "Menu nominateur"),
- *             $tbShowCsr (def. false — affiche le bouton "Menu CSR", avant $tbSwitchTo ; nécessite le CSS #btn-switch-csr dans la vue).
+ *             $tbShowCsr (def. false — affiche le bouton "Menu CSR", avant $tbSwitchTo ; nécessite le CSS #btn-switch-csr dans la vue),
+ *             $tbShowDefisc (def. false — affiche le bouton "Menu Défiscalisateur", avant $tbSwitchTo ; nécessite le CSS #btn-switch-defisc dans la vue).
  */
 $tbId             = $tbId ?? 'toolbar';
 $tbShowLabel      = $tbShowLabel ?? true;
 $tbShowPwdWarning = $tbShowPwdWarning ?? true;
 $tbSwitchTo       = $tbSwitchTo ?? null;
 $tbShowCsr        = $tbShowCsr ?? false;
+$tbShowDefisc     = $tbShowDefisc ?? false;
 ?>
 <div id="<?= esc($tbId) ?>">
     <span class="ts-user">
@@ -22,11 +24,16 @@ $tbShowCsr        = $tbShowCsr ?? false;
         <i class="bi bi-key-fill"></i>Mot de passe à modifier
     </a>
     <?php endif; ?>
-    <?php if ($tbShowCsr || $tbSwitchTo): ?>
+    <?php if ($tbShowCsr || $tbShowDefisc || $tbSwitchTo): ?>
     <div style="display:flex;align-items:center;gap:.5rem;">
         <?php if ($tbShowCsr): ?>
         <a id="btn-switch-csr" href="<?= site_url('csr-menu') ?>" title="Basculer vers le menu CSR">
             <i class="bi bi-award-fill"></i>Menu CSR
+        </a>
+        <?php endif; ?>
+        <?php if ($tbShowDefisc): ?>
+        <a id="btn-switch-defisc" href="<?= site_url('defiscalisateur-menu') ?>" title="Basculer vers le menu Défiscalisateur">
+            <i class="bi bi-cash-coin"></i>Menu Défiscalisateur
         </a>
         <?php endif; ?>
         <?php if ($tbSwitchTo === 'admin'): ?>

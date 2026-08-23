@@ -16,6 +16,8 @@
 /* ── nijacToast(message, type, duration) ────────────────────────────────────────
  *  type    : 'success' | 'danger' | 'warning' | 'info'  (défaut : 'success')
  *  duration: millisecondes avant disparition             (défaut : 3 500)
+ *            0 = pas de disparition automatique, reste affiché jusqu'à ce que
+ *            l'utilisateur clique sur ✕
  * ─────────────────────────────────────────────────────────────────────────── */
 function nijacToast(message, type, duration) {
     type     = type     || 'success';
@@ -61,10 +63,12 @@ function nijacToast(message, type, duration) {
     document.getElementById('nijac-toast-wrap').appendChild(el);
     requestAnimationFrame(function () { el.style.opacity = '1'; });
 
-    setTimeout(function () {
-        el.style.opacity = '0';
-        setTimeout(function () { el.remove(); }, 200);
-    }, duration);
+    if (duration > 0) {
+        setTimeout(function () {
+            el.style.opacity = '0';
+            setTimeout(function () { el.remove(); }, 200);
+        }, duration);
+    }
 }
 
 /* ── nijacConfirm(message, onConfirm, onCancel, opts) ───────────────────────────

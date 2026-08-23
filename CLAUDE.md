@@ -125,7 +125,7 @@ $_SESSION['utilisateur'] = [
     'login'          => string,
     'nom'            => string,
     'prenom'         => string,
-    'role'           => 'Administrateur' | 'Nominateur' | 'CSR',
+    'role'           => 'Administrateur' | 'Nominateur' | 'CSR' | 'Defiscalisateur',
     'is_admin'       => bool,
     'id_departement' => string,    // e.g. '76'
     'change_login'   => bool,      // forces password change on next login
@@ -140,6 +140,7 @@ There is no `JA` role/session: a JA never logs in. All JA-facing screens (E029�
 - Admin-only routes: `['filter' => 'adminauth']` in `Routes.php`
 - Nominateur + admin routes: `['filter' => 'auth']` in `Routes.php` (role `CSR` also passes this filter, though it has no menu link into these screens)
 - CSR-only routes (E034, E035): `['filter' => 'csrauth']` — role `CSR` or `Administrateur` (see `CsrAuth.php`). E027 briefly moved to `csrauth`/the CSR menu (E034) when the CSR role was introduced, but moved back to `auth`/the Nominateur menu (E020).
+- Defiscalisateur-only routes (E038, E039): `['filter' => 'defiscauth']` — role `Defiscalisateur` or `Administrateur` (see `DefiscalisateurAuth.php`), same pattern as `csrauth`.
 - Admin-only AJAX actions within a shared controller: checked individually inside the method, same idea as before (e.g. `SalleController`/`JugearbitreController`/`MessagerieController` use route filter `auth` but gate specific write actions to admin in code)
 - E018 (FfttTestController) and E099 (DbAdminController) extra restriction, checked manually in the controller: `$_SESSION['utilisateur']['login'] === 'CHAUTARD'`
 - Public (tokenized or fully open) routes have no filter at all in `Routes.php` — e.g. E023 `desiderata-club`, E029 `adresse-ja`, E030 `info-rencontre`, E031 `convocation-ja`, E032 `disponibilite-ja` (all JA-facing screens; session checked manually in-controller only to let Nominateur/Admin reuse E030 from their own menu)

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Menu CSR (E034)</title>
+    <title>NIJAC – Menu Défiscalisateur (E038)</title>
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
@@ -19,9 +19,10 @@
             flex-direction: column;
         }
 
-        /* ── En-tête (violet, propre à E034/CSR — distinct du bleu Admin et du vert Nominateur) ── */
+        /* ── En-tête (sarcelle, propre à E038/Défiscalisateur — distinct du bleu Admin,
+           du vert Nominateur et du violet CSR) ── */
         #page-header {
-            background: #6a1b9a;
+            background: #00695c;
             color: #fff;
             padding: .5rem 1.25rem;
             font-size: .9rem;
@@ -72,7 +73,7 @@
         }
         #toolbar .ts-pwd-warning:hover { color: #900; }
 
-        /* Visible seulement pour un Administrateur qui prévisualise le menu CSR (voir E020) — masqué pour le rôle CSR lui-même. */
+        /* Visible seulement pour un Administrateur qui prévisualise le menu Défiscalisateur. */
         #btn-switch-admin {
             display: <?= $isAdmin ? 'inline-flex' : 'none' ?>;
             align-items: center;
@@ -90,17 +91,16 @@
         }
         #btn-switch-admin:hover { background: #0f2550; color: #fff; }
 
-        /* ── Grille de boutons (mêmes classes et même style que E002, pour une apparence
-           identique) ── */
+        /* ── Grille de boutons (mêmes classes et même style que E002/E034, pour une
+           apparence identique) ── */
         #menu-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 16px;
             padding: 24px;
             flex: 1;
-            /* Contrairement à E002/E020 (assez de boutons pour remplir 2 lignes), E034 n'a
-               qu'une seule ligne à moitié remplie : sans ça, elle s'étire pour occuper tout
-               l'espace vertical laissé par flex:1 au lieu de ne prendre que sa hauteur de contenu. */
+            /* E038 n'a qu'une seule ligne à moitié remplie : sans ça, elle s'étire pour
+               occuper tout l'espace vertical laissé par flex:1. */
             align-content: start;
         }
 
@@ -173,8 +173,7 @@
             box-shadow: 1px 2px 4px rgba(0,0,0,.15);
         }
 
-        .btn-club-csr   { background-color: #e0f2f1; }
-        .btn-messagerie { background-color: #fff8e1; }
+        .btn-defiscalisation { background-color: #e8f5e9; }
 
         .btn-code {
             position: absolute;
@@ -200,11 +199,11 @@
 </head>
 <body>
 
-<!-- En-tête : pas de bouton Retour, page racine du rôle CSR -->
+<!-- En-tête : pas de bouton Retour, page racine du rôle Défiscalisateur -->
 <div id="page-header" style="display:flex;align-items:center;gap:.5rem;">
     <div style="flex:1;min-width:0;">
-        <i class="bi bi-grid-3x3-gap-fill me-2"></i>Menu CSR
-        <small class="opacity-75 ms-2">(E034)</small>
+        <i class="bi bi-grid-3x3-gap-fill me-2"></i>Menu Défiscalisateur
+        <small class="opacity-75 ms-2">(E038)</small>
     </div>
 </div>
 
@@ -216,18 +215,11 @@
 <!-- Grille -->
 <div id="menu-grid">
 
-    <a href="<?= site_url('club-csr') ?>" class="menu-btn btn-club-csr">
-        <span class="btn-code">E035</span>
-        <div class="btn-icon"><img src="<?= base_url('img/Association.png') ?>" alt="Club CSR"></div>
-        <span>Club CSR</span>
-        <span class="btn-desc">Liste des clubs et envoi d'un email aux correspondants sélectionnés</span>
-    </a>
-
-    <a href="<?= site_url('messagerie') ?>" class="menu-btn btn-messagerie">
-        <span class="btn-code">E026</span>
-        <div class="btn-icon"><img src="<?= base_url('img/Messagerie.png') ?>" alt="Messagerie"></div>
-        <span>Messagerie</span>
-        <span class="btn-desc">Modifier le message envoyé aux correspondants de club</span>
+    <a href="<?= site_url('defiscalisation') ?>" class="menu-btn btn-defiscalisation">
+        <span class="btn-code">E039</span>
+        <div class="btn-icon"><img src="<?= base_url('img/Defiscalisation.png') ?>" alt="Défiscalisation JA"></div>
+        <span>Défiscalisation JA</span>
+        <span class="btn-desc">Frais cumulés des JA défiscalisés sur une période, export CSV</span>
     </a>
 
 </div>

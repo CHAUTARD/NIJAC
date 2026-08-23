@@ -282,6 +282,13 @@ $routes->post('fftt-test/scan-dept-nat', 'FfttTestController::scanDeptNat', ['fi
 // avertissement sécurité dans FfttTestController::testViaLibrary().
 $routes->post('fftt-test/test-lib', 'FfttTestController::testViaLibrary', ['filter' => 'adminauth']);
 
+// ── E019 Équipes régionales ──────────────────────────────────────────────────
+$routes->get('equipe-regionale', 'EquipeRegionaleController::index', ['filter' => 'adminauth']);
+$routes->get('equipe-regionale/liste', 'EquipeRegionaleController::liste', ['filter' => 'adminauth']);
+$routes->post('equipe-regionale/import-txt', 'EquipeRegionaleController::importerTxt', ['filter' => 'adminauth']);
+$routes->put('equipe-regionale/(:num)', 'EquipeRegionaleController::modifier/$1', ['filter' => 'adminauth']);
+$routes->delete('equipe-regionale/(:num)', 'EquipeRegionaleController::supprimer/$1', ['filter' => 'adminauth']);
+
 // ── E099 Administration base de données ──────────────────────────────────────
 // Admin uniquement (filtre "adminauth"), + restriction supplémentaire
 // login === 'CHAUTARD' vérifiée manuellement dans le contrôleur (même règle
@@ -358,3 +365,12 @@ $routes->post('disponibilite-ja-v2/token', 'DisponibiliteJaV2Controller::token')
 $routes->get('disponibilite-ja-v2/lire-note', 'DisponibiliteJaV2Controller::lireNote');
 $routes->post('disponibilite-ja-v2/sauvegarder-note', 'DisponibiliteJaV2Controller::sauvegarderNote');
 $routes->post('disponibilite-ja-v2/sauvegarder-defiscalisation', 'DisponibiliteJaV2Controller::sauvegarderDefiscalisation');
+
+// ── E038 Menu Défiscalisateur ────────────────────────────────────────────────
+// Rôle Defiscalisateur ou Administrateur — voir DefiscalisateurAuth.php.
+$routes->get('defiscalisateur-menu', 'DefiscalisateurMenuController::index', ['filter' => 'defiscauth']);
+
+// ── E039 Défiscalisation JA ──────────────────────────────────────────────────
+$routes->get('defiscalisation', 'DefiscalisationController::index', ['filter' => 'defiscauth']);
+$routes->post('defiscalisation/donnees', 'DefiscalisationController::donnees', ['filter' => 'defiscauth']);
+$routes->post('defiscalisation/export-csv', 'DefiscalisationController::exportCsv', ['filter' => 'defiscauth']);

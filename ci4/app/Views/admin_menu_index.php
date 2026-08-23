@@ -45,7 +45,7 @@
 
         #toolbar .ts-pwd-warning:hover { color: #900; }
 
-        #btn-switch-nominateur, #btn-switch-csr {
+        #btn-switch-nominateur, #btn-switch-csr, #btn-switch-defisc {
             display: inline-flex;
             align-items: center;
             gap: .35rem;
@@ -63,6 +63,8 @@
         #btn-switch-nominateur:hover { background: #1b5e20; color: #fff; }
         #btn-switch-csr { background: #6a1b9a; }
         #btn-switch-csr:hover { background: #4a148c; color: #fff; }
+        #btn-switch-defisc { background: #00695c; }
+        #btn-switch-defisc:hover { background: #004d40; color: #fff; }
 
         #page-header {
             background: var(--nijac-blue);
@@ -93,12 +95,40 @@
         #page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
         #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
 
-        #menu-grid {
+        .menu-grid {
             display: grid;
             grid-template-columns: repeat(6, 1fr);
             gap: 16px;
             padding: 24px;
             flex: 1;
+        }
+
+        #menu-tabs {
+            background: #fff;
+            border-bottom: 1px solid #dde5f0;
+            padding: 0 24px;
+            flex-shrink: 0;
+        }
+        #menu-tabs .nav-link {
+            font-weight: 600;
+            color: #556;
+        }
+        #menu-tabs .nav-link.active {
+            color: var(--nijac-blue);
+            border-color: #dde5f0 #dde5f0 #fff;
+        }
+
+        .tab-content { flex: 1; display: flex; }
+        .tab-content .tab-pane { flex: 1; }
+
+        #zone-deconnexion {
+            padding: 0 24px 24px;
+            display: flex;
+            justify-content: center;
+        }
+        #zone-deconnexion .menu-btn {
+            max-width: 260px;
+            width: 100%;
         }
 
         .menu-btn {
@@ -181,6 +211,7 @@
         .btn-region       { background-color: #e8eaf6; }
         .btn-departement  { background-color: #e1f5fe; }
         .btn-competition-regionale { background-color: #f3e5f5; }
+        .btn-equipe-regionale { background-color: #e8f5e9; }
 
         .btn-code {
             position: absolute;
@@ -203,7 +234,7 @@
         </div>
     </div>
 
-    <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowCsr' => true, 'tbSwitchTo' => 'nominateur']) ?>
+    <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowCsr' => true, 'tbShowDefisc' => true, 'tbSwitchTo' => 'nominateur']) ?>
 
     <?php if ($ffttJoursExpiration !== null && $ffttJoursExpiration <= 60): ?>
     <div class="alert alert-<?= $ffttJoursExpiration < 0 ? 'danger' : 'warning' ?> d-flex align-items-center gap-2 mb-0" style="border-radius:0;font-size:.85rem;">
@@ -218,116 +249,165 @@
 
     <?php require __DIR__ . '/_modal_mdp.php'; ?>
 
-    <div id="menu-grid">
+    <ul class="nav nav-tabs" id="menu-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tab-operation-btn" data-bs-toggle="tab" data-bs-target="#tab-operation" type="button" role="tab">
+                <i class="bi bi-play-circle-fill me-1"></i>Opération courante
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-tables-btn" data-bs-toggle="tab" data-bs-target="#tab-tables" type="button" role="tab">
+                <i class="bi bi-table me-1"></i>Gestion des tables
+            </button>
+        </li>
+        <?php if ($isChautard): ?>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-dba-btn" data-bs-toggle="tab" data-bs-target="#tab-dba" type="button" role="tab">
+                <i class="bi bi-hdd-stack-fill me-1"></i>DBA
+            </button>
+        </li>
+        <?php endif; ?>
+    </ul>
 
-        <a href="<?= site_url('club') ?>" class="menu-btn btn-club">
-            <span class="btn-code">E008</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Association.png') ?>" alt="Club / Association"></div>
-            <span>Club / Association</span>
-            <span class="btn-desc">Gérer les clubs et associations affiliés</span>
-        </a>
+    <div class="tab-content">
 
-        <a href="<?= site_url('salle') ?>" class="menu-btn btn-salle">
-            <span class="btn-code">E005</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Salle.png') ?>" alt="Salle"></div>
-            <span>Salle</span>
-            <span class="btn-desc">Référencer les salles de compétition et leur adresse</span>
-        </a>
+        <!-- ── Onglet 1 : Opération courante ── -->
+        <div class="tab-pane fade show active" id="tab-operation" role="tabpanel">
+            <div class="menu-grid">
 
-        <a href="<?= site_url('utilisateur') ?>" class="menu-btn btn-utilisateur">
-            <span class="btn-code">E009</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Utilisateur.png') ?>" alt="Utilisateur"></div>
-            <span>Utilisateur</span>
-            <span class="btn-desc">Gérer les comptes et droits d'accès</span>
-        </a>
+                <a href="<?= site_url('club') ?>" class="menu-btn btn-club">
+                    <span class="btn-code">E008</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/Association.png') ?>" alt="Club / Association"></div>
+                    <span>Club / Association</span>
+                    <span class="btn-desc">Gérer les clubs et associations affiliés</span>
+                </a>
 
-        <a href="<?= site_url('commune') ?>" class="menu-btn btn-communes">
-            <span class="btn-code">E006</span>
-            <div class="btn-icon"><img src="<?= base_url('img/La_Poste.png') ?>" alt="Communes"></div>
-            <span>Communes</span>
-            <span class="btn-desc">Base des codes postaux et coordonnées GPS</span>
-        </a>
+                <a href="<?= site_url('salle') ?>" class="menu-btn btn-salle">
+                    <span class="btn-code">E005</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/Salle.png') ?>" alt="Salle"></div>
+                    <span>Salle</span>
+                    <span class="btn-desc">Référencer les salles de compétition et leur adresse</span>
+                </a>
 
-        <a href="<?= site_url('division') ?>" class="menu-btn btn-division">
-            <span class="btn-code">E010</span>
-            <div class="btn-icon"><img src="<?= base_url('img/podium.png') ?>" alt="Division"></div>
-            <span>Division</span>
-            <span class="btn-desc">Définir les divisions et leur niveau</span>
-        </a>
+                <a href="<?= site_url('import-rencontres') ?>" class="menu-btn btn-club">
+                    <span class="btn-code">E011</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/Competition.png') ?>" alt="Import Rencontres Régionales"></div>
+                    <span>Import Rencontres Régionales</span>
+                    <span class="btn-desc">Importer les rencontres Régionales depuis un fichier FFTT</span>
+                </a>
 
-        <a href="<?= site_url('import-rencontres') ?>" class="menu-btn btn-club">
-            <span class="btn-code">E011</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Competition.png') ?>" alt="Import Rencontres Régionales"></div>
-            <span>Import Rencontres Régionales</span>
-            <span class="btn-desc">Importer les rencontres Régionales depuis un fichier FFTT</span>
-        </a>
+                <a href="<?= site_url('import-rencontres-nat') ?>" class="menu-btn btn-club">
+                    <span class="btn-code">E017</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/ImportNat.png') ?>" alt="Import Nationales"></div>
+                    <span>Import Rencontres Nationales</span>
+                    <span class="btn-desc">Importer les rencontres de divisions Nationales</span>
+                </a>
 
-        <a href="<?= site_url('import-rencontres-nat') ?>" class="menu-btn btn-club">
-            <span class="btn-code">E017</span>
-            <div class="btn-icon"><img src="<?= base_url('img/ImportNat.png') ?>" alt="Import Nationales"></div>
-            <span>Import Rencontres Nationales</span>
-            <span class="btn-desc">Importer les rencontres de divisions Nationales</span>
-        </a>
+                <a href="<?= site_url('competition-regionale') ?>" class="menu-btn btn-competition-regionale">
+                    <span class="btn-code">E014</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/Calendrier_Regional.png') ?>" alt="Calendrier championnat régional"></div>
+                    <span>Calendrier Régional</span>
+                    <span class="btn-desc">Saisir les dates du championnat régional</span>
+                </a>
 
-        <a href="<?= site_url('region') ?>" class="menu-btn btn-region">
-            <span class="btn-code">E012</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Regions.png') ?>" alt="Régions"></div>
-            <span>Régions</span>
-            <span class="btn-desc">Gérer les régions et leur gentilé</span>
-        </a>
+                <a href="<?= site_url('clean') ?>" class="menu-btn btn-saison">
+                    <span class="btn-code">E016</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/Nettoyage.png') ?>" alt="Saison"></div>
+                    <span>Saison</span>
+                    <span class="btn-desc">Suppression des informations sur la saison dernière</span>
+                </a>
 
-        <a href="<?= site_url('departement') ?>" class="menu-btn btn-departement">
-            <span class="btn-code">E013</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Departement.png') ?>" alt="Départements"></div>
-            <span>Départements</span>
-            <span class="btn-desc">Gérer les départements et leur région</span>
-        </a>
+            </div>
+        </div>
 
-        <a href="<?= site_url('competition-regionale') ?>" class="menu-btn btn-competition-regionale">
-            <span class="btn-code">E014</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Calendrier_Regional.png') ?>" alt="Calendrier championnat régional"></div>
-            <span>Calendrier Régional</span>
-            <span class="btn-desc">Saisir les dates du championnat régional</span>
-        </a>
+        <!-- ── Onglet 2 : Gestion des tables ── -->
+        <div class="tab-pane fade" id="tab-tables" role="tabpanel">
+            <div class="menu-grid">
 
-        <a href="<?= site_url('clean') ?>" class="menu-btn btn-saison">
-            <span class="btn-code">E016</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Nettoyage.png') ?>" alt="Saison"></div>
-            <span>Saison</span>
-            <span class="btn-desc">Suppression des informations sur la saison dernière</span>
-        </a>
+                <a href="<?= site_url('utilisateur') ?>" class="menu-btn btn-utilisateur">
+                    <span class="btn-code">E009</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/Utilisateur.png') ?>" alt="Utilisateur"></div>
+                    <span>Utilisateur</span>
+                    <span class="btn-desc">Gérer les comptes et droits d'accès</span>
+                </a>
 
-        <a href="<?= site_url('configuration') ?>" class="menu-btn btn-configuration">
-            <span class="btn-code">E015</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Parametres.png') ?>" alt="Configuration"></div>
-            <span>Configuration</span>
-            <span class="btn-desc">Paramètres généraux de l'application</span>
-        </a>
+                <a href="<?= site_url('commune') ?>" class="menu-btn btn-communes">
+                    <span class="btn-code">E006</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/La_Poste.png') ?>" alt="Communes"></div>
+                    <span>Communes</span>
+                    <span class="btn-desc">Base des codes postaux et coordonnées GPS</span>
+                </a>
 
+                <a href="<?= site_url('region') ?>" class="menu-btn btn-region">
+                    <span class="btn-code">E012</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/Regions.png') ?>" alt="Régions"></div>
+                    <span>Régions</span>
+                    <span class="btn-desc">Gérer les régions et leur gentilé</span>
+                </a>
+
+                <a href="<?= site_url('division') ?>" class="menu-btn btn-division">
+                    <span class="btn-code">E010</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/podium.png') ?>" alt="Division"></div>
+                    <span>Division</span>
+                    <span class="btn-desc">Définir les divisions et leur niveau</span>
+                </a>
+
+                <a href="<?= site_url('departement') ?>" class="menu-btn btn-departement">
+                    <span class="btn-code">E013</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/Departement.png') ?>" alt="Départements"></div>
+                    <span>Départements</span>
+                    <span class="btn-desc">Gérer les départements et leur région</span>
+                </a>
+
+                <a href="<?= site_url('configuration') ?>" class="menu-btn btn-configuration">
+                    <span class="btn-code">E015</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/Parametres.png') ?>" alt="Configuration"></div>
+                    <span>Configuration</span>
+                    <span class="btn-desc">Paramètres généraux de l'application</span>
+                </a>
+
+                <a href="<?= site_url('equipe-regionale') ?>" class="menu-btn btn-equipe-regionale">
+                    <span class="btn-code">E019</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/Equipe.png') ?>" alt="Chargement équipe régionale"></div>
+                    <span>Chargement équipe régionale</span>
+                    <span class="btn-desc">Consulter et modifier les équipes régionales importées</span>
+                </a>
+
+            </div>
+        </div>
+
+        <!-- ── Onglet 3 : DBA (visible uniquement par CHAUTARD) ── -->
+        <?php if ($isChautard): ?>
+        <div class="tab-pane fade" id="tab-dba" role="tabpanel">
+            <div class="menu-grid">
+
+                <a href="<?= site_url('fftt-test') ?>" class="menu-btn btn-configuration">
+                    <span class="btn-code">E018</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/TestAPI.png') ?>" alt="Test API FFTT"></div>
+                    <span>Test API FFTT</span>
+                    <span class="btn-desc">Vérifier la connexion à l'API FFTT</span>
+                </a>
+
+                <a href="<?= site_url('db-admin') ?>" class="menu-btn btn-dbadmin" style="background: repeating-linear-gradient(45deg, #fce4ec, #fce4ec 10px, #ffcdd2 10px, #ffcdd2 20px); border: 2px solid #c62828;">
+                    <span class="btn-code">E099</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/database.png') ?>" alt="Base de données"></div>
+                    <span>Base de données</span>
+                    <span class="btn-desc">Administration directe de la base de données</span>
+                </a>
+
+            </div>
+        </div>
+        <?php endif; ?>
+
+    </div>
+
+    <!-- ── Commun, sous les onglets : Quitter ── -->
+    <div id="zone-deconnexion">
         <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;">
             <div class="btn-icon"><img src="<?= base_url('img/Quitter.png') ?>" alt="Se déconnecter"></div>
             <span style="color:#842029;">Se déconnecter</span>
             <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
         </a>
-
-        <?php if ($isChautard): ?>
-        <a href="<?= site_url('fftt-test') ?>" class="menu-btn btn-configuration">
-            <span class="btn-code">E018</span>
-            <div class="btn-icon"><img src="<?= base_url('img/TestAPI.png') ?>" alt="Test API FFTT"></div>
-            <span>Test API FFTT</span>
-            <span class="btn-desc">Vérifier la connexion à l'API FFTT</span>
-        </a>
-        <?php endif; ?>
-
-        <?php if ($isChautard): ?>
-        <a href="<?= site_url('db-admin') ?>" class="menu-btn btn-dbadmin" style="background: repeating-linear-gradient(45deg, #fce4ec, #fce4ec 10px, #ffcdd2 10px, #ffcdd2 20px); border: 2px solid #c62828;">
-            <span class="btn-code">E099</span>
-            <div class="btn-icon"><img src="<?= base_url('img/database.png') ?>" alt="Base de données"></div>
-            <span>Base de données</span>
-            <span class="btn-desc">Administration directe de la base de données</span>
-        </a>
-        <?php endif; ?>
-
     </div>
 
     <!-- Pied de page : recopié de includes/footer.php -->
