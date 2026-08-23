@@ -337,6 +337,10 @@ $routes->post('disponibilite-ja/sauvegarder-defiscalisation', 'DisponibiliteJaCo
 // Rôle CSR (Commission Sportive Régionale) ou Administrateur — voir CsrAuth.php.
 $routes->get('csr-menu', 'CsrMenuController::index', ['filter' => 'csrauth']);
 
+// ── E040 Message Réengagement CSR ────────────────────────────────────────────
+// Remplace le lien vers E026 dans le menu CSR (E034) — voir ReengagementCsrController.
+$routes->get('reengagement-csr', 'ReengagementCsrController::index', ['filter' => 'csrauth']);
+
 // ── E035 Club CSR (envoi email) ──────────────────────────────────────────────
 $routes->get('club-csr', 'ClubCsrController::index', ['filter' => 'csrauth']);
 $routes->get('club-csr/liste', 'ClubCsrController::liste', ['filter' => 'csrauth']);

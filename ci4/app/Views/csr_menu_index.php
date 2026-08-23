@@ -223,10 +223,10 @@
         <span class="btn-desc">Liste des clubs et envoi d'un email aux correspondants sélectionnés</span>
     </a>
 
-    <a href="<?= site_url('messagerie') ?>" class="menu-btn btn-messagerie">
-        <span class="btn-code">E026</span>
-        <div class="btn-icon"><img src="<?= base_url('img/Messagerie.png') ?>" alt="Messagerie"></div>
-        <span>Messagerie</span>
+    <a href="<?= site_url('reengagement-csr') ?>" class="menu-btn btn-messagerie">
+        <span class="btn-code">E040</span>
+        <div class="btn-icon"><img src="<?= base_url('img/Messagerie.png') ?>" alt="Message Réengagement"></div>
+        <span>Message Réengagement</span>
         <span class="btn-desc">Modifier le message envoyé aux correspondants de club</span>
     </a>
 
