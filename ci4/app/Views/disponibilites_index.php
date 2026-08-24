@@ -33,7 +33,6 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 #barre-dept { background:#fff; border-bottom:2px solid #dee2e6; padding:.65rem 1.25rem; display:flex; align-items:center; gap:1.25rem; flex-wrap:wrap; }
 #barre-dept label { font-weight:700; color:#444; font-size:.88rem; margin:0; white-space:nowrap; }
 #sel-dept { min-width:260px; font-size:.88rem; }
-#info-dept { font-size:.8rem; color:#888; font-style:italic; }
 
 /* ── Corps ── */
 #corps { flex:1; overflow-y:auto; padding:1.25rem clamp(1rem, 4vw, 4rem); width:100%; box-sizing:border-box; }
@@ -174,20 +173,19 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
         </optgroup>
         <?php endif; ?>
     </select>
-    <span id="info-dept"></span>
     <div id="spinner-dept" class="spinner-border spinner-border-sm text-secondary" role="status">
         <span class="visually-hidden">Chargement…</span>
     </div>
     <div id="legende-dispo">
         <span class="leg-item"><span class="leg-dot leg-dot-ok"></span>Disponibilités saisies</span>
-        <span class="leg-item"><span class="leg-dot leg-dot-ko"></span>Aucune disponibilité</span>
+        <span class="leg-item"><span class="leg-dot leg-dot-ko"></span>Non renseigné</span>
     </div>
     <div class="input-group input-group-sm" style="max-width:200px; display:none" id="wrap-filtre-dispo">
         <label class="input-group-text" for="sel-filtre-dispo"><i class="bi bi-funnel-fill"></i></label>
         <select id="sel-filtre-dispo" class="form-select form-select-sm">
             <option value="">Tous les JA</option>
             <option value="ok">Avec disponibilités</option>
-            <option value="ko">Sans disponibilités</option>
+            <option value="ko">Non renseigné</option>
         </select>
     </div>
     <div class="input-group input-group-sm ms-2" style="max-width:240px; display:none" id="wrap-filtre-ja">
@@ -218,11 +216,10 @@ const DISPONIBILITE_JA_BASE = '<?= site_url('disponibilite-ja') ?>';
 
 // Libellés des départements
 const DEPT_NOMS = <?= json_encode(
-    array_merge(
-        array_column($deptActifs, 'nom', 'code'),
-        array_column($deptLimitrophes, 'nom', 'code')
-    ),
-    JSON_UNESCAPED_UNICODE
+    // '+' (pas array_merge) : préserve les clés code-département, que PHP caste en
+    // entiers pour les codes numériques (ex. "76") — array_merge les aurait renumérotées.
+    array_column($deptActifs, 'nom', 'code') + array_column($deptLimitrophes, 'nom', 'code'),
+    JSON_FORCE_OBJECT | JSON_UNESCAPED_UNICODE
 ) ?>;
 
 $(function () {
@@ -235,7 +232,6 @@ $(function () {
         if (!dept) {
             $('#liste-ja').hide().empty();
             $('#placeholder').show();
-            $('#info-dept').text('');
             $('#wrap-filtre-dispo').hide();
             $('#wrap-filtre-ja').hide();
             $('#legende-dispo').hide();
@@ -253,7 +249,6 @@ function chargerJA(dept) {
     $('#placeholder').hide();
     $('#liste-ja').hide().empty();
     $('#spinner-dept').show();
-    $('#info-dept').text(DEPT_NOMS[dept] || dept);
 
     $.ajax({
         url: `${DISPO_BASE}/ja-dept`,
@@ -295,7 +290,7 @@ function chargerJA(dept) {
                     <span>${escHtml(DEPT_NOMS[d] || d)}</span>
                     <span class="dept-nb" data-total="${jas.length}">${jas.length} JA</span>
                     <span style="font-size:.75rem;color:#2e7d32;font-weight:600;"><i class="bi bi-check-circle-fill me-1"></i>${nbDispo} avec dispo</span>
-                    ${nbSansDispo > 0 ? `<span style="font-size:.75rem;color:#c62828;font-weight:600;"><i class="bi bi-exclamation-circle-fill me-1"></i>${nbSansDispo} sans dispo</span>` : ''}
+                    ${nbSansDispo > 0 ? `<span style="font-size:.75rem;color:#c62828;font-weight:600;"><i class="bi bi-exclamation-circle-fill me-1"></i>${nbSansDispo} non renseigné</span>` : ''}
                 </div>
                 <div class="ja-grid" id="grid-${escHtml(d)}"></div>
             `);
@@ -315,14 +310,14 @@ function chargerJA(dept) {
                 const noDispoClass = hasDispo ? '' : 'no-dispo';
                 const dispoBadge  = hasDispo
                     ? `<div class="ja-dispo-badge" title="Disponibilités saisies"><i class="bi bi-check-lg"></i></div>`
-                    : `<div class="ja-dispo-badge" style="background:#c62828;" title="Aucune disponibilité saisie"><i class="bi bi-x-lg"></i></div>`;
+                    : `<div class="ja-dispo-badge" style="background:#c62828;" title="Non renseigné"><i class="bi bi-x-lg"></i></div>`;
 
                 // Lien vers la fiche de disponibilité (E032) dans une nouvelle fenêtre
                 $grid.append(`
                     <a class="ja-card ${gradeClass} ${noDispoClass}"
                        href="${DISPONIBILITE_JA_BASE}?id_ja=${ja.Id_JA}"
                        target="_blank"
-                       title="${hasDispo ? 'Disponibilités saisies — ' : 'Aucune disponibilité — '}${escHtml(ja.Prenom)} ${escHtml(ja.Nom)}">
+                       title="${hasDispo ? 'Disponibilités saisies — ' : 'Non renseigné — '}${escHtml(ja.Prenom)} ${escHtml(ja.Nom)}">
                         <div class="ja-avatar">${escHtml(initiales)}</div>
                         <div class="ja-corps">
                             <div class="ja-nom">${escHtml(ja.Prenom)} ${escHtml(ja.Nom)}</div>

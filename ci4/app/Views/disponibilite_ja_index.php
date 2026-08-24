@@ -132,7 +132,7 @@
 
         /* ── Vue calendrier ──────────────────────────────────────────────── */
         #section-cal-grille {
-            max-width: 960px; margin: 0 auto;
+            max-width: 1700px; margin: 0 auto;
             padding: .75rem 1rem 1rem;
             display: none;
         }
@@ -161,23 +161,23 @@
         }
         .cal-mois-titre {
             background: var(--nijac-blue); color: #fff;
-            text-align: center; font-size: .85rem; font-weight: 700;
-            padding: .4rem;
+            text-align: center; font-size: 1.05rem; font-weight: 700;
+            padding: .6rem;
         }
         .cal-semaine-header {
             display: grid; grid-template-columns: repeat(7, 1fr);
-            text-align: center; font-size: .7rem; font-weight: 700;
-            color: #888; padding: .3rem 0 .1rem;
+            text-align: center; font-size: .85rem; font-weight: 700;
+            color: #888; padding: .4rem 0 .15rem;
         }
         .cal-semaine-header span:last-child { color: #c62828; }
         .cal-grid {
             display: grid; grid-template-columns: repeat(7, 1fr);
-            padding: .2rem .25rem .4rem;
+            padding: .3rem .35rem .5rem;
         }
         .cal-jour {
             aspect-ratio: 1; display: flex; align-items: center;
             justify-content: center; border-radius: 50%;
-            font-size: .78rem; margin: 1px;
+            font-size: 1rem; margin: 2px;
             cursor: default; user-select: none;
         }
         .cal-jour.vide { color: transparent; }
@@ -335,6 +335,9 @@ const TOKEN_JA = <?= json_encode($tokenJa) ?>;
 const CONFIG_SAISON = <?= json_encode(getConfig('saison') ?: '') ?>;
 // Phase courante (1 ou 2), déterminée par getAnneePhase() (bornes phase2_debut/phase2_fin)
 const CONFIG_PHASE = <?= strpos(getAnneePhase(), '-') !== false ? 2 : 1 ?>;
+// Bornes de la phase 2 (mois calendaire 1-12) — le reste de la saison est la phase 1.
+const PHASE2_MOIS_DEBUT = <?= (int) substr(getConfig('phase2_debut', '02-01'), 0, 2) ?>;
+const PHASE2_MOIS_FIN   = <?= (int) substr(getConfig('phase2_fin',   '06-30'), 0, 2) ?>;
 
 (function () {
     const m = CONFIG_SAISON.match(/(\d{4})/);
@@ -495,9 +498,13 @@ function renderCalendrierMensuel() {
         [yrDebut + 1, 3],
         [yrDebut + 1, 4],
         [yrDebut + 1, 5],
-    ];
+    ].filter(([, mois]) => {
+        const enPhase2 = (mois + 1) >= PHASE2_MOIS_DEBUT && (mois + 1) <= PHASE2_MOIS_FIN;
+        return CONFIG_PHASE === 2 ? enPhase2 : !enPhase2;
+    });
 
-    const $grille = $('#cal-mois-grille').empty();
+    const $grille = $('#cal-mois-grille').empty()
+        .css('grid-template-columns', `repeat(${moisSaison.length}, 1fr)`);
     moisSaison.forEach(([annee, mois]) => {
         $grille.append(buildMonthGrid(annee, mois, today));
     });

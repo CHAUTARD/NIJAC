@@ -128,30 +128,11 @@ class JugearbitreController extends BaseController
         $pdo = getPDO();
         $this->ensureFfttColumns($pdo);
 
-        // Auto-heal : CodeDept n'était renseigné nulle part avant l'ajout du
-        // filtre E020 sur ja.CodeDept — comble les valeurs manquantes à chaque
-        // chargement de la liste, même logique de résolution que whereDept
-        // ci-dessous (Id_Club en priorité, sinon Cp/laposte).
-        $pdo->exec(
-            "UPDATE ja j
-             SET j.CodeDept = LEFT(
-                 CASE
-                     WHEN j.Id_Club IS NOT NULL AND j.Id_Club <> '' THEN SUBSTRING(j.Id_Club, 3, 2)
-                     ELSE COALESCE(NULLIF(j.Cp, ''), (SELECT lp.CodePostal FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1))
-                 END, 2)
-             WHERE j.CodeDept IS NULL"
-        );
-
         $dept = $this->request->getGet('dept');
         $dept = ($dept !== null && $dept !== '') ? $dept : null;
 
         $deptPad   = $dept !== null ? str_pad((string) $dept, 2, '0', STR_PAD_LEFT) : null;
-        $whereDept = $dept !== null
-            ? 'WHERE (
-                   SUBSTRING(j.Id_Club, 3, 2) = ?
-                   OR ((j.Id_Club IS NULL OR j.Id_Club = \'\') AND LEFT((SELECT lp2.CodePostal FROM laposte lp2 WHERE lp2.Id_LaPoste = j.Id_LaPoste LIMIT 1), 2) = ?)
-               )'
-            : '';
+        $whereDept = $dept !== null ? 'WHERE j.CodeDept = ?' : '';
 
         $stmt = $pdo->prepare(
             'SELECT j.Id_JA, j.Nom, j.Prenom, j.Email, j.Telephone,
@@ -159,15 +140,17 @@ class JugearbitreController extends BaseController
                     j.Defiscalisation, j.Nationale, j.NumCompteEBP,
                     j.DateValidationFFTT,
                     j.Cp, j.Ville, j.CodeDept,
-                    (SELECT cl.Nom FROM Club cl WHERE cl.Id_Club = j.Id_Club LIMIT 1) AS NomClub,
-                    COALESCE(j.Cp,    (SELECT lp.CodePostal FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1)) AS CodePostalJA,
-                    COALESCE(j.Ville, (SELECT lp.Nom        FROM laposte lp WHERE lp.Id_LaPoste = j.Id_LaPoste LIMIT 1)) AS VilleJA,
+                    cl.Nom AS NomClub,
+                    COALESCE(j.Cp,    lp.CodePostal) AS CodePostalJA,
+                    COALESCE(j.Ville, lp.Nom)        AS VilleJA,
                     (SELECT COUNT(*) FROM disponible d WHERE d.Id_JA = j.Id_JA) AS NbDispo
              FROM ja j
+             LEFT JOIN Club cl    ON cl.Id_Club    = j.Id_Club
+             LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
              ' . $whereDept . '
              ORDER BY j.Nom, j.Prenom'
         );
-        $stmt->execute($dept !== null ? [$deptPad, $deptPad] : []);
+        $stmt->execute($dept !== null ? [$deptPad] : []);
         $rows = $stmt->fetchAll();
         $rows = $this->deduplicateJA($rows, 'Nom', 'Prenom', 'Grade');
 
@@ -249,12 +232,16 @@ class JugearbitreController extends BaseController
     }
 
     /**
-     * Résout le département (2 chiffres) d'un JA — même priorité que whereDept
-     * dans liste() : Id_Club (positions 3-4), sinon Cp, sinon code postal de
-     * Id_LaPoste.
+     * Résout le département (2 chiffres) d'un JA — $deptManuel (combo de la
+     * modale Créer/Modifier JA) est prioritaire s'il est fourni, sinon même
+     * priorité que whereDept dans liste() : Id_Club (positions 3-4), sinon Cp,
+     * sinon code postal de Id_LaPoste.
      */
-    private function resolveCodeDept(\PDO $pdo, ?string $idClub, string $cp, ?int $idLap): ?string
+    private function resolveCodeDept(\PDO $pdo, ?string $idClub, string $cp, ?int $idLap, ?string $deptManuel = null): ?string
     {
+        if ($deptManuel !== null && $deptManuel !== '') {
+            return $deptManuel;
+        }
         if ($idClub !== null && $idClub !== '') {
             return substr($idClub, 2, 2);
         }
@@ -345,6 +332,7 @@ class JugearbitreController extends BaseController
             $nationale = !empty($l['nationale']) ? 1 : 0;
             $idClub    = ($l['id_club'] ?? '') !== '' ? trim($l['id_club']) : null;
             $idLap     = ($l['id_laposte'] ?? '') !== '' ? (int) $l['id_laposte'] : null;
+            $deptManuel = ($l['dept'] ?? '') !== '' ? trim((string) $l['dept']) : null;
             $cpteEbp   = ($l['num_compte_ebp'] ?? '') !== '' ? trim($l['num_compte_ebp']) : null;
             // Cp/Ville sont NOT NULL en base : chaîne vide plutôt que null si inconnu
             $cp    = trim((string) ($l['cp'] ?? ''));
@@ -366,7 +354,7 @@ class JugearbitreController extends BaseController
                 $idClub = null;
             }
 
-            $codeDept = $this->resolveCodeDept($pdo, $idClub, $cp, $idLap);
+            $codeDept = $this->resolveCodeDept($pdo, $idClub, $cp, $idLap, $deptManuel);
 
             try {
                 if ($id > 0) {

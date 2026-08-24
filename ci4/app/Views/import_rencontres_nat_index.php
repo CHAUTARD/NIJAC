@@ -63,6 +63,8 @@
         .club-result { padding:.3rem .6rem; cursor:pointer; font-size:.82rem; border-bottom:1px solid #f0f4fa; }
         .club-result:hover { background:#eef3fb; }
         .stat-card { display:inline-block; text-align:center; min-width:100px; background:#fff; border:2px solid #d0d8e8; border-radius:8px; padding:.4rem .7rem; margin-right:.5rem; margin-bottom:.5rem; }
+        .stat-card.stat-clickable { cursor:pointer; }
+        .stat-card.stat-clickable:hover { background:#f0f4fa; }
         .stat-card .sv { font-size:1.5rem; font-weight:700; color:var(--nijac-blue); }
         .stat-card .sl { font-size:.72rem; color:#6b7280; }
         .log-detail { font-size:.75rem; padding:.3rem .5rem .3rem 1.5rem; color:#374151; background:#f9fafb; border-left:3px solid #e5e7eb; }
@@ -123,7 +125,7 @@
                     $nom  = $allDepts[$code] ?? $code;
                     $cls  = $nb > 0 ? 'border-success text-success' : 'border-secondary text-muted';
                 ?>
-                    <div class="stat-card <?= $cls ?>" style="min-width:110px; border-color:inherit;">
+                    <div class="stat-card <?= $cls ?><?= $nb > 0 ? ' stat-clickable' : '' ?>" style="min-width:110px; border-color:inherit;"<?= $nb > 0 ? ' data-code-dept="' . esc($code) . '"' : '' ?>>
                         <div class="sv" style="font-size:1.4rem;"><?= $nb ?></div>
                         <div class="sl"><?= esc($nom) ?> (<?= esc($code) ?>)</div>
                     </div>
@@ -134,6 +136,24 @@
                     </div>
                 </div>
             <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- Modale : clubs du département cliqué (récap ci-dessus) -->
+    <div class="modal fade" id="modal-clubs-dept" tabindex="-1" aria-labelledby="modal-clubs-dept-titre" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header" style="background:#1a3a6b;color:#fff;">
+                    <h5 class="modal-title" id="modal-clubs-dept-titre"><i class="bi bi-building me-2"></i>Clubs</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                </div>
+                <div class="modal-body">
+                    <ul id="liste-clubs-dept" class="list-unstyled mb-0" style="font-size:.88rem;"></ul>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fermer</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -286,7 +306,7 @@
                         <th style="width:75px;">N° Club</th>
                         <th style="width:280px;">Club</th>
                         <th>Équipe</th>
-                        <th style="width:70px; text-align:center;">Dépt</th>
+                        <th style="width:70px; text-align:center;">Exerce</th>
                         <th style="width:55px; text-align:center;">Sauver</th>
                     </tr></thead>
                     <tbody id="tbody-assoc">
@@ -615,6 +635,30 @@ $.getJSON(`${NAT_BASE}/equipes`, function(r) {
         $('#btn-export-txt').prop('disabled', false);
         renderAssoc();
     }
+});
+
+// Clic sur une zone du récapitulatif par département : liste des clubs de ce département.
+$(document).on('click', '.stat-card[data-code-dept]', function () {
+    const code  = $(this).data('code-dept');
+    const label = $(this).find('.sl').text();
+    const clubs = {};
+    equipes.forEach(e => {
+        if (String(e.CodeDept) === String(code) && e.Id_Club) {
+            const c = clubs[e.Id_Club] || (clubs[e.Id_Club] = { nom: e.NomClub || e.Id_Club, equipes: [] });
+            c.equipes.push(`${e.Nom} (${e.id_division})`);
+        }
+    });
+    const liste = Object.values(clubs).sort((a, b) => a.nom.localeCompare(b.nom));
+    const $list = $('#liste-clubs-dept').empty();
+    if (!liste.length) {
+        $list.append('<li class="text-muted">Aucun club.</li>');
+    } else {
+        liste.forEach(c => $list.append(
+            `<li class="mb-2"><strong>${esc(c.nom)}</strong><br><span class="text-muted small">${esc(c.equipes.join(', '))}</span></li>`
+        ));
+    }
+    $('#modal-clubs-dept-titre').html(`<i class="bi bi-building me-2"></i>Clubs — ${esc(label)}`);
+    new bootstrap.Modal(document.getElementById('modal-clubs-dept')).show();
 });
 
 // ── Onglet Importation Excel ──────────────────────────────────────────────────

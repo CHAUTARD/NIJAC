@@ -101,18 +101,11 @@ class DisponibilitesController extends BaseController
         $depts = getDepartementsAutorises($dept);
 
         $pdo = getPDO();
-        $colsJa = array_column($pdo->query('SHOW COLUMNS FROM ja')->fetchAll(\PDO::FETCH_ASSOC), 'Field');
-        if (!in_array('DateValidationFFTT', $colsJa)) {
-            $pdo->exec('ALTER TABLE ja ADD COLUMN DateValidationFFTT VARCHAR(10) NULL DEFAULT NULL');
-        }
 
-        // Le département est dérivé du code postal (laposte), pas de ja.CodeDept :
-        // cette colonne n'est renseignée par aucun import/écran de l'application
-        // (voir JugearbitreController::majBdd) et un filtre dessus ne retournait
-        // donc jamais aucune ligne. COALESCE avec ja.Cp/ja.Ville (copies
-        // dénormalisées) : des JA actifs et validés FFTT ont Id_LaPoste vide
-        // mais Cp/Ville renseignés directement sur la fiche, et disparaissaient
-        // sinon de la liste faute de jointure laposte résolue.
+        // Département d'exercice (club en priorité, sinon Cp/laposte) : voir
+        // JugearbitreController::resolveCodeDept(). Filtrer/dériver depuis le code
+        // postal personnel du JA (comme avant) excluait à tort les JA qui résident
+        // hors région mais officient pour un club de la région.
         $placeholders = implode(',', array_fill(0, count($depts), '?'));
         $stmt         = $pdo->prepare("
             SELECT ja.Id_JA,
@@ -122,15 +115,14 @@ class DisponibilitesController extends BaseController
                    cl.Nom      AS Club,
                    COALESCE(lp.CodePostal, ja.Cp)    AS Cp,
                    COALESCE(lp.Nom,        ja.Ville) AS Ville,
-                   LEFT(COALESCE(lp.CodePostal, ja.Cp), 2) AS Dept,
+                   ja.CodeDept AS Dept,
                    (SELECT COUNT(*) FROM disponible d WHERE d.Id_JA = ja.Id_JA) AS HasDispo
             FROM ja
             LEFT JOIN Club    cl ON cl.Id_Club    = ja.Id_Club
             LEFT JOIN laposte lp ON lp.Id_LaPoste = ja.Id_LaPoste
             WHERE ja.Actif = 1
-              AND ja.DateValidationFFTT IS NOT NULL AND ja.DateValidationFFTT != ''
-              AND LEFT(COALESCE(lp.CodePostal, ja.Cp), 2) IN ($placeholders)
-            ORDER BY LEFT(COALESCE(lp.CodePostal, ja.Cp), 2), ja.Nom, ja.Prenom
+              AND ja.CodeDept IN ($placeholders)
+            ORDER BY ja.CodeDept, ja.Nom, ja.Prenom
         ");
         $stmt->execute(array_values($depts));
 

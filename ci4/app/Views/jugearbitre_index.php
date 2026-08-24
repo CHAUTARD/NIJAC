@@ -117,6 +117,7 @@
         }
         td.col-readonly { background: #f0f4fa; }
         td.col-readonly .cell-inner { color: #6b7280; font-style: italic; }
+        td[data-field="codedept"] .cell-inner { text-align: center; }
 
         /* Actif badge */
         .badge-actif     { background: #d1fae5; color: #065f46; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
@@ -333,6 +334,7 @@
                 <th style="width:100px" data-field="date_validation_fftt">Date Validation<span class="sort-icon"></span></th>
                 <th style="width:75px"  data-field="id_club">N° Club<span class="sort-icon"></span></th>
                 <th style="width:200px" data-field="nom_club">Nom du club<span class="sort-icon"></span></th>
+                <th style="width:65px"  data-field="codedept">Exerce<span class="sort-icon"></span></th>
                 <th style="width:90px"  data-field="defiscalisation">Défiscalisation<span class="sort-icon"></span></th>
                 <th style="width:85px"  data-field="nationale">Nationale<span class="sort-icon"></span></th>
                 <th style="width:110px" data-field="num_compte_ebp">Cpte EBP<span class="sort-icon"></span></th>
@@ -575,17 +577,22 @@
               <input type="text" class="form-control form-control-sm" id="nja-telephone" placeholder="06.12.34.56.78">
             </div>
             <div class="col-12">
-              <label class="form-label fw-semibold">Département / Club</label>
-              <div class="input-group input-group-sm">
-                <select class="form-select" id="nja-dept" style="max-width:200px">
-                  <option value="">— Tous —</option>
-                  <?php foreach ($deptActifs as $d): ?>
-                  <option value="<?= (int) $d['code'] ?>"><?= (int) $d['code'] ?> — <?= esc($d['nom']) ?></option>
-                  <?php endforeach; ?>
-                </select>
-                <select class="form-select" id="nja-id-club">
-                  <option value="">— Sélectionnez d'abord un département —</option>
-                </select>
+              <div class="row g-2">
+                <div class="col-md-5">
+                  <label class="form-label fw-semibold">Exerce dans</label>
+                  <select class="form-select form-select-sm" id="nja-dept">
+                    <option value="">— Tous —</option>
+                    <?php foreach ($deptActifs as $d): ?>
+                    <option value="<?= (int) $d['code'] ?>"><?= (int) $d['code'] ?> — <?= esc($d['nom']) ?></option>
+                    <?php endforeach; ?>
+                  </select>
+                </div>
+                <div class="col-md-7">
+                  <label class="form-label fw-semibold">Club</label>
+                  <select class="form-select form-select-sm" id="nja-id-club">
+                    <option value="">— Sélectionnez d'abord un département —</option>
+                  </select>
+                </div>
               </div>
             </div>
             <div class="col-md-8">
@@ -661,7 +668,7 @@ function setStatus(msg, ok = true) {
 }
 
 function deptDeJA(l) {
-    return String(l.cp ?? '').substring(0, 2);
+    return String(l.codedept ?? '');
 }
 
 // ── Tri & Recherche ───────────────────────────────────────────────────────────
@@ -710,7 +717,7 @@ function renderGrille() {
 
     if (!affichees.length) {
         const msg = searchTerm ? 'Aucun résultat pour cette recherche.' : 'Aucun juge-arbitre.';
-        $body.append(`<tr><td colspan="16" class="text-center text-muted py-3">${msg}</td></tr>`);
+        $body.append(`<tr><td colspan="17" class="text-center text-muted py-3">${msg}</td></tr>`);
     } else {
         affichees.forEach(l => {
             const idx  = l._idx;          // index stable, indépendant du filtre/tri
@@ -735,6 +742,7 @@ function renderGrille() {
             $tr.append(makeTd(l.date_validation_fftt, idx, 'date_validation_fftt', true));
             $tr.append(makeTd(l.id_club,          idx, 'id_club',         true));
             $tr.append(makeTd(l.nom_club,         idx, 'nom_club',        true));
+            $tr.append(makeTd(l.codedept,         idx, 'codedept',        true));
             $tr.append(makeTdHtml(defiscHtml,     idx, 'defiscalisation'));
             $tr.append(makeTdHtml(nationaleHtml,   idx, 'nationale'));
             $tr.append(makeTd(l.num_compte_ebp,    idx, 'num_compte_ebp', false));
@@ -1360,6 +1368,7 @@ $('#btn-enregistrer-ja').on('click', function () {
         email:           $('#nja-email').val().trim() || null,
         telephone:       $('#nja-telephone').val().trim() || null,
         id_club:         $('#nja-id-club').val() || null,
+        dept:            $('#nja-dept').val() || null,
         cp:              $('#nja-cp').val().trim() || null,
         ville:           $('#nja-ville').val().trim() || null,
         id_laposte:      njaIdLaPoste,
