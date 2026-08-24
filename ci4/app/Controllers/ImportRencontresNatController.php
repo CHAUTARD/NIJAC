@@ -86,6 +86,21 @@ class ImportRencontresNatController extends BaseController
                 $this->dedupliquerEquipeNationale($pdo0);
                 $pdo0->exec('ALTER TABLE equipe_nationale ADD UNIQUE KEY uq_nom_div (Nom(150), Division)');
             }
+
+            // FK présente en Prod (créée via script SQL manuel) mais absente du CREATE TABLE
+            // ci-dessus : sans elle, un CodeDept invalide s'insère sans erreur en local et ne
+            // plante qu'en Prod. Try/catch isolé : si des CodeDept orphelins existent déjà, on
+            // laisse la contrainte non posée plutôt que de faire échouer toute la migration.
+            $hasFkDept = (bool) $pdo0->query("
+                SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
+                WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'equipe_nationale' AND CONSTRAINT_NAME = 'fk_equipenat_dept'
+            ")->fetch();
+            if (!$hasFkDept) {
+                try {
+                    $pdo0->exec('ALTER TABLE equipe_nationale ADD CONSTRAINT fk_equipenat_dept FOREIGN KEY (CodeDept) REFERENCES departement (code) ON DELETE SET NULL ON UPDATE NO ACTION');
+                } catch (\PDOException $e) {
+                }
+            }
         } catch (\PDOException $e) {
         }
     }
@@ -584,6 +599,23 @@ class ImportRencontresNatController extends BaseController
      * est dérivé du numéro FFTT du club (SUBSTRING(Id_Club, 3, 2), même convention que
      * DesiderataClubsController/JugearbitreController/AuthController). Retourne le nb d'équipes associées.
      */
+    /**
+     * Ne renvoie le code département dérivé d'un n° de club que s'il existe dans la table
+     * `departement` (FK equipe_nationale.CodeDept) — sinon NULL, laissé à l'association
+     * manuelle. La table `departement` peut être moins complète en production qu'en dev
+     * (ex: codes DOM-TOM ou étrangers absents), un club "hors périmètre" ne doit pas faire
+     * échouer tout l'import.
+     */
+    private function filtrerCodeDept(\PDO $pdo, ?string $code): ?string
+    {
+        static $valides = null;
+        if ($valides === null) {
+            $valides = array_flip($pdo->query('SELECT code FROM departement')->fetchAll(\PDO::FETCH_COLUMN));
+        }
+
+        return ($code !== null && isset($valides[$code])) ? $code : null;
+    }
+
     private function autoMatchClubs(\PDO $pdo): int
     {
         $rows = $pdo->query('SELECT Id_EquipeNat, Nom FROM equipe_nationale WHERE Id_Club IS NULL')->fetchAll();
@@ -607,7 +639,7 @@ class ImportRencontresNatController extends BaseController
                 continue; // aucun club, ou plusieurs candidats ambigus : laissé à l'association manuelle
             }
             $idClub = $matches[0];
-            $stmtUpd->execute([$idClub, substr($idClub, 2, 2), $r['Id_EquipeNat']]);
+            $stmtUpd->execute([$idClub, $this->filtrerCodeDept($pdo, substr($idClub, 2, 2)), $r['Id_EquipeNat']]);
             try {
                 // EquipeNom est UNIQUE : si un autre club porte déjà ce nom de base (collision
                 // rare après le retrait du numéro final), on garde l'association Id_Club faite
@@ -694,7 +726,7 @@ class ImportRencontresNatController extends BaseController
                 }
                 foreach ($pool['equipes'] as $eq) {
                     $idClub   = $eq['id_club'] ?? null;
-                    $codeDept = $idClub ? substr($idClub, 2, 2) : null;
+                    $codeDept = $idClub ? $this->filtrerCodeDept($pdo, substr($idClub, 2, 2)) : null;
                     $stmt->execute([mb_substr($eq['nom'], 0, 200), $idDiv, $pool['poule'], $eq['rang'], $idClub, $codeDept]);
                 }
             }

@@ -254,7 +254,7 @@
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Input file caché pour import XLSX JA -->
-<input type="file" id="file-input" accept=".csv" style="display:none">
+<input type="file" id="file-input" accept=".csv,.txt" style="display:none">
 <input type="file" id="file-input-ebp" accept=".csv,text/csv" style="display:none">
 
 <!-- Spinner -->
@@ -1453,7 +1453,11 @@ $('#file-input-ebp').on('change', function () {
 
 <?php if ($isAdmin): ?>
 // ── Importer CSV FFTT (102_*.csv) ─────────────────────────────────────────────
-$('#btn-importer').on('click', () => $('#file-input').val('').trigger('click'));
+// Ouvre la popup d'aide (où trouver le fichier 102 sur le site FFTT) ; c'est
+// elle qui déclenche ensuite le sélecteur de fichier de cette fenêtre.
+$('#btn-importer').on('click', function () {
+    window.open('<?= base_url('asset/aide/import-102.html') ?>', 'aideImport102', 'width=640,height=680,resizable=yes,scrollbars=yes');
+});
 
 (function () {
     let _modalImportExcel = null;
@@ -1474,8 +1478,7 @@ $('#btn-importer').on('click', () => $('#file-input').val('').trigger('click'));
         if (label !== undefined) $('#xlsx-progress-label').text(label);
     }
 
-    $('#file-input').on('change', function () {
-        const file = this.files[0];
+    function importerFichier102(file) {
         if (!file) return;
 
         // Réinitialiser la modale
@@ -1662,7 +1665,12 @@ $('#btn-importer').on('click', () => $('#file-input').val('').trigger('click'));
         $('#btn-xlsx-ok').off('click').on('click', function () {
             nijacToast(`${lignes.length} JA importé(s) depuis le CSV.`);
         });
-    });
+    }
+
+    $('#file-input').on('change', function () { importerFichier102(this.files[0]); });
+    // Exposée pour la popup d'aide (asset/aide/import-102.html), qui sélectionne
+    // son propre fichier local et le transmet directement à cette fenêtre.
+    window.importerFichier102 = importerFichier102;
 }());
 <?php endif; ?>
 

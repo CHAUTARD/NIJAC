@@ -882,8 +882,8 @@ class JugearbitreController extends BaseController
         if ($file === null || !$file->isValid()) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Aucun fichier reçu (post_max_size = ' . ini_get('post_max_size') . ').']);
         }
-        if (strtolower($file->getClientExtension()) !== 'csv') {
-            return $this->response->setJSON(['ok' => false, 'msg' => 'Seul le format .csv est accepté.']);
+        if (!in_array(strtolower($file->getClientExtension()), ['csv', 'txt'], true)) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Seul le format .csv ou .txt est accepté.']);
         }
 
         set_time_limit(180);
