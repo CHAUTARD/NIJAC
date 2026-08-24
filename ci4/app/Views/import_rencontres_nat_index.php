@@ -270,6 +270,9 @@
                 <label class="mb-0" style="font-size:.82rem;">
                     <input type="checkbox" id="chk-sans-dept" class="form-check-input me-1">Sans département
                 </label>
+                <label class="mb-0" style="font-size:.82rem;">
+                    <input type="checkbox" id="chk-sans-club" class="form-check-input me-1">Sans club
+                </label>
                 <button id="btn-export-txt" class="btn btn-outline-secondary btn-sm ms-auto" disabled
                         title="Enregistre un fichier .txt dans Importation/Rencontres/Nationale/">
                     <i class="bi bi-save me-1"></i>Exporter en .txt
@@ -281,7 +284,7 @@
                         <th style="width:55px;">Division</th>
                         <th style="width:35px;">P.</th>
                         <th style="width:75px;">N° Club</th>
-                        <th style="width:280px;">Club (<?= esc($regionNom) ?>)</th>
+                        <th style="width:280px;">Club</th>
                         <th>Équipe</th>
                         <th style="width:70px; text-align:center;">Dépt</th>
                         <th style="width:55px; text-align:center;">Sauver</th>
@@ -403,9 +406,11 @@ function chargerEquipes() {
 function renderAssoc() {
     const divF = $('#sel-div-filtre').val();
     const sans = $('#chk-sans-dept').is(':checked');
+    const sansClub = $('#chk-sans-club').is(':checked');
     let data = [...equipes];
     if (divF) data = data.filter(e => e.id_division === divF);
     if (sans) data = data.filter(e => !e.CodeDept);
+    if (sansClub) data = data.filter(e => !e.Id_Club);
 
     const total    = equipes.length;
     const avecDept = equipes.filter(e => e.CodeDept).length;
@@ -525,6 +530,7 @@ function pickClubResult($result) {
     $tr.find('.dept-badge').html(deptBadge(dept));
     $tr.find('.btn-sauver').attr('data-club', idClub).attr('data-dept', dept);
     $wrap.find('.club-popup').removeClass('open');
+    sauverAssoc($tr);
 }
 
 $(document).on('click', '.club-result', function() {
@@ -571,15 +577,15 @@ $(document).on('change', '.input-numclub', function() {
         $tr.find('.input-dept').val(dept);
         $tr.find('.dept-badge').html(deptBadge(dept));
         $tr.find('.btn-sauver').attr('data-club', r.club.Id_Club).attr('data-dept', dept);
+        sauverAssoc($tr);
     }).fail(() => { $input.prop('disabled', false); nijacToast('Erreur réseau.', 'danger'); });
 });
 
-$(document).on('click', '.btn-sauver', function() {
-    const $btn  = $(this);
-    const idEn  = +$btn.attr('data-id');
-    const dept  = $btn.closest('tr').find('.input-dept').val().trim();
-    const idClub = $btn.attr('data-club') || '';
-    $btn.prop('disabled', true);
+function sauverAssoc($tr) {
+    const idEn   = +$tr.attr('data-id');
+    const dept   = $tr.find('.input-dept').val().trim();
+    const idClub = $tr.find('.btn-sauver').attr('data-club') || '';
+    const $btn   = $tr.find('.btn-sauver').prop('disabled', true);
     $.post(`${NAT_BASE}/sauvegarder-assoc`, {id_equipe_nat:idEn, code_dept:dept, id_club:idClub}, function(r) {
         $btn.prop('disabled', false);
         if (r.ok) {
@@ -589,9 +595,13 @@ $(document).on('click', '.btn-sauver', function() {
             if (r.warn) nijacToast(r.warn, 'warning');
         } else nijacToast('Erreur : ' + r.err, 'danger');
     }, 'json').fail(() => { $btn.prop('disabled', false); nijacToast('Erreur réseau.', 'danger'); });
+}
+
+$(document).on('click', '.btn-sauver', function() {
+    sauverAssoc($(this).closest('tr'));
 });
 
-$('#sel-div-filtre, #chk-sans-dept').on('change', renderAssoc);
+$('#sel-div-filtre, #chk-sans-dept, #chk-sans-club').on('change', renderAssoc);
 
 // ── Export .txt (calendrier persisté + équipes/poules/N° Club de l'étape 2) ──
 // Généré et enregistré côté serveur (Importation/Rencontres/Nationale/YYYYMMJJ_Poules_Nationales.txt),
