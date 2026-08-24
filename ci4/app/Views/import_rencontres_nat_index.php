@@ -140,7 +140,7 @@
     <ul class="nav nav-tabs" id="nat-tabs" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="tab-excel-btn" data-bs-toggle="tab" data-bs-target="#tab-excel" type="button" role="tab">
-                <i class="bi bi-file-earmark-excel me-1"></i>Importation Excel
+                <i class="bi bi-file-earmark-text me-1"></i>Importation txt
             </button>
         </li>
         <li class="nav-item" role="presentation">
@@ -155,7 +155,7 @@
 
     <!-- Étape 1 (Excel) : sélection + analyse du fichier -->
     <div class="card mb-3">
-        <div class="card-header fw-semibold"><i class="bi bi-file-earmark-excel me-2"></i>1. Analyser un fichier Excel ou texte FFTT</div>
+        <div class="card-header fw-semibold"><i class="bi bi-file-earmark-text me-2"></i>1. Analyser un fichier txt FFTT</div>
         <div class="card-body">
             <p class="text-muted small mb-2">
                 Analyse un fichier déposé dans <code>Importation/Rencontres/Nationale/</code> (calendrier des
@@ -299,7 +299,7 @@
 
     <!-- Étape 3 : import rencontres depuis le fichier Excel/texte (pas d'appel FFTT) -->
     <div id="section-import-excel" class="card mb-3">
-        <div class="card-header fw-semibold"><i class="bi bi-calendar2-check me-2"></i>3. Importer les rencontres depuis le fichier Excel/texte (receveur = club de <?= esc($regionNom) ?>)</div>
+        <div class="card-header fw-semibold"><i class="bi bi-calendar2-check me-2"></i>3. Importer les rencontres depuis le fichier txt (receveur = club de <?= esc($regionNom) ?>)</div>
         <div class="card-body">
             <p class="text-muted small mb-2">
                 Reconstitue les rencontres à partir des dates et de l'ordre des rencontres du fichier analysé
@@ -307,23 +307,13 @@
                 <strong>l'équipe à domicile</strong> est un club de la région.
             </p>
             <button id="btn-importer-excel" class="btn btn-success" disabled>
-                <i class="bi bi-cloud-upload me-1"></i>Importer les rencontres (Excel/texte)
+                <i class="bi bi-cloud-upload me-1"></i>Importer les rencontres (txt)
             </button>
             <span id="import-excel-hint" class="text-muted small ms-2">Analysez d'abord un fichier à l'étape 1.</span>
             <div id="res-import-excel" class="mt-2"></div>
         </div>
     </div>
 
-    <!-- Étape 4 : fichiers Excel/texte disponibles -->
-    <div class="card mb-3">
-        <div class="card-header fw-semibold"><i class="bi bi-file-earmark-text me-2"></i>4. Fichiers Excel/texte disponibles</div>
-        <div class="card-body">
-            <p class="text-muted small mb-2">Fichiers présents dans <code>Importation/Rencontres/Nationale/</code> :</p>
-            <ul id="liste-fichiers-nat" class="list-unstyled mb-0" style="font-size:.85rem;">
-                <li class="text-muted">Chargement…</li>
-            </ul>
-        </div>
-    </div>
 
 </div>
 
@@ -337,7 +327,6 @@
 'use strict';
 
 const NAT_BASE = '<?= site_url('import-rencontres-nat') ?>';
-const NAT_DIR_URL = '<?= base_url('Importation/Rencontres/Nationale/') ?>';
 
 let equipes = [];
 let currentSaison = '';
@@ -658,25 +647,21 @@ $('#btn-toggle-cal-excel').on('click', function () {
     $(this).html(open ? '<i class="bi bi-chevron-down"></i> Afficher' : '<i class="bi bi-chevron-up"></i> Masquer');
 });
 
-// Liste des fichiers Excel/texte disponibles (étape 1 + liste de l'étape 4)
+// Liste des fichiers txt disponibles (étape 1)
 $.getJSON(`${NAT_BASE}/fichiers-excel`, function (r) {
     const $sel  = $('#sel-fichier-excel').empty();
-    const $list = $('#liste-fichiers-nat').empty();
     if (!r.ok || !r.fichiers.length) {
         $sel.append('<option value="">— Aucun fichier .xlsx disponible —</option>');
-        $list.append('<li class="text-muted">Aucun fichier.</li>');
         return;
     }
     $sel.append('<option value="">— Choisir un fichier —</option>');
     r.fichiers.forEach(f => {
         $sel.append(`<option value="${esc(f)}">${esc(f)}</option>`);
-        $list.append(`<li><a href="${NAT_DIR_URL}${encodeURIComponent(f)}" target="_blank" rel="noopener"><i class="bi bi-file-earmark me-1"></i>${esc(f)}</a></li>`);
     });
     $('#btn-analyser-excel').prop('disabled', false);
 }).fail(() => {
     $('#sel-fichier-excel').empty().append('<option value="">— Erreur de chargement —</option>');
-    $('#liste-fichiers-nat').empty().append('<li class="text-danger">Erreur de chargement.</li>');
-    nijacToast('Erreur réseau lors du chargement de la liste des fichiers Excel.', 'danger');
+    nijacToast('Erreur réseau lors du chargement de la liste des fichiers txt.', 'danger');
 });
 
 // Calendrier persisté (table nationale_calendrier) : restaure le cartouche "Ordre des rencontres"
