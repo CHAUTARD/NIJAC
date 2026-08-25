@@ -804,10 +804,11 @@ class ImportRencontresNatController extends BaseController
 
             $stmtEqChk = $pdo->prepare('SELECT Id_Equipe FROM equipe WHERE Nom=? AND Division=? LIMIT 1');
             $stmtEqIns = $pdo->prepare('INSERT INTO equipe (Nom, Division, Id_Club, JAdemande) VALUES (?,?,?,0)');
-            $stmtRcChk = $pdo->prepare('SELECT 1 FROM rencontre WHERE Date=? AND Id_EquipeDom=? AND Id_EquipeExt=? LIMIT 1');
+            $stmtRcChk = $pdo->prepare('SELECT Id_Rencontre, Journee, Heure FROM rencontre WHERE Date=? AND Id_EquipeDom=? AND Id_EquipeExt=? LIMIT 1');
             $stmtRcIns = $pdo->prepare('INSERT INTO rencontre (Date,Heure,Poule,Id_EquipeDom,Id_EquipeExt,Phase,Journee,ArbitrageObligatoire) VALUES (?,?,?,?,?,?,?,?)');
+            $stmtRcMaj = $pdo->prepare('UPDATE rencontre SET Journee=?, Heure=? WHERE Id_Rencontre=?');
 
-            $stats = ['equipes_creees' => 0, 'rencontres_creees' => 0, 'doublons' => 0, 'ignores' => 0, 'erreurs' => [], 'log' => []];
+            $stats = ['equipes_creees' => 0, 'rencontres_creees' => 0, 'doublons' => 0, 'doublons_corriges' => 0, 'ignores' => 0, 'erreurs' => [], 'log' => []];
 
             // Résout (ou crée) l'équipe NIJAC correspondant à une ligne equipe_nationale, retourne son Id_Equipe.
             // equipe.Nom est VARCHAR(100) (contrairement à equipe_nationale.Nom, VARCHAR(200)) : tronqué ici.
@@ -857,12 +858,28 @@ class ImportRencontresNatController extends BaseController
                             }
 
                             $stmtRcChk->execute([$j['date'], $idDom, $idExt]);
-                            if ($stmtRcChk->fetchColumn()) {
-                                $stats['doublons']++;
+                            $rcExistante = $stmtRcChk->fetch();
+                            if ($rcExistante) {
+                                // Rencontre déjà importée : rattrape Journee et/ou Heure (16h00,
+                                // l'horaire standard national) si l'une des deux manque encore —
+                                // même logique que ImportRencontresController::importerDivision()
+                                // pour l'import FFTT direct.
+                                $journeeMaj = (int) $rcExistante['Journee'] === 0 && $j['journee'] !== 0
+                                    ? $j['journee'] : (int) $rcExistante['Journee'];
+                                $manquante  = (int) $rcExistante['Journee'] === 0 || $rcExistante['Heure'] === '00:00:00';
+                                if ($manquante) {
+                                    $stmtRcMaj->execute([$journeeMaj, '16:00:00', $rcExistante['Id_Rencontre']]);
+                                    $stats['doublons_corriges']++;
+                                    $stats['log'][] = ['type' => 'rencontre', 'val' => "Journée/heure corrigées : P{$poule} J{$journeeMaj} — {$dom['Nom']} vs {$ext['Nom']} ({$j['date']})"];
+                                } else {
+                                    $stats['doublons']++;
+                                }
                                 continue;
                             }
 
-                            $stmtRcIns->execute([$j['date'], '00:00:00', $poule, $idDom, $idExt, 1, $j['journee'], $arbitrage]);
+                            // Le calendrier Excel ne fournit pas d'heure par rencontre : 16h00 est
+                            // l'horaire standard des championnats nationaux par équipes.
+                            $stmtRcIns->execute([$j['date'], '16:00:00', $poule, $idDom, $idExt, 1, $j['journee'], $arbitrage]);
                             $stats['rencontres_creees']++;
                             $stats['log'][] = ['type' => 'rencontre', 'val' => "P{$poule} J{$j['journee']} — {$dom['Nom']} vs {$ext['Nom']} ({$j['date']})"];
                         }

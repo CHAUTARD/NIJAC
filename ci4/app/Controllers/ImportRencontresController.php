@@ -351,7 +351,7 @@ class ImportRencontresController extends BaseController
                 $rencontres = $this->ffttItems($rAll, 'tour');
             }
 
-            $stats = ['poules' => [], 'equipes_creees' => 0, 'rencontres_creees' => 0, 'doublons' => 0, 'erreurs' => [], 'log' => []];
+            $stats = ['poules' => [], 'equipes_creees' => 0, 'rencontres_creees' => 0, 'doublons' => 0, 'doublons_corriges' => 0, 'erreurs' => [], 'log' => []];
 
             $stmtClubIns          = $pdo->prepare('INSERT IGNORE INTO club (Id_Club, Nom) VALUES (?,?)');
             $stmtClubByNom        = $pdo->prepare('SELECT Id_Club FROM club WHERE Nom=? LIMIT 1');
@@ -364,11 +364,12 @@ class ImportRencontresController extends BaseController
             );
             $stmtEqChk = $pdo->prepare('SELECT Id_Equipe FROM equipe WHERE Nom=? AND Division=? LIMIT 1');
             $stmtEqIns = $pdo->prepare('INSERT INTO equipe (Nom, Division, Id_Club, JAdemande) VALUES (?,?,?,0)');
-            $stmtRcChk = $pdo->prepare('SELECT 1 FROM rencontre WHERE Date=? AND Id_EquipeDom=? AND Id_EquipeExt=? LIMIT 1');
+            $stmtRcChk = $pdo->prepare('SELECT Id_Rencontre, Journee, Heure FROM rencontre WHERE Date=? AND Id_EquipeDom=? AND Id_EquipeExt=? LIMIT 1');
             $stmtRcIns = $pdo->prepare(
                 'INSERT INTO rencontre (Date,Heure,Poule,Id_EquipeDom,Id_EquipeExt,Phase,Journee,ArbitrageObligatoire)
                  VALUES (?,?,?,?,?,?,?,?)'
             );
+            $stmtRcMaj = $pdo->prepare('UPDATE rencontre SET Journee=?, Heure=? WHERE Id_Rencontre=?');
 
             foreach ($rencontres as $rc) {
                 // Champs confirmés : equa, equb, dateprevue, libelle ("Poule X - tour n°Y du …")
@@ -383,7 +384,9 @@ class ImportRencontresController extends BaseController
                 if ($pouleNum === 0 && preg_match('/poule\s+(\d+)/i', $libelle, $m)) {
                     $pouleNum = (int) $m[1];
                 }
-                if (preg_match('/tour\s+n[°o]?\s*(\d+)/i', $libelle, $m)) {
+                // /u indispensable : "n°" contient un caractère multioctet (UTF-8), sans quoi
+                // la classe [°o] casse le match et Journee reste toujours à 0.
+                if (preg_match('/tour\s+n[°o]?\s*(\d+)/iu', $libelle, $m)) {
                     $journee = (int) $m[1];
                 }
 
@@ -392,7 +395,10 @@ class ImportRencontresController extends BaseController
                     $stats['erreurs'][] = "Rencontre ignorée : dom=\"$libDom\" ext=\"$libExt\" date=\"$dateStr\"";
                     continue;
                 }
-                $heure = '00:00:00'; // xml_result_equ ne fournit pas l'heure
+                // heurereelle (ex. "09:00") fournie par xml_result_equ — absente uniquement
+                // si la rencontre n'a pas encore d'horaire fixé par le club recevant.
+                $heureBrute = trim((string) ($rc['heurereelle'] ?? ''));
+                $heure      = preg_match('/^\d{1,2}:\d{2}/', $heureBrute) ? substr($heureBrute, 0, 5) . ':00' : '00:00:00';
 
                 if ($pouleNum > 0) {
                     $stats['poules'][$pouleNum] = true;
@@ -484,9 +490,20 @@ class ImportRencontresController extends BaseController
                 }
 
                 $stmtRcChk->execute([$date, $idDom, $idExt]);
-                if ($stmtRcChk->fetchColumn()) {
-                    $stats['doublons']++;
-                    $stats['log'][] = ['type' => 'doublon', 'op' => 'ignorée', 'val' => "P$pouleNum J$journee — $libDom vs $libExt ($date)"];
+                $rcExistante = $stmtRcChk->fetch();
+                if ($rcExistante) {
+                    // Rencontre déjà importée : on corrige Journee/Heure si l'une des deux
+                    // manque encore côté BDD (ex. import fait avant le correctif FFTT CDATA/regex
+                    // — voir tools/backfill_e011_journee_heure.php pour le rattrapage ponctuel).
+                    $manquante = (int) $rcExistante['Journee'] === 0 || $rcExistante['Heure'] === '00:00:00';
+                    if ($manquante && ($journee !== 0 || $heure !== '00:00:00')) {
+                        $stmtRcMaj->execute([$journee, $heure, $rcExistante['Id_Rencontre']]);
+                        $stats['doublons_corriges']++;
+                        $stats['log'][] = ['type' => 'doublon', 'op' => 'corrigée (journée/heure)', 'val' => "P$pouleNum J$journee $heure — $libDom vs $libExt ($date)"];
+                    } else {
+                        $stats['doublons']++;
+                        $stats['log'][] = ['type' => 'doublon', 'op' => 'ignorée', 'val' => "P$pouleNum J$journee — $libDom vs $libExt ($date)"];
+                    }
                     continue;
                 }
 

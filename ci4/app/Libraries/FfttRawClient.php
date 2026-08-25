@@ -206,7 +206,11 @@ class FfttRawClient
             );
         }
 
-        return $this->xmlToArray($obj);
+        // La racine peut n'avoir aucun enfant (ex. <liste/>, poule sans rencontre) :
+        // xmlToArray() renvoie alors une chaîne vide plutôt qu'un tableau.
+        $result = $this->xmlToArray($obj);
+
+        return is_array($result) ? $result : [];
     }
 
     /**

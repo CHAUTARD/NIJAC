@@ -499,7 +499,7 @@ $('#btn-importer').on('click', async function () {
     $('#liste-progression').empty();
     $('#bilan-import').hide();
 
-    const bilanTotal = { equipes: 0, rencontres: 0, doublons: 0, erreurs: 0 };
+    const bilanTotal = { equipes: 0, rencontres: 0, doublons: 0, corrigees: 0, erreurs: 0 };
 
     const phaseNum = phaseKey === 'p2' ? 2 : 1;
 
@@ -553,13 +553,15 @@ $('#btn-importer').on('click', async function () {
                     bilanTotal.equipes    += s.equipes_creees    ?? 0;
                     bilanTotal.rencontres += s.rencontres_creees ?? 0;
                     bilanTotal.doublons   += s.doublons          ?? 0;
+                    bilanTotal.corrigees  += s.doublons_corriges ?? 0;
                     bilanTotal.erreurs    += s.erreurs?.length   ?? 0;
 
                     let resume = `<span class="dp-ok">${s.rencontres_creees} renc. créées</span>`;
-                    if (s.poules)          resume += ` · ${s.poules} poule(s)`;
-                    if (s.doublons)        resume += ` · <span class="text-secondary">${s.doublons} doublon(s)</span>`;
-                    if (s.equipes_creees)  resume += ` · ${s.equipes_creees} éq. créées`;
-                    if (s.erreurs?.length) resume += ` · <span class="dp-err">${s.erreurs.length} err.</span>`;
+                    if (s.poules)            resume += ` · ${s.poules} poule(s)`;
+                    if (s.doublons)          resume += ` · <span class="text-secondary">${s.doublons} doublon(s)</span>`;
+                    if (s.doublons_corriges) resume += ` · <span class="text-primary">${s.doublons_corriges} corrigée(s) (journée/heure)</span>`;
+                    if (s.equipes_creees)    resume += ` · ${s.equipes_creees} éq. créées`;
+                    if (s.erreurs?.length)   resume += ` · <span class="dp-err">${s.erreurs.length} err.</span>`;
                     mettreAJourLigne(rowDiv, s.erreurs?.length === 0, resume);
 
                     // Détail des opérations
@@ -597,6 +599,7 @@ $('#btn-importer').on('click', async function () {
         <div class="stat-card"><div class="sv text-success">${bilanTotal.rencontres}</div><div class="sl">Rencontres créées</div></div>
         <div class="stat-card"><div class="sv text-primary">${bilanTotal.equipes}</div><div class="sl">Équipes créées</div></div>
         <div class="stat-card"><div class="sv text-secondary">${bilanTotal.doublons}</div><div class="sl">Doublons ignorés</div></div>
+        <div class="stat-card"><div class="sv text-primary">${bilanTotal.corrigees}</div><div class="sl">Journée/heure corrigées</div></div>
         <div class="stat-card"><div class="sv ${bilanTotal.erreurs ? 'text-danger' : 'text-success'}">${bilanTotal.erreurs}</div><div class="sl">Erreurs</div></div>
         <div class="alert alert-${bilanTotal.erreurs ? 'warning' : 'success'} mt-2 py-2">
             <i class="bi bi-${bilanTotal.erreurs ? 'exclamation-triangle' : 'check-circle'}-fill me-1"></i>

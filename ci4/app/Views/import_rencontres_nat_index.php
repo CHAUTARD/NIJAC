@@ -784,6 +784,7 @@ $('#btn-importer-excel').on('click', async function() {
             <div class="stat-card"><div class="sv text-success">${s.rencontres_creees}</div><div class="sl">Rencontres créées</div></div>
             <div class="stat-card"><div class="sv text-primary">${s.equipes_creees}</div><div class="sl">Équipes créées</div></div>
             <div class="stat-card"><div class="sv text-secondary">${s.doublons}</div><div class="sl">Doublons</div></div>
+            <div class="stat-card"><div class="sv text-primary">${s.doublons_corriges ?? 0}</div><div class="sl">Journée/heure corrigées</div></div>
             <div class="stat-card"><div class="sv text-muted">${s.ignores}</div><div class="sl">Ignorées</div></div>
         </div>`;
         if (s.erreurs?.length) {
