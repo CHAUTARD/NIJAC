@@ -8,96 +8,9 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('asset/css/nijac-liste-edit.css') ?>">
     <style>
-        body {
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            background: #f0f4fa;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            overflow: hidden;
-        }
-        #page-header {
-            background: var(--nijac-blue);
-            color: #fff;
-            padding: .5rem 1.25rem;
-            font-size: .9rem;
-            font-weight: 600;
-            flex-shrink: 0;
-        }
-        #split-container { display: flex; flex: 1; overflow: hidden; }
-        #panel-liste {
-            width: 50%;
-            display: flex;
-            flex-direction: column;
-            border-right: 2px solid #c8d4e8;
-        }
-        #liste-header {
-            background: steelblue;
-            color: #fff;
-            font-weight: 700;
-            font-size: .85rem;
-            padding: .4rem .75rem;
-            flex-shrink: 0;
-        }
-        #table-wrapper { flex: 1; overflow-y: auto; }
-        #tbl-dates { width: 100%; font-size: .85rem; border-collapse: collapse; }
-        #tbl-dates thead th {
-            background: #e8eef7;
-            border-bottom: 2px solid #c8d4e8;
-            padding: .35rem .5rem;
-            white-space: nowrap;
-            position: sticky;
-            top: 0;
-            z-index: 1;
-            cursor: pointer;
-            user-select: none;
-        }
-        #tbl-dates thead th .sort-icon { margin-left: .3rem; opacity: .4; font-size: .75rem; }
-        #tbl-dates thead th.sort-asc  .sort-icon::after { content: '▲'; opacity: 1; }
-        #tbl-dates thead th.sort-desc .sort-icon::after { content: '▼'; opacity: 1; }
-        #tbl-dates thead th:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
-        #tbl-dates tbody tr { cursor: pointer; border-bottom: 1px solid #e0e8f0; }
-        #tbl-dates tbody tr:hover { background: #dce8f8; }
-        #tbl-dates tbody tr.selected { background: #b8d0f0 !important; }
-        #tbl-dates tbody td { padding: .3rem .5rem; }
-        #panel-form {
-            flex: 1;
-            padding: 1rem 1.25rem;
-            overflow-y: auto;
-            background: #fff;
-        }
-        .form-label { font-size: .82rem; font-weight: 700; color: #374151; margin-bottom: .2rem; }
-        .form-control { font-size: .9rem; }
-        #panel-boutons { display: flex; gap: .6rem; margin-top: 1.25rem; }
-        .btn-nouveau     { background:#fff; border:1px solid #aaa; }
-        .btn-enregistrer { background:#c6efce; border:1px solid #82c88e; font-weight:600; }
-        .btn-supprimer   { background:#ffc7ce; border:1px solid #e09090; font-weight:600; }
-        .btn-nouveau:hover     { background:#e8e8e8; }
-        .btn-enregistrer:hover { background:#a8dfb0; }
-        .btn-supprimer:hover   { background:#f0a0a8; }
-        .btn-supprimer:disabled { opacity:.5; cursor:not-allowed; }
-        #page-footer {
-            background: #e8eef7;
-            border-top: 1px solid #c8d4e8;
-            padding: .25rem 1rem;
-            font-size: .8rem;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 1rem;
-            flex-shrink: 0;
-        }
-        #status-bar { color: #374151; min-height: 18px; }
-        .footer-copyright { color: #6b7280; white-space: nowrap; }
-        .footer-logo { height: 20px; width: auto; opacity: .75; }
-        #page-footer.pf-status-left {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
-            align-items: center;
-        }
-        #page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
-        #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
+        #panel-liste { width: 50%; }
     </style>
 </head>
 <body>

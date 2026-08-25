@@ -12,17 +12,17 @@
 
     <style>
         body {
-            background: #f0f4fa;
+            background: #fff3e0;
             font-family: 'Segoe UI', system-ui, sans-serif;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
 
-        /* ── En-tête (sarcelle, propre à E038/Défiscalisateur — distinct du bleu Admin,
+        /* ── En-tête (orange, propre à E038/Défiscalisateur — distinct du bleu Admin,
            du vert Nominateur et du violet CSR) ── */
         #page-header {
-            background: #00695c;
+            background: #e65100;
             color: #fff;
             padding: .5rem 1.25rem;
             font-size: .9rem;

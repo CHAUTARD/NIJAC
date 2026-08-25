@@ -111,7 +111,7 @@ class CentrenvoyeController extends BaseController
                     LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
                     WHERE j.Actif = 1
                       AND j.Grade = 'JA1'
-                      AND LEFT(lp.CodePostal, 2) = ?
+                      AND j.CodeDept = ?
                     ORDER BY j.Nom, j.Prenom
                 ");
                 $stmt->execute([$dept]);
@@ -127,7 +127,7 @@ class CentrenvoyeController extends BaseController
                     LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
                     WHERE j.Actif = 1
                       AND j.Grade = 'JA1'
-                      AND LEFT(lp.CodePostal, 2) = ?
+                      AND j.CodeDept = ?
                       AND NOT EXISTS (
                           SELECT 1 FROM disponible d
                           WHERE d.Id_JA = j.Id_JA
@@ -182,12 +182,11 @@ class CentrenvoyeController extends BaseController
                     SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
                            COUNT(n.Id_Nomination) AS NbNominations
                     FROM ja j
-                    LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
                     JOIN disponible dn ON dn.Id_JA = j.Id_JA
                     JOIN nomination n ON n.Id_Disponible = dn.Id_Disponible
                     WHERE j.Actif = 1
                       AND j.Grade = 'JA1'
-                      AND LEFT(lp.CodePostal, 2) = ?
+                      AND j.CodeDept = ?
                     GROUP BY j.Id_JA, j.Nom, j.Prenom, j.Email
                     ORDER BY j.Nom, j.Prenom
                 ");

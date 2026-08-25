@@ -28,7 +28,7 @@
 - [E023 – Désidératas club](#e023--désidératas-club)
 - [E024 – Centre d'envoi](#e024--centre-denvoi)
 - [E025 – Comptabilité frais JA](#e025--comptabilité-frais-ja)
-- [E026 – Messagerie](#e026--messagerie)
+- [E026 – Gestion des messages](#e026--gestion-des-messages)
 - [E027 – Désidératas clubs](#e027--désidératas-clubs)
 - [E028 – Statistiques JA](#e028--statistiques-ja)
 - [E029 – Adresse domicile JA](#e029--adresse-domicile-ja)
@@ -710,7 +710,7 @@ Les indicateurs affichent un **badge rouge** sur le bouton de menu correspondant
 | Juge-Arbitre | E007 | `jugearbitre.php` |
 | Disponibilités JA | E021 | `disponibilites.php` |
 | Nomination JA | E022 | `nomination.php` |
-| Messagerie | E026 | `messagerie.php` |
+| Gestion des messages | E026 | `messagerie.php` |
 | Centre d'envoi | E024 | `centrenvoye.php` |
 | Comptabilité | E025 | `compta.php` |
 | Désidératas clubs | E027 | `JA_R3R4.php` |
@@ -860,7 +860,7 @@ Générer le récapitulatif des frais de déplacement des JA pour une période e
 
 ---
 
-## E026 – Messagerie
+## E026 – Gestion des messages
 
 **Fichier :** `Nominateur/messagerie.php`  
 **Accès :** Administrateur et Nominateur

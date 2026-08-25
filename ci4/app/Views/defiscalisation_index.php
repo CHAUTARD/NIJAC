@@ -19,9 +19,9 @@
             flex-direction: column;
         }
 
-        /* Sarcelle, cohérent avec E038 (Menu Défiscalisateur) */
+        /* Orange, cohérent avec E038 (Menu Défiscalisateur) */
         #page-header {
-            background: #00695c;
+            background: #e65100;
             color: #fff;
             padding: .5rem 1.25rem;
             font-size: .9rem;

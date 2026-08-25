@@ -12,7 +12,7 @@
 
     <style>
         body {
-            background: #f0f4fa;
+            background: #e8f5e9;
             font-family: 'Segoe UI', system-ui, sans-serif;
             min-height: 100vh;
             display: flex;
@@ -253,9 +253,9 @@
         /* Couleurs boutons */
         .btn-nomination    { background-color: #e8f5e9; }
         .btn-ja            { background-color: #e3f2fd; }
-        .btn-messagerie    { background-color: #fff8e1; }
         .btn-envoi         { background-color: #e0f7fa; }
         .btn-r34           { background-color: #fbe9e7; }
+        .btn-correspondant { background-color: #fff8e1; }
 
         /* Code écran en haut à droite de chaque bouton */
         .menu-btn { position: relative; }
@@ -419,15 +419,6 @@
     </div>
 
     <!-- Ligne 2 -->
-
-    <div class="menu-btn-wrap">
-        <a href="<?= site_url('messagerie') ?>" class="menu-btn btn-messagerie">
-            <span class="btn-code">E026</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Messagerie.png') ?>" alt="Messagerie"></div>
-            <span>Messagerie</span>
-            <span class="btn-desc">Préparer les messages pour JA et correspondants de club</span>
-        </a>
-    </div>
 
     <div class="menu-btn-wrap">
         <a href="<?= site_url('compta') ?>" class="menu-btn btn-envoi">

@@ -63,8 +63,8 @@
         #btn-switch-nominateur:hover { background: #1b5e20; color: #fff; }
         #btn-switch-csr { background: #6a1b9a; }
         #btn-switch-csr:hover { background: #4a148c; color: #fff; }
-        #btn-switch-defisc { background: #00695c; }
-        #btn-switch-defisc:hover { background: #004d40; color: #fff; }
+        #btn-switch-defisc { background: #e65100; }
+        #btn-switch-defisc:hover { background: #bf360c; color: #fff; }
 
         #page-header {
             background: var(--nijac-blue);
@@ -112,17 +112,27 @@
         #menu-tabs .nav-link {
             font-weight: 600;
             color: #556;
+            border-radius: 6px 6px 0 0;
         }
-        #menu-tabs .nav-link.active {
-            color: var(--nijac-blue);
-            border-color: #dde5f0 #dde5f0 #fff;
-        }
+
+        /* Une couleur pastel distincte par onglet, pour les repérer au premier coup d'œil. */
+        #tab-operation-btn { background: #e3f2fd; }
+        #tab-operation-btn.active { color: #1565c0; background: #e3f2fd; border-color: #90caf9 #90caf9 #e3f2fd; }
+
+        #tab-tables-btn { background: #e8f5e9; }
+        #tab-tables-btn.active { color: #2e7d32; background: #e8f5e9; border-color: #a5d6a7 #a5d6a7 #e8f5e9; }
+
+        #tab-dba-btn { background: #fce4ec; }
+        #tab-dba-btn.active { color: #c62828; background: #fce4ec; border-color: #f48fb1 #f48fb1 #fce4ec; }
 
         .tab-content { flex: 1; display: flex; }
         .tab-content .tab-pane { flex: 1; }
+        #tab-operation { background: #e3f2fd; }
+        #tab-tables    { background: #e8f5e9; }
+        #tab-dba       { background: #fce4ec; }
 
         #zone-deconnexion {
-            padding: 0 24px 24px;
+            padding: 16px 24px 24px;
             display: flex;
             justify-content: center;
         }
@@ -212,6 +222,9 @@
         .btn-departement  { background-color: #e1f5fe; }
         .btn-competition-regionale { background-color: #f3e5f5; }
         .btn-equipe-regionale { background-color: #e8f5e9; }
+        .btn-messagerie   { background-color: #fff8e1; }
+        .btn-gestion-equipes { background-color: #e3f2fd; }
+        .btn-gestion-rencontres { background-color: #fff3e0; }
 
         .btn-code {
             position: absolute;
@@ -371,6 +384,27 @@
                     <div class="btn-icon"><img src="<?= base_url('img/Equipe.png') ?>" alt="Chargement équipe régionale"></div>
                     <span>Chargement équipe régionale</span>
                     <span class="btn-desc">Consulter et modifier les équipes régionales importées</span>
+                </a>
+
+                <a href="<?= site_url('messagerie') ?>" class="menu-btn btn-messagerie">
+                    <span class="btn-code">E026</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/Messagerie.png') ?>" alt="Gestion des messages"></div>
+                    <span>Gestion des messages</span>
+                    <span class="btn-desc">Préparer les messages pour JA et correspondants de club</span>
+                </a>
+
+                <a href="<?= site_url('gestion-equipes') ?>" class="menu-btn btn-gestion-equipes">
+                    <span class="btn-code">E041</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/GestEquipe.png') ?>" alt="Gestion des équipes"></div>
+                    <span>Gestion des équipes</span>
+                    <span class="btn-desc">Filtrer et modifier les équipes (club, division, nom)</span>
+                </a>
+
+                <a href="<?= site_url('gestion-rencontres') ?>" class="menu-btn btn-gestion-rencontres">
+                    <span class="btn-code">E042</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/Rencontre.png') ?>" alt="Gestion des rencontres"></div>
+                    <span>Gestion des rencontres</span>
+                    <span class="btn-desc">Filtrer et modifier date, heure, poule, journée</span>
                 </a>
 
             </div>

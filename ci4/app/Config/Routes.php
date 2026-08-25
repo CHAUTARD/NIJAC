@@ -288,6 +288,16 @@ $routes->post('equipe-regionale/import-txt', 'EquipeRegionaleController::importe
 $routes->put('equipe-regionale/(:num)', 'EquipeRegionaleController::modifier/$1', ['filter' => 'adminauth']);
 $routes->delete('equipe-regionale/(:num)', 'EquipeRegionaleController::supprimer/$1', ['filter' => 'adminauth']);
 
+// ── E041 Gestion des équipes ─────────────────────────────────────────────────
+$routes->get('gestion-equipes', 'EquipeAdminController::index', ['filter' => 'adminauth']);
+$routes->get('gestion-equipes/data', 'EquipeAdminController::data', ['filter' => 'adminauth']);
+$routes->put('gestion-equipes/(:num)', 'EquipeAdminController::update/$1', ['filter' => 'adminauth']);
+
+// ── E042 Gestion des rencontres ──────────────────────────────────────────────
+$routes->get('gestion-rencontres', 'RencontreAdminController::index', ['filter' => 'adminauth']);
+$routes->get('gestion-rencontres/data', 'RencontreAdminController::data', ['filter' => 'adminauth']);
+$routes->put('gestion-rencontres/(:num)', 'RencontreAdminController::update/$1', ['filter' => 'adminauth']);
+
 // ── E099 Administration base de données ──────────────────────────────────────
 // Admin uniquement (filtre "adminauth"), + restriction supplémentaire
 // login === 'CHAUTARD' vérifiée manuellement dans le contrôleur (même règle

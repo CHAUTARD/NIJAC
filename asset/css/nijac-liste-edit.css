@@ -1,0 +1,162 @@
+/*
+ * NIJAC – Styles partagés du motif "liste + panneau d'édition" (E005-E013,
+ * E019, E024, E026, E040-E042...) : deux volets côte à côte, une table
+ * triable à gauche, un formulaire de modification à droite.
+ *
+ * Chaque écran reste un document HTML autonome (voir CLAUDE.md, "View /
+ * header convention") : ce fichier ne factorise que le CSS répété à
+ * l'identique sur ces écrans, jamais la structure de page elle-même. Une vue
+ * qui utilise ce motif doit conserver les IDs #split-container, #panel-liste,
+ * #liste-header, #table-wrapper, #panel-form, #panel-boutons, #no-selection,
+ * #page-footer et la table à l'intérieur de #table-wrapper (peu importe son
+ * ID, ciblé ici via `#table-wrapper table`).
+ *
+ * #panel-liste { width: ... } reste à définir par écran (varie de 54% à 68%
+ * selon le nombre de colonnes) — non inclus ici.
+ */
+
+body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #f0f4fa;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* ── En-tête ── */
+#page-header {
+    background: var(--nijac-blue);
+    color: #fff;
+    padding: .5rem 1.25rem;
+    font-size: .9rem;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+/* ── Toolbar (écrans qui n'utilisent pas partials/toolbar.php en autonome) ── */
+#toolbar {
+    background: #f8fafc;
+    border-bottom: 1px solid #dde5f0;
+    padding: .3rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: .85rem;
+    flex-shrink: 0;
+}
+#toolbar .ts-user { color: #1a3a6b; font-weight: 600; }
+#toolbar .ts-pwd-warning {
+    display: none; /* la vue appelante bascule en inline-flex si $changeLogin est vrai — voir partials/toolbar.php */
+    align-items: center;
+    gap: .35rem;
+    color: #c00;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: underline dotted;
+}
+#toolbar .ts-pwd-warning:hover { color: #900; }
+
+/* ── Deux volets ── */
+#split-container { display: flex; flex: 1; overflow: hidden; }
+#panel-liste {
+    display: flex;
+    flex-direction: column;
+    border-right: 2px solid #c8d4e8;
+}
+#liste-header {
+    background: steelblue;
+    color: #fff;
+    font-weight: 700;
+    font-size: .85rem;
+    padding: .4rem .75rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+}
+#liste-header select, #liste-header input {
+    font-size: .82rem;
+    padding: .15rem .5rem;
+    border: 1px solid #c8d4e8;
+    border-radius: 4px;
+}
+#lbl-count {
+    display: inline-block;
+    padding: .12rem .5rem;
+    background: rgba(255,255,255,.85);
+    border: 1px solid rgba(0,0,0,.1);
+    border-radius: 4px;
+    font-size: .8rem;
+    font-weight: 700;
+    color: #1a3a6b;
+    margin-left: auto;
+}
+
+/* ── Table triable ── */
+#table-wrapper { flex: 1; overflow-y: auto; }
+#table-wrapper table { width: 100%; font-size: .85rem; border-collapse: collapse; }
+#table-wrapper table thead th {
+    background: #e8eef7;
+    border-bottom: 2px solid #c8d4e8;
+    padding: .35rem .5rem;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+#table-wrapper table thead th[data-col] { cursor: pointer; user-select: none; }
+#table-wrapper table thead th .sort-icon { margin-left: .3rem; opacity: .4; font-size: .75rem; }
+#table-wrapper table thead th.sort-asc  .sort-icon::after { content: '▲'; opacity: 1; }
+#table-wrapper table thead th.sort-desc .sort-icon::after { content: '▼'; opacity: 1; }
+#table-wrapper table thead th[data-col]:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
+#table-wrapper table tbody tr { cursor: pointer; border-bottom: 1px solid #e0e8f0; }
+#table-wrapper table tbody tr:nth-child(even) { background: #f4f7fc; }
+#table-wrapper table tbody tr:hover { background: #dce8f8; }
+#table-wrapper table tbody tr.selected { background: #b8d0f0 !important; }
+#table-wrapper table tbody td { padding: .3rem .5rem; }
+
+/* ── Formulaire d'édition ── */
+#panel-form {
+    flex: 1;
+    padding: 1rem 1.25rem;
+    overflow-y: auto;
+    background: #fff;
+}
+.form-label { font-size: .82rem; font-weight: 700; color: #374151; margin-bottom: .2rem; }
+.form-control, .form-select { font-size: .9rem; }
+.form-readonly { font-size: .9rem; color: #374151; padding: .3rem 0; }
+#no-selection { color: #9ca3af; font-size: .85rem; text-align: center; margin-top: 2rem; }
+
+#panel-boutons { display: flex; gap: .6rem; margin-top: 1.25rem; }
+.btn-nouveau     { background: #fff; border: 1px solid #aaa; }
+.btn-enregistrer { background: #c6efce; border: 1px solid #82c88e; font-weight: 600; }
+.btn-supprimer   { background: #ffc7ce; border: 1px solid #e09090; font-weight: 600; }
+.btn-nouveau:hover     { background: #e8e8e8; }
+.btn-enregistrer:hover { background: #a8dfb0; }
+.btn-supprimer:hover   { background: #f0a0a8; }
+.btn-enregistrer:disabled, .btn-supprimer:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── Pied de page ── */
+#page-footer {
+    background: #e8eef7;
+    border-top: 1px solid #c8d4e8;
+    padding: .25rem 1rem;
+    font-size: .8rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    flex-shrink: 0;
+}
+#status-bar { color: #374151; min-height: 18px; }
+.footer-copyright { color: #6b7280; white-space: nowrap; }
+.footer-logo { height: 20px; width: auto; opacity: .75; }
+#page-footer.pf-status-left {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+}
+#page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
+#page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }

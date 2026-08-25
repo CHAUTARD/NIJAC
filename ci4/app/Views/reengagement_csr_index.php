@@ -9,60 +9,16 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('asset/css/nijac-liste-edit.css') ?>">
 
     <style>
-        body {
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            background: #f0f4fa;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            overflow: hidden;
-        }
-
         /* Violet, propre au rôle CSR — voir E034/E035. */
-        #page-header {
-            background: #6a1b9a;
-            color: #fff;
-            padding: .5rem 1.25rem;
-            font-size: .9rem;
-            font-weight: 600;
-            flex-shrink: 0;
-        }
-
-        #toolbar {
-            background: #f8fafc;
-            border-bottom: 1px solid #dde5f0;
-            padding: .3rem 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: .85rem;
-            flex-shrink: 0;
-        }
-        #toolbar .ts-user { color: #1a3a6b; font-weight: 600; }
-        #toolbar .ts-pwd-warning {
-            display: <?= $changeLogin ? 'inline-flex' : 'none' ?>;
-            align-items: center;
-            gap: .35rem;
-            color: #c00;
-            font-weight: 700;
-            cursor: pointer;
-            text-decoration: underline dotted;
-        }
-        #toolbar .ts-pwd-warning:hover { color: #900; }
-
-        #split-container {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-        }
+        #page-header { background: #6a1b9a; }
+        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
 
         #panel-form {
             width: 50%;
             padding: 1.25rem 1.5rem;
-            overflow-y: auto;
-            background: #fff;
             display: flex;
             flex-direction: column;
             border-right: 2px solid #c8d4e8;
@@ -90,28 +46,10 @@
             width: 100%;
         }
 
-        .form-label {
-            font-size: .82rem;
-            font-weight: 700;
-            color: #374151;
-            margin-bottom: .2rem;
-        }
-
-        .form-control, .form-select { font-size: .9rem; }
-
         #txt-message {
             resize: vertical;
             min-height: 320px;
         }
-
-        #panel-boutons {
-            display: flex;
-            gap: .6rem;
-            margin-top: 1.25rem;
-        }
-
-        .btn-enregistrer { background:#c6efce; border:1px solid #82c88e; font-weight:600; }
-        .btn-enregistrer:hover { background:#a8dfb0; }
 
         #cartouche-marqueurs code {
             display: inline-block;
@@ -135,26 +73,6 @@
             transform: scale(.95);
         }
 
-        #page-footer {
-            background: #e8eef7;
-            border-top: 1px solid #c8d4e8;
-            padding: .25rem 1rem;
-            font-size: .8rem;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-shrink: 0;
-        }
-        #status-bar { color: #374151; min-height: 18px; }
-        .footer-copyright { color: #6b7280; white-space: nowrap; }
-        .footer-logo { height: 20px; width: auto; opacity: .75; }
-        #page-footer.pf-status-left {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
-            align-items: center;
-        }
-        #page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
-        #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
     </style>
 </head>
 <body>

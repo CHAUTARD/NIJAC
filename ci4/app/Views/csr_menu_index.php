@@ -12,7 +12,7 @@
 
     <style>
         body {
-            background: #f0f4fa;
+            background: #f3e5f5;
             font-family: 'Segoe UI', system-ui, sans-serif;
             min-height: 100vh;
             display: flex;

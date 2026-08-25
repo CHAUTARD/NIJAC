@@ -29,7 +29,7 @@ Le détail complet de chaque écran (fonctionnalités, fichier source) est dispo
 | E022 | Nomination | Affectation JA ↔ rencontres avec règles métier, validation des nominations |
 | E024 | Centre d'envoi | Envoi des 4 types de messages aux JA actifs du département |
 | E025 | Comptabilité | Récapitulatif des frais JA, export CSV format EBP (journal AC) |
-| E026 | Messagerie | Création et gestion des modèles de messages (convocation, rappel, annulation…) |
+| E026 | Gestion des messages | Création et gestion des modèles de messages (convocation, rappel, annulation…) |
 | E027 | JA R3 / R4 | Signalement des équipes R3/R4 demandant un JA → `ArbitrageObligatoire = 1` |
 | E099 | Administration BDD | Browse/CRUD, structure, requêteur SQL, export CSV, gestion des index |
 
