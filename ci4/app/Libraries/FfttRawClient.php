@@ -206,8 +206,40 @@ class FfttRawClient
             );
         }
 
-        $data = json_decode(json_encode($obj, JSON_INVALID_UTF8_SUBSTITUTE), true);
+        return $this->xmlToArray($obj);
+    }
 
-        return $data ?? [];
+    /**
+     * Convertit récursivement un SimpleXMLElement en tableau associatif (feuille
+     * → chaîne, via cast direct). Remplace l'ancien passage par
+     * json_encode()/json_decode() : celui-ci aplatit un nœud dont le seul contenu
+     * est un bloc CDATA (ex. <lien><![CDATA[cx_poule=...]]></lien>, utilisé par
+     * xml_result_equ) en objet vide, perdant le texte — provoquant en pratique
+     * l'échec silencieux de l'extraction de cx_poule dans ImportRencontresController
+     * et donc l'import d'une seule poule par division.
+     */
+    private function xmlToArray(\SimpleXMLElement $el): array|string
+    {
+        $children = $el->children();
+        if (count($children) === 0) {
+            return (string) $el;
+        }
+
+        $names = [];
+        foreach ($children as $name => $child) {
+            $names[$name] = ($names[$name] ?? 0) + 1;
+        }
+
+        $result = [];
+        foreach ($children as $name => $child) {
+            $value = $this->xmlToArray($child);
+            if ($names[$name] > 1) {
+                $result[$name][] = $value;
+            } else {
+                $result[$name] = $value;
+            }
+        }
+
+        return $result;
     }
 }

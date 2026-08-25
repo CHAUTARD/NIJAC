@@ -362,7 +362,6 @@ Importer les rencontres de la saison régionale directement depuis l'API FFTT (S
 | `import-rencontres/liste-rencontres` | GET | Liste les rencontres déjà importées |
 | `import-rencontres/candidats-arbitre` | GET | JA actifs du club recevant, pour désignation directe R3M/R4M |
 | `import-rencontres/designer-arbitre` | POST | Désigne un JA du club recevant sur une rencontre R3M/R4M et envoie sa convocation |
-| `import-rencontres/debug-result-equ` | POST | Action de débogage FFTT, non appelée par l'interface |
 
 ### Règles
 - Les doublons (même Date + équipe domicile + équipe visiteur) sont ignorés silencieusement

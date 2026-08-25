@@ -379,7 +379,7 @@ $(document).on('click', '.btn-phase', function () {
 $('#btn-fftt').on('click', function () {
     $(this).prop('disabled', true);
     $('#spinner-fftt').addClass('show');
-    ['sec-ligue','sec-epreuves','sec-divisions','sec-progression'].forEach(id => $(`#${id}`).hide());
+    ['sec-ligue','sec-epreuves','sec-progression'].forEach(id => $(`#${id}`).hide());
 
     $.post(`${IMPORT_RENC_BASE}/chercher-ligue`, function (r) {
         $('#spinner-fftt').removeClass('show');
@@ -419,7 +419,6 @@ $('#btn-fftt').on('click', function () {
 function chargerEpreuves() {
     $('#sec-epreuves').show();
     $('#liste-epreuves').html('<span class="text-muted"><i class="bi bi-hourglass-split me-1"></i>Chargement des épreuves…</span>');
-    $('#btn-charger-divisions').prop('disabled', true);
 
     $.post(`${IMPORT_RENC_BASE}/charger-epreuves`, { organisme: ligueId }, function (r) {
         if (!r.ok) {
@@ -440,7 +439,6 @@ function chargerEpreuves() {
         $('#lbl-nb-epreuves').text(`(${epreuves.length} épreuve(s))`);
         renderEpreuves();
         majBtnImportEpreuves();
-        majBtnDivisions();
     }, 'json').fail(function () {
         $('#liste-epreuves').html('<div class="text-danger">Erreur réseau.</div>');
     });
@@ -477,10 +475,6 @@ function majBtnImportEpreuves() {
     $('#btn-importer').append(
         '<span id="spinner-div" class="spinner-border spinner-border-sm ms-2 d-none"></span>'
     );
-}
-
-function majBtnDivisions() {
-    // pas de bouton dédié dans cette version — conservé pour parité avec le legacy
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

@@ -141,7 +141,6 @@ $routes->post('jugearbitre/fftt/reset-actif-tous', 'JugearbitreController::reini
 $routes->get('import-rencontres', 'ImportRencontresController::index', ['filter' => 'adminauth']);
 $routes->post('import-rencontres/chercher-ligue', 'ImportRencontresController::chercherLigue', ['filter' => 'adminauth']);
 $routes->post('import-rencontres/charger-epreuves', 'ImportRencontresController::chargerEpreuves', ['filter' => 'adminauth']);
-$routes->post('import-rencontres/debug-result-equ', 'ImportRencontresController::debugResultEqu', ['filter' => 'adminauth']);
 $routes->post('import-rencontres/charger-divisions', 'ImportRencontresController::chargerDivisions', ['filter' => 'adminauth']);
 $routes->post('import-rencontres/importer-division', 'ImportRencontresController::importerDivision', ['filter' => 'adminauth']);
 $routes->get('import-rencontres/liste-rencontres', 'ImportRencontresController::listeRencontres', ['filter' => 'adminauth']);

@@ -30,16 +30,7 @@ class ImportRencontresController extends BaseController
         // Garantit que la clé "region" existe en configuration
         try {
             $pdo0 = getPDO();
-            $pdo0->exec("INSERT IGNORE INTO configuration (cle, valeur) VALUES ('region', 'Normandie')");
 
-            // Colonne club.EquipeNom (nom de base utilisé pour les équipes de ce club, ex.
-            // "ROUEN SPO" pour "ROUEN SPO 2") — persistée dès qu'une équipe est résolue vers ce
-            // club dans importerDivision(), pour que les imports des saisons suivantes retrouvent
-            // le club directement au lieu de créer un club "fictif" faute de code FFTT.
-            $colsClub = array_column($pdo0->query('SHOW COLUMNS FROM club')->fetchAll(), 'Field');
-            if (!in_array('EquipeNom', $colsClub, true)) {
-                $pdo0->exec('ALTER TABLE club ADD COLUMN EquipeNom VARCHAR(100) NULL');
-            }
             // Un nom d'équipe ne doit désigner qu'un seul club. Try/catch isolé : si des doublons
             // existent déjà en base, on laisse la contrainte non posée plutôt que de faire échouer
             // le reste de la migration.
@@ -232,7 +223,7 @@ class ImportRencontresController extends BaseController
             // façon croissante et continue toutes saisons confondues, donc les anciennes saisons
             // encombrent la liste sans intérêt. Seuil configurable (clé 'fftt_epreuve_min',
             // éditable dans Configuration générale E015 — à relever à chaque nouvelle saison).
-            $seuilEpreuve = (int) getConfig('fftt_epreuve_min', '18369');
+            $seuilEpreuve = (int) getConfig('fftt_epreuve_min', '18368');
             $items        = array_values(array_filter(
                 $items,
                 static fn ($e) => (int) ($e['idepreuve'] ?? 0) > $seuilEpreuve
@@ -261,66 +252,8 @@ class ImportRencontresController extends BaseController
     }
 
     /**
-     * Action de débogage non appelée par le JS de import_rencontres.php —
-     * portée à l'identique pour parité, comme les autres actions mortes déjà
-     * rencontrées dans ce portage (liste_tables_db, maj_laposte…).
-     */
-    public function debugResultEqu(): ResponseInterface
-    {
-
-        return $this->tryJson(function () {
-            $divFftt = trim($this->request->getPost('division_fftt') ?? '');
-            if ($divFftt === '') {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'division_fftt manquant']);
-            }
-            $api        = getFfttRawClient();
-            $resultats  = [];
-            $cxPoules   = [];
-            $pouleItems = [];
-
-            try {
-                $r          = $api->request('xml_result_equ', ['action' => 'poule', 'D1' => $divFftt, 'auto' => '1', 'type' => 'E']);
-                $pouleItems = isset($r['poule']) ? (isset($r['poule'][0]) ? $r['poule'] : [$r['poule']]) : [];
-                foreach ($pouleItems as $i => $p) {
-                    $lienRaw = $p['lien'] ?? '';
-                    $lienStr = is_array($lienRaw) ? '' : (string) $lienRaw;
-                    parse_str(html_entity_decode($lienStr), $lp);
-                    if (!empty($lp['cx_poule'])) {
-                        $cxPoules[$i + 1] = $lp['cx_poule'];
-                    }
-                }
-                $resultats[] = ['test' => 'action=poule', 'url' => $api->lastUrl(), 'nb_poules' => count($pouleItems), 'cx_poules' => $cxPoules, 'apercu' => $pouleItems];
-            } catch (\Throwable $e) {
-                $resultats[] = ['test' => 'action=poule', 'erreur' => $e->getMessage(), 'url' => $api->lastUrl()];
-            }
-
-            if (count($cxPoules) === count($pouleItems) && count($cxPoules) > 0) {
-                foreach ($cxPoules as $num => $cx) {
-                    try {
-                        $r     = $api->request('xml_result_equ', ['D1' => $divFftt, 'cx_poule' => $cx, 'auto' => '1', 'type' => 'E']);
-                        $tours = isset($r['tour']) ? (isset($r['tour'][0]) ? $r['tour'] : [$r['tour']]) : [];
-                        $resultats[] = ['test' => "poule $num (cx=$cx)", 'url' => $api->lastUrl(), 'nb_tours' => count($tours), 'apercu' => array_slice($tours, 0, 2)];
-                    } catch (\Throwable $e) {
-                        $resultats[] = ['test' => "poule $num", 'erreur' => $e->getMessage(), 'url' => $api->lastUrl()];
-                    }
-                }
-            } else {
-                try {
-                    $r     = $api->request('xml_result_equ', ['D1' => $divFftt, 'auto' => '1', 'type' => 'E']);
-                    $tours = isset($r['tour']) ? (isset($r['tour'][0]) ? $r['tour'] : [$r['tour']]) : [];
-                    $resultats[] = ['test' => 'fallback global (lien vide)', 'url' => $api->lastUrl(), 'nb_tours' => count($tours), 'apercu' => array_slice($tours, 0, 2)];
-                } catch (\Throwable $e) {
-                    $resultats[] = ['test' => 'fallback global', 'erreur' => $e->getMessage(), 'url' => $api->lastUrl()];
-                }
-            }
-
-            return $this->response->setJSON(['ok' => true, 'resultats' => $resultats]);
-        });
-    }
-
-    /**
-     * Utilise le client bas niveau (getFfttRawClient()), comme les méthodes
-     * suivantes (importerDivision, debugResultEqu) : la façade FFTTApi de
+     * Utilise le client bas niveau (getFfttRawClient()), comme importerDivision
+     * ci-dessous : la façade FFTTApi de
      * alamirault/fftt-api n'expose pas xml_division (aucune méthode
      * listDivisions()/équivalent), et ses méthodes de poules/rencontres
      * (listEquipePouleByLienDivision, listRencontrePouleByLienDivision)
@@ -373,13 +306,12 @@ class ImportRencontresController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Paramètres manquants.']);
             }
 
+            // Toutes les divisions sont importables, qu'elles soient déjà configurées dans la
+            // table NIJAC "division" (avec un ArbitrageCRA connu) ou non — pas de blocage ici.
             $stmtDiv = $pdo->prepare('SELECT ArbitrageCRA FROM division WHERE Division=?');
             $stmtDiv->execute([$divCode]);
-            $divInfo = $stmtDiv->fetch();
-            if (!$divInfo) {
-                return $this->response->setJSON(['ok' => false, 'msg' => "Division NIJAC $divCode introuvable."]);
-            }
-            $arbitrage   = (int) $divInfo['ArbitrageCRA'];
+            $divInfo     = $stmtDiv->fetch();
+            $arbitrage   = $divInfo ? (int) $divInfo['ArbitrageCRA'] : 0;
             $isNationale = str_starts_with($divCode, 'N');
 
             $api = getFfttRawClient();
