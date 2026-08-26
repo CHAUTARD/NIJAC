@@ -253,7 +253,7 @@ function selectionnerLigne($tr) {
     $('#tbody-liste tr').removeClass('selected');
     $tr.addClass('selected');
     const id = +$tr.attr('data-id');
-    const r  = rencontres.find(x => x.Id_Rencontre === id);
+    const r  = rencontres.find(x => x.Id_Rencontre == id);
     if (!r) return;
 
     currentId = id;
