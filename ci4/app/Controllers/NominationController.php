@@ -338,8 +338,15 @@ class NominationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => 'Rencontre hors de votre périmètre']);
             }
 
-            // Vérification règle : pas déjà affecté ce jour-là
-            $dateRenc = $pdo->prepare('SELECT Date FROM rencontre WHERE Id_Rencontre = ?');
+            // Vérification règle : pas déjà affecté ce jour-là, sauf pour une autre
+            // rencontre du même club domicile (ex. plusieurs équipes du même club
+            // jouant à domicile le même jour, dans la même salle).
+            $dateRenc = $pdo->prepare('
+                SELECT r.Date, ed.Id_Club
+                FROM rencontre r
+                JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
+                WHERE r.Id_Rencontre = ?
+            ');
             $dateRenc->execute([$idRenc]);
             $ri = $dateRenc->fetch();
             if (!$ri) {
@@ -348,11 +355,13 @@ class NominationController extends BaseController
 
             $checkDate = $pdo->prepare('
                 SELECT COUNT(*) FROM nomination n
-                JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                JOIN disponible d  ON d.Id_Disponible  = n.Id_Disponible
+                JOIN rencontre r2  ON r2.Id_Rencontre   = n.Id_Rencontre
+                JOIN equipe ed2    ON ed2.Id_Equipe     = r2.Id_EquipeDom
                 WHERE d.Id_JA = ? AND n.Id_Rencontre != ?
-                  AND n.Id_Rencontre IN (SELECT Id_Rencontre FROM rencontre WHERE Date = ?)
+                  AND r2.Date = ? AND ed2.Id_Club != ?
             ');
-            $checkDate->execute([$idJa, $idRenc, $ri['Date']]);
+            $checkDate->execute([$idJa, $idRenc, $ri['Date'], $ri['Id_Club']]);
             if ($checkDate->fetchColumn() > 0) {
                 return $this->response->setJSON(['ok' => false, 'err' => 'Ce JA est déjà affecté ce jour-là']);
             }
