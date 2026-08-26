@@ -57,7 +57,7 @@ class RencontreAdminController extends BaseController
         return $this->tryJson(function () {
             $rows = getPDO()->query(
                 'SELECT r.Id_Rencontre, r.Date, r.Heure, r.Poule, r.Journee, r.Phase,
-                        ed.Division, dv.Color AS DivisionColor, ed.Nom AS NomDom, ed.Id_Club AS IdClubDom, ed.SouhaitJA, ev.Nom AS NomExt
+                        ed.Division, dv.Color AS DivisionColor, ed.Nom AS NomDom, ed.Id_Club AS IdClubDom, ev.Nom AS NomExt
                  FROM rencontre r
                  JOIN equipe   ed ON ed.Id_Equipe = r.Id_EquipeDom
                  LEFT JOIN equipe ev ON ev.Id_Equipe = r.Id_EquipeExt
@@ -99,18 +99,6 @@ class RencontreAdminController extends BaseController
                 if ((int) $chk->fetchColumn() === 0) {
                     return $this->response->setJSON(['ok' => false, 'msg' => "Rencontre $idRencontre introuvable."]);
                 }
-            }
-
-            // Souhait Arbitrage (CRA/Club) est un attribut de l'équipe domicile (R3/R4
-            // uniquement), pas de la rencontre — répercuté sur equipe.SouhaitJA.
-            $souhaitArbitrage = trim($input['souhait_arbitrage'] ?? '');
-            if (in_array($souhaitArbitrage, ['CRA', 'Club'], true)) {
-                $pdo->prepare('
-                    UPDATE equipe e
-                    JOIN rencontre r ON r.Id_EquipeDom = e.Id_Equipe
-                    SET e.SouhaitJA = ?
-                    WHERE r.Id_Rencontre = ?
-                ')->execute([$souhaitArbitrage, $idRencontre]);
             }
 
             return $this->response->setJSON(['ok' => true, 'msg' => 'Rencontre mise à jour.']);

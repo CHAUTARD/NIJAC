@@ -124,14 +124,6 @@
                 <input type="number" id="txt-journee" class="form-control form-control-sm" min="0" step="1">
             </div>
 
-            <div class="mb-2" id="grp-souhait-arbitrage" style="display:none;">
-                <label class="form-label" for="sel-souhait-arbitrage">Souhait Arbitrage</label>
-                <select id="sel-souhait-arbitrage" class="form-select form-select-sm">
-                    <option value="CRA">CRA</option>
-                    <option value="Club">Club</option>
-                </select>
-            </div>
-
             <div id="panel-boutons">
                 <button class="btn btn-sm btn-enregistrer px-3" id="btn-enregistrer"><i class="bi bi-floppy me-1"></i>Enregistrer</button>
                 <button class="btn btn-sm btn-nouveau px-3" id="btn-annuler">Annuler</button>
@@ -312,9 +304,6 @@ function selectionnerLigne($tr) {
     $('#sel-heure').val((r.Heure ?? '').substring(0, 5));
     $('#txt-poule').val(r.Poule ?? '');
     $('#txt-journee').val(r.Journee ?? '');
-    const rxR3R4 = /^R[34]/.test(r.Division ?? '');
-    $('#grp-souhait-arbitrage').toggle(rxR3R4);
-    $('#sel-souhait-arbitrage').val(r.SouhaitJA || 'CRA');
     setStatus('');
 }
 
@@ -326,9 +315,6 @@ $('#btn-enregistrer').on('click', function () {
         poule:   $('#txt-poule').val(),
         journee: $('#txt-journee').val(),
     };
-    if ($('#grp-souhait-arbitrage').is(':visible')) {
-        payload.souhait_arbitrage = $('#sel-souhait-arbitrage').val();
-    }
 
     $.ajax({ url: `${RENCONTRE_BASE}/${currentId}`, method: 'PUT', data: payload, dataType: 'json' }).done(function (res) {
         if (res.ok) { toast(res.msg); chargerListe(currentId); }
