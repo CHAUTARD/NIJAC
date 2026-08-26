@@ -120,6 +120,7 @@
 
             <div id="panel-boutons">
                 <button class="btn btn-sm btn-enregistrer px-3" id="btn-enregistrer"><i class="bi bi-floppy me-1"></i>Enregistrer</button>
+                <button class="btn btn-sm btn-supprimer px-3" id="btn-supprimer"><i class="bi bi-trash me-1"></i>Supprimer</button>
             </div>
 
             <div id="form-status" class="mt-3 small fw-bold"></div>
@@ -305,6 +306,24 @@ $('#btn-enregistrer').on('click', function () {
         if (res.ok) { toast(res.msg); chargerListe(currentId); }
         else { toast(res.msg, false); setStatus(res.msg, false); }
     }).fail(() => toast('Erreur réseau.', false));
+});
+
+$('#btn-supprimer').on('click', function () {
+    if (!currentId) return;
+    const libelle = `${$('#txt-dom').text()} / ${$('#txt-ext').text()}`;
+    nijacConfirm(`Supprimer la rencontre ${libelle} ?`, function () {
+        $.ajax({ url: `${RENCONTRE_BASE}/${currentId}`, method: 'DELETE', dataType: 'json' }).done(function (res) {
+            if (res.ok) {
+                toast(res.msg);
+                currentId = null;
+                $('#form-rencontre').hide();
+                $('#no-selection').show();
+                chargerListe();
+            } else {
+                toast(res.msg, false);
+            }
+        }).fail(() => toast('Erreur réseau.', false));
+    }, null, { type: 'danger' });
 });
 
 $('#search-equipe').on('input', function () { searchEquipe = $(this).val().trim(); renderListe(); });

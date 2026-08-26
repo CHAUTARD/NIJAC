@@ -293,7 +293,7 @@
             <label class="input-group-text" for="sync-fftt-dept"><i class="bi bi-map me-1"></i>Département</label>
             <select id="sync-fftt-dept" class="form-select">
               <option value="">— Choisir —</option>
-              <?php foreach ($tousDepts as $d): ?>
+              <?php foreach ($deptActifs as $d): ?>
               <option value="<?= esc($d['code']) ?>"><?= esc($d['code']) ?> — <?= esc($d['nom']) ?></option>
               <?php endforeach; ?>
             </select>

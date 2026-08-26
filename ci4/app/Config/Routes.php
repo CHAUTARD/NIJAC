@@ -297,6 +297,7 @@ $routes->put('gestion-equipes/(:num)', 'EquipeAdminController::update/$1', ['fil
 $routes->get('gestion-rencontres', 'RencontreAdminController::index', ['filter' => 'adminauth']);
 $routes->get('gestion-rencontres/data', 'RencontreAdminController::data', ['filter' => 'adminauth']);
 $routes->put('gestion-rencontres/(:num)', 'RencontreAdminController::update/$1', ['filter' => 'adminauth']);
+$routes->delete('gestion-rencontres/(:num)', 'RencontreAdminController::delete/$1', ['filter' => 'adminauth']);
 
 // ── E099 Administration base de données ──────────────────────────────────────
 // Admin uniquement (filtre "adminauth"), + restriction supplémentaire

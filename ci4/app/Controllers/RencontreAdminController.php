@@ -102,4 +102,18 @@ class RencontreAdminController extends BaseController
             return $this->response->setJSON(['ok' => true, 'msg' => 'Rencontre mise à jour.']);
         });
     }
+
+    public function delete(int $idRencontre): ResponseInterface
+    {
+        return $this->tryJson(function () use ($idRencontre) {
+            $stmt = getPDO()->prepare('DELETE FROM rencontre WHERE Id_Rencontre=?');
+            $stmt->execute([$idRencontre]);
+
+            if ($stmt->rowCount() === 0) {
+                return $this->response->setJSON(['ok' => false, 'msg' => "Rencontre $idRencontre introuvable."]);
+            }
+
+            return $this->response->setJSON(['ok' => true, 'msg' => 'Rencontre supprimée.']);
+        });
+    }
 }

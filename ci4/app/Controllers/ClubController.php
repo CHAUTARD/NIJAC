@@ -67,22 +67,7 @@ class ClubController extends BaseController
         return $this->tryJson(function () {
             $pdo = getPDO();
 
-            // Auto-migration colonnes correspondant + EquipeNom (nom de base utilisé pour les
-            // équipes de ce club dans les imports FFTT, ex. "ROUEN SPO" pour "ROUEN SPO 2" — distinct
-            // du nom officiel du club, sert à l'association équipe → club dans E011/E017).
-            $colsClub = array_column($pdo->query('SHOW COLUMNS FROM Club')->fetchAll(), 'Field');
-            $corCols  = [
-                'CorNom'       => 'VARCHAR(100) NULL',
-                'CorEmail'     => 'VARCHAR(150) NULL',
-                'CorTelephone' => 'VARCHAR(20) NULL',
-                'EquipeNom'    => 'VARCHAR(100) NULL',
-            ];
-            foreach ($corCols as $col => $def) {
-                if (!in_array($col, $colsClub)) {
-                    $pdo->exec("ALTER TABLE Club ADD COLUMN $col $def");
-                }
-            }
-            // Un nom d'équipe ne doit désigner qu'un seul club (utilisé pour l'affectation
+           // Un nom d'équipe ne doit désigner qu'un seul club (utilisé pour l'affectation
             // automatique en E011/E017). Posée séparément avec son propre try/catch : si des
             // doublons existent déjà en base, on ne veut pas faire planter le chargement de
             // l'écran, juste laisser la contrainte non posée jusqu'à correction manuelle.
@@ -93,20 +78,6 @@ class ClubController extends BaseController
                 } catch (\PDOException $e) {
                 }
             }
-            // Copie unique Correspondant → Club (si la table Correspondant existe encore
-            // et qu'il reste des clubs sans correspondant) — no-op désormais que la table
-            // a été retirée (voir E024/E026), conservé pour parité avec le fichier legacy.
-            $tables = array_column($pdo->query("SHOW TABLES LIKE 'Correspondant'")->fetchAll(), 0);
-            if ($tables) {
-                $pdo->exec(
-                    'UPDATE Club cl
-                     JOIN (SELECT Id_Club, MIN(Id_Correspondant) AS Id_Min FROM Correspondant GROUP BY Id_Club) sel
-                       ON sel.Id_Club = cl.Id_Club AND cl.CorNom IS NULL
-                     JOIN Correspondant co ON co.Id_Correspondant = sel.Id_Min
-                     SET cl.CorNom = co.Nom, cl.CorEmail = co.Email, cl.CorTelephone = co.Telephone'
-                );
-            }
-
             $rows = $pdo->query(
                 'SELECT c.Id_Club, c.Nom, c.EquipeNom,
                         c.CorNom, c.CorEmail, c.CorTelephone,
