@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-liste-edit.css') ?>">
     <style>
         #panel-liste { width: 68%; }
+        .cell-equipe:hover { text-decoration: underline; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -37,9 +38,15 @@
             <select id="sel-journee" class="form-select form-select-sm" style="width:auto;">
                 <option value="">— Journée —</option>
             </select>
+            <button type="button" class="btn btn-sm btn-light" id="btn-date-prec" title="Jour précédent">
+                <i class="bi bi-dash-lg"></i>
+            </button>
             <select id="sel-date" class="form-select form-select-sm" style="width:auto;">
                 <option value="">— Date —</option>
             </select>
+            <button type="button" class="btn btn-sm btn-light" id="btn-date-suivant" title="Jour suivant">
+                <i class="bi bi-plus-lg"></i>
+            </button>
             <button type="button" class="btn btn-sm btn-light" id="btn-reset-filtres" title="Réinitialiser les filtres">
                 <i class="bi bi-x-circle"></i>
             </button>
@@ -92,10 +99,15 @@
 
             <div class="mb-2">
                 <label class="form-label" for="sel-heure">Heure</label>
-                <select id="sel-heure" class="form-select form-select-sm">
-                    <option value="09:00">9h00</option>
-                    <option value="16:00">16h00</option>
-                </select>
+                <div class="input-group input-group-sm">
+                    <button type="button" class="btn btn-outline-secondary" id="btn-heure-moins"><i class="bi bi-dash-lg"></i></button>
+                    <select id="sel-heure" class="form-select form-select-sm">
+                        <option value="09:00">9h00</option>
+                        <option value="14:00">14h00</option>
+                        <option value="16:00">16h00</option>
+                    </select>
+                    <button type="button" class="btn btn-outline-secondary" id="btn-heure-plus"><i class="bi bi-plus-lg"></i></button>
+                </div>
             </div>
 
             <div class="mb-2">
@@ -232,14 +244,18 @@ function renderListe() {
     affichees.forEach(r => {
         const date = formatDateAvecJour(r.Date);
         const heure = (r.Heure ?? '').substring(0, 5);
+        const $tdDom = $('<td>').addClass('cell-equipe').text(r.NomDom ?? '')
+            .on('click', function (e) { e.stopPropagation(); filtrerParEquipe(r.NomDom, r.Id_Rencontre); });
+        const $tdExt = $('<td>').addClass('cell-equipe').text(r.NomExt ?? '—')
+            .on('click', function (e) { e.stopPropagation(); filtrerParEquipe(r.NomExt, r.Id_Rencontre); });
         $('<tr>').attr('data-id', r.Id_Rencontre).append(
             $('<td>').text(date),
             $('<td>').text(heure),
             $('<td>').text(r.Poule ?? ''),
             $('<td>').text(r.Journee ?? ''),
             $('<td>').append(macaronDivision(r.Division, r.DivisionColor)),
-            $('<td>').text(r.NomDom ?? ''),
-            $('<td>').text(r.NomExt ?? '—')
+            $tdDom,
+            $tdExt
         ).on('click', function () { selectionnerLigne($(this)); }).appendTo($body);
     });
 
@@ -247,6 +263,15 @@ function renderListe() {
         const $tr = $(`#tbody-liste tr[data-id="${currentId}"]`);
         if ($tr.length) $tr.addClass('selected');
     }
+}
+
+function filtrerParEquipe(nom, id) {
+    if (!nom) return;
+    searchEquipe = nom;
+    $('#search-equipe').val(nom);
+    renderListe();
+    const $tr = $(`#tbody-liste tr[data-id="${id}"]`);
+    if ($tr.length) selectionnerLigne($tr);
 }
 
 function selectionnerLigne($tr) {
@@ -289,6 +314,29 @@ $('#sel-division').on('change', function () { divisionFiltre = $(this).val(); re
 $('#sel-poule').on('change', function () { pouleFiltre = $(this).val(); renderListe(); });
 $('#sel-journee').on('change', function () { journeeFiltre = $(this).val(); renderListe(); });
 $('#sel-date').on('change', function () { dateFiltre = $(this).val(); renderListe(); });
+
+function decalerDate(delta) {
+    const dates = $('#sel-date option').map(function () { return $(this).val(); }).get().filter(Boolean);
+    if (!dates.length) return;
+    const idx = dateFiltre ? dates.indexOf(dateFiltre) + delta : (delta > 0 ? 0 : dates.length - 1);
+    if (idx >= 0 && idx < dates.length) {
+        dateFiltre = dates[idx];
+        $('#sel-date').val(dateFiltre);
+        renderListe();
+    }
+}
+$('#btn-date-prec').on('click', function () { decalerDate(-1); });
+$('#btn-date-suivant').on('click', function () { decalerDate(1); });
+
+function decalerHeure(delta) {
+    const $sel = $('#sel-heure');
+    const idx = $sel.prop('selectedIndex') + delta;
+    if (idx >= 0 && idx < $sel.find('option').length) {
+        $sel.prop('selectedIndex', idx);
+    }
+}
+$('#btn-heure-moins').on('click', function () { decalerHeure(-1); });
+$('#btn-heure-plus').on('click', function () { decalerHeure(1); });
 
 $('#btn-reset-filtres').on('click', function () {
     searchEquipe = divisionFiltre = pouleFiltre = journeeFiltre = dateFiltre = '';
