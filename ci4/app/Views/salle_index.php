@@ -409,6 +409,7 @@ function renderGrille() {
         const msg = searchTerm ? 'Aucun résultat.' : 'Aucune salle.';
         $body.append(`<tr><td colspan="11" class="text-center text-muted py-3">${msg}</td></tr>`);
         setStatus(searchTerm ? `0 résultat sur ${lignes.length} salle(s).` : 'Aucune salle enregistrée.');
+        $('#lbl-count').text(`0 / ${lignes.length} salle(s)`);
         return;
     }
 
@@ -435,7 +436,7 @@ function renderGrille() {
 
     const info = searchTerm ? `${affichees.length} résultat(s) sur ${lignes.length}. ` : '';
     setStatus(`${info}Prêt.`);
-    $('#lbl-count').text(`${lignes.length} salle(s)`);
+    $('#lbl-count').text(`${affichees.length} / ${lignes.length} salle(s)`);
 }
 
 function makeTd(val, idx, field, readonly) {

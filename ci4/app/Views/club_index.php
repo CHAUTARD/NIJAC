@@ -206,11 +206,14 @@
                 <th style="width:200px" data-field="cor_nom">Correspondant<span class="sort-icon"></span></th>
                 <th style="width:220px" data-field="cor_email">Email correspondant<span class="sort-icon"></span></th>
                 <th style="width:150px" data-field="cor_tel">Téléphone correspondant<span class="sort-icon"></span></th>
+                <th style="width:180px" data-field="salle_nom">Salle principale<span class="sort-icon"></span></th>
+                <th style="width:90px"  data-field="salle_cp">Code postal<span class="sort-icon"></span></th>
+                <th style="width:150px" data-field="salle_ville">Ville<span class="sort-icon"></span></th>
                 <th style="width:70px"></th>
             </tr>
         </thead>
         <tbody id="tbody-grille">
-            <tr><td colspan="7" class="text-center text-muted py-3">Chargement…</td></tr>
+            <tr><td colspan="10" class="text-center text-muted py-3">Chargement…</td></tr>
         </tbody>
     </table>
 </div>
@@ -458,7 +461,7 @@ function renderGrille() {
 
     if (!rows.length) {
         const msg = searchTerm ? 'Aucun résultat pour cette recherche.' : 'Aucun club.';
-        $body.append(`<tr><td colspan="7" class="text-center text-muted py-3">${msg}</td></tr>`);
+        $body.append(`<tr><td colspan="10" class="text-center text-muted py-3">${msg}</td></tr>`);
         setStatus(searchTerm ? `0 résultat sur ${lignes.length} club(s).` : 'Aucun club enregistré.');
         $('#lbl-count').text(`0 / ${lignes.length} club(s)`);
         return;
@@ -483,6 +486,9 @@ function construireLigne(l) {
     $tr.append(makeTd(l.cor_nom,     'cor_nom'));
     $tr.append(makeTd(l.cor_email,   'cor_email'));
     $tr.append(makeTd(l.cor_tel,     'cor_tel'));
+    $tr.append(makeTd(l.salle_nom,   'salle_nom'));
+    $tr.append(makeTd(l.salle_cp,    'salle_cp'));
+    $tr.append(makeTd(l.salle_ville, 'salle_ville'));
     const $tdActions = $('<td class="text-center">');
     $tdActions.append(
         $('<button type="button" class="btn btn-sm btn-outline-primary btn-modifier-club me-1" title="Modifier">')
@@ -619,6 +625,9 @@ function chargerListe() {
             cor_nom:      r.CorNom      ?? '',
             cor_email:    r.CorEmail    ?? '',
             cor_tel:      r.CorTelephone ?? '',
+            salle_nom:    r.SallePrincipaleNom  ?? '',
+            salle_cp:     r.SallePrincipaleCp   ?? '',
+            salle_ville:  r.SallePrincipaleVille ?? '',
         }));
         invaliderCacheRendu();
         const aMultiSalles = lignes.some(l => l.nb_salles > 1);

@@ -110,8 +110,10 @@ class ClubController extends BaseController
             $rows = $pdo->query(
                 'SELECT c.Id_Club, c.Nom, c.EquipeNom,
                         c.CorNom, c.CorEmail, c.CorTelephone,
-                        (SELECT COUNT(*) FROM Salle s2 WHERE s2.Id_Club = c.Id_Club) AS NbSalles
+                        (SELECT COUNT(*) FROM Salle s2 WHERE s2.Id_Club = c.Id_Club) AS NbSalles,
+                        sp.Nom AS SallePrincipaleNom, sp.Cp AS SallePrincipaleCp, sp.Ville AS SallePrincipaleVille
                  FROM Club c
+                 LEFT JOIN Salle sp ON sp.Id_Club = c.Id_Club AND sp.EstPrincipale = 1
                  ORDER BY c.Nom'
             )->fetchAll();
 

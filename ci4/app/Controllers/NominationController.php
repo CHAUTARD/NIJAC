@@ -224,11 +224,11 @@ class NominationController extends BaseController
                     ed.Nom       AS NomDom,
                     ed.Id_Club   AS IdClubDom,
                     ee.Nom       AS NomExt,
-                    COALESCE(lp_r.CodePostal, lp_c.CodePostal) AS CpSalle,
-                    COALESCE(lp_r.Nom,        lp_c.Nom)        AS VilleSalle,
-                    COALESCE(s_r.Nom,         s_c.Nom)         AS NomSalle,
-                    COALESCE(lp_r.Latitude,  lp_c.Latitude)  AS VenueLat,
-                    COALESCE(lp_r.Longitude, lp_c.Longitude) AS VenueLon,
+                    s_c.Cp    AS CpSalle,
+                    s_c.Ville AS VilleSalle,
+                    s_c.Nom    AS NomSalle,
+                    lp_r.Latitude AS VenueLat,
+                    lp_r.Longitude AS VenueLon,
                     d_n.Id_JA    AS IdJaAffecte,
                     CONCAT(ja_n.Prenom, ' ', ja_n.Nom) AS NomJaAffecte,
                     n.Valide,
@@ -240,7 +240,6 @@ class NominationController extends BaseController
                 LEFT JOIN salle   s_r  ON s_r.Id_Salle   = r.id_Salle
                 LEFT JOIN laposte lp_r ON lp_r.Id_LaPoste = s_r.Id_Laposte
                 LEFT JOIN salle   s_c  ON s_c.Id_Club     = ed.Id_Club AND s_c.EstPrincipale = 1
-                LEFT JOIN laposte lp_c ON lp_c.Id_LaPoste = s_c.Id_Laposte
                 LEFT JOIN nomination n  ON n.Id_Rencontre  = r.Id_Rencontre
                 LEFT JOIN disponible d_n ON d_n.Id_Disponible = n.Id_Disponible
                 LEFT JOIN ja ja_n       ON ja_n.Id_JA       = d_n.Id_JA
