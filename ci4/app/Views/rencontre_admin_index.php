@@ -28,6 +28,9 @@
         <div id="liste-header">
             <span>Rencontres</span>
             <input type="search" id="search-equipe" placeholder="🔍 Équipe…" style="width:220px;">
+            <select id="sel-division" class="form-select form-select-sm" style="width:auto;">
+                <option value="">— Division —</option>
+            </select>
             <select id="sel-poule" class="form-select form-select-sm" style="width:auto;">
                 <option value="">— Poule —</option>
             </select>
@@ -124,6 +127,7 @@ const RENCONTRE_BASE = '<?= site_url('gestion-rencontres') ?>';
 let rencontres = [];
 let currentId  = null;
 let searchEquipe  = '';
+let divisionFiltre = '';
 let pouleFiltre   = '';
 let journeeFiltre = '';
 let dateFiltre    = '';
@@ -164,6 +168,7 @@ function rencontresFiltrees() {
         if (equipe
             && !String(r.NomDom ?? '').toLowerCase().includes(equipe)
             && !String(r.NomExt ?? '').toLowerCase().includes(equipe)) return false;
+        if (divisionFiltre && String(r.Division ?? '') !== divisionFiltre) return false;
         if (pouleFiltre && String(r.Poule ?? '') !== pouleFiltre) return false;
         if (journeeFiltre && String(r.Journee ?? '') !== journeeFiltre) return false;
         if (dateFiltre && (r.Date ?? '').substring(0, 10) !== dateFiltre) return false;
@@ -185,6 +190,13 @@ function chargerListe(selectId = null) {
 }
 
 function peuplerFiltres() {
+    const divisions = [...new Set(rencontres.map(r => r.Division).filter(Boolean))].sort();
+    const $selDivision = $('#sel-division');
+    const valDivision   = $selDivision.val();
+    $selDivision.find('option:not(:first)').remove();
+    divisions.forEach(d => $selDivision.append(new Option(d, d)));
+    $selDivision.val(valDivision);
+
     const poules = [...new Set(rencontres.map(r => r.Poule).filter(p => p !== null))].sort((a, b) => a - b);
     const $selPoule = $('#sel-poule');
     const valPoule   = $selPoule.val();
@@ -273,14 +285,15 @@ $('#btn-enregistrer').on('click', function () {
 });
 
 $('#search-equipe').on('input', function () { searchEquipe = $(this).val().trim(); renderListe(); });
+$('#sel-division').on('change', function () { divisionFiltre = $(this).val(); renderListe(); });
 $('#sel-poule').on('change', function () { pouleFiltre = $(this).val(); renderListe(); });
 $('#sel-journee').on('change', function () { journeeFiltre = $(this).val(); renderListe(); });
 $('#sel-date').on('change', function () { dateFiltre = $(this).val(); renderListe(); });
 
 $('#btn-reset-filtres').on('click', function () {
-    searchEquipe = pouleFiltre = journeeFiltre = dateFiltre = '';
+    searchEquipe = divisionFiltre = pouleFiltre = journeeFiltre = dateFiltre = '';
     $('#search-equipe').val('');
-    $('#sel-poule, #sel-journee, #sel-date').val('');
+    $('#sel-division, #sel-poule, #sel-journee, #sel-date').val('');
     renderListe();
 });
 
