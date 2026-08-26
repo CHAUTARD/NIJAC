@@ -29,13 +29,19 @@
         <div id="liste-header">
             <span>Rencontres</span>
             <input type="search" id="search-equipe" placeholder="🔍 Équipe…" style="width:220px;">
-            <select id="sel-division" class="form-select form-select-sm" style="width:auto;">
+            <select id="sel-dept" class="form-select form-select-sm" style="width:170px;">
+                <option value="">— Département —</option>
+                <?php foreach ($deptActifs as $d): ?>
+                <option value="<?= esc($d['code']) ?>"><?= esc($d['code']) ?> — <?= esc($d['nom']) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <select id="sel-division" class="form-select form-select-sm" style="width:130px;">
                 <option value="">— Division —</option>
             </select>
-            <select id="sel-poule" class="form-select form-select-sm" style="width:auto;">
+            <select id="sel-poule" class="form-select form-select-sm" style="width:110px;">
                 <option value="">— Poule —</option>
             </select>
-            <select id="sel-journee" class="form-select form-select-sm" style="width:auto;">
+            <select id="sel-journee" class="form-select form-select-sm" style="width:120px;">
                 <option value="">— Journée —</option>
             </select>
             <select id="sel-date" class="form-select form-select-sm" style="width:auto;">
@@ -118,8 +124,17 @@
                 <input type="number" id="txt-journee" class="form-control form-control-sm" min="0" step="1">
             </div>
 
+            <div class="mb-2" id="grp-souhait-arbitrage" style="display:none;">
+                <label class="form-label" for="sel-souhait-arbitrage">Souhait Arbitrage</label>
+                <select id="sel-souhait-arbitrage" class="form-select form-select-sm">
+                    <option value="CRA">CRA</option>
+                    <option value="Club">Club</option>
+                </select>
+            </div>
+
             <div id="panel-boutons">
                 <button class="btn btn-sm btn-enregistrer px-3" id="btn-enregistrer"><i class="bi bi-floppy me-1"></i>Enregistrer</button>
+                <button class="btn btn-sm btn-nouveau px-3" id="btn-annuler">Annuler</button>
                 <button class="btn btn-sm btn-supprimer px-3" id="btn-supprimer"><i class="bi bi-trash me-1"></i>Supprimer</button>
             </div>
 
@@ -138,6 +153,7 @@ const RENCONTRE_BASE = '<?= site_url('gestion-rencontres') ?>';
 let rencontres = [];
 let currentId  = null;
 let searchEquipe  = '';
+let deptFiltre = '';
 let divisionFiltre = '';
 let pouleFiltre   = '';
 let journeeFiltre = '';
@@ -164,6 +180,11 @@ function textColorFor(hex) {
     return lum > 0.55 ? '#111' : '#fff';
 }
 
+// Format Id_Club : 0[9][dept 2 chiffres][4 chiffres] — ex. 09760442 → '76'
+function deptDeClub(idClub) {
+    return /^\d{8}$/.test(idClub ?? '') ? idClub.substring(2, 4) : '';
+}
+
 function macaronDivision(division, color) {
     const bg = color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#1a3a6b';
     return $('<span class="badge">').text(division ?? '').css({ background: bg, color: textColorFor(bg) });
@@ -179,6 +200,7 @@ function rencontresFiltrees() {
         if (equipe
             && !String(r.NomDom ?? '').toLowerCase().includes(equipe)
             && !String(r.NomExt ?? '').toLowerCase().includes(equipe)) return false;
+        if (deptFiltre && deptDeClub(r.IdClubDom) !== deptFiltre) return false;
         if (divisionFiltre && String(r.Division ?? '') !== divisionFiltre) return false;
         if (pouleFiltre && String(r.Poule ?? '') !== pouleFiltre) return false;
         if (journeeFiltre && String(r.Journee ?? '') !== journeeFiltre) return false;
@@ -290,6 +312,9 @@ function selectionnerLigne($tr) {
     $('#sel-heure').val((r.Heure ?? '').substring(0, 5));
     $('#txt-poule').val(r.Poule ?? '');
     $('#txt-journee').val(r.Journee ?? '');
+    const rxR3R4 = /^R[34]/.test(r.Division ?? '');
+    $('#grp-souhait-arbitrage').toggle(rxR3R4);
+    $('#sel-souhait-arbitrage').val(r.SouhaitJA || 'CRA');
     setStatus('');
 }
 
@@ -301,11 +326,21 @@ $('#btn-enregistrer').on('click', function () {
         poule:   $('#txt-poule').val(),
         journee: $('#txt-journee').val(),
     };
+    if ($('#grp-souhait-arbitrage').is(':visible')) {
+        payload.souhait_arbitrage = $('#sel-souhait-arbitrage').val();
+    }
 
     $.ajax({ url: `${RENCONTRE_BASE}/${currentId}`, method: 'PUT', data: payload, dataType: 'json' }).done(function (res) {
         if (res.ok) { toast(res.msg); chargerListe(currentId); }
         else { toast(res.msg, false); setStatus(res.msg, false); }
     }).fail(() => toast('Erreur réseau.', false));
+});
+
+$('#btn-annuler').on('click', function () {
+    currentId = null;
+    $('#tbody-liste tr').removeClass('selected');
+    $('#form-rencontre').hide();
+    $('#no-selection').show();
 });
 
 $('#btn-supprimer').on('click', function () {
@@ -327,6 +362,7 @@ $('#btn-supprimer').on('click', function () {
 });
 
 $('#search-equipe').on('input', function () { searchEquipe = $(this).val().trim(); renderListe(); });
+$('#sel-dept').on('change', function () { deptFiltre = $(this).val(); renderListe(); });
 $('#sel-division').on('change', function () { divisionFiltre = $(this).val(); renderListe(); });
 $('#sel-poule').on('change', function () { pouleFiltre = $(this).val(); renderListe(); });
 $('#sel-journee').on('change', function () { journeeFiltre = $(this).val(); renderListe(); });
@@ -354,9 +390,9 @@ $('#btn-date-moins').on('click', function () { decalerDateChamp(-1); });
 $('#btn-date-plus').on('click', function () { decalerDateChamp(1); });
 
 $('#btn-reset-filtres').on('click', function () {
-    searchEquipe = divisionFiltre = pouleFiltre = journeeFiltre = dateFiltre = '';
+    searchEquipe = deptFiltre = divisionFiltre = pouleFiltre = journeeFiltre = dateFiltre = '';
     $('#search-equipe').val('');
-    $('#sel-division, #sel-poule, #sel-journee, #sel-date').val('');
+    $('#sel-dept, #sel-division, #sel-poule, #sel-journee, #sel-date').val('');
     renderListe();
 });
 
