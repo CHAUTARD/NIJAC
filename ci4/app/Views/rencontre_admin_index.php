@@ -38,15 +38,9 @@
             <select id="sel-journee" class="form-select form-select-sm" style="width:auto;">
                 <option value="">— Journée —</option>
             </select>
-            <button type="button" class="btn btn-sm btn-light" id="btn-date-prec" title="Jour précédent">
-                <i class="bi bi-dash-lg"></i>
-            </button>
             <select id="sel-date" class="form-select form-select-sm" style="width:auto;">
                 <option value="">— Date —</option>
             </select>
-            <button type="button" class="btn btn-sm btn-light" id="btn-date-suivant" title="Jour suivant">
-                <i class="bi bi-plus-lg"></i>
-            </button>
             <button type="button" class="btn btn-sm btn-light" id="btn-reset-filtres" title="Réinitialiser les filtres">
                 <i class="bi bi-x-circle"></i>
             </button>
@@ -94,7 +88,11 @@
 
             <div class="mb-2">
                 <label class="form-label" for="txt-date">Date</label>
-                <input type="date" id="txt-date" class="form-control form-control-sm">
+                <div class="input-group input-group-sm">
+                    <button type="button" class="btn btn-outline-secondary" id="btn-date-moins"><i class="bi bi-dash-lg"></i></button>
+                    <input type="date" id="txt-date" class="form-control form-control-sm">
+                    <button type="button" class="btn btn-outline-secondary" id="btn-date-plus"><i class="bi bi-plus-lg"></i></button>
+                </div>
             </div>
 
             <div class="mb-2">
@@ -315,19 +313,6 @@ $('#sel-poule').on('change', function () { pouleFiltre = $(this).val(); renderLi
 $('#sel-journee').on('change', function () { journeeFiltre = $(this).val(); renderListe(); });
 $('#sel-date').on('change', function () { dateFiltre = $(this).val(); renderListe(); });
 
-function decalerDate(delta) {
-    const dates = $('#sel-date option').map(function () { return $(this).val(); }).get().filter(Boolean);
-    if (!dates.length) return;
-    const idx = dateFiltre ? dates.indexOf(dateFiltre) + delta : (delta > 0 ? 0 : dates.length - 1);
-    if (idx >= 0 && idx < dates.length) {
-        dateFiltre = dates[idx];
-        $('#sel-date').val(dateFiltre);
-        renderListe();
-    }
-}
-$('#btn-date-prec').on('click', function () { decalerDate(-1); });
-$('#btn-date-suivant').on('click', function () { decalerDate(1); });
-
 function decalerHeure(delta) {
     const $sel = $('#sel-heure');
     const idx = $sel.prop('selectedIndex') + delta;
@@ -337,6 +322,17 @@ function decalerHeure(delta) {
 }
 $('#btn-heure-moins').on('click', function () { decalerHeure(-1); });
 $('#btn-heure-plus').on('click', function () { decalerHeure(1); });
+
+function decalerDateChamp(delta) {
+    const $input = $('#txt-date');
+    const [y, m, d] = ($input.val() || '').split('-').map(Number);
+    if (!y || !m || !d) return;
+    const dt = new Date(y, m - 1, d + delta);
+    const pad = n => String(n).padStart(2, '0');
+    $input.val(`${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`);
+}
+$('#btn-date-moins').on('click', function () { decalerDateChamp(-1); });
+$('#btn-date-plus').on('click', function () { decalerDateChamp(1); });
 
 $('#btn-reset-filtres').on('click', function () {
     searchEquipe = divisionFiltre = pouleFiltre = journeeFiltre = dateFiltre = '';

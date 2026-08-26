@@ -184,7 +184,6 @@ class NominationController extends BaseController
                 JOIN equipe eq ON eq.Id_Equipe = r.Id_EquipeDom
                 JOIN division dv ON dv.Division = eq.Division
                 WHERE SUBSTRING(eq.Id_Club, 3, 2) IN ($deptPh)
-                  AND (dv.ArbitrageCRA = 1 OR eq.JAdemande = 1)
                   AND r.Date >= CURDATE()
                 ORDER BY r.Journee, r.Date
             ");
@@ -247,7 +246,6 @@ class NominationController extends BaseController
                 LEFT JOIN ja ja_n       ON ja_n.Id_JA       = d_n.Id_JA
                 WHERE r.Date = ?
                   AND SUBSTRING(ed.Id_Club, 3, 2) IN ($deptPh)
-                  AND (dv.ArbitrageCRA = 1 OR ed.JAdemande = 1)
                 ORDER BY dv.Ord, r.Poule, r.Id_Rencontre
             ");
             $stmt->execute(array_merge([$date], $deptsAutorises));

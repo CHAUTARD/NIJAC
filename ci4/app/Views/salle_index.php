@@ -182,6 +182,11 @@
     <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 salle(s)</span>
     <span style="flex:1"></span>
 <?php endif; ?>
+    <select id="sel-la-poste" class="form-select form-select-sm w-auto">
+        <option value="">— La Poste —</option>
+        <option value="1">Oui</option>
+        <option value="0">Non</option>
+    </select>
     <input type="search" id="search-input" placeholder="🔍 Rechercher…">
 </div>
 
@@ -198,6 +203,7 @@
                 <th style="width:120px" data-field="telephone">Téléphone<span class="sort-icon"></span></th>
                 <th style="width:90px"  data-field="cp">Code postal<span class="sort-icon"></span></th>
                 <th style="width:170px" data-field="ville">Ville<span class="sort-icon"></span></th>
+                <th style="width:80px"  data-field="la_poste">La Poste<span class="sort-icon"></span></th>
                 <th style="width:90px"  data-field="est_principale">Principale<span class="sort-icon"></span></th>
                 <?php if ($isAdmin): ?>
                 <th style="width:70px"></th>
@@ -205,7 +211,7 @@
             </tr>
         </thead>
         <tbody id="tbody-grille">
-            <tr><td colspan="10" class="text-center text-muted py-3">Chargement…</td></tr>
+            <tr><td colspan="11" class="text-center text-muted py-3">Chargement…</td></tr>
         </tbody>
     </table>
 </div>
@@ -349,6 +355,7 @@ let clubs      = [];
 let rowActive  = null;
 const sortState = { col: 'nom_club', asc: true };
 let searchTerm = '';
+let laPosteFiltre = '';
 let deptFiltre = IS_ADMIN ? '' : (DEPT_USER ?? '');
 let filtreEnRegion = true; // true = En région uniquement (par défaut), false = Tous
 
@@ -366,6 +373,7 @@ function lignesFiltreesTriees() {
     const term = searchTerm.toLowerCase();
     let result = [...lignes];
     if (IS_ADMIN && filtreEnRegion) result = result.filter(l => DEPTS_REGION.has(deptDeSalle(l)));
+    if (laPosteFiltre !== '') result = result.filter(l => (laPosteFiltre === '1') === !!l.id_laposte);
     if (term) result = result.filter(l =>
             String(l.id_salle   ?? '').toLowerCase().includes(term) ||
             String(l.nom        ?? '').toLowerCase().includes(term) ||
@@ -399,7 +407,7 @@ function renderGrille() {
 
     if (!affichees.length) {
         const msg = searchTerm ? 'Aucun résultat.' : 'Aucune salle.';
-        $body.append(`<tr><td colspan="10" class="text-center text-muted py-3">${msg}</td></tr>`);
+        $body.append(`<tr><td colspan="11" class="text-center text-muted py-3">${msg}</td></tr>`);
         setStatus(searchTerm ? `0 résultat sur ${lignes.length} salle(s).` : 'Aucune salle enregistrée.');
         return;
     }
@@ -416,6 +424,7 @@ function renderGrille() {
         $tr.append(makeTd(l.telephone,  idx, 'telephone',  false));
         $tr.append(makeTd(l.cp,         idx, 'cp',         false));
         $tr.append(makeTd(l.ville,      idx, 'ville',      false));
+        $tr.append(makeTd(l.la_poste,   idx, 'la_poste',   true));
         $tr.append(makePrincipaleTd(l, idx));
         if (IS_ADMIN) $tr.append(makeActionsTd(idx));
 
@@ -504,6 +513,7 @@ function chargerListe() {
                 adresse:        r.Adresse,
                 telephone:      r.Telephone ?? '',
                 id_laposte:     r.Id_Laposte,
+                la_poste:       r.Id_Laposte ? 'Oui' : '',
                 cp:             r.Cp    ?? '',
                 ville:          r.Ville ?? '',
                 cp_ville:       r.CpVille ?? '',
@@ -685,6 +695,11 @@ $('#btn-supprimer').on('click', function () {
 let refreshTriEntetes = () => {};
 $(function () {
     refreshTriEntetes = nijacSortableTable('#tbl-salles thead th[data-field]', 'field', sortState, renderGrille);
+});
+
+$('#sel-la-poste').on('change', function () {
+    laPosteFiltre = $(this).val();
+    renderGrille();
 });
 
 $('#search-input').on('input', function () {
