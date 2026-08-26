@@ -30,7 +30,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 #info-journee { background:#e8f5e9; border-bottom:1px solid #c8e6c9; padding:.4rem 1.25rem; font-size:.82rem; color:#2e7d32; display:none; gap:1.5rem; align-items:center; flex-wrap:wrap; flex-shrink:0; }
 
 /* ── Layout deux colonnes ── */
-#main-content { display:flex; flex:1; overflow:hidden; }
+#main-content { display:flex; flex:1; min-height:0; overflow:hidden; }
 
 /* ── Colonne gauche — rencontres ── */
 #col-rencontres { width:42%; min-width:300px; border-right:2px solid #dee2e6; overflow-y:auto; display:flex; flex-direction:column; }
@@ -145,6 +145,9 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
     <span id="info-nb-renc"></span>
     <span class="text-muted">|</span>
     <span id="info-nb-attribues"></span>
+    <button id="btn-recap" class="btn btn-outline-secondary btn-sm ms-auto" style="display:none">
+        <i class="bi bi-list-check me-1"></i>Récapitulatif
+    </button>
 </div>
 
 <!-- Corps principal -->
@@ -180,9 +183,6 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 
 <!-- Barre d'actions -->
 <div id="barre-actions">
-    <button id="btn-recap" class="btn btn-outline-secondary btn-sm" style="display:none">
-        <i class="bi bi-list-check me-1"></i>Récapitulatif
-    </button>
     <button id="btn-valider" class="btn btn-success btn-sm">
         <i class="bi bi-check-circle-fill me-1"></i>Valider les nominations
     </button>
@@ -583,7 +583,7 @@ function afficherCandidatsPourRencontre(idRenc) {
     });
 
     $('#liste-candidats').off('click', '.btn-retirer').on('click', '.btn-retirer', function () {
-        retirerJa(idRenc);
+        retirerJaAvecConfirmation(idRenc);
     });
 }
 
@@ -648,6 +648,23 @@ function retirerJa(idRenc) {
     });
 }
 
+function retirerJaAvecConfirmation(idRenc) {
+    const rc  = rencontres.find(r => r.Id_Rencontre == idRenc);
+    const nom = nominations[idRenc];
+    if (!rc || !nom) return;
+    const libelle = `${rc.NomDom} vs ${rc.NomExt || '?'}`;
+    const jaNom   = `${nom.Prenom} ${nom.Nom}`.trim();
+    nijacConfirm(`Retirer la nomination de ${jaNom} pour ${libelle} ?`, function () {
+        retirerJa(idRenc);
+        if (bootstrap.Modal.getInstance('#modalRecap')) afficherRecap();
+    }, null, { type: 'danger', title: 'Retirer la nomination', confirmLabel: 'Retirer' });
+}
+
+$(document).on('click', '.recap-btn-retirer', function (e) {
+    e.stopPropagation();
+    retirerJaAvecConfirmation(parseInt($(this).data('renc')));
+});
+
 // ── Mise à jour UI ────────────────────────────────────────────────────────────
 function mettreAJourBoutons() {
     const total    = rencontres.length;
@@ -691,8 +708,9 @@ function afficherRecap() {
                 <span class="recap-div">${escHtml(rc.DivisionCode || '')}</span>
                 <span class="recap-equipes">${escHtml(rc.NomDom)} vs ${escHtml(rc.NomExt || '?')}</span>
                 ${nom
-                    ? `<span class="recap-ja"><i class="bi bi-person-check me-1"></i>${escHtml((nom.Prenom + ' ' + nom.Nom).trim())}</span>`
-                    : `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Non attribué</span>`
+                    ? `<span class="recap-ja"><i class="bi bi-person-check me-1"></i>${escHtml((nom.Prenom + ' ' + nom.Nom).trim())}</span>
+                       <button class="btn btn-sm btn-outline-danger recap-btn-retirer ms-auto" data-renc="${rc.Id_Rencontre}" title="Retirer cette nomination"><i class="bi bi-trash"></i></button>`
+                    : `<span class="text-danger ms-auto"><i class="bi bi-x-circle me-1"></i>Non attribué</span>`
                 }
             </div>
         `);

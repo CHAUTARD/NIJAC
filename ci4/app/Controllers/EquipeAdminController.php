@@ -64,7 +64,7 @@ class EquipeAdminController extends BaseController
             $equipes = $pdo->query(
                 "SELECT e.Id_Equipe, e.Nom, e.Division, e.Id_Club, c.Nom AS NomClub,
                         d.code AS Departement,
-                        e.JAdemande, e.ReEngagement, e.JourSouhaite, e.SouhaitJA, e.DesiderataSaison
+                        e.ReEngagement, e.JourSouhaite, e.SouhaitJA, e.DesiderataSaison
                  FROM equipe e
                  JOIN club c ON c.Id_Club = e.Id_Club
                  LEFT JOIN departement d ON d.code = SUBSTRING(e.Id_Club, 3, 2)
@@ -92,7 +92,6 @@ class EquipeAdminController extends BaseController
             $nom       = trim($input['nom'] ?? '');
             $division  = trim($input['division'] ?? '');
             $idClub    = trim($input['id_club'] ?? '');
-            $jademande = (int) (($input['ja_demande'] ?? '0') === '1');
             $reeng     = trim($input['re_engagement'] ?? '') ?: null;
             $jourSouh  = trim($input['jour_souhaite'] ?? '') ?: null;
             $souhaitJa = trim($input['souhait_ja'] ?? '') ?: null;
@@ -125,10 +124,10 @@ class EquipeAdminController extends BaseController
             }
 
             $stmt = $pdo->prepare(
-                'UPDATE equipe SET Nom=?, Division=?, Id_Club=?, JAdemande=?, ReEngagement=?, JourSouhaite=?, SouhaitJA=?, DesiderataSaison=?
+                'UPDATE equipe SET Nom=?, Division=?, Id_Club=?, ReEngagement=?, JourSouhaite=?, SouhaitJA=?, DesiderataSaison=?
                  WHERE Id_Equipe=?'
             );
-            $stmt->execute([$nom, $division, $idClub, $jademande, $reeng, $jourSouh, $souhaitJa, $desider, $idEquipe]);
+            $stmt->execute([$nom, $division, $idClub, $reeng, $jourSouh, $souhaitJa, $desider, $idEquipe]);
 
             if ($stmt->rowCount() === 0) {
                 $chk = $pdo->prepare('SELECT COUNT(*) FROM equipe WHERE Id_Equipe = ?');

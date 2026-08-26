@@ -307,6 +307,17 @@ $routes->get('db-admin', 'DbAdminController::index', ['filter' => 'adminauth']);
 $routes->get('db-admin/tables', 'DbAdminController::tables', ['filter' => 'adminauth']);
 $routes->post('db-admin/sql', 'DbAdminController::sql', ['filter' => 'adminauth']);
 
+// ── E043 BugSpid (file de corrections Id_Club dupliqué) ─────────────────────
+// Même restriction que E099 : filtre "adminauth" + login === 'CHAUTARD'
+// vérifié manuellement dans le contrôleur — outil de correction de données,
+// accessible depuis un bouton sur E099.
+$routes->get('bug-spid', 'BugSpidController::index', ['filter' => 'adminauth']);
+$routes->get('bug-spid/data', 'BugSpidController::data', ['filter' => 'adminauth']);
+$routes->post('bug-spid', 'BugSpidController::store', ['filter' => 'adminauth']);
+$routes->put('bug-spid/(:num)', 'BugSpidController::update/$1', ['filter' => 'adminauth']);
+$routes->delete('bug-spid/(:num)', 'BugSpidController::delete/$1', ['filter' => 'adminauth']);
+$routes->post('bug-spid/executer', 'BugSpidController::executer', ['filter' => 'adminauth']);
+
 // ── Déconnexion ──────────────────────────────────────────────────────────────
 $routes->get('logout', 'LogoutController::index');
 

@@ -48,15 +48,14 @@
                         <th data-col="2">Club<span class="sort-icon"></span></th>
                         <th style="width:90px" data-col="3">Id_Club<span class="sort-icon"></span></th>
                         <th style="width:75px" data-col="4">Dépt<span class="sort-icon"></span></th>
-                        <th style="width:75px" data-col="5">JA dem.<span class="sort-icon"></span></th>
-                        <th style="width:85px" data-col="6">Réengag.<span class="sort-icon"></span></th>
-                        <th style="width:95px" data-col="7">Jour souh.<span class="sort-icon"></span></th>
-                        <th style="width:85px" data-col="8">Souhait JA<span class="sort-icon"></span></th>
-                        <th style="width:90px" data-col="9">Désid. saison<span class="sort-icon"></span></th>
+                        <th style="width:85px" data-col="5">Réengag.<span class="sort-icon"></span></th>
+                        <th style="width:95px" data-col="6">Jour souh.<span class="sort-icon"></span></th>
+                        <th style="width:85px" data-col="7">Souhait JA<span class="sort-icon"></span></th>
+                        <th style="width:90px" data-col="8">Désid. saison<span class="sort-icon"></span></th>
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
-                    <tr><td colspan="10" class="text-center text-muted py-3">Chargement…</td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-3">Chargement…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -83,11 +82,6 @@
             </div>
 
             <hr>
-
-            <div class="form-check mb-2">
-                <input type="checkbox" id="chk-ja-demande" class="form-check-input">
-                <label class="form-check-label form-label mb-0" for="chk-ja-demande">JA demandé</label>
-            </div>
 
             <div class="mb-2">
                 <label class="form-label" for="sel-reengagement">Réengagement</label>
@@ -222,7 +216,7 @@ function renderListe() {
     $('#lbl-count').text(`${affichees.length} / ${equipes.length}`);
 
     if (!affichees.length) {
-        $body.append('<tr><td colspan="10" class="text-center text-muted py-3">Aucune équipe.</td></tr>');
+        $body.append('<tr><td colspan="9" class="text-center text-muted py-3">Aucune équipe.</td></tr>');
         return;
     }
 
@@ -233,7 +227,6 @@ function renderListe() {
             $('<td>').text(e.NomClub ?? ''),
             $('<td>').text(e.Id_Club ?? ''),
             $('<td>').text(e.Departement ?? ''),
-            $('<td>').text(+e.JAdemande ? 'Oui' : 'Non'),
             $('<td>').text(e.ReEngagement ?? ''),
             $('<td>').text(e.JourSouhaite ?? ''),
             $('<td>').text(e.SouhaitJA ?? ''),
@@ -260,7 +253,6 @@ function selectionnerLigne($tr) {
     $('#txt-nom').val(e.Nom ?? '');
     $('#edit-sel-division').val(e.Division ?? '');
     $('#edit-sel-club').val(e.Id_Club ?? '');
-    $('#chk-ja-demande').prop('checked', !!+e.JAdemande);
     $('#sel-reengagement').val(e.ReEngagement ?? '');
     $('#sel-jour-souhaite').val(e.JourSouhaite ?? '');
     $('#sel-souhait-ja').val(e.SouhaitJA ?? '');
@@ -274,7 +266,6 @@ $('#btn-enregistrer').on('click', function () {
         nom:               $('#txt-nom').val().trim(),
         division:          $('#edit-sel-division').val(),
         id_club:           $('#edit-sel-club').val(),
-        ja_demande:        $('#chk-ja-demande').is(':checked') ? '1' : '0',
         re_engagement:     $('#sel-reengagement').val(),
         jour_souhaite:     $('#sel-jour-souhaite').val(),
         souhait_ja:        $('#sel-souhait-ja').val(),

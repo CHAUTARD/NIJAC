@@ -187,6 +187,12 @@
 <!-- Spinner -->
 <?= view('partials/spinner_overlay') ?>
 
+<div id="menu-strip">
+    <a class="menu-item" href="<?= site_url('bug-spid') ?>">
+        <i class="bi bi-wrench-adjustable-circle"></i>BugSpid — corrections de clubs dupliqués
+    </a>
+</div>
+
 <div id="main-area">
     <div id="panel-tables">
         <div class="panel-titre">
