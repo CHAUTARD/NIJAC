@@ -47,7 +47,7 @@
             <select id="sel-date" class="form-select form-select-sm" style="width:auto;">
                 <option value="">— Date —</option>
             </select>
-            <button type="button" class="btn btn-sm btn-outline-warning" id="btn-doublons" title="N'afficher que les rencontres en doublon (identiques sauf l'Id)">
+            <button type="button" class="btn btn-sm btn-outline-warning" id="btn-doublons" title="N'afficher que les rencontres en doublon : même affiche (domicile / extérieur / phase), quelles que soient la date, l'heure ou la journée">
                 <i class="bi bi-files"></i> Doublons
             </button>
             <button type="button" class="btn btn-sm btn-light" id="btn-reset-filtres" title="Réinitialiser les filtres">

@@ -12,8 +12,8 @@ use CodeIgniter\HTTP\ResponseInterface;
  * depuis E022 (bouton « Demander le JA au club », message système n°7).
  *
  * Le correspondant choisit dans une liste déroulante le juge-arbitre qui
- * dirigera la rencontre — d'abord les JA rattachés au club, puis les JA
- * actifs du/des département(s) du club, triés alphabétiquement. La réponse
+ * dirigera la rencontre — uniquement les JA actifs rattachés au club,
+ * triés alphabétiquement. La réponse
  * crée une `nomination` (Peage/Kilometre/Defiscalisation = 0, Valide = 1,
  * EmailEnvoye = 0) comme le fait E030 pour l'arbitrage club.
  *
@@ -89,24 +89,19 @@ class ArbitreClubController extends BaseController
     }
 
     /**
-     * JA proposables : d'abord ceux du club, puis les JA actifs du/des
-     * département(s) du club, triés Nom/Prénom.
+     * JA proposables : uniquement les JA actifs rattachés au club recevant,
+     * triés Nom/Prénom.
      * @return array<int,array{Id_JA:int,Nom:string,Prenom:string,EstClub:int}>
      */
     private function listeJa(\PDO $pdo, string $idClub): array
     {
-        $dept   = substr($idClub, 2, 2);
-        $depts  = getDepartementsAutorises($dept) ?: [$dept];
-        $ph     = implode(',', array_fill(0, count($depts), '?'));
-
         $stmt = $pdo->prepare(
-            "SELECT Id_JA, Nom, Prenom, (Id_Club = ?) AS EstClub
+            "SELECT Id_JA, Nom, Prenom, 1 AS EstClub
              FROM ja
-             WHERE COALESCE(Actif, 1) = 1
-               AND (Id_Club = ? OR CodeDept IN ($ph) OR SUBSTRING(Id_Club, 3, 2) IN ($ph))
-             ORDER BY EstClub DESC, Nom, Prenom"
+             WHERE COALESCE(Actif, 1) = 1 AND Id_Club = ?
+             ORDER BY Nom, Prenom"
         );
-        $stmt->execute(array_merge([$idClub, $idClub], $depts, $depts));
+        $stmt->execute([$idClub]);
 
         return $stmt->fetchAll();
     }

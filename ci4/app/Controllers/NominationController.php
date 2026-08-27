@@ -622,7 +622,7 @@ class NominationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => 'Rencontre non autorisée.']);
             }
 
-            assurerTemplateArbitreClub($pdo);
+            if (function_exists('assurerTemplateArbitreClub')) { assurerTemplateArbitreClub($pdo); } // tolère un app_config.php encore en cache opcache
             $tpl = resoudreModeleMessagerie($pdo, 7, (int) ($moi['id'] ?? 0)) ?: ['Sujet' => '', 'Message' => ''];
 
             $stmt = $pdo->prepare(
@@ -691,7 +691,7 @@ class NominationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => "Le club recevant n'a pas d'email de correspondant (à compléter en E008)."]);
             }
 
-            assurerTemplateArbitreClub($pdo);
+            if (function_exists('assurerTemplateArbitreClub')) { assurerTemplateArbitreClub($pdo); } // tolère un app_config.php encore en cache opcache
             $tpl = resoudreModeleMessagerie($pdo, 7, (int) ($moi['id'] ?? 0))
                 ?: ['Sujet' => 'Juge-arbitre pour {DOM} / {EXT}', 'Message' => '', 'Cc' => 0, 'ReplyTo' => 0];
 

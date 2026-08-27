@@ -61,35 +61,24 @@
             </div>
         <?php endif; ?>
 
+        <?php if (!$jas): ?>
+        <div class="alert alert-warning mb-0"><i class="bi bi-exclamation-triangle-fill me-2"></i>Aucun juge-arbitre n'est rattaché à votre club dans l'application. Merci de contacter la CRA.</div>
+        <?php else: ?>
         <form id="form-ac" <?= (int) ($dejaFait['EmailEnvoye'] ?? 0) === 1 ? 'style="display:none"' : '' ?>>
             <input type="hidden" name="renc" value="<?= esc($token) ?>">
             <div class="mb-3">
-                <label class="form-label" for="sel-ja">Juge-arbitre qui dirigera la rencontre</label>
+                <label class="form-label" for="sel-ja">Juge-arbitre du club qui dirigera la rencontre</label>
                 <select id="sel-ja" name="id_ja" class="form-select" required>
                     <option value="">— Choisir un juge-arbitre —</option>
-                    <?php
-                    $club = array_filter($jas, static fn ($j) => (int) $j['EstClub'] === 1);
-                    $autres = array_filter($jas, static fn ($j) => (int) $j['EstClub'] !== 1);
-                    ?>
-                    <?php if ($club): ?>
-                    <optgroup label="Juges-arbitres du club">
-                        <?php foreach ($club as $j): ?>
-                        <option value="<?= (int) $j['Id_JA'] ?>"><?= esc(strtoupper((string) $j['Nom']) . ' ' . $j['Prenom']) ?> (n°<?= (int) $j['Id_JA'] ?>)</option>
-                        <?php endforeach; ?>
-                    </optgroup>
-                    <?php endif; ?>
-                    <?php if ($autres): ?>
-                    <optgroup label="Autres juges-arbitres du département">
-                        <?php foreach ($autres as $j): ?>
-                        <option value="<?= (int) $j['Id_JA'] ?>"><?= esc(strtoupper((string) $j['Nom']) . ' ' . $j['Prenom']) ?> (n°<?= (int) $j['Id_JA'] ?>)</option>
-                        <?php endforeach; ?>
-                    </optgroup>
-                    <?php endif; ?>
+                    <?php foreach ($jas as $j): ?>
+                    <option value="<?= (int) $j['Id_JA'] ?>"><?= esc(strtoupper((string) $j['Nom']) . ' ' . $j['Prenom']) ?> (n°<?= (int) $j['Id_JA'] ?>)</option>
+                    <?php endforeach; ?>
                 </select>
             </div>
             <button type="submit" class="btn btn-primary w-100"><i class="bi bi-send me-1"></i>Envoyer</button>
             <div id="form-err" class="text-danger small mt-2"></div>
         </form>
+        <?php endif; ?>
 
         <div id="msg-ok">
             <i class="bi bi-check-circle-fill"></i>

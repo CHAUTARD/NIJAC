@@ -805,6 +805,9 @@ class ImportRencontresNatController extends BaseController
             $stmtEqChk = $pdo->prepare('SELECT Id_Equipe FROM equipe WHERE Nom=? AND Division=? LIMIT 1');
             $stmtEqIns = $pdo->prepare('INSERT INTO equipe (Nom, Division, Id_Club, JAdemande) VALUES (?,?,?,0)');
             $stmtRcChk = $pdo->prepare('SELECT Id_Rencontre, Journee, Heure FROM rencontre WHERE Date=? AND Id_EquipeDom=? AND Id_EquipeExt=? LIMIT 1');
+            // Même affiche (mêmes équipes, même poule, même journée) déjà en base
+            // sous une autre date → on ne recrée pas.
+            $stmtRcChkPJ = $pdo->prepare('SELECT Id_Rencontre, Date FROM rencontre WHERE Id_EquipeDom=? AND Id_EquipeExt=? AND Poule=? AND Journee=? LIMIT 1');
             $stmtRcIns = $pdo->prepare('INSERT INTO rencontre (Date,Heure,Poule,Id_EquipeDom,Id_EquipeExt,Phase,Journee,ArbitrageObligatoire) VALUES (?,?,?,?,?,?,?,?)');
             $stmtRcMaj = $pdo->prepare('UPDATE rencontre SET Journee=?, Heure=? WHERE Id_Rencontre=?');
 
@@ -874,6 +877,15 @@ class ImportRencontresNatController extends BaseController
                                 } else {
                                     $stats['doublons']++;
                                 }
+                                continue;
+                            }
+
+                            // Blocage : rencontre entre ces deux équipes déjà présente
+                            // pour cette poule et cette journée (à une autre date).
+                            $stmtRcChkPJ->execute([$idDom, $idExt, $poule, $j['journee']]);
+                            if ($autrePJ = $stmtRcChkPJ->fetch()) {
+                                $stats['doublons']++;
+                                $stats['log'][] = ['type' => 'rencontre', 'val' => "Bloquée (P{$poule} J{$j['journee']} déjà présente au {$autrePJ['Date']}) — {$dom['Nom']} vs {$ext['Nom']} ({$j['date']})"];
                                 continue;
                             }
 

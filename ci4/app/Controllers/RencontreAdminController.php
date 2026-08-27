@@ -70,10 +70,12 @@ class RencontreAdminController extends BaseController
     }
 
     /**
-     * Recherche les rencontres en doublon : lignes identiques sur toutes les
-     * colonnes sauf la PK Id_Rencontre. Le GROUP BY de MySQL considère les
-     * NULL comme égaux, donc pas de COALESCE à ajouter. Renvoie la liste à
-     * plat des Id_Rencontre concernés (tous les membres de chaque groupe).
+     * Recherche les rencontres en doublon : plusieurs rencontres pour la même
+     * affiche dans la même phase — même équipe domicile, même équipe extérieure,
+     * même Phase — quelles que soient la date, l'heure, la journée, la poule ou
+     * la salle (une affiche ne se joue qu'une fois par phase). Le GROUP BY de
+     * MySQL considère les NULL comme égaux (équipe extérieure « exempt »).
+     * Renvoie la liste à plat des Id_Rencontre concernés.
      */
     public function doublons(): ResponseInterface
     {
@@ -81,8 +83,7 @@ class RencontreAdminController extends BaseController
             $groupes = getPDO()->query(
                 'SELECT GROUP_CONCAT(Id_Rencontre ORDER BY Id_Rencontre) AS ids, COUNT(*) AS n
                  FROM rencontre
-                 GROUP BY Date, Heure, Poule, Id_EquipeDom, Id_EquipeExt, Phase,
-                          Journee, id_Salle, ArbitrageObligatoire, Commentaire
+                 GROUP BY Id_EquipeDom, Id_EquipeExt, Phase
                  HAVING n > 1'
             )->fetchAll();
 
