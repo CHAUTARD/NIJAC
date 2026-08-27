@@ -422,6 +422,13 @@
                     <span class="btn-desc">Vérifier la connexion à l'API FFTT</span>
                 </a>
 
+                <a href="<?= site_url('bug-spid') ?>" class="menu-btn" style="background: #ffe0b2; border: 2px solid #e65100;">
+                    <span class="btn-code">E043</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/BugSpid.png') ?>" alt="BugSpid"></div>
+                    <span>BugSpid</span>
+                    <span class="btn-desc">Corrections de clubs dupliqués (Id_Club fantôme)</span>
+                </a>
+
                 <a href="<?= site_url('db-admin') ?>" class="menu-btn btn-dbadmin" style="background: repeating-linear-gradient(45deg, #fce4ec, #fce4ec 10px, #ffcdd2 10px, #ffcdd2 20px); border: 2px solid #c62828;">
                     <span class="btn-code">E099</span>
                     <div class="btn-icon"><img src="<?= base_url('img/database.png') ?>" alt="Base de données"></div>

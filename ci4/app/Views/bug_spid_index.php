@@ -13,6 +13,10 @@
         #panel-liste { width: 62%; }
         #tbl-bugspid td.col-statut .badge-traite  { background: #c6efce; color: #1a5c1a; }
         #tbl-bugspid td.col-statut .badge-atraiter { background: #fff3cd; color: #7a5b00; }
+        #tbody-liste tr.ligne-ok { background: #e8f5e9; }
+        #tbody-liste tr.ligne-ok:nth-child(even) { background: #ddeedd; }
+        #zone-import { padding: .5rem .75rem; background: #f4f7fb; border-bottom: 1px solid #c8d4e8; }
+        #zone-import .zone-import-btns { display: flex; gap: .5rem; flex-wrap: wrap; }
     </style>
 </head>
 <body>
@@ -37,6 +41,19 @@
             </button>
             <span id="lbl-count">0 / 0</span>
         </div>
+
+        <div id="zone-import">
+            <div class="zone-import-btns">
+                <button type="button" class="btn btn-sm btn-light" id="btn-pdf-csv">
+                    <i class="bi bi-filetype-pdf"></i> Créer le CSV depuis un PDF
+                </button>
+                <button type="button" class="btn btn-sm btn-light" id="btn-maj-csv">
+                    <i class="bi bi-filetype-csv"></i> Mise à jour CSV
+                </button>
+                <input type="file" id="file-csv" accept=".csv,text/csv" class="d-none">
+            </div>
+        </div>
+
         <div id="table-wrapper">
             <table id="tbl-bugspid">
                 <thead>
@@ -47,10 +64,11 @@
                         <th style="width:110px" data-col="3">Nouveau Id_Club<span class="sort-icon"></span></th>
                         <th style="width:90px" data-col="4">Statut<span class="sort-icon"></span></th>
                         <th style="width:140px" data-col="5">Date exécution<span class="sort-icon"></span></th>
+                        <th style="width:60px"></th>
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
-                    <tr><td colspan="6" class="text-center text-muted py-3">Chargement…</td></tr>
+                    <tr><td colspan="7" class="text-center text-muted py-3">Chargement…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -95,6 +113,50 @@
     </div>
 </div>
 
+<!-- Modale « Créer le CSV depuis un PDF » -->
+<div class="modal fade" id="modalPdfCsv" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title fs-6"><i class="bi bi-filetype-pdf me-2"></i>Créer le CSV depuis un PDF</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small mb-2">
+                    Sélectionnez un PDF « Calendriers Chpt R1 à R4 » de la FFTT. L'écran en extrait la liste
+                    <em>N° Club officiel&nbsp;↔&nbsp;nom du club</em> (n° d'équipe retiré, doublons n°+nom supprimés)
+                    et télécharge un fichier CSV « N° Club ; Club ».
+                </p>
+                <p class="small text-muted mb-3">
+                    Ce CSV se recharge ensuite via <strong>Mise à jour CSV</strong> pour renseigner la colonne
+                    <em>Nouveau Id_Club</em>. Aucune fusion n'est exécutée.
+                </p>
+                <input type="file" id="file-pdf" accept="application/pdf,.pdf" class="form-control form-control-sm">
+                <div id="pdf-csv-status" class="small mt-2"></div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fermer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modale résultat xml_club_b -->
+<div class="modal fade" id="modalXmlClubB" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title fs-6"><i class="bi bi-cloud-download me-2"></i>Retour xml_club_b</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="xml-club-b-body"></div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fermer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?= view('partials/page_footer', ['pfStatusAlign' => 'left']) ?>
 
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
@@ -128,7 +190,7 @@ function renderListe() {
     $('#chk-tout').prop('checked', false);
 
     if (!lignes.length) {
-        $body.append('<tr><td colspan="6" class="text-center text-muted py-3">Aucune ligne.</td></tr>');
+        $body.append('<tr><td colspan="7" class="text-center text-muted py-3">Aucune ligne.</td></tr>');
         return;
     }
 
@@ -136,13 +198,27 @@ function renderListe() {
         const badge = l.Statut === 'Traite'
             ? '<span class="badge badge-traite">Traité</span>'
             : '<span class="badge badge-atraiter">À traiter</span>';
-        $('<tr>').attr('data-id', l.Id_BugSpid).append(
+        const $tdFftt = $('<td>').append(
+            $('<button type="button" class="btn btn-sm btn-outline-secondary btn-xml-club-b" title="Tester xml_club_b avec cet Id_Club">')
+                .html('<i class="bi bi-cloud-download"></i>')
+                .on('click', function (e) { e.stopPropagation(); appelerXmlClubB(l.Id_BugSpid); })
+        );
+        // Même contrôle que le garde-fou d'exécution côté serveur : un NouveauIdClub
+        // identifié (format FFTT à 8 chiffres, différent de AncienIdClub).
+        const nouveauOk = /^\d{8}$/.test(l.NouveauIdClub ?? '') && l.NouveauIdClub !== l.AncienIdClub;
+        const $tdNouveau = $('<td>').text(l.NouveauIdClub ?? '');
+        if (/^\d{8}$/.test(l.NouveauIdClub ?? '')) {
+            $tdNouveau.css('cursor', 'pointer').attr('title', 'Cliquer pour afficher le nom du club')
+                .on('click', function (e) { e.stopPropagation(); afficherNomClub(l.NouveauIdClub); });
+        }
+        $('<tr>').attr('data-id', l.Id_BugSpid).toggleClass('ligne-ok', nouveauOk).append(
             $('<td>').append($('<input type="checkbox" class="chk-ligne">').prop('disabled', l.Statut === 'Traite')),
             $('<td>').text(l.Description ?? ''),
             $('<td>').text(l.AncienIdClub ?? ''),
-            $('<td>').text(l.NouveauIdClub ?? ''),
+            $tdNouveau,
             $('<td>').addClass('col-statut').html(badge),
-            $('<td>').text(l.DateExecution ?? '')
+            $('<td>').text(l.DateExecution ?? ''),
+            $tdFftt
         ).on('click', function (e) {
             if ($(e.target).is('input[type="checkbox"]')) return;
             selectionnerLigne($(this));
@@ -241,6 +317,124 @@ $('#btn-executer-selection').on('click', function () {
             chargerListe();
         }).fail(() => toast('Erreur réseau.', false));
     }, null, { type: 'question', title: 'Exécuter la sélection', confirmLabel: 'Exécuter' });
+});
+
+$('#btn-pdf-csv').on('click', function () {
+    $('#file-pdf').val('');
+    $('#pdf-csv-status').text('').removeClass('text-danger text-success');
+    new bootstrap.Modal('#modalPdfCsv').show();
+});
+
+$('#file-pdf').on('change', function () {
+    const f = this.files[0];
+    if (!f) return;
+
+    const $st = $('#pdf-csv-status').removeClass('text-danger text-success').text('Extraction du PDF en cours…');
+    const fd = new FormData();
+    fd.append('pdf', f);
+    $.ajax({
+        url: `${BUGSPID_BASE}/pdf-csv`, method: 'POST', data: fd,
+        processData: false, contentType: false, dataType: 'json',
+    }).done(function (res) {
+        if (!res.ok) { $st.addClass('text-danger').text(res.msg); return; }
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([res.csv], { type: 'text/csv;charset=utf-8' }));
+        a.download = res.nom || 'clubs.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+        bootstrap.Modal.getInstance('#modalPdfCsv')?.hide();
+        toast(`${res.nb} club(s) extrait(s) — fichier « ${a.download} » téléchargé.`);
+    }).fail(() => $st.addClass('text-danger').text('Erreur réseau.'));
+});
+
+$('#btn-maj-csv').on('click', () => $('#file-csv').click());
+
+$('#file-csv').on('change', function () {
+    const f = this.files[0];
+    this.value = ''; // permet de re-sélectionner le même fichier ensuite
+    if (!f) return;
+
+    const fd = new FormData();
+    fd.append('csv', f);
+    $.ajax({
+        url: `${BUGSPID_BASE}/maj-csv`, method: 'POST', data: fd,
+        processData: false, contentType: false, dataType: 'json',
+    }).done(function (res) {
+        if (!res.ok) { toast(res.msg, false); return; }
+        toast(res.msg, (res.restantes ?? 0) === 0);
+        chargerListe();
+    }).fail(() => toast('Erreur réseau.', false));
+});
+
+function afficherNomClub(num) {
+    $.get(`${BUGSPID_BASE}/nom-club/${num}`, function (res) {
+        toast(res.ok ? `${num} — ${res.nom}` : (res.msg || 'Club introuvable.'), res.ok);
+    }, 'json').fail(() => toast('Erreur réseau.', false));
+}
+
+function appelerXmlClubB(id) {
+    $('#xml-club-b-body').html('<div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm"></div> Appel en cours…</div>');
+    const modal = new bootstrap.Modal('#modalXmlClubB');
+    modal.show();
+
+    $.post(`${BUGSPID_BASE}/${id}/xml-club-b`, {}, function (res) {
+        if (!res.ok) {
+            $('#xml-club-b-body').html(`<div class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>${res.msg}</div>`);
+            return;
+        }
+        const url    = res.url ? `<div class="text-muted small mb-2 text-break">${res.url}</div>` : '';
+        const source = res.source === 'local'
+            ? '<span class="badge bg-success ms-2">Trouvé en base locale</span>'
+            : '<span class="badge bg-secondary ms-2">Recherche FFTT</span>';
+        const entete = `<div class="mb-2"><strong>Recherche :</strong> ${escHtml(res.recherche)}${source}</div>${url}`;
+        if (!res.clubs.length) {
+            $('#xml-club-b-body').html(`${entete}<div class="text-muted">Aucun club trouvé.</div>`);
+            return;
+        }
+        const lignes = res.clubs.map(c => `
+            <tr>
+                <td>${escHtml(c.numero ?? '')}</td>
+                <td>${escHtml(c.nom ?? '')}</td>
+                <td class="text-end">
+                    <button type="button" class="btn btn-sm btn-success btn-utiliser-numero" data-id="${id}" data-numero="${escHtml(c.numero ?? '')}">
+                        <i class="bi bi-check-lg me-1"></i>Utiliser
+                    </button>
+                </td>
+            </tr>`).join('');
+        $('#xml-club-b-body').html(
+            `${entete}<table class="table table-sm"><thead><tr><th>Numéro</th><th>Nom</th><th></th></tr></thead><tbody>${lignes}</tbody></table>`
+        );
+    }, 'json').fail(function (xhr) {
+        $('#xml-club-b-body').html(`<div class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>Erreur réseau.</div>`);
+    });
+}
+
+function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+$(document).on('click', '.btn-utiliser-numero', function () {
+    const id     = +$(this).data('id');
+    const numero = String($(this).data('numero'));
+    const l      = lignes.find(x => x.Id_BugSpid == id);
+    if (!l) return;
+
+    $.ajax({
+        url: `${BUGSPID_BASE}/${id}`, method: 'PUT', dataType: 'json',
+        data: {
+            description:      l.Description ?? '',
+            ancien_id_club:   l.AncienIdClub ?? '',
+            nouveau_id_club:  numero,
+            equipe_nom:       l.EquipeNom ?? '',
+        },
+    }).done(function (res) {
+        if (!res.ok) { toast(res.msg, false); return; }
+        toast(`Nouveau Id_Club renseigné : ${numero}`);
+        bootstrap.Modal.getInstance('#modalXmlClubB')?.hide();
+        chargerListe(id);
+    }).fail(() => toast('Erreur réseau.', false));
 });
 
 $(function () {

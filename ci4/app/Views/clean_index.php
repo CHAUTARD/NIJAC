@@ -50,16 +50,47 @@
         }
         #toolbar .ts-pwd-warning:hover { color: #900; }
 
-        /* ── Mise en page deux colonnes ── */
+        /* ── Mise en page : onglets + rangées de cartes ── */
         #main-content {
             flex: 1;
             display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1.5rem 1rem;
+        }
+        #e016-tabs {
+            margin-bottom: -1px;
+            border-bottom: none;
+            gap: .3rem;
+        }
+        #e016-tabs .nav-link {
+            font-weight: 700;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 10px 10px 0 0;
+            padding: .5rem 1.4rem;
+        }
+        /* Onglet Sauvegarde : vert pastel */
+        #e016-tabs .nav-sauvegarde          { color: #065f46; background: #d1fae5; }
+        #e016-tabs .nav-sauvegarde:hover    { color: #065f46; }
+        #e016-tabs .nav-sauvegarde.active   { background: #ecfdf5; border-color: #6ee7b7; color: #065f46; }
+        /* Onglet Restauration : bleu pastel */
+        #e016-tabs .nav-restauration        { color: #1e3a8a; background: #dbeafe; }
+        #e016-tabs .nav-restauration:hover  { color: #1e3a8a; }
+        #e016-tabs .nav-restauration.active { background: #eff6ff; border-color: #93c5fd; color: #1e3a8a; }
+
+        .tab-content { width: 100%; }
+        .cards-row {
             align-items: stretch;
             justify-content: center;
-            padding: 2rem 1rem;
             gap: 1.5rem;
             flex-wrap: wrap;
+            padding: 1.75rem 1.5rem;
+            border-radius: 0 12px 12px 12px;
         }
+        .tab-content > .tab-pane.cards-row.active { display: flex; }
+        #pane-sauvegarde   { background: #ecfdf5; border: 1px solid #6ee7b7; }
+        #pane-restauration { background: #eff6ff; border: 1px solid #93c5fd; }
 
         /* ── Carte commune ── */
         .op-card {
@@ -295,6 +326,24 @@
         .btn-table-restore { background: #7c3aed; color: #fff; }
         .btn-table-restore:hover:not(:disabled) { background: #6d28d9; }
 
+        /* ── Sauvegarde d'une table : fond turquoise ── */
+        .card-table-save .card-head   { background: #ccfbf1; border-color: #14b8a6; }
+        .card-table-save .card-head h2 { color: #115e59; }
+        .save-list { margin: 0; padding-left: 1.2rem; font-size: .85rem; color: #115e59; }
+        .save-list li { margin-bottom: .25rem; }
+        .btn-table-save { background: #0d9488; color: #fff; }
+        .btn-table-save:hover:not(:disabled) { background: #0f766e; }
+        #select-save-table {
+            width: 100%;
+            border: 2px solid #c8d4e8;
+            border-radius: 6px;
+            padding: .4rem .7rem;
+            font-size: .85rem;
+            margin-bottom: .75rem;
+            background: #fff;
+        }
+        #select-save-table:focus { outline: none; border-color: #14b8a6; }
+
         #select-table-fichier, #select-table-nom {
             width: 100%;
             border: 2px solid #c8d4e8;
@@ -368,6 +417,23 @@
 <!-- ════════════════════════ CONTENU PRINCIPAL ════════════════════════ -->
 <div id="main-content">
 
+    <ul class="nav nav-tabs" id="e016-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link nav-sauvegarde active" data-bs-toggle="tab" data-bs-target="#pane-sauvegarde" type="button" role="tab">
+                <i class="bi bi-database-fill-down me-1"></i>Sauvegarde
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link nav-restauration" data-bs-toggle="tab" data-bs-target="#pane-restauration" type="button" role="tab">
+                <i class="bi bi-database-fill-up me-1"></i>Restauration
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+
+    <div class="tab-pane fade show active cards-row" id="pane-sauvegarde">
+
     <!-- ── CARTE 1 : Nettoyage ── -->
     <div class="op-card card-clean">
         <div class="card-head">
@@ -396,7 +462,78 @@
         <div id="clean-result" class="result-zone"></div>
     </div>
 
-    <!-- ── CARTE 2 : Restauration ── -->
+    <!-- ── CARTE 3 : Sauvegarde totale ── -->
+    <div class="op-card card-full">
+        <div class="card-head">
+            <h2>
+                <i class="bi bi-database-fill-down warn-icon"></i>
+                Sauvegarde totale de la base de données
+            </h2>
+            <ul class="full-list">
+                <li>Exporte <strong>toutes les tables</strong> (structure + données) dans un fichier SQL.</li>
+                <li>Le fichier est créé dans <code>/SQL/</code> sous la forme <code>Full_*.sql</code>.</li>
+                <li>Aucune suppression n'est effectuée — opération <strong>non destructive</strong>.</li>
+            </ul>
+            <div class="tables-badge" id="full-tables-badge">
+                <span>Toutes les tables</span>
+            </div>
+        </div>
+
+        <div class="card-body-custom" id="section-full">
+
+            <button id="btn-full" class="btn-action btn-full" disabled>
+                <i class="bi bi-database-fill-down me-2"></i>Sauvegarder toute la base de données
+            </button>
+
+            <!-- Liste des sauvegardes totales existantes -->
+            <div id="full-liste-zone" style="margin-top:1.1rem;"></div>
+        </div>
+
+        <div id="full-result" class="result-zone"></div>
+    </div>
+
+    <!-- ── CARTE 3bis : Sauvegarde d'une table ── -->
+    <div class="op-card card-table-save">
+        <div class="card-head">
+            <h2>
+                <i class="bi bi-file-earmark-arrow-down warn-icon"></i>
+                Sauvegarde d'une table
+            </h2>
+            <ul class="save-list">
+                <li>Exporte <strong>une seule table</strong> (structure + données) dans un fichier SQL.</li>
+                <li>Le fichier est créé dans <code>/SQL/</code> sous la forme <code>Table_&lt;nom&gt;_*.sql</code>.</li>
+                <li>Aucune suppression n'est effectuée — opération <strong>non destructive</strong>.</li>
+            </ul>
+        </div>
+
+        <div class="card-body-custom" id="section-table-save">
+            <div style="margin-bottom:.8rem;">
+                <label for="select-save-table" style="font-size:.82rem;font-weight:600;color:#374151;display:block;margin-bottom:.25rem;">
+                    <i class="bi bi-table me-1"></i>Table à sauvegarder
+                </label>
+                <select id="select-save-table">
+                    <option value="">— Choisir une table —</option>
+                    <?php foreach ($tablesBdd as $t): ?>
+                    <option value="<?= esc($t['TABLE_NAME']) ?>">
+                        <?= esc($t['TABLE_NAME']) ?><?= $t['TABLE_COMMENT'] !== '' ? ' — ' . esc($t['TABLE_COMMENT']) : '' ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <button id="btn-save-table" class="btn-action btn-table-save" disabled>
+                <i class="bi bi-file-earmark-arrow-down me-2"></i>Sauvegarder cette table
+            </button>
+        </div>
+
+        <div id="table-save-result" class="result-zone"></div>
+    </div>
+
+    </div><!-- /#pane-sauvegarde -->
+
+    <div class="tab-pane fade cards-row" id="pane-restauration">
+
+    <!-- ── CARTE 2 : Restauration d'une sauvegarde de phase ── -->
     <div class="op-card card-restore">
         <div class="card-head">
             <h2>
@@ -443,36 +580,6 @@
         </div>
 
         <div id="restore-result" class="result-zone"></div>
-    </div>
-
-    <!-- ── CARTE 3 : Sauvegarde totale ── -->
-    <div class="op-card card-full">
-        <div class="card-head">
-            <h2>
-                <i class="bi bi-database-fill-down warn-icon"></i>
-                Sauvegarde totale de la base de données
-            </h2>
-            <ul class="full-list">
-                <li>Exporte <strong>toutes les tables</strong> (structure + données) dans un fichier SQL.</li>
-                <li>Le fichier est créé dans <code>/SQL/</code> sous la forme <code>Full_*.sql</code>.</li>
-                <li>Aucune suppression n'est effectuée — opération <strong>non destructive</strong>.</li>
-            </ul>
-            <div class="tables-badge" id="full-tables-badge">
-                <span>Toutes les tables</span>
-            </div>
-        </div>
-
-        <div class="card-body-custom" id="section-full">
-
-            <button id="btn-full" class="btn-action btn-full" disabled>
-                <i class="bi bi-database-fill-down me-2"></i>Sauvegarder toute la base de données
-            </button>
-
-            <!-- Liste des sauvegardes totales existantes -->
-            <div id="full-liste-zone" style="margin-top:1.1rem;"></div>
-        </div>
-
-        <div id="full-result" class="result-zone"></div>
     </div>
 
     <!-- ── CARTE 4 : Restauration totale ── -->
@@ -523,10 +630,10 @@
         <div class="card-head">
             <h2>
                 <i class="bi bi-table warn-icon"></i>
-                Restauration d'une table depuis une sauvegarde totale
+                Restauration d'une table
             </h2>
             <ul class="info-list" style="color:#3b0764;">
-                <li>Sélectionnez un fichier <code>Full_*.sql</code>, puis choisissez la table à restaurer.</li>
+                <li>Sélectionnez un fichier <code>Full_*.sql</code> ou <code>Table_*.sql</code>, puis la table à restaurer.</li>
                 <li>Seule la table sélectionnée sera supprimée et recréée.</li>
                 <li>Les autres tables ne sont pas affectées.</li>
             </ul>
@@ -572,6 +679,9 @@
         <div id="table-restore-result" class="result-zone"></div>
     </div>
 
+    </div><!-- /#pane-restauration -->
+    </div><!-- /.tab-content -->
+
 </div><!-- /main-content -->
 
 <!-- Pied de page : recopié de includes/footer.php (setStatus() écrit dans #status-bar) -->
@@ -601,6 +711,7 @@ function majBoutonsAvecPwd() {
     if ($('#restore-form').is(':visible'))       $('#btn-restaurer').prop('disabled', !pwdOk);
     if ($('#full-restore-form').is(':visible'))  $('#btn-restaurer-total').prop('disabled', !pwdOk);
     if ($('#select-table-nom').val())            $('#btn-restaurer-table').prop('disabled', !pwdOk);
+    if ($('#select-save-table').val())           $('#btn-save-table').prop('disabled', !pwdOk);
 }
 
 $('#pwd-global').on('input', function () {
@@ -847,6 +958,58 @@ function executerSauvegardeTotale() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+//  Bloc SAUVEGARDE D'UNE TABLE
+// ═══════════════════════════════════════════════════════════════════
+$('#select-save-table').on('change', function () {
+    $('#btn-save-table').prop('disabled', !pwdOk || !$(this).val());
+});
+
+$('#btn-save-table').on('click', function () {
+    if (!pwdOk) return;
+    const table = $('#select-save-table').val();
+    if (!table) return;
+
+    nijacConfirm(
+        'SAUVEGARDE DE TABLE\n\n' +
+        'La table « ' + table + ' » va être exportée\n' +
+        '(structure + données) dans un fichier SQL.',
+        function () { executerSauvegardeTable(table); },
+        null,
+        { type: 'question', title: 'Sauvegarde de table', confirmLabel: 'Sauvegarder' }
+    );
+});
+
+function executerSauvegardeTable(table) {
+    spinner(true);
+    setStatus('Sauvegarde de la table ' + table + '…');
+    $('#btn-save-table').prop('disabled', true);
+
+    $.post(`${CLEAN_BASE}/sauvegarde-table`, { table, password: $('#pwd-global').val() }, res => {
+        spinner(false);
+        const $box = $('#table-save-result').addClass('show');
+        if (res.ok) {
+            $box.html(
+                `<div class="result-ok">
+                   ✅ <strong>Table sauvegardée !</strong><br>
+                   Fichier&nbsp;: <code>${res.fichier}</code><br>
+                   Table&nbsp;: <code>${res.table}</code> — ${res.lignes} ligne(s), ${res.taille} Ko
+                 </div>`
+            );
+            setStatus('Sauvegarde table terminée — ' + res.fichier);
+            chargerFichiersTableRestore();
+        } else {
+            $box.html(`<div class="result-err"><strong>Erreur :</strong> ${res.msg}</div>`);
+            setStatus('Erreur sauvegarde table : ' + res.msg);
+        }
+        $('#btn-save-table').prop('disabled', !pwdOk || !$('#select-save-table').val());
+    }, 'json').fail(() => {
+        spinner(false);
+        $('#table-save-result').addClass('show').html('<div class="result-err"><strong>Erreur réseau.</strong></div>');
+        $('#btn-save-table').prop('disabled', !pwdOk || !$('#select-save-table').val());
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════
 //  Bloc RESTAURATION TOTALE
 // ═══════════════════════════════════════════════════════════════════
 let fullFichiers = [];
@@ -939,12 +1102,12 @@ function restaurerTotal(fichier) {
 let tableRestoreFichiers = [];
 
 function chargerFichiersTableRestore() {
-    $.get(`${CLEAN_BASE}/sauvegardes-total`, res => {
+    $.get(`${CLEAN_BASE}/sauvegardes-table`, res => {
         tableRestoreFichiers = res.fichiers || [];
         const $zone = $('#table-restore-file-zone');
 
         if (!tableRestoreFichiers.length) {
-            $zone.html('<div class="no-backup"><i class="bi bi-inbox"></i>Aucune sauvegarde totale disponible dans <code>/SQL/</code></div>');
+            $zone.html('<div class="no-backup"><i class="bi bi-inbox"></i>Aucune sauvegarde <code>Full_*.sql</code> ou <code>Table_*.sql</code> dans <code>/SQL/</code></div>');
             $('#table-restore-form').hide();
             return;
         }
@@ -972,7 +1135,11 @@ function majTableRestoreMeta() {
     }
 }
 
-$('#select-table-fichier').on('change', function () { /* le combo de tables reste inchangé */ });
+$('#select-table-fichier').on('change', function () {
+    // Un fichier Table_<nom>_<date>.sql ne contient qu'une table : la présélectionner.
+    const m = /^Table_([A-Za-z0-9_]+)_\d{12}\.sql$/.exec($(this).val() || '');
+    if (m) $('#select-table-nom').val(m[1]).trigger('change');
+});
 
 $('#select-table-nom').on('change', majTableRestoreMeta);
 
@@ -1084,6 +1251,10 @@ $(document).on('click', '#btn-suppr-full', function () {
         { type: 'danger', confirmLabel: 'Supprimer' }
     );
 });
+
+// Réévalue l'état des boutons du panneau qui devient visible (un mdp saisi
+// sous l'onglet Sauvegarde doit activer les boutons de l'onglet Restauration).
+$('#e016-tabs button[data-bs-toggle="tab"]').on('shown.bs.tab', majBoutonsAvecPwd);
 
 // ── Initialisation ────────────────────────────────────────────────
 $(function () {

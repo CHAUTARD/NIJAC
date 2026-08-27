@@ -53,7 +53,7 @@ class FfttRawClient
 
         $url = self::BASE_URL . $action . '.php?serie=' . $this->appId . '&tm=' . $time . '&tmc=' . $tmc . '&id=' . $this->appId;
         foreach ($params as $k => $v) {
-            $url .= '&' . $k . '=' . $v;
+            $url .= '&' . rawurlencode((string) $k) . '=' . rawurlencode((string) $v);
         }
         $this->lastUrl = $url;
 

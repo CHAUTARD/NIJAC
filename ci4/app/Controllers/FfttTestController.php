@@ -416,6 +416,39 @@ class FfttTestController extends BaseController
         }
     }
 
+    /**
+     * xml_club_b : découvert via BugSpid (E043) pour retrouver le vrai club
+     * FFTT correspondant à un club dupliqué sous un Id_Club fantôme —
+     * recherche par nom (contrairement à xml_club_detail/xml_club_dep2 qui
+     * exigent un numéro FFTT exact). Le paramètre "ville" sert aussi de
+     * recherche par nom de club (un seul paramètre de recherche à la fois
+     * parmi dep/ville/numero/code — voir
+     * Documentation/Specifications_techniques_de_API_Smartping_2.0.pdf).
+     */
+    public function testClubB(): ResponseInterface
+    {
+        if ($guard = $this->guardChautard()) {
+            return $guard;
+        }
+
+        $trace = [['étape' => '1. Credentials', 'app_id' => getFfttAppId(), 'app_key_len' => strlen(getFfttAppKey())]];
+
+        try {
+            $nom = trim($this->request->getPost('nom') ?? '');
+            if ($nom === '') {
+                return $this->rawJson(['ok' => false, 'msg' => 'Nom du club requis', 'trace' => $trace]);
+            }
+            $trace[] = ['étape' => '2. Appel xml_club_b', 'ville' => $nom];
+            $api     = getFfttRawClient();
+            $data    = $api->request('xml_club_b', ['ville' => $nom]);
+            $trace[] = ['étape' => '3. Réponse reçue'];
+
+            return $this->rawJson(['ok' => true, 'data' => $data, 'url' => $api->lastUrl(), 'http' => $api->lastHttp(), 'trace' => $trace, 'warnings' => []]);
+        } catch (\Throwable $e) {
+            return $this->rawJson(['ok' => false, 'msg' => $e->getMessage(), 'trace' => $trace, 'warnings' => []]);
+        }
+    }
+
     public function testLicenceB(): ResponseInterface
     {
         if ($guard = $this->guardChautard()) {

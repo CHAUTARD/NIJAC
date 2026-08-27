@@ -217,6 +217,29 @@ class CleanController extends BaseController
         return $this->tryJson(fn () => $this->response->setJSON(['ok' => true, 'fichiers' => $this->listeSauvegardesTotal($this->sqlDir())]));
     }
 
+    /**
+     * Fichiers restaurables table par table : sauvegardes totales Full_*.sql
+     * ET sauvegardes de table individuelles Table_<nom>_*.sql — les deux
+     * portent le marqueur de section "-- ── <table> ──" attendu par
+     * restaurerTableFull().
+     */
+    public function sauvegardesTable(): ResponseInterface
+    {
+        return $this->tryJson(function () {
+            $sqlDir = $this->sqlDir();
+            $files  = array_merge(glob($sqlDir . '/Full_*.sql') ?: [], glob($sqlDir . '/Table_*.sql') ?: []);
+            usort($files, fn ($a, $b) => filemtime($b) - filemtime($a));
+
+            $liste = array_map(fn ($f) => [
+                'nom'    => basename($f),
+                'taille' => round(filesize($f) / 1024, 1),
+                'date'   => date('d/m/Y H:i', filemtime($f)),
+            ], $files);
+
+            return $this->response->setJSON(['ok' => true, 'fichiers' => $liste]);
+        });
+    }
+
     public function verifierMdp(): ResponseInterface
     {
 
@@ -369,6 +392,42 @@ class CleanController extends BaseController
         });
     }
 
+    /**
+     * Lignes SQL d'une table pour un dump complet : marqueur de section
+     * "-- ── <table> ──", DROP + SHOW CREATE TABLE, puis un INSERT par ligne.
+     * Partagé par sauvegardeTotale() (toutes les tables) et sauvegardeTable()
+     * (une seule) — même format, donc restaurable via restaurer-table.
+     *
+     * @return string[]
+     */
+    private function dumpTableComplete(\PDO $pdo, string $table): array
+    {
+        $lines   = [];
+        $lines[] = '-- ── ' . $table . ' ──';
+
+        $createRow = $pdo->query("SHOW CREATE TABLE `$table`")->fetch(\PDO::FETCH_ASSOC);
+        $createSql = $createRow['Create Table'] ?? $createRow[array_key_last($createRow)];
+        $lines[]   = "DROP TABLE IF EXISTS `$table`;";
+        $lines[]   = $createSql . ';';
+        $lines[]   = '';
+
+        $cols = [];
+        foreach ($pdo->query("SHOW COLUMNS FROM `$table`")->fetchAll() as $col) {
+            $cols[] = $col['Field'];
+        }
+        $rows = $pdo->query("SELECT * FROM `$table`")->fetchAll(\PDO::FETCH_ASSOC);
+        if ($rows) {
+            $colList = '`' . implode('`, `', $cols) . '`';
+            foreach ($rows as $r) {
+                $vals    = array_map(fn ($v) => $v === null ? 'NULL' : $pdo->quote($v), array_values($r));
+                $lines[] = "INSERT INTO `$table` ($colList) VALUES (" . implode(', ', $vals) . ');';
+            }
+            $lines[] = '';
+        }
+
+        return $lines;
+    }
+
     public function sauvegardeTotale(): ResponseInterface
     {
 
@@ -402,27 +461,7 @@ class CleanController extends BaseController
             $lines[] = '';
 
             foreach ($tables as $table) {
-                $lines[] = '-- ── ' . $table . ' ──';
-
-                $createRow = $pdo->query("SHOW CREATE TABLE `$table`")->fetch(\PDO::FETCH_ASSOC);
-                $createSql = $createRow['Create Table'] ?? $createRow[array_key_last($createRow)];
-                $lines[]   = "DROP TABLE IF EXISTS `$table`;";
-                $lines[]   = $createSql . ';';
-                $lines[]   = '';
-
-                $cols = [];
-                foreach ($pdo->query("SHOW COLUMNS FROM `$table`")->fetchAll() as $col) {
-                    $cols[] = $col['Field'];
-                }
-                $rows = $pdo->query("SELECT * FROM `$table`")->fetchAll(\PDO::FETCH_ASSOC);
-                if ($rows) {
-                    $colList = '`' . implode('`, `', $cols) . '`';
-                    foreach ($rows as $r) {
-                        $vals    = array_map(fn ($v) => $v === null ? 'NULL' : $pdo->quote($v), array_values($r));
-                        $lines[] = "INSERT INTO `$table` ($colList) VALUES (" . implode(', ', $vals) . ');';
-                    }
-                    $lines[] = '';
-                }
+                array_push($lines, ...$this->dumpTableComplete($pdo, $table));
             }
             $lines[] = 'SET FOREIGN_KEY_CHECKS = 1;';
             $sql     = implode("\n", $lines);
@@ -446,6 +485,66 @@ class CleanController extends BaseController
                 'msg'     => 'Sauvegarde totale effectuée avec succès.',
                 'fichier' => $filename,
                 'tables'  => count($tables),
+                'taille'  => round(strlen($sql) / 1024, 1),
+            ]);
+        });
+    }
+
+    /** Sauvegarde d'une seule table dans SQL/Table_<table>_*.sql (non destructif). */
+    public function sauvegardeTable(): ResponseInterface
+    {
+
+        return $this->tryJson(function () {
+            if ($err = $this->verifierMdpRequete()) {
+                return $err;
+            }
+
+            $table = trim($this->request->getPost('table') ?? '');
+            if ($table === '' || !preg_match('/^[a-zA-Z0-9_]+$/', $table)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Nom de table invalide.']);
+            }
+
+            $pdo    = getPDO();
+            $moi    = $this->moi();
+            $sqlDir = $this->sqlDir();
+
+            $tables = $pdo->query('SHOW TABLES')->fetchAll(\PDO::FETCH_COLUMN);
+            if (!in_array($table, $tables, true)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => "Table « $table » introuvable."]);
+            }
+
+            if (!is_dir($sqlDir) && !mkdir($sqlDir, 0755, true)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Impossible de créer le répertoire /SQL/.']);
+            }
+
+            $filename = 'Table_' . $table . '_' . date('YmdHi') . '.sql';
+            $filepath = $sqlDir . '/' . $filename;
+
+            $lines   = [];
+            $lines[] = '-- NIJAC sauvegarde de table';
+            $lines[] = '-- Fichier  : ' . $filename;
+            $lines[] = '-- Date     : ' . date('d/m/Y H:i');
+            $lines[] = '-- Opérateur: ' . $moi['nom'] . ' ' . $moi['prenom'];
+            $lines[] = '';
+            $lines[] = 'SET NAMES utf8mb4;';
+            $lines[] = 'SET FOREIGN_KEY_CHECKS = 0;';
+            $lines[] = '';
+            array_push($lines, ...$this->dumpTableComplete($pdo, $table));
+            $lines[] = 'SET FOREIGN_KEY_CHECKS = 1;';
+            $sql     = implode("\n", $lines);
+
+            if (file_put_contents($filepath, $sql) === false) {
+                return $this->response->setJSON(['ok' => false, 'msg' => "Impossible d'écrire le fichier de sauvegarde."]);
+            }
+
+            $nbLignes = (int) $pdo->query("SELECT COUNT(*) FROM `$table`")->fetchColumn();
+
+            return $this->response->setJSON([
+                'ok'      => true,
+                'msg'     => 'Sauvegarde de table effectuée avec succès.',
+                'fichier' => $filename,
+                'table'   => $table,
+                'lignes'  => $nbLignes,
                 'taille'  => round(strlen($sql) / 1024, 1),
             ]);
         });
@@ -536,7 +635,7 @@ class CleanController extends BaseController
             $nomFichier = trim($this->request->getPost('fichier') ?? '');
             $table      = trim($this->request->getPost('table') ?? '');
 
-            $filepath = $this->resoudreFichierSauvegarde($nomFichier, '/^Full_\d{12}\.sql$/');
+            $filepath = $this->resoudreFichierSauvegarde($nomFichier, '/^(Full_\d{12}|Table_[A-Za-z0-9_]+_\d{12})\.sql$/');
             if ($filepath === false) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Nom de fichier invalide.']);
             }

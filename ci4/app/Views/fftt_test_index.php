@@ -152,6 +152,20 @@
         </div>
     </div>
 
+    <!-- Test : recherche club par nom -->
+    <div class="card mb-3 border-success">
+        <div class="card-header fw-semibold text-success"><i class="bi bi-search me-2"></i>Recherche club par nom (xml_club_b)</div>
+        <div class="card-body">
+            <p class="text-muted small mb-2">Recherche un club par son nom (contrairement à xml_club_detail qui exige le numéro FFTT exact) — utile pour retrouver le vrai club d'un doublon BugSpid (E043).</p>
+            <div class="input-group mb-2" style="max-width:600px">
+                <span class="input-group-text">Nom</span>
+                <input type="text" id="club-b-nom" class="form-control form-control-lg" value="VILLERS BOCAGE">
+                <button class="btn btn-success" onclick="tester('test-club-b', {nom:$('#club-b-nom').val()}, 'club-b')">Tester</button>
+            </div>
+            <div id="res-club-b"></div>
+        </div>
+    </div>
+
     </div>
 
     <div class="col-lg-6">

@@ -107,11 +107,13 @@ $routes->post('centrenvoye/envoyer-un', 'CentrenvoyeController::envoyerUn', ['fi
 $routes->get('clean', 'CleanController::index', ['filter' => 'adminauth']);
 $routes->get('clean/sauvegardes', 'CleanController::sauvegardes', ['filter' => 'adminauth']);
 $routes->get('clean/sauvegardes-total', 'CleanController::sauvegardesTotal', ['filter' => 'adminauth']);
+$routes->get('clean/sauvegardes-table', 'CleanController::sauvegardesTable', ['filter' => 'adminauth']);
 $routes->post('clean/verifier-mdp', 'CleanController::verifierMdp', ['filter' => 'adminauth']);
 $routes->post('clean/tables', 'CleanController::tables', ['filter' => 'adminauth']);
 $routes->post('clean/supprimer-anciennes', 'CleanController::supprimerAnciennes', ['filter' => 'adminauth']);
 $routes->post('clean/executer', 'CleanController::executer', ['filter' => 'adminauth']);
 $routes->post('clean/sauvegarde-totale', 'CleanController::sauvegardeTotale', ['filter' => 'adminauth']);
+$routes->post('clean/sauvegarde-table', 'CleanController::sauvegardeTable', ['filter' => 'adminauth']);
 $routes->post('clean/restaurer', 'CleanController::restaurer', ['filter' => 'adminauth']);
 $routes->post('clean/restaurer-total', 'CleanController::restaurerTotal', ['filter' => 'adminauth']);
 $routes->post('clean/restaurer-table', 'CleanController::restaurerTableFull', ['filter' => 'adminauth']);
@@ -263,6 +265,7 @@ $routes->post('fftt-test/test-clubs-dep', 'FfttTestController::testClubsDep', ['
 $routes->post('fftt-test/test-licence', 'FfttTestController::testLicence', ['filter' => 'adminauth']);
 $routes->post('fftt-test/test-equipes', 'FfttTestController::testEquipes', ['filter' => 'adminauth']);
 $routes->post('fftt-test/test-club-detail', 'FfttTestController::testClubDetail', ['filter' => 'adminauth']);
+$routes->post('fftt-test/test-club-b', 'FfttTestController::testClubB', ['filter' => 'adminauth']);
 $routes->post('fftt-test/debug-club-salle', 'FfttTestController::debugClubSalle', ['filter' => 'adminauth']);
 $routes->post('fftt-test/test-licence-b', 'FfttTestController::testLicenceB', ['filter' => 'adminauth']);
 $routes->post('fftt-test/test-arbitres-dep', 'FfttTestController::testArbitresDep', ['filter' => 'adminauth']);
@@ -317,6 +320,10 @@ $routes->post('bug-spid', 'BugSpidController::store', ['filter' => 'adminauth'])
 $routes->put('bug-spid/(:num)', 'BugSpidController::update/$1', ['filter' => 'adminauth']);
 $routes->delete('bug-spid/(:num)', 'BugSpidController::delete/$1', ['filter' => 'adminauth']);
 $routes->post('bug-spid/executer', 'BugSpidController::executer', ['filter' => 'adminauth']);
+$routes->post('bug-spid/pdf-csv', 'BugSpidController::pdfCsv', ['filter' => 'adminauth']);
+$routes->post('bug-spid/maj-csv', 'BugSpidController::majCsv', ['filter' => 'adminauth']);
+$routes->get('bug-spid/nom-club/(:num)', 'BugSpidController::nomClub/$1', ['filter' => 'adminauth']);
+$routes->post('bug-spid/(:num)/xml-club-b', 'BugSpidController::testXmlClubB/$1', ['filter' => 'adminauth']);
 
 // ── Déconnexion ──────────────────────────────────────────────────────────────
 $routes->get('logout', 'LogoutController::index');
