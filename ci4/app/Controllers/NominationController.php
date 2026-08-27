@@ -223,12 +223,18 @@ class NominationController extends BaseController
                     dv.Color    AS DivisionColor,
                     ed.Nom       AS NomDom,
                     ed.Id_Club   AS IdClubDom,
+                    ed.SouhaitJA AS SouhaitJADom,
+                    cl.CorEmail  AS CorEmailDom,
                     ee.Nom       AS NomExt,
                     s_c.Cp    AS CpSalle,
                     s_c.Ville AS VilleSalle,
                     s_c.Nom    AS NomSalle,
-                    lp_r.Latitude AS VenueLat,
-                    lp_r.Longitude AS VenueLon,
+                    -- Coordonnées du lieu : salle propre à la rencontre si renseignée,
+                    -- sinon salle principale du club recevant (r.id_Salle est NULL
+                    -- pour la majorité des rencontres, comme l'adresse affichée qui
+                    -- vient déjà de s_c) — sans ce repli, aucune distance / km JA.
+                    COALESCE(lp_r.Latitude,  lp_c.Latitude)  AS VenueLat,
+                    COALESCE(lp_r.Longitude, lp_c.Longitude) AS VenueLon,
                     d_n.Id_JA    AS IdJaAffecte,
                     CONCAT(ja_n.Prenom, ' ', ja_n.Nom) AS NomJaAffecte,
                     n.Valide,
@@ -240,6 +246,8 @@ class NominationController extends BaseController
                 LEFT JOIN salle   s_r  ON s_r.Id_Salle   = r.id_Salle
                 LEFT JOIN laposte lp_r ON lp_r.Id_LaPoste = s_r.Id_Laposte
                 LEFT JOIN salle   s_c  ON s_c.Id_Club     = ed.Id_Club AND s_c.EstPrincipale = 1
+                LEFT JOIN laposte lp_c ON lp_c.Id_LaPoste = s_c.Id_Laposte
+                LEFT JOIN club    cl   ON cl.Id_Club      = ed.Id_Club
                 LEFT JOIN nomination n  ON n.Id_Rencontre  = r.Id_Rencontre
                 LEFT JOIN disponible d_n ON d_n.Id_Disponible = n.Id_Disponible
                 LEFT JOIN ja ja_n       ON ja_n.Id_JA       = d_n.Id_JA
@@ -596,6 +604,152 @@ class NominationController extends BaseController
             }
 
             return $this->response->setJSON(['ok' => true, 'envoyes' => $envoyes, 'erreurs' => $erreurs, 'liens' => $liens]);
+        });
+    }
+
+    /**
+     * Charge le modèle du message n°7 (JA Club) pour édition dans le panneau
+     * droit d'E022 avant l'envoi (marqueurs non substitués : ils le sont à
+     * l'envoi par demanderJaClub()).
+     */
+    public function messageArbitreClub(): ResponseInterface
+    {
+        return $this->tryJson(function () {
+            $pdo    = getPDO();
+            $moi    = $_SESSION['utilisateur'] ?? [];
+            $idRenc = (int) $this->request->getGet('id_rencontre');
+            if (!$idRenc || !$this->rencontreAutorisee($pdo, $idRenc, $this->deptsAutorises())) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Rencontre non autorisée.']);
+            }
+
+            assurerTemplateArbitreClub($pdo);
+            $tpl = resoudreModeleMessagerie($pdo, 7, (int) ($moi['id'] ?? 0)) ?: ['Sujet' => '', 'Message' => ''];
+
+            $stmt = $pdo->prepare(
+                'SELECT cl.CorNom, cl.CorEmail
+                 FROM rencontre r JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
+                 LEFT JOIN club cl ON cl.Id_Club = ed.Id_Club WHERE r.Id_Rencontre = ?'
+            );
+            $stmt->execute([$idRenc]);
+            $c = $stmt->fetch() ?: [];
+
+            return $this->response->setJSON([
+                'ok'         => true,
+                'sujet'      => $tpl['Sujet'],
+                'message'    => $tpl['Message'],
+                'corr_nom'   => $c['CorNom'] ?? '',
+                'corr_email' => $c['CorEmail'] ?? '',
+            ]);
+        });
+    }
+
+    /**
+     * « Envoyer la demande au club » (panneau E022) : envoie au correspondant du
+     * club recevant le lien vers la page publique E045 (message système n°7,
+     * éventuellement édité dans le panneau), pour qu'il désigne lui-même le
+     * juge-arbitre. Réservé aux rencontres R3M/R4M sans JA dont le club est en
+     * arbitrage club.
+     */
+    public function demanderJaClub(): ResponseInterface
+    {
+        return $this->tryJson(function () {
+            $pdo   = getPDO();
+            $moi   = $_SESSION['utilisateur'] ?? [];
+            $idRenc = (int) $this->request->getPost('id_rencontre');
+            if (!$idRenc || !$this->rencontreAutorisee($pdo, $idRenc, $this->deptsAutorises())) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Rencontre non autorisée.']);
+            }
+
+            $stmt = $pdo->prepare(
+                "SELECT r.Id_Rencontre, r.Date, r.Heure, r.Journee, r.Poule,
+                        ed.Division, ed.SouhaitJA, ed.Nom AS NomDom, ev.Nom AS NomExt,
+                        cl.CorNom, cl.CorEmail,
+                        COALESCE(sr.Nom, sc.Nom) AS SalleNom, COALESCE(sr.Adresse, sc.Adresse) AS SalleAdresse,
+                        COALESCE(sr.Cp, sc.Cp) AS SalleCp, COALESCE(sr.Ville, sc.Ville) AS SalleVille
+                 FROM rencontre r
+                 JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
+                 LEFT JOIN equipe ev ON ev.Id_Equipe = r.Id_EquipeExt
+                 LEFT JOIN club cl ON cl.Id_Club = ed.Id_Club
+                 LEFT JOIN salle sr ON sr.Id_Salle = r.id_Salle
+                 LEFT JOIN salle sc ON sc.Id_Club = ed.Id_Club AND sc.EstPrincipale = 1
+                 WHERE r.Id_Rencontre = ?"
+            );
+            $stmt->execute([$idRenc]);
+            $rc = $stmt->fetch();
+            if (!$rc) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Rencontre introuvable.']);
+            }
+            if ($rc['SouhaitJA'] !== 'Club') {
+                return $this->response->setJSON(['ok' => false, 'err' => "Cette rencontre n'est pas en arbitrage club."]);
+            }
+            $dejaNom = $pdo->prepare('SELECT COUNT(*) FROM nomination WHERE Id_Rencontre = ?');
+            $dejaNom->execute([$idRenc]);
+            if ((int) $dejaNom->fetchColumn() > 0) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Un JA est déjà désigné pour cette rencontre.']);
+            }
+            if (empty($rc['CorEmail'])) {
+                return $this->response->setJSON(['ok' => false, 'err' => "Le club recevant n'a pas d'email de correspondant (à compléter en E008)."]);
+            }
+
+            assurerTemplateArbitreClub($pdo);
+            $tpl = resoudreModeleMessagerie($pdo, 7, (int) ($moi['id'] ?? 0))
+                ?: ['Sujet' => 'Juge-arbitre pour {DOM} / {EXT}', 'Message' => '', 'Cc' => 0, 'ReplyTo' => 0];
+
+            // Sujet / corps éventuellement retouchés dans le panneau E022.
+            $sujetEdit = trim((string) $this->request->getPost('sujet'));
+            $msgEdit   = trim((string) $this->request->getPost('message'));
+            if ($sujetEdit !== '') {
+                $tpl['Sujet'] = $sujetEdit;
+            }
+            if ($msgEdit !== '') {
+                $tpl['Message'] = $msgEdit;
+            }
+
+            $marqueurs = construireMarqueursMessage([], $moi, [
+                'id_rencontre'  => $idRenc,
+                'date'          => $rc['Date'],
+                'heure'         => $rc['Heure'],
+                'journee'       => $rc['Journee'],
+                'poule'         => $rc['Poule'],
+                'division'      => $rc['Division'],
+                'dom'           => $rc['NomDom'],
+                'ext'           => $rc['NomExt'],
+                'salle_nom'     => $rc['SalleNom'],
+                'salle_adresse' => $rc['SalleAdresse'],
+                'salle_cp'      => $rc['SalleCp'],
+                'salle_ville'   => $rc['SalleVille'],
+                'corr_nom'      => $rc['CorNom'],
+                'corr_email'    => $rc['CorEmail'],
+            ]);
+            $rendu = remplacerMarqueursMessage($tpl['Sujet'], $tpl['Message'], $marqueurs);
+            $corps = $rendu['corps'] !== '' ? $rendu['corps']
+                : "Bonjour,\r\n\r\nMerci d'indiquer le juge-arbitre de la rencontre {$rc['NomDom']} / {$rc['NomExt']} du "
+                  . date('d/m/Y', strtotime($rc['Date'])) . " :\r\n" . $marqueurs['{URL_ARBITRE_CLUB}'];
+
+            $modeDev = isModeDeveloppement();
+            $dest    = getEmailDestinataire($rc['CorEmail']);
+            $isHtml  = strip_tags($corps) !== $corps;
+
+            $mail = getNijacMailer();
+            $mail->isHTML($isHtml);
+            $mail->addAddress($dest, (string) $rc['CorNom']);
+            if (!empty($tpl['ReplyTo']) && !empty($moi['email'])) {
+                $mail->addReplyTo($moi['email'], trim(($moi['prenom'] ?? '') . ' ' . ($moi['nom'] ?? '')));
+            }
+            if (!empty($tpl['Cc']) && !empty($moi['email'])) {
+                $mail->addCC(getEmailDestinataire($moi['email']), trim(($moi['prenom'] ?? '') . ' ' . ($moi['nom'] ?? '')));
+            }
+            $mail->Subject = ($modeDev && $dest !== $rc['CorEmail']) ? "[DEV → {$rc['CorEmail']}] {$rendu['sujet']}" : $rendu['sujet'];
+            $mail->Body    = $corps;
+            if ($isHtml) {
+                $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $corps));
+            }
+            $mail->send();
+
+            return $this->response->setJSON([
+                'ok'  => true,
+                'msg' => 'Demande envoyée à ' . ($rc['CorNom'] ?: $rc['CorEmail']) . '.',
+            ]);
         });
     }
 }

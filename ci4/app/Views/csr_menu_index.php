@@ -173,8 +173,9 @@
             box-shadow: 1px 2px 4px rgba(0,0,0,.15);
         }
 
-        .btn-club-csr   { background-color: #e0f2f1; }
-        .btn-messagerie { background-color: #fff8e1; }
+        .btn-club-csr      { background-color: #e0f2f1; }
+        .btn-messagerie    { background-color: #fff8e1; }
+        .btn-souhait-equipe { background-color: #ede7f6; }
 
         .btn-code {
             position: absolute;
@@ -228,6 +229,13 @@
         <div class="btn-icon"><img src="<?= base_url('img/Messagerie.png') ?>" alt="Message Réengagement"></div>
         <span>Message Réengagement</span>
         <span class="btn-desc">Modifier le message envoyé aux correspondants de club</span>
+    </a>
+
+    <a href="<?= site_url('souhait-equipe') ?>" class="menu-btn btn-souhait-equipe">
+        <span class="btn-code">E044</span>
+        <div class="btn-icon"><img src="<?= base_url('img/Souhait.png') ?>" alt="Souhaits des équipes"></div>
+        <span>Souhaits des équipes</span>
+        <span class="btn-desc">Jour souhaité et arbitrage des équipes R3M / R4M</span>
     </a>
 
 </div>

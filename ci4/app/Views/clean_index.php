@@ -1101,8 +1101,11 @@ function restaurerTotal(fichier) {
 // ═══════════════════════════════════════════════════════════════════
 let tableRestoreFichiers = [];
 
-function chargerFichiersTableRestore() {
-    $.get(`${CLEAN_BASE}/sauvegardes-table`, res => {
+function chargerFichiersTableRestore(url) {
+    // Repli sur /sauvegardes-total si /sauvegardes-table n'est pas déployé
+    // (déploiement FTP partiel : vue à jour mais route/contrôleur pas encore).
+    url = url || `${CLEAN_BASE}/sauvegardes-table`;
+    $.get(url, res => {
         tableRestoreFichiers = res.fichiers || [];
         const $zone = $('#table-restore-file-zone');
 
@@ -1120,6 +1123,10 @@ function chargerFichiersTableRestore() {
         $('#table-restore-loading').hide();
         $('#table-restore-form').show();
     }, 'json').fail(() => {
+        if (url.endsWith('/sauvegardes-table')) {
+            chargerFichiersTableRestore(`${CLEAN_BASE}/sauvegardes-total`);
+            return;
+        }
         $('#table-restore-file-zone').html('<div class="no-backup"><i class="bi bi-wifi-off"></i>Erreur lors du chargement des sauvegardes.</div>');
     });
 }

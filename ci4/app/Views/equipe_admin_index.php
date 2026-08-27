@@ -67,6 +67,11 @@
 
         <div id="form-equipe" style="display:none;">
             <div class="mb-2">
+                <span class="form-label d-block">Id_Equipe</span>
+                <div class="form-readonly" id="txt-id"></div>
+            </div>
+
+            <div class="mb-2">
                 <label class="form-label" for="txt-nom">Nom</label>
                 <input type="text" id="txt-nom" class="form-control form-control-sm" maxlength="100">
             </div>
@@ -250,6 +255,7 @@ function selectionnerLigne($tr) {
     currentId = id;
     $('#no-selection').hide();
     $('#form-equipe').show();
+    $('#txt-id').text(e.Id_Equipe ?? '');
     $('#txt-nom').val(e.Nom ?? '');
     $('#edit-sel-division').val(e.Division ?? '');
     $('#edit-sel-club').val(e.Id_Club ?? '');

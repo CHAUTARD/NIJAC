@@ -213,6 +213,36 @@ function assurerTemplateExpirationFfttApi(\PDO $pdo): void
  * comme les autres modèles système via E026. Id_Messagerie fixé à 8 explicitement (demandé),
  * l'AUTO_INCREMENT de la table ayant déjà dépassé cette valeur. Idempotente.
  */
+/**
+ * Modèle « JA Club » (Id_Messagerie = 7) : email envoyé au correspondant d'un
+ * club recevant en arbitrage club (E022), demandant le nom du JA qui arbitrera
+ * la rencontre via la page publique {URL_ARBITRE_CLUB} (E045). Remplit la ligne
+ * si elle est absente ou vide, sans écraser un contenu déjà saisi via E026.
+ */
+function assurerTemplateArbitreClub(\PDO $pdo): void
+{
+    ajouterTypeMessagerie($pdo, 'JA Club');
+
+    $sujet   = 'Championnat Régional - Juge-arbitre pour {DOM} / {EXT} du {DATE}';
+    $message = "Bonjour {CORR_NOM},\n\n"
+        . "Votre équipe {DOM} reçoit {EXT} le {DATE} à {HEURE}"
+        . " (Division {DIVISION}, journée {JOURNEE}, poule {POULE})"
+        . " à la salle : {SALLE_NOM} {SALLE_CP} {SALLE_VILLE}.\n\n"
+        . "Cette rencontre est en arbitrage club. Merci de nous indiquer le nom du"
+        . " juge-arbitre qui la dirigera, en suivant ce lien :\n{URL_ARBITRE_CLUB}\n\n"
+        . "À renseigner dans les 5 jours qui suivent la rencontre au maximum.\n\n"
+        . "Sportivement,\n{UTI_PRENOM} {UTI_NOM}";
+
+    $row = $pdo->query('SELECT Message FROM messagerie WHERE Id_Messagerie = 7')->fetch();
+    if (!$row) {
+        $pdo->prepare('INSERT INTO messagerie (Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, Cc, ReplyTo) VALUES (7, ?, ?, ?, NULL, 1, 1)')
+            ->execute(['JA Club', $sujet, $message]);
+    } elseif (trim((string) $row['Message']) === '') {
+        $pdo->prepare('UPDATE messagerie SET Type = ?, Sujet = ?, Message = ?, Cc = 1, ReplyTo = 1 WHERE Id_Messagerie = 7')
+            ->execute(['JA Club', $sujet, $message]);
+    }
+}
+
 function assurerTemplateDispoRegionale(\PDO $pdo): void
 {
     ajouterTypeMessagerie($pdo, 'Dispo régionale');
@@ -311,7 +341,7 @@ function verifierRappelExpirationFfttApi(): void
  *                    le(s) marqueur(s) correspondant(s) vide(s) :
  *                    {PHASE} : numéro de phase (config `phase`, saisi manuellement — distinct de {YEAR_PHASE}
  *                    qui est calculé à partir de la date du jour, voir getAnneePhase()).
- *                    id_nomination, sexe_code ('F'|'M'), date, heure, journee, poule, division, dom, ext,
+ *                    id_nomination, id_rencontre (pour {URL_ARBITRE_CLUB}), sexe_code ('F'|'M'), date, heure, journee, poule, division, dom, ext,
  *                    salle_nom, salle_adresse, salle_cp, salle_ville,
  *                    corr_nom, corr_email, corr_tel, liste_nominations (HTML de {LISTE_NOMINATIONS}).
  * @return array<string,string> Table marqueur => valeur, prête pour remplacerMarqueursMessage().
@@ -324,6 +354,8 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
     $token        = $idJa > 0 ? (new \Obfuscator(OBFUSCATOR_SEED))->obfuscate($idJa) : '';
     $idNomination = $ctx['id_nomination'] ?? null;
     $tokenNomination = !empty($idNomination) ? (new \Obfuscator(OBFUSCATOR_SEED))->obfuscate((int) $idNomination) : '';
+    $idRencontre  = $ctx['id_rencontre'] ?? null;
+    $tokenRenc    = !empty($idRencontre) ? (new \Obfuscator(OBFUSCATOR_SEED))->obfuscate((int) $idRencontre) : '';
 
     $sexe = match ($ctx['sexe_code'] ?? '') {
         'F'     => 'Féminin',
@@ -346,6 +378,7 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
         '{URL_DISPO_REGIONALE_JA}' => $token !== '' ? (site_url('dispo-regionale-ja') . '?ja=' . $token) : '',
         '{URL_INFO_RENCONTRE}'   => $token !== '' ? (site_url('info-rencontre') . '?ja=' . $token) : '',
         '{URL_CONVOCATION_JA}'   => !empty($idNomination) ? (site_url('convocation-ja') . '?nomination=' . $idNomination . '&cnv=' . $tokenNomination) : '',
+        '{URL_ARBITRE_CLUB}'     => $tokenRenc !== '' ? (site_url('arbitre-club') . '?renc=' . $tokenRenc) : '',
         '{YEAR_PHASE}'           => getAnneePhase(),
         '{PHASE}'                => getConfig('phase', '1'),
         '{DATE}'                 => !empty($ctx['date']) ? date('d/m/Y', strtotime($ctx['date'])) : '',

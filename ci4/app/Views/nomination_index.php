@@ -62,6 +62,13 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 
 #placeholder-candid { display:flex; flex-direction:column; align-items:center; justify-content:center; height:200px; color:#aaa; font-size:.9rem; gap:.5rem; }
 
+/* ── Panneau « arbitrage club » (message n°7) ── */
+#panel-arbitre-club { flex:1; overflow-y:auto; padding:.85rem; display:flex; flex-direction:column; }
+#panel-arbitre-club #ac-message { flex:1; min-height:180px; resize:vertical; font-family:'Consolas','Courier New',monospace; }
+#ac-marqueurs code { display:inline-block; background:#eef4fc; border:1px solid #b8d0ee; border-radius:4px; padding:.05rem .4rem; margin:.1rem .15rem 0 0; font-size:.7rem; color:#1a3a6b; cursor:pointer; }
+#ac-marqueurs code:hover { background:#cfe0f8; }
+.renc-arbclub { margin-top:.25rem; font-size:.7rem; font-weight:700; color:#e65100; }
+
 .cand-card { margin:.55rem .85rem; border:1px solid #dee2e6; border-radius:8px; background:#fff; overflow:hidden; transition:box-shadow .12s; }
 .cand-card:hover { box-shadow:0 2px 8px rgba(0,0,0,.15); }
 .cand-card .cand-header { padding:.45rem .7rem; background:#e8f5e9; display:flex; align-items:center; gap:.5rem; border-bottom:1px solid #dee2e6; }
@@ -177,6 +184,24 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
             <span>Sélectionnez une rencontre</span>
         </div>
         <div id="liste-candidats"></div>
+
+        <!-- Rencontre en arbitrage club : éditeur du message n°7 (comme E024) + envoi -->
+        <div id="panel-arbitre-club" style="display:none;">
+            <div class="small text-muted mb-2">
+                <i class="bi bi-info-circle me-1"></i>Rencontre en <strong>arbitrage club</strong> : envoyez au correspondant la demande de désignation du juge-arbitre (message&nbsp;n°7). Le lien renvoie vers la page publique E045.
+            </div>
+            <label class="form-label small mb-1" for="ac-sujet">Sujet</label>
+            <input type="text" id="ac-sujet" class="form-control form-control-sm mb-2" maxlength="150">
+            <label class="form-label small mb-1" for="ac-message">Message</label>
+            <textarea id="ac-message" class="form-control form-control-sm mb-1" rows="11" style="font-size:.78rem;"></textarea>
+            <div id="ac-marqueurs" class="mb-2">
+                <?php foreach (['{CORR_NOM}','{DOM}','{EXT}','{DATE}','{HEURE}','{DIVISION}','{JOURNEE}','{POULE}','{SALLE_NOM}','{SALLE_CP}','{SALLE_VILLE}','{URL_ARBITRE_CLUB}','{UTI_PRENOM}','{UTI_NOM}'] as $mk): ?>
+                <code data-m="<?= $mk ?>"><?= $mk ?></code>
+                <?php endforeach; ?>
+            </div>
+            <button id="ac-envoyer" class="btn btn-warning btn-sm w-100"><i class="bi bi-envelope-fill me-1"></i>Envoyer la demande au club</button>
+            <div id="ac-status" class="small mt-2"></div>
+        </div>
     </div>
 
 </div>
@@ -406,6 +431,12 @@ function renderRencontres() {
                 ? '<span class="ms-2 renc-envoi-badge envoye"><i class="bi bi-check-circle-fill me-1"></i>Envoyée</span>'
                 : '<span class="ms-2 renc-envoi-badge a-envoyer"><i class="bi bi-envelope-exclamation-fill me-1"></i>À envoyer</span>')
             : '';
+        // Arbitrage club (R3M/R4M, club recevant en SouhaitJA='Club', pas encore de JA) :
+        // la demande au correspondant se fait dans le panneau de droite.
+        const arbClub  = !attr && rc.SouhaitJADom === 'Club' && ['R3M', 'R4M'].includes(rc.DivisionCode || '');
+        const btnAsk   = arbClub
+            ? '<div class="renc-arbclub"><i class="bi bi-envelope me-1"></i>Arbitrage club — demande à envoyer</div>'
+            : '';
         $liste.append(`
             <div class="renc-item ${attr ? 'attribue' : ''}" data-id="${rc.Id_Rencontre}">
                 ${checkbox}
@@ -419,6 +450,7 @@ function renderRencontres() {
                         ${envoiBadge}
                     </div>
                     ${attr ? `<div class="renc-ja"><i class="bi bi-person-check me-1"></i>${escHtml(nomJa)}</div>` : ''}
+                    ${btnAsk}
                 </div>
                 <i class="bi ${attr ? 'bi-person-check-fill' : 'bi-person-dash'} renc-ico"></i>
             </div>
@@ -435,6 +467,7 @@ function renderRencontres() {
         if (this.checked) selectionEnvoi.add(id); else selectionEnvoi.delete(id);
         mettreAJourBoutons();
     });
+
 
     const nb    = rencontres.length;
     const nbAttr = Object.keys(nominations).length;
@@ -461,6 +494,17 @@ function selectionnerRencontre(idRenc) {
 function afficherCandidatsPourRencontre(idRenc) {
     const rc = rencontres.find(r => r.Id_Rencontre == idRenc);
     $('#placeholder-candid').hide();
+
+    // Rencontre en arbitrage club sans JA : panneau « message n°7 » à droite.
+    const arbClub = rc && !nominations[idRenc]
+        && rc.SouhaitJADom === 'Club' && ['R3M', 'R4M'].includes(rc.DivisionCode || '');
+    if (arbClub) {
+        $('#liste-candidats').hide().empty();
+        chargerPanelArbitreClub(idRenc);
+        return;
+    }
+    $('#panel-arbitre-club').hide();
+    $('#liste-candidats').show();
 
     if (!rc || !jaList.length) {
         $('#liste-candidats').html('<div class="text-center text-muted py-4" style="font-size:.85rem"><i class="bi bi-person-x fs-2 d-block mb-2"></i>Aucun JA disponible pour cette journée</div>');
@@ -587,8 +631,57 @@ function afficherCandidatsPourRencontre(idRenc) {
     });
 }
 
+// ── Panneau arbitrage club : éditeur du message n°7 + envoi ──────────────────
+function chargerPanelArbitreClub(idRenc) {
+    $('#panel-arbitre-club').show();
+    $('#ac-status').text('').removeClass('text-danger text-success');
+    $('#ac-envoyer').prop('disabled', true).data('id', idRenc);
+    $('#ac-sujet, #ac-message').prop('disabled', true).val('Chargement…');
+
+    $.get('<?= site_url('nomination/message-arbitre-club') ?>', { id_rencontre: idRenc }, function (res) {
+        if (!res.ok) { $('#ac-status').addClass('text-danger').text(res.err || 'Erreur.'); return; }
+        $('#ac-sujet').val(res.sujet || '').prop('disabled', false);
+        $('#ac-message').val(res.message || '').prop('disabled', false);
+        if (!res.corr_email) {
+            $('#ac-status').addClass('text-danger').text('Aucun email de correspondant pour ce club (à compléter en E008).');
+        } else {
+            $('#ac-envoyer').prop('disabled', false);
+            $('#ac-status').text('Destinataire : ' + (res.corr_nom || res.corr_email));
+        }
+    }, 'json').fail(() => $('#ac-status').addClass('text-danger').text('Erreur réseau.'));
+}
+
+$('#ac-marqueurs').on('click', 'code', function () {
+    const el = document.getElementById('ac-message');
+    if (el.disabled) return;
+    const s = el.selectionStart, e = el.selectionEnd, m = $(this).data('m');
+    el.value = el.value.slice(0, s) + m + el.value.slice(e);
+    el.focus();
+    el.selectionStart = el.selectionEnd = s + m.length;
+});
+
+$('#ac-envoyer').on('click', function () {
+    const id = $(this).data('id');
+    const $b = $(this).prop('disabled', true);
+    $('#ac-status').removeClass('text-danger text-success').text('Envoi en cours…');
+    $.post('<?= site_url('nomination/demander-ja-club') ?>', {
+        id_rencontre: id,
+        sujet:        $('#ac-sujet').val(),
+        message:      $('#ac-message').val(),
+    }, function (res) {
+        if (res.ok) {
+            $('#ac-status').addClass('text-success').text(res.msg);
+            toast(res.msg);
+        } else {
+            $('#ac-status').addClass('text-danger').text(res.err || res.msg || 'Erreur.');
+            $b.prop('disabled', false);
+        }
+    }, 'json').fail(() => { $('#ac-status').addClass('text-danger').text('Erreur réseau.'); $b.prop('disabled', false); });
+});
+
 function viderCandidats() {
-    $('#liste-candidats').empty();
+    $('#liste-candidats').show().empty();
+    $('#panel-arbitre-club').hide();
     $('#placeholder-candid').show();
     $('#renc-sel-titre').text('');
     rencSelectionnee = null;

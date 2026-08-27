@@ -47,6 +47,9 @@
             <select id="sel-date" class="form-select form-select-sm" style="width:auto;">
                 <option value="">— Date —</option>
             </select>
+            <button type="button" class="btn btn-sm btn-outline-warning" id="btn-doublons" title="N'afficher que les rencontres en doublon (identiques sauf l'Id)">
+                <i class="bi bi-files"></i> Doublons
+            </button>
             <button type="button" class="btn btn-sm btn-light" id="btn-reset-filtres" title="Réinitialiser les filtres">
                 <i class="bi bi-x-circle"></i>
             </button>
@@ -78,6 +81,10 @@
 
         <div id="form-rencontre" style="display:none;">
             <div class="row g-2 mb-2">
+                <div class="col-auto">
+                    <span class="form-label d-block">Id_Rencontre</span>
+                    <div class="form-readonly" id="txt-id"></div>
+                </div>
                 <div class="col-auto">
                     <span class="form-label d-block">Rencontre</span>
                     <div class="form-readonly">
@@ -150,6 +157,7 @@ let divisionFiltre = '';
 let pouleFiltre   = '';
 let journeeFiltre = '';
 let dateFiltre    = '';
+let doublonsIds   = null;   // null = filtre inactif ; sinon tableau d'Id_Rencontre (chaînes)
 const sortState = { col: null, asc: true };
 
 const JOURS_SEMAINE = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -197,6 +205,7 @@ function rencontresFiltrees() {
         if (pouleFiltre && String(r.Poule ?? '') !== pouleFiltre) return false;
         if (journeeFiltre && String(r.Journee ?? '') !== journeeFiltre) return false;
         if (dateFiltre && (r.Date ?? '').substring(0, 10) !== dateFiltre) return false;
+        if (doublonsIds && !doublonsIds.includes(String(r.Id_Rencontre))) return false;
         return true;
     });
 }
@@ -297,6 +306,7 @@ function selectionnerLigne($tr) {
     currentId = id;
     $('#no-selection').hide();
     $('#form-rencontre').show();
+    $('#txt-id').text(r.Id_Rencontre ?? '');
     $('#txt-dom').text(r.NomDom ?? '');
     $('#txt-ext').text(r.NomExt ?? '—');
     $('#txt-division').empty().append(macaronDivision(r.Division, r.DivisionColor));
@@ -377,9 +387,28 @@ $('#btn-date-plus').on('click', function () { decalerDateChamp(1); });
 
 $('#btn-reset-filtres').on('click', function () {
     searchEquipe = deptFiltre = divisionFiltre = pouleFiltre = journeeFiltre = dateFiltre = '';
+    doublonsIds = null;
+    $('#btn-doublons').removeClass('active btn-warning').addClass('btn-outline-warning');
     $('#search-equipe').val('');
     $('#sel-dept, #sel-division, #sel-poule, #sel-journee, #sel-date').val('');
     renderListe();
+});
+
+$('#btn-doublons').on('click', function () {
+    if (doublonsIds) {                    // désactivation
+        doublonsIds = null;
+        $(this).removeClass('active btn-warning').addClass('btn-outline-warning');
+        renderListe();
+        return;
+    }
+    $.get(`${RENCONTRE_BASE}/doublons`, function (res) {
+        if (!res.ok) { toast(res.msg, false); return; }
+        doublonsIds = (res.ids || []).map(String);
+        if (!doublonsIds.length) { toast('Aucune rencontre en doublon.'); return; }
+        $('#btn-doublons').addClass('active btn-warning').removeClass('btn-outline-warning');
+        renderListe();
+        toast(`${res.groupes} groupe(s) de doublons — ${doublonsIds.length} rencontre(s).`);
+    }, 'json').fail(() => toast('Erreur réseau.', false));
 });
 
 // ── Tri sur clic en-tête ──────────────────────────────────────────────────────

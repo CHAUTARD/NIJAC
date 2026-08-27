@@ -69,6 +69,34 @@ class RencontreAdminController extends BaseController
         });
     }
 
+    /**
+     * Recherche les rencontres en doublon : lignes identiques sur toutes les
+     * colonnes sauf la PK Id_Rencontre. Le GROUP BY de MySQL considère les
+     * NULL comme égaux, donc pas de COALESCE à ajouter. Renvoie la liste à
+     * plat des Id_Rencontre concernés (tous les membres de chaque groupe).
+     */
+    public function doublons(): ResponseInterface
+    {
+        return $this->tryJson(function () {
+            $groupes = getPDO()->query(
+                'SELECT GROUP_CONCAT(Id_Rencontre ORDER BY Id_Rencontre) AS ids, COUNT(*) AS n
+                 FROM rencontre
+                 GROUP BY Date, Heure, Poule, Id_EquipeDom, Id_EquipeExt, Phase,
+                          Journee, id_Salle, ArbitrageObligatoire, Commentaire
+                 HAVING n > 1'
+            )->fetchAll();
+
+            $ids = [];
+            foreach ($groupes as $g) {
+                foreach (explode(',', $g['ids']) as $id) {
+                    $ids[] = (int) $id;
+                }
+            }
+
+            return $this->response->setJSON(['ok' => true, 'ids' => $ids, 'groupes' => count($groupes)]);
+        });
+    }
+
     public function update(int $idRencontre): ResponseInterface
     {
         return $this->tryJson(function () use ($idRencontre) {

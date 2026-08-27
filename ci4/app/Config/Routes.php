@@ -194,6 +194,8 @@ $routes->post('nomination/affecter-ja', 'NominationController::affecterJa', ['fi
 $routes->post('nomination/retirer-ja', 'NominationController::retirerJa', ['filter' => 'auth']);
 $routes->post('nomination/valider', 'NominationController::validerNominations', ['filter' => 'auth']);
 $routes->post('nomination/envoyer-convocations', 'NominationController::envoyerConvocations', ['filter' => 'auth']);
+$routes->get('nomination/message-arbitre-club', 'NominationController::messageArbitreClub', ['filter' => 'auth']);
+$routes->post('nomination/demander-ja-club', 'NominationController::demanderJaClub', ['filter' => 'auth']);
 
 // ── E023 Désidératas club ────────────────────────────────────────────────────
 // Page PUBLIQUE (sans authentification), tokenisée par ?club=<Id_Club> — lien
@@ -201,6 +203,12 @@ $routes->post('nomination/envoyer-convocations', 'NominationController::envoyerC
 $routes->get('desiderata-club', 'DesiderataClubController::index');
 $routes->get('desiderata-club/charger', 'DesiderataClubController::charger');
 $routes->post('desiderata-club/enregistrer', 'DesiderataClubController::enregistrer');
+
+// ── E045 Juge-arbitre du club ────────────────────────────────────────────────
+// Page PUBLIQUE, tokenisée par ?renc=TOKEN (Obfuscator Id_Rencontre) — lien
+// envoyé au correspondant du club recevant depuis E022 (message n°7).
+$routes->get('arbitre-club', 'ArbitreClubController::index');
+$routes->post('arbitre-club/enregistrer', 'ArbitreClubController::enregistrer');
 
 // ── E027 Désidératas clubs ───────────────────────────────────────────────────
 // Nominateur ou Administrateur — retiré du menu CSR (E034), remis dans le menu
@@ -299,6 +307,7 @@ $routes->put('gestion-equipes/(:num)', 'EquipeAdminController::update/$1', ['fil
 // ── E042 Gestion des rencontres ──────────────────────────────────────────────
 $routes->get('gestion-rencontres', 'RencontreAdminController::index', ['filter' => 'adminauth']);
 $routes->get('gestion-rencontres/data', 'RencontreAdminController::data', ['filter' => 'adminauth']);
+$routes->get('gestion-rencontres/doublons', 'RencontreAdminController::doublons', ['filter' => 'adminauth']);
 $routes->put('gestion-rencontres/(:num)', 'RencontreAdminController::update/$1', ['filter' => 'adminauth']);
 $routes->delete('gestion-rencontres/(:num)', 'RencontreAdminController::delete/$1', ['filter' => 'adminauth']);
 
@@ -368,6 +377,15 @@ $routes->get('csr-menu', 'CsrMenuController::index', ['filter' => 'csrauth']);
 // ── E040 Message Réengagement CSR ────────────────────────────────────────────
 // Remplace le lien vers E026 dans le menu CSR (E034) — voir ReengagementCsrController.
 $routes->get('reengagement-csr', 'ReengagementCsrController::index', ['filter' => 'csrauth']);
+
+// ── E044 Souhaits des équipes (jour + arbitrage R3M/R4M) ─────────────────────
+// Rôle CSR ou Administrateur (filtre "csrauth"), accessible depuis E034.
+$routes->get('souhait-equipe', 'SouhaitEquipeController::index', ['filter' => 'csrauth']);
+$routes->get('souhait-equipe/liste', 'SouhaitEquipeController::liste', ['filter' => 'csrauth']);
+$routes->post('souhait-equipe/xlsx-csv', 'SouhaitEquipeController::xlsxCsv', ['filter' => 'csrauth']);
+$routes->post('souhait-equipe/maj-csv', 'SouhaitEquipeController::majCsv', ['filter' => 'csrauth']);
+$routes->get('souhait-equipe/rapports', 'SouhaitEquipeController::rapports', ['filter' => 'csrauth']);
+$routes->put('souhait-equipe/(:num)', 'SouhaitEquipeController::modifier/$1', ['filter' => 'csrauth']);
 
 // ── E035 Club CSR (envoi email) ──────────────────────────────────────────────
 $routes->get('club-csr', 'ClubCsrController::index', ['filter' => 'csrauth']);
