@@ -14,9 +14,12 @@ use CodeIgniter\HTTP\ResponseInterface;
  * données brutes (coordonnées, disponibilités, nominations existantes).
  *
  * Pas de Model : jointures multiples nomination→disponible→ja, résolution de
- * disponibilité avec matérialisation conditionnelle, affectation automatique
- * en cascade (même salle) — trop éloigné du Query Builder simple. Réutilise
- * getPDO() directement, comme le fichier legacy.
+ * disponibilité avec matérialisation conditionnelle — trop éloigné du Query
+ * Builder simple. Réutilise getPDO() directement, comme le fichier legacy.
+ *
+ * Règle de nomination : au plus 2 nominations par JA et par journée ; la 2ᵉ
+ * est décidée manuellement par le nominateur (plus d'affectation automatique
+ * « même salle »).
  */
 class NominationController extends BaseController
 {
@@ -346,9 +349,6 @@ class NominationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => 'Rencontre hors de votre périmètre']);
             }
 
-            // Vérification règle : pas déjà affecté ce jour-là, sauf pour une autre
-            // rencontre du même club domicile (ex. plusieurs équipes du même club
-            // jouant à domicile le même jour, dans la même salle).
             $dateRenc = $pdo->prepare('
                 SELECT r.Date, ed.Id_Club
                 FROM rencontre r
@@ -361,17 +361,17 @@ class NominationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => 'Rencontre introuvable']);
             }
 
+            // Règle : au maximum 2 nominations par JA sur une même journée. Le
+            // nominateur décide lui-même de la 2ᵉ (aucune affectation automatique).
             $checkDate = $pdo->prepare('
                 SELECT COUNT(*) FROM nomination n
-                JOIN disponible d  ON d.Id_Disponible  = n.Id_Disponible
-                JOIN rencontre r2  ON r2.Id_Rencontre   = n.Id_Rencontre
-                JOIN equipe ed2    ON ed2.Id_Equipe     = r2.Id_EquipeDom
-                WHERE d.Id_JA = ? AND n.Id_Rencontre != ?
-                  AND r2.Date = ? AND ed2.Id_Club != ?
+                JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                JOIN rencontre  r2 ON r2.Id_Rencontre = n.Id_Rencontre
+                WHERE d.Id_JA = ? AND n.Id_Rencontre != ? AND r2.Date = ?
             ');
-            $checkDate->execute([$idJa, $idRenc, $ri['Date'], $ri['Id_Club']]);
-            if ($checkDate->fetchColumn() > 0) {
-                return $this->response->setJSON(['ok' => false, 'err' => 'Ce JA est déjà affecté ce jour-là']);
+            $checkDate->execute([$idJa, $idRenc, $ri['Date']]);
+            if ((int) $checkDate->fetchColumn() >= 2) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Ce JA a déjà 2 nominations ce jour-là (maximum).']);
             }
 
             // Règle : pour être nominé, un JA doit être disponible
@@ -382,48 +382,11 @@ class NominationController extends BaseController
 
             $this->affecterNomination($pdo, $idRenc, $idDispo);
 
-            // Récupérer le nom du JA pour affichage
             $jaInfo = $pdo->prepare('SELECT Nom, Prenom, Grade, Id_Club FROM ja WHERE Id_JA = ?');
             $jaInfo->execute([$idJa]);
-            $ja     = $jaInfo->fetch();
-            $jaClub = $ja['Id_Club'] ?? null;
+            $ja = $jaInfo->fetch();
 
-            // Affectation automatique aux autres rencontres dans la même salle le même jour
-            $autoAffectes = [];
-            $salleStmt    = $pdo->prepare('SELECT id_Salle FROM rencontre WHERE Id_Rencontre = ?');
-            $salleStmt->execute([$idRenc]);
-            $idSalle = $salleStmt->fetchColumn();
-
-            if ($idSalle) {
-                $autresStmt = $pdo->prepare('
-                    SELECT r.Id_Rencontre, ed.Id_Club AS IdClubDom, ee.Id_Club AS IdClubExt
-                    FROM rencontre r
-                    JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
-                    LEFT JOIN equipe ee ON ee.Id_Equipe = r.Id_EquipeExt
-                    LEFT JOIN nomination n ON n.Id_Rencontre = r.Id_Rencontre
-                    WHERE r.id_Salle = ?
-                      AND r.Date = ?
-                      AND r.Id_Rencontre != ?
-                      AND n.Id_Rencontre IS NULL
-                ');
-                $autresStmt->execute([$idSalle, $ri['Date'], $idRenc]);
-                foreach ($autresStmt->fetchAll() as $autre) {
-                    // Ne pas affecter si le club du JA joue dans cette rencontre
-                    if ($jaClub && ($jaClub == $autre['IdClubDom'] || $jaClub == $autre['IdClubExt'])) {
-                        continue;
-                    }
-                    // Le JA doit aussi être disponible pour cette deuxième rencontre
-                    $idDispoAutre = $this->resoudreDisponible($pdo, $idJa, (int) $autre['Id_Rencontre'], $ri['Date']);
-                    if (!$idDispoAutre) {
-                        continue;
-                    }
-                    $this->affecterNomination($pdo, (int) $autre['Id_Rencontre'], $idDispoAutre);
-                    $autoAffectes[] = $autre['Id_Rencontre'];
-                    break; // une seule deuxième rencontre automatique
-                }
-            }
-
-            return $this->response->setJSON(['ok' => true, 'ja' => $ja, 'autoAffectes' => $autoAffectes]);
+            return $this->response->setJSON(['ok' => true, 'ja' => $ja]);
         });
     }
 

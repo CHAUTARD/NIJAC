@@ -527,10 +527,12 @@ function afficherCandidatsPourRencontre(idRenc) {
 
         if (ja.Id_Club && ja.Id_Club === clubDom) return;
 
-        const dejaAffecte = Object.entries(nominations).some(
+        // Max 2 nominations par JA sur la journée : on masque le JA seulement
+        // s'il est déjà nominé sur 2 autres rencontres du jour.
+        const nbCeJour = Object.entries(nominations).filter(
             ([rid, nom]) => parseInt(rid) !== idRenc && nom.Id_JA == ja.Id_JA
-        );
-        if (dejaAffecte) return;
+        ).length;
+        if (nbCeJour >= 2) return;
 
         const dist  = haversineKm(ja.JaLat, ja.JaLon, venueLat, venueLon);
         const score = (prefereRenc ? 300 : 0)
@@ -547,9 +549,16 @@ function afficherCandidatsPourRencontre(idRenc) {
         });
     });
 
-    candidats.sort((a, b) =>
-        b.Score - a.Score || a.NbNominations - b.NbNominations || a.Nom.localeCompare(b.Nom)
-    );
+    // Tri principal par kilométrage (JA le plus proche en tête, distance
+    // inconnue en dernier), puis score / nb d'arbitrages / nom en départage.
+    candidats.sort((a, b) => {
+        const da = a.DistanceKm == null ? Infinity : a.DistanceKm;
+        const db = b.DistanceKm == null ? Infinity : b.DistanceKm;
+        return da - db
+            || b.Score - a.Score
+            || a.NbNominations - b.NbNominations
+            || a.Nom.localeCompare(b.Nom);
+    });
 
     const jaAffecteId = nominations[idRenc] ? nominations[idRenc].Id_JA : null;
 
@@ -705,16 +714,6 @@ function affecterJa(idRenc, idJa, nom, prenom) {
         if (!r.ok) { nijacToast('Erreur : ' + r.err, 'danger'); return; }
         nominations[idRenc] = { Id_JA: idJa, Nom: nom, Prenom: prenom };
         reinitialiserValidation(idRenc);
-
-        // Affectations automatiques dans la même salle
-        const auto = r.autoAffectes || [];
-        auto.forEach(function (idAuto) {
-            nominations[idAuto] = { Id_JA: idJa, Nom: nom, Prenom: prenom };
-            reinitialiserValidation(idAuto);
-        });
-        if (auto.length > 0) {
-            nijacToast(`Affectation automatique : ${escHtml(prenom)} ${escHtml(nom)} a également été affecté(e) à ${auto.length} autre(s) rencontre(s) dans la même salle.`, 'info', 6000);
-        }
 
         renderRencontres();
         mettreAJourBoutons();
