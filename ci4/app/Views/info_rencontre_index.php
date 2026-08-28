@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Ma fiche JA (E030)</title>
+    <title>NIJAC – Ma fiche JA (EN20)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
@@ -32,7 +32,7 @@
 <!-- En-tête : recopié de includes/page_header.php (pas de bouton Retour, page racine du JA) -->
 <div id="page-header">
     <i class="bi bi-person-badge me-2"></i>Ma fiche Juge-Arbitre
-    <small class="ms-2" style="opacity:.75;">(E030)</small>
+    <small class="ms-2" style="opacity:.75;">(EN20)</small>
 </div>
 
 <div class="container-fluid px-3 pb-4 pt-3">

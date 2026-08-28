@@ -81,11 +81,11 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
 
   const ecrans = [
     { code: "E001",  titre: "Connexion (index.php)",      couleur: "5C4033",  desc: "Login / mot de passe — redirection selon le rôle (Admin ou Nominateur)" },
-    { code: "E020",  titre: "Menu Nominateur",             couleur: C.mid,     desc: "Accès à toutes les fonctions de nomination" },
-    { code: "E021",  titre: "Disponibilités JA",           couleur: C.blue1,   desc: "Consultation & saisie des dispos par département" },
-    { code: "E022",  titre: "Nomination des JA",           couleur: "1E8449",  desc: "Nomination auto ou manuelle aux rencontres" },
-    { code: "E023",  titre: "Convocation & Frais",         couleur: C.orange3, desc: "Convocation officielle + déclaration des frais" },
-    { code: "E024",  titre: "Centre d'envoi",              couleur: C.red,     desc: "Envoi groupé de messages aux JA (4 types)" },
+    { code: "E003",  titre: "Menu Nominateur",             couleur: C.mid,     desc: "Accès à toutes les fonctions de nomination" },
+    { code: "EN13",  titre: "Disponibilités JA",           couleur: C.blue1,   desc: "Consultation & saisie des dispos par département" },
+    { code: "EN14",  titre: "Nomination des JA",           couleur: "1E8449",  desc: "Nomination auto ou manuelle aux rencontres" },
+    { code: "EN18",  titre: "Convocation & Frais",         couleur: C.orange3, desc: "Convocation officielle + déclaration des frais" },
+    { code: "EN15",  titre: "Centre d'envoi",              couleur: C.red,     desc: "Envoi groupé de messages aux JA (4 types)" },
   ];
 
   ecrans.forEach((e, i) => {
@@ -111,13 +111,13 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
   });
 }
 
-// ─── SLIDE 3 : E020 Menu Nominateur ───────────────────────────────────────────
+// ─── SLIDE 3 : E003 Menu Nominateur ───────────────────────────────────────────
 {
   const s = pres.addSlide();
   s.background = { color: C.white };
 
   s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 10, h: 0.85, fill: { color: C.mid }, line: { color: C.mid } });
-  s.addText("E020 — Menu Nominateur", {
+  s.addText("E003 — Menu Nominateur", {
     x: 0.4, y: 0.1, w: 9.2, h: 0.65,
     fontSize: 22, bold: true, color: C.white, fontFace: "Calibri", margin: 0
   });
@@ -129,9 +129,9 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
   });
 
   const boutons = [
-    { label: "Disponibilités JA (E021)",    couleur: C.blue1 },
-    { label: "Nomination JA (E022)",        couleur: "1E8449" },
-    { label: "Centre d'envoi (E024)",       couleur: C.red },
+    { label: "Disponibilités JA (EN13)",    couleur: C.blue1 },
+    { label: "Nomination JA (EN14)",        couleur: "1E8449" },
+    { label: "Centre d'envoi (EN15)",       couleur: C.red },
     { label: "Menu Administrateur",         couleur: C.mid },
     { label: "Se déconnecter",              couleur: C.muted },
   ];
@@ -155,13 +155,13 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
   });
 }
 
-// ─── SLIDE 4 : E021 Disponibilités JA ─────────────────────────────────────────
+// ─── SLIDE 4 : EN13 Disponibilités JA ─────────────────────────────────────────
 {
   const s = pres.addSlide();
   s.background = { color: C.light };
 
   s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 10, h: 0.85, fill: { color: C.blue1 }, line: { color: C.blue1 } });
-  s.addText("E021 — Disponibilités des Juges-Arbitres", {
+  s.addText("EN13 — Disponibilités des Juges-Arbitres", {
     x: 0.4, y: 0.1, w: 9.2, h: 0.65,
     fontSize: 22, bold: true, color: C.white, fontFace: "Calibri", margin: 0
   });
@@ -219,13 +219,13 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
   });
 }
 
-// ─── SLIDE 5 : E022 Nomination des JA ─────────────────────────────────────────
+// ─── SLIDE 5 : EN14 Nomination des JA ─────────────────────────────────────────
 {
   const s = pres.addSlide();
   s.background = { color: C.white };
 
   s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 10, h: 0.85, fill: { color: "1E8449" }, line: { color: "1E8449" } });
-  s.addText("E022 — Nomination des Juges-Arbitres", {
+  s.addText("EN14 — Nomination des Juges-Arbitres", {
     x: 0.4, y: 0.1, w: 9.2, h: 0.65,
     fontSize: 22, bold: true, color: C.white, fontFace: "Calibri", margin: 0
   });
@@ -272,18 +272,18 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
   });
 }
 
-// ─── SLIDE 6 : E023 Convocation & Frais ───────────────────────────────────────
+// ─── SLIDE 6 : EN18 Convocation & Frais ───────────────────────────────────────
 {
   const s = pres.addSlide();
   s.background = { color: C.light };
 
   s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 10, h: 0.85, fill: { color: C.orange3 }, line: { color: C.orange3 } });
-  s.addText("E023 — Convocation et Frais JA", {
+  s.addText("EN18 — Convocation et Frais JA", {
     x: 0.4, y: 0.1, w: 9.2, h: 0.65,
     fontSize: 22, bold: true, color: C.white, fontFace: "Calibri", margin: 0
   });
 
-  s.addText("Page de convocation officielle d'un Juge-Arbitre. Accessible via token email ou depuis E022.", {
+  s.addText("Page de convocation officielle d'un Juge-Arbitre. Accessible via token email ou depuis EN14.", {
     x: 0.4, y: 1.0, w: 9.2, h: 0.4,
     fontSize: 13, color: C.text, fontFace: "Calibri", margin: 0
   });
@@ -328,13 +328,13 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
   });
 }
 
-// ─── SLIDE 7 : E024 Centre d'envoi ────────────────────────────────────────────
+// ─── SLIDE 7 : EN15 Centre d'envoi ────────────────────────────────────────────
 {
   const s = pres.addSlide();
   s.background = { color: C.white };
 
   s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 10, h: 0.85, fill: { color: C.red }, line: { color: C.red } });
-  s.addText("E024 — Centre d'envoi", {
+  s.addText("EN15 — Centre d'envoi", {
     x: 0.4, y: 0.1, w: 9.2, h: 0.65,
     fontSize: 22, bold: true, color: C.white, fontFace: "Calibri", margin: 0
   });
@@ -380,11 +380,11 @@ const makeShadow = () => ({ type: "outer", blur: 8, offset: 3, angle: 135, color
   });
 
   const recap = [
-    { code: "E020", desc: "Menu Nominateur" },
-    { code: "E021", desc: "Disponibilités JA — suivi par département avec code couleur grade" },
-    { code: "E022", desc: "Nomination — algorithme automatique + 6 règles métier" },
-    { code: "E023", desc: "Convocation officielle + saisie & calcul des frais" },
-    { code: "E024", desc: "Centre d'envoi — 4 types de messages groupés" },
+    { code: "E003", desc: "Menu Nominateur" },
+    { code: "EN13", desc: "Disponibilités JA — suivi par département avec code couleur grade" },
+    { code: "EN14", desc: "Nomination — algorithme automatique + 6 règles métier" },
+    { code: "EN18", desc: "Convocation officielle + saisie & calcul des frais" },
+    { code: "EN15", desc: "Centre d'envoi — 4 types de messages groupés" },
   ];
 
   recap.forEach((r, i) => {

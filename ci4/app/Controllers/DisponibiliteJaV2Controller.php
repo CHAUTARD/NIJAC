@@ -5,8 +5,8 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Copie de E032 (Déclaration de disponibilité JA) pour utilisation
- * ultérieure — code E037, nom provisoire. Duplication à l'identique de
+ * NIJAC – Copie de EN22 (Déclaration de disponibilité JA) pour utilisation
+ * ultérieure — code EN24, nom provisoire. Duplication à l'identique de
  * DisponibiliteJaController, à adapter/renommer quand son usage sera défini.
  *
  * Voir DisponibiliteJaController pour la documentation de fonctionnement.
@@ -68,7 +68,7 @@ class DisponibiliteJaV2Controller extends BaseController
      * Comme resolveIdJa(), mais pour les actions sensibles (Note interne,
      * Défiscalisation, saisie de disponibilité) : un ?id_ja=N en clair sans
      * token n'est accepté que si l'appelant a une session authentifiée
-     * (usage documenté : lien utilisé directement depuis E021 par un
+     * (usage documenté : lien utilisé directement depuis EN13 par un
      * nominateur déjà connecté). Sans token valide ni session, retourne 0 au
      * lieu de faire confiance à n'importe quel entier deviné par un tiers.
      */
@@ -102,7 +102,7 @@ class DisponibiliteJaV2Controller extends BaseController
     public function index()
     {
         // Page publique, mais accessible aussi depuis un onglet ouvert par un
-        // nominateur déjà connecté (E021, target="_blank" — même session
+        // nominateur déjà connecté (EN13, target="_blank" — même session
         // navigateur) : on lit la session si elle existe, sans l'exiger.
         demarrerSessionNijac();
         $u = $_SESSION['utilisateur'] ?? [];

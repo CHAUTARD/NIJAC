@@ -5,7 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Gestion des clubs et associations (E008), portage CI4 de club.php.
+ * NIJAC – Gestion des clubs et associations (EA80), portage CI4 de club.php.
  *
  * Admin uniquement (filtre "adminauth", comme includes/admin_required.php
  * côté legacy).
@@ -68,7 +68,7 @@ class ClubController extends BaseController
             $pdo = getPDO();
 
            // Un nom d'équipe ne doit désigner qu'un seul club (utilisé pour l'affectation
-            // automatique en E011/E017). Posée séparément avec son propre try/catch : si des
+            // automatique en EA82/EA83). Posée séparément avec son propre try/catch : si des
             // doublons existent déjà en base, on ne veut pas faire planter le chargement de
             // l'écran, juste laisser la contrainte non posée jusqu'à correction manuelle.
             $hasUqEquipeNom = (bool) $pdo->query("SHOW INDEX FROM Club WHERE Key_name = 'uq_club_equipenom'")->fetch();

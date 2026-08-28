@@ -10,7 +10,7 @@ use CodeIgniter\HTTP\ResponseInterface;
  * Réplique includes/auth_required.php de l'app legacy NIJAC : accès réservé
  * aux sessions authentifiées (Administrateur, Nominateur ou CSR), contrairement
  * à AdminAuth.php qui exige en plus is_admin. Le rôle JA n'a plus de session
- * (voir AuthController) : son unique écran (E030) est public, tokenisé.
+ * (voir AuthController) : son unique écran (EN20) est public, tokenisé.
  *
  * Session native — voir AdminAuth.php pour le détail de cette contrainte.
  */

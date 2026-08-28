@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Menu CSR (E034)</title>
+    <title>NIJAC – Menu CSR (E004)</title>
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
@@ -19,7 +19,7 @@
             flex-direction: column;
         }
 
-        /* ── En-tête (violet, propre à E034/CSR — distinct du bleu Admin et du vert Nominateur) ── */
+        /* ── En-tête (violet, propre à E004/CSR — distinct du bleu Admin et du vert Nominateur) ── */
         #page-header {
             background: #6a1b9a;
             color: #fff;
@@ -72,7 +72,7 @@
         }
         #toolbar .ts-pwd-warning:hover { color: #900; }
 
-        /* Visible seulement pour un Administrateur qui prévisualise le menu CSR (voir E020) — masqué pour le rôle CSR lui-même. */
+        /* Visible seulement pour un Administrateur qui prévisualise le menu CSR (voir E003) — masqué pour le rôle CSR lui-même. */
         #btn-switch-admin {
             display: <?= $isAdmin ? 'inline-flex' : 'none' ?>;
             align-items: center;
@@ -98,7 +98,7 @@
             gap: 16px;
             padding: 24px;
             flex: 1;
-            /* Contrairement à E002/E020 (assez de boutons pour remplir 2 lignes), E034 n'a
+            /* Contrairement à E002/E003 (assez de boutons pour remplir 2 lignes), E004 n'a
                qu'une seule ligne à moitié remplie : sans ça, elle s'étire pour occuper tout
                l'espace vertical laissé par flex:1 au lieu de ne prendre que sa hauteur de contenu. */
             align-content: start;
@@ -205,7 +205,7 @@
 <div id="page-header" style="display:flex;align-items:center;gap:.5rem;">
     <div style="flex:1;min-width:0;">
         <i class="bi bi-grid-3x3-gap-fill me-2"></i>Menu CSR
-        <small class="opacity-75 ms-2">(E034)</small>
+        <small class="opacity-75 ms-2">(E004)</small>
     </div>
 </div>
 
@@ -218,21 +218,21 @@
 <div id="menu-grid">
 
     <a href="<?= site_url('club-csr') ?>" class="menu-btn btn-club-csr">
-        <span class="btn-code">E035</span>
+        <span class="btn-code">ES31</span>
         <div class="btn-icon"><img src="<?= base_url('img/Association.png') ?>" alt="Club CSR"></div>
         <span>Club CSR</span>
         <span class="btn-desc">Liste des clubs et envoi d'un email aux correspondants sélectionnés</span>
     </a>
 
     <a href="<?= site_url('reengagement-csr') ?>" class="menu-btn btn-messagerie">
-        <span class="btn-code">E040</span>
+        <span class="btn-code">ES32</span>
         <div class="btn-icon"><img src="<?= base_url('img/Messagerie.png') ?>" alt="Message Réengagement"></div>
         <span>Message Réengagement</span>
         <span class="btn-desc">Modifier le message envoyé aux correspondants de club</span>
     </a>
 
     <a href="<?= site_url('souhait-equipe') ?>" class="menu-btn btn-souhait-equipe">
-        <span class="btn-code">E044</span>
+        <span class="btn-code">ES33</span>
         <div class="btn-icon"><img src="<?= base_url('img/Souhait.png') ?>" alt="Souhaits des équipes"></div>
         <span>Souhaits des équipes</span>
         <span class="btn-desc">Jour souhaité et arbitrage des équipes R3M / R4M</span>

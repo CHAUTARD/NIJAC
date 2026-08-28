@@ -5,10 +5,10 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Gestion des rencontres (E042) : édition directe de la table
+ * NIJAC – Gestion des rencontres (EA95) : édition directe de la table
  * `rencontre` (Date, Heure, Poule, Journee), avec filtres Équipe domicile,
  * Équipe extérieure, Poule, Journée, Date. Distinct des écrans d'import
- * (E011/E017), qui créent les rencontres — celui-ci corrige un enregistrement
+ * (EA82/EA83), qui créent les rencontres — celui-ci corrige un enregistrement
  * déjà en base sans repasser par un import.
  *
  * Admin uniquement (filtre "adminauth"). Pas de Model : jointures equipe/

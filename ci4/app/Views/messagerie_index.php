@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Gestion des messages (E026)</title>
+    <title>NIJAC – Gestion des messages (EA93)</title>
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-liste-edit.css') ?>">
 
     <style>
-        /* Violet quand ouvert depuis le menu CSR (E034), vert Nominateur sinon — voir isCsr(). */
+        /* Violet quand ouvert depuis le menu CSR (E004), vert Nominateur sinon — voir isCsr(). */
         #page-header { background: <?= $isCsr ? '#6a1b9a' : '#2e7d32' ?>; }
         #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
         #panel-liste { width: 44%; }
@@ -52,7 +52,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'envelope-fill', 'phTitle' => 'Gestion des messages', 'phCode' => 'E026',
+    'phIcon' => 'envelope-fill', 'phTitle' => 'Gestion des messages', 'phCode' => 'EA93',
     'phCrumbLabel' => $isCsr ? 'CSR' : 'Nominateur',
     'phCrumbUrl'   => site_url($isCsr ? 'csr-menu' : 'nominateur-menu'),
     'phBackUrl'    => site_url($isCsr ? 'csr-menu' : 'nominateur-menu'),
@@ -202,7 +202,7 @@
                 <code data-marqueur="{URL_ADRESSE_JA}" class="me-2">{URL_ADRESSE_JA}</code>
             </div>
             <div>
-                <span class="badge me-1 fw-normal" style="background:#c2185b;">Désidératas club (E027 / E035 CSR)</span>
+                <span class="badge me-1 fw-normal" style="background:#c2185b;">Désidératas club (EN12 / ES31 CSR)</span>
                 <code data-marqueur="{NOM_CLUB}" class="me-2">{NOM_CLUB}</code>
                 <code data-marqueur="{CORR_NOM}" class="me-2">{CORR_NOM}</code>
                 <code data-marqueur="{URL_DESIDERATA}" class="me-2">{URL_DESIDERATA}</code>

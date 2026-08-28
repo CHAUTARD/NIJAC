@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Menu Nominateur (E020)</title>
+    <title>NIJAC – Menu Nominateur (E003)</title>
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
@@ -19,7 +19,7 @@
             flex-direction: column;
         }
 
-        /* ── En-tête (vert, propre à E020/Nominateur) ── */
+        /* ── En-tête (vert, propre à E003/Nominateur) ── */
         #page-header {
             background: #2e7d32;
             color: #fff;
@@ -304,7 +304,7 @@
 <div id="page-header" style="display:flex;align-items:center;gap:.5rem;">
     <div style="flex:1;min-width:0;">
         <i class="bi bi-grid-3x3-gap-fill me-2"></i>Menu nominateur
-        <small class="opacity-75 ms-2">(E020)</small>
+        <small class="opacity-75 ms-2">(E003)</small>
     </div>
 </div>
 
@@ -372,7 +372,7 @@
     <!-- Ligne 1 -->
     <div class="menu-btn-wrap">
         <a href="<?= site_url('jugearbitre') ?>" class="menu-btn btn-ja">
-            <span class="btn-code">E007</span>
+            <span class="btn-code">EN11</span>
             <div class="btn-icon"><img src="<?= base_url('img/Arbitre_filet.png') ?>" alt="Juge-Arbitre"></div>
             <span>Juge-Arbitre</span>
             <span class="btn-desc">Gérer la liste des juges-arbitres, grades et coordonnées</span>
@@ -381,7 +381,7 @@
 
     <div class="menu-btn-wrap">
         <a href="<?= site_url('desiderata-clubs') ?>" class="menu-btn btn-r34">
-            <span class="btn-code">E027</span>
+            <span class="btn-code">EN12</span>
             <div class="btn-icon"><img src="<?= base_url('img/R3_4.png') ?>" alt="Désidératas clubs"></div>
             <span>Désidératas clubs</span>
             <span class="btn-desc">Envoi du questionnaire de désidératas (PN à R4) aux clubs</span>
@@ -390,7 +390,7 @@
 
     <div class="menu-btn-wrap">
         <a href="<?= site_url('disponibilites') ?>" class="menu-btn btn-correspondant">
-            <span class="btn-code">E021</span>
+            <span class="btn-code">EN13</span>
             <div class="btn-icon"><img src="<?= base_url('img/Dispo.png') ?>" alt="Disponibilités JA"></div>
             <span>Disponibilités JA</span>
             <span class="btn-desc">Saisir ou modifier les disponibilités d'un JA par département</span>
@@ -399,7 +399,7 @@
 
     <div class="menu-btn-wrap">
         <a href="<?= site_url('nomination') ?>" class="menu-btn btn-nomination">
-            <span class="btn-code">E022</span>
+            <span class="btn-code">EN14</span>
             <div class="btn-icon"><img src="<?= base_url('img/Nomination.png') ?>" alt="Nomination JA" style="max-width:220px;max-height:220px;width:220px;height:220px;"></div>
             <span>Nomination JA</span>
             <span class="btn-desc">Affecter les JA aux rencontres et valider les nominations</span>
@@ -411,7 +411,7 @@
 
     <div class="menu-btn-wrap">
         <a href="<?= site_url('centrenvoye') ?>" class="menu-btn btn-envoi">
-            <span class="btn-code">E024</span>
+            <span class="btn-code">EN15</span>
             <div class="btn-icon"><img src="<?= base_url('img/Centrenvoye.png') ?>" alt="Centre d'envoi"></div>
             <span>Centre d'envoi</span>
             <span class="btn-desc">Envoyer les messages aux JA et correspondants</span>
@@ -422,7 +422,7 @@
 
     <div class="menu-btn-wrap">
         <a href="<?= site_url('compta') ?>" class="menu-btn btn-envoi">
-            <span class="btn-code">E025</span>
+            <span class="btn-code">EN16</span>
             <div class="btn-icon"><img src="<?= base_url('img/Compta.png') ?>" alt="Comptabilite"></div>
             <span>Comptabilité</span>
             <span class="btn-desc">Génération des pièces pour la comptabilité</span>
@@ -431,7 +431,7 @@
 
     <div class="menu-btn-wrap">
         <a href="<?= site_url('stats-ja') ?>" class="menu-btn btn-ja">
-            <span class="btn-code">E028</span>
+            <span class="btn-code">EN17</span>
             <div class="btn-icon"><img src="<?= base_url('img/Stat_JA.png') ?>" alt="Statistiques JA"></div>
             <span>Statistiques JA</span>
             <span class="btn-desc">Arbitrages, kilomètres et frais par JA sur une période</span>
@@ -463,7 +463,7 @@
             </div>
             <div class="modal-footer py-2">
                 <a href="<?= site_url('nomination') ?>" class="btn btn-sm btn-primary">
-                    <i class="bi bi-person-check-fill me-1"></i>Aller à la Nomination (E022)
+                    <i class="bi bi-person-check-fill me-1"></i>Aller à la Nomination (EN14)
                 </a>
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fermer</button>
             </div>
@@ -484,7 +484,7 @@
             </div>
             <div class="modal-footer py-2">
                 <a href="<?= site_url('nomination') ?>" class="btn btn-sm btn-primary">
-                    <i class="bi bi-person-check-fill me-1"></i>Aller à la Nomination (E022)
+                    <i class="bi bi-person-check-fill me-1"></i>Aller à la Nomination (EN14)
                 </a>
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fermer</button>
             </div>

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Configuration (E015)</title>
+    <title>NIJAC – Configuration (EA91)</title>
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
@@ -281,7 +281,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'gear-fill', 'phTitle' => 'Configuration générale', 'phCode' => 'E015',
+    'phIcon' => 'gear-fill', 'phTitle' => 'Configuration générale', 'phCode' => 'EA91',
     'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
 ]) ?>
 
@@ -487,7 +487,7 @@
 
             <hr style="margin:1.2rem 0;">
             <p style="font-size:.85rem;color:#374151;margin-bottom:1rem;">
-                <i class="bi bi-journal-text me-1"></i><strong>Paramètres comptables EBP</strong> — utilisés pour l'export du journal AC (E025).
+                <i class="bi bi-journal-text me-1"></i><strong>Paramètres comptables EBP</strong> — utilisés pour l'export du journal AC (EN16).
             </p>
 
             <div class="email-dev-group mb-3">
@@ -537,7 +537,7 @@
 
             <hr style="margin:1.2rem 0;">
             <p style="font-size:.85rem;color:#374151;margin-bottom:1rem;">
-                <i class="bi bi-calendar2-range me-1"></i><strong>Phases de saison</strong> — bornes utilisées pour le filtre rapide dans E025 (format MM/JJ).
+                <i class="bi bi-calendar2-range me-1"></i><strong>Phases de saison</strong> — bornes utilisées pour le filtre rapide dans EN16 (format MM/JJ).
             </p>
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
@@ -668,7 +668,7 @@
             <i class="bi bi-archive-fill param-icon"></i>
             <div>
                 <h2>Sauvegardes</h2>
-                <small>Sauvegarde totale de la base (E016)</small>
+                <small>Sauvegarde totale de la base (EA85)</small>
             </div>
         </div>
         <div class="param-card-body">

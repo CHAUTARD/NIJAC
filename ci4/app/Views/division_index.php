@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Gestion des divisions (E010)</title>
+    <title>NIJAC – Gestion des divisions (EA89)</title>
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
@@ -20,7 +20,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'diagram-3-fill', 'phTitle' => 'Gestion des divisions', 'phCode' => 'E010',
+    'phIcon' => 'diagram-3-fill', 'phTitle' => 'Gestion des divisions', 'phCode' => 'EA89',
     'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
 ]) ?>
 

@@ -3,16 +3,16 @@
 namespace App\Controllers;
 
 /**
- * NIJAC – Message Réengagement CSR (E040), remplace le lien vers E026 (Gestion des
- * messages) dans le menu CSR (E034).
+ * NIJAC – Message Réengagement CSR (ES32), remplace le lien vers EA93 (Gestion des
+ * messages) dans le menu CSR (E004).
  *
- * Coquille légère : affiche uniquement la partie droite (formulaire) d'E026,
+ * Coquille légère : affiche uniquement la partie droite (formulaire) d'EA93,
  * réduite au seul message Réengagement (Id_Messagerie = 6) et à un bouton
  * Enregistrer. Aucune logique CRUD ici — les appels AJAX de la vue tapent
  * directement les routes existantes `messagerie/data/6` (GET) et `messagerie/6`
  * (PUT), déjà restreintes au message n°6 pour le rôle CSR côté
  * MessagerieController (voir isCsr()/ID_MESSAGE_CSR). Accès rôle CSR +
- * Administrateur (filtre "csrauth"), comme E034/E035.
+ * Administrateur (filtre "csrauth"), comme E004/ES31.
  */
 class ReengagementCsrController extends BaseController
 {

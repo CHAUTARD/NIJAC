@@ -7,7 +7,7 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 
 /**
- * NIJAC – Import Rencontres Nationales (E017), portage CI4 de
+ * NIJAC – Import Rencontres Nationales (EA83), portage CI4 de
  * import_rencontres_nat.php.
  *
  * Deux méthodes d'alimentation de la table equipe_nationale, partagées par
@@ -148,11 +148,11 @@ class ImportRencontresNatController extends BaseController
         try {
             return $fn();
         } catch (\PDOException $e) {
-            error_log('[NIJAC] E017 PDO : ' . $e->getMessage());
+            error_log('[NIJAC] EA83 PDO : ' . $e->getMessage());
 
             return $this->response->setJSON(['ok' => false, 'err' => 'Erreur BDD : ' . $e->getMessage()]);
         } catch (\Throwable $e) {
-            error_log('[NIJAC] E017 : ' . $e->getMessage());
+            error_log('[NIJAC] EA83 : ' . $e->getMessage());
 
             return $this->response->setJSON(['ok' => false, 'err' => $e->getMessage()]);
         }
@@ -288,7 +288,7 @@ class ImportRencontresNatController extends BaseController
         return '';
     }
 
-    /** Dossier de dépôt des fichiers Excel/texte FFTT (déposés par FTP en production, comme Importation/Rencontres/*.xlsx pour E011). */
+    /** Dossier de dépôt des fichiers Excel/texte FFTT (déposés par FTP en production, comme Importation/Rencontres/*.xlsx pour EA82). */
     private function excelNatDir(): string
     {
         return __DIR__ . '/../../../Importation/Rencontres/Nationale/';

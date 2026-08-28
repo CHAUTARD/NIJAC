@@ -3,7 +3,7 @@
 namespace App\Controllers;
 
 /**
- * NIJAC – Menu CSR (E034), rôle Commission Sportive Régionale.
+ * NIJAC – Menu CSR (E004), rôle Commission Sportive Régionale.
  *
  * Pas d'accès BDD : lit uniquement $_SESSION['utilisateur']. Protégé par le filtre "csrauth"
  * (rôle CSR ou Administrateur — voir CsrAuth.php).

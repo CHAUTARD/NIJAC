@@ -5,18 +5,18 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Test API FFTT (E018), portage CI4 de fftt_test.php.
+ * NIJAC – Test API FFTT (EA96), portage CI4 de fftt_test.php.
  *
  * Interface de diagnostic de l'API FFTT (Smartping v2) — appel manuel de
  * chaque endpoint, lecture seule, aucune écriture en base. Tout passe par
  * App\Libraries\FfttRawClient/getFfttRawClient(), comme les écrans d'import
- * réels (E007, E008, E005, E011, E017) : ce diagnostic ne couvre que les
+ * réels (EN11, EA80, EA81, EA82, EA83) : ce diagnostic ne couvre que les
  * endpoints réellement utilisés en production, pas l'intégralité de
  * l'ancienne façade alamirault/fftt-api (retirée — cURL natif, plus de
  * dépendance Composer pour l'accès à l'API FFTT).
  *
  * Accès Administrateur + restriction supplémentaire login === 'CHAUTARD'
- * (même règle que E099), vérifiée manuellement en plus du filtre "adminauth".
+ * (même règle que EA98), vérifiée manuellement en plus du filtre "adminauth".
  */
 class FfttTestController extends BaseController
 {
@@ -417,7 +417,7 @@ class FfttTestController extends BaseController
     }
 
     /**
-     * xml_club_b : découvert via BugSpid (E043) pour retrouver le vrai club
+     * xml_club_b : découvert via BugSpid (EA97) pour retrouver le vrai club
      * FFTT correspondant à un club dupliqué sous un Id_Club fantôme —
      * recherche par nom (contrairement à xml_club_detail/xml_club_dep2 qui
      * exigent un numéro FFTT exact). Le paramètre "ville" sert aussi de

@@ -5,11 +5,11 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Club CSR (E035), variante de la Gestion des clubs (E008) pour le rôle CSR
+ * NIJAC – Club CSR (ES31), variante de la Gestion des clubs (EA80) pour le rôle CSR
  * (Commission Sportive Régionale) : même liste de clubs, sans la synchronisation FFTT ni le
  * filtre "Plusieurs salles", avec une case à cocher par ligne et un envoi groupé d'email aux
  * correspondants des clubs sélectionnés — message n°6 (Réengagements), le même que celui déjà
- * utilisé par E027 (Désidératas clubs), éditable via E026 où le rôle CSR n'a accès qu'à celui-ci.
+ * utilisé par EN12 (Désidératas clubs), éditable via EA93 où le rôle CSR n'a accès qu'à celui-ci.
  *
  * Accès rôle CSR ou Administrateur (filtre "csrauth").
  *
@@ -79,7 +79,7 @@ class ClubCsrController extends BaseController
             // Tous les clubs par défaut (filtre "Club Régional" appliqué côté vue) — EstRegional
             // signale un club ayant au moins une équipe en Régionale (code Division commençant
             // par R, ex. R1M) ou Pré-Nationale (PN, ex. PNM) — codes définis dans la table
-            // division, voir E011/E017.
+            // division, voir EA82/EA83.
             $rows = $pdo->query(
                 "SELECT c.Id_Club, c.Nom, c.EquipeNom,
                         c.CorNom, c.CorEmail, c.CorTelephone,
@@ -139,7 +139,7 @@ class ClubCsrController extends BaseController
 
     /**
      * Envoi groupé du message système "CSR" aux correspondants des clubs sélectionnés — même
-     * schéma que DesiderataClubsController::envoyer() (E027), gabarit et destinataires différents.
+     * schéma que DesiderataClubsController::envoyer() (EN12), gabarit et destinataires différents.
      */
     public function envoyer(): ResponseInterface
     {
@@ -158,10 +158,10 @@ class ClubCsrController extends BaseController
             }
 
             // Message n°6 (Réengagements) : celui destiné aux correspondants de club, déjà utilisé
-            // par E027 (Désidératas clubs) — édité via E026, où le rôle CSR n'a accès qu'à celui-ci.
+            // par EN12 (Désidératas clubs) — édité via EA93, où le rôle CSR n'a accès qu'à celui-ci.
             $msgRow = $pdo->query('SELECT Sujet, Message FROM messagerie WHERE Id_Messagerie = 6')->fetch();
             if (!$msgRow) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Modèle de message n°6 introuvable (à créer dans E026 — Gestion des messages).']);
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Modèle de message n°6 introuvable (à créer dans EA93 — Gestion des messages).']);
             }
 
             $base    = site_url('desiderata-club');

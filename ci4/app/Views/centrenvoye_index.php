@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Centre d'envoi (E024)</title>
+    <title>NIJAC – Centre d'envoi (EN15)</title>
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
@@ -208,7 +208,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'send-fill', 'phTitle' => "Centre d'envoi", 'phCode' => 'E024',
+    'phIcon' => 'send-fill', 'phTitle' => "Centre d'envoi", 'phCode' => 'EN15',
     'phCrumbLabel' => 'Nominateur', 'phCrumbUrl' => site_url('nominateur-menu'), 'phBackUrl' => site_url('nominateur-menu'),
     'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
 ]) ?>
@@ -466,11 +466,11 @@ function chargerModele(type) {
     const m = MODELES[type] || { sujet: '', message: '', cc: false, replyto: false };
     $('#txt-sujet').val(m.sujet || '');
     $('#txt-message').val(m.message || '');
-    // Cc coché par défaut selon le modèle (E026), mais toujours modifiable
+    // Cc coché par défaut selon le modèle (EA93), mais toujours modifiable
     // avant l'envoi — la case reste visible même si le modèle a Cc désactivé.
     $('#chk-cc').prop('checked', !!m.cc);
     $('#txt-cc').val(MON_EMAIL).prop('disabled', !m.cc);
-    // Reply-To coché par défaut selon le modèle (E026) — même principe que Cc,
+    // Reply-To coché par défaut selon le modèle (EA93) — même principe que Cc,
     // mais l'adresse est toujours celle du nominateur connecté (champ lecture seule).
     $('#chk-replyto').prop('checked', !!m.replyto);
     $('#txt-replyto').val(MON_EMAIL).prop('disabled', !m.replyto);

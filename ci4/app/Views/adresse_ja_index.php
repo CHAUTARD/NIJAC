@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="csrf-token" content="<?= csrf_hash() ?>">
-<title>Adresse domicile JA (E029)<?= $ja ? ' – ' . esc($ja['Nom'] . ' ' . $ja['Prenom']) : '' ?></title>
+<title>Adresse domicile JA (EN19)<?= $ja ? ' – ' . esc($ja['Nom'] . ' ' . $ja['Prenom']) : '' ?></title>
 <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
 <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
 <style>
@@ -153,7 +153,7 @@
 
 <div class="page-header">
     <h1><i class="bi bi-geo-alt-fill me-2"></i>Adresse domicile – Juge-Arbitre</h1>
-    <span class="badge-ecran">E029</span>
+    <span class="badge-ecran">EN19</span>
 </div>
 
 <div class="container-fluid">

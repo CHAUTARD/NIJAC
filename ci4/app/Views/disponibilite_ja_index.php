@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Disponibilités JA (E032)</title>
+    <title>NIJAC – Disponibilités JA (EN22)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
@@ -198,7 +198,7 @@
 <!-- ── En-tête unifié ─────────────────────────────────────────────────────── -->
 <div id="page-header">
     <i class="bi bi-calendar2-check fs-5 flex-shrink-0"></i>
-    <h1>Disponibilités JA <small class="opacity-75" style="font-size:.75rem;">(E032)</small></h1>
+    <h1>Disponibilités JA <small class="opacity-75" style="font-size:.75rem;">(EN22)</small></h1>
     <span id="ja-info-bar" style="display:none;align-items:center;gap:.65rem;flex-wrap:wrap">
         <span class="ja-header-sep">|</span>
         <i class="bi bi-person-badge flex-shrink-0" style="opacity:.7"></i>

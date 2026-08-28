@@ -5,12 +5,12 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Calendrier du championnat régional (E014), nouvel écran.
+ * NIJAC – Calendrier du championnat régional (EA84), nouvel écran.
  *
  * CRUD admin du calendrier (date/heure) des rencontres régionales, table
  * `competition_regionale` — voir DisponibilitesController pour la création
  * de la table et le seed initial (fichier "Disponibilités JA 2ème phase",
- * Importation/), et DispoRegionaleJaController (E036) qui l'exploite côté JA.
+ * Importation/), et DispoRegionaleJaController (EN23) qui l'exploite côté JA.
  *
  * Pas de Model : table à 2 colonnes, reste au raw PDO comme le contrôleur qui
  * l'a introduite (DisponibilitesController) plutôt que de mélanger les deux

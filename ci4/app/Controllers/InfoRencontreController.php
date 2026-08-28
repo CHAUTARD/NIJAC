@@ -5,7 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Fiche personnelle du Juge-Arbitre (E030), portage CI4 de
+ * NIJAC – Fiche personnelle du Juge-Arbitre (EN20), portage CI4 de
  * JA/info_rencontre.php.
  *
  * Écran public, identifié par un lien tokenisé (?ja=TOKEN, Obfuscator) reçu
@@ -29,7 +29,7 @@ class InfoRencontreController extends BaseController
 
     /**
      * Résout le JA ciblé :
-     *   - ?ja=TOKEN valide → accès public, sans session (comme E029/E031/E032) —
+     *   - ?ja=TOKEN valide → accès public, sans session (comme EN19/EN21/EN22) —
      *     c'est ainsi qu'un JA consulte sa propre fiche depuis un lien reçu par email,
      *     il n'y a plus de rôle JA ni de login dédié (voir AuthController::index()).
      *   - sinon, Administrateur/Nominateur connecté → son propre menu.

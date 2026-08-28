@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Rencontres Nationales (E017)</title>
+    <title>NIJAC – Rencontres Nationales (EA83)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
@@ -96,7 +96,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'trophy-fill', 'phTitle' => 'Rencontres Nationales', 'phCode' => 'E017',
+    'phIcon' => 'trophy-fill', 'phTitle' => 'Rencontres Nationales', 'phCode' => 'EA83',
     'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
 ]) ?>
 

@@ -5,7 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Configuration générale (E015), portage CI4 de configuration.php.
+ * NIJAC – Configuration générale (EA91), portage CI4 de configuration.php.
  *
  * Gestion des paramètres applicatifs stockés dans la table `configuration`
  * (clé/valeur). Administrateur uniquement (filtre "adminauth"). Pas de Model :
@@ -41,7 +41,7 @@ class ConfigurationController extends BaseController
 
         $pdo = getPDO();
         // Auto-heal : la ligne n'est sinon créée qu'à la première sauvegarde
-        // totale (E016) ou au premier enregistrement manuel de ce champ.
+        // totale (EA85) ou au premier enregistrement manuel de ce champ.
         $pdo->exec("INSERT IGNORE INTO configuration (cle, valeur) VALUES ('backup_full_garder', '5')");
         try {
             $etatCourant       = getConfig('etat_logiciel', 'Developpement');

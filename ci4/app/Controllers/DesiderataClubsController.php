@@ -5,14 +5,14 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Désidératas clubs (E027), portage CI4 de Nominateur/JA_R3R4.php.
+ * NIJAC – Désidératas clubs (EN12), portage CI4 de Nominateur/JA_R3R4.php.
  *
  * Sélection des clubs ayant des équipes PN à R4M et envoi groupé du
  * questionnaire de désidératas de saison (message système n°6) contenant un
- * lien vers le formulaire public E023 (site_url('desiderata-club')).
+ * lien vers le formulaire public EN18 (site_url('desiderata-club')).
  *
  * Accessible Nominateur ou Administrateur (filtre "auth"), lien depuis le menu Nominateur
- * (E020) — plus accessible depuis le menu CSR (E034). Pas de Model : agrégations
+ * (E003) — plus accessible depuis le menu CSR (E004). Pas de Model : agrégations
  * GROUP_CONCAT et filtrage dynamique par département — reste en raw PDO comme le reste de
  * cette famille d'écrans.
  */
@@ -220,7 +220,7 @@ class DesiderataClubsController extends BaseController
             $moi    = $_SESSION['utilisateur'] ?? [];
             $msgRow = $pdo->query('SELECT Sujet, Message FROM messagerie WHERE Id_Messagerie = 6')->fetch();
             if (!$msgRow) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Modèle de message n°6 introuvable (à créer dans E026 — Gestion des messages).']);
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Modèle de message n°6 introuvable (à créer dans EA93 — Gestion des messages).']);
             }
 
             $idClub = trim($this->request->getGet('club') ?? '');
@@ -274,7 +274,7 @@ class DesiderataClubsController extends BaseController
 
             $msgRow = $pdo->query('SELECT Sujet, Message FROM messagerie WHERE Id_Messagerie = 6')->fetch();
             if (!$msgRow) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Modèle de message n°6 introuvable (à créer dans E026 — Gestion des messages).']);
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Modèle de message n°6 introuvable (à créer dans EA93 — Gestion des messages).']);
             }
 
             $base    = site_url('desiderata-club');

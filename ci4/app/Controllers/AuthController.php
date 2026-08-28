@@ -6,9 +6,9 @@ namespace App\Controllers;
  * NIJAC – Page de connexion (E001), portage CI4 de index.php.
  *
  * Recherche Utilisateur par Login/Password (Administrateur, Nominateur, CSR).
- * Le rôle JA n'a plus de login : ses écrans (E029/E030/E031/E032) sont tous
+ * Le rôle JA n'a plus de login : ses écrans (EN19/EN20/EN21/EN22) sont tous
  * publics, identifiés par un lien tokenisé (Obfuscator) envoyé par email —
- * voir InfoRencontreController::resolveContext() pour E030.
+ * voir InfoRencontreController::resolveContext() pour EN20.
  * Session native (jamais le service Session de CI4) — voir AdminAuth.php
  * pour l'explication complète de l'incompatibilité des deux mécanismes.
  */
@@ -65,7 +65,7 @@ class AuthController extends BaseController
                             // Casse canonique de la base (Login a une collation *_ci,
                             // insensible à la casse) — pas la saisie brute de l'utilisateur,
                             // dont la casse peut différer et casser les comparaisons
-                            // strictes === 'CHAUTARD' (E018, E099, isChautard E002/E017).
+                            // strictes === 'CHAUTARD' (EA96, EA98, isChautard E002/EA83).
                             'login'          => $row['Login'],
                             'nom'            => $row['Nom'],
                             'prenom'         => $row['Prenom'],

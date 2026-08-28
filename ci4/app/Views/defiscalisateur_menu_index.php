@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Menu Défiscalisateur (E038)</title>
+    <title>NIJAC – Menu Défiscalisateur (E005)</title>
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
@@ -19,7 +19,7 @@
             flex-direction: column;
         }
 
-        /* ── En-tête (orange, propre à E038/Défiscalisateur — distinct du bleu Admin,
+        /* ── En-tête (orange, propre à E005/Défiscalisateur — distinct du bleu Admin,
            du vert Nominateur et du violet CSR) ── */
         #page-header {
             background: #e65100;
@@ -91,7 +91,7 @@
         }
         #btn-switch-admin:hover { background: #0f2550; color: #fff; }
 
-        /* ── Grille de boutons (mêmes classes et même style que E002/E034, pour une
+        /* ── Grille de boutons (mêmes classes et même style que E002/E004, pour une
            apparence identique) ── */
         #menu-grid {
             display: grid;
@@ -99,7 +99,7 @@
             gap: 16px;
             padding: 24px;
             flex: 1;
-            /* E038 n'a qu'une seule ligne à moitié remplie : sans ça, elle s'étire pour
+            /* E005 n'a qu'une seule ligne à moitié remplie : sans ça, elle s'étire pour
                occuper tout l'espace vertical laissé par flex:1. */
             align-content: start;
         }
@@ -203,7 +203,7 @@
 <div id="page-header" style="display:flex;align-items:center;gap:.5rem;">
     <div style="flex:1;min-width:0;">
         <i class="bi bi-grid-3x3-gap-fill me-2"></i>Menu Défiscalisateur
-        <small class="opacity-75 ms-2">(E038)</small>
+        <small class="opacity-75 ms-2">(E005)</small>
     </div>
 </div>
 
@@ -216,7 +216,7 @@
 <div id="menu-grid">
 
     <a href="<?= site_url('defiscalisation') ?>" class="menu-btn btn-defiscalisation">
-        <span class="btn-code">E039</span>
+        <span class="btn-code">ED51</span>
         <div class="btn-icon"><img src="<?= base_url('img/Defiscalisation.png') ?>" alt="Défiscalisation JA"></div>
         <span>Défiscalisation JA</span>
         <span class="btn-desc">Frais cumulés des JA défiscalisés sur une période, export CSV</span>

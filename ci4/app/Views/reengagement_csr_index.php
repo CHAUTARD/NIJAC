@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Message Réengagement (E040)</title>
+    <title>NIJAC – Message Réengagement (ES32)</title>
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-liste-edit.css') ?>">
 
     <style>
-        /* Violet, propre au rôle CSR — voir E034/E035. */
+        /* Violet, propre au rôle CSR — voir E004/ES31. */
         #page-header { background: #6a1b9a; }
         #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
 
@@ -78,7 +78,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'envelope-fill', 'phTitle' => 'Message Réengagement', 'phCode' => 'E040',
+    'phIcon' => 'envelope-fill', 'phTitle' => 'Message Réengagement', 'phCode' => 'ES32',
     'phCrumbLabel' => 'CSR', 'phCrumbUrl' => site_url('csr-menu'), 'phBackUrl' => site_url('csr-menu'),
 ]) ?>
 
@@ -90,7 +90,7 @@
 <!-- ── Deux colonnes : formulaire à gauche, rendu HTML en direct à droite ── -->
 <div id="split-container">
 
-    <!-- ── Formulaire (partie droite d'E026, réduite au message Réengagement) ── -->
+    <!-- ── Formulaire (partie droite d'EA93, réduite au message Réengagement) ── -->
     <div id="panel-form">
 
         <div class="mb-2 flex-grow-1 d-flex flex-column">
@@ -124,7 +124,7 @@
                 <code data-marqueur="{URL_INFO_RENCONTRE}" class="me-2">{URL_INFO_RENCONTRE}</code>
             </div>
             <div>
-                <span class="badge me-1 fw-normal" style="background:#c2185b;">Désidératas club (E027 / E035 CSR)</span>
+                <span class="badge me-1 fw-normal" style="background:#c2185b;">Désidératas club (EN12 / ES31 CSR)</span>
                 <code data-marqueur="{NOM_CLUB}" class="me-2">{NOM_CLUB}</code>
                 <code data-marqueur="{CORR_NOM}" class="me-2">{CORR_NOM}</code>
                 <code data-marqueur="{URL_DESIDERATA}" class="me-2">{URL_DESIDERATA}</code>

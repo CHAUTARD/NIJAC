@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Import Rencontres FFTT (E011)</title>
+    <title>NIJAC – Import Rencontres FFTT (EA82)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
@@ -154,7 +154,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'trophy-fill', 'phTitle' => 'Import des rencontres FFTT', 'phCode' => 'E011',
+    'phIcon' => 'trophy-fill', 'phTitle' => 'Import des rencontres FFTT', 'phCode' => 'EA82',
     'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
 ]) ?>
 
@@ -692,7 +692,7 @@ function rafraichirEtatTables(afficherMsg) {
             html += `<div class="alert alert-warning py-1 px-2 mb-0" style="font-size:.82rem;">
                 <i class="bi bi-exclamation-triangle-fill me-1"></i>
                 <strong>Tables non vides.</strong> Avant le premier import de la saison, utilisez
-                <a href="<?= site_url('clean') ?>" target="_blank" class="alert-link">Administrateur → Nouvelle saison (E016)</a>
+                <a href="<?= site_url('clean') ?>" target="_blank" class="alert-link">Administrateur → Nouvelle saison (EA85)</a>
                 pour vider et sauvegarder ces tables.
             </div>`;
         } else {

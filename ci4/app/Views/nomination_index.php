@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="csrf-token" content="<?= csrf_hash() ?>">
-<title>NIJAC – Nomination JA (E022)</title>
+<title>NIJAC – Nomination JA (EN14)</title>
 <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
 <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
 <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
@@ -127,7 +127,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'person-check-fill', 'phTitle' => 'Nomination des Juges-Arbitres', 'phCode' => 'E022',
+    'phIcon' => 'person-check-fill', 'phTitle' => 'Nomination des Juges-Arbitres', 'phCode' => 'EN14',
     'phCrumbLabel' => 'Nominateur', 'phCrumbUrl' => site_url('nominateur-menu'), 'phBackUrl' => site_url('nominateur-menu'),
     'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
 ]) ?>
@@ -185,10 +185,10 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
         </div>
         <div id="liste-candidats"></div>
 
-        <!-- Rencontre en arbitrage club : éditeur du message n°7 (comme E024) + envoi -->
+        <!-- Rencontre en arbitrage club : éditeur du message n°7 (comme EN15) + envoi -->
         <div id="panel-arbitre-club" style="display:none;">
             <div class="small text-muted mb-2">
-                <i class="bi bi-info-circle me-1"></i>Rencontre en <strong>arbitrage club</strong> : envoyez au correspondant la demande de désignation du juge-arbitre (message&nbsp;n°7). Le lien renvoie vers la page publique E045.
+                <i class="bi bi-info-circle me-1"></i>Rencontre en <strong>arbitrage club</strong> : envoyez au correspondant la demande de désignation du juge-arbitre (message&nbsp;n°7). Le lien renvoie vers la page publique EN25.
             </div>
             <label class="form-label small mb-1" for="ac-sujet">Sujet</label>
             <input type="text" id="ac-sujet" class="form-control form-control-sm mb-2" maxlength="150">
@@ -652,7 +652,7 @@ function chargerPanelArbitreClub(idRenc) {
         $('#ac-sujet').val(res.sujet || '').prop('disabled', false);
         $('#ac-message').val(res.message || '').prop('disabled', false);
         if (!res.corr_email) {
-            $('#ac-status').addClass('text-danger').text('Aucun email de correspondant pour ce club (à compléter en E008).');
+            $('#ac-status').addClass('text-danger').text('Aucun email de correspondant pour ce club (à compléter en EA80).');
         } else {
             $('#ac-envoyer').prop('disabled', false);
             $('#ac-status').text('Destinataire : ' + (res.corr_nom || res.corr_email));

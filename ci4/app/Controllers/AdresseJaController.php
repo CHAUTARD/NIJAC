@@ -5,7 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Adresse domicile JA (E029), portage CI4 de Nominateur/adresse_ja.php.
+ * NIJAC – Adresse domicile JA (EN19), portage CI4 de Nominateur/adresse_ja.php.
  *
  * Page PUBLIQUE (sans authentification), tokenisée par le paramètre `?ja=TOKEN`
  * (Obfuscator) — un JA renseigne ou corrige son code postal/ville sans se

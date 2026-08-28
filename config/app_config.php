@@ -111,7 +111,7 @@ function getEmailDestinataire(string $email): string
 
 /**
  * Retourne le nombre de jours restants avant l'expiration des identifiants API FFTT
- * (clé de config 'fftt_api_expiration', format YYYY-MM-DD — voir E015/E018), ou null si
+ * (clé de config 'fftt_api_expiration', format YYYY-MM-DD — voir EA91/EA96), ou null si
  * la clé n'est pas configurée. Négatif si la date est déjà dépassée.
  */
 function getFfttApiJoursAvantExpiration(): ?int
@@ -160,7 +160,7 @@ function ajouterTypeMessagerie(\PDO $pdo, string $type): void
 
 /**
  * Ajoute le rôle 'CSR' (Commission Sportive Régionale) à l'ENUM utilisateur.Role s'il n'y est pas
- * déjà — permet de créer des comptes CSR depuis E009 (Gestion des utilisateurs) sans migration
+ * déjà — permet de créer des comptes CSR depuis EA86 (Gestion des utilisateurs) sans migration
  * manuelle. Idempotente, appelée par UtilisateurController.
  */
 function assurerRoleCsr(\PDO $pdo): void
@@ -170,7 +170,7 @@ function assurerRoleCsr(\PDO $pdo): void
 
 /**
  * Ajoute le rôle 'Defiscalisateur' à l'ENUM utilisateur.Role s'il n'y est pas déjà — permet de
- * créer des comptes Défiscalisateur depuis E009 sans migration manuelle. Idempotente, appelée
+ * créer des comptes Défiscalisateur depuis EA86 sans migration manuelle. Idempotente, appelée
  * par UtilisateurController, même principe que assurerRoleCsr().
  */
 function assurerRoleDefiscalisateur(\PDO $pdo): void
@@ -181,10 +181,10 @@ function assurerRoleDefiscalisateur(\PDO $pdo): void
 /**
  * Garantit l'existence du type de message système "Expiration FFTT API" (ENUM messagerie.Type +
  * une ligne de gabarit par défaut, marqueurs {DATE_EXPIRATION}/{DELAI}) — éditable ensuite comme
- * les autres modèles système via E026 (Id_Utilisateur NULL = protégé en écriture pour les non-admin,
+ * les autres modèles système via EA93 (Id_Utilisateur NULL = protégé en écriture pour les non-admin,
  * voir MessagerieController). Idempotente, appelée à la fois par MessagerieController (pour que le
  * gabarit apparaisse dès l'ouverture de l'écran) et par verifierRappelExpirationFfttApi() (filet de
- * sécurité si E026 n'a jamais été ouvert avant la fenêtre des 60 jours).
+ * sécurité si EA93 n'a jamais été ouvert avant la fenêtre des 60 jours).
  */
 function assurerTemplateExpirationFfttApi(\PDO $pdo): void
 {
@@ -202,22 +202,22 @@ function assurerTemplateExpirationFfttApi(\PDO $pdo): void
             "Les identifiants de l'API FFTT (Code Appli / Mot de passe) utilisés par NIJAC expirent le {DATE_EXPIRATION} ({DELAI}).\n\n"
             . "Merci de faire la demande de prolongation auprès de la FFTT, puis de mettre à jour :\n"
             . "- le fichier .env (FFTT_APP_ID / FFTT_APP_KEY)\n"
-            . "- la clé de configuration « fftt_api_expiration » (écran Configuration générale, E015)",
+            . "- la clé de configuration « fftt_api_expiration » (écran Configuration générale, EA91)",
         ]);
 }
 
 /**
  * Garantit l'existence du message système n°8 "Dispo régionale" (ENUM messagerie.Type +
  * une ligne de gabarit, marqueur {URL_DISPO_REGIONALE_JA}) — invite un JA à saisir ses
- * disponibilités pour le championnat régional (E036, dispo-regionale-ja), éditable ensuite
- * comme les autres modèles système via E026. Id_Messagerie fixé à 8 explicitement (demandé),
+ * disponibilités pour le championnat régional (EN23, dispo-regionale-ja), éditable ensuite
+ * comme les autres modèles système via EA93. Id_Messagerie fixé à 8 explicitement (demandé),
  * l'AUTO_INCREMENT de la table ayant déjà dépassé cette valeur. Idempotente.
  */
 /**
  * Modèle « JA Club » (Id_Messagerie = 7) : email envoyé au correspondant d'un
- * club recevant en arbitrage club (E022), demandant le nom du JA qui arbitrera
- * la rencontre via la page publique {URL_ARBITRE_CLUB} (E045). Remplit la ligne
- * si elle est absente ou vide, sans écraser un contenu déjà saisi via E026.
+ * club recevant en arbitrage club (EN14), demandant le nom du JA qui arbitrera
+ * la rencontre via la page publique {URL_ARBITRE_CLUB} (EN25). Remplit la ligne
+ * si elle est absente ou vide, sans écraser un contenu déjà saisi via EA93.
  */
 function assurerTemplateArbitreClub(\PDO $pdo): void
 {
@@ -268,7 +268,7 @@ function assurerTemplateDispoRegionale(\PDO $pdo): void
  * API FFTT approche (2 mois, soit 60 jours) ou est dépassée — à demander à prolonger auprès de
  * la FFTT, puis à reporter dans .env (FFTT_APP_ID/FFTT_APP_KEY) et dans la clé de config
  * 'fftt_api_expiration'. Sujet/corps viennent du gabarit système "Expiration FFTT API" de la
- * table `messagerie` (éditable via E026), avec les marqueurs {DATE_EXPIRATION}/{DELAI} — voir
+ * table `messagerie` (éditable via EA93), avec les marqueurs {DATE_EXPIRATION}/{DELAI} — voir
  * assurerTemplateExpirationFfttApi(). Envoyé au plus une fois par date d'expiration (mémorisé
  * dans la clé 'fftt_api_expiration_email_envoye') pour ne pas spammer à chaque connexion admin
  * (voir AuthController::index(), seul appelant). Best-effort : erreurs SMTP/BDD avalées, ce
@@ -328,11 +328,11 @@ function verifierRappelExpirationFfttApi(): void
  * Construit la table de correspondance des marqueurs {XXX} des modèles de
  * message (table `messagerie`) — source unique remplaçant les listes de
  * marqueurs dupliquées et divergentes qui existaient dans
- * CentrenvoyeController::marqueurs() (E024), NominationController::
- * envoyerConvocations() (E022), InfoRencontreController::
- * designerJaPourRencontre() (E030) et AdresseJaController::
- * envoyerDemandeAdresse() (E029). C'est cette divergence qui causait le bug
- * "{URL_CONVOCATION_JA} non remplacé" (E022 ne connaissait que
+ * CentrenvoyeController::marqueurs() (EN15), NominationController::
+ * envoyerConvocations() (EN14), InfoRencontreController::
+ * designerJaPourRencontre() (EN20) et AdresseJaController::
+ * envoyerDemandeAdresse() (EN19). C'est cette divergence qui causait le bug
+ * "{URL_CONVOCATION_JA} non remplacé" (EN14 ne connaissait que
  * {LIEN_CONVOCATION}).
  *
  * @param array $ja   Ligne JA : au moins Id_JA, Nom, Prenom.
@@ -418,7 +418,7 @@ function remplacerMarqueursMessage(string $sujet, string $corps, array $marqueur
  * la version personnalisée du Nominateur courant (même Sujet que le modèle
  * système $idMessagerieSysteme, mais Id_Utilisateur = lui), sinon le modèle
  * système par défaut (Id_Utilisateur = 1). Les versions personnalisées sont
- * créées via le bouton "Dupliquer" de E024 (MessagerieController::duplicate).
+ * créées via le bouton "Dupliquer" de EN15 (MessagerieController::duplicate).
  */
 function resoudreModeleMessagerie(\PDO $pdo, int $idMessagerieSysteme, int $idUtilisateurCourant): ?array
 {
@@ -548,7 +548,7 @@ function getDepartementsLimitrophes(): array
 /**
  * Départements de la même région que $dept qui lui sont limitrophes :
  * colonne departement.Limitrophe ∩ départements de même code_region.
- * Chaque entrée : ['code' => '27', 'nom' => 'Eure']. Utilisé par E021 pour
+ * Chaque entrée : ['code' => '27', 'nom' => 'Eure']. Utilisé par EN13 pour
  * proposer d'étendre l'affichage aux départements voisins.
  */
 function getLimitrophesRegion(string $dept): array

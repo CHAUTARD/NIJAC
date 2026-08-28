@@ -5,7 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Statistiques des Juges-Arbitres (E028), portage CI4 de
+ * NIJAC – Statistiques des Juges-Arbitres (EN17), portage CI4 de
  * Nominateur/stats_ja.php.
  *
  * Récapitulatif par JA (arbitrages, km, péages, indemnité, total frais) sur
@@ -32,7 +32,7 @@ class StatsJaController extends BaseController
     }
 
     /**
-     * Lit une date de phase (E015, saisie/affichée au format MM/JJ) et la
+     * Lit une date de phase (EA91, saisie/affichée au format MM/JJ) et la
      * normalise en MM-JJ pour l'arithmétique interne (comparaisons lexicales
      * et construction de dates ISO AAAA-MM-JJ, qui exigent le tiret).
      */
@@ -88,7 +88,7 @@ class StatsJaController extends BaseController
 
     /**
      * Période par défaut du filtre, calculée à partir des dates de phase
-     * configurées (E015, MM/JJ, normalisées via phaseCfg()) : dates de la
+     * configurées (EA91, MM/JJ, normalisées via phaseCfg()) : dates de la
      * phase en cours si aujourd'hui y tombe (début de phase → aujourd'hui,
      * la phase n'étant pas encore terminée) ; sinon dates complètes de la
      * dernière phase terminée (ex. pendant la coupure estivale) — jamais une
@@ -127,7 +127,7 @@ class StatsJaController extends BaseController
      * (un jour unique est une période valide — cf. le jour même d'un début
      * de phase, où periodeDefautParPhase() renvoie début = fin = aujourd'hui),
      * et fin non postérieure à aujourd'hui. Les dates ne sont plus
-     * contraintes à un début de phase (E015) — celui-ci ne sert plus qu'à
+     * contraintes à un début de phase (EA91) — celui-ci ne sert plus qu'à
      * calculer la période par défaut proposée au chargement.
      */
     private function periodeValide(string $dateDebut, string $dateFin): bool
@@ -155,7 +155,7 @@ class StatsJaController extends BaseController
     {
         $u = $_SESSION['utilisateur'] ?? [];
 
-        // Période par défaut (E015) : phase en cours, ou dernière phase terminée
+        // Période par défaut (EA91) : phase en cours, ou dernière phase terminée
         [$defaultDebut, $defaultFin] = $this->periodeDefautParPhase();
         $data = [
             'nomComplet'   => trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? '')),

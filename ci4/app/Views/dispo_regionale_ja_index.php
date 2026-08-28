@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="csrf-token" content="<?= csrf_hash() ?>">
-<title>Disponibilités JA Régionale (E036)<?= $ja ? ' – ' . esc($ja['Nom'] . ' ' . $ja['Prenom']) : '' ?></title>
+<title>Disponibilités JA Régionale (EN23)<?= $ja ? ' – ' . esc($ja['Nom'] . ' ' . $ja['Prenom']) : '' ?></title>
 <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
 <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
 <style>
@@ -70,7 +70,7 @@
 
 <div class="page-header">
     <i class="bi bi-calendar2-check-fill me-2"></i><h1>Disponibilités JA – Championnat Régional</h1>
-    <span class="badge-ecran">E036</span>
+    <span class="badge-ecran">EN23</span>
 </div>
 
 <div class="container-fluid">

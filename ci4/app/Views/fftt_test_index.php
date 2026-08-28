@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Test API FFTT (E018)</title>
+    <title>NIJAC – Test API FFTT (EA96)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
@@ -53,7 +53,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'plug-fill', 'phTitle' => 'Test API FFTT', 'phCode' => 'E018',
+    'phIcon' => 'plug-fill', 'phTitle' => 'Test API FFTT', 'phCode' => 'EA96',
     'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
 ]) ?>
 
@@ -156,7 +156,7 @@
     <div class="card mb-3 border-success">
         <div class="card-header fw-semibold text-success"><i class="bi bi-search me-2"></i>Recherche club par nom (xml_club_b)</div>
         <div class="card-body">
-            <p class="text-muted small mb-2">Recherche un club par son nom (contrairement à xml_club_detail qui exige le numéro FFTT exact) — utile pour retrouver le vrai club d'un doublon BugSpid (E043).</p>
+            <p class="text-muted small mb-2">Recherche un club par son nom (contrairement à xml_club_detail qui exige le numéro FFTT exact) — utile pour retrouver le vrai club d'un doublon BugSpid (EA97).</p>
             <div class="input-group mb-2" style="max-width:600px">
                 <span class="input-group-text">Nom</span>
                 <input type="text" id="club-b-nom" class="form-control form-control-lg" value="VILLERS BOCAGE">
@@ -395,18 +395,18 @@
     </div>
 
     <div class="tab-pane fade" id="tab-national" role="tabpanel">
-    <p class="text-muted small mb-3">Détection Équipes Nationales (E017).</p>
+    <p class="text-muted small mb-3">Détection Équipes Nationales (EA83).</p>
     <div class="row">
 
     <div class="col-lg-6">
     <!-- Carte 7 : Analyse détection nationale pour un club -->
     <div class="card mb-3 border-warning">
         <div class="card-header fw-semibold text-warning-emphasis">
-            <i class="bi bi-cpu me-2"></i>7. Analyse détection nationale — un club (xml_equipe + logique E017)
+            <i class="bi bi-cpu me-2"></i>7. Analyse détection nationale — un club (xml_equipe + logique EA83)
         </div>
         <div class="card-body">
             <p class="text-muted small mb-2">
-                Appelle <code>xml_equipe</code> pour un club, puis applique la logique de détection de E017 sur chaque équipe.<br>
+                Appelle <code>xml_equipe</code> pour un club, puis applique la logique de détection de EA83 sur chaque équipe.<br>
                 Affiche : le champ division brut reçu, la règle matchée (ou non), et le code détecté.
                 Permet de voir pourquoi une équipe nationale n'est pas reconnue.
             </p>

@@ -6,14 +6,14 @@ use CodeIgniter\HTTP\ResponseInterface;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
 /**
- * NIJAC – Souhaits des équipes (E044) : saisie par la CSR (Commission Sportive
+ * NIJAC – Souhaits des équipes (ES33) : saisie par la CSR (Commission Sportive
  * Régionale) du jour souhaité et du souhait d'arbitrage (`equipe.JourSouhaite`,
  * `equipe.SouhaitJA`) des équipes régionales.
  *
  * Ces deux champs ne se saisissent que pour les divisions R3M et R4M — la règle
  * est appliquée aussi côté serveur dans modifier(). Les autres colonnes
  * affichées (Id_Club, nom du club, nom d'équipe, division) sont en lecture
- * seule : ce n'est pas un écran de gestion d'équipes (voir E019/E041).
+ * seule : ce n'est pas un écran de gestion d'équipes (voir EA92/EA94).
  *
  * Accès rôle CSR ou Administrateur (filtre "csrauth"). Pas de Model : jointure
  * Club pour l'affichage, réutilise getPDO() directement comme le reste de cette
@@ -43,7 +43,7 @@ class SouhaitEquipeController extends BaseController
                 NbProblemes INT NOT NULL DEFAULT 0,
                 Problemes MEDIUMTEXT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-              COMMENT=\'Rapports d\'\'exécution CSV -> equipe (E044)\''
+              COMMENT=\'Rapports d\'\'exécution CSV -> equipe (ES33)\''
         );
     }
 

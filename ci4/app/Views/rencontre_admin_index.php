@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Gestion des rencontres (E042)</title>
+    <title>NIJAC – Gestion des rencontres (EA95)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
@@ -17,7 +17,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'calendar3', 'phTitle' => 'Gestion des rencontres', 'phCode' => 'E042',
+    'phIcon' => 'calendar3', 'phTitle' => 'Gestion des rencontres', 'phCode' => 'EA95',
     'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
 ]) ?>
 

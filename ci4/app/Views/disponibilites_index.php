@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="csrf-token" content="<?= csrf_hash() ?>">
-<title>NIJAC – Disponibilités JA (E021)</title>
+<title>NIJAC – Disponibilités JA (EN13)</title>
 <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
 <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
 <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
@@ -145,7 +145,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'calendar2-check', 'phTitle' => 'Saisie des disponibilités JA', 'phCode' => 'E021',
+    'phIcon' => 'calendar2-check', 'phTitle' => 'Saisie des disponibilités JA', 'phCode' => 'EN13',
     'phCrumbLabel' => 'Nominateur', 'phCrumbUrl' => site_url('nominateur-menu'), 'phBackUrl' => site_url('nominateur-menu'),
     'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
 ]) ?>
@@ -360,7 +360,7 @@ function chargerJA(dept) {
                     ? `<div class="ja-dispo-badge" title="Disponibilités saisies"><i class="bi bi-check-lg"></i></div>`
                     : `<div class="ja-dispo-badge" style="background:#c62828;" title="Non renseigné"><i class="bi bi-x-lg"></i></div>`;
 
-                // Lien vers la fiche de disponibilité (E032) dans une nouvelle fenêtre
+                // Lien vers la fiche de disponibilité (EN22) dans une nouvelle fenêtre
                 $grid.append(`
                     <a class="ja-card ${gradeClass} ${noDispoClass}"
                        href="${DISPONIBILITE_JA_BASE}?id_ja=${ja.Id_JA}"

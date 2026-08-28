@@ -3,11 +3,11 @@
 namespace App\Controllers;
 
 /**
- * NIJAC – Menu Défiscalisateur (E038), rôle Defiscalisateur.
+ * NIJAC – Menu Défiscalisateur (E005), rôle Defiscalisateur.
  *
  * Pas d'accès BDD : lit uniquement $_SESSION['utilisateur']. Protégé par le filtre "defiscauth"
  * (rôle Defiscalisateur ou Administrateur — voir DefiscalisateurAuth.php). Même structure que
- * CsrMenuController (E034).
+ * CsrMenuController (E004).
  */
 class DefiscalisateurMenuController extends BaseController
 {

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Communes / La Poste (E006)</title>
+    <title>NIJAC – Communes / La Poste (EA87)</title>
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
@@ -200,7 +200,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'mailbox2', 'phTitle' => 'Gestion des communes (La Poste)', 'phCode' => 'E006',
+    'phIcon' => 'mailbox2', 'phTitle' => 'Gestion des communes (La Poste)', 'phCode' => 'EA87',
     'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
 ]) ?>
 

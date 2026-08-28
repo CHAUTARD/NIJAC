@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="csrf-token" content="<?= csrf_hash() ?>">
-<title>Désidératas club (E023)<?= $club ? ' – ' . esc($club['Nom']) : '' ?></title>
+<title>Désidératas club (EN18)<?= $club ? ' – ' . esc($club['Nom']) : '' ?></title>
 <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
 <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
 <style>
@@ -118,7 +118,7 @@
 
 <div class="page-header">
     <h1><i class="bi bi-clipboard2-check-fill me-2"></i>Désidératas du club — Phase</h1>
-    <span class="badge-ecran">E023</span>
+    <span class="badge-ecran">EN18</span>
 </div>
 
 <div class="container-fluid">

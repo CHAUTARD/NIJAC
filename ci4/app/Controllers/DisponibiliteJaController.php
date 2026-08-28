@@ -5,24 +5,24 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Déclaration de disponibilité JA (E032), portage CI4 de
+ * NIJAC – Déclaration de disponibilité JA (EN22), portage CI4 de
  * Nominateur/disponibilite_ja.php.
  *
  * Écran non documenté dans ECRANS.md/SPECIFICATION.md avant ce portage (le
- * fichier legacy se labellisait par erreur "E012", déjà attribué à Régions) —
- * code E032 attribué à la suite de E031 (Convocation JA).
+ * fichier legacy se labellisait par erreur "EA88", déjà attribué à Régions) —
+ * code EN22 attribué à la suite de EN21 (Convocation JA).
  *
  * Page PUBLIQUE (sans authentification) permettant à un JA de déclarer ses
  * disponibilités pour les dates du championnat régional (table
  * `competition_regionale`, calendrier saisi par un admin, voir
- * CompetitionRegionaleController E014). Calendrier mensuel, clic sur une
+ * CompetitionRegionaleController EA84). Calendrier mensuel, clic sur une
  * date = bascule Disponible / Non disponible (et vice-versa) ; le passage en
  * Disponible ouvre une popup pour une Note facultative et, si le Commentaire
  * de la date en contient, le choix du/des département(s) concerné(s) parmi
  * 14/27/50/61/76 (stockés dans `disponible.Departement`/`disponible.Note`,
- * même convention que `disponible_regionale` utilisée par E036). Accessible
- * via ?ja=TOKEN (Obfuscator) ou ?id_ja=N en clair. Lien généré depuis E007
- * (Juge-Arbitre, action "token") ou utilisé directement depuis E021
+ * même convention que `disponible_regionale` utilisée par EN23). Accessible
+ * via ?ja=TOKEN (Obfuscator) ou ?id_ja=N en clair. Lien généré depuis EN11
+ * (Juge-Arbitre, action "token") ou utilisé directement depuis EN13
  * (Disponibilités, ?id_ja=N).
  */
 class DisponibiliteJaController extends BaseController
@@ -90,7 +90,7 @@ class DisponibiliteJaController extends BaseController
      * Comme resolveIdJa(), mais pour les actions sensibles (Note interne,
      * Défiscalisation, saisie de disponibilité) : un ?id_ja=N en clair sans
      * token n'est accepté que si l'appelant a une session authentifiée
-     * (usage documenté : lien utilisé directement depuis E021 par un
+     * (usage documenté : lien utilisé directement depuis EN13 par un
      * nominateur déjà connecté). Sans token valide ni session, retourne 0 au
      * lieu de faire confiance à n'importe quel entier deviné par un tiers.
      */
@@ -124,7 +124,7 @@ class DisponibiliteJaController extends BaseController
     public function index()
     {
         // Page publique, mais accessible aussi depuis un onglet ouvert par un
-        // nominateur déjà connecté (E021, target="_blank" — même session
+        // nominateur déjà connecté (EN13, target="_blank" — même session
         // navigateur) : on lit la session si elle existe, sans l'exiger.
         demarrerSessionNijac();
         $u = $_SESSION['utilisateur'] ?? [];

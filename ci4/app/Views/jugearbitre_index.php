@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Juges-Arbitres (E007)</title>
+    <title>NIJAC – Juges-Arbitres (EN11)</title>
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
@@ -244,7 +244,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'person-badge-fill', 'phTitle' => 'Gestion des Juges-Arbitres', 'phCode' => 'E007',
+    'phIcon' => 'person-badge-fill', 'phTitle' => 'Gestion des Juges-Arbitres', 'phCode' => 'EN11',
     'phCrumbLabel' => 'Nominateur', 'phCrumbUrl' => site_url('nominateur-menu'), 'phBackUrl' => site_url('nominateur-menu'),
     'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
 ]) ?>

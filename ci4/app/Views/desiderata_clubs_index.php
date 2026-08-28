@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Désidératas clubs (E027)</title>
+    <title>NIJAC – Désidératas clubs (EN12)</title>
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
@@ -229,7 +229,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'clipboard2-check', 'phTitle' => 'Désidératas clubs (R3 et R4)', 'phCode' => 'E027',
+    'phIcon' => 'clipboard2-check', 'phTitle' => 'Désidératas clubs (R3 et R4)', 'phCode' => 'EN12',
     'phCrumbLabel' => 'CSR', 'phCrumbUrl' => site_url('csr-menu'), 'phBackUrl' => site_url('csr-menu'),
     'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
 ]) ?>

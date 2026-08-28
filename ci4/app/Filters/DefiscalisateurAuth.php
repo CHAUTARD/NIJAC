@@ -10,7 +10,7 @@ use CodeIgniter\HTTP\ResponseInterface;
  * Accès réservé aux sessions authentifiées avec le rôle Defiscalisateur, ou
  * Administrateur (pour permettre à un admin de prévisualiser/tester les écrans
  * Défiscalisateur — même logique que "csrauth" pour le rôle CSR). Utilisé par
- * E038 (Menu Défiscalisateur) et E039 (Défiscalisation JA).
+ * E005 (Menu Défiscalisateur) et ED51 (Défiscalisation JA).
  *
  * Session native — voir AdminAuth.php pour le détail de cette contrainte.
  */

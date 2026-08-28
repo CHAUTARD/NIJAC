@@ -4,7 +4,7 @@
  *
  * Partagée par toutes les vues CI4 (portage de includes/modal_mdp.php).
  * Le lien déclencheur doit avoir : id="lnk-chg-pwd" et data-base="<?= site_url('changer-mot-de-passe') ?>".
- * Cible ChangerMotDePasseController (E033), portage CI4 de
+ * Cible ChangerMotDePasseController (E006), portage CI4 de
  * changer_mot_de_passe.php.
  *
  * Usage : <?php require __DIR__ . '/_modal_mdp.php'; ?>

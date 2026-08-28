@@ -5,7 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Nomination des Juges-Arbitres (E022), portage CI4 de
+ * NIJAC – Nomination des Juges-Arbitres (EN14), portage CI4 de
  * Nominateur/nomination.php.
  *
  * Accessible à tout utilisateur authentifié (filtre "auth"). Le classement/tri
@@ -452,7 +452,7 @@ class NominationController extends BaseController
             $journee = (int) $journeeRaw;
 
             // Sélection des rencontres dont la convocation doit être envoyée
-            // (cases cochées côté E022) — obligatoire, pour ne jamais renvoyer
+            // (cases cochées côté EN14) — obligatoire, pour ne jamais renvoyer
             // toute la journée par erreur.
             $idsRencontre = array_values(array_unique(array_filter(
                 array_map('intval', json_decode($this->request->getPost('ids') ?? '[]', true) ?: [])
@@ -572,7 +572,7 @@ class NominationController extends BaseController
 
     /**
      * Charge le modèle du message n°7 (JA Club) pour édition dans le panneau
-     * droit d'E022 avant l'envoi (marqueurs non substitués : ils le sont à
+     * droit d'EN14 avant l'envoi (marqueurs non substitués : ils le sont à
      * l'envoi par demanderJaClub()).
      */
     public function messageArbitreClub(): ResponseInterface
@@ -607,8 +607,8 @@ class NominationController extends BaseController
     }
 
     /**
-     * « Envoyer la demande au club » (panneau E022) : envoie au correspondant du
-     * club recevant le lien vers la page publique E045 (message système n°7,
+     * « Envoyer la demande au club » (panneau EN14) : envoie au correspondant du
+     * club recevant le lien vers la page publique EN25 (message système n°7,
      * éventuellement édité dans le panneau), pour qu'il désigne lui-même le
      * juge-arbitre. Réservé aux rencontres R3M/R4M sans JA dont le club est en
      * arbitrage club.
@@ -651,14 +651,14 @@ class NominationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => 'Un JA est déjà désigné pour cette rencontre.']);
             }
             if (empty($rc['CorEmail'])) {
-                return $this->response->setJSON(['ok' => false, 'err' => "Le club recevant n'a pas d'email de correspondant (à compléter en E008)."]);
+                return $this->response->setJSON(['ok' => false, 'err' => "Le club recevant n'a pas d'email de correspondant (à compléter en EA80)."]);
             }
 
             if (function_exists('assurerTemplateArbitreClub')) { assurerTemplateArbitreClub($pdo); } // tolère un app_config.php encore en cache opcache
             $tpl = resoudreModeleMessagerie($pdo, 7, (int) ($moi['id'] ?? 0))
                 ?: ['Sujet' => 'Juge-arbitre pour {DOM} / {EXT}', 'Message' => '', 'Cc' => 0, 'ReplyTo' => 0];
 
-            // Sujet / corps éventuellement retouchés dans le panneau E022.
+            // Sujet / corps éventuellement retouchés dans le panneau EN14.
             $sujetEdit = trim((string) $this->request->getPost('sujet'));
             $msgEdit   = trim((string) $this->request->getPost('message'));
             if ($sujetEdit !== '') {

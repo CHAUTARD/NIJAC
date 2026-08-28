@@ -5,10 +5,10 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Administration base de données (E099), requêteur SQL libre.
+ * NIJAC – Administration base de données (EA98), requêteur SQL libre.
  *
  * Outil "bris de glace" réservé au seul utilisateur CHAUTARD (filtre
- * "adminauth" + vérification manuelle du login, même règle que E018) :
+ * "adminauth" + vérification manuelle du login, même règle que EA96) :
  * accès SQL total, sans restriction, pour cet unique compte.
  */
 class DbAdminController extends BaseController

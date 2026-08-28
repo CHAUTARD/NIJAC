@@ -5,7 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Comptabilité frais JA (E025), portage CI4 de Nominateur/compta.php.
+ * NIJAC – Comptabilité frais JA (EN16), portage CI4 de Nominateur/compta.php.
  *
  * Récapitulatif des frais de déplacement des JA sur une période, et export
  * CSV au format EBP (journal AC). Accessible Administrateur + Nominateur

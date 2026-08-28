@@ -5,16 +5,16 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Convocation et frais JA (E031), portage CI4 de
+ * NIJAC – Convocation et frais JA (EN21), portage CI4 de
  * Nominateur/convocation_ja.php.
  *
  * Écran non documenté dans ECRANS.md/SPECIFICATION.md avant ce portage — code
- * E031 attribué à la suite de E030 (JA/info_rencontre.php), qui rompt déjà la
- * numérotation stricte des plages E001-E019/E020-E029.
+ * EN21 attribué dans la bande nominateur/public (EN11-EN30), à la suite de
+ * EN20 (JA/info_rencontre.php).
  *
  * Page PUBLIQUE (sans authentification, sans même de token obfusqué : l'URL
  * porte directement `?nomination=<Id_Nomination>` en clair) — comportement
- * identique au legacy, préservé tel quel. Générée depuis E022 (NominationController,
+ * identique au legacy, préservé tel quel. Générée depuis EN14 (NominationController,
  * envoi des convocations par email) et consultée/imprimée par le JA.
  */
 class ConvocationJaController extends BaseController

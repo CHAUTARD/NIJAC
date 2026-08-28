@@ -5,7 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Défiscalisation JA (E039), rôle Defiscalisateur.
+ * NIJAC – Défiscalisation JA (ED51), rôle Defiscalisateur.
  *
  * La défiscalisation s'applique sur l'année civile en cours (1er janvier -
  * 31 décembre), pas sur la saison/phase NIJAC — pas de sélecteur de période.

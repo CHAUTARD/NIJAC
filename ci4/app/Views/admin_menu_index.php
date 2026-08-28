@@ -289,42 +289,42 @@
             <div class="menu-grid">
 
                 <a href="<?= site_url('club') ?>" class="menu-btn btn-club">
-                    <span class="btn-code">E008</span>
+                    <span class="btn-code">EA80</span>
                     <div class="btn-icon"><img src="<?= base_url('img/Association.png') ?>" alt="Club / Association"></div>
                     <span>Club / Association</span>
                     <span class="btn-desc">Gérer les clubs et associations affiliés</span>
                 </a>
 
                 <a href="<?= site_url('salle') ?>" class="menu-btn btn-salle">
-                    <span class="btn-code">E005</span>
+                    <span class="btn-code">EA81</span>
                     <div class="btn-icon"><img src="<?= base_url('img/Salle.png') ?>" alt="Salle"></div>
                     <span>Salle</span>
                     <span class="btn-desc">Référencer les salles de compétition et leur adresse</span>
                 </a>
 
                 <a href="<?= site_url('import-rencontres') ?>" class="menu-btn btn-club">
-                    <span class="btn-code">E011</span>
+                    <span class="btn-code">EA82</span>
                     <div class="btn-icon"><img src="<?= base_url('img/Competition.png') ?>" alt="Import Rencontres Régionales"></div>
                     <span>Import Rencontres Régionales</span>
                     <span class="btn-desc">Importer les rencontres Régionales depuis un fichier FFTT</span>
                 </a>
 
                 <a href="<?= site_url('import-rencontres-nat') ?>" class="menu-btn btn-club">
-                    <span class="btn-code">E017</span>
+                    <span class="btn-code">EA83</span>
                     <div class="btn-icon"><img src="<?= base_url('img/ImportNat.png') ?>" alt="Import Nationales"></div>
                     <span>Import Rencontres Nationales</span>
                     <span class="btn-desc">Importer les rencontres de divisions Nationales</span>
                 </a>
 
                 <a href="<?= site_url('competition-regionale') ?>" class="menu-btn btn-competition-regionale">
-                    <span class="btn-code">E014</span>
+                    <span class="btn-code">EA84</span>
                     <div class="btn-icon"><img src="<?= base_url('img/Calendrier_Regional.png') ?>" alt="Calendrier championnat régional"></div>
                     <span>Calendrier Régional</span>
                     <span class="btn-desc">Saisir les dates du championnat régional</span>
                 </a>
 
                 <a href="<?= site_url('clean') ?>" class="menu-btn btn-saison">
-                    <span class="btn-code">E016</span>
+                    <span class="btn-code">EA85</span>
                     <div class="btn-icon"><img src="<?= base_url('img/Nettoyage.png') ?>" alt="Saison"></div>
                     <span>Saison</span>
                     <span class="btn-desc">Suppression des informations sur la saison dernière</span>
@@ -338,70 +338,70 @@
             <div class="menu-grid">
 
                 <a href="<?= site_url('utilisateur') ?>" class="menu-btn btn-utilisateur">
-                    <span class="btn-code">E009</span>
+                    <span class="btn-code">EA86</span>
                     <div class="btn-icon"><img src="<?= base_url('img/Utilisateur.png') ?>" alt="Utilisateur"></div>
                     <span>Utilisateur</span>
                     <span class="btn-desc">Gérer les comptes et droits d'accès</span>
                 </a>
 
                 <a href="<?= site_url('commune') ?>" class="menu-btn btn-communes">
-                    <span class="btn-code">E006</span>
+                    <span class="btn-code">EA87</span>
                     <div class="btn-icon"><img src="<?= base_url('img/La_Poste.png') ?>" alt="Communes"></div>
                     <span>Communes</span>
                     <span class="btn-desc">Base des codes postaux et coordonnées GPS</span>
                 </a>
 
                 <a href="<?= site_url('region') ?>" class="menu-btn btn-region">
-                    <span class="btn-code">E012</span>
+                    <span class="btn-code">EA88</span>
                     <div class="btn-icon"><img src="<?= base_url('img/Regions.png') ?>" alt="Régions"></div>
                     <span>Régions</span>
                     <span class="btn-desc">Gérer les régions et leur gentilé</span>
                 </a>
 
                 <a href="<?= site_url('division') ?>" class="menu-btn btn-division">
-                    <span class="btn-code">E010</span>
+                    <span class="btn-code">EA89</span>
                     <div class="btn-icon"><img src="<?= base_url('img/podium.png') ?>" alt="Division"></div>
                     <span>Division</span>
                     <span class="btn-desc">Définir les divisions et leur niveau</span>
                 </a>
 
                 <a href="<?= site_url('departement') ?>" class="menu-btn btn-departement">
-                    <span class="btn-code">E013</span>
+                    <span class="btn-code">EA90</span>
                     <div class="btn-icon"><img src="<?= base_url('img/Departement.png') ?>" alt="Départements"></div>
                     <span>Départements</span>
                     <span class="btn-desc">Gérer les départements et leur région</span>
                 </a>
 
                 <a href="<?= site_url('configuration') ?>" class="menu-btn btn-configuration">
-                    <span class="btn-code">E015</span>
+                    <span class="btn-code">EA91</span>
                     <div class="btn-icon"><img src="<?= base_url('img/Parametres.png') ?>" alt="Configuration"></div>
                     <span>Configuration</span>
                     <span class="btn-desc">Paramètres généraux de l'application</span>
                 </a>
 
                 <a href="<?= site_url('equipe-regionale') ?>" class="menu-btn btn-equipe-regionale">
-                    <span class="btn-code">E019</span>
+                    <span class="btn-code">EA92</span>
                     <div class="btn-icon"><img src="<?= base_url('img/Equipe.png') ?>" alt="Chargement équipe régionale"></div>
                     <span>Chargement équipe régionale</span>
                     <span class="btn-desc">Consulter et modifier les équipes régionales importées</span>
                 </a>
 
                 <a href="<?= site_url('messagerie') ?>" class="menu-btn btn-messagerie">
-                    <span class="btn-code">E026</span>
+                    <span class="btn-code">EA93</span>
                     <div class="btn-icon"><img src="<?= base_url('img/Messagerie.png') ?>" alt="Gestion des messages"></div>
                     <span>Gestion des messages</span>
                     <span class="btn-desc">Préparer les messages pour JA et correspondants de club</span>
                 </a>
 
                 <a href="<?= site_url('gestion-equipes') ?>" class="menu-btn btn-gestion-equipes">
-                    <span class="btn-code">E041</span>
+                    <span class="btn-code">EA94</span>
                     <div class="btn-icon"><img src="<?= base_url('img/GestEquipe.png') ?>" alt="Gestion des équipes"></div>
                     <span>Gestion des équipes</span>
                     <span class="btn-desc">Filtrer et modifier les équipes (club, division, nom)</span>
                 </a>
 
                 <a href="<?= site_url('gestion-rencontres') ?>" class="menu-btn btn-gestion-rencontres">
-                    <span class="btn-code">E042</span>
+                    <span class="btn-code">EA95</span>
                     <div class="btn-icon"><img src="<?= base_url('img/Rencontre.png') ?>" alt="Gestion des rencontres"></div>
                     <span>Gestion des rencontres</span>
                     <span class="btn-desc">Filtrer et modifier date, heure, poule, journée</span>
@@ -416,21 +416,21 @@
             <div class="menu-grid">
 
                 <a href="<?= site_url('fftt-test') ?>" class="menu-btn btn-configuration">
-                    <span class="btn-code">E018</span>
+                    <span class="btn-code">EA96</span>
                     <div class="btn-icon"><img src="<?= base_url('img/TestAPI.png') ?>" alt="Test API FFTT"></div>
                     <span>Test API FFTT</span>
                     <span class="btn-desc">Vérifier la connexion à l'API FFTT</span>
                 </a>
 
                 <a href="<?= site_url('bug-spid') ?>" class="menu-btn" style="background: #ffe0b2; border: 2px solid #e65100;">
-                    <span class="btn-code">E043</span>
+                    <span class="btn-code">EA97</span>
                     <div class="btn-icon"><img src="<?= base_url('img/BugSpid.png') ?>" alt="BugSpid"></div>
                     <span>BugSpid</span>
                     <span class="btn-desc">Corrections de clubs dupliqués (Id_Club fantôme)</span>
                 </a>
 
                 <a href="<?= site_url('db-admin') ?>" class="menu-btn btn-dbadmin" style="background: repeating-linear-gradient(45deg, #fce4ec, #fce4ec 10px, #ffcdd2 10px, #ffcdd2 20px); border: 2px solid #c62828;">
-                    <span class="btn-code">E099</span>
+                    <span class="btn-code">EA98</span>
                     <div class="btn-icon"><img src="<?= base_url('img/database.png') ?>" alt="Base de données"></div>
                     <span>Base de données</span>
                     <span class="btn-desc">Administration directe de la base de données</span>

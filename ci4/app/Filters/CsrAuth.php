@@ -10,7 +10,7 @@ use CodeIgniter\HTTP\ResponseInterface;
  * Accès réservé aux sessions authentifiées avec le rôle CSR (Commission Sportive Régionale),
  * ou Administrateur (pour permettre à un admin de prévisualiser/tester les écrans CSR — même
  * logique que "auth" qui laisse passer Administrateur en plus de Nominateur). Utilisé par
- * E034 (Menu CSR) et E035 (Club CSR).
+ * E004 (Menu CSR) et ES31 (Club CSR).
  *
  * Session native — voir AdminAuth.php pour le détail de cette contrainte.
  */

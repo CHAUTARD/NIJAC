@@ -5,7 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – BugSpid (E043) : file de corrections « club dupliqué avec un
+ * NIJAC – BugSpid (EA97) : file de corrections « club dupliqué avec un
  * Id_Club fantôme » (code alphabétique généré par l'import quand le nom du
  * club de la rencontre ne matchait aucun Club.EquipeNom existant — voir
  * ImportRencontresController::synchroniserClubFftt() et l'outil de
@@ -18,9 +18,9 @@ use CodeIgniter\HTTP\ResponseInterface;
  *   2. DELETE FROM Club WHERE Id_Club = ancien
  *   3. UPDATE Club SET EquipeNom = ... WHERE Id_Club = nouveau (si renseigné)
  *
- * Même restriction que E099 (outil de correction de données) : filtre
+ * Même restriction que EA98 (outil de correction de données) : filtre
  * "adminauth" + login === 'CHAUTARD' vérifié manuellement, même règle que
- * E018/E099.
+ * EA96/EA98.
  */
 class BugSpidController extends BaseController
 {
@@ -53,7 +53,7 @@ class BugSpidController extends BaseController
                 DateExecution DATETIME NULL,
                 Resultat TEXT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-              COMMENT=\'File de corrections Id_Club dupliqué (alpha -> code FFTT réel), exécutable en lot depuis E043\''
+              COMMENT=\'File de corrections Id_Club dupliqué (alpha -> code FFTT réel), exécutable en lot depuis EA97\''
         );
     }
 
@@ -489,7 +489,7 @@ class BugSpidController extends BaseController
      * Exécute la fusion (UPDATE equipe / DELETE Club / UPDATE Club EquipeNom)
      * pour chaque ligne cochée. Chaque ligne est traitée dans sa propre
      * transaction : une erreur sur l'une n'empêche pas le traitement des
-     * suivantes, contrairement au requêteur libre de E099.
+     * suivantes, contrairement au requêteur libre de EA98.
      */
     public function executer(): ResponseInterface
     {

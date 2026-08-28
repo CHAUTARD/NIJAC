@@ -5,7 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Gestion des communes / La Poste (E006), portage CI4 de communes.php.
+ * NIJAC – Gestion des communes / La Poste (EA87), portage CI4 de communes.php.
  *
  * Requêtes SQL dynamiques (recherche, pagination, jointure département, import
  * CSV en masse) trop éloignées des méthodes simples du Query Builder CI4 pour

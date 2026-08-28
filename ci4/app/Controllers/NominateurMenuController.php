@@ -5,7 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Menu nominateur (E020), portage CI4 de Nominateur/menu.php.
+ * NIJAC – Menu nominateur (E003), portage CI4 de Nominateur/menu.php.
  *
  * Tableau de bord (JA actifs, nominations à valider, convocations à envoyer,
  * rencontres sans JA, prochaine journée) + grille de boutons vers les

@@ -79,7 +79,7 @@ class Security extends BaseConfig
      * Regenerate CSRF Token on every submission.
      *
      * Désactivé volontairement (false) : de nombreux écrans NIJAC enchaînent
-     * plusieurs appels AJAX POST depuis un seul chargement de page (ex. E015
+     * plusieurs appels AJAX POST depuis un seul chargement de page (ex. EA91
      * Configuration : ~15 boutons Enregistrer indépendants). Avec regenerate=true,
      * le 2ᵉ appel échouerait avec le token périmé sans rafraîchissement JS
      * après chaque réponse. Reproduit le comportement de l'ancien système

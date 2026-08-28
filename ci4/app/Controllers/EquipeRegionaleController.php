@@ -5,8 +5,8 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Équipes régionales (E019) : consultation/édition des équipes chargées
- * via l'import FFTT (E011, table `equipe`). Pas de création ici — les équipes
+ * NIJAC – Équipes régionales (EA92) : consultation/édition des équipes chargées
+ * via l'import FFTT (EA82, table `equipe`). Pas de création ici — les équipes
  * sont alimentées par l'import ; seuls les champs liés aux désidératas
  * (réengagement, jour souhaité, souhait JA, saison) sont modifiables, ainsi
  * que la suppression d'une équipe.

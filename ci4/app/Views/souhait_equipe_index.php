@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Souhaits des équipes (E044)</title>
+    <title>NIJAC – Souhaits des équipes (ES33)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-liste-edit.css') ?>">
     <style>
-        /* En-tête violet, propre au rôle CSR (voir E034/E035) */
+        /* En-tête violet, propre au rôle CSR (voir E004/ES31) */
         #page-header { background: #6a1b9a; }
         #panel-liste { width: 62%; }
         #liste-header { justify-content: space-between; }
@@ -29,7 +29,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'calendar-week', 'phTitle' => 'Souhaits des équipes', 'phCode' => 'E044',
+    'phIcon' => 'calendar-week', 'phTitle' => 'Souhaits des équipes', 'phCode' => 'ES33',
     'phCrumbLabel' => 'CSR', 'phCrumbUrl' => site_url('csr-menu'), 'phBackUrl' => site_url('csr-menu'),
 ]) ?>
 

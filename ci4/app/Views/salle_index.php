@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Salles (E005)</title>
+    <title>NIJAC – Salles (EA81)</title>
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
@@ -136,7 +136,7 @@
 
 <?php $backUrl = $isAdmin ? site_url('admin-menu') : site_url('nominateur-menu'); ?>
 <?= view('partials/page_header', [
-    'phIcon' => 'building-fill', 'phTitle' => 'Gestion des salles', 'phCode' => 'E005',
+    'phIcon' => 'building-fill', 'phTitle' => 'Gestion des salles', 'phCode' => 'EA81',
     'phCrumbLabel' => $isAdmin ? 'Admin' : 'Nominateur', 'phCrumbUrl' => $backUrl, 'phBackUrl' => $backUrl,
 ]) ?>
 </div>

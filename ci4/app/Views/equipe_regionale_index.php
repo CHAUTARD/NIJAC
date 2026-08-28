@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Équipes régionales (E019)</title>
+    <title>NIJAC – Équipes régionales (EA92)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
@@ -45,7 +45,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'people-fill', 'phTitle' => 'Équipes régionales', 'phCode' => 'E019',
+    'phIcon' => 'people-fill', 'phTitle' => 'Équipes régionales', 'phCode' => 'EA92',
     'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
 ]) ?>
 

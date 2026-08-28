@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – BugSpid (E043)</title>
+    <title>NIJAC – BugSpid (EA97)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
@@ -22,7 +22,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'wrench-adjustable-circle', 'phTitle' => 'BugSpid — corrections de clubs dupliqués', 'phCode' => 'E043',
+    'phIcon' => 'wrench-adjustable-circle', 'phTitle' => 'BugSpid — corrections de clubs dupliqués', 'phCode' => 'EA97',
     'phCrumbLabel' => 'Admin BDD', 'phCrumbUrl' => site_url('db-admin'), 'phBackUrl' => site_url('db-admin'),
 ]) ?>
 

@@ -19,10 +19,10 @@ All FFTT calls go through `App\Libraries\FfttRawClient` (`ci4/app/Libraries/Fftt
 
 Two ways to call it:
 
-- **7 typed convenience methods** — `listClubsByDepartement()`, `retrieveClubDetails()`, `listOrganismes()`, `listEpreuves()`, `listEquipesByClub()`, `retrieveJoueurDetails()`, `listJoueursByClub()` — cover every FFTT call actually used by production screens (E005, E007, E008, E011, E017). Each returns a plain associative array (or array of arrays) with the raw FFTT field names (e.g. `numero`, `nom`, `nomsalle`, `libequipe`) — no typed model objects.
-- **`request(string $action, array $params = []): array`** — for any other raw endpoint: `xml_division`, `xml_result_equ` (poules/rencontres by division ID or `cx_poule`), `xml_chp_renc`, `xml_licence` (base SPID, distinct from `xml_licence_b`), or any field a convenience method doesn't surface (e.g. `xml_club_detail` returning multiple salles for one club — see `SalleController::ffttSync()`). `lastUrl()`/`lastHttp()`/`lastRaw()` expose the last request's details for diagnostics (see E018).
+- **7 typed convenience methods** — `listClubsByDepartement()`, `retrieveClubDetails()`, `listOrganismes()`, `listEpreuves()`, `listEquipesByClub()`, `retrieveJoueurDetails()`, `listJoueursByClub()` — cover every FFTT call actually used by production screens (EN11, EA80, EA81, EA82, EA83). Each returns a plain associative array (or array of arrays) with the raw FFTT field names (e.g. `numero`, `nom`, `nomsalle`, `libequipe`) — no typed model objects.
+- **`request(string $action, array $params = []): array`** — for any other raw endpoint: `xml_division`, `xml_result_equ` (poules/rencontres by division ID or `cx_poule`), `xml_chp_renc`, `xml_licence` (base SPID, distinct from `xml_licence_b`), or any field a convenience method doesn't surface (e.g. `xml_club_detail` returning multiple salles for one club — see `SalleController::ffttSync()`). `lastUrl()`/`lastHttp()`/`lastRaw()` expose the last request's details for diagnostics (see EA96).
 
-Previously used the composer package `alamirault/fftt-api` (typed facade + Guzzle 6.x, an EOL branch with known CVEs) and, before that, `Classes/FfttApi.php` (raw cURL, a different `serie`/app-key signing scheme) — both removed. E018 (FfttTestController, `testViaLibrary()`) only exercises the 7 production-used methods; it no longer covers the old facade's diagnostic-only surface (classement, historique, parties, Elo-style virtual points, regex-parsed rencontre details, actualités...), none of which backed a real screen.
+Previously used the composer package `alamirault/fftt-api` (typed facade + Guzzle 6.x, an EOL branch with known CVEs) and, before that, `Classes/FfttApi.php` (raw cURL, a different `serie`/app-key signing scheme) — both removed. EA96 (FfttTestController, `testViaLibrary()`) only exercises the 7 production-used methods; it no longer covers the old facade's diagnostic-only surface (classement, historique, parties, Elo-style virtual points, regex-parsed rencontre details, actualités...), none of which backed a real screen.
 
 ## Documentation
 
@@ -43,7 +43,7 @@ cd ci4 && composer install # ci4/: CodeIgniter 4 framework itself
 
 Access via `http://nijac/` — a dedicated WAMP vhost whose `DocumentRoot` is this folder directly (see `httpd-vhosts.conf` and the Windows `hosts` file), matching `app.baseURL` in `ci4/.env` (`http://nijac/`). Do **not** use `http://localhost/NIJAC/` (default vhost, NIJAC as a subfolder): `Config\App::$baseURL` has no path segment, so every `site_url()`/`base_url()` link generated while browsing under that host is wrong (wrong host under the default vhost, or wrong path if the host is added to `allowedHostnames`) — CodeIgniter's `SiteURI` only swaps the host for allowed hostnames, never the base path, so the two access methods can't both work against a single static `baseURL`. In production the app is deployed under a path (`https://www.ligue-normandie-tt.fr/nijac/`), so `ci4/.env`'s `app.baseURL` there must include that path — that `.env` is a separate file edited directly on the server (FTP-only deploy, see below), not the one in this repo. The root `.htaccess` transparently forwards everything to `ci4/public/index.php` (the CI4 front controller) except real files/folders (`asset/`, `img/`, `SQL/`, `Importation/`, `logs/`, `ci4/` itself), which are served as-is. No `RewriteBase` is hard-coded, so the same `.htaccess` works whether this folder is a vhost docroot (WAMP) or a subfolder (production).
 
-The DB schema migrations run via `config/app_config.php → initTableConfiguration()`, no CI4 migration files are used. Only `DbAdminController` (E099) calls it, so a new column/table gets created the first time an admin loads the E099 screen after deploying a change — not automatically on every page load like before. Several controllers also run their own inline `DESCRIBE`/`ALTER TABLE ADD COLUMN` checks unrelated to `initTableConfiguration()` (e.g. `DesiderataClubController` for `salle.Cp`) — those still self-heal on their own page load regardless.
+The DB schema migrations run via `config/app_config.php → initTableConfiguration()`, no CI4 migration files are used. Only `DbAdminController` (EA98) calls it, so a new column/table gets created the first time an admin loads the EA98 screen after deploying a change — not automatically on every page load like before. Several controllers also run their own inline `DESCRIBE`/`ALTER TABLE ADD COLUMN` checks unrelated to `initTableConfiguration()` (e.g. `DesiderataClubController` for `salle.Cp`) — those still self-heal on their own page load regardless.
 
 No test suite exists for the application itself (`ci4/tests/` is the untouched CodeIgniter starter scaffold).
 
@@ -65,13 +65,15 @@ Served from the root `asset/` folder via `base_url('asset/js/...')` — not dupl
 
 Every screen has a code `EXXX`. It's hard-coded directly into each view's `<title>`/header markup (no shared header partial — see "View / header convention" below) and referenced in the matching `Routes.php` comment block. When creating a new screen, assign the next available code and add it to `Ecrans.md` and `SPECIFICATION.md`.
 
+Le numéro reflète le menu d'accès de l'écran :
+
 | Range | Domain |
 |-------|--------|
-| E001–E019 | Admin / paramétrage |
-| E020–E029 | Nominateur |
-| E030–E033 | JA / public (fiche JA, convocation, disponibilité, changement mdp) |
-| E034–E039 | CSR (Commission Sportive Régionale) |
-| E099 | Administration BDD (accès restreint) |
+| E001–E010 | Connexion + menus eux-mêmes (E001 login, E002 menu admin, E003 menu nominateur, E004 menu CSR, E005 menu défiscalisateur, E006 changement mdp) |
+| EN11–EN30 | Menu nominateur + pages publiques/JA tokenisées (désidératas club, adresse, fiche JA, convocation, disponibilité, JA du club) |
+| ES31–ES50 | Menu CSR (Commission Sportive Régionale) |
+| ED51–ED70 | Menu défiscalisateur |
+| EA80+ | Menu paramètres administrateur (EA98 = Administration BDD, accès restreint CHAUTARD) |
 
 ## Architecture
 
@@ -129,26 +131,26 @@ $_SESSION['utilisateur'] = [
     'is_admin'       => bool,
     'id_departement' => string,    // e.g. '76'
     'change_login'   => bool,      // forces password change on next login
-    'email'          => string,    // Utilisateur.Email — Reply-To + Cc prefill in Centre d'envoi (E024)
+    'email'          => string,    // Utilisateur.Email — Reply-To + Cc prefill in Centre d'envoi (EN15)
 ];
 ```
 
-There is no `JA` role/session: a JA never logs in. All JA-facing screens (E029–E032) are public routes, identified by an Obfuscator token (`?ja=TOKEN`) in a link emailed to them — see `construireMarqueursMessage()` in `config/app_config.php` for how those links are built, and `InfoRencontreController::resolveContext()` (E030) for the reference implementation of "token, else Nominateur/Admin session, else redirect".
+There is no `JA` role/session: a JA never logs in. All JA-facing screens (EN19–EN22) are public routes, identified by an Obfuscator token (`?ja=TOKEN`) in a link emailed to them — see `construireMarqueursMessage()` in `config/app_config.php` for how those links are built, and `InfoRencontreController::resolveContext()` (EN20) for the reference implementation of "token, else Nominateur/Admin session, else redirect".
 
 ### Access control convention
 
 - Admin-only routes: `['filter' => 'adminauth']` in `Routes.php`
 - Nominateur + admin routes: `['filter' => 'auth']` in `Routes.php` (role `CSR` also passes this filter, though it has no menu link into these screens)
-- CSR-only routes (E034, E035): `['filter' => 'csrauth']` — role `CSR` or `Administrateur` (see `CsrAuth.php`). E027 briefly moved to `csrauth`/the CSR menu (E034) when the CSR role was introduced, but moved back to `auth`/the Nominateur menu (E020).
-- Defiscalisateur-only routes (E038, E039): `['filter' => 'defiscauth']` — role `Defiscalisateur` or `Administrateur` (see `DefiscalisateurAuth.php`), same pattern as `csrauth`.
+- CSR-only routes (E004, ES31): `['filter' => 'csrauth']` — role `CSR` or `Administrateur` (see `CsrAuth.php`). EN12 briefly moved to `csrauth`/the CSR menu (E004) when the CSR role was introduced, but moved back to `auth`/the Nominateur menu (E003).
+- Defiscalisateur-only routes (E005, ED51): `['filter' => 'defiscauth']` — role `Defiscalisateur` or `Administrateur` (see `DefiscalisateurAuth.php`), same pattern as `csrauth`.
 - Admin-only AJAX actions within a shared controller: checked individually inside the method, same idea as before (e.g. `SalleController`/`JugearbitreController`/`MessagerieController` use route filter `auth` but gate specific write actions to admin in code)
-- E018 (FfttTestController) and E099 (DbAdminController) extra restriction, checked manually in the controller: `$_SESSION['utilisateur']['login'] === 'CHAUTARD'`
-- Public (tokenized or fully open) routes have no filter at all in `Routes.php` — e.g. E023 `desiderata-club`, E029 `adresse-ja`, E030 `info-rencontre`, E031 `convocation-ja`, E032 `disponibilite-ja` (all JA-facing screens; session checked manually in-controller only to let Nominateur/Admin reuse E030 from their own menu)
+- EA96 (FfttTestController) and EA98 (DbAdminController) extra restriction, checked manually in the controller: `$_SESSION['utilisateur']['login'] === 'CHAUTARD'`
+- Public (tokenized or fully open) routes have no filter at all in `Routes.php` — e.g. EN18 `desiderata-club`, EN19 `adresse-ja`, EN20 `info-rencontre`, EN21 `convocation-ja`, EN22 `disponibilite-ja` (all JA-facing screens; session checked manually in-controller only to let Nominateur/Admin reuse EN20 from their own menu)
 
 ### Database conventions
 
 - Auto-column-add pattern: controllers check `DESCRIBE ja` / `SHOW COLUMNS FROM` at request time and issue `ALTER TABLE ADD COLUMN IF NOT EXISTS` before using new columns. No CI4 migration files are used for this — everything is in `config/app_config.php` or inline in the controller.
-- Auto-enum-extend pattern: `ajouterValeurEnum($pdo, $table, $colonne, $valeur, $defaut)` in `config/app_config.php` adds a value to an existing `ENUM` column if missing (re-reads the current definition via `SHOW COLUMNS` first, so no existing value is lost) — used for `messagerie.Type` (new system message types, e.g. `assurerTemplateExpirationFfttApi()`) and `utilisateur.Role` (`assurerRoleCsr()`, called from `UtilisateurController`). The CSR role (E035) doesn't get its own message type: it reuses `Id_Messagerie = 6` (Réengagements), the same message already sent by E027 — see `MessagerieController::ID_MESSAGE_CSR`.
+- Auto-enum-extend pattern: `ajouterValeurEnum($pdo, $table, $colonne, $valeur, $defaut)` in `config/app_config.php` adds a value to an existing `ENUM` column if missing (re-reads the current definition via `SHOW COLUMNS` first, so no existing value is lost) — used for `messagerie.Type` (new system message types, e.g. `assurerTemplateExpirationFfttApi()`) and `utilisateur.Role` (`assurerRoleCsr()`, called from `UtilisateurController`). The CSR role (ES31) doesn't get its own message type: it reuses `Id_Messagerie = 6` (Réengagements), the same message already sent by EN12 — see `MessagerieController::ID_MESSAGE_CSR`.
 - `laposte` table is the INSEE commune reference (CodePostal, Nom, GPS). JA rows link to it via `Id_LaPoste`; `Cp` and `Ville` columns on `ja` are fallback denormalized copies.
 - Department filtering rule for Seine-Maritime (76): automatically includes Eure (27), configured in `regles_departements` JSON in the `configuration` table.
 - Always call `getDepartementsAutorises($id_departement)` to resolve the full list of departments for a given user — never hardcode department rules.
@@ -170,11 +172,11 @@ Requires PHP `bcmath` extension. Used to expose JA IDs in public convocation/dis
 
 ### Menu button convention
 
-Both menu views (`admin_menu_index.php` E002 and `nominateur_menu_index.php` E020) display a small screen code badge (top-right, `.btn-code` CSS class, `position: absolute`) inside each `.menu-btn`. Links now point to CI4 routes via `site_url(...)` instead of static filenames. When adding a new button to a menu, always include the `<span class="btn-code">EXXXX</span>` as the first child of the `<a>` element.
+Both menu views (`admin_menu_index.php` E002 and `nominateur_menu_index.php` E003) display a small screen code badge (top-right, `.btn-code` CSS class, `position: absolute`) inside each `.menu-btn`. Links now point to CI4 routes via `site_url(...)` instead of static filenames. When adding a new button to a menu, always include the `<span class="btn-code">EXXXX</span>` as the first child of the `<a>` element.
 
 ```html
 <a href="<?= site_url('mypage') ?>" class="menu-btn btn-mycolor">
-    <span class="btn-code">E030</span>
+    <span class="btn-code">EN20</span>
     <div class="btn-icon"><img src="<?= base_url('img/myicon.png') ?>" alt="..."></div>
     <span>Titre du bouton</span>
     <span class="btn-desc">Description courte</span>

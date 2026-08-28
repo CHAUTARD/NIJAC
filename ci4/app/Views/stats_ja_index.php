@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Statistiques JA (E028)</title>
+    <title>NIJAC – Statistiques JA (EN17)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
@@ -83,7 +83,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'bar-chart-fill', 'phTitle' => 'Statistiques des Juges-Arbitres', 'phCode' => 'E028',
+    'phIcon' => 'bar-chart-fill', 'phTitle' => 'Statistiques des Juges-Arbitres', 'phCode' => 'EN17',
     'phCrumbLabel' => 'Nominateur', 'phCrumbUrl' => site_url('nominateur-menu'), 'phBackUrl' => site_url('nominateur-menu'),
     'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
 ]) ?>

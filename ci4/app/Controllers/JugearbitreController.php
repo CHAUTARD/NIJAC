@@ -5,7 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Gestion des Juges-Arbitres (E007), portage CI4 de Nominateur/jugearbitre.php.
+ * NIJAC – Gestion des Juges-Arbitres (EN11), portage CI4 de Nominateur/jugearbitre.php.
  *
  * Accessible à tout utilisateur authentifié (filtre "auth", pas "adminauth") :
  * un Nominateur consulte/modifie la grille et importe des comptes EBP ; import
@@ -957,7 +957,7 @@ class JugearbitreController extends BaseController
 
         // Clubs référencés par le CSV mais absents localement — créés à la
         // volée depuis l'API FFTT (le N° club vient du CSV lui-même), via le
-        // même helper que ClubController::syncFfttClub() (écran E005).
+        // même helper que ClubController::syncFfttClub() (écran EA81).
         $clubsCrees = [];
         foreach (array_unique($idsClubManquants) as $numClub) {
             try {

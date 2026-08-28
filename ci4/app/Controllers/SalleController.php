@@ -6,7 +6,7 @@ use CodeIgniter\HTTP\ResponseInterface;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
 /**
- * NIJAC – Gestion des salles (E005), portage CI4 de salle.php.
+ * NIJAC – Gestion des salles (EA81), portage CI4 de salle.php.
  *
  * Accessible à tout utilisateur authentifié (filtre "auth", pas "adminauth") :
  * un Nominateur consulte en lecture, restreint à ses départements autorisés ;

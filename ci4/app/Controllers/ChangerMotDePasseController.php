@@ -3,7 +3,7 @@
 namespace App\Controllers;
 
 /**
- * NIJAC – Changement du mot de passe (E033), portage CI4 de
+ * NIJAC – Changement du mot de passe (E006), portage CI4 de
  * changer_mot_de_passe.php.
  *
  * Ouverte depuis la modale "Mot de passe à modifier" (toolbar, _modal_mdp.php)

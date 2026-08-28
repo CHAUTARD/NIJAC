@@ -5,12 +5,12 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Import des rencontres depuis l'API FFTT (E011), portage CI4 de
+ * NIJAC – Import des rencontres depuis l'API FFTT (EA82), portage CI4 de
  * import_rencontres.php.
  *
  * Flux : Ligue → Épreuves → Divisions → Poules → Rencontres → BDD.
  * Admin uniquement (filtre "adminauth", comme includes/admin_required.php
- * côté legacy — voir SPECIFICATION.md, section E011, mise à jour pour
+ * côté legacy — voir SPECIFICATION.md, section EA82, mise à jour pour
  * refléter ce flux API FFTT direct au lieu de l'ancien import de fichier
  * Excel).
  *
@@ -222,7 +222,7 @@ class ImportRencontresController extends BaseController
             // Ne conserver que les épreuves des saisons récentes : la FFTT numérote idepreuve de
             // façon croissante et continue toutes saisons confondues, donc les anciennes saisons
             // encombrent la liste sans intérêt. Seuil configurable (clé 'fftt_epreuve_min',
-            // éditable dans Configuration générale E015 — à relever à chaque nouvelle saison).
+            // éditable dans Configuration générale EA91 — à relever à chaque nouvelle saison).
             $seuilEpreuve = (int) getConfig('fftt_epreuve_min', '18368');
             $items        = array_values(array_filter(
                 $items,
@@ -590,10 +590,10 @@ class ImportRencontresController extends BaseController
     /**
      * Désigne un JA du club recevant sur une rencontre R3M/R4M sans arbitre
      * nominé, et lui envoie immédiatement la convocation — même logique que
-     * InfoRencontreController::designerJaPourRencontre() (E030, auto-désignation
+     * InfoRencontreController::designerJaPourRencontre() (EN20, auto-désignation
      * du JA connecté), adaptée ici au choix par l'admin d'un JA quelconque du
      * club recevant. La disponibilité est générée automatiquement (Reponse='P',
-     * comme en E030) : ces arbitres officient leur propre match, sans saisie
+     * comme en EN20) : ces arbitres officient leur propre match, sans saisie
      * préalable de disponibilité.
      */
     public function designerArbitre(): ResponseInterface

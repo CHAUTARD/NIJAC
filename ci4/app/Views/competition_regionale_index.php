@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Calendrier championnat régional (E014)</title>
+    <title>NIJAC – Calendrier championnat régional (EA84)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
@@ -16,7 +16,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'calendar2-check-fill', 'phTitle' => 'Calendrier championnat régional', 'phCode' => 'E014',
+    'phIcon' => 'calendar2-check-fill', 'phTitle' => 'Calendrier championnat régional', 'phCode' => 'EA84',
     'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
 ]) ?>
 

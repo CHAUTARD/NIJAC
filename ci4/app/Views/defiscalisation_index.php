@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Défiscalisation JA (E039)</title>
+    <title>NIJAC – Défiscalisation JA (ED51)</title>
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
@@ -19,7 +19,7 @@
             flex-direction: column;
         }
 
-        /* Orange, cohérent avec E038 (Menu Défiscalisateur) */
+        /* Orange, cohérent avec E005 (Menu Défiscalisateur) */
         #page-header {
             background: #e65100;
             color: #fff;
@@ -190,7 +190,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'cash-coin', 'phTitle' => 'Défiscalisation JA', 'phCode' => 'E039',
+    'phIcon' => 'cash-coin', 'phTitle' => 'Défiscalisation JA', 'phCode' => 'ED51',
     'phCrumbLabel' => 'Défiscalisateur', 'phCrumbUrl' => site_url('defiscalisateur-menu'), 'phBackUrl' => site_url('defiscalisateur-menu'),
 ]) ?>
 

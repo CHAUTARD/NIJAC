@@ -9,7 +9,7 @@ use CodeIgniter\HTTP\ResponseInterface;
  * ajax/laposte.php.
  *
  * Utilitaire AJAX partagé (pas un écran à part entière, pas de code EXXX) :
- * réutilisé par E005 (Salle) et E007 (Juge-Arbitre) pour résoudre un
+ * réutilisé par EA81 (Salle) et EN11 (Juge-Arbitre) pour résoudre un
  * code postal / nom de commune en Id_LaPoste. Accessible à tout utilisateur
  * authentifié (Administrateur ou Nominateur) — filtre "auth".
  */

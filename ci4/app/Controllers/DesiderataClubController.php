@@ -5,10 +5,10 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Désidératas club (E023), portage CI4 de Nominateur/desiderata_club.php.
+ * NIJAC – Désidératas club (EN18), portage CI4 de Nominateur/desiderata_club.php.
  *
  * Page PUBLIQUE, sans authentification — tokenisée par le paramètre `?club=<Id_Club>`
- * envoyé par email depuis E027 (JA_R3R4.php, pas encore porté). Pas de filtre de
+ * envoyé par email depuis EN12 (JA_R3R4.php, pas encore porté). Pas de filtre de
  * route ("auth"/"adminauth") : seul le filtre global "canonicalhost" s'applique.
  *
  * Session native démarrée manuellement dans chaque action (comme AuthController),

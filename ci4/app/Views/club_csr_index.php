@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Club CSR (E035)</title>
+    <title>NIJAC – Club CSR (ES31)</title>
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
@@ -42,7 +42,7 @@
         }
         #toolbar .ts-pwd-warning:hover { color: #900; }
 
-        /* ── En-tête (violet, propre au rôle CSR — voir E034) ── */
+        /* ── En-tête (violet, propre au rôle CSR — voir E004) ── */
         #page-header {
             background: #6a1b9a;
             color: #fff;
@@ -139,7 +139,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'building', 'phTitle' => 'Club CSR', 'phCode' => 'E035',
+    'phIcon' => 'building', 'phTitle' => 'Club CSR', 'phCode' => 'ES31',
     'phCrumbLabel' => 'CSR', 'phCrumbUrl' => site_url('csr-menu'), 'phBackUrl' => site_url('csr-menu'),
 ]) ?>
 

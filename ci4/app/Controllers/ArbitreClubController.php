@@ -5,17 +5,17 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Désignation du JA par le club (E045).
+ * NIJAC – Désignation du JA par le club (EN25).
  *
  * Page PUBLIQUE, sans authentification — lien tokenisé `?renc=TOKEN`
  * (Obfuscator de l'Id_Rencontre) envoyé au correspondant du club recevant
- * depuis E022 (bouton « Demander le JA au club », message système n°7).
+ * depuis EN14 (bouton « Demander le JA au club », message système n°7).
  *
  * Le correspondant choisit dans une liste déroulante le juge-arbitre qui
  * dirigera la rencontre — uniquement les JA actifs rattachés au club,
  * triés alphabétiquement. La réponse
  * crée une `nomination` (Peage/Kilometre/Defiscalisation = 0, Valide = 1,
- * EmailEnvoye = 0) comme le fait E030 pour l'arbitrage club.
+ * EmailEnvoye = 0) comme le fait EN20 pour l'arbitrage club.
  *
  * À renseigner dans les 5 jours qui suivent la rencontre : au-delà, simple
  * avertissement, la saisie reste possible.

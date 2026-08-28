@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Nettoyage / Restauration (E016)</title>
+    <title>NIJAC – Nettoyage / Restauration (EA85)</title>
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
@@ -390,7 +390,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'database-fill-gear', 'phTitle' => 'Nettoyage / Restauration de phase', 'phCode' => 'E016',
+    'phIcon' => 'database-fill-gear', 'phTitle' => 'Nettoyage / Restauration de phase', 'phCode' => 'EA85',
     'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
 ]) ?>
 

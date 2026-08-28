@@ -5,7 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Nettoyage / Restauration de phase (E016), portage CI4 de clean.php.
+ * NIJAC – Nettoyage / Restauration de phase (EA85), portage CI4 de clean.php.
  *
  * Outil admin destructeur : vidage/sauvegarde de la phase en cours, sauvegarde
  * et restauration totale de la base, restauration d'une table isolée depuis

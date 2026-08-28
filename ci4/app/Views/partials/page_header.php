@@ -1,9 +1,9 @@
 <?php
 /**
  * Cartouche #page-header standard : breadcrumb optionnel + icône + titre + badge écran + bouton Retour.
- * Requis : $phIcon (suffixe bootstrap-icons, ex. 'people-fill'), $phTitle, $phCode (ex. 'E009'), $phBackUrl.
+ * Requis : $phIcon (suffixe bootstrap-icons, ex. 'people-fill'), $phTitle, $phCode (ex. 'EA86'), $phBackUrl.
  * Optionnel : $phCrumbLabel/$phCrumbUrl (pas de breadcrumb si absents), $phCrumbColor (def. #cfe0ff),
- *             $phBadgeColor (def. #cfe0ff), $phBadgeOpacityOnly (def. false — variante "opacity-75" sans couleur, cf. E099).
+ *             $phBadgeColor (def. #cfe0ff), $phBadgeOpacityOnly (def. false — variante "opacity-75" sans couleur, cf. EA98).
  */
 $phCrumbColor       = $phCrumbColor ?? '#cfe0ff';
 $phBadgeColor       = $phBadgeColor ?? '#cfe0ff';

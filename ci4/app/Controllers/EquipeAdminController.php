@@ -5,9 +5,9 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Gestion des équipes (E041) : édition directe de la table `equipe`
+ * NIJAC – Gestion des équipes (EA94) : édition directe de la table `equipe`
  * (Nom, Division, Club) avec filtres Club/Division/Nom, sans passer par les
- * écrans d'import. Distinct d'E019 (Équipes régionales), qui édite les champs
+ * écrans d'import. Distinct d'EA92 (Équipes régionales), qui édite les champs
  * de désidératas (ReEngagement, JourSouhaite, SouhaitJA...) d'équipes déjà
  * importées mais laisse Nom/Division/Club en lecture seule.
  *

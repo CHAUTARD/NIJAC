@@ -5,7 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Disponibilités JA Championnat Régional (E036), nouvel écran.
+ * NIJAC – Disponibilités JA Championnat Régional (EN23), nouvel écran.
  *
  * Page PUBLIQUE (sans authentification), tokenisée par le paramètre `?ja=TOKEN`
  * (Obfuscator) — remplace le formulaire Excel "Disponibilités JA 2ème phase"

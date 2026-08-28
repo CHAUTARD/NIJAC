@@ -6,7 +6,7 @@ use App\Models\UtilisateurModel;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Gestion des utilisateurs (E009), portage CI4 de utilisateur.php.
+ * NIJAC – Gestion des utilisateurs (EA86), portage CI4 de utilisateur.php.
  */
 class UtilisateurController extends BaseController
 {
@@ -42,7 +42,7 @@ class UtilisateurController extends BaseController
 
     /**
      * Lit les valeurs possibles de l'ENUM utilisateur.Role directement en base, pour que la
-     * combobox Rôle (E009) et la validation de extractFields() restent synchronisées avec la
+     * combobox Rôle (EA86) et la validation de extractFields() restent synchronisées avec la
      * colonne sans modification de code si un rôle est ajouté (voir ajouterValeurEnum() /
      * assurerRoleCsr() dans config/app_config.php) — même pattern que MessagerieController::typesValides().
      */

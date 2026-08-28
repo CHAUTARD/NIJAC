@@ -5,7 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Gestion des messages (E026), portage CI4 de Nominateur/messagerie.php.
+ * NIJAC – Gestion des messages (EA93), portage CI4 de Nominateur/messagerie.php.
  *
  * Accessible à tout utilisateur authentifié (filtre "auth", pas "adminauth") :
  * un Nominateur consulte les messages système + les siens et peut dupliquer un
@@ -41,8 +41,8 @@ class MessagerieController extends BaseController
         }
 
         // Idem pour ReplyTo (Reply-To = email du nominateur courant) — ajoutée en fin de
-        // table, utilisée par NominationController::envoyerConvocations() (E022) et
-        // CentrenvoyeController::envoyerUn() (E024). Activée par défaut uniquement sur le
+        // table, utilisée par NominationController::envoyerConvocations() (EN14) et
+        // CentrenvoyeController::envoyerUn() (EN15). Activée par défaut uniquement sur le
         // message système n°3 "Convocation" (NominationController::ID_MESSAGE_CONVOCATION).
         if (!in_array('ReplyTo', $cols, true)) {
             $pdo->exec('ALTER TABLE messagerie ADD COLUMN ReplyTo TINYINT(1) NOT NULL DEFAULT 0');
@@ -61,7 +61,7 @@ class MessagerieController extends BaseController
         return !empty($_SESSION['utilisateur']['is_admin']);
     }
 
-    /** Rôle CSR (Commission Sportive Régionale) — ne voit/modifie que le message n°6 (Réengagements), déjà utilisé par E027 pour les correspondants de club. */
+    /** Rôle CSR (Commission Sportive Régionale) — ne voit/modifie que le message n°6 (Réengagements), déjà utilisé par EN12 pour les correspondants de club. */
     private function isCsr(): bool
     {
         return ($_SESSION['utilisateur']['role'] ?? '') === 'CSR';

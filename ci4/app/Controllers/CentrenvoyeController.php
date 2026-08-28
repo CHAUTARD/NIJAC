@@ -5,7 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Centre d'envoi de messages (E024), portage CI4 de Nominateur/centrenvoye.php.
+ * NIJAC – Centre d'envoi de messages (EN15), portage CI4 de Nominateur/centrenvoye.php.
  *
  * Accessible à tout utilisateur authentifié (filtre "auth", pas "adminauth") :
  * envoie les 4 types de messages (Disponibilités, Rappel dispo, Convocation,

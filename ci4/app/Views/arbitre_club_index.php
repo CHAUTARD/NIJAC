@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Juge-arbitre du club (E045)</title>
+    <title>NIJAC – Juge-arbitre du club (EN25)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <style>
@@ -29,7 +29,7 @@
 <body>
 <div class="card-pub">
     <div class="hd">
-        <h1><i class="bi bi-person-badge me-2"></i>Juge-arbitre du club <span class="ec">E045</span></h1>
+        <h1><i class="bi bi-person-badge me-2"></i>Juge-arbitre du club <span class="ec">EN25</span></h1>
     </div>
     <div class="bd">
 
