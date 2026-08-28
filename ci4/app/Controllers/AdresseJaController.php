@@ -279,14 +279,6 @@ class AdresseJaController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => 'JA introuvable.']);
             }
 
-            // Auto-migration colonnes si nécessaire
-            $colsJa = array_column($pdo->query('SHOW COLUMNS FROM ja')->fetchAll(), 'Field');
-            foreach (['Cp' => 'VARCHAR(10) NULL', 'Ville' => 'VARCHAR(100) NULL'] as $col => $def) {
-                if (!in_array($col, $colsJa)) {
-                    $pdo->exec("ALTER TABLE ja ADD COLUMN $col $def");
-                }
-            }
-
             $pdo->prepare('UPDATE ja SET Id_LaPoste = ?, Cp = ?, Ville = ? WHERE Id_JA = ?')
                 ->execute([$idLaPoste, $cp ?: null, $ville ?: null, $id]);
 

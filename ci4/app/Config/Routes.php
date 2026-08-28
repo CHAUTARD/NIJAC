@@ -369,6 +369,7 @@ $routes->post('disponibilite-ja/token', 'DisponibiliteJaController::token');
 $routes->get('disponibilite-ja/lire-note', 'DisponibiliteJaController::lireNote');
 $routes->post('disponibilite-ja/sauvegarder-note', 'DisponibiliteJaController::sauvegarderNote');
 $routes->post('disponibilite-ja/sauvegarder-defiscalisation', 'DisponibiliteJaController::sauvegarderDefiscalisation');
+$routes->post('disponibilite-ja/sauvegarder-arbitrage-voisins', 'DisponibiliteJaController::sauvegarderArbitrageVoisins');
 
 // ── E004 Menu CSR ────────────────────────────────────────────────────────────
 // Rôle CSR (Commission Sportive Régionale) ou Administrateur — voir CsrAuth.php.

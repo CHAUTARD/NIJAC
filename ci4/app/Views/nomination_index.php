@@ -178,6 +178,9 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
     <div id="col-candidats">
         <div class="col-titre">
             <span><i class="bi bi-people-fill me-1"></i>Candidats JA</span>
+            <label style="font-weight:600;font-size:.75rem;cursor:pointer;user-select:none;display:flex;align-items:center;gap:.3rem;">
+                <input type="checkbox" id="chk-hors-dept" class="form-check-input mt-0"> Autres départements
+            </label>
         </div>
         <div id="placeholder-candid">
             <i class="bi bi-arrow-left-circle fs-2"></i>
@@ -490,6 +493,10 @@ function selectionnerRencontre(idRenc) {
     afficherCandidatsPourRencontre(idRenc);
 }
 
+$('#chk-hors-dept').on('change', function () {
+    if (rencSelectionnee != null) afficherCandidatsPourRencontre(rencSelectionnee);
+});
+
 // ── Candidats JA pour une rencontre — filtrage et tri côté client ─────────────
 function afficherCandidatsPourRencontre(idRenc) {
     const rc = rencontres.find(r => r.Id_Rencontre == idRenc);
@@ -524,6 +531,10 @@ function afficherCandidatsPourRencontre(idRenc) {
             : [];
         const prefereRenc  = dispoRencs.includes(idRenc);
         if (!dispoJournee && !prefereRenc) return;
+
+        // JA d'un autre département (accepte via EN22) : masqué sauf si la case
+        // « Autres départements » du header est cochée.
+        if (ja.HorsDept == 1 && !$('#chk-hors-dept').is(':checked')) return;
 
         if (ja.Id_Club && ja.Id_Club === clubDom) return;
 
@@ -581,6 +592,7 @@ function afficherCandidatsPourRencontre(idRenc) {
             const nomMin  = ja.NbNominations > 0 ? `${ja.NbNominations} arb.` : '0 arb.';
 
             let badges = '';
+            if (ja.HorsDept == 1) badges += '<span class="badge rounded-pill me-1" style="background:#6c757d;color:#fff;"><i class="bi bi-signpost-2 me-1"></i>Autre dépt</span>';
             if (ja.PrefereRenc == 1) badges += '<span class="badge badge-pref rounded-pill me-1"><i class="bi bi-star-fill me-1"></i>Choix JA</span>';
             if (ja.DistanceKm != null && ja.DistanceKm <= 20) badges += '<span class="badge badge-prox rounded-pill me-1"><i class="bi bi-geo-alt-fill me-1"></i>Proche</span>';
             badges += `<span class="badge ${ja.Disponibilite === 'O' ? 'badge-dispo-O' : 'badge-dispo-P'} rounded-pill">${ja.Disponibilite === 'O' ? 'Disponible' : 'Partiel'}</span>`;

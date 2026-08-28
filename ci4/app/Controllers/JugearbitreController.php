@@ -14,9 +14,8 @@ use CodeIgniter\HTTP\ResponseInterface;
  * chaque méthode, comme le fait jugearbitre.php
  * (`in_array($action, $actionsAdmin) && !$isAdmin`).
  *
- * Pas de Model : introspection dynamique des colonnes (auto-migration FFTT),
- * upsert en masse, appels API FFTT avec retry — trop éloignés du Query
- * Builder simple. Réutilise getPDO() directement, comme le fichier legacy.
+ * Pas de Model : upsert en masse, appels API FFTT avec retry — trop éloignés
+ * du Query Builder simple. Réutilise getPDO() directement, comme le fichier legacy.
  */
 class JugearbitreController extends BaseController
 {
@@ -35,36 +34,6 @@ class JugearbitreController extends BaseController
 
     /** Codes département FFTT (xml_club_dep2) pour la Corse, distincts des codes INSEE 2A/2B utilisés partout ailleurs dans l'appli. */
     private const DEPT_FFTT_CORSE = ['2A' => '98', '2B' => '99'];
-
-    /**
-     * Auto-migration colonnes enrichissement FFTT sur `ja` — exécutée avant
-     * chaque action, comme le fait jugearbitre.php (uniquement pour les
-     * requêtes AJAX, pas au rendu de page).
-     */
-    private function ensureFfttColumns(\PDO $pdo): void
-    {
-        $colsInfo = $pdo->query('SHOW COLUMNS FROM ja')->fetchAll();
-        $colsJa   = array_column($colsInfo, 'Field');
-        $ffttCols = [
-            'DateValidationFFTT'     => 'VARCHAR(10) NULL DEFAULT NULL',
-            'Cp'                     => 'VARCHAR(10) NULL DEFAULT NULL',
-            'Ville'                  => 'VARCHAR(100) NULL DEFAULT NULL',
-            'CodeDept'               => 'VARCHAR(3) NULL DEFAULT NULL',
-        ];
-        foreach ($ffttCols as $col => $def) {
-            if (!in_array($col, $colsJa)) {
-                $pdo->exec("ALTER TABLE ja ADD COLUMN $col $def");
-            }
-        }
-
-        // Corrige un schéma existant plus strict que prévu ci-dessus (ex: CodeDept
-        // créé NOT NULL sans défaut ailleurs) — l'INSERT de l'import FFTT club ne
-        // renseigne pas cette colonne et échouerait sinon (1364).
-        $codeDept = current(array_filter($colsInfo, static fn ($c) => $c['Field'] === 'CodeDept'));
-        if ($codeDept && strtoupper($codeDept['Null']) === 'NO' && $codeDept['Default'] === null) {
-            $pdo->exec('ALTER TABLE ja MODIFY COLUMN CodeDept VARCHAR(3) NULL DEFAULT NULL');
-        }
-    }
 
     /** Rang du grade : J3=3, J2=2, JA1=1 — plus c'est haut, plus c'est prioritaire */
     private function gradeRank(string $grade): int
@@ -126,7 +95,6 @@ class JugearbitreController extends BaseController
     public function liste(): ResponseInterface
     {
         $pdo = getPDO();
-        $this->ensureFfttColumns($pdo);
 
         $dept = $this->request->getGet('dept');
         $dept = ($dept !== null && $dept !== '') ? $dept : null;
@@ -139,6 +107,7 @@ class JugearbitreController extends BaseController
                     j.Grade, j.Actif, j.Id_Club, j.Id_LaPoste,
                     j.Defiscalisation, j.Nationale, j.NumCompteEBP,
                     j.DateValidationFFTT,
+                    j.ArbitreAutresDepts, j.DeptsArbitrage,
                     j.Cp, j.Ville, j.CodeDept,
                     cl.Nom AS NomClub,
                     COALESCE(j.Cp,    lp.CodePostal) AS CodePostalJA,
@@ -168,6 +137,8 @@ class JugearbitreController extends BaseController
             'NumCompteEBP'           => $r['NumCompteEBP'],
             'Defiscalisation'        => $r['Defiscalisation'],
             'Nationale'              => $r['Nationale'],
+            'ArbitreAutresDepts'     => $r['ArbitreAutresDepts'],
+            'DeptsArbitrage'         => $r['DeptsArbitrage'],
             'NbDispo'                => $r['NbDispo'],
             'NomClub'                => $r['NomClub'],
             'CP'                     => $r['CodePostalJA'],
@@ -181,7 +152,6 @@ class JugearbitreController extends BaseController
     public function clubsParDept(): ResponseInterface
     {
         $pdo  = getPDO();
-        $this->ensureFfttColumns($pdo);
 
         $dept = trim((string) ($this->request->getGet('dept') ?? ''));
         if ($dept === '') {
@@ -214,7 +184,6 @@ class JugearbitreController extends BaseController
         }
 
         $pdo = getPDO();
-        $this->ensureFfttColumns($pdo);
 
         $idJA      = (int) ($this->request->getPost('id_ja') ?? 0);
         $idLaPoste = ($this->request->getPost('id_laposte') ?? '') !== '' ? (int) $this->request->getPost('id_laposte') : null;
@@ -264,7 +233,6 @@ class JugearbitreController extends BaseController
     {
 
         $pdo = getPDO();
-        $this->ensureFfttColumns($pdo);
 
         $lignes = json_decode($this->request->getPost('lignes') ?? '[]', true);
         if (!is_array($lignes)) {
@@ -477,7 +445,6 @@ class JugearbitreController extends BaseController
         }
 
         $pdo = getPDO();
-        $this->ensureFfttColumns($pdo);
 
         $numClub = trim($this->request->getPost('num_club') ?? '');
         if ($numClub === '') {
@@ -598,7 +565,6 @@ class JugearbitreController extends BaseController
         }
 
         $pdo = getPDO();
-        $this->ensureFfttColumns($pdo);
 
         $numClub = trim($this->request->getPost('num_club') ?? '');
         if ($numClub === '') {
@@ -707,7 +673,6 @@ class JugearbitreController extends BaseController
         }
 
         $pdo = getPDO();
-        $this->ensureFfttColumns($pdo);
 
         $licences = json_decode($this->request->getPost('licences') ?? '[]', true);
         if (!is_array($licences)) {
@@ -767,7 +732,6 @@ class JugearbitreController extends BaseController
     {
 
         $pdo = getPDO();
-        $this->ensureFfttColumns($pdo);
 
         $lignes = json_decode($this->request->getPost('lignes') ?? '[]', true);
         if (!is_array($lignes)) {
@@ -826,7 +790,6 @@ class JugearbitreController extends BaseController
         }
 
         $pdo = getPDO();
-        $this->ensureFfttColumns($pdo);
 
         $idJa = trim($this->request->getPost('id_ja') ?? '');
         if ($idJa === '') {
@@ -864,7 +827,6 @@ class JugearbitreController extends BaseController
         }
 
         $pdo = getPDO();
-        $this->ensureFfttColumns($pdo);
 
         $file = $this->request->getFile('fichier');
         if ($file === null || !$file->isValid()) {

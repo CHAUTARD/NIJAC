@@ -13,8 +13,7 @@ use CodeIgniter\HTTP\ResponseInterface;
  *
  * Accès rôle CSR ou Administrateur (filtre "csrauth").
  *
- * Pas de Model : auto-migration de colonnes, mêmes raisons que ClubController — réutilise
- * getPDO() directement.
+ * Pas de Model : mêmes raisons que ClubController — réutilise getPDO() directement.
  */
 class ClubCsrController extends BaseController
 {
@@ -39,7 +38,7 @@ class ClubCsrController extends BaseController
         }
     }
 
-    /** Auto-migration colonnes Club — même liste que ClubController::liste(). */
+    /** Pose la clé unique Club.EquipeNom si absente — même garde que ClubController::liste(). */
     private function assurerColonnesClub(\PDO $pdo): void
     {
         $hasUqEquipeNom = (bool) $pdo->query("SHOW INDEX FROM Club WHERE Key_name = 'uq_club_equipenom'")->fetch();

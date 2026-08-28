@@ -83,15 +83,10 @@ class ConvocationJaController extends BaseController
                 $stmtJa->execute([$idJa]);
                 $ja = $stmtJa->fetch();
 
-                $rencCols = array_column($pdo->query('DESCRIBE rencontre')->fetchAll(), 'Field');
-                $convNum  = in_array('NumConvocation', $rencCols) ? 'r.NumConvocation' : 'r.Id_Rencontre';
-                $hasPhase = in_array('Phase', $rencCols);
-                $phaseSel = $hasPhase ? 'r.Phase,' : 'NULL AS Phase,';
-
                 $stmtR = $pdo->prepare("
                     SELECT r.Id_Rencontre, r.Journee, r.Date, r.Heure, r.Poule,
-                           $convNum  AS NumConvocation,
-                           $phaseSel
+                           r.NumConvocation AS NumConvocation,
+                           r.Phase,
                            d.Division AS DivisionCode, d.Nom AS DivisionNom,
                            ed.Nom     AS NomDom,  ed.Id_Club AS IdClubDom,
                            ee.Nom     AS NomExt,

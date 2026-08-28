@@ -23,18 +23,10 @@ class DisponibiliteJaV2Controller extends BaseController
 
         $this->obf = new \Obfuscator(OBFUSCATOR_SEED);
 
-        $pdo = getPDO();
         try {
-            $jaCols = array_column($pdo->query('DESCRIBE JA')->fetchAll(), 'Field');
-            if (!in_array('Note', $jaCols)) {
-                $pdo->exec("ALTER TABLE JA ADD COLUMN Note TEXT NULL COMMENT 'Note à destination des nominateurs'");
-            }
-            try {
-                $pdo->exec('ALTER TABLE disponible ADD UNIQUE KEY uq_dispo (Id_JA, Id_Rencontre)');
-            } catch (\PDOException $ignored) {
-                // déjà présente
-            }
+            getPDO()->exec('ALTER TABLE disponible ADD UNIQUE KEY uq_dispo (Id_JA, Id_Rencontre)');
         } catch (\PDOException $ignored) {
+            // index déjà présent
         }
     }
 
@@ -149,14 +141,11 @@ class DisponibiliteJaV2Controller extends BaseController
         return $this->tryJson(function () {
             $pdo    = getPDO();
             $id     = (int) ($this->request->getGet('id') ?? 0);
-            $jaCols = array_column($pdo->query('DESCRIBE JA')->fetchAll(), 'Field');
-            $hasDefisc = in_array('Defiscalisation', $jaCols);
 
             $stmt = $pdo->prepare('
-                SELECT ja.Id_JA, ja.Nom, ja.Prenom, ja.Grade,
+                SELECT ja.Id_JA, ja.Nom, ja.Prenom, ja.Grade, ja.Defiscalisation,
                        lp.CodePostal AS Cp,
-                       lp.Nom        AS Ville' .
-                       ($hasDefisc ? ', ja.Defiscalisation' : ', 0 AS Defiscalisation') . '
+                       lp.Nom        AS Ville
                 FROM ja
                 LEFT JOIN laposte lp ON lp.Id_LaPoste = ja.Id_LaPoste
                 WHERE ja.Id_JA = ?

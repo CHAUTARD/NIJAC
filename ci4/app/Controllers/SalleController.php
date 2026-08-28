@@ -68,11 +68,6 @@ class SalleController extends BaseController
         $isAdmin = $this->isAdmin();
         $pdo     = getPDO();
 
-        $colsSalle = array_column($pdo->query('SHOW COLUMNS FROM Salle')->fetchAll(), 'Field');
-        if (!in_array('Cp', $colsSalle))        $pdo->exec("ALTER TABLE Salle ADD COLUMN Cp VARCHAR(10) NULL AFTER Adresse");
-        if (!in_array('Ville', $colsSalle))     $pdo->exec("ALTER TABLE Salle ADD COLUMN Ville VARCHAR(100) NULL AFTER Cp");
-        if (!in_array('Telephone', $colsSalle)) $pdo->exec("ALTER TABLE Salle ADD COLUMN Telephone VARCHAR(20) NULL AFTER Ville");
-
         $sql = 'SELECT s.Id_Salle, COALESCE(s.Nom, cl.Nom) AS Nom, s.Adresse, s.Telephone, s.Id_Laposte, s.Id_Club,
                        s.EstPrincipale, s.Cp, s.Ville, cl.Nom AS NomClub,
                        COALESCE(

@@ -10,9 +10,8 @@ use CodeIgniter\HTTP\ResponseInterface;
  * Admin uniquement (filtre "adminauth", comme includes/admin_required.php
  * côté legacy).
  *
- * Pas de Model : auto-migration de colonnes, appels API FFTT — trop éloigné
- * du Query Builder simple. Réutilise getPDO() directement, comme le fichier
- * legacy.
+ * Pas de Model : upsert en masse, appels API FFTT — trop éloigné du Query
+ * Builder simple. Réutilise getPDO() directement, comme le fichier legacy.
  */
 class ClubController extends BaseController
 {

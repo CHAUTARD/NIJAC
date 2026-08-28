@@ -101,6 +101,22 @@
         #tbl-ja thead th.sort-desc .sort-icon::after { content: '▼'; opacity: 1; }
         #tbl-ja thead th:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
 
+        /* Menu « Colonnes » (affichage/masquage des colonnes, mémorisé par le navigateur) */
+        #menu-colonnes { position: relative; }
+        #menu-colonnes > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; }
+        #menu-colonnes > summary::-webkit-details-marker { display: none; }
+        #menu-colonnes-list {
+            position: absolute; right: 0; top: calc(100% + 4px); z-index: 60;
+            background: #fff; border: 1px solid #ccc; border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,.15); padding: .35rem;
+            min-width: 180px; max-height: 60vh; overflow: auto;
+        }
+        #menu-colonnes-list label {
+            display: flex; align-items: center; gap: .45rem;
+            padding: .25rem .4rem; font-size: .85rem; cursor: pointer; white-space: nowrap;
+        }
+        #menu-colonnes-list label:hover { background: #eef4ff; border-radius: 4px; }
+
         #tbl-ja tbody tr { border-bottom: 1px solid #e0e8f0; }
         #tbl-ja tbody tr:nth-child(even) { background: #f7faff; }
         #tbl-ja tbody tr:hover   { background: #dce8f8; }
@@ -298,6 +314,11 @@
     </div>
     <span id="lbl-count">0 JA</span>
     <span style="flex:1"></span>
+    <details id="menu-colonnes">
+        <summary class="menu-item" style="border-color:transparent;"><i class="bi bi-layout-three-columns me-1"></i>Colonnes</summary>
+        <div id="menu-colonnes-list"></div>
+    </details>
+    <span style="flex:1"></span>
     <label for="sel-dept" style="font-size:.85rem;font-weight:700;color:#444;white-space:nowrap;margin:0;">
         <i class="bi bi-map me-1"></i>Département
     </label>
@@ -325,26 +346,28 @@
         <thead>
             <tr>
                 <th style="width:70px"  data-field="id">N° JA<span class="sort-icon"></span></th>
-                <th style="width:55px"  data-field="grade">Grade<span class="sort-icon"></span></th>
+                <th style="width:55px;display:none"  data-field="grade">Grade<span class="sort-icon"></span></th>
                 <th style="width:160px" data-field="nom">Nom<span class="sort-icon"></span></th>
                 <th style="width:140px" data-field="prenom">Prénom<span class="sort-icon"></span></th>
                 <th style="width:210px" data-field="email">Email<span class="sort-icon"></span></th>
                 <th style="width:120px" data-field="telephone">Téléphone<span class="sort-icon"></span></th>
                 <th style="width:65px"  data-field="actif">Actif<span class="sort-icon"></span></th>
-                <th style="width:100px" data-field="date_validation_fftt">Date Validation<span class="sort-icon"></span></th>
+                <th style="width:100px;display:none" data-field="date_validation_fftt">Date Validation<span class="sort-icon"></span></th>
                 <th style="width:75px"  data-field="id_club">N° Club<span class="sort-icon"></span></th>
                 <th style="width:200px" data-field="nom_club">Nom du club<span class="sort-icon"></span></th>
                 <th style="width:65px"  data-field="codedept">Exerce<span class="sort-icon"></span></th>
-                <th style="width:90px"  data-field="defiscalisation">Défiscalisation<span class="sort-icon"></span></th>
-                <th style="width:85px"  data-field="nationale">Nationale<span class="sort-icon"></span></th>
-                <th style="width:110px" data-field="num_compte_ebp">Cpte EBP<span class="sort-icon"></span></th>
+                <th style="width:90px;display:none"  data-field="defiscalisation">Défiscalisation<span class="sort-icon"></span></th>
+                <th style="width:85px;display:none"  data-field="nationale">Nationale<span class="sort-icon"></span></th>
+                <th style="width:110px;display:none" data-field="num_compte_ebp">Cpte EBP<span class="sort-icon"></span></th>
+                <th style="width:95px;display:none"  data-field="arbitre_autres_depts">Arb. autres dépts<span class="sort-icon"></span></th>
+                <th style="width:120px;display:none" data-field="depts_arbitrage">Dépts arbitrage<span class="sort-icon"></span></th>
                 <th style="width:75px"  data-field="cp">CP<span class="sort-icon"></span></th>
                 <th style="width:160px" data-field="ville">Ville<span class="sort-icon"></span></th>
                 <th style="width:75px"  class="no-sort">Lien dispo</th>
             </tr>
         </thead>
         <tbody id="tbody-grille">
-            <tr><td colspan="16" class="text-center text-muted py-3">Chargement…</td></tr>
+            <tr><td colspan="19" class="text-center text-muted py-3">Chargement…</td></tr>
         </tbody>
     </table>
 </div>
@@ -623,6 +646,21 @@
                 </div>
               </div>
             </div>
+            <div class="col-12">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="nja-arb-voisins">
+                <label class="form-check-label" for="nja-arb-voisins">Accepte d'arbitrer dans un ou plusieurs départements voisins</label>
+              </div>
+              <div id="nja-arb-voisins-depts" class="d-none ms-4 mt-1">
+                <div class="d-flex flex-wrap gap-3">
+                  <?php foreach (['14' => 'Calvados', '27' => 'Eure', '50' => 'Manche', '61' => 'Orne', '76' => 'Seine-Maritime'] as $d => $nom): ?>
+                  <label style="font-size:.9rem">
+                    <input type="checkbox" class="form-check-input me-1 nja-arb-dept" value="<?= $d ?>"><?= $d ?> <?= $nom ?>
+                  </label>
+                  <?php endforeach; ?>
+                </div>
+              </div>
+            </div>
           </div>
         </form>
         <!-- Zone suggestions laposte -->
@@ -717,7 +755,7 @@ function renderGrille() {
 
     if (!affichees.length) {
         const msg = searchTerm ? 'Aucun résultat pour cette recherche.' : 'Aucun juge-arbitre.';
-        $body.append(`<tr><td colspan="17" class="text-center text-muted py-3">${msg}</td></tr>`);
+        $body.append(`<tr><td colspan="19" class="text-center text-muted py-3">${msg}</td></tr>`);
     } else {
         affichees.forEach(l => {
             const idx  = l._idx;          // index stable, indépendant du filtre/tri
@@ -726,6 +764,9 @@ function renderGrille() {
                 ? '<span class="badge-actif">Oui</span>'
                 : '<span class="badge-inactif">Non</span>';
             const defiscHtml = l.defiscalisation
+                ? '<span class="badge-actif">Oui</span>'
+                : '<span class="badge-inactif">Non</span>';
+            const arbVoisinsHtml = l.arbitre_autres_depts
                 ? '<span class="badge-actif">Oui</span>'
                 : '<span class="badge-inactif">Non</span>';
             const nationaleHtml = l.nationale
@@ -744,8 +785,10 @@ function renderGrille() {
             $tr.append(makeTd(l.nom_club,         idx, 'nom_club',        true));
             $tr.append(makeTd(l.codedept,         idx, 'codedept',        true));
             $tr.append(makeTdHtml(defiscHtml,     idx, 'defiscalisation'));
-            $tr.append(makeTdHtml(nationaleHtml,   idx, 'nationale'));
-            $tr.append(makeTd(l.num_compte_ebp,    idx, 'num_compte_ebp', false));
+            $tr.append(makeTdHtml(nationaleHtml,  idx, 'nationale'));
+            $tr.append(makeTd(l.num_compte_ebp,   idx, 'num_compte_ebp', false));
+            $tr.append(makeTdHtml(arbVoisinsHtml, idx, 'arbitre_autres_depts'));
+            $tr.append(makeTd(l.depts_arbitrage,  idx, 'depts_arbitrage', true));
             $tr.append(makeCpTd(l,    idx));
             $tr.append(makeVilleTd(l, idx));
             // Boutons lien dispo / adresse — masqués si le JA n'a pas d'email
@@ -767,6 +810,8 @@ function renderGrille() {
     const info = searchTerm ? `${affichees.length} résultat(s) sur ${lignes.length}. ` : '';
     setStatus(`${info}Double-cliquez sur une ligne pour la modifier.`);
     $('#lbl-count').text(`${affichees.length}/${lignes.length} JA`);
+
+    appliquerColonnesCachees();
 }
 
 function makeTd(val, idx, field, readonly) {
@@ -832,6 +877,8 @@ function chargerListe() {
             num_compte_ebp:   r.NumCompteEBP ?? '',
             defiscalisation:  +r.Defiscalisation,
             nationale:        +r.Nationale,
+            arbitre_autres_depts: +r.ArbitreAutresDepts,
+            depts_arbitrage:      r.DeptsArbitrage ?? '',
             nb_dispo:               +r.NbDispo,
             cp:                     r.CP    ?? '',
             ville:                  r.Ville ?? '',
@@ -850,6 +897,10 @@ $('#win-menu-trigger').on('click', function (e) {
 $(document).on('click', function () {
     $('#win-menu-drop').removeClass('open');
     $('#win-menu-trigger').removeClass('open');
+});
+// Ferme le menu « Colonnes » au clic hors de celui-ci
+$(document).on('click', function (e) {
+    if (!$(e.target).closest('#menu-colonnes').length) $('#menu-colonnes').removeAttr('open');
 });
 $('#win-menu-drop').on('click', '.drop-item', function () {
     $('#win-menu-drop').removeClass('open');
@@ -1132,6 +1183,44 @@ $(function () {
     refreshTriEntetes = nijacSortableTable('#tbl-ja thead th[data-field]', 'field', sortState, renderGrille);
 });
 
+// ── Affichage / masquage des colonnes (mémorisé dans le navigateur) ──────────
+const LS_COLONNES = 'nijac_en11_colonnes_cachees';
+// Colonnes masquées tant que l'utilisateur n'a rien choisi (toutes restent
+// activables depuis le menu « Colonnes »).
+const COLONNES_CACHEES_DEFAUT = ['grade', 'date_validation_fftt', 'defiscalisation',
+    'nationale', 'num_compte_ebp', 'arbitre_autres_depts', 'depts_arbitrage'];
+let colonnesCachees;
+try {
+    const brut = localStorage.getItem(LS_COLONNES);
+    colonnesCachees = new Set(brut !== null ? JSON.parse(brut) : COLONNES_CACHEES_DEFAUT);
+} catch (e) {
+    colonnesCachees = new Set(COLONNES_CACHEES_DEFAUT);
+}
+
+function appliquerColonnesCachees() {
+    document.querySelectorAll('#tbl-ja [data-field]').forEach(el => {
+        el.style.display = colonnesCachees.has(el.getAttribute('data-field')) ? 'none' : '';
+    });
+}
+
+function construireMenuColonnes() {
+    const $box = $('#menu-colonnes-list').empty();
+    document.querySelectorAll('#tbl-ja thead th[data-field]').forEach(th => {
+        const field = th.getAttribute('data-field');
+        const label = (th.textContent || '').replace(/[⇅▲▼]/g, '').trim();
+        const $chk  = $('<input type="checkbox">').prop('checked', !colonnesCachees.has(field));
+        $chk.on('change', function () {
+            if (this.checked) colonnesCachees.delete(field);
+            else              colonnesCachees.add(field);
+            try { localStorage.setItem(LS_COLONNES, JSON.stringify([...colonnesCachees])); } catch (e) {}
+            appliquerColonnesCachees();
+        });
+        $('<label>').append($chk).append(document.createTextNode(' ' + label)).appendTo($box);
+    });
+}
+construireMenuColonnes();
+appliquerColonnesCachees();
+
 // ── Filtre département ────────────────────────────────────────────────────────
 $('#sel-dept').on('change', function () {
     deptFiltre = $(this).val();
@@ -1234,6 +1323,7 @@ function ouvrirModaleJa(record) {
     $('#nja-laposte-msg').text('').css('color', '');
     $('#nja-suggestions').hide();
     $('#nja-suggestions-list').empty();
+    njaSyncArbVoisins();
 
     if (record) {
         njaEditId = record.id;
@@ -1252,6 +1342,10 @@ function ouvrirModaleJa(record) {
         $('#nja-actif').prop('checked', !!record.actif);
         $('#nja-defisc').prop('checked', !!record.defiscalisation);
         $('#nja-nationale').prop('checked', !!record.nationale);
+        $('#nja-arb-voisins').prop('checked', !!record.arbitre_autres_depts);
+        const arbSel = new Set((record.depts_arbitrage || '').split(',').filter(Boolean));
+        $('.nja-arb-dept').each(function () { $(this).prop('checked', arbSel.has(this.value)); });
+        njaSyncArbVoisins();
         njaIdLaPoste = record.id_laposte ?? null;
         if (njaIdLaPoste && (record.cp || record.ville)) {
             $('#nja-laposte-msg').text(`✓ ${record.cp} ${record.ville}`).css('color', '#065f46');
@@ -1337,6 +1431,14 @@ $('#nja-dept').on('change', function () {
     njaChargerClubs($(this).val());
 });
 
+// Cartouche « arbitre dans les départements voisins » (même case que EN22)
+function njaSyncArbVoisins() {
+    const on = $('#nja-arb-voisins').is(':checked');
+    $('#nja-arb-voisins-depts').toggleClass('d-none', !on);
+    if (!on) $('.nja-arb-dept').prop('checked', false);
+}
+$('#nja-arb-voisins').on('change', njaSyncArbVoisins);
+
 $('#nja-cp, #nja-ville').on('blur', function () { njaRechercherLaPoste(); });
 $('#nja-nom').on('input', function () { $(this).val($(this).val().toUpperCase()); });
 
@@ -1383,6 +1485,15 @@ $('#btn-enregistrer-ja').on('click', function () {
         spinner(false);
         toast(res.msg, res.ok);
         if (res.ok) {
+            // Préférence « arbitre dans les départements voisins » : endpoint
+            // partagé avec EN22 (gate session/token — l'admin connecté passe).
+            $.post('<?= site_url('disponibilite-ja/sauvegarder-arbitrage-voisins') ?>', {
+                id_ja:        idJa,
+                actif:        $('#nja-arb-voisins').is(':checked') ? 1 : 0,
+                departements: $('.nja-arb-dept:checked').map(function () { return this.value; }).get(),
+            }, function (r) {
+                if (!r.ok) toast('JA enregistré, mais préférence départements voisins non sauvée : ' + r.err, false);
+            }, 'json');
             bootstrap.Modal.getInstance('#modal-nouveau-ja')?.hide();
             chargerListe();
         }

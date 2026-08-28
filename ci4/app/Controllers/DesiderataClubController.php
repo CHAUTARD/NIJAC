@@ -22,16 +22,6 @@ class DesiderataClubController extends BaseController
     {
         require_once __DIR__ . '/../../../config/db.php';
         require_once __DIR__ . '/../../../config/app_config.php';
-
-        $pdo = getPDO();
-
-        $colsSalle = array_column($pdo->query('SHOW COLUMNS FROM salle')->fetchAll(\PDO::FETCH_ASSOC), 'Field');
-        if (!in_array('Cp', $colsSalle)) {
-            $pdo->exec('ALTER TABLE salle ADD COLUMN Cp VARCHAR(10) NULL AFTER Adresse');
-        }
-        if (!in_array('Ville', $colsSalle)) {
-            $pdo->exec('ALTER TABLE salle ADD COLUMN Ville VARCHAR(100) NULL AFTER Cp');
-        }
     }
 
     private function startSession(): void

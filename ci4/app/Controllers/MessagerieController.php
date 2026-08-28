@@ -31,23 +31,7 @@ class MessagerieController extends BaseController
         require_once __DIR__ . '/../../../config/db.php';
         require_once __DIR__ . '/../../../config/app_config.php';
 
-        // Auto-migration (comme DesiderataClubController pour salle.Cp) : colonne
-        // Cc ajoutée en base de dev sans passer par initTableConfiguration() —
-        // se crée seule ici au premier chargement de l'écran en production.
-        $pdo  = getPDO();
-        $cols = array_column($pdo->query('SHOW COLUMNS FROM messagerie')->fetchAll(\PDO::FETCH_ASSOC), 'Field');
-        if (!in_array('Cc', $cols, true)) {
-            $pdo->exec('ALTER TABLE messagerie ADD COLUMN Cc TINYINT(1) NOT NULL DEFAULT 0 AFTER Id_Utilisateur');
-        }
-
-        // Idem pour ReplyTo (Reply-To = email du nominateur courant) — ajoutée en fin de
-        // table, utilisée par NominationController::envoyerConvocations() (EN14) et
-        // CentrenvoyeController::envoyerUn() (EN15). Activée par défaut uniquement sur le
-        // message système n°3 "Convocation" (NominationController::ID_MESSAGE_CONVOCATION).
-        if (!in_array('ReplyTo', $cols, true)) {
-            $pdo->exec('ALTER TABLE messagerie ADD COLUMN ReplyTo TINYINT(1) NOT NULL DEFAULT 0');
-            $pdo->exec('UPDATE messagerie SET ReplyTo = 1 WHERE Id_Messagerie = 3');
-        }
+        $pdo = getPDO();
 
         // Gabarit système du rappel d'expiration API FFTT (voir config/app_config.php) — créé ici
         // pour qu'il soit visible/éditable dès l'ouverture de cet écran, avant même que la fenêtre

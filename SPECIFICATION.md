@@ -213,6 +213,8 @@ Gérer la liste complète des Juges-Arbitres : import depuis fichier FFTT, consu
 | Actif | Booléen | Oui |
 | Défiscalisation | Booléen | Non |
 | Nationale | Booléen (Oui/Non) | Non |
+| Accepte d'arbitrer dans des départements voisins | Booléen (`ja.ArbitreAutresDepts`) | Non |
+| Départements voisins souhaités | SET 14/27/50/61/76 (`ja.DeptsArbitrage`) | Non |
 
 ### Actions AJAX
 | Action | Méthode | Description |
@@ -224,6 +226,11 @@ Gérer la liste complète des Juges-Arbitres : import depuis fichier FFTT, consu
 | `maj_laposte` | POST | Met à jour `Id_LaPoste` d'un JA |
 | `maj_bdd` | POST | Créer ou modifier un JA |
 
+### Affichage de la grille
+- Menu **Colonnes** (dropdown `<details>`, centré dans le bandeau entre le compteur « x/y JA » et le sélecteur Département) : une case par colonne pour l'afficher/masquer. Le sous-ensemble masqué est mémorisé dans `localStorage` (`nijac_en11_colonnes_cachees`), réappliqué à chaque rendu de la grille.
+- La grille expose toutes les colonnes de la table `ja` **sauf `Note` et `Id_LaPoste`** (plus la colonne calculée `nom_club`).
+- Masquées par défaut (jeu initial `COLONNES_CACHEES_DEFAUT` quand la clé `localStorage` est absente) : `grade`, `date_validation_fftt`, `defiscalisation`, `nationale`, `num_compte_ebp`, `arbitre_autres_depts`, `depts_arbitrage`. Toutes réactivables depuis le menu.
+
 ### Import Excel
 - Colonnes attendues : N° licence, Nom, Prénom, Grade, Club, Code postal, Ville
 - Comportement : upsert sur le N° licence
@@ -233,6 +240,8 @@ Gérer la liste complète des Juges-Arbitres : import depuis fichier FFTT, consu
 - Seuls les JA avec `Actif = 1` sont proposés à la nomination (EN14)
 - Le département d'un JA est déterminé par le code postal de sa salle principale de club
 - Le sélecteur de département (filtre liste + import FFTT) propose, en plus des départements actifs (`getDeptActifs()`), un groupe **« Départements limitrophes »** alimenté par `getDepartementsLimitrophes()` — liste paramétrable via la clé `departements_limitrophes` en EA91 (par défaut `28,35,53,60,72,78,80,95`). Ce mécanisme est distinct de la règle 76→27 (`regles_departements`, voir EA91) : il permet de gérer des JA rattachés à des départements hors Normandie qui interviennent occasionnellement en Normandie, plutôt qu'une inclusion automatique entre deux départements normands.
+- La modale Créer/Modifier reprend la case **« Accepte d'arbitrer dans un ou plusieurs départements voisins »** d'EN22 (case maîtresse + sélection 14/27/50/61/76). Le corps de la fiche part par `maj_bdd`, puis, une fois l'enregistrement confirmé, la préférence est envoyée par un second POST vers l'action `sauvegarder_arbitrage_voisins` d'EN22 (endpoint partagé, `maj_bdd` n'écrit pas ces colonnes) — un échec de ce second appel n'annule pas l'enregistrement du reste de la fiche (toast d'avertissement).
+- Colonnes `ja.ArbitreAutresDepts` / `ja.DeptsArbitrage` supposées présentes en base (créées en production ; plus d'auto-migration côté contrôleur).
 
 ---
 
@@ -310,7 +319,7 @@ Affecter les JA disponibles aux rencontres de la saison en appliquant les règle
 |--------|---------|-------------|
 | `journees` | GET | Retourne les journées disponibles pour le département |
 | `rencontres_journee` | GET | Retourne les rencontres d'une journée avec nominations |
-| `candidats_journee` | GET | Retourne les JA candidats pour une rencontre (triés par règles) |
+| `candidats_journee` | GET | Retourne les JA candidats de la journée : JA actifs disponibles (journée ou rencontre) rattachés à un département du nominateur — soit par le domicile (`LEFT(Cp,2)`), soit par `ja.CodeDept` — **ou** JA d'un autre département ayant coché « accepte d'arbitrer dans un département voisin » (`ja.ArbitreAutresDepts = 1` et un département du nominateur présent dans `ja.DeptsArbitrage`, testé par `FIND_IN_SET`) — voir EN22/EN11. Chaque ligne porte `HorsDept` (0/1) ; côté client, la case **« Autres départements »** du header masque (défaut) ou affiche les `HorsDept = 1`, signalés par un badge « Autre dépt ». Tri final côté client. |
 | `affecter_ja` | POST | Nomme un JA sur une rencontre |
 | `retirer_ja` | POST | Retire la nomination d'un JA (`DELETE FROM nomination WHERE Id_Rencontre = ?`) |
 | `valider_nominations` | POST | Valide les nominations de la journée (`Valide = 1`) |
@@ -558,6 +567,7 @@ Permet à un Juge-Arbitre de déclarer ses disponibilités par journée de champ
 - Distance domicile JA ↔ salle (Haversine), affichée en plage min/max si ≥ 20 rencontres sur la journée
 - Case à cocher **Défiscalisation**, bouton **Note** (zone de texte libre à destination des nominateurs)
 - Filtrage des rencontres proposées par département du JA (règle Seine-Maritime 76 → inclut aussi l'Eure 27, config `dept_76_includes`)
+- **Cartouche en bas d'écran** « J'accepte d'arbitrer dans un ou plusieurs départements voisins » : case maîtresse qui révèle une sélection des départements de la ligue (`14 Calvados`, `27 Eure`, `50 Manche`, `61 Orne`, `76 Seine-Maritime`), celui du JA étant masqué. Enregistrement automatique au changement dans `ja.ArbitreAutresDepts` (booléen) et `ja.DeptsArbitrage` (SET). Décocher la case maîtresse remet les deux colonnes à 0 / NULL.
 
 ### Actions AJAX
 | Action | Méthode | Description |
@@ -571,6 +581,7 @@ Permet à un Juge-Arbitre de déclarer ses disponibilités par journée de champ
 | `lire_note` (`lireNote`) | GET | Lit `ja.Note` |
 | `sauvegarder_note` (`sauvegarderNote`) | POST | Met à jour `ja.Note` |
 | `sauvegarder_defiscalisation` (`sauvegarderDefiscalisation`) | POST | Met à jour `ja.Defiscalisation` |
+| `sauvegarder_arbitrage_voisins` (`sauvegarderArbitrageVoisins`) | POST | Met à jour `ja.ArbitreAutresDepts` + `ja.DeptsArbitrage` (`actif` 0/1, `departements[]` ⊂ 14/27/50/61/76). Route publique gardée par token JA **ou** session authentifiée (`resolveIdJaAutorise()`) — réutilisée telle quelle par la modale d'EN11 |
 
 ### Bug corrigé lors du portage CI4 (contrairement à la politique habituelle de préservation)
 Les actions `rencontres_journee` et `sauvegarder_dispo_journee` du fichier legacy rejetaient la requête (`Paramètres manquants`/`Paramètres invalides`) dès que `journee = 0`, à cause d'un test PHP `!$journee` qui traite `0` comme une valeur absente — même bug que celui identifié et corrigé dans EN14 (Nomination). Sur la base de données actuelle, **toutes** les lignes de `rencontre` ont `Journee = 0` (numérotation de journée jamais renseignée), ce qui rendait ces deux actions non fonctionnelles en pratique. Corrigé dans `DisponibiliteJaController` (CI4) en distinguant "paramètre absent" (`null`/chaîne vide) de "paramètre valant 0" avant le cast en entier.

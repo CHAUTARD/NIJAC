@@ -37,26 +37,10 @@ class DisponibiliteJaController extends BaseController
 
         $this->obf = new \Obfuscator(OBFUSCATOR_SEED);
 
-        $pdo = getPDO();
         try {
-            $jaCols = array_column($pdo->query('DESCRIBE JA')->fetchAll(), 'Field');
-            if (!in_array('Note', $jaCols)) {
-                $pdo->exec("ALTER TABLE JA ADD COLUMN Note TEXT NULL COMMENT 'Note à destination des nominateurs'");
-            }
-            try {
-                $pdo->exec('ALTER TABLE disponible ADD UNIQUE KEY uq_dispo (Id_JA, Id_Rencontre)');
-            } catch (\PDOException $ignored) {
-                // déjà présente
-            }
-
-            $dispoCols = array_column($pdo->query('SHOW COLUMNS FROM disponible')->fetchAll(), 'Field');
-            if (!in_array('Departement', $dispoCols)) {
-                $pdo->exec("ALTER TABLE disponible ADD COLUMN Departement SET('14','27','50','61','76') NULL DEFAULT NULL");
-            }
-            if (!in_array('Note', $dispoCols)) {
-                $pdo->exec('ALTER TABLE disponible ADD COLUMN Note TEXT NULL');
-            }
+            getPDO()->exec('ALTER TABLE disponible ADD UNIQUE KEY uq_dispo (Id_JA, Id_Rencontre)');
         } catch (\PDOException $ignored) {
+            // index déjà présent
         }
     }
 
@@ -176,14 +160,12 @@ class DisponibiliteJaController extends BaseController
         return $this->tryJson(function () {
             $pdo    = getPDO();
             $id     = (int) ($this->request->getGet('id') ?? 0);
-            $jaCols = array_column($pdo->query('DESCRIBE JA')->fetchAll(), 'Field');
-            $hasDefisc = in_array('Defiscalisation', $jaCols);
 
             $stmt = $pdo->prepare('
                 SELECT ja.Id_JA, ja.Nom, ja.Prenom, ja.Grade,
+                       ja.ArbitreAutresDepts, ja.DeptsArbitrage, ja.Defiscalisation,
                        lp.CodePostal AS Cp,
-                       lp.Nom        AS Ville' .
-                       ($hasDefisc ? ', ja.Defiscalisation' : ', 0 AS Defiscalisation') . '
+                       lp.Nom        AS Ville
                 FROM ja
                 LEFT JOIN laposte lp ON lp.Id_LaPoste = ja.Id_LaPoste
                 WHERE ja.Id_JA = ?
@@ -291,6 +273,31 @@ class DisponibiliteJaController extends BaseController
             }
             getPDO()->prepare('UPDATE JA SET Note = ? WHERE Id_JA = ?')
                 ->execute([$note === '' ? null : $note, $id]);
+
+            return $this->response->setJSON(['ok' => true]);
+        });
+    }
+
+    /**
+     * POST : id_ja, actif (0/1), departements[] (sous-ensemble de 14/27/50/61/76).
+     * Cartouche EN22 « J'accepte d'arbitrer dans des départements voisins ».
+     */
+    public function sauvegarderArbitrageVoisins(): ResponseInterface
+    {
+        return $this->tryJson(function () {
+            $id = $this->resolveIdJaAutorise();
+            if (!$id) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'ID manquant ou non autorisé']);
+            }
+
+            $actif = !empty($this->request->getPost('actif')) ? 1 : 0;
+            $deptsValides = ['14', '27', '50', '61', '76'];
+            $depts = $actif
+                ? array_values(array_intersect((array) ($this->request->getPost('departements') ?? []), $deptsValides))
+                : [];
+
+            getPDO()->prepare('UPDATE JA SET ArbitreAutresDepts = ?, DeptsArbitrage = ? WHERE Id_JA = ?')
+                ->execute([$actif, $depts ? implode(',', $depts) : null, $id]);
 
             return $this->response->setJSON(['ok' => true]);
         });

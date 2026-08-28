@@ -26,24 +26,17 @@ class DisponibilitesController extends BaseController
         require_once __DIR__ . '/../../../config/app_config.php';
 
         $pdo = getPDO();
+        // Seed initial du calendrier régional (Régionale 3/4 non couvertes par un import FFTT),
+        // une seule fois si la table est vide — voir EA84 pour l'édition ensuite.
         $pdo->exec('
             CREATE TABLE IF NOT EXISTS competition_regionale (
                 Id_CompetitionRegionale INT AUTO_INCREMENT PRIMARY KEY,
                 Date                    DATE NOT NULL,
                 Heure                   TIME NOT NULL,
+                Commentaire             VARCHAR(255) NULL,
                 UNIQUE KEY uq_date_heure (Date, Heure)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ');
-        // Le département n'est pas un attribut de la date/heure elle-même : c'est un choix
-        // propre à chaque JA, saisi via EN23 (dispo-regionale-ja) et stocké dans
-        // disponible_regionale.Departement — voir DispoRegionaleJaController.
-        $col = $pdo->query("SHOW COLUMNS FROM competition_regionale WHERE Field = 'Departement'")->fetch();
-        if ($col) {
-            $pdo->exec('ALTER TABLE competition_regionale DROP COLUMN Departement');
-        }
-        // Calendrier "Disponibilités JA 2ème phase 2025-2026 (v2)" (Importation/) : dates/horaires
-        // des rencontres régionales, à défaut d'un import FFTT (Régionale 3/4 non couvertes par
-        // ImportRencontresController) — seed une seule fois, à la création de la table.
         if ((int) $pdo->query('SELECT COUNT(*) FROM competition_regionale')->fetchColumn() === 0) {
             $stmt = $pdo->prepare('INSERT INTO competition_regionale (Date, Heure) VALUES (?, ?)');
             foreach ([
@@ -58,19 +51,6 @@ class DisponibilitesController extends BaseController
                 $stmt->execute([$date, $heure]);
             }
         }
-
-        // Commentaire libre par date (ex. horaire du dimanche différent selon le secteur en
-        // Régionale Masculine, voir onglet "Instructions" du fichier Importation/) — voir EA84.
-        if (!$pdo->query("SHOW COLUMNS FROM competition_regionale WHERE Field = 'Commentaire'")->fetch()) {
-            $pdo->exec('ALTER TABLE competition_regionale ADD COLUMN Commentaire VARCHAR(255) NULL');
-        }
-        // Rétro-remplissage des dimanches existants (Heure = 14:00, seed ci-dessus) sans écraser
-        // une note déjà saisie par un admin.
-        $pdo->prepare("
-            UPDATE competition_regionale
-            SET Commentaire = 'Dimanche 09h00 : départements 27 et 76 — Dimanche 14h00 : départements 14, 50, 61'
-            WHERE Heure = '14:00:00' AND Commentaire IS NULL
-        ")->execute();
     }
 
     public function index()

@@ -320,6 +320,26 @@
     <div class="cal-mois-grille" id="cal-mois-grille"></div>
 </div>
 
+<!-- ── Cartouche : arbitrage dans les départements voisins ─────────────────── -->
+<div id="cartouche-arb-voisins" style="display:none;max-width:1700px;margin:.5rem auto 2rem;padding:0 1rem;">
+    <div style="background:#fff;border:1px solid #d0d8e8;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.07);padding:1rem 1.25rem;">
+        <label style="font-size:.95rem;font-weight:700;color:var(--nijac-blue);display:flex;align-items:center;gap:.55rem;cursor:pointer;user-select:none;">
+            <input type="checkbox" id="chk-arb-voisins" class="form-check-input" style="width:1.15rem;height:1.15rem;margin:0;">
+            J'accepte d'arbitrer dans un ou plusieurs départements voisins
+        </label>
+        <div id="arb-voisins-depts" style="display:none;margin-top:.75rem;">
+            <span class="form-label fw-bold d-block" style="font-size:.85rem">Département(s) souhaité(s)</span>
+            <div class="d-flex flex-wrap gap-3">
+                <?php foreach (['14' => 'Calvados', '27' => 'Eure', '50' => 'Manche', '61' => 'Orne', '76' => 'Seine-Maritime'] as $d => $nom): ?>
+                <label class="arb-dept-lbl" style="font-size:.9rem">
+                    <input type="checkbox" class="form-check-input me-1 arb-dept" value="<?= $d ?>"><?= $d ?> <?= $nom ?>
+                </label>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
@@ -386,8 +406,41 @@ function chargerInfosJA() {
         $('#chk-defisc').prop('checked', +r.data.Defiscalisation === 1);
         $('#lbl-defisc').addClass('d-flex').removeClass('d-none');
         $('#btn-note').removeClass('d-none');
+        appliquerArbitrageVoisins(r.data);
     });
 }
+
+function appliquerArbitrageVoisins(d) {
+    const actif = +d.ArbitreAutresDepts === 1;
+    const sel   = new Set((d.DeptsArbitrage || '').split(',').filter(Boolean));
+    $('.arb-dept').each(function () {
+        // On masque le propre département du JA : ce sont les voisins qui nous intéressent.
+        $(this).closest('.arb-dept-lbl').toggle(this.value !== jaDept);
+        $(this).prop('checked', sel.has(this.value));
+    });
+    $('#chk-arb-voisins').prop('checked', actif);
+    $('#arb-voisins-depts').toggle(actif);
+    $('#cartouche-arb-voisins').show();
+}
+
+function enregistrerArbitrageVoisins() {
+    $.post(`${BASE}/sauvegarder-arbitrage-voisins`, {
+        id_ja:        idJaCourant,
+        ja:           TOKEN_JA,
+        actif:        $('#chk-arb-voisins').is(':checked') ? 1 : 0,
+        departements: $('.arb-dept:checked').map(function () { return this.value; }).get(),
+    }, function (r) {
+        if (!r.ok) toast('Erreur : ' + r.err, false);
+        else toast('Préférence enregistrée.');
+    }, 'json').fail(function () { toast('Erreur réseau.', false); });
+}
+
+$('#chk-arb-voisins').on('change', function () {
+    $('#arb-voisins-depts').toggle(this.checked);
+    if (!this.checked) $('.arb-dept').prop('checked', false);
+    enregistrerArbitrageVoisins();
+});
+$('#arb-voisins-depts').on('change', '.arb-dept', enregistrerArbitrageVoisins);
 
 $('#chk-defisc').on('change', function () {
     $.post(`${BASE}/sauvegarder-defiscalisation`, {

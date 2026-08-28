@@ -59,14 +59,6 @@ class ImportRencontresNatController extends BaseController
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             ');
 
-            // Colonne club.EquipeNom (nom de base utilisé pour les équipes de ce club, ex.
-            // "ROUEN SPO" pour "ROUEN SPO 2") — persistée dès qu'une équipe est associée à ce
-            // club (voir autoMatchClubs()/sauvegarderAssoc()), pour que les imports des saisons
-            // suivantes retrouvent le club directement au lieu de re-demander une association manuelle.
-            $colsClub = array_column($pdo0->query('SHOW COLUMNS FROM club')->fetchAll(), 'Field');
-            if (!in_array('EquipeNom', $colsClub, true)) {
-                $pdo0->exec('ALTER TABLE club ADD COLUMN EquipeNom VARCHAR(100) NULL');
-            }
             // Un nom d'équipe ne doit désigner qu'un seul club. Try/catch isolé : si des doublons
             // existent déjà en base, on laisse la contrainte non posée plutôt que de faire échouer
             // toute la migration (calendrier, dédoublonnage equipe_nationale...) qui suit.

@@ -22,18 +22,6 @@ class EquipeRegionaleController extends BaseController
         require_once __DIR__ . '/../../../config/db.php';
     }
 
-    /** Auto-migration colonnes Id_Club2/Id_Club3 — équipe "entente" (jusqu'à 3 clubs), voir importerTxt(). */
-    private function ensureColonnes(\PDO $pdo): void
-    {
-        $cols = array_column($pdo->query('SHOW COLUMNS FROM equipe')->fetchAll(), 'Field');
-        if (!in_array('Id_Club2', $cols, true)) {
-            $pdo->exec('ALTER TABLE equipe ADD COLUMN Id_Club2 CHAR(8) NULL DEFAULT NULL AFTER Id_Club');
-        }
-        if (!in_array('Id_Club3', $cols, true)) {
-            $pdo->exec('ALTER TABLE equipe ADD COLUMN Id_Club3 CHAR(8) NULL DEFAULT NULL AFTER Id_Club2');
-        }
-    }
-
     /**
      * Résout le code division (table `division`) à partir du libellé d'en-tête
      * de section du fichier texte (ex. "PRENATIONALE", "REGIONALE 1_SECTEUR_27_76",
@@ -86,7 +74,6 @@ class EquipeRegionaleController extends BaseController
     {
         return $this->tryJson(function () {
             $pdo = getPDO();
-            $this->ensureColonnes($pdo);
 
             $rows = $pdo->query(
                 'SELECT e.Id_Equipe, e.Nom, e.Division, e.Id_Club, c.Nom AS NomClub,
@@ -117,7 +104,6 @@ class EquipeRegionaleController extends BaseController
     {
         return $this->tryJson(function () {
             $pdo = getPDO();
-            $this->ensureColonnes($pdo);
 
             $file = $this->request->getFile('fichier');
             if ($file === null || !$file->isValid()) {

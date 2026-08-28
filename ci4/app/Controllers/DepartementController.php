@@ -19,23 +19,14 @@ class DepartementController extends BaseController
     }
 
     /**
-     * Auto-migration colonne Limitrophe sur `departement` (codes des
-     * départements ayant une frontière commune, séparés par ';'), comme le
-     * fait ensureFfttColumns() dans SalleController/JugearbitreController.
-     * La colonne existait déjà en base pour 5 départements (saisie manuelle
-     * partielle, séparateur ',' ou ';' selon la ligne) : le UPDATE ci-dessous
-     * re-normalise systématiquement toutes les lignes plutôt que de ne
-     * peupler qu'à la création de la colonne. Les DOM (971, 972, 973, 974,
-     * 976) n'ont pas de limitrophe métropolitain : laissés à NULL.
+     * Peuple `departement.Limitrophe` (codes des départements ayant une
+     * frontière commune, séparés par ';') pour les lignes encore vides ou au
+     * séparateur ',' historique. Les DOM (971-976) n'ont pas de limitrophe
+     * métropolitain : laissés à NULL.
      */
     private function ensureLimitropheColumn(): void
     {
-        $pdo  = getPDO();
-        $cols = array_column($pdo->query('SHOW COLUMNS FROM departement')->fetchAll(), 'Field');
-        if (!in_array('Limitrophe', $cols, true)) {
-            $pdo->exec("ALTER TABLE departement ADD COLUMN Limitrophe TEXT NULL DEFAULT NULL
-                         COMMENT 'Codes des départements limitrophes, séparés par ;'");
-        }
+        $pdo = getPDO();
 
         // Coûteux (une centaine d'UPDATE) : ne s'exécute que tant qu'il reste
         // une ligne métropolitaine non peuplée ou au séparateur ',' historique.

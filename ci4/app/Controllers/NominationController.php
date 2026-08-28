@@ -277,11 +277,21 @@ class NominationController extends BaseController
                 return $this->response->setJSON(['ok' => true, 'data' => []]);
             }
 
-            $pdo     = getPDO();
-            $jaCols  = array_column($pdo->query('DESCRIBE ja')->fetchAll(), 'Field');
-            $hasNote = in_array('Note', $jaCols);
-            $noteExpr = $hasNote ? 'ja.Note' : 'NULL';
-            $deptPh   = implode(',', array_fill(0, count($deptsAutorises), '?'));
+            $pdo    = getPDO();
+            $deptPh = implode(',', array_fill(0, count($deptsAutorises), '?'));
+
+            // « Dans le département » = domicile (code postal) OU CodeDept dans le
+            // périmètre du nominateur. Sert à la fois au filtre WHERE et au flag
+            // HorsDept renvoyé au client (case à cocher « autres départements »).
+            $inDeptSql  = "LEFT(lp_ja.CodePostal, 2) IN ($deptPh) OR ja.CodeDept IN ($deptPh)";
+            $deptParams = array_merge($deptsAutorises, $deptsAutorises);
+
+            // JA d'un autre département ayant coché « accepte d'arbitrer dans un
+            // département voisin » (EN22/EN11) : retenus si l'un des départements
+            // du nominateur figure dans ja.DeptsArbitrage.
+            $arbSql = ' OR (ja.ArbitreAutresDepts = 1 AND ('
+                . implode(' OR ', array_fill(0, count($deptsAutorises), 'FIND_IN_SET(?, ja.DeptsArbitrage)'))
+                . '))';
 
             $stmt = $pdo->prepare("
                 SELECT
@@ -293,10 +303,11 @@ class NominationController extends BaseController
                     ja.Id_Club,
                     lp_ja.CodePostal                 AS Cp,
                     lp_ja.Nom                        AS Ville,
-                    $noteExpr                        AS Note,
+                    ja.Note                          AS Note,
                     lp_ja.Latitude                   AS JaLat,
                     lp_ja.Longitude                  AS JaLon,
                     CASE WHEN dj.Id_JA IS NOT NULL THEN 1 ELSE 0 END AS DispoJournee,
+                    CASE WHEN $inDeptSql THEN 0 ELSE 1 END AS HorsDept,
                     (SELECT GROUP_CONCAT(dr2.Id_Rencontre ORDER BY dr2.Id_Rencontre)
                      FROM disponible dr2
                      WHERE dr2.Id_JA = ja.Id_JA
@@ -324,11 +335,16 @@ class NominationController extends BaseController
                 ) nbnom ON nbnom.Id_JA = ja.Id_JA
                 WHERE ja.Actif = 1
                   AND (dj.Id_JA IS NOT NULL OR dr.Id_JA IS NOT NULL)
-                  AND LEFT(lp_ja.CodePostal, 2) IN ($deptPh)
+                  AND (($inDeptSql)$arbSql)
                 GROUP BY ja.Id_JA
                 ORDER BY ja.Nom, ja.Prenom
             ");
-            $stmt->execute(array_merge([$date, $date, $date], $deptsAutorises));
+            $stmt->execute(array_merge(
+                $deptParams,          // CASE ... HorsDept
+                [$date, $date, $date],
+                $deptParams,          // WHERE ($inDeptSql)
+                $deptsAutorises       // WHERE ... FIND_IN_SET
+            ));
 
             return $this->response->setJSON(['ok' => true, 'data' => $stmt->fetchAll()]);
         });
