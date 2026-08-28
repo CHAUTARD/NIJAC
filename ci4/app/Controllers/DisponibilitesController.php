@@ -86,6 +86,19 @@ class DisponibilitesController extends BaseController
             'deptLimitrophes' => getDepartementsLimitrophes(),
         ];
 
+        // Pour chaque département actif : ses voisins de la région déjà pas
+        // inclus d'office (regles_departements) — proposés en cases à cocher
+        // dans E021 pour étendre l'affichage aux départements limitrophes.
+        $data['limitrophesParDept'] = [];
+        foreach ($data['deptActifs'] as $d) {
+            $code = (string) $d['code'];
+            $auto = getDepartementsAutorises($code);
+            $data['limitrophesParDept'][$code] = array_values(array_filter(
+                getLimitrophesRegion($code),
+                static fn ($l) => !in_array($l['code'], $auto, true)
+            ));
+        }
+
         return view('disponibilites_index', $data);
     }
 
@@ -99,6 +112,14 @@ class DisponibilitesController extends BaseController
         // Ex. un nominateur du 76 (Seine-Maritime) voit aussi le 27 (Eure) —
         // règle définie dans configuration.regles_departements, jamais en dur.
         $depts = getDepartementsAutorises($dept);
+
+        // Départements limitrophes cochés dans E021 : on ne garde que ceux
+        // réellement voisins de $dept dans la région (pas de code arbitraire).
+        $extra = array_filter(array_map('trim', explode(',', (string) $this->request->getGet('extra'))));
+        if ($extra) {
+            $voisinsOk = array_column(getLimitrophesRegion($dept), 'code');
+            $depts     = array_values(array_unique(array_merge($depts, array_intersect($extra, $voisinsOk))));
+        }
 
         $pdo = getPDO();
 

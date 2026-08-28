@@ -89,6 +89,30 @@ class DepartementController extends BaseController
         }
     }
 
+    /**
+     * Ajoute à chaque ligne le champ calculé `LimitropheRegion` : sous-ensemble
+     * de `Limitrophe` restreint aux départements de la même région
+     * (`code_region` identique). Non stocké en base — entièrement dérivable.
+     */
+    private function ajouterLimitropheRegion(array $rows): array
+    {
+        $regionDe = array_column(
+            $this->departementModel->select('code, code_region')->findAll(),
+            'code_region',
+            'code'
+        );
+        foreach ($rows as &$r) {
+            $reg     = $r['code_region'] ?? null;
+            $voisins = array_filter(array_map('trim', explode(';', (string) ($r['Limitrophe'] ?? ''))));
+            $memeReg = $reg === null || $reg === '' ? [] : array_values(array_filter(
+                $voisins,
+                static fn ($c) => ($regionDe[$c] ?? null) === $reg
+            ));
+            $r['LimitropheRegion'] = implode(';', $memeReg);
+        }
+        return $rows;
+    }
+
     public function index()
     {
         $this->ensureLimitropheColumn();
@@ -112,7 +136,7 @@ class DepartementController extends BaseController
             ->orderBy('departement.code', 'ASC')
             ->findAll();
 
-        return $this->response->setJSON(['ok' => true, 'data' => $rows]);
+        return $this->response->setJSON(['ok' => true, 'data' => $this->ajouterLimitropheRegion($rows)]);
     }
 
     public function show($code = null): ResponseInterface
@@ -124,7 +148,7 @@ class DepartementController extends BaseController
             ->find($code);
 
         return $this->response->setJSON(
-            $row ? ['ok' => true, 'data' => $row] : ['ok' => false, 'msg' => 'Introuvable']
+            $row ? ['ok' => true, 'data' => $this->ajouterLimitropheRegion([$row])[0]] : ['ok' => false, 'msg' => 'Introuvable']
         );
     }
 

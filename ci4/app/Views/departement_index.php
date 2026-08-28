@@ -21,6 +21,10 @@
             font-size: .78rem;
             color: #6b7280;
         }
+        /* Valeur calculée (non stockée, non modifiable) : teal + italique */
+        #tbl-depts td.col-limitrophe.col-calc,
+        #tbl-depts th.th-calc,
+        #txt-limitrophe-region { color: #0b7285; font-style: italic; }
     </style>
 </head>
 <body>
@@ -54,10 +58,11 @@
                         <th data-col="nom">Nom<span class="sort-icon"></span></th>
                         <th data-col="nom_region">Région<span class="sort-icon"></span></th>
                         <th data-col="Limitrophe">Limitrophes<span class="sort-icon"></span></th>
+                        <th data-col="LimitropheRegion" class="th-calc">Limitrophes région<span class="sort-icon"></span></th>
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
-                    <tr><td colspan="4" class="text-center text-muted py-3">Chargement…</td></tr>
+                    <tr><td colspan="5" class="text-center text-muted py-3">Chargement…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -88,6 +93,12 @@
             <label class="form-label" for="txt-limitrophe">Départements limitrophes :</label>
             <input type="text" id="txt-limitrophe" class="form-control form-control-sm" placeholder="28;60;72;78;80;95">
             <div class="form-text" style="font-size:.75rem;">Codes séparés par « ; ».</div>
+        </div>
+
+        <div class="mb-2">
+            <span class="form-label d-block">Limitrophes de la région :</span>
+            <div id="txt-limitrophe-region" class="form-text fw-bold" style="min-height:1rem;">&mdash;</div>
+            <div class="form-text" style="font-size:.75rem;">Information calculée : sous-ensemble des limitrophes appartenant à la même région.</div>
         </div>
 
         <div id="panel-boutons">
@@ -143,7 +154,7 @@ function appliquerFiltre() {
         });
     }
     if (!data.length) {
-        $body.append('<tr><td colspan="4" class="text-center text-muted py-3">Aucun département.</td></tr>');
+        $body.append('<tr><td colspan="5" class="text-center text-muted py-3">Aucun département.</td></tr>');
         return;
     }
     data.forEach(d => {
@@ -151,7 +162,8 @@ function appliquerFiltre() {
             $('<td>').html(`<code>${d.code}</code>`),
             $('<td>').text(d.nom),
             $('<td>').text(d.nom_region ?? ''),
-            $('<td class="col-limitrophe">').text(d.Limitrophe ?? '').attr('title', d.Limitrophe ?? '')
+            $('<td class="col-limitrophe">').text(d.Limitrophe ?? '').attr('title', d.Limitrophe ?? ''),
+            $('<td class="col-limitrophe col-calc">').text(d.LimitropheRegion ?? '').attr('title', d.LimitropheRegion ?? '')
         ).on('click', function() { selectionnerLigne($(this)); }).appendTo($body);
     });
 }
@@ -186,6 +198,7 @@ function selectionnerLigne($tr) {
         $('#txt-code').val(d.code).prop('readonly', true);
         $('#txt-nom').val(d.nom);
         $('#txt-limitrophe').val(d.Limitrophe ?? '');
+        $('#txt-limitrophe-region').text(d.LimitropheRegion || '—');
         peuplerRegions(d.code_region ?? '');
         $('#btn-supprimer').prop('disabled', false);
         setStatus('');
@@ -198,6 +211,7 @@ $('#btn-nouveau').on('click', function() {
     $('#txt-code').val('').prop('readonly', false).trigger('focus');
     $('#txt-nom').val('');
     $('#txt-limitrophe').val('');
+    $('#txt-limitrophe-region').text('—');
     peuplerRegions('');
     $('#btn-supprimer').prop('disabled', true);
     setStatus('');

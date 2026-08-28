@@ -546,6 +546,40 @@ function getDepartementsLimitrophes(): array
 }
 
 /**
+ * Départements de la même région que $dept qui lui sont limitrophes :
+ * colonne departement.Limitrophe ∩ départements de même code_region.
+ * Chaque entrée : ['code' => '27', 'nom' => 'Eure']. Utilisé par E021 pour
+ * proposer d'étendre l'affichage aux départements voisins.
+ */
+function getLimitrophesRegion(string $dept): array
+{
+    $dept = trim($dept);
+    if ($dept === '') return [];
+    try {
+        $pdo  = getPDO();
+        $stmt = $pdo->prepare('SELECT code_region, Limitrophe FROM departement WHERE code = ?');
+        $stmt->execute([$dept]);
+        $r = $stmt->fetch();
+        if (!$r || $r['code_region'] === null || $r['code_region'] === '' || empty($r['Limitrophe'])) {
+            return [];
+        }
+        $voisins = array_values(array_filter(array_map('trim', explode(';', $r['Limitrophe']))));
+        if (!$voisins) return [];
+
+        $ph   = implode(',', array_fill(0, count($voisins), '?'));
+        $stmt = $pdo->prepare(
+            "SELECT code, nom FROM departement
+             WHERE code IN ($ph) AND code_region = ?
+             ORDER BY CAST(code AS UNSIGNED), code"
+        );
+        $stmt->execute([...$voisins, $r['code_region']]);
+        return $stmt->fetchAll();
+    } catch (PDOException $e) {
+        return [];
+    }
+}
+
+/**
  * Retourne les départements actifs (depuis departements_actifs en configuration)
  * avec leur nom (depuis la table departement), triés par code numérique.
  * Chaque entrée : ['code' => '14', 'nom' => 'Calvados']

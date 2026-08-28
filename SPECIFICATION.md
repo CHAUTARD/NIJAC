@@ -413,6 +413,8 @@ Référentiel des départements, rattachés à une région (E012). Sert de base 
 | code | Texte (clé primaire, ex : `76`) | Oui, non modifiable après création |
 | nom | Texte (ex : `Seine-Maritime`) | Oui |
 | code_region | Texte (référence logique vers `region.code`) | Non |
+| Limitrophe | Texte, codes séparés par `;` (ex : `14;27;60;80`) | Non — colonne auto-migrée/normalisée par `ensureLimitropheColumn()` |
+| LimitropheRegion | Texte, codes séparés par `;` (ex : `14;27`) — **lecture seule** | Non stocké — champ calculé à la volée (`ajouterLimitropheRegion()`) : sous-ensemble de `Limitrophe` restreint aux départements de même `code_region` |
 
 ### Actions AJAX
 | Action | Méthode | Description |
@@ -427,6 +429,7 @@ Référentiel des départements, rattachés à une région (E012). Sert de base 
 - `code` et `nom` sont obligatoires à l'enregistrement
 - `code_region` n'est pas une contrainte FK déclarée en base : la cohérence est gérée applicativement, pas de blocage de suppression
 - Distinct des listes de départements actifs (`departements_actifs`, E015) et limitrophes (`departements_limitrophes`, E015) : cette table est un référentiel de noms, pas un mécanisme de filtrage des écrans nominateur
+- `Limitrophe` est éditable (champ « Départements limitrophes », codes séparés par `;`) ; `LimitropheRegion` n'est pas une colonne : il est recalculé à chaque réponse `data`/`charger` à partir de `Limitrophe` ∩ même région, affiché en lecture seule et non transmis à l'enregistrement
 
 ---
 
@@ -732,13 +735,14 @@ Consulter et modifier les disponibilités des JA par département et par journé
 
 ### Interface
 - Sélecteur de département : groupe **« Normandie »** (14, 27, 50, 61, 76) et groupe **« Départements limitrophes »** (liste de `getDepartementsLimitrophes()`, paramétrable via `departements_limitrophes` en E015)
+- Après choix d'un département de Normandie, cases à cocher **« Limitrophes »** listant ses départements voisins de la région (`getLimitrophesRegion()`, hors ceux déjà inclus d'office par `regles_departements`) ; boutons **« Tout cocher »** et **« Inverser »**. Cocher/décocher recharge la grille en ajoutant les JA de ces départements.
 - Grille des JA du/des département(s) sélectionné(s) avec leur disponibilité par journée
 - Clic sur un JA → ouvre `disponibilite_ja.php?id_ja=...` dans une nouvelle fenêtre pour la saisie détaillée par journée
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `ja_dept` | GET | Retourne les JA actifs des départements sélectionnés (`depts`, liste séparée par virgules) avec leurs disponibilités |
+| `ja_dept` | GET | Retourne les JA actifs du département `dept` (+ inclusions `regles_departements`) avec leurs disponibilités. Paramètre optionnel `extra` (codes séparés par virgules) : départements limitrophes cochés, filtrés côté serveur sur les voisins réels de `dept` dans la région |
 
 ### Règle département 76
 La sélection du département 76 inclut automatiquement les JA du 27.

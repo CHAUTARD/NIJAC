@@ -176,6 +176,12 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
     <div id="spinner-dept" class="spinner-border spinner-border-sm text-secondary" role="status">
         <span class="visually-hidden">Chargement…</span>
     </div>
+    <div id="wrap-limitrophes" style="display:none; align-items:center; gap:.5rem; flex-wrap:wrap;">
+        <span style="font-weight:700;color:#444;font-size:.82rem;white-space:nowrap;">Limitrophes</span>
+        <span id="limitrophes-checks" style="display:flex; gap:.55rem; flex-wrap:wrap;"></span>
+        <button type="button" class="btn btn-outline-secondary btn-sm py-0" id="btn-lim-tous">Tout cocher</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm py-0" id="btn-lim-inverse">Inverser</button>
+    </div>
     <div id="legende-dispo">
         <span class="leg-item"><span class="leg-dot leg-dot-ok"></span>Disponibilités saisies</span>
         <span class="leg-item"><span class="leg-dot leg-dot-ko"></span>Non renseigné</span>
@@ -222,13 +228,19 @@ const DEPT_NOMS = <?= json_encode(
     JSON_FORCE_OBJECT | JSON_UNESCAPED_UNICODE
 ) ?>;
 
+// Voisins de la région proposés en cases à cocher, par département sélectionné.
+// Pas de JSON_FORCE_OBJECT : les clés (14, 27…) donnent déjà un objet, et on
+// veut garder les listes internes en tableaux JS (.length / .forEach).
+const LIMITROPHES = <?= json_encode($limitrophesParDept, JSON_UNESCAPED_UNICODE) ?>;
+
 $(function () {
     const deptInitial = $('#sel-dept').val();
-    if (deptInitial) chargerJA(deptInitial);
+    if (deptInitial) { majLimitrophes(deptInitial); chargerJA(deptInitial); }
 
     $('#sel-dept').on('change', function () {
         const dept = this.value;
         $('#filtre-ja').val('');
+        majLimitrophes(dept);
         if (!dept) {
             $('#liste-ja').hide().empty();
             $('#placeholder').show();
@@ -241,9 +253,45 @@ $(function () {
         chargerJA(dept);
     });
 
+    // Cocher / décocher un voisin, ou les boutons « Tout cocher » / « Inverser »
+    // → recharge la grille avec la liste étendue.
+    $('#limitrophes-checks').on('change', '.lim-chk', rechargerAvecLimitrophes);
+    $('#btn-lim-tous').on('click', function () {
+        $('.lim-chk').prop('checked', true);
+        rechargerAvecLimitrophes();
+    });
+    $('#btn-lim-inverse').on('click', function () {
+        $('.lim-chk').each(function () { this.checked = !this.checked; });
+        rechargerAvecLimitrophes();
+    });
+
     $('#filtre-ja').on('input', filtrerJA);
     $('#sel-filtre-dispo').on('change', filtrerJA);
 });
+
+function majLimitrophes(dept) {
+    const $box  = $('#limitrophes-checks').empty();
+    const liste = LIMITROPHES[dept] || [];
+    if (!dept || !liste.length) { $('#wrap-limitrophes').hide(); return; }
+    liste.forEach(d => {
+        $box.append(
+            `<label style="font-size:.82rem;display:inline-flex;align-items:center;gap:.25rem;cursor:pointer;">
+                <input type="checkbox" class="form-check-input lim-chk mt-0" value="${escHtml(d.code)}">
+                ${escHtml(d.code)} ${escHtml(d.nom)}
+            </label>`
+        );
+    });
+    $('#wrap-limitrophes').css('display', 'flex');
+}
+
+function extrasCoches() {
+    return $('.lim-chk:checked').map(function () { return this.value; }).get();
+}
+
+function rechargerAvecLimitrophes() {
+    const dept = $('#sel-dept').val();
+    if (dept) chargerJA(dept);
+}
 
 function chargerJA(dept) {
     $('#placeholder').hide();
@@ -252,7 +300,7 @@ function chargerJA(dept) {
 
     $.ajax({
         url: `${DISPO_BASE}/ja-dept`,
-        data: { dept: dept },
+        data: { dept: dept, extra: extrasCoches().join(',') },
         dataType: 'json'
     }).done(function (r) {
         $('#spinner-dept').hide();
