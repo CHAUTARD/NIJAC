@@ -24,10 +24,16 @@
     .contenu-principal > .card-dispo,
     .contenu-principal > .alert-danger { grid-column: 2; grid-row: 1; }
     @media (max-width: 900px) {
-        .contenu-principal { grid-template-columns: 220px; justify-content: center; }
-        #bandeau-normandie { grid-row: 1; margin: 0 auto; }
+        .contenu-principal { grid-template-columns: minmax(0, 1fr); gap: 1rem; margin-top: 1rem; }
+        #bandeau-normandie { grid-row: 1; margin: 0 auto; max-width: 260px; }
         .contenu-principal > .card-dispo,
         .contenu-principal > .alert-danger { grid-column: 1; grid-row: 2; }
+    }
+    @media (max-width: 640px) {
+        .page-header { padding: .6rem .9rem; flex-wrap: wrap; gap: .5rem; }
+        .page-header h1 { font-size: 1rem; }
+        .card-dispo .card-body { padding: 1rem !important; }
+        .depts-cell label { margin-right: .4rem; }
     }
 
     .page-header {

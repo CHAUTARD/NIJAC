@@ -86,7 +86,8 @@ class UtilisateurController extends BaseController
     public function store(): ResponseInterface
     {
 
-        $fields = $this->extractFields($this->request->getPost(), true);
+        $mdpGenere = null;
+        $fields = $this->extractFields($this->request->getPost(), true, $mdpGenere);
 
         if (is_string($fields)) {
             return $this->response->setJSON(['ok' => false, 'msg' => $fields]);
@@ -95,14 +96,15 @@ class UtilisateurController extends BaseController
         $this->utilisateurModel->insert($fields);
         $id = (int) $this->utilisateurModel->getInsertID();
 
-        return $this->response->setJSON(['ok' => true, 'msg' => 'Utilisateur créé.', 'id' => $id]);
+        return $this->response->setJSON(['ok' => true, 'msg' => 'Utilisateur créé.', 'id' => $id, 'mdp' => $mdpGenere]);
     }
 
     public function update($id = null): ResponseInterface
     {
 
         $id     = (int) $id;
-        $fields = $this->extractFields($this->request->getRawInput(), false);
+        $mdpGenere = null;
+        $fields = $this->extractFields($this->request->getRawInput(), false, $mdpGenere);
 
         if (is_string($fields)) {
             return $this->response->setJSON(['ok' => false, 'msg' => $fields]);
@@ -110,7 +112,7 @@ class UtilisateurController extends BaseController
 
         $this->utilisateurModel->update($id, $fields);
 
-        return $this->response->setJSON(['ok' => true, 'msg' => 'Utilisateur mis à jour.', 'id' => $id]);
+        return $this->response->setJSON(['ok' => true, 'msg' => 'Utilisateur mis à jour.', 'id' => $id, 'mdp' => $mdpGenere]);
     }
 
     public function delete($id = null): ResponseInterface
@@ -134,21 +136,26 @@ class UtilisateurController extends BaseController
     /**
      * Extrait et valide les champs du formulaire. Retourne un message d'erreur
      * (string) en cas de validation échouée, sinon le tableau de champs prêt
-     * pour insert()/update() — même règles que utilisateur.php legacy.
-     * Password absent du tableau si le mot de passe soumis est vide (modification
-     * sans changement de mot de passe).
+     * pour insert()/update().
+     *
+     * Mot de passe : plus de saisie manuelle. À la création, ou si la case
+     * « Écraser » est cochée, un mot de passe aléatoire est généré, le compte
+     * passe en ChangeLogin = 1, et le mot de passe en clair est renvoyé via
+     * $mdpGenere (pour affichage à l'admin). Sinon aucune clé Password/ChangeLogin
+     * n'est écrite (valeurs BDD inchangées).
      */
-    private function extractFields(array $input, bool $isNew)
+    private function extractFields(array $input, bool $isNew, ?string &$mdpGenere = null)
     {
-        $login    = trim($input['login'] ?? '');
-        $nom      = trim($input['nom'] ?? '');
-        $prenom   = trim($input['prenom'] ?? '');
-        $role     = trim($input['role'] ?? '');
-        $dept     = (int) ($input['dept'] ?? 0);
-        $mdp      = $input['mdp'] ?? '';
-        $email    = trim($input['email'] ?? '');
-        $actif    = ($input['actif'] ?? '0') === '1' ? 1 : 0;
-        $chgLogin = ($input['change_login'] ?? '0') === '1' ? 1 : 0;
+        $mdpGenere = null;
+
+        $login   = trim($input['login'] ?? '');
+        $nom     = trim($input['nom'] ?? '');
+        $prenom  = trim($input['prenom'] ?? '');
+        $role    = trim($input['role'] ?? '');
+        $dept    = (int) ($input['dept'] ?? 0);
+        $email   = trim($input['email'] ?? '');
+        $actif   = ($input['actif'] ?? '0') === '1' ? 1 : 0;
+        $ecraser = ($input['ecraser'] ?? '0') === '1';
 
         if ($login === '') {
             return 'Le login ne peut pas être vide.';
@@ -158,9 +165,6 @@ class UtilisateurController extends BaseController
         }
         if ($prenom === '') {
             return 'Le prénom ne peut pas être vide.';
-        }
-        if ($isNew && $mdp === '') {
-            return 'Un mot de passe est obligatoire pour un nouvel utilisateur.';
         }
         if (!in_array($role, $this->rolesValides(), true)) {
             return 'Rôle invalide.';
@@ -179,12 +183,13 @@ class UtilisateurController extends BaseController
             'Role'           => $role,
             'Id_Departement' => $dept,
             'Actif'          => $actif,
-            'ChangeLogin'    => $chgLogin,
             'Email'          => $email !== '' ? $email : null,
         ];
 
-        if ($mdp !== '') {
-            $fields['Password'] = \SecurePasswordHasher::hash($mdp);
+        if ($isNew || $ecraser) {
+            $mdpGenere              = genererMotDePasseAleatoire();
+            $fields['Password']     = \SecurePasswordHasher::hash($mdpGenere);
+            $fields['ChangeLogin']  = 1;
         }
 
         return $fields;

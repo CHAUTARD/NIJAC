@@ -89,6 +89,15 @@ class JugearbitreController extends BaseController
             'deptLimitrophes' => getDepartementsLimitrophes(),
         ];
 
+        // Pour chaque département actif : ses voisins de la région (codes) — sert
+        // à ne proposer, dans la modale JA, que les départements voisins du
+        // « Exerce dans » saisi pour la préférence « arbitre départements voisins ».
+        $data['voisinsParDept'] = [];
+        foreach ($data['deptActifs'] as $d) {
+            $code = (string) $d['CodeDept'];
+            $data['voisinsParDept'][$code] = array_column(getLimitrophesRegion($code), 'CodeDept');
+        }
+
         return view('jugearbitre_index', $data);
     }
 

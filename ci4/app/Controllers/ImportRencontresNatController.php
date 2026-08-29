@@ -602,7 +602,7 @@ class ImportRencontresNatController extends BaseController
     {
         static $valides = null;
         if ($valides === null) {
-            $valides = array_flip($pdo->query('SELECT code FROM departement')->fetchAll(\PDO::FETCH_COLUMN));
+            $valides = array_flip($pdo->query('SELECT CodeDept FROM departement')->fetchAll(\PDO::FETCH_COLUMN));
         }
 
         return ($code !== null && isset($valides[$code])) ? $code : null;
@@ -780,7 +780,7 @@ class ImportRencontresNatController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => "Aucun calendrier enregistré : analysez d'abord un fichier à l'étape 1."]);
             }
 
-            $deptsNorm = array_map('strval', array_column(getDeptActifs(), 'code'));
+            $deptsNorm = array_map('strval', array_column(getDeptActifs(), 'CodeDept'));
 
             // Équipes par division/poule/rang, depuis equipe_nationale (associations club à jour de l'étape 2)
             $rows  = $pdo->query('SELECT Nom, Division, Poule, Rang, Id_Club, CodeDept FROM equipe_nationale')->fetchAll();
@@ -984,12 +984,12 @@ class ImportRencontresNatController extends BaseController
     {
         $u = $_SESSION['utilisateur'] ?? [];
 
-        $deptsNorm     = array_column(getDeptActifs(), 'code');
+        $deptsNorm     = array_column(getDeptActifs(), 'CodeDept');
         $regionNom     = getConfig('region', 'Région');
         $regionGentile = getRegionGentile();
 
         try {
-            $allDepts = getPDO()->query('SELECT code, nom FROM departement ORDER BY CAST(code AS UNSIGNED)')->fetchAll(\PDO::FETCH_KEY_PAIR);
+            $allDepts = getPDO()->query('SELECT CodeDept, nom FROM departement ORDER BY CAST(CodeDept AS UNSIGNED)')->fetchAll(\PDO::FETCH_KEY_PAIR);
         } catch (\PDOException $e) {
             $allDepts = [];
         }
@@ -1049,13 +1049,13 @@ class ImportRencontresNatController extends BaseController
             $depts = getDeptActifs();
             $clubs = [];
             foreach ($depts as $dept) {
-                $list = $api->listClubsByDepartement((int) $dept['code']);
+                $list = $api->listClubsByDepartement((int) $dept['CodeDept']);
                 foreach ($list as $c) {
                     $num = trim($c['numero'] ?? '');
                     if ($num === '') {
                         continue;
                     }
-                    $clubs[] = ['numclu' => $num, 'nom' => trim($c['nom'] ?? ''), 'dept' => (string) $dept['code']];
+                    $clubs[] = ['numclu' => $num, 'nom' => trim($c['nom'] ?? ''), 'dept' => (string) $dept['CodeDept']];
                 }
             }
 

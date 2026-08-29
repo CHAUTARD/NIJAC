@@ -53,8 +53,8 @@ class ClubController extends BaseController
             'changeLogin' => !empty($moi['change_login']),
             'deptActifs'  => getDeptActifs(),
             'tousDepts'   => $pdo->query(
-                "SELECT code, nom FROM departement
-                 ORDER BY CASE WHEN code IN ('2A','2B') THEN 20 ELSE CAST(code AS UNSIGNED) END, code"
+                "SELECT CodeDept, nom FROM departement
+                 ORDER BY CASE WHEN CodeDept IN ('2A','2B') THEN 20 ELSE CAST(CodeDept AS UNSIGNED) END, CodeDept"
             )->fetchAll(),
         ];
 

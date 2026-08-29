@@ -284,8 +284,12 @@
                 <span id="lbl-assoc-count" class="text-muted" style="font-size:.82rem;"></span>
                 <select id="sel-div-filtre" class="form-select form-select-sm w-auto ms-2">
                     <option value="">Toutes les divisions</option>
-                    <option value="N1M">N1M</option><option value="N2M">N2M</option><option value="N3M">N3M</option>
-                    <option value="N1F">N1F</option><option value="N2F">N2F</option>
+                    <?php foreach ([
+                        'N1M' => 'Nationale 1 Messieurs', 'N2M' => 'Nationale 2 Messieurs', 'N3M' => 'Nationale 3 Messieurs',
+                        'N1F' => 'Nationale 1 Dames', 'N2F' => 'Nationale 2 Dames',
+                    ] as $dc => $dn): ?>
+                    <option value="<?= $dc ?>"><?= $dc ?> — <?= esc($dn) ?></option>
+                    <?php endforeach; ?>
                 </select>
                 <label class="mb-0" style="font-size:.82rem;">
                     <input type="checkbox" id="chk-sans-dept" class="form-check-input me-1">Sans département

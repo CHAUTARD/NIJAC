@@ -162,13 +162,13 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
         <option value="">— Choisir un département —</option>
         <optgroup label="Normandie">
         <?php foreach ($deptActifs as $d): ?>
-        <option value="<?= (int) $d['code'] ?>" <?= (string) $d['code'] === $departement ? 'selected' : '' ?>><?= (int) $d['code'] ?> — <?= esc($d['nom']) ?></option>
+        <option value="<?= (int) $d['CodeDept'] ?>" <?= (string) $d['CodeDept'] === $departement ? 'selected' : '' ?>><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?></option>
         <?php endforeach; ?>
         </optgroup>
         <?php if ($deptLimitrophes): ?>
         <optgroup label="Départements limitrophes">
         <?php foreach ($deptLimitrophes as $d): ?>
-        <option value="<?= (int) $d['code'] ?>"><?= (int) $d['code'] ?> — <?= esc($d['nom']) ?> (<?= esc($d['region']) ?>)</option>
+        <option value="<?= (int) $d['CodeDept'] ?>"><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?> (<?= esc($d['region']) ?>)</option>
         <?php endforeach; ?>
         </optgroup>
         <?php endif; ?>
@@ -224,7 +224,7 @@ const DISPONIBILITE_JA_BASE = '<?= site_url('disponibilite-ja') ?>';
 const DEPT_NOMS = <?= json_encode(
     // '+' (pas array_merge) : préserve les clés code-département, que PHP caste en
     // entiers pour les codes numériques (ex. "76") — array_merge les aurait renumérotées.
-    array_column($deptActifs, 'nom', 'code') + array_column($deptLimitrophes, 'nom', 'code'),
+    array_column($deptActifs, 'nom', 'CodeDept') + array_column($deptLimitrophes, 'nom', 'CodeDept'),
     JSON_FORCE_OBJECT | JSON_UNESCAPED_UNICODE
 ) ?>;
 
@@ -276,11 +276,13 @@ function majLimitrophes(dept) {
     liste.forEach(d => {
         $box.append(
             `<label style="font-size:.82rem;display:inline-flex;align-items:center;gap:.25rem;cursor:pointer;">
-                <input type="checkbox" class="form-check-input lim-chk mt-0" value="${escHtml(d.code)}">
-                ${escHtml(d.code)} ${escHtml(d.nom)}
+                <input type="checkbox" class="form-check-input lim-chk mt-0" value="${escHtml(d.CodeDept)}">
+                ${escHtml(d.CodeDept)} ${escHtml(d.nom)}
             </label>`
         );
     });
+    // « Tout cocher » / « Inverser » n'ont de sens qu'avec au moins 2 voisins.
+    $('#btn-lim-tous, #btn-lim-inverse').toggle(liste.length > 1);
     $('#wrap-limitrophes').css('display', 'flex');
 }
 

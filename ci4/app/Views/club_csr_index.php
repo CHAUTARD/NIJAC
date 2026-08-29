@@ -162,19 +162,19 @@
         <i class="bi bi-map me-1"></i>Département
     </label>
     <?php
-        $codesRegion = array_column($deptActifs, 'code');
-        $deptsAutres = array_filter($tousDepts, fn ($d) => !in_array($d['code'], $codesRegion, true));
+        $codesRegion = array_column($deptActifs, 'CodeDept');
+        $deptsAutres = array_filter($tousDepts, fn ($d) => !in_array($d['CodeDept'], $codesRegion, true));
     ?>
     <select id="sel-dept" class="form-select form-select-sm w-auto">
         <option value="">— Tous —</option>
         <optgroup label="Région">
         <?php foreach ($deptActifs as $d): ?>
-        <option value="<?= esc($d['code']) ?>"><?= esc($d['code']) ?> — <?= esc($d['nom']) ?></option>
+        <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
         <?php endforeach; ?>
         </optgroup>
         <optgroup label="Autres départements">
         <?php foreach ($deptsAutres as $d): ?>
-        <option value="<?= esc($d['code']) ?>"><?= esc($d['code']) ?> — <?= esc($d['nom']) ?></option>
+        <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
         <?php endforeach; ?>
         </optgroup>
     </select>
@@ -268,7 +268,7 @@
 'use strict';
 
 const CLUB_BASE = '<?= site_url('club-csr') ?>';
-const DEPTS_REGION = new Set(<?= json_encode(array_column($deptActifs, 'code')) ?>);
+const DEPTS_REGION = new Set(<?= json_encode(array_column($deptActifs, 'CodeDept')) ?>);
 
 function deptDeClub(idClub) {
     // Format : 0[9][dept 2 chiffres][4 chiffres] — ex. 09760442 → '76'

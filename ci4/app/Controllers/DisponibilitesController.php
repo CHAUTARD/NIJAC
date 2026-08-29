@@ -71,11 +71,11 @@ class DisponibilitesController extends BaseController
         // dans EN13 pour étendre l'affichage aux départements limitrophes.
         $data['limitrophesParDept'] = [];
         foreach ($data['deptActifs'] as $d) {
-            $code = (string) $d['code'];
+            $code = (string) $d['CodeDept'];
             $auto = getDepartementsAutorises($code);
             $data['limitrophesParDept'][$code] = array_values(array_filter(
                 getLimitrophesRegion($code),
-                static fn ($l) => !in_array($l['code'], $auto, true)
+                static fn ($l) => !in_array($l['CodeDept'], $auto, true)
             ));
         }
 
@@ -97,7 +97,7 @@ class DisponibilitesController extends BaseController
         // réellement voisins de $dept dans la région (pas de code arbitraire).
         $extra = array_filter(array_map('trim', explode(',', (string) $this->request->getGet('extra'))));
         if ($extra) {
-            $voisinsOk = array_column(getLimitrophesRegion($dept), 'code');
+            $voisinsOk = array_column(getLimitrophesRegion($dept), 'CodeDept');
             $depts     = array_values(array_unique(array_merge($depts, array_intersect($extra, $voisinsOk))));
         }
 

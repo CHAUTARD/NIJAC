@@ -16,6 +16,15 @@
         #panel-liste { width: 54%; }
         #tbl-utilisateurs tbody tr.inactif td { color: #bbb; }
         #txt-id { background: #f0f4fa; width: 80px; }
+
+        /* Cadres (fieldset) du formulaire */
+        .cadre-form { border: 1px solid #c8d4e8; border-radius: 6px; padding: .5rem .8rem .7rem; margin-bottom: .85rem; }
+        .cadre-form > legend {
+            float: none; width: auto; font-size: .8rem; font-weight: 700;
+            color: #1a3a6b; padding: 0 .4rem; margin-bottom: .35rem;
+        }
+        .cadre-form .form-label { margin-bottom: .1rem; }
+        #mdp-genere-box code { user-select: all; font-weight: 700; }
     </style>
 </head>
 <body>
@@ -60,78 +69,78 @@
     <!-- ── Formulaire ── -->
     <div id="panel-form">
 
-        <div class="row g-2 mb-2">
-            <div class="col-auto">
-                <label class="form-label">Id :</label>
-                <input type="text" id="txt-id" class="form-control form-control-sm" readonly tabindex="-1">
+        <fieldset class="cadre-form">
+            <legend>Identifiant</legend>
+            <div class="row g-2 align-items-end">
+                <div class="col-auto">
+                    <label class="form-label">Id :</label>
+                    <input type="text" id="txt-id" class="form-control form-control-sm" readonly tabindex="-1">
+                </div>
+                <div class="col">
+                    <label class="form-label" for="txt-login">Login (*) :</label>
+                    <input type="text" id="txt-login" class="form-control form-control-sm" maxlength="50" autocomplete="off">
+                </div>
             </div>
-        </div>
+        </fieldset>
 
-        <div class="mb-2">
-            <label class="form-label" for="txt-login">Login (*) :</label>
-            <input type="text" id="txt-login" class="form-control form-control-sm" maxlength="50" autocomplete="off">
-        </div>
-
-        <div class="mb-2">
-            <label class="form-label" for="txt-nom">Nom (*) :</label>
-            <input type="text" id="txt-nom" class="form-control form-control-sm" maxlength="100">
-        </div>
-
-        <div class="mb-2">
-            <label class="form-label" for="txt-prenom">Prénom (*) :</label>
-            <input type="text" id="txt-prenom" class="form-control form-control-sm" maxlength="100">
-        </div>
-
-        <div class="mb-2">
-            <label class="form-label" for="txt-email">Adresse email :</label>
-            <input type="email" id="txt-email" class="form-control form-control-sm" maxlength="150">
-        </div>
-
-        <div class="mb-2">
-            <label class="form-label" for="cbo-role">Rôle (*) :</label>
-            <select id="cbo-role" class="form-select form-select-sm">
-                <?php foreach ($roles as $r): ?>
-                <option value="<?= esc($r) ?>" <?= $r === 'Nominateur' ? 'selected' : '' ?>><?= esc($r) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-
-        <div class="mb-2">
-            <label class="form-label" for="cbo-dept">Département (*) :</label>
-            <select id="cbo-dept" class="form-select form-select-sm" style="max-width:280px">
-                <option value="">— Sélectionner —</option>
-                <?php foreach ($deptActifs as $d): ?>
-                <option value="<?= (int) $d['code'] ?>"><?= (int) $d['code'] ?> — <?= esc($d['nom']) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-
-        <div class="mb-2">
-            <label class="form-label" for="txt-mdp">
-                Mot de passe (*) :
-                <small class="fw-normal text-muted" id="mdp-hint">(laisser vide = inchangé)</small>
-            </label>
-            <div class="input-group" style="max-width:320px">
-                <input type="password" id="txt-mdp" class="form-control form-control-sm" maxlength="100" autocomplete="new-password">
-                <button class="btn btn-sm btn-outline-secondary" type="button" id="btn-toggle-mdp" tabindex="-1" title="Afficher / masquer le mot de passe">
-                    <i id="eye-mdp" class="bi bi-eye-slash"></i>
-                </button>
+        <fieldset class="cadre-form">
+            <legend>Information personnelle</legend>
+            <div class="row g-2 mb-2">
+                <div class="col">
+                    <label class="form-label" for="txt-prenom">Prénom (*) :</label>
+                    <input type="text" id="txt-prenom" class="form-control form-control-sm" maxlength="100">
+                </div>
+                <div class="col">
+                    <label class="form-label" for="txt-nom">Nom (*) :</label>
+                    <input type="text" id="txt-nom" class="form-control form-control-sm" maxlength="100">
+                </div>
             </div>
-        </div>
 
-        <div class="mb-2">
+            <div class="mb-2">
+                <label class="form-label" for="txt-email">Adresse email :</label>
+                <input type="email" id="txt-email" class="form-control form-control-sm" maxlength="150">
+            </div>
+
+            <div class="row g-2 mb-2">
+                <div class="col">
+                    <label class="form-label" for="cbo-role">Rôle (*) :</label>
+                    <select id="cbo-role" class="form-select form-select-sm">
+                        <?php foreach ($roles as $r): ?>
+                        <option value="<?= esc($r) ?>" <?= $r === 'Nominateur' ? 'selected' : '' ?>><?= esc($r) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col">
+                    <label class="form-label" for="cbo-dept">Département (*) :</label>
+                    <select id="cbo-dept" class="form-select form-select-sm">
+                        <option value="">— Sélectionner —</option>
+                        <?php foreach ($deptActifs as $d): ?>
+                        <option value="<?= (int) $d['CodeDept'] ?>"><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+
             <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="chk-actif" checked>
                 <label class="form-check-label fw-bold" for="chk-actif">Actif</label>
             </div>
-        </div>
+        </fieldset>
 
-        <div class="mb-2">
+        <fieldset class="cadre-form">
+            <legend>Écraser mot de passe</legend>
             <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="chk-change-login" checked>
-                <label class="form-check-label" for="chk-change-login">Forcer changement de mot de passe</label>
+                <input class="form-check-input" type="checkbox" id="chk-ecraser">
+                <label class="form-check-label fw-bold" for="chk-ecraser">Écraser</label>
             </div>
-        </div>
+            <div class="small text-muted mt-1">
+                Coché : un mot de passe aléatoire est généré et l'utilisateur devra le changer à sa première connexion.
+                <span id="ecraser-force" class="d-none fw-bold text-secondary">— obligatoire à la création.</span>
+            </div>
+            <div id="mdp-genere-box" class="alert alert-warning py-1 px-2 mt-2 mb-0 small d-none">
+                Mot de passe provisoire à communiquer : <code id="mdp-genere-code"></code>
+            </div>
+        </fieldset>
 
         <!-- Boutons -->
         <div id="panel-boutons">
@@ -147,7 +156,7 @@
         </div>
 
         <!-- Légende champs obligatoires -->
-        <div class="small text-muted mt-2">(*) Champs obligatoires (mot de passe obligatoire uniquement à la création)</div>
+        <div class="small text-muted mt-2">(*) Champs obligatoires</div>
 
         <!-- Statut -->
         <div id="form-status" class="mt-3 small fw-bold"></div>
@@ -219,10 +228,10 @@ function selectionnerLigne($tr) {
         $('#txt-email').val(u.Email || '');
         $('#cbo-role').val(u.Role);
         $('#cbo-dept').val(u.Id_Departement);
-        $('#txt-mdp').val('');
         $('#chk-actif').prop('checked', parseInt(u.Actif) === 1);
-        $('#chk-change-login').prop('checked', parseInt(u.ChangeLogin) === 1);
-        $('#mdp-hint').show();
+        $('#chk-ecraser').prop('checked', false).prop('disabled', false);
+        $('#ecraser-force').addClass('d-none');
+        $('#mdp-genere-box').addClass('d-none');
         $('#btn-supprimer').prop('disabled', currentId === MOI_ID);
         setStatus('');
     }, 'json');
@@ -239,10 +248,11 @@ $('#btn-nouveau').on('click', function () {
     $('#txt-email').val('');
     $('#cbo-role').val('Nominateur');
     $('#cbo-dept').val('');
-    $('#txt-mdp').val('Change_On_Install');
     $('#chk-actif').prop('checked', true);
-    $('#chk-change-login').prop('checked', true);
-    $('#mdp-hint').hide();
+    // À la création, le mot de passe aléatoire est toujours généré : case forcée.
+    $('#chk-ecraser').prop('checked', true).prop('disabled', true);
+    $('#ecraser-force').removeClass('d-none');
+    $('#mdp-genere-box').addClass('d-none');
     $('#btn-supprimer').prop('disabled', true);
     setStatus('');
 });
@@ -251,22 +261,33 @@ $('#btn-nouveau').on('click', function () {
 $('#btn-enregistrer').on('click', function () {
     const isNew = currentId === null;
     const payload = {
-        login:        $('#txt-login').val().trim(),
-        nom:          $('#txt-nom').val().trim(),
-        prenom:       $('#txt-prenom').val().trim(),
-        email:        $('#txt-email').val().trim(),
-        role:         $('#cbo-role').val(),
-        dept:         $('#cbo-dept').val(),
-        mdp:          $('#txt-mdp').val(),
-        actif:        $('#chk-actif').is(':checked') ? '1' : '0',
-        change_login: $('#chk-change-login').is(':checked') ? '1' : '0',
+        login:   $('#txt-login').val().trim(),
+        nom:     $('#txt-nom').val().trim(),
+        prenom:  $('#txt-prenom').val().trim(),
+        email:   $('#txt-email').val().trim(),
+        role:    $('#cbo-role').val(),
+        dept:    $('#cbo-dept').val(),
+        actif:   $('#chk-actif').is(':checked') ? '1' : '0',
+        ecraser: (isNew || $('#chk-ecraser').is(':checked')) ? '1' : '0',
     };
     const url    = isNew ? UTILISATEUR_BASE : `${UTILISATEUR_BASE}/${currentId}`;
     const method = isNew ? 'POST' : 'PUT';
 
     $.ajax({ url, method, data: payload, dataType: 'json' }).done(function (res) {
-        if (res.ok) { toast(res.msg); chargerListe(res.id); }
-        else { toast(res.msg, false); setStatus(res.msg, false); }
+        if (!res.ok) { toast(res.msg, false); setStatus(res.msg, false); return; }
+        toast(res.msg);
+        currentId = res.id;
+        $('#txt-id').val(res.id);
+        $('#chk-ecraser').prop('checked', false).prop('disabled', false);
+        $('#ecraser-force').addClass('d-none');
+        if (res.mdp) {
+            $('#mdp-genere-code').text(res.mdp);
+            $('#mdp-genere-box').removeClass('d-none');
+        } else {
+            $('#mdp-genere-box').addClass('d-none');
+        }
+        chargerListe();   // rafraîchit la liste sans re-sélection (préserve l'encadré mot de passe)
+        $('#btn-supprimer').prop('disabled', currentId === MOI_ID);
     });
 });
 
@@ -281,14 +302,6 @@ $('#btn-supprimer').on('click', function () {
             else toast(res.msg, false);
         });
     }, null, {type: 'danger'});
-});
-
-// ── Afficher / masquer le mot de passe ───────────────────────────────────────
-$('#btn-toggle-mdp').on('click', function () {
-    const $input = $('#txt-mdp');
-    const hidden = $input.attr('type') === 'password';
-    $input.attr('type', hidden ? 'text' : 'password');
-    $('#eye-mdp').toggleClass('bi-eye-slash', !hidden).toggleClass('bi-eye', hidden);
 });
 
 // ── Tri sur clic en-tête ──────────────────────────────────────────────────────

@@ -237,6 +237,24 @@
     }
     #save-status { display: none; font-size: .8rem; color: #155724; margin-left: .5rem; }
 
+    /*  Adaptation smartphone (écran uniquement — l'impression garde le A4 ci-dessous)  */
+    @media screen and (max-width: 820px) {
+        body { font-size: 13px; }
+        #action-bar { padding: .5rem .8rem; }
+        #action-bar h1 { font-size: .92rem; }
+        .page {
+            width: auto;
+            min-height: 0;
+            margin: .6rem;
+            padding: 4mm;
+            overflow-x: auto;
+        }
+        .num-phase { position: static; text-align: left; margin-bottom: 3mm; }
+        .conv-title { font-size: 15px; letter-spacing: 1px; }
+        .salle-bloc { flex-wrap: wrap; }
+        #btn-save-frais { bottom: 1rem; right: 1rem; }
+    }
+
     /*  Impression / Export PDF  */
     @media print {
         @page { size: A4 portrait; margin: 12mm 14mm; }

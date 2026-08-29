@@ -112,6 +112,14 @@
 
     #save-status { min-height: 1.4em; font-size: .85rem; margin-top: .5rem; text-align: center; }
     #save-status.err { color: #c00; }
+
+    @media (max-width: 640px) {
+        .page-header { padding: .6rem .9rem; flex-wrap: wrap; gap: .5rem; }
+        .page-header h1 { font-size: 1rem; }
+        .card-desiderata { margin: 1rem .5rem; }
+        .card-desiderata .card-body { padding: 1rem !important; }
+        #tbl-equipes { font-size: .8rem; }
+    }
 </style>
 </head>
 <body>

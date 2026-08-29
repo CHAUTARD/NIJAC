@@ -172,6 +172,11 @@
 <script>
 'use strict';
 const EQUIPE_BASE = '<?= site_url('equipe-regionale') ?>';
+const DIVISION_NOMS = <?= json_encode($divisionNoms ?? [], JSON_UNESCAPED_UNICODE) ?>;
+function libDivision(code) {
+    const n = DIVISION_NOMS[code];
+    return n ? code + ' — ' + n : code;
+}
 let lignes         = [];
 let currentId       = null;
 let searchTerm      = '';
@@ -198,7 +203,7 @@ function majComboDivisions() {
     const $sel = $('#sel-division');
     const val  = $sel.val();
     $sel.find('option:not(:first)').remove();
-    divisions.forEach(d => $sel.append(new Option(d, d)));
+    divisions.forEach(d => $sel.append(new Option(libDivision(d), d)));
     if (divisions.includes(val)) $sel.val(val);
     else { divisionFiltre = ''; $sel.val(''); }
 }

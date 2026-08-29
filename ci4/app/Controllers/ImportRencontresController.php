@@ -172,6 +172,7 @@ class ImportRencontresController extends BaseController
             'region'        => $region,
             'ffttOk'        => $ffttOk,
             'divsNijac'     => $divsNijac,
+            'divisionNoms'  => getDivisionNoms(),
             'phaseOptions'  => $phaseOptions,
             'phaseKey'      => $phaseKey,
             'phaseLabel'    => $phaseLabel,

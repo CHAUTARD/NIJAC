@@ -160,11 +160,17 @@ class NominationController extends BaseController
     {
         $u = $_SESSION['utilisateur'] ?? [];
 
+        // code => nom des départements de la région : libellé des cases « autre dépt »
+        // du filtre des candidats JA (voir majFiltreHorsDept() dans la vue).
+        $deptNoms = array_column(getDeptActifs(), 'nom', 'CodeDept')
+                  + array_column(getDepartementsLimitrophes(), 'nom', 'CodeDept');
+
         $data = [
             'nomComplet'  => trim(($u['nom'] ?? '') . ' ' . ($u['prenom'] ?? '')),
             'departement' => $u['id_departement'] ?? '',
             'changeLogin' => !empty($u['change_login']),
             'isAdmin'     => !empty($u['is_admin']),
+            'deptNoms'    => $deptNoms,
         ];
 
         return view('nomination_index', $data);
@@ -301,6 +307,7 @@ class NominationController extends BaseController
                     ja.Grade,
                     COALESCE(ja.Nationale, 0)        AS Nationale,
                     ja.Id_Club,
+                    ja.CodeDept                      AS CodeDept,
                     lp_ja.CodePostal                 AS Cp,
                     lp_ja.Nom                        AS Ville,
                     ja.Note                          AS Note,

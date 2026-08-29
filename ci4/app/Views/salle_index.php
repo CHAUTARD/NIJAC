@@ -169,7 +169,7 @@
     <select id="sel-dept" class="form-select form-select-sm w-auto">
         <option value="">— Tous —</option>
         <?php foreach ($deptActifs as $d): ?>
-        <option value="<?= (int) $d['code'] ?>"><?= (int) $d['code'] ?> — <?= esc($d['nom']) ?></option>
+        <option value="<?= (int) $d['CodeDept'] ?>"><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?></option>
         <?php endforeach; ?>
     </select>
     <button class="menu-item" id="btn-filtre-region" title="Cliquer pour n'afficher que les salles de la région, ou toutes les salles" style="border-color:transparent;">
@@ -284,7 +284,7 @@
             <select id="sync-fftt-dept" class="form-select">
               <option value="">— Choisir —</option>
               <?php foreach ($deptActifs as $d): ?>
-              <option value="<?= (int) $d['code'] ?>"><?= (int) $d['code'] ?> — <?= esc($d['nom']) ?></option>
+              <option value="<?= (int) $d['CodeDept'] ?>"><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?></option>
               <?php endforeach; ?>
             </select>
           </div>
@@ -348,7 +348,7 @@ const LAPOSTE_BASE = '<?= site_url('laposte') ?>';
 
 const IS_ADMIN  = <?= $isAdmin ? 'true' : 'false' ?>;
 const DEPT_USER = <?= json_encode($deptUser) ?>;
-const DEPTS_REGION = new Set(<?= json_encode(array_column($deptActifs, 'code')) ?>);
+const DEPTS_REGION = new Set(<?= json_encode(array_column($deptActifs, 'CodeDept')) ?>);
 
 let lignes     = [];
 let clubs      = [];

@@ -412,8 +412,8 @@ async function chargerDepartements() {
     const sel = document.getElementById('sel-dept');
     res.data.forEach(d => {
         const opt = document.createElement('option');
-        opt.value = d.code;
-        opt.textContent = d.code + ' — ' + d.nom;
+        opt.value = d.CodeDept;
+        opt.textContent = d.CodeDept + ' — ' + d.nom;
         sel.appendChild(opt);
     });
 }

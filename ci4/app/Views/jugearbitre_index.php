@@ -325,12 +325,12 @@
     <select id="sel-dept" class="form-select form-select-sm w-auto">
         <option value="">— Tous —</option>
         <?php foreach ($deptActifs as $d): ?>
-        <option value="<?= (int) $d['code'] ?>" <?= ((string) (int) $d['code'] === (string) (int) $deptUser) ? 'selected' : '' ?>><?= (int) $d['code'] ?> — <?= esc($d['nom']) ?></option>
+        <option value="<?= (int) $d['CodeDept'] ?>" <?= ((string) (int) $d['CodeDept'] === (string) (int) $deptUser) ? 'selected' : '' ?>><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?></option>
         <?php endforeach; ?>
         <?php if ($deptLimitrophes): ?>
         <option disabled>── Limitrophes ──</option>
         <?php foreach ($deptLimitrophes as $d): ?>
-        <option value="<?= (int) $d['code'] ?>" <?= ((string) (int) $d['code'] === (string) (int) $deptUser) ? 'selected' : '' ?>><?= (int) $d['code'] ?> — <?= esc($d['nom']) ?> (<?= esc($d['region']) ?>)</option>
+        <option value="<?= (int) $d['CodeDept'] ?>" <?= ((string) (int) $d['CodeDept'] === (string) (int) $deptUser) ? 'selected' : '' ?>><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?> (<?= esc($d['region']) ?>)</option>
         <?php endforeach; ?>
         <?php endif; ?>
     </select>
@@ -466,12 +466,12 @@
             <select id="import-fftt-dept" class="form-select">
               <option value="">— Choisir —</option>
               <?php foreach ($deptActifs as $d): ?>
-              <option value="<?= (int) $d['code'] ?>"><?= (int) $d['code'] ?> — <?= esc($d['nom']) ?></option>
+              <option value="<?= (int) $d['CodeDept'] ?>"><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?></option>
               <?php endforeach; ?>
               <?php if ($deptLimitrophes): ?>
               <option disabled>── Limitrophes ──</option>
               <?php foreach ($deptLimitrophes as $d): ?>
-              <option value="<?= (int) $d['code'] ?>"><?= (int) $d['code'] ?> — <?= esc($d['nom']) ?> (<?= esc($d['region']) ?>)</option>
+              <option value="<?= (int) $d['CodeDept'] ?>"><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?> (<?= esc($d['region']) ?>)</option>
               <?php endforeach; ?>
               <?php endif; ?>
             </select>
@@ -606,7 +606,7 @@
                   <select class="form-select form-select-sm" id="nja-dept">
                     <option value="">— Tous —</option>
                     <?php foreach ($deptActifs as $d): ?>
-                    <option value="<?= (int) $d['code'] ?>"><?= (int) $d['code'] ?> — <?= esc($d['nom']) ?></option>
+                    <option value="<?= (int) $d['CodeDept'] ?>"><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?></option>
                     <?php endforeach; ?>
                   </select>
                 </div>
@@ -687,6 +687,8 @@
 const JUGEARBITRE_BASE = '<?= site_url('jugearbitre') ?>';
 const LAPOSTE_BASE = '<?= site_url('laposte') ?>';
 const DISPONIBILITE_JA_BASE = '<?= site_url('disponibilite-ja') ?>';
+// { "14": ["27","50","61"], ... } — départements voisins (région) de chaque code dept.
+const VOISINS_PAR_DEPT = <?= json_encode($voisinsParDept ?? [], JSON_UNESCAPED_UNICODE) ?>;
 
 let lignes     = [];
 let filtreActif   = true;   // false = tous, true = actifs seulement
@@ -696,7 +698,7 @@ const sortState = { col: 'nom', asc: true };
 let searchTerm = '';
 const isAdmin  = <?= $isAdmin ? 'true' : 'false' ?>;
 let deptFiltre = <?= json_encode($deptUser) ?>; // filtré par défaut sur le département de l'utilisateur connecté (admin inclus)
-const DEPTS_REGION = new Set(<?= json_encode(array_column($deptActifs, 'code')) ?>);
+const DEPTS_REGION = new Set(<?= json_encode(array_column($deptActifs, 'CodeDept')) ?>);
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
 function spinner(show) { $('#spinner').toggleClass('show', show); }
@@ -909,7 +911,7 @@ $('#win-menu-drop').on('click', '.drop-item', function () {
 
 <?php if ($isAdmin): ?>
 // ── Import FFTT par département ───────────────────────────────────────────────
-const DEPT_ACTIFS_CODES = <?= json_encode(array_map('strval', array_column($deptActifs, 'code'))) ?>;
+const DEPT_ACTIFS_CODES = <?= json_encode(array_map('strval', array_column($deptActifs, 'CodeDept'))) ?>;
 let importFfttEnCours = false;
 <?php endif; ?>
 
@@ -1342,6 +1344,7 @@ function ouvrirModaleJa(record) {
         $('#nja-actif').prop('checked', !!record.actif);
         $('#nja-defisc').prop('checked', !!record.defiscalisation);
         $('#nja-nationale').prop('checked', !!record.nationale);
+        $('#nja-dept').val(record.codedept || '');   // avant njaSyncArbVoisins : filtre les voisins
         $('#nja-arb-voisins').prop('checked', !!record.arbitre_autres_depts);
         const arbSel = new Set((record.depts_arbitrage || '').split(',').filter(Boolean));
         $('.nja-arb-dept').each(function () { $(this).prop('checked', arbSel.has(this.value)); });
@@ -1350,7 +1353,6 @@ function ouvrirModaleJa(record) {
         if (njaIdLaPoste && (record.cp || record.ville)) {
             $('#nja-laposte-msg').text(`✓ ${record.cp} ${record.ville}`).css('color', '#065f46');
         }
-        $('#nja-dept').val(record.codedept || '');
         njaChargerClubs('', record.id_club || '');
     } else {
         njaEditId = null;
@@ -1436,8 +1438,22 @@ function njaSyncArbVoisins() {
     const on = $('#nja-arb-voisins').is(':checked');
     $('#nja-arb-voisins-depts').toggleClass('d-none', !on);
     if (!on) $('.nja-arb-dept').prop('checked', false);
+    njaMajArbVoisins();
 }
 $('#nja-arb-voisins').on('change', njaSyncArbVoisins);
+
+// N'affiche que les départements voisins (région) du « Exerce dans » saisi.
+// Sans département choisi : on laisse tout visible (rien à voisiner).
+function njaMajArbVoisins() {
+    const dept    = String($('#nja-dept').val() || '');
+    const voisins = dept && VOISINS_PAR_DEPT[dept] ? VOISINS_PAR_DEPT[dept] : null;
+    $('.nja-arb-dept').each(function () {
+        const visible = !voisins || voisins.includes(this.value);
+        $(this).closest('label').toggle(visible);
+        if (!visible) this.checked = false;
+    });
+}
+$('#nja-dept').on('change', njaMajArbVoisins);
 
 $('#nja-cp, #nja-ville').on('blur', function () { njaRechercherLaPoste(); });
 $('#nja-nom').on('input', function () { $(this).val($(this).val().toUpperCase()); });

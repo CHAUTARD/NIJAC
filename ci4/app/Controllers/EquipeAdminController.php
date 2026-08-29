@@ -43,9 +43,10 @@ class EquipeAdminController extends BaseController
         $moi = $_SESSION['utilisateur'] ?? [];
 
         $data = [
-            'nomComplet'  => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
-            'departement' => $moi['id_departement'] ?? '',
-            'changeLogin' => !empty($moi['change_login']),
+            'nomComplet'   => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
+            'departement'  => $moi['id_departement'] ?? '',
+            'changeLogin'  => !empty($moi['change_login']),
+            'divisionNoms' => getDivisionNoms(),
         ];
 
         return view('equipe_admin_index', $data);
@@ -63,11 +64,11 @@ class EquipeAdminController extends BaseController
             // vrai numéro FFTT, produit un code garbage à ignorer plutôt qu'un faux département).
             $equipes = $pdo->query(
                 "SELECT e.Id_Equipe, e.Nom, e.Division, e.Id_Club, c.Nom AS NomClub,
-                        d.code AS Departement,
+                        d.CodeDept AS Departement,
                         e.ReEngagement, e.JourSouhaite, e.SouhaitJA, e.DesiderataSaison
                  FROM equipe e
                  JOIN club c ON c.Id_Club = e.Id_Club
-                 LEFT JOIN departement d ON d.code = SUBSTRING(e.Id_Club, 3, 2)
+                 LEFT JOIN departement d ON d.CodeDept = SUBSTRING(e.Id_Club, 3, 2)
                  ORDER BY e.Nom"
             )->fetchAll();
 

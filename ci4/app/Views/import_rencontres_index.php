@@ -298,6 +298,12 @@
 <script>
 'use strict';
 
+const DIVISION_NOMS = <?= json_encode($divisionNoms ?? [], JSON_UNESCAPED_UNICODE) ?>;
+function libDivision(code) {
+    const n = DIVISION_NOMS[code];
+    return n ? code + ' — ' + n : code;
+}
+
 const IMPORT_RENC_BASE = '<?= site_url('import-rencontres') ?>';
 
 /* ── Données PHP → JS ─────────────────────────────────────────────────────── */
@@ -739,7 +745,7 @@ function chargerListeRencontres() {
         // Alimenter le filtre division
         const divs = [...new Set(toutesRencontres.map(rc => rc.DivisionCode))].sort();
         const $sel = $('#filtre-div').empty().append('<option value="">Toutes les divisions</option>');
-        divs.forEach(d => $sel.append(`<option value="${esc(d)}">${esc(d)}</option>`));
+        divs.forEach(d => $sel.append(`<option value="${esc(d)}">${esc(libDivision(d))}</option>`));
 
         renderListeRencontres();
     }, 'json').fail(function () {

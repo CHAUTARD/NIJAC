@@ -24,10 +24,55 @@ function jsonError(string $msg, int $httpCode = 200): never
 }
 
 /**
- * Crée la table configuration si absente et insère les paramètres par défaut.
+ * Migrations de schéma appliquées à l'ouverture de l'écran EA98 (seul appelant).
+ * Chaque bloc est idempotent : on ne (re)crée que ce qui manque.
  */
 function initTableConfiguration(\PDO $pdo): void
 {
+    // Renommage departement.code -> departement.CodeDept : PK référencée par 2 FK,
+    // il faut les retirer, renommer, puis les recréer à l'identique.
+    try {
+        $ancienne = $pdo->query(
+            "SELECT 1 FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'departement' AND COLUMN_NAME = 'code'"
+        )->fetchColumn();
+        if ($ancienne) {
+            $pdo->exec('ALTER TABLE equipe_nationale DROP FOREIGN KEY fk_equipenat_dept');
+            $pdo->exec('ALTER TABLE utilisateur DROP FOREIGN KEY fk_utilisateur_departement_code');
+            $pdo->exec("ALTER TABLE departement CHANGE code CodeDept varchar(3) COLLATE utf8mb4_unicode_ci NOT NULL");
+            $pdo->exec("ALTER TABLE equipe_nationale ADD CONSTRAINT fk_equipenat_dept FOREIGN KEY (CodeDept) REFERENCES departement (CodeDept) ON DELETE SET NULL ON UPDATE CASCADE");
+            $pdo->exec("ALTER TABLE utilisateur ADD CONSTRAINT fk_utilisateur_departement_code FOREIGN KEY (Id_Departement) REFERENCES departement (CodeDept) ON DELETE SET NULL ON UPDATE CASCADE");
+        }
+    } catch (\PDOException $e) {
+        // best-effort — voir le SQL manuel dans la doc si l'ALTER échoue ici.
+    }
+
+    // FK Division -> division.Division sur equipe et equipe_nationale (aucune
+    // valeur orpheline en base). ON UPDATE CASCADE : renommage d'un code division
+    // propagé ; ON DELETE RESTRICT : impossible de supprimer une division encore
+    // référencée.
+    foreach ([
+        'equipe'           => 'fk_equipe_division',
+        'equipe_nationale' => 'fk_equipenat_division',
+    ] as $table => $contrainte) {
+        try {
+            $existe = $pdo->query(
+                "SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
+                 WHERE CONSTRAINT_SCHEMA = DATABASE()
+                   AND TABLE_NAME = " . $pdo->quote($table) . "
+                   AND CONSTRAINT_NAME = " . $pdo->quote($contrainte)
+            )->fetchColumn();
+            if (!$existe) {
+                $pdo->exec(
+                    "ALTER TABLE $table
+                     ADD CONSTRAINT $contrainte FOREIGN KEY (Division) REFERENCES division (Division)
+                     ON DELETE RESTRICT ON UPDATE CASCADE"
+                );
+            }
+        } catch (\PDOException $e) {
+            // best-effort : ne bloque pas EA98 si l'ALTER échoue (droits, données incohérentes…)
+        }
+    }
 }
 
 /**
@@ -282,6 +327,37 @@ function validerRobustesseMotDePasse(string $mdp): ?string
     if (!preg_match('/\d/', $mdp))             return 'Le mot de passe doit contenir au moins un chiffre.';
     if (!preg_match('/[^a-zA-Z0-9]/', $mdp))   return 'Le mot de passe doit contenir au moins un caractère spécial.';
     return null;
+}
+
+/**
+ * Génère un mot de passe aléatoire conforme à validerRobustesseMotDePasse()
+ * (au moins un minuscule, un majuscule, un chiffre, un caractère spécial).
+ * Caractères ambigus (l/1/I, O/0…) exclus pour la lisibilité. Utilisé par EA86
+ * quand l'admin coche « Écraser » (mot de passe provisoire à communiquer).
+ */
+function genererMotDePasseAleatoire(int $longueur = 12): string
+{
+    $minu = 'abcdefghijkmnpqrstuvwxyz';
+    $maju = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    $chif = '23456789';
+    $spec = '!@#$%*-_=+';
+    $tous = $minu . $maju . $chif . $spec;
+
+    $car = [
+        $minu[random_int(0, strlen($minu) - 1)],
+        $maju[random_int(0, strlen($maju) - 1)],
+        $chif[random_int(0, strlen($chif) - 1)],
+        $spec[random_int(0, strlen($spec) - 1)],
+    ];
+    for ($i = count($car); $i < max($longueur, 10); $i++) {
+        $car[] = $tous[random_int(0, strlen($tous) - 1)];
+    }
+    for ($i = count($car) - 1; $i > 0; $i--) {           // mélange Fisher-Yates
+        $j = random_int(0, $i);
+        [$car[$i], $car[$j]] = [$car[$j], $car[$i]];
+    }
+
+    return implode('', $car);
 }
 
 /**
@@ -582,19 +658,19 @@ function getDepartementsAutorises(?string $deptUtilisateur): array
  * paramètre 'departements_limitrophes' en configuration) à partir de la
  * colonne departement.Limitrophe des départements actifs (getDeptActifs) :
  * union des codes limitrophes de chaque département actif, en excluant ceux
- * qui sont eux-mêmes actifs. Chaque entrée : ['code' => '80', 'nom' =>
+ * qui sont eux-mêmes actifs. Chaque entrée : ['CodeDept' => '80', 'nom' =>
  * 'Somme', 'region' => 'Hauts-de-France'].
  */
 function getDepartementsLimitrophes(): array
 {
     $actifs = getDeptActifs();
     if (!$actifs) return [];
-    $codesActifs = array_column($actifs, 'code');
+    $codesActifs = array_column($actifs, 'CodeDept');
 
     try {
         $pdo = getPDO();
         $ph  = implode(',', array_fill(0, count($codesActifs), '?'));
-        $stmt = $pdo->prepare("SELECT Limitrophe FROM departement WHERE code IN ($ph)");
+        $stmt = $pdo->prepare("SELECT Limitrophe FROM departement WHERE CodeDept IN ($ph)");
         $stmt->execute($codesActifs);
 
         $codesVoisins = [];
@@ -608,11 +684,11 @@ function getDepartementsLimitrophes(): array
 
         $ph2 = implode(',', array_fill(0, count($codesVoisins), '?'));
         $stmt2 = $pdo->prepare(
-            "SELECT d.code, d.nom, r.nom AS region
+            "SELECT d.CodeDept, d.nom, r.nom AS region
              FROM departement d
              LEFT JOIN region r ON r.code = d.code_region
-             WHERE d.code IN ($ph2)
-             ORDER BY CAST(d.code AS UNSIGNED), d.code"
+             WHERE d.CodeDept IN ($ph2)
+             ORDER BY CAST(d.CodeDept AS UNSIGNED), d.CodeDept"
         );
         $stmt2->execute($codesVoisins);
 
@@ -625,7 +701,7 @@ function getDepartementsLimitrophes(): array
 /**
  * Départements de la même région que $dept qui lui sont limitrophes :
  * colonne departement.Limitrophe ∩ départements de même code_region.
- * Chaque entrée : ['code' => '27', 'nom' => 'Eure']. Utilisé par EN13 pour
+ * Chaque entrée : ['CodeDept' => '27', 'nom' => 'Eure']. Utilisé par EN13 pour
  * proposer d'étendre l'affichage aux départements voisins.
  */
 function getLimitrophesRegion(string $dept): array
@@ -634,7 +710,7 @@ function getLimitrophesRegion(string $dept): array
     if ($dept === '') return [];
     try {
         $pdo  = getPDO();
-        $stmt = $pdo->prepare('SELECT code_region, Limitrophe FROM departement WHERE code = ?');
+        $stmt = $pdo->prepare('SELECT code_region, Limitrophe FROM departement WHERE CodeDept = ?');
         $stmt->execute([$dept]);
         $r = $stmt->fetch();
         if (!$r || $r['code_region'] === null || $r['code_region'] === '' || empty($r['Limitrophe'])) {
@@ -645,9 +721,9 @@ function getLimitrophesRegion(string $dept): array
 
         $ph   = implode(',', array_fill(0, count($voisins), '?'));
         $stmt = $pdo->prepare(
-            "SELECT code, nom FROM departement
-             WHERE code IN ($ph) AND code_region = ?
-             ORDER BY CAST(code AS UNSIGNED), code"
+            "SELECT CodeDept, nom FROM departement
+             WHERE CodeDept IN ($ph) AND code_region = ?
+             ORDER BY CAST(CodeDept AS UNSIGNED), CodeDept"
         );
         $stmt->execute([...$voisins, $r['code_region']]);
         return $stmt->fetchAll();
@@ -659,7 +735,7 @@ function getLimitrophesRegion(string $dept): array
 /**
  * Retourne les départements actifs (depuis departements_actifs en configuration)
  * avec leur nom (depuis la table departement), triés par code numérique.
- * Chaque entrée : ['code' => '14', 'nom' => 'Calvados']
+ * Chaque entrée : ['CodeDept' => '14', 'nom' => 'Calvados']
  */
 function getDeptActifs(): array
 {
@@ -669,15 +745,36 @@ function getDeptActifs(): array
         $pdo = getPDO();
         $ph  = implode(',', array_fill(0, count($codesActifs), '?'));
         $stmt = $pdo->prepare(
-            "SELECT code, nom FROM departement
-             WHERE CAST(code AS UNSIGNED) IN ($ph)
-             ORDER BY CAST(code AS UNSIGNED)"
+            "SELECT CodeDept, nom FROM departement
+             WHERE CAST(CodeDept AS UNSIGNED) IN ($ph)
+             ORDER BY CAST(CodeDept AS UNSIGNED)"
         );
         $stmt->execute(array_map('intval', $codesActifs));
         return $stmt->fetchAll();
     } catch (PDOException $e) {
         return [];
     }
+}
+
+/**
+ * Table de correspondance code division => libellé (colonne division.Nom), triée
+ * par division.Ord. Alimente les listes déroulantes « Division » (EA82, EA83,
+ * EA92, EA94, EA95), affichées « code — Nom ». Cache statique par requête.
+ *
+ * @return array<string, string>
+ */
+function getDivisionNoms(): array
+{
+    static $cache = null;
+    if ($cache === null) {
+        try {
+            $cache = getPDO()->query('SELECT Division, Nom FROM division ORDER BY Ord')->fetchAll(\PDO::FETCH_KEY_PAIR);
+        } catch (\PDOException $e) {
+            $cache = [];
+        }
+    }
+
+    return $cache;
 }
 
 /**

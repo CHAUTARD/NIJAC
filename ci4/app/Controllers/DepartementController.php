@@ -32,7 +32,7 @@ class DepartementController extends BaseController
         // une ligne métropolitaine non peuplée ou au séparateur ',' historique.
         $aNormaliser = (bool) $pdo->query(
             "SELECT 1 FROM departement
-             WHERE code NOT LIKE '97%' AND (Limitrophe IS NULL OR Limitrophe = '' OR Limitrophe LIKE '%,%')
+             WHERE CodeDept NOT LIKE '97%' AND (Limitrophe IS NULL OR Limitrophe = '' OR Limitrophe LIKE '%,%')
              LIMIT 1"
         )->fetchColumn();
         if (!$aNormaliser) {
@@ -74,7 +74,7 @@ class DepartementController extends BaseController
             '93' => '75;77;92;94;95',    '94' => '75;77;91;92;93',    '95' => '27;60;77;78;92;93',
         ];
 
-        $stmt = $pdo->prepare('UPDATE departement SET Limitrophe = ? WHERE code = ?');
+        $stmt = $pdo->prepare('UPDATE departement SET Limitrophe = ? WHERE CodeDept = ?');
         foreach ($limitrophes as $code => $val) {
             $stmt->execute([$val, $code]);
         }
@@ -88,9 +88,9 @@ class DepartementController extends BaseController
     private function ajouterLimitropheRegion(array $rows): array
     {
         $regionDe = array_column(
-            $this->departementModel->select('code, code_region')->findAll(),
+            $this->departementModel->select('CodeDept, code_region')->findAll(),
             'code_region',
-            'code'
+            'CodeDept'
         );
         foreach ($rows as &$r) {
             $reg     = $r['code_region'] ?? null;
@@ -122,9 +122,9 @@ class DepartementController extends BaseController
     {
         $this->ensureLimitropheColumn();
         $rows = $this->departementModel
-            ->select('departement.code, departement.nom, departement.code_region, departement.Limitrophe, region.nom AS nom_region')
+            ->select('departement.CodeDept, departement.nom, departement.code_region, departement.Limitrophe, region.nom AS nom_region')
             ->join('region', 'region.code = departement.code_region', 'left')
-            ->orderBy('departement.code', 'ASC')
+            ->orderBy('departement.CodeDept', 'ASC')
             ->findAll();
 
         return $this->response->setJSON(['ok' => true, 'data' => $this->ajouterLimitropheRegion($rows)]);
@@ -134,7 +134,7 @@ class DepartementController extends BaseController
     {
         $code = trim((string) $code);
         $row  = $this->departementModel
-            ->select('departement.code, departement.nom, departement.code_region, departement.Limitrophe, region.nom AS nom_region')
+            ->select('departement.CodeDept, departement.nom, departement.code_region, departement.Limitrophe, region.nom AS nom_region')
             ->join('region', 'region.code = departement.code_region', 'left')
             ->find($code);
 
@@ -157,7 +157,7 @@ class DepartementController extends BaseController
     {
 
         $input      = $this->request->getPost();
-        $code       = trim($input['code'] ?? '');
+        $code       = trim($input['CodeDept'] ?? '');
         [$nom, $codeRegion, $limitrophe] = $this->extractFields($input);
 
         if ($code === '' || $nom === '') {
@@ -165,13 +165,13 @@ class DepartementController extends BaseController
         }
 
         $this->departementModel->insert([
-            'code'        => $code,
+            'CodeDept'    => $code,
             'nom'         => $nom,
             'code_region' => $codeRegion,
             'Limitrophe'  => $limitrophe,
         ]);
 
-        return $this->response->setJSON(['ok' => true, 'msg' => 'Département créé.', 'code' => $code]);
+        return $this->response->setJSON(['ok' => true, 'msg' => 'Département créé.', 'CodeDept' => $code]);
     }
 
     public function update($code = null): ResponseInterface
@@ -190,7 +190,7 @@ class DepartementController extends BaseController
             'Limitrophe'  => $limitrophe,
         ]);
 
-        return $this->response->setJSON(['ok' => true, 'msg' => 'Département mis à jour.', 'code' => $code]);
+        return $this->response->setJSON(['ok' => true, 'msg' => 'Département mis à jour.', 'CodeDept' => $code]);
     }
 
     public function delete($code = null): ResponseInterface

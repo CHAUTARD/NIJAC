@@ -95,10 +95,17 @@
 
 <!-- Barre de filtres -->
 <div id="toolbar">
-    <label class="fw-bold" style="font-size:.82rem;">Période :</label>
-    <input type="date" id="filtre-debut" class="form-control form-control-sm" style="width:145px;" value="<?= esc($defaultDebut) ?>">
-    <span class="text-muted">→</span>
-    <input type="date" id="filtre-fin"   class="form-control form-control-sm" style="width:145px;" value="<?= esc($defaultFin) ?>" max="<?= esc(date('Y-m-d')) ?>">
+    <label class="fw-bold" style="font-size:.82rem;" for="filtre-phase">Phase :</label>
+    <select id="filtre-phase" class="form-select form-select-sm" style="width:auto;">
+        <option value="1"<?= (int) $defaultPhase === 1 ? ' selected' : '' ?>>Phase 1</option>
+        <option value="2"<?= (int) $defaultPhase === 2 ? ' selected' : '' ?>>Phase 2</option>
+    </select>
+    <label class="fw-bold" style="font-size:.82rem;" for="filtre-annee">Saison :</label>
+    <select id="filtre-annee" class="form-select form-select-sm" style="width:auto;">
+        <?php foreach ($anneesDispo as $a): ?>
+        <option value="<?= $a ?>"<?= (int) $a === (int) $defaultAnnee ? ' selected' : '' ?>><?= $a ?>&#8209;<?= $a + 1 ?></option>
+        <?php endforeach; ?>
+    </select>
     <button class="btn btn-sm btn-primary" id="btn-charger">
         <i class="bi bi-search me-1"></i>Afficher
     </button>
@@ -148,26 +155,6 @@
 'use strict';
 
 const BASE = '<?= site_url('stats-ja') ?>';
-
-/** Date du jour locale (AAAA-MM-JJ) — pas toISOString(), qui est en UTC et peut décaler d'un jour selon le fuseau horaire. */
-function aujourdhuiLocal() {
-    const d = new Date();
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-}
-
-/** début non postérieur à la fin (un jour unique est une période valide) ET fin non postérieure à aujourd'hui. */
-function periodeValide(debut, fin) {
-    if (!debut || !fin || debut > fin) return false;
-    return fin <= aujourdhuiLocal();
-}
-
-/** Message adapté à la cause réelle de l'échec de periodeValide(). */
-function messagePeriodeInvalide(debut, fin) {
-    if (debut > fin) {
-        return 'La date de début doit être antérieure à la date de fin.';
-    }
-    return 'La date de fin ne peut pas être postérieure à la date du jour.';
-}
 
 let _rows   = [];
 const sortState = { col: 'nb_arbitrages', asc: false };
@@ -222,18 +209,13 @@ function renderTable() {
 }
 
 function charger() {
-    const debut = $('#filtre-debut').val();
-    const fin   = $('#filtre-fin').val();
-    if (!debut || !fin) { nijacToast('Veuillez renseigner les deux dates.', 'warning'); return; }
-    if (!periodeValide(debut, fin)) {
-        nijacToast(messagePeriodeInvalide(debut, fin), 'warning');
-        return;
-    }
+    const phase = $('#filtre-phase').val();
+    const annee = $('#filtre-annee').val();
 
     $('#table-wrap, #empty-msg').hide();
     $('#loading').show();
 
-    $.getJSON(`${BASE}/donnees`, { debut, fin })
+    $.getJSON(`${BASE}/donnees`, { phase, annee })
         .done(r => {
             $('#loading').hide();
             if (!r.ok) { nijacToast(r.msg || 'Erreur serveur.', 'danger'); return; }
@@ -268,19 +250,12 @@ $(function () {
 
 $('#btn-charger').on('click', charger);
 
-$('#filtre-debut, #filtre-fin').on('change', function () {
-    if ($('#filtre-debut').val() && $('#filtre-fin').val()) charger();
-});
+$('#filtre-phase, #filtre-annee').on('change', charger);
 
 $('#btn-export-csv').on('click', function () {
-    const debut = $('#filtre-debut').val();
-    const fin   = $('#filtre-fin').val();
-    if (!debut || !fin) { nijacToast('Veuillez renseigner les deux dates.', 'warning'); return; }
-    if (!periodeValide(debut, fin)) {
-        nijacToast(messagePeriodeInvalide(debut, fin), 'warning');
-        return;
-    }
-    window.open(`${BASE}/export-csv?debut=${encodeURIComponent(debut)}&fin=${encodeURIComponent(fin)}`);
+    const phase = $('#filtre-phase').val();
+    const annee = $('#filtre-annee').val();
+    window.open(`${BASE}/export-csv?phase=${encodeURIComponent(phase)}&annee=${encodeURIComponent(annee)}`);
 });
 
 // Chargement initial

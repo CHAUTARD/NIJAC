@@ -125,10 +125,10 @@ class DesiderataClubsController extends BaseController
             sort($codes);
             $ph   = implode(',', array_fill(0, count($codes), '?'));
             $stmt = $pdo->prepare(
-                "SELECT CAST(code AS UNSIGNED) AS code, nom
+                "SELECT CAST(CodeDept AS UNSIGNED) AS CodeDept, nom
                  FROM departement
-                 WHERE CAST(code AS UNSIGNED) IN ($ph)
-                 ORDER BY CAST(code AS UNSIGNED)"
+                 WHERE CAST(CodeDept AS UNSIGNED) IN ($ph)
+                 ORDER BY CAST(CodeDept AS UNSIGNED)"
             );
             $stmt->execute($codes);
 

@@ -18,10 +18,12 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 1rem;
             font-family: 'Segoe UI', system-ui, sans-serif;
         }
         .pwd-card {
-            width: 460px;
+            width: 100%;
+            max-width: 460px;
             border: none;
             border-radius: 12px;
             box-shadow: 0 8px 32px rgba(26, 58, 107, 0.18);

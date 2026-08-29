@@ -380,15 +380,6 @@
     </div>
 
     <div class="menu-btn-wrap">
-        <a href="<?= site_url('desiderata-clubs') ?>" class="menu-btn btn-r34">
-            <span class="btn-code">EN12</span>
-            <div class="btn-icon"><img src="<?= base_url('img/R3_4.png') ?>" alt="Désidératas clubs"></div>
-            <span>Désidératas clubs</span>
-            <span class="btn-desc">Envoi du questionnaire de désidératas (PN à R4) aux clubs</span>
-        </a>
-    </div>
-
-    <div class="menu-btn-wrap">
         <a href="<?= site_url('disponibilites') ?>" class="menu-btn btn-correspondant">
             <span class="btn-code">EN13</span>
             <div class="btn-icon"><img src="<?= base_url('img/Dispo.png') ?>" alt="Disponibilités JA"></div>

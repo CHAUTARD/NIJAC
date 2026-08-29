@@ -261,7 +261,7 @@
     <select id="sel-dept" class="form-select form-select-sm w-auto">
         <option value="">— Tous —</option>
         <?php foreach ($departements as $d): ?>
-        <option value="<?= esc($d['code']) ?>"><?= esc($d['code']) ?> — <?= esc($d['nom']) ?></option>
+        <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
         <?php endforeach; ?>
     </select>
     <button class="menu-item" id="btn-filtre-region" title="Cliquer pour n'afficher que les communes de la région, ou toutes les communes" style="border-color:transparent;">

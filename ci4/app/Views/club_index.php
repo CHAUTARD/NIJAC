@@ -57,16 +57,18 @@
 
         #tbl-clubs {
             width: 100%;
-            font-size: .85rem;
+            font-size: .82rem;
             border-collapse: collapse;
-            min-width: 400px;
+            table-layout: fixed;   /* respecte les largeurs des <th> et tronque le contenu — pas de scroll horizontal */
         }
 
         #tbl-clubs thead th {
             background: #e8eef7;
             border: 1px solid #c8d4e8;
-            padding: .35rem .6rem;
+            padding: .3rem .45rem;
             white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
             position: sticky;
             top: 0;
             z-index: 1;
@@ -87,10 +89,11 @@
 
         .cell-inner {
             display: block;
-            padding: .28rem .5rem;
+            padding: .28rem .4rem;
             min-height: 28px;
             white-space: nowrap;
             overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         td.col-id .cell-inner {
@@ -98,6 +101,11 @@
             font-style: italic;
             background: #f0f4fa;
         }
+
+        /* Colonne actions : 2 boutons icônes serrés */
+        #tbl-clubs td:last-child { padding: 0 2px; }
+        #tbl-clubs td:last-child .btn { padding: .15rem .3rem; }
+        #tbl-clubs td:last-child .btn.me-1 { margin-right: 2px !important; }
 
         /* ── Recherche ── */
         #search-input {
@@ -170,19 +178,19 @@
         <i class="bi bi-map me-1"></i>Département
     </label>
     <?php
-        $codesRegion = array_column($deptActifs, 'code');
-        $deptsAutres = array_filter($tousDepts, fn ($d) => !in_array($d['code'], $codesRegion, true));
+        $codesRegion = array_column($deptActifs, 'CodeDept');
+        $deptsAutres = array_filter($tousDepts, fn ($d) => !in_array($d['CodeDept'], $codesRegion, true));
     ?>
     <select id="sel-dept" class="form-select form-select-sm w-auto">
         <option value="">— Tous —</option>
         <optgroup label="Région">
         <?php foreach ($deptActifs as $d): ?>
-        <option value="<?= esc($d['code']) ?>"><?= esc($d['code']) ?> — <?= esc($d['nom']) ?></option>
+        <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
         <?php endforeach; ?>
         </optgroup>
         <optgroup label="Autres départements">
         <?php foreach ($deptsAutres as $d): ?>
-        <option value="<?= esc($d['code']) ?>"><?= esc($d['code']) ?> — <?= esc($d['nom']) ?></option>
+        <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
         <?php endforeach; ?>
         </optgroup>
     </select>
@@ -200,16 +208,16 @@
     <table id="tbl-clubs">
         <thead>
             <tr>
-                <th style="width:120px" data-field="id_club">N° FFTT<span class="sort-icon"></span></th>
-                <th data-field="nom">Nom club<span class="sort-icon"></span></th>
-                <th style="width:180px" data-field="equipe_nom" title="Nom de base utilisé pour les équipes de ce club dans les imports FFTT (ex. « ROUEN SPO » pour « ROUEN SPO 2 »)">Nom équipe<span class="sort-icon"></span></th>
-                <th style="width:200px" data-field="cor_nom">Correspondant<span class="sort-icon"></span></th>
-                <th style="width:220px" data-field="cor_email">Email correspondant<span class="sort-icon"></span></th>
-                <th style="width:150px" data-field="cor_tel">Téléphone correspondant<span class="sort-icon"></span></th>
-                <th style="width:180px" data-field="salle_nom">Salle principale<span class="sort-icon"></span></th>
-                <th style="width:90px"  data-field="salle_cp">Code postal<span class="sort-icon"></span></th>
-                <th style="width:150px" data-field="salle_ville">Ville<span class="sort-icon"></span></th>
-                <th style="width:70px"></th>
+                <th style="width:6%"  data-field="id_club" title="N° FFTT">N°<span class="sort-icon"></span></th>
+                <th style="width:24%" data-field="nom">Nom club<span class="sort-icon"></span></th>
+                <th style="width:9%"  data-field="equipe_nom" title="Nom de base utilisé pour les équipes de ce club dans les imports FFTT (ex. « ROUEN SPO » pour « ROUEN SPO 2 »)">Nom équipe<span class="sort-icon"></span></th>
+                <th style="width:12%" data-field="cor_nom">Correspondant<span class="sort-icon"></span></th>
+                <th style="width:14%" data-field="cor_email">Email corresp.<span class="sort-icon"></span></th>
+                <th style="width:9%"  data-field="cor_tel">Téléphone<span class="sort-icon"></span></th>
+                <th style="width:10%" data-field="salle_nom">Salle principale<span class="sort-icon"></span></th>
+                <th style="width:4%"  data-field="salle_cp">CP<span class="sort-icon"></span></th>
+                <th style="width:8%"  data-field="salle_ville">Ville<span class="sort-icon"></span></th>
+                <th style="width:4%"></th>
             </tr>
         </thead>
         <tbody id="tbody-grille">
@@ -294,7 +302,7 @@
             <select id="sync-fftt-dept" class="form-select">
               <option value="">— Choisir —</option>
               <?php foreach ($deptActifs as $d): ?>
-              <option value="<?= esc($d['code']) ?>"><?= esc($d['code']) ?> — <?= esc($d['nom']) ?></option>
+              <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
               <?php endforeach; ?>
             </select>
           </div>
@@ -383,7 +391,7 @@
 'use strict';
 
 const CLUB_BASE = '<?= site_url('club') ?>';
-const DEPTS_REGION = new Set(<?= json_encode(array_column($deptActifs, 'code')) ?>);
+const DEPTS_REGION = new Set(<?= json_encode(array_column($deptActifs, 'CodeDept')) ?>);
 
 function deptDeClub(idClub) {
     // Format : 0[9][dept 2 chiffres][4 chiffres] — ex. 09760442 → '76'

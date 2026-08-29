@@ -21,6 +21,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; }
 .journee-titre { background:#e8f5e9; color:#2e7d32; font-weight:700; font-size:.9rem; padding:.5rem .85rem; cursor:pointer; user-select:none; list-style-position:inside; }
 details.journee-bloc[open] .journee-titre { border-bottom:1px solid #c8e6c9; }
 .journee-titre::marker { color:#2e7d32; }
+.recap-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 table.recap { width:100%; border-collapse:collapse; font-size:.83rem; }
 table.recap th { background:#f8f9fa; text-align:left; padding:.4rem .6rem; border-bottom:2px solid #dee2e6; white-space:nowrap; }
 table.recap td { padding:.35rem .6rem; border-bottom:1px solid #f0f0f0; vertical-align:middle; }
@@ -54,6 +55,26 @@ h2.section { font-size:1rem; color:#1a3a6b; margin:1.5rem 0 .6rem; }
 .cal-jour.jour-j { font-weight:700; cursor:pointer; background:var(--nom-green); color:#fff; transition:filter .12s, transform .1s; }
 .cal-jour.jour-j:hover { filter:brightness(1.12); transform:scale(1.1); }
 .cal-jour.today { outline:2px solid #1a3a6b; outline-offset:1px; }
+
+/* ── Adaptation smartphone ──────────────────────────────────────────────── */
+@media (max-width: 640px) {
+    #page-header { padding:.5rem .8rem; }
+    #toolbar { padding:.3rem .8rem; flex-wrap:wrap; }
+    .wrap { padding:0 .6rem; margin:.6rem auto 2rem; }
+    h2.section { font-size:.95rem; margin:1.1rem 0 .5rem; }
+
+    /* Tableau récap : masquer Poule + Heure, resserrer, combo plus étroite */
+    table.recap th:nth-child(3), table.recap td:nth-child(3),
+    table.recap th:nth-child(4), table.recap td:nth-child(4) { display:none; }
+    table.recap { font-size:.8rem; }
+    table.recap th, table.recap td { padding:.3rem .35rem; }
+    .cell-ja { white-space:normal; }
+    .sel-ja { max-width:150px; font-size:.8rem; }
+
+    .cal-mois-grille { grid-template-columns:1fr; gap:.75rem; }
+    .cal-mois-titre { font-size:.9rem; }
+    .cal-jour { font-size:.95rem; }
+}
 </style>
 </head>
 <body>
@@ -220,6 +241,7 @@ function rendu(res) {
         const visible = ouverts.has(cle);   // masquée par défaut ; révélée via le calendrier
         html += `<details class="journee-bloc" data-cle="${escHtml(cle)}"${visible ? ' open' : ' style="display:none"'}>
             <summary class="journee-titre">Journée ${escHtml(g.journee)} — ${fmtDate(g.date)}</summary>
+            <div class="recap-scroll">
             <table class="recap">
                 <thead><tr><th>Div.</th><th>Rencontre</th><th>Poule</th><th>Heure</th><th>Juge-arbitre</th><th>Statut</th></tr></thead>
                 <tbody>`;
@@ -237,7 +259,7 @@ function rendu(res) {
                 <td class="cell-statut">${statutBadge(r)}</td>
             </tr>`;
         });
-        html += '</tbody></table></details>';
+        html += '</tbody></table></div></details>';
     });
     $('#journees').html(html);
 

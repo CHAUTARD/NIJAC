@@ -20,6 +20,7 @@ class EquipeRegionaleController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
+        require_once __DIR__ . '/../../../config/app_config.php';
     }
 
     /**
@@ -62,9 +63,10 @@ class EquipeRegionaleController extends BaseController
         $moi = $_SESSION['utilisateur'] ?? [];
 
         $data = [
-            'nomComplet'  => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
-            'departement' => $moi['id_departement'] ?? '',
-            'changeLogin' => !empty($moi['change_login']),
+            'nomComplet'   => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
+            'departement'  => $moi['id_departement'] ?? '',
+            'changeLogin'  => !empty($moi['change_login']),
+            'divisionNoms' => getDivisionNoms(),
         ];
 
         return view('equipe_regionale_index', $data);

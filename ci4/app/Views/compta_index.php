@@ -250,11 +250,10 @@
 
 <!-- ── Toolbar filtres ── -->
 <div id="toolbar">
-    <label for="inp-debut">Période du</label>
-    <input type="date" id="inp-debut" value="<?= esc($defaultDebut) ?>">
-
-    <label for="inp-fin">au</label>
-    <input type="date" id="inp-fin" value="<?= esc($defaultFin) ?>">
+    <!-- Plage de dates pilotée uniquement par les boutons Phase 1 / Phase 2 (plus de sélecteurs de date). -->
+    <input type="hidden" id="inp-debut" value="<?= esc($defaultDebut) ?>">
+    <input type="hidden" id="inp-fin" value="<?= esc($defaultFin) ?>">
+    <span class="fw-bold">Période :</span>
 
     <button class="btn-phase" id="btn-phase1" data-debut="<?= esc($dateP1Debut) ?>" data-fin="<?= esc($dateP1Fin) ?>">
         <i class="bi bi-1-circle"></i>Phase 1

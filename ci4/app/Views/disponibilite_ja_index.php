@@ -191,6 +191,26 @@
         .cal-jour.statut-N { background: var(--col-nodispo); color: #fff; }
         .cal-jour.statut-vide { background: #e2e8f0; color: #475569; }
         .cal-jour.today { outline: 2px solid var(--nijac-blue); outline-offset: 1px; }
+
+        /* ── Adaptation smartphone ──────────────────────────────────────── */
+        @media (max-width: 640px) {
+            /* en-tête non collant sur mobile : il occupe 3 lignes, autant récupérer la hauteur */
+            #page-header { position: static; padding: .5rem .7rem; gap: .4rem; }
+            #page-header h1 { font-size: .92rem; }
+            #page-header .btn { font-size: .78rem; padding: .2rem .5rem; }
+            #ja-info-bar { gap: .4rem !important; }
+            #ja-info-bar .ja-header-sep { display: none; }
+            #lbl-defisc { margin-left: 0 !important; }
+
+            #section-cal-grille { padding: .5rem .5rem 1.25rem; }
+            .cal-mois-grille { gap: .75rem; }
+            .cal-legende { font-size: .72rem; gap: .7rem 1rem; }
+            .cal-mois-titre { font-size: .98rem; padding: .5rem; }
+            .cal-jour { font-size: .95rem; }
+
+            #cartouche-arb-voisins { padding: 0 .5rem; }
+            #cartouche-arb-voisins > div { padding: .8rem .9rem; }
+        }
     </style>
 </head>
 <body>
@@ -556,12 +576,26 @@ function renderCalendrierMensuel() {
         return CONFIG_PHASE === 2 ? enPhase2 : !enPhase2;
     });
 
+    // Nombre de colonnes adapté à la largeur : 1 sur smartphone, 2 sur tablette,
+    // sinon jusqu'à tous les mois sur une ligne (bureau).
+    const w = window.innerWidth;
+    const nCol = w < 680 ? 1 : (w < 1100 ? 2 : (w < 1500 ? Math.min(moisSaison.length, 4) : moisSaison.length));
+
     const $grille = $('#cal-mois-grille').empty()
-        .css('grid-template-columns', `repeat(${moisSaison.length}, 1fr)`);
+        .css('grid-template-columns', `repeat(${nCol}, 1fr)`);
     moisSaison.forEach(([annee, mois]) => {
         $grille.append(buildMonthGrid(annee, mois, today));
     });
 }
+
+// Re-render du calendrier au changement de largeur (rotation, redimensionnement).
+let _calResizeT;
+$(window).on('resize', function () {
+    clearTimeout(_calResizeT);
+    _calResizeT = setTimeout(function () {
+        if (Object.keys(etatDates).length) renderCalendrierMensuel();
+    }, 200);
+});
 
 function buildMonthGrid(annee, mois, today) {
     const $wrap = $('<div class="cal-mois">');

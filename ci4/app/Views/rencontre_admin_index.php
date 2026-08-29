@@ -32,7 +32,7 @@
             <select id="sel-dept" class="form-select form-select-sm" style="width:170px;">
                 <option value="">— Département —</option>
                 <?php foreach ($deptActifs as $d): ?>
-                <option value="<?= esc($d['code']) ?>"><?= esc($d['code']) ?> — <?= esc($d['nom']) ?></option>
+                <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
                 <?php endforeach; ?>
             </select>
             <select id="sel-division" class="form-select form-select-sm" style="width:130px;">
@@ -149,6 +149,11 @@
 <script>
 'use strict';
 const RENCONTRE_BASE = '<?= site_url('gestion-rencontres') ?>';
+const DIVISION_NOMS = <?= json_encode($divisionNoms ?? [], JSON_UNESCAPED_UNICODE) ?>;
+function libDivision(code) {
+    const n = DIVISION_NOMS[code];
+    return n ? code + ' — ' + n : code;
+}
 let rencontres = [];
 let currentId  = null;
 let searchEquipe  = '';
@@ -228,7 +233,7 @@ function peuplerFiltres() {
     const $selDivision = $('#sel-division');
     const valDivision   = $selDivision.val();
     $selDivision.find('option:not(:first)').remove();
-    divisions.forEach(d => $selDivision.append(new Option(d, d)));
+    divisions.forEach(d => $selDivision.append(new Option(libDivision(d), d)));
     $selDivision.val(valDivision);
 
     const poules = [...new Set(rencontres.map(r => r.Poule).filter(p => p !== null))].sort((a, b) => a - b);

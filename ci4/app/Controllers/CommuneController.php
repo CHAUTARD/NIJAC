@@ -29,7 +29,7 @@ class CommuneController extends BaseController
             'nomComplet'   => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
             'departement'  => $moi['id_departement'] ?? '',
             'changeLogin'  => !empty($moi['change_login']),
-            'departements' => $pdo->query('SELECT code, nom FROM departement ORDER BY code')->fetchAll(),
+            'departements' => $pdo->query('SELECT CodeDept, nom FROM departement ORDER BY CodeDept')->fetchAll(),
             'deptActifs'   => getDeptActifs(),
         ];
 
@@ -54,7 +54,7 @@ class CommuneController extends BaseController
             $where  .= ' AND LEFT(lp.CodePostal, 2) = ?';
             $params[] = $dept;
         } elseif ($region) {
-            $codes = array_column(getDeptActifs(), 'code');
+            $codes = array_column(getDeptActifs(), 'CodeDept');
             if (!$codes) {
                 return $this->response->setJSON(['ok' => true, 'data' => [], 'total' => 0, 'offset' => $offset, 'limit' => $limit]);
             }
@@ -78,7 +78,7 @@ class CommuneController extends BaseController
             "SELECT lp.Id_LaPoste, lp.Nom, lp.CodePostal, lp.Latitude, lp.Longitude,
                     LEFT(lp.CodePostal, 2) AS CodeDept, d.nom AS NomDept
              FROM laposte lp
-             LEFT JOIN departement d ON d.code = LEFT(lp.CodePostal, 2)
+             LEFT JOIN departement d ON d.CodeDept = LEFT(lp.CodePostal, 2)
              WHERE $where
              ORDER BY lp.CodePostal, lp.Nom LIMIT ? OFFSET ?"
         );
@@ -127,7 +127,7 @@ class CommuneController extends BaseController
             'SELECT lp.Id_LaPoste, lp.Nom, lp.CodePostal, lp.Latitude, lp.Longitude,
                     LEFT(lp.CodePostal, 2) AS CodeDept, d.nom AS NomDept
              FROM laposte lp
-             LEFT JOIN departement d ON d.code = LEFT(lp.CodePostal, 2)
+             LEFT JOIN departement d ON d.CodeDept = LEFT(lp.CodePostal, 2)
              WHERE lp.Id_LaPoste = ?'
         );
         $stmt->execute([$insee]);
@@ -311,7 +311,7 @@ class CommuneController extends BaseController
             'SELECT lp.Id_LaPoste, lp.Nom, lp.CodePostal, lp.Latitude, lp.Longitude,
                     LEFT(lp.CodePostal, 2) AS CodeDept, d.nom AS NomDept
              FROM laposte lp
-             LEFT JOIN departement d ON d.code = LEFT(lp.CodePostal, 2)
+             LEFT JOIN departement d ON d.CodeDept = LEFT(lp.CodePostal, 2)
              ORDER BY lp.CodePostal, lp.Nom'
         )->fetchAll();
 

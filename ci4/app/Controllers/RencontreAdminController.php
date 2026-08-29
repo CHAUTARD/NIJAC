@@ -43,10 +43,11 @@ class RencontreAdminController extends BaseController
         $moi = $_SESSION['utilisateur'] ?? [];
 
         $data = [
-            'nomComplet'  => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
-            'departement' => $moi['id_departement'] ?? '',
-            'changeLogin' => !empty($moi['change_login']),
-            'deptActifs'  => getDeptActifs(),
+            'nomComplet'   => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
+            'departement'  => $moi['id_departement'] ?? '',
+            'changeLogin'  => !empty($moi['change_login']),
+            'deptActifs'   => getDeptActifs(),
+            'divisionNoms' => getDivisionNoms(),
         ];
 
         return view('rencontre_admin_index', $data);

@@ -25,6 +25,12 @@
             flex-shrink: 0;
         }
         .container-fluid { flex: 1; }
+
+        @media (max-width: 640px) {
+            #page-header { padding: .5rem .8rem; }
+            .card .card-body { padding: .9rem; }
+            h4 { font-size: 1.15rem; }
+        }
     </style>
 </head>
 <body>

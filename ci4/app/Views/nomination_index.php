@@ -181,9 +181,13 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
     <div id="col-candidats">
         <div class="col-titre">
             <span><i class="bi bi-people-fill me-1"></i>Candidats JA</span>
-            <label style="font-weight:600;font-size:.75rem;cursor:pointer;user-select:none;display:flex;align-items:center;gap:.3rem;">
-                <input type="checkbox" id="chk-hors-dept" class="form-check-input mt-0"> Autres départements
-            </label>
+        </div>
+        <!-- Filtre des candidats d'un autre département (voir majFiltreHorsDept()) -->
+        <div id="hors-dept-box" style="display:none;align-items:center;flex-wrap:wrap;gap:.4rem;padding:.4rem .85rem;background:#fbfbfd;border-bottom:1px solid #eee;font-size:.75rem;">
+            <span style="font-weight:700;color:#555;white-space:nowrap;"><i class="bi bi-signpost-2 me-1"></i>Autres dépts</span>
+            <span id="hd-checks" style="display:flex;flex-wrap:wrap;gap:.5rem;"></span>
+            <button type="button" class="btn btn-outline-secondary btn-sm py-0" id="btn-hd-tous" style="font-size:.72rem;">Tout cocher</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm py-0" id="btn-hd-inv" style="font-size:.72rem;">Inverser</button>
         </div>
         <div id="placeholder-candid">
             <i class="bi bi-arrow-left-circle fs-2"></i>
@@ -294,6 +298,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 'use strict';
 
 const NOM_BASE = '<?= site_url('nomination') ?>';
+const DEPT_NOMS = <?= json_encode($deptNoms ?? [], JSON_UNESCAPED_UNICODE) ?>;
 
 // ── État ─────────────────────────────────────────────────────────────────────
 let journeeCourante = null;  // {Journee, Date}
@@ -403,6 +408,7 @@ function chargerRencontres() {
                 rencontres.filter(rc => rc.Valide == 1 && rc.EmailEnvoye != 1).map(rc => rc.Id_Rencontre)
             );
             if (j.ok) jaList = j.data;
+            majFiltreHorsDept();
             renderRencontres();
             mettreAJourInfoJournee();
             mettreAJourBoutons();
@@ -496,9 +502,36 @@ function selectionnerRencontre(idRenc) {
     afficherCandidatsPourRencontre(idRenc);
 }
 
-$('#chk-hors-dept').on('change', function () {
+function deptDeJa(ja) {
+    return (ja.Cp && ja.Cp.length >= 2) ? ja.Cp.substring(0, 2) : String(ja.CodeDept || '');
+}
+
+// Construit les cases « autre dépt » à partir des candidats hors périmètre chargés
+// (jaList). « Tout cocher » / « Inverser » masqués s'il n'y a qu'un seul département.
+function majFiltreHorsDept() {
+    const depts = [...new Set(jaList.filter(j => j.HorsDept == 1).map(deptDeJa))]
+        .filter(Boolean).sort();
+    const $box = $('#hd-checks').empty();
+    if (!depts.length) { $('#hors-dept-box').hide(); return; }
+    depts.forEach(code => {
+        const nom = DEPT_NOMS[code] || '';
+        $box.append(
+            `<label style="cursor:pointer;display:inline-flex;align-items:center;gap:.25rem;">
+                <input type="checkbox" class="hd-chk form-check-input mt-0" value="${escHtml(code)}">
+                ${escHtml(code)}${nom ? ' ' + escHtml(nom) : ''}
+            </label>`
+        );
+    });
+    $('#btn-hd-tous, #btn-hd-inv').toggle(depts.length > 1);
+    $('#hors-dept-box').css('display', 'flex');
+}
+
+function rafraichirCandidats() {
     if (rencSelectionnee != null) afficherCandidatsPourRencontre(rencSelectionnee);
-});
+}
+$('#hd-checks').on('change', '.hd-chk', rafraichirCandidats);
+$('#btn-hd-tous').on('click', function () { $('.hd-chk').prop('checked', true); rafraichirCandidats(); });
+$('#btn-hd-inv').on('click', function () { $('.hd-chk').each(function () { this.checked = !this.checked; }); rafraichirCandidats(); });
 
 // ── Candidats JA pour une rencontre — filtrage et tri côté client ─────────────
 function afficherCandidatsPourRencontre(idRenc) {
@@ -535,9 +568,12 @@ function afficherCandidatsPourRencontre(idRenc) {
         const prefereRenc  = dispoRencs.includes(idRenc);
         if (!dispoJournee && !prefereRenc) return;
 
-        // JA d'un autre département (accepte via EN22) : masqué sauf si la case
-        // « Autres départements » du header est cochée.
-        if (ja.HorsDept == 1 && !$('#chk-hors-dept').is(':checked')) return;
+        // JA d'un autre département (accepte via EN22) : affiché seulement si la
+        // case de SON département est cochée dans le filtre « Autres dépts ».
+        if (ja.HorsDept == 1) {
+            const coches = $('.hd-chk:checked').map(function () { return this.value; }).get();
+            if (!coches.includes(deptDeJa(ja))) return;
+        }
 
         if (ja.Id_Club && ja.Id_Club === clubDom) return;
 
@@ -706,6 +742,7 @@ $('#ac-envoyer').on('click', function () {
 function viderCandidats() {
     $('#liste-candidats').show().empty();
     $('#panel-arbitre-club').hide();
+    $('#hors-dept-box').hide();
     $('#placeholder-candid').show();
     $('#renc-sel-titre').text('');
     rencSelectionnee = null;

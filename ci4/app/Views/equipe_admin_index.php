@@ -136,6 +136,11 @@
 <script>
 'use strict';
 const EQUIPE_BASE = '<?= site_url('gestion-equipes') ?>';
+const DIVISION_NOMS = <?= json_encode($divisionNoms ?? [], JSON_UNESCAPED_UNICODE) ?>;
+function libDivision(code) {
+    const n = DIVISION_NOMS[code];
+    return n ? code + ' — ' + n : code;
+}
 let equipes     = [];
 let clubs       = [];
 let divisions   = [];
@@ -197,19 +202,19 @@ function peuplerFiltres() {
     const $selDept = $('#sel-departement');
     const valDept   = $selDept.val();
     $selDept.find('option:not(:first)').remove();
-    departements.forEach(d => $selDept.append(new Option(`${d.code} - ${d.nom}`, d.code)));
+    departements.forEach(d => $selDept.append(new Option(`${d.CodeDept} - ${d.nom}`, d.CodeDept)));
     $selDept.val(valDept);
 
     const $selDiv = $('#sel-division');
     const valDiv   = $selDiv.val();
     $selDiv.find('option:not(:first)').remove();
-    divisions.forEach(d => $selDiv.append(new Option(d, d)));
+    divisions.forEach(d => $selDiv.append(new Option(libDivision(d), d)));
     $selDiv.val(valDiv);
 }
 
 function peuplerSelectsFormulaire() {
     const $selDiv = $('#edit-sel-division').empty();
-    divisions.forEach(d => $selDiv.append(new Option(d, d)));
+    divisions.forEach(d => $selDiv.append(new Option(libDivision(d), d)));
 
     const $selClub = $('#edit-sel-club').empty();
     clubs.forEach(c => $selClub.append(new Option(c.Nom, c.Id_Club)));

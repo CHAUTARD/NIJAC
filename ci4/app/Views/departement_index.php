@@ -54,7 +54,7 @@
             <table id="tbl-depts">
                 <thead>
                     <tr>
-                        <th style="width:55px;" data-col="code">Code<span class="sort-icon"></span></th>
+                        <th style="width:55px;" data-col="CodeDept">Code<span class="sort-icon"></span></th>
                         <th data-col="nom">Nom<span class="sort-icon"></span></th>
                         <th data-col="nom_region">Région<span class="sort-icon"></span></th>
                         <th data-col="Limitrophe">Limitrophes<span class="sort-icon"></span></th>
@@ -142,7 +142,7 @@ function appliquerFiltre() {
     const region = $('#filtre-region').val();
     const $body  = $('#tbody-liste').empty();
     const data   = tousLesDepts.filter(d =>
-        (!texte  || d.code.toLowerCase().includes(texte) || d.nom.toLowerCase().includes(texte)) &&
+        (!texte  || d.CodeDept.toLowerCase().includes(texte) || d.nom.toLowerCase().includes(texte)) &&
         (!region || d.code_region === region)
     );
     if (sortState.col) {
@@ -158,8 +158,8 @@ function appliquerFiltre() {
         return;
     }
     data.forEach(d => {
-        $('<tr>').attr('data-code', d.code).append(
-            $('<td>').html(`<code>${d.code}</code>`),
+        $('<tr>').attr('data-code', d.CodeDept).append(
+            $('<td>').html(`<code>${d.CodeDept}</code>`),
             $('<td>').text(d.nom),
             $('<td>').text(d.nom_region ?? ''),
             $('<td class="col-limitrophe">').text(d.Limitrophe ?? '').attr('title', d.Limitrophe ?? ''),
@@ -194,8 +194,8 @@ function selectionnerLigne($tr) {
     $.get(`${DEPT_BASE}/data/${code}`, function(res) {
         if (!res.ok) return;
         const d = res.data;
-        currentCode = d.code;
-        $('#txt-code').val(d.code).prop('readonly', true);
+        currentCode = d.CodeDept;
+        $('#txt-code').val(d.CodeDept).prop('readonly', true);
         $('#txt-nom').val(d.nom);
         $('#txt-limitrophe').val(d.Limitrophe ?? '');
         $('#txt-limitrophe-region').text(d.LimitropheRegion || '—');
@@ -220,7 +220,7 @@ $('#btn-nouveau').on('click', function() {
 $('#btn-enregistrer').on('click', function() {
     const isNew = currentCode === null;
     const payload = {
-        code:        $('#txt-code').val().trim(),
+        CodeDept:    $('#txt-code').val().trim(),
         nom:         $('#txt-nom').val().trim(),
         code_region: $('#cbo-region').val(),
         limitrophe:  $('#txt-limitrophe').val().trim(),
@@ -229,7 +229,7 @@ $('#btn-enregistrer').on('click', function() {
     const method = isNew ? 'POST' : 'PUT';
 
     $.ajax({ url, method, data: payload, dataType: 'json' }).done(function(res) {
-        if (res.ok) { toast(res.msg); currentCode = res.code; chargerListe(res.code); }
+        if (res.ok) { toast(res.msg); currentCode = res.CodeDept; chargerListe(res.CodeDept); }
         else { toast(res.msg, false); setStatus(res.msg, false); }
     });
 });

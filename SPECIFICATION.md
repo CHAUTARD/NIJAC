@@ -286,7 +286,7 @@ Gérer la liste complète des Juges-Arbitres : import depuis fichier FFTT, consu
 - Seuls les JA avec `Actif = 1` sont proposés à la nomination (EN14)
 - Le département d'un JA est déterminé par le code postal de sa salle principale de club
 - Le sélecteur de département (filtre liste + import FFTT) propose, en plus des départements actifs (`getDeptActifs()`), un groupe **« Départements limitrophes »** alimenté par `getDepartementsLimitrophes()` — liste paramétrable via la clé `departements_limitrophes` en EA91 (par défaut `28,35,53,60,72,78,80,95`). Ce mécanisme est distinct de la règle 76→27 (`regles_departements`, voir EA91) : il permet de gérer des JA rattachés à des départements hors Normandie qui interviennent occasionnellement en Normandie, plutôt qu'une inclusion automatique entre deux départements normands.
-- La modale Créer/Modifier reprend la case **« Accepte d'arbitrer dans un ou plusieurs départements voisins »** d'EN22 (case maîtresse + sélection 14/27/50/61/76). Le corps de la fiche part par `maj_bdd`, puis, une fois l'enregistrement confirmé, la préférence est envoyée par un second POST vers l'action `sauvegarder_arbitrage_voisins` d'EN22 (endpoint partagé, `maj_bdd` n'écrit pas ces colonnes) — un échec de ce second appel n'annule pas l'enregistrement du reste de la fiche (toast d'avertissement).
+- La modale Créer/Modifier reprend la case **« Accepte d'arbitrer dans un ou plusieurs départements voisins »** d'EN22 (case maîtresse + sélection des départements). La sélection est filtrée : seuls les départements **voisins de région du champ « Exerce dans »** sont proposés (`voisinsParDept` = `getLimitrophesRegion()` par département actif, injecté en JS ; `njaMajArbVoisins()` masque et décoche les cases non voisines, se recalcule au `change` du département et au chargement d'une fiche). Le corps de la fiche part par `maj_bdd`, puis, une fois l'enregistrement confirmé, la préférence est envoyée par un second POST vers l'action `sauvegarder_arbitrage_voisins` d'EN22 (endpoint partagé, `maj_bdd` n'écrit pas ces colonnes) — un échec de ce second appel n'annule pas l'enregistrement du reste de la fiche (toast d'avertissement).
 - Colonnes `ja.ArbitreAutresDepts` / `ja.DeptsArbitrage` supposées présentes en base (créées en production ; plus d'auto-migration côté contrôleur).
 
 ---
@@ -365,7 +365,7 @@ Affecter les JA disponibles aux rencontres de la saison en appliquant les règle
 |--------|---------|-------------|
 | `journees` | GET | Retourne les journées disponibles pour le département |
 | `rencontres_journee` | GET | Retourne les rencontres d'une journée avec nominations |
-| `candidats_journee` | GET | Retourne les JA candidats de la journée : JA actifs disponibles (journée ou rencontre) rattachés à un département du nominateur — soit par le domicile (`LEFT(Cp,2)`), soit par `ja.CodeDept` — **ou** JA d'un autre département ayant coché « accepte d'arbitrer dans un département voisin » (`ja.ArbitreAutresDepts = 1` et un département du nominateur présent dans `ja.DeptsArbitrage`, testé par `FIND_IN_SET`) — voir EN22/EN11. Chaque ligne porte `HorsDept` (0/1) ; côté client, la case **« Autres départements »** du header masque (défaut) ou affiche les `HorsDept = 1`, signalés par un badge « Autre dépt ». Tri final côté client. |
+| `candidats_journee` | GET | Retourne les JA candidats de la journée : JA actifs disponibles (journée ou rencontre) rattachés à un département du nominateur — soit par le domicile (`LEFT(Cp,2)`), soit par `ja.CodeDept` — **ou** JA d'un autre département ayant coché « accepte d'arbitrer dans un département voisin » (`ja.ArbitreAutresDepts = 1` et un département du nominateur présent dans `ja.DeptsArbitrage`, testé par `FIND_IN_SET`) — voir EN22/EN11. Chaque ligne porte `HorsDept` (0/1) et `CodeDept` ; côté client, un filtre **« Autres dépts »** génère une case par département distinct des candidats `HorsDept = 1` (dépt = `LEFT(Cp,2)` sinon `CodeDept`) — un tel JA n'est affiché que si la case de son département est cochée (toutes décochées par défaut), boutons Tout cocher / Inverser visibles à partir de 2 départements, badge « Autre dépt ». Tri final côté client. |
 | `affecter_ja` | POST | Nomme un JA sur une rencontre |
 | `retirer_ja` | POST | Retire la nomination d'un JA (`DELETE FROM nomination WHERE Id_Rencontre = ?`) |
 | `valider_nominations` | POST | Valide les nominations de la journée (`Valide = 1`) |
@@ -432,7 +432,7 @@ Envoyer les messages aux JA actifs du département (convocations, rappels, annul
 Générer le récapitulatif des frais de déplacement des JA pour une période et l'exporter pour le logiciel comptable EBP.
 
 ### Interface
-- Sélecteur de période (date début / date fin)
+- Période choisie via les boutons **Phase 1** / **Phase 2** uniquement (plus de sélecteurs de date ; les bornes proviennent de la config EA91, portées par des champs cachés `#inp-debut` / `#inp-fin`)
 - Tableau récapitulatif : JA, rencontres arbitrées, kilométrage, péages, indemnité forfaitaire, total
 - Bouton export CSV
 
@@ -464,18 +464,23 @@ Générer le récapitulatif des frais de déplacement des JA pour une période e
 **Accès :** Administrateur et Nominateur
 
 ### Objectif
-Rapport agrégé, en lecture seule, des arbitrages et frais par JA sur une période donnée (complémentaire de l'export comptable détaillé EN16).
+Rapport agrégé, en lecture seule, des arbitrages et frais par JA pour une phase d'une saison (complémentaire de l'export comptable détaillé EN16).
 
 ### Interface
-- Filtres de période (défaut : 1ᵉʳ septembre de l'année en cours → aujourd'hui), bouton **Afficher**
+- Filtres **Phase** (`1` / `2`) et **Saison** (liste des 7 dernières années, libellé `AAAA‑AAAA+1`), bouton **Afficher** ; défaut = phase en cours (ou phase 2 de la saison écoulée pendant la coupure estivale)
 - Tableau triable (clic sur en-tête) : JA (avec mini barre proportionnelle au nombre d'arbitrages), Grade, Club, Arbitrages, Km, Péages, Indemnité, Total frais — avec ligne de totaux
 - Boutons **Export CSV** et **Imprimer** (vue imprimable via CSS `@media print`)
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `donnees` | GET | Retourne, par JA, le nombre d'arbitrages et les totaux km / péages / indemnité / frais sur la période |
-| `export_csv` | GET | Télécharge un CSV (BOM UTF-8, séparateur `;`) `stats_ja_{debut}_{fin}.csv` |
+| `donnees` | GET (`phase`, `annee`) | Retourne, par JA, le nombre d'arbitrages et les totaux km / péages / indemnité / frais sur la phase choisie |
+| `export_csv` | GET (`phase`, `annee`) | Télécharge un CSV (BOM UTF-8, séparateur `;`) `stats_ja_saison{annee}_phase{phase}.csv` |
+
+### Résolution (phase, saison) → bornes de dates
+- Bornes MM/JJ lues dans la configuration EA91 (`phase1_debut`/`phase1_fin`/`phase2_debut`/`phase2_fin`)
+- Année civile d'un mois : `≥ juillet` → 1re année de la saison, sinon année suivante (ex. phase 1 de la saison 2026 = `2026-09-01` → `2027-01-31` ; phase 2 = `2027-02-01` → `2027-06-30`)
+- La date de fin est bornée à aujourd'hui ; si la date de début est future, la phase « n'a pas encore commencé » (message d'erreur, aucune ligne)
 
 ### Calcul (par JA, sur les nominations `Valide = 1` de la période)
 - `total_km` = `SUM(Kilometre)`, `total_peages` = `SUM(Peage)`
@@ -920,30 +925,34 @@ Préparer l'application pour une nouvelle saison : sauvegarde SQL puis vidage de
 ### Objectif
 Gérer les comptes utilisateurs de l'application (création, modification, suppression, droits).
 
+### Formulaire — 3 cadres
+- **Identifiant** : Id (lecture seule) + Login sur la même ligne
+- **Information personnelle** : Prénom + Nom sur la même ligne, Adresse email, Rôle + Département sur la même ligne, case Actif
+- **Écraser mot de passe** : une seule case **Écraser**. Cochée (ou création — case forcée), le serveur **génère un mot de passe aléatoire** conforme à `validerRobustesseMotDePasse()` (`genererMotDePasseAleatoire()`, 12 caractères) et passe le compte en `ChangeLogin = 1`. Le mot de passe en clair est renvoyé dans la réponse (`mdp`) et affiché à l'admin dans un encadré « Mot de passe provisoire à communiquer ». Case décochée en modification : ni `Password` ni `ChangeLogin` ne sont réécrits.
+
 ### Champs d'un utilisateur
 | Champ | Type | Obligatoire |
 |-------|------|-------------|
 | Login | Texte unique | Oui |
-| Mot de passe | Texte (haché bcrypt) | Oui (création) |
-| Nom | Texte | Non |
-| Prénom | Texte | Non |
-| Rôle | `Administrateur` \| `Nominateur` | Oui |
-| Département | Entier (ex : 76) | Non |
+| Mot de passe | Généré (haché PBKDF2, jamais saisi) | Auto (création / case Écraser) |
+| Nom | Texte | Oui |
+| Prénom | Texte | Oui |
+| Rôle | ENUM `utilisateur.Role` (lu en base) | Oui |
+| Département | Entier (ex : 76) | Oui |
 | Actif | Booléen | Oui |
-| Forcer changement MDP | Booléen (`ChangeLogin`) | Non |
+| `ChangeLogin` | Booléen | Forcé à 1 quand un mot de passe est généré |
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `liste` | GET | Retourne tous les utilisateurs |
-| `charger` | GET | Charge un utilisateur par son Id |
-| `enregistrer` | POST | Créer ou modifier un utilisateur |
-| `supprimer` | POST | Supprimer un utilisateur |
+| `data` | GET | Retourne tous les utilisateurs (`data/{id}` pour un seul) |
+| `store` | POST | Créer un utilisateur (mot de passe aléatoire généré, renvoyé dans `mdp`) |
+| `update` | PUT | Modifier ; régénère le mot de passe si `ecraser=1` (renvoyé dans `mdp`) |
+| `delete` | DELETE | Supprimer un utilisateur |
 
 ### Validations
-- Login obligatoire et unique
-- Mot de passe obligatoire en création ; facultatif en modification (si vide, non modifié)
-- Rôles valides : `Administrateur`, `Nominateur`
+- Login, Nom, Prénom, Rôle, Département obligatoires ; email vérifié si renseigné
+- Rôles valides : lus dynamiquement dans l'ENUM `utilisateur.Role`
 - Un utilisateur ne peut pas supprimer son propre compte
 
 ---
@@ -1030,6 +1039,15 @@ Définir les divisions sportives et leur niveau hiérarchique, utilisés pour cl
 | `enregistrer` | POST | Créer ou modifier une division |
 | `supprimer` | POST | Supprimer une division |
 
+### Relations en base
+- PK `Division` `varchar(3)` (codes tous sur 3 caractères : `N1M`, `PNF`, `R4M`…) ; `Nom` et `Ord` sont `UNIQUE`. Les colonnes `equipe.Division` / `equipe_nationale.Division` sont aussi `varchar(3)`.
+- **Contraintes FK déclarées** (`ON UPDATE CASCADE` / `ON DELETE RESTRICT`) :
+  - `equipe.Division → division.Division` (`fk_equipe_division`)
+  - `equipe_nationale.Division → division.Division` (`fk_equipenat_division`)
+- Conséquences : renommer un code division propage aux équipes ; supprimer une division encore référencée par une équipe est bloqué en base (le contrôle applicatif `$divsValides` des écrans d'import reste en place).
+- Les contraintes sont (re)créées de façon idempotente par `initTableConfiguration()` (config/app_config.php), appelée à l'ouverture d'EA98.
+- `rencontre` n'a pas de colonne `Division` : le lien passe par `rencontre.Id_EquipeDom → equipe.Division → division.Division`.
+
 ---
 
 ## EA90 – Départements
@@ -1043,9 +1061,9 @@ Référentiel des départements, rattachés à une région (EA88). Sert de base 
 ### Champs d'un département
 | Champ | Type | Obligatoire |
 |-------|------|-------------|
-| code | Texte (clé primaire, ex : `76`) | Oui, non modifiable après création |
+| **CodeDept** | `varchar(3)` (clé primaire, ex : `76`) | Oui, non modifiable après création — renommée depuis `code`, référencée par `utilisateur.Id_Departement` et `equipe_nationale.CodeDept` (FK) |
 | nom | Texte (ex : `Seine-Maritime`) | Oui |
-| code_region | Texte (référence logique vers `region.code`) | Non |
+| code_region | Texte (référence logique vers `region.code` — **inchangé**, à ne pas confondre avec `CodeDept`) | Non |
 | Limitrophe | Texte, codes séparés par `;` (ex : `14;27;60;80`) | Non — colonne auto-migrée/normalisée par `ensureLimitropheColumn()` |
 | LimitropheRegion | Texte, codes séparés par `;` (ex : `14;27`) — **lecture seule** | Non stocké — champ calculé à la volée (`ajouterLimitropheRegion()`) : sous-ensemble de `Limitrophe` restreint aux départements de même `code_region` |
 
@@ -1059,8 +1077,9 @@ Référentiel des départements, rattachés à une région (EA88). Sert de base 
 | `supprimer` | POST | Supprime un département |
 
 ### Règles
-- `code` et `nom` sont obligatoires à l'enregistrement
+- `CodeDept` et `nom` sont obligatoires à l'enregistrement (formulaire : champ `CodeDept`)
 - `code_region` n'est pas une contrainte FK déclarée en base : la cohérence est gérée applicativement, pas de blocage de suppression
+- `CodeDept` est en revanche référencée par 2 FK (`fk_utilisateur_departement_code`, `fk_equipenat_dept`, `ON DELETE SET NULL` / `ON UPDATE CASCADE`) : renommer un code se propage, supprimer un département met à NULL les rattachements
 - Distinct des listes de départements actifs (`departements_actifs`, EA91) et limitrophes (`departements_limitrophes`, EA91) : cette table est un référentiel de noms, pas un mécanisme de filtrage des écrans nominateur
 - `Limitrophe` est éditable (champ « Départements limitrophes », codes séparés par `;`) ; `LimitropheRegion` n'est pas une colonne : il est recalculé à chaque réponse `data`/`charger` à partir de `Limitrophe` ∩ même région, affiché en lecture seule et non transmis à l'enregistrement
 

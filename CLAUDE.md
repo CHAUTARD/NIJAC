@@ -141,7 +141,7 @@ There is no `JA` role/session: a JA never logs in. All JA-facing screens (EN19�
 
 - Admin-only routes: `['filter' => 'adminauth']` in `Routes.php`
 - Nominateur + admin routes: `['filter' => 'auth']` in `Routes.php` (role `CSR` also passes this filter, though it has no menu link into these screens)
-- CSR-only routes (E004, ES31): `['filter' => 'csrauth']` — role `CSR` or `Administrateur` (see `CsrAuth.php`). EN12 briefly moved to `csrauth`/the CSR menu (E004) when the CSR role was introduced, but moved back to `auth`/the Nominateur menu (E003).
+- CSR-only routes (E004, ES31): `['filter' => 'csrauth']` — role `CSR` or `Administrateur` (see `CsrAuth.php`). EN12 briefly moved to `csrauth`/the CSR menu (E004) when the CSR role was introduced, then moved back to `auth`/the Nominateur menu (E003); its E003 cartouche has since been removed — the `desiderata-clubs` route stays on `auth` but is no longer menu-linked (réengagement flow lives on the CSR menu, ES31/ES32).
 - Defiscalisateur-only routes (E005, ED51): `['filter' => 'defiscauth']` — role `Defiscalisateur` or `Administrateur` (see `DefiscalisateurAuth.php`), same pattern as `csrauth`.
 - Admin-only AJAX actions within a shared controller: checked individually inside the method, same idea as before (e.g. `SalleController`/`JugearbitreController`/`MessagerieController` use route filter `auth` but gate specific write actions to admin in code)
 - EA96 (FfttTestController) and EA98 (DbAdminController) extra restriction, checked manually in the controller: `$_SESSION['utilisateur']['login'] === 'CHAUTARD'`
@@ -150,8 +150,10 @@ There is no `JA` role/session: a JA never logs in. All JA-facing screens (EN19�
 ### Database conventions
 
 - No auto-column-add: columns are assumed to exist. New columns are added by an explicit `ALTER TABLE` per environment, or through `initTableConfiguration()` via EA98. The old per-controller `DESCRIBE`/`SHOW COLUMNS` + conditional `ALTER TABLE ADD COLUMN` guards have been removed.
+- `initTableConfiguration($pdo)` (`config/app_config.php`, called only by EA98) also (re)creates schema constraints idempotently — currently the FKs `equipe.Division` / `equipe_nationale.Division` → `division.Division` (`fk_equipe_division` / `fk_equipenat_division`, `ON UPDATE CASCADE` / `ON DELETE RESTRICT`). `division` has PK `Division`; `rencontre` reaches it only via `equipe`.
 - Auto-enum-extend pattern: `ajouterValeurEnum($pdo, $table, $colonne, $valeur, $defaut)` in `config/app_config.php` adds a value to an existing `ENUM` column if missing (re-reads the current definition via `SHOW COLUMNS` first, so no existing value is lost) — used for `messagerie.Type` (new system message types, e.g. `assurerTemplateExpirationFfttApi()`) and `utilisateur.Role` (`assurerRoleCsr()`, called from `UtilisateurController`). The CSR role (ES31) doesn't get its own message type: it reuses `Id_Messagerie = 6` (Réengagements), the same message already sent by EN12 — see `MessagerieController::ID_MESSAGE_CSR`.
 - `laposte` table is the INSEE commune reference (CodePostal, Nom, GPS). JA rows link to it via `Id_LaPoste`; `Cp` and `Ville` columns on `ja` are fallback denormalized copies.
+- `departement` PK is `CodeDept` (`varchar(3)`, renamed from `code`) — referenced by `utilisateur.Id_Departement` and `equipe_nationale.CodeDept` (FKs, `ON DELETE SET NULL` / `ON UPDATE CASCADE`). `departement.code_region` (→ `region.code`) is a different column, unchanged. `getDeptActifs()` / `getDepartementsLimitrophes()` / `getLimitrophesRegion()` return rows keyed `['CodeDept' => ..., 'nom' => ...]`.
 - Department filtering rule for Seine-Maritime (76): automatically includes Eure (27), configured in `regles_departements` JSON in the `configuration` table.
 - Always call `getDepartementsAutorises($id_departement)` to resolve the full list of departments for a given user — never hardcode department rules.
 

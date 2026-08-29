@@ -121,13 +121,17 @@ NIJAC/
 
 ```
 ja ─── disponible ─── rencontre ─── nomination
- │                        │
- └── Club                 └── Salle ─── laposte
+ │                    │     │
+ └── Club        equipe(Dom/Ext)    └── Salle ─── laposte
+                     │
+                  division
 ```
 
 - **`ja`** : fiche JA (Grade, Actif, Defiscalisation, Nationale [Oui/Non], Id_LaPoste, Cp, Ville)
 - **`disponible`** : réponse d'un JA pour une rencontre (O/P/N)
-- **`rencontre`** : matchs à arbitrer (Saison, Journee, Division, Id_Salle)
+- **`rencontre`** : matchs à arbitrer (Saison, Journee, Id_EquipeDom/Id_EquipeExt, Id_Salle) — la division vient de l'équipe (`equipe.Division`), pas de colonne `Division` sur `rencontre`
+- **`equipe`** / **`equipe_nationale`** : équipes engagées (Nom, Division, Id_Club) — `Division` sous contrainte FK vers `division` (`ON UPDATE CASCADE` / `ON DELETE RESTRICT`)
+- **`division`** : référentiel des divisions (code `Division` = PK, `Nom`, `Color`, `Ord`, `ArbitrageCRA`)
 - **`nomination`** : affectation JA ↔ rencontre + frais (Peages, Kilometres)
 - **`laposte`** : référentiel INSEE des communes (CodePostal, Nom, coordonnées GPS)
 

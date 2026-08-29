@@ -11,6 +11,16 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-liste-edit.css') ?>">
     <style>
         #panel-liste { width: 50%; }
+        /* Id_Rencontre : affichage seul — on masque l'aspect « champ de saisie » (bordure, fond, padding). */
+        #txt-id {
+            width: 70px;
+            border: 0;
+            background: transparent;
+            padding: 0;
+            box-shadow: none;
+            font-weight: 700;
+            color: #374151;
+        }
     </style>
 </head>
 <body>
@@ -43,6 +53,11 @@
     </div>
 
     <div id="panel-form">
+
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <label class="form-label mb-0">Id_Rencontre :</label>
+            <input type="text" id="txt-id" class="form-control form-control-sm" readonly tabindex="-1">
+        </div>
 
         <div class="mb-2">
             <label class="form-label" for="txt-date">Date :</label>
@@ -121,6 +136,7 @@ function selectionnerLigne($tr) {
         if (!res.ok) return;
         const r = res.data;
         currentId = r.Id_CompetitionRegionale;
+        $('#txt-id').val(r.Id_CompetitionRegionale);
         $('#txt-date').val(r.Date);
         $('#txt-heure').val(r.Heure.substring(0, 5));
         $('#txt-commentaire').val(r.Commentaire ?? '');
@@ -132,6 +148,7 @@ function selectionnerLigne($tr) {
 $('#btn-nouveau').on('click', function() {
     currentId = null;
     $('#tbody-liste tr').removeClass('selected');
+    $('#txt-id').val('');
     $('#txt-date').val('').trigger('focus');
     $('#txt-heure').val('');
     $('#txt-commentaire').val('');

@@ -436,7 +436,7 @@
             <div class="d-flex gap-2 mb-2 flex-wrap align-items-center">
                 <select id="scan-dep" class="form-select w-auto">
                     <?php foreach ($deptsNorm as $d): ?>
-                    <option value="<?= esc($d['code']) ?>"><?= esc($d['code'] . ' — ' . $d['nom']) ?></option>
+                    <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept'] . ' — ' . $d['nom']) ?></option>
                     <?php endforeach; ?>
                 </select>
                 <select id="scan-phase" class="form-select w-auto">

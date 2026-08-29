@@ -7,13 +7,13 @@ use CodeIgniter\Model;
 class DepartementModel extends Model
 {
     protected $table            = 'departement';
-    protected $primaryKey       = 'code';
+    protected $primaryKey       = 'CodeDept';
     protected $useAutoIncrement = false;
 
     protected $returnType     = 'array';
     protected $useSoftDeletes = false;
 
-    protected $allowedFields = ['code', 'nom', 'code_region', 'Limitrophe'];
+    protected $allowedFields = ['CodeDept', 'nom', 'code_region', 'Limitrophe'];
 
     protected $useTimestamps = false;
 }
