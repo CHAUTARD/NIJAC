@@ -197,6 +197,12 @@ $routes->post('nomination/envoyer-convocations', 'NominationController::envoyerC
 $routes->get('nomination/message-arbitre-club', 'NominationController::messageArbitreClub', ['filter' => 'auth']);
 $routes->post('nomination/demander-ja-club', 'NominationController::demanderJaClub', ['filter' => 'auth']);
 
+// ── EN26 Statistiques des nominations ────────────────────────────────────────
+// Ouvert dans une nouvelle fenêtre depuis EN14. Récapitulatif journées/rencontres
+// + JA nominés ; la modification du JA réutilise nomination/affecter-ja|retirer-ja.
+$routes->get('stats-nomination', 'StatsNominationController::index', ['filter' => 'auth']);
+$routes->get('stats-nomination/data', 'StatsNominationController::data', ['filter' => 'auth']);
+
 // ── EN18 Désidératas club ────────────────────────────────────────────────────
 // Page PUBLIQUE (sans authentification), tokenisée par ?club=<Id_Club> — lien
 // envoyé par email depuis EN12. Pas de filtre "auth"/"adminauth" ici.
@@ -343,6 +349,15 @@ $routes->get('logout', 'LogoutController::index');
 // fait includes/auth_required.php côté legacy pour ce fichier.
 $routes->get('changer-mot-de-passe', 'ChangerMotDePasseController::index', ['filter' => 'auth']);
 $routes->post('changer-mot-de-passe', 'ChangerMotDePasseController::index', ['filter' => 'auth']);
+
+// ── E007 Mot de passe oublié (demande) + E008 Réinitialisation (lien email) ──
+// Pages PUBLIQUES (aucun filtre auth) : l'utilisateur n'est pas connecté. Le
+// lien email porte un jeton HMAC à usage unique (genererJetonResetMdp), aucune
+// colonne BDD. Le filtre csrf global couvre les POST.
+$routes->get('mot-de-passe-oublie',  'MotDePasseOublieController::demande');
+$routes->post('mot-de-passe-oublie', 'MotDePasseOublieController::demande');
+$routes->get('reinitialiser-mot-de-passe',  'MotDePasseOublieController::reinitialiser');
+$routes->post('reinitialiser-mot-de-passe', 'MotDePasseOublieController::reinitialiser');
 
 // ── Utilitaire partagé : résolution code postal / commune (laposte) ─────────
 // Pas un écran EXXX — réutilisé par EA81 (Salle) et EN11 (Juge-Arbitre).

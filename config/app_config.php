@@ -243,6 +243,83 @@ function assurerTemplateArbitreClub(\PDO $pdo): void
     }
 }
 
+/**
+ * Garantit l'existence du type de message système « Mot de passe oublié » (ENUM messagerie.Type +
+ * une ligne de gabarit par défaut, marqueur {URL_RESET_MDP}) — éditable ensuite comme les autres
+ * modèles système via EA93 (Id_Utilisateur NULL = protégé en écriture pour les non-admin).
+ * Idempotente, appelée par MessagerieController à l'ouverture de l'écran.
+ */
+function assurerTemplateMotDePasseOublie(\PDO $pdo): void
+{
+    ajouterTypeMessagerie($pdo, 'Mot de passe oublié');
+
+    $existe = $pdo->query("SELECT 1 FROM messagerie WHERE Type = 'Mot de passe oublié' LIMIT 1")->fetch();
+    if ($existe) {
+        return;
+    }
+
+    $pdo->prepare('INSERT INTO messagerie (Type, Sujet, Message, Id_Utilisateur, Cc) VALUES (?, ?, ?, NULL, 0)')
+        ->execute([
+            'Mot de passe oublié',
+            'NIJAC - Réinitialisation de votre mot de passe',
+            "Bonjour {UTI_PRENOM} {UTI_NOM},\n\n"
+            . "Une réinitialisation de mot de passe a été demandée pour votre compte NIJAC.\n\n"
+            . "Cliquez sur le lien suivant pour choisir un nouveau mot de passe :\n{URL_RESET_MDP}\n\n"
+            . "Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.",
+        ]);
+}
+
+/**
+ * Règle de robustesse du mot de passe (E008 « mot de passe oublié ») : 10 caractères
+ * minimum, avec au moins une minuscule, une majuscule, un chiffre et un caractère
+ * spécial. Retourne null si conforme, sinon le message d'erreur à afficher.
+ */
+function validerRobustesseMotDePasse(string $mdp): ?string
+{
+    if (strlen($mdp) < 10)                     return 'Le mot de passe doit contenir au moins 10 caractères.';
+    if (!preg_match('/[a-z]/', $mdp))          return 'Le mot de passe doit contenir au moins une lettre minuscule.';
+    if (!preg_match('/[A-Z]/', $mdp))          return 'Le mot de passe doit contenir au moins une lettre majuscule.';
+    if (!preg_match('/\d/', $mdp))             return 'Le mot de passe doit contenir au moins un chiffre.';
+    if (!preg_match('/[^a-zA-Z0-9]/', $mdp))   return 'Le mot de passe doit contenir au moins un caractère spécial.';
+    return null;
+}
+
+/**
+ * Jeton de réinitialisation de mot de passe SANS stockage BDD : la signature HMAC
+ * est calculée avec le hash du mot de passe actuel comme clé, donc le jeton devient
+ * automatiquement invalide dès que le mot de passe a été changé (usage unique).
+ * Format : "<idUtilisateur>-<timestampExpiration>-<hmacSha256>" (tout URL-safe).
+ */
+function genererJetonResetMdp(int $idUtilisateur, string $hashMdpActuel, int $dureeSecondes = 3600): string
+{
+    $exp = time() + $dureeSecondes;
+    $sig = hash_hmac('sha256', $idUtilisateur . '.' . $exp, $hashMdpActuel . OBFUSCATOR_SEED);
+    return $idUtilisateur . '-' . $exp . '-' . $sig;
+}
+
+/**
+ * Vérifie un jeton produit par genererJetonResetMdp() : retourne l'Id_Utilisateur si
+ * le jeton est bien formé, non expiré et signé avec le hash de mot de passe COURANT
+ * de l'utilisateur, sinon null. $lookupHash(int $id): ?string doit rendre le hash
+ * Password actuel (null si utilisateur inconnu/inactif).
+ */
+function verifierJetonResetMdp(string $jeton, callable $lookupHash): ?int
+{
+    if (!preg_match('/^(\d+)-(\d+)-([0-9a-f]{64})$/', $jeton, $m)) {
+        return null;
+    }
+    [, $id, $exp, $sig] = $m;
+    if ((int) $exp < time()) {
+        return null;
+    }
+    $hash = $lookupHash((int) $id);
+    if (!$hash) {
+        return null;
+    }
+    $attendu = hash_hmac('sha256', $id . '.' . $exp, $hash . OBFUSCATOR_SEED);
+    return hash_equals($attendu, $sig) ? (int) $id : null;
+}
+
 function assurerTemplateDispoRegionale(\PDO $pdo): void
 {
     ajouterTypeMessagerie($pdo, 'Dispo régionale');

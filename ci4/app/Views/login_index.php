@@ -133,6 +133,8 @@
         }
 
         #lbl-status {
+            display: block;
+            text-align: center;
             font-weight: 600;
             font-size: .875rem;
             min-height: 1.25rem;
@@ -209,6 +211,12 @@
 
                 <div class="mt-3">
                     <span id="lbl-status" class="<?= $statutClass ?>"><?= htmlspecialchars($status) ?></span>
+                </div>
+
+                <div class="mt-2 text-center">
+                    <a href="<?= site_url('mot-de-passe-oublie') ?>" class="text-decoration-none" style="font-size:.82rem;">
+                        Mot de passe oublié ?
+                    </a>
                 </div>
 
             </form>

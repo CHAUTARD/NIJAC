@@ -144,6 +144,9 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
         <option value="">— chargement —</option>
     </select>
     <div id="spinner-barre" class="spinner-border spinner-sm text-secondary ms-2" role="status" style="display:none"><span class="visually-hidden">Chargement…</span></div>
+    <a href="<?= site_url('stats-nomination') ?>" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm ms-auto">
+        <i class="bi bi-bar-chart-line me-1"></i>Statistiques
+    </a>
 </div>
 
 <!-- Info journée -->

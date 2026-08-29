@@ -18,7 +18,16 @@
         #panel-liste { width: 44%; }
         #table-wrapper { min-height: 9rem; }
         #panel-form { display: flex; flex-direction: column; }
-        #txt-id { background: #f0f4fa; width: 80px; }
+        /* Id : affichage seul — on masque l'aspect « champ de saisie » (bordure, fond, padding). */
+        #txt-id {
+            width: 60px;
+            border: 0;
+            background: transparent;
+            padding: 0;
+            box-shadow: none;
+            font-weight: 700;
+            color: #374151;
+        }
 
         #txt-message {
             resize: vertical;
@@ -201,11 +210,15 @@
                 <span class="badge me-1 fw-normal" style="background:#e06c00;">Demande adresse</span>
                 <code data-marqueur="{URL_ADRESSE_JA}" class="me-2">{URL_ADRESSE_JA}</code>
             </div>
-            <div>
+            <div class="mb-1">
                 <span class="badge me-1 fw-normal" style="background:#c2185b;">Désidératas club (EN12 / ES31 CSR)</span>
                 <code data-marqueur="{NOM_CLUB}" class="me-2">{NOM_CLUB}</code>
                 <code data-marqueur="{CORR_NOM}" class="me-2">{CORR_NOM}</code>
                 <code data-marqueur="{URL_DESIDERATA}" class="me-2">{URL_DESIDERATA}</code>
+            </div>
+            <div>
+                <span class="badge me-1 fw-normal" style="background:#495057;">Mot de passe oublié (E007)</span>
+                <code data-marqueur="{URL_RESET_MDP}" class="me-2">{URL_RESET_MDP}</code>
             </div>
         </div>
 
@@ -280,7 +293,8 @@ const MARQUEURS_EXEMPLE = {
     '{SEXE}':               'M',
     '{LISTE_NOMINATIONS}':  '<ul><li>15/03/2026 — R2M — Club A vs Club B</li></ul>',
     '{NOM_CLUB}':           'ASSUN TT',
-    '{URL_DESIDERATA}':     <?= json_encode(site_url('desiderata-club') . '?club=09760136') ?>
+    '{URL_DESIDERATA}':     <?= json_encode(site_url('desiderata-club') . '?club=09760136') ?>,
+    '{URL_RESET_MDP}':      <?= json_encode(site_url('reinitialiser-mot-de-passe') . '?t=12-1893456000-abcdef') ?>
 };
 
 function resoudreMarqueurs(txt) {

@@ -21,6 +21,7 @@ class ChangerMotDePasseController extends BaseController
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
+        require_once __DIR__ . '/../../../config/app_config.php';
         require_once __DIR__ . '/../../../Classes/SecurePasswordHasher.php';
     }
 
@@ -46,8 +47,8 @@ class ChangerMotDePasseController extends BaseController
             if ($actuel === '' || $nouveau === '' || $confirme === '') {
                 $status      = 'Veuillez remplir tous les champs.';
                 $statutClass = 'text-warning';
-            } elseif (strlen($nouveau) < 8) {
-                $status      = 'Le nouveau mot de passe doit contenir au moins 8 caractères.';
+            } elseif (($erreurRobustesse = validerRobustesseMotDePasse($nouveau)) !== null) {
+                $status      = $erreurRobustesse;
                 $statutClass = 'text-warning';
             } elseif ($nouveau !== $confirme) {
                 $status      = 'Les deux saisies du nouveau mot de passe ne correspondent pas.';

@@ -38,6 +38,7 @@ class MessagerieController extends BaseController
         // des 60 jours ne déclenche l'envoi réel à la connexion admin (AuthController::index()).
         assurerTemplateExpirationFfttApi($pdo);
         assurerTemplateDispoRegionale($pdo);
+        assurerTemplateMotDePasseOublie($pdo);
     }
 
     private function isAdmin(): bool

@@ -11,6 +11,8 @@
 - [E002 – Menu administrateur](#e002--menu-administrateur)
 - [E003 – Menu nominateur](#e003--menu-nominateur)
 - [E006 – Changement du mot de passe](#e006--changement-du-mot-de-passe)
+- [E007 – Mot de passe oublié (demande)](#e007--mot-de-passe-oublié-demande)
+- [E008 – Réinitialisation du mot de passe](#e008--réinitialisation-du-mot-de-passe)
 - [EN11 – Juges-Arbitres](#en11--juges-arbitres)
 - [EN12 – Désidératas clubs](#en12--désidératas-clubs)
 - [EN13 – Disponibilités JA](#en13--disponibilités-ja)
@@ -183,12 +185,56 @@ Permet à l'utilisateur connecté de changer son propre mot de passe : saisie du
 | Action | Méthode | Description |
 |--------|---------|-------------|
 | `index` | GET | Retourne la page complète, ou le fragment de formulaire seul si en-tête `X-Requested-With: XMLHttpRequest` (chargement modale) |
-| `index` | POST | Valide (champs non vides, ≥ 8 caractères, confirmation identique, mot de passe actuel correct), met à jour le hash et `ChangeLogin = 0` · Réponse JSON `{ok, msg, retour}` si AJAX, sinon page complète avec le résultat |
+| `index` | POST | Valide (champs non vides, robustesse `validerRobustesseMotDePasse()`, confirmation identique, mot de passe actuel correct), met à jour le hash et `ChangeLogin = 0` · Réponse JSON `{ok, msg, retour}` si AJAX, sinon page complète avec le résultat |
 
 ### Règles métier
-- Nouveau mot de passe : 8 caractères minimum, doit être confirmé à l'identique
+- Nouveau mot de passe : règle commune `validerRobustesseMotDePasse()` (10 caractères min, minuscule + majuscule + chiffre + caractère spécial — voir E008), doit être confirmé à l'identique
 - Le mot de passe actuel est vérifié via `SecurePasswordHasher::verify()` avant tout changement
 - Le lien de retour (`retour`) pointe vers E002 (menu admin) ou E003 (menu nominateur) selon `is_admin`
+
+---
+
+## E007 – Mot de passe oublié (demande)
+
+**Fichier :** `MotDePasseOublieController` (CI4), vue `mdp_oublie_index.php`
+**Accès :** Public (aucun filtre) — lien **"Mot de passe oublié ?"** sur E001
+
+### Objectif
+L'utilisateur non connecté demande un lien de réinitialisation en saisissant son identifiant de connexion **ou** l'adresse email de son compte.
+
+### Actions
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `demande` | GET | Affiche le formulaire (champ unique « identifiant ou email ») |
+| `demande` | POST | Cherche un compte `Actif = 1` avec un `Email` non vide où `Login = saisie` OU `Email = saisie` ; si trouvé, envoie l'email de réinitialisation · **Réponse neutre systématique** (« si un compte correspond… »), aucune information sur l'existence du compte |
+
+### Email envoyé
+- Modèle : type système **« Mot de passe oublié »** de la table `messagerie` (éditable en EA93), créé par `assurerTemplateMotDePasseOublie()`
+- Marqueurs : `{URL_RESET_MDP}` (lien vers E008), `{UTI_PRENOM}`, `{UTI_NOM}`, `{URL_LIGUE}`
+- Passe par `getNijacMailer()` + `getEmailDestinataire()` (redirection en mode Développement)
+
+### Sécurité
+- Jeton = `"<Id_Utilisateur>-<expiration>-<HMAC-SHA256>"` produit par `genererJetonResetMdp()`
+- Clé HMAC = hash du mot de passe **actuel** `+ OBFUSCATOR_SEED` → le jeton devient invalide dès que le mot de passe change (usage unique), **sans aucune colonne en base**
+- Durée de validité : 1 heure
+
+---
+
+## E008 – Réinitialisation du mot de passe
+
+**Fichier :** `MotDePasseOublieController` (CI4), vue `mdp_reset_index.php`
+**Accès :** Public — URL `?t=<jeton>` reçue par email (E007)
+
+### Actions
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `reinitialiser` | GET | Valide le jeton (`verifierJetonResetMdp`) ; si KO, page d'erreur + lien vers E007 ; sinon formulaire de double saisie |
+| `reinitialiser` | POST | Re-valide le jeton, puis les deux saisies (non vides, identiques, robustesse) ; `UPDATE Utilisateur SET Password = <hash>, ChangeLogin = 0` ; page de succès + lien vers E001 |
+
+### Règles métier
+- `verifierJetonResetMdp()` : format `^\d+-\d+-[0-9a-f]{64}$`, non expiré, HMAC recalculé avec le hash de mot de passe **courant** (`hash_equals`) — un jeton déjà utilisé (mot de passe changé) ne repasse pas
+- Robustesse imposée par `validerRobustesseMotDePasse()` : **10 caractères minimum**, au moins une minuscule, une majuscule, un chiffre et un caractère spécial (règle commune, réutilisable par E006)
+- Hachage via `SecurePasswordHasher::hash()` (PBKDF2-HMAC-SHA256, 600 000 itérations)
 
 ---
 

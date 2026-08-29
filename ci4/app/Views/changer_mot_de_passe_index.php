@@ -14,13 +14,13 @@
 
         <div class="mb-3">
             <label for="mdp_nouveau" class="form-label">Nouveau mot de passe :</label>
-            <input type="password" class="form-control" id="mdp_nouveau" name="mdp_nouveau" autocomplete="new-password" minlength="8">
-            <small class="text-muted" style="font-size:.78rem;">8 caractères minimum.</small>
+            <input type="password" class="form-control" id="mdp_nouveau" name="mdp_nouveau" autocomplete="new-password" minlength="10">
+            <small class="text-muted" style="font-size:.78rem;">10 caractères minimum, avec une minuscule, une majuscule, un chiffre et un caractère spécial.</small>
         </div>
 
         <div class="mb-3">
             <label for="mdp_confirme" class="form-label">Confirmer le nouveau mot de passe :</label>
-            <input type="password" class="form-control" id="mdp_confirme" name="mdp_confirme" autocomplete="new-password" minlength="8">
+            <input type="password" class="form-control" id="mdp_confirme" name="mdp_confirme" autocomplete="new-password" minlength="10">
         </div>
 
         <div id="lbl-status" class="mb-3 <?= $statutClass ?>">
@@ -138,13 +138,13 @@
 
             <div class="mb-3">
                 <label for="mdp_nouveau" class="form-label">Nouveau mot de passe :</label>
-                <input type="password" class="form-control" id="mdp_nouveau" name="mdp_nouveau" autocomplete="new-password" minlength="8">
-                <small class="text-muted" style="font-size:.78rem;">8 caractères minimum.</small>
+                <input type="password" class="form-control" id="mdp_nouveau" name="mdp_nouveau" autocomplete="new-password" minlength="10">
+                <small class="text-muted" style="font-size:.78rem;">10 caractères minimum, avec une minuscule, une majuscule, un chiffre et un caractère spécial.</small>
             </div>
 
             <div class="mb-3">
                 <label for="mdp_confirme" class="form-label">Confirmer le nouveau mot de passe :</label>
-                <input type="password" class="form-control" id="mdp_confirme" name="mdp_confirme" autocomplete="new-password" minlength="8">
+                <input type="password" class="form-control" id="mdp_confirme" name="mdp_confirme" autocomplete="new-password" minlength="10">
             </div>
 
             <div id="lbl-status" class="mb-3 <?= $statutClass ?>">
