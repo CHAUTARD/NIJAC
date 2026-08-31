@@ -50,7 +50,12 @@ table.recap tr:hover td { background:#f4f9f4; }
 .jauge { position:relative; height:6px; border-radius:3px; background:#e9edf3; margin-top:.2rem; overflow:hidden; }
 .jauge > span { position:absolute; inset:0 auto 0 0; background:var(--nom-green); border-radius:3px; }
 #tbl-clubs tr.court .jauge > span { background:#f0a020; }
-h2.section { font-size:1rem; color:#1a3a6b; margin:1.5rem 0 .6rem; }
+h2.section, summary.section { font-size:1rem; color:#1a3a6b; }
+h2.section { margin:1.5rem 0 .6rem; }
+details.sect { margin:1.5rem 0 .6rem; }
+details.sect > summary.section { margin-bottom:.6rem; cursor:pointer; user-select:none; list-style-position:inside; }
+details.sect > summary.section::marker { color:#1a3a6b; }
+details.sect:not([open]) > summary.section { margin-bottom:0; }
 #chargement { text-align:center; color:#888; padding:2rem; }
 
 /* ── Calendrier (repris d'EN22) : affichage permanent, mois repliés par défaut ── */
@@ -72,7 +77,8 @@ h2.section { font-size:1rem; color:#1a3a6b; margin:1.5rem 0 .6rem; }
     #page-header { padding:.5rem .8rem; }
     #toolbar { padding:.3rem .8rem; flex-wrap:wrap; }
     .wrap { padding:0 .6rem; margin:.6rem auto 2rem; }
-    h2.section { font-size:.95rem; margin:1.1rem 0 .5rem; }
+    h2.section, summary.section { font-size:.95rem; }
+    h2.section, details.sect { margin:1.1rem 0 .5rem; }
 
     /* Tableau récap : masquer Poule + Heure, resserrer, combo plus étroite */
     table.recap th:nth-child(3), table.recap td:nth-child(3),
@@ -111,16 +117,19 @@ h2.section { font-size:1rem; color:#1a3a6b; margin:1.5rem 0 .6rem; }
         <h2 class="section"><i class="bi bi-list-check me-1"></i>Journées de rencontre</h2>
         <div id="journees"></div>
 
-        <h2 class="section"><i class="bi bi-person-badge me-1"></i>JA nominés</h2>
+        <details class="sect">
+        <summary class="section"><i class="bi bi-person-badge me-1"></i>JA nominés</summary>
         <table id="tbl-compteurs">
             <thead><tr><th>Juge-arbitre</th><th style="text-align:right">Nominations</th></tr></thead>
             <tbody id="compteurs-body"></tbody>
         </table>
+        </details>
 
-        <h2 class="section"><i class="bi bi-building me-1"></i>Clubs avec équipes en régionale
+        <details class="sect">
+        <summary class="section"><i class="bi bi-building me-1"></i>Clubs avec équipes en régionale
             <span class="text-muted fw-normal" style="font-size:.8rem">— nominations faites par les JA du club sur le nombre à effectuer
                 (<span id="coef-nat"></span> par équipe nationale, <span id="coef-reg"></span> par équipe régionale)</span>
-        </h2>
+        </summary>
         <div class="recap-scroll">
         <table id="tbl-clubs">
             <thead><tr>
@@ -134,6 +143,7 @@ h2.section { font-size:1rem; color:#1a3a6b; margin:1.5rem 0 .6rem; }
             <tbody id="clubs-body"></tbody>
         </table>
         </div>
+        </details>
     </div>
 
 </div>
