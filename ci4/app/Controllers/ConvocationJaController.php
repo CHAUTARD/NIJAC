@@ -85,7 +85,6 @@ class ConvocationJaController extends BaseController
 
                 $stmtR = $pdo->prepare("
                     SELECT r.Id_Rencontre, r.Journee, r.Date, r.Heure, r.Poule,
-                           r.NumConvocation AS NumConvocation,
                            r.Phase,
                            d.Division AS DivisionCode, d.Nom AS DivisionNom,
                            ed.Nom     AS NomDom,  ed.Id_Club AS IdClubDom,
@@ -171,6 +170,7 @@ class ConvocationJaController extends BaseController
             'idNomination'     => $idNomination,
             'tokenCnv'         => $tokenValide ? $tokenCnv : '',
             'idJa'             => $idJa,
+            'idRencontre'      => $idRencontre,
             'ja'               => $ja,
             'rencontre'        => $rencontre,
             'correspondant'    => $correspondant,
