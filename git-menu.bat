@@ -12,10 +12,11 @@ echo   1) git add .
 echo   2) git commit -m "..."
 echo   3) git push -u origin main
 echo   4) git show --name-only
-echo   5) Tout faire : add + commit + push
-echo   6) Commits locaux non pousses sur origin/main
-echo   7) Fichiers modifies sur origin non encore recuperes
-echo   8) git pull
+echo   5) Generer script lftp du dernier commit + deployer
+echo   6) Tout faire : add + commit + push
+echo   7) Commits locaux non pousses sur origin/main
+echo   8) Fichiers modifies sur origin non encore recuperes
+echo   9) git pull
 echo   0) Quitter
 echo.
 set CHOIX=
@@ -25,10 +26,11 @@ if "%CHOIX%"=="1" goto ADD
 if "%CHOIX%"=="2" goto COMMIT
 if "%CHOIX%"=="3" goto PUSH
 if "%CHOIX%"=="4" goto SHOW
-if "%CHOIX%"=="5" goto TOUT
-if "%CHOIX%"=="6" goto DIFF
-if "%CHOIX%"=="7" goto PULL_DIFF
-if "%CHOIX%"=="8" goto PULL
+if "%CHOIX%"=="5" goto DEPLOY
+if "%CHOIX%"=="6" goto TOUT
+if "%CHOIX%"=="7" goto DIFF
+if "%CHOIX%"=="8" goto PULL_DIFF
+if "%CHOIX%"=="9" goto PULL
 if "%CHOIX%"=="0" goto FIN
 echo Choix invalide.
 pause
@@ -78,6 +80,53 @@ git show --name-only
 echo.
 pause
 goto MENU
+
+:DEPLOY
+echo.
+echo --- Generation du script lftp (fichiers du dernier commit) ---
+set FTPHOST=
+set FTPUSER=
+set FTPPASS=
+set /p FTPHOST=Hote FTP (ex: ftp.ligue-normandie-tt.fr) :
+set /p FTPUSER=Utilisateur FTP :
+set /p FTPPASS=Mot de passe FTP :
+if "%FTPHOST%"=="" ( echo Hote vide - annule. & pause & goto MENU )
+set "LOCAL=%CD:\=/%"
+set "SCRIPT=%CD%\deploy.lftp"
+> "%SCRIPT%" echo open -u %FTPUSER%,%FTPPASS% %FTPHOST%
+>> "%SCRIPT%" echo set ssl:verify-certificate no
+for /f "usebackq delims=" %%p in (`git diff-tree --no-commit-id --name-only --diff-filter=d -r HEAD`) do call :PUTLINE "%%p"
+for /f "usebackq delims=" %%p in (`git diff-tree --no-commit-id --name-only --diff-filter=D -r HEAD`) do >> "%SCRIPT%" echo rm -f "/nijac/%%p"
+>> "%SCRIPT%" echo bye
+echo.
+echo Script genere : %SCRIPT%
+echo.
+type "%SCRIPT%"
+echo.
+set RUN=
+set /p RUN=Lancer lftp maintenant ? (o/N) :
+if /i "%RUN%"=="o" lftp -f "%SCRIPT%"
+echo.
+pause
+goto MENU
+
+:PUTLINE
+set "REL=%~1"
+call :PARENT "%REL%"
+if defined DIR >> "%SCRIPT%" echo mkdir -pf "/nijac/%DIR%"
+>> "%SCRIPT%" echo put "%LOCAL%/%REL%" -o "/nijac/%REL%"
+goto :eof
+
+:PARENT
+set "P=%~1"
+set "DIR="
+:PARENT_LOOP
+for /f "tokens=1* delims=/" %%x in ("%P%") do (
+    if "%%y"=="" goto :eof
+    if defined DIR (set "DIR=%DIR%/%%x") else (set "DIR=%%x")
+    set "P=%%y"
+)
+goto PARENT_LOOP
 
 :TOUT
 echo.

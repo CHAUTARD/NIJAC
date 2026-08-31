@@ -50,12 +50,22 @@ table.recap tr:hover td { background:#f4f9f4; }
 .jauge { position:relative; height:6px; border-radius:3px; background:#e9edf3; margin-top:.2rem; overflow:hidden; }
 .jauge > span { position:absolute; inset:0 auto 0 0; background:var(--nom-green); border-radius:3px; }
 #tbl-clubs tr.court .jauge > span { background:#f0a020; }
-h2.section, summary.section { font-size:1rem; color:#1a3a6b; }
-h2.section { margin:1.5rem 0 .6rem; }
-details.sect { margin:1.5rem 0 .6rem; }
-details.sect > summary.section { margin-bottom:.6rem; cursor:pointer; user-select:none; list-style-position:inside; }
-details.sect > summary.section::marker { color:#1a3a6b; }
-details.sect:not([open]) > summary.section { margin-bottom:0; }
+h2.section { font-size:1rem; color:#1a3a6b; margin:1.5rem 0 .6rem; }
+
+/* ── Sections repliables façon boutons-cartes (forme donnée en exemple) ── */
+details.sect-btn { background:#fff; border:1px solid #e6e9f0; border-left:5px solid #ccc; border-radius:14px; box-shadow:0 1px 6px rgba(0,0,0,.06); margin:1rem 0; overflow:hidden; }
+details.sect-btn > summary.sect-head { display:flex; align-items:center; gap:1rem; padding:1rem 1.1rem; cursor:pointer; user-select:none; list-style:none; }
+details.sect-btn > summary.sect-head::-webkit-details-marker { display:none; }
+.sect-head .sect-ico { flex-shrink:0; width:46px; height:46px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.25rem; }
+.sect-head .sect-txt { flex:1; min-width:0; }
+.sect-head .sect-titre { display:block; font-weight:700; font-size:1.05rem; color:#1f2937; }
+.sect-head .sect-desc { display:block; font-size:.8rem; color:#6b7280; font-weight:400; margin-top:.15rem; }
+.sect-head .sect-chev { flex-shrink:0; font-size:1.1rem; transition:transform .15s; }
+details.sect-btn[open] > summary.sect-head .sect-chev { transform:rotate(90deg); }
+details.sect-btn > .sect-body { padding:0 1.1rem 1.1rem; }
+details.cal-accent  { border-left-color:#2e7d32; } .cal-accent  .sect-ico { background:#e8f5e9; color:#2e7d32; } .cal-accent  .sect-chev { color:#2e7d32; }
+details.ja-accent   { border-left-color:#1565c0; } .ja-accent   .sect-ico { background:#e3f2fd; color:#1565c0; } .ja-accent   .sect-chev { color:#1565c0; }
+details.club-accent { border-left-color:#e65100; } .club-accent .sect-ico { background:#fff3e0; color:#e65100; } .club-accent .sect-chev { color:#e65100; }
 #chargement { text-align:center; color:#888; padding:2rem; }
 
 /* ── Calendrier (repris d'EN22) : affichage permanent, mois repliés par défaut ── */
@@ -77,8 +87,9 @@ details.sect:not([open]) > summary.section { margin-bottom:0; }
     #page-header { padding:.5rem .8rem; }
     #toolbar { padding:.3rem .8rem; flex-wrap:wrap; }
     .wrap { padding:0 .6rem; margin:.6rem auto 2rem; }
-    h2.section, summary.section { font-size:.95rem; }
-    h2.section, details.sect { margin:1.1rem 0 .5rem; }
+    h2.section { font-size:.95rem; margin:1.1rem 0 .5rem; }
+    details.sect-btn { margin:.8rem 0; }
+    .sect-head .sect-titre { font-size:1rem; }
 
     /* Tableau récap : masquer Poule + Heure, resserrer, combo plus étroite */
     table.recap th:nth-child(3), table.recap td:nth-child(3),
@@ -109,27 +120,49 @@ details.sect:not([open]) > summary.section { margin-bottom:0; }
     <div id="chargement"><span class="spinner-border spinner-border-sm me-2"></span>Chargement…</div>
 
     <div id="contenu" style="display:none">
-        <h2 class="section"><i class="bi bi-calendar3 me-1"></i>Calendrier
-            <span class="text-muted fw-normal" style="font-size:.8rem">— cliquer un mois pour voir ses dates, puis une date pour ouvrir la journée</span>
-        </h2>
-        <div id="cal-grille" class="cal-mois-grille"></div>
+        <details class="sect-btn cal-accent" open>
+        <summary class="sect-head">
+            <span class="sect-ico"><i class="bi bi-calendar3"></i></span>
+            <span class="sect-txt">
+                <span class="sect-titre">Calendrier</span>
+                <span class="sect-desc">Cliquer un mois pour voir ses dates, puis une date pour ouvrir la journée</span>
+            </span>
+            <i class="bi bi-chevron-right sect-chev"></i>
+        </summary>
+        <div class="sect-body"><div id="cal-grille" class="cal-mois-grille"></div></div>
+        </details>
 
         <h2 class="section"><i class="bi bi-list-check me-1"></i>Journées de rencontre</h2>
         <div id="journees"></div>
 
-        <details class="sect">
-        <summary class="section"><i class="bi bi-person-badge me-1"></i>JA nominés</summary>
+        <details class="sect-btn ja-accent">
+        <summary class="sect-head">
+            <span class="sect-ico"><i class="bi bi-person-badge"></i></span>
+            <span class="sect-txt">
+                <span class="sect-titre">JA nominés</span>
+                <span class="sect-desc">Nombre de nominations par juge-arbitre</span>
+            </span>
+            <i class="bi bi-chevron-right sect-chev"></i>
+        </summary>
+        <div class="sect-body">
         <table id="tbl-compteurs">
             <thead><tr><th>Juge-arbitre</th><th style="text-align:right">Nominations</th></tr></thead>
             <tbody id="compteurs-body"></tbody>
         </table>
+        </div>
         </details>
 
-        <details class="sect">
-        <summary class="section"><i class="bi bi-building me-1"></i>Clubs avec équipes en régionale
-            <span class="text-muted fw-normal" style="font-size:.8rem">— nominations faites par les JA du club sur le nombre à effectuer
-                (<span id="coef-nat"></span> par équipe nationale, <span id="coef-reg"></span> par équipe régionale)</span>
+        <details class="sect-btn club-accent">
+        <summary class="sect-head">
+            <span class="sect-ico"><i class="bi bi-building"></i></span>
+            <span class="sect-txt">
+                <span class="sect-titre">Clubs avec équipes en régionale</span>
+                <span class="sect-desc">Nominations faites par les JA du club sur le nombre à effectuer
+                    (<span id="coef-nat"></span> par équipe nationale, <span id="coef-reg"></span> par équipe régionale)</span>
+            </span>
+            <i class="bi bi-chevron-right sect-chev"></i>
         </summary>
+        <div class="sect-body">
         <div class="recap-scroll">
         <table id="tbl-clubs">
             <thead><tr>
@@ -142,6 +175,7 @@ details.sect:not([open]) > summary.section { margin-bottom:0; }
             </tr></thead>
             <tbody id="clubs-body"></tbody>
         </table>
+        </div>
         </div>
         </details>
     </div>
