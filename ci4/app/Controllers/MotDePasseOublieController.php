@@ -58,13 +58,16 @@ class MotDePasseOublieController extends BaseController
     private function envoyerLien(string $ident): void
     {
         $pdo  = getPDO();
+        // Deux placeholders distincts : getPDO() désactive ATTR_EMULATE_PREPARES,
+        // et un prepare natif MySQL refuse un même paramètre nommé réutilisé
+        // (SQLSTATE[HY093]) — sinon envoyerLien() lève toujours et aucun mail ne part.
         $stmt = $pdo->prepare(
             'SELECT Id_Utilisateur, Nom, Prenom, Password, Email
              FROM Utilisateur
-             WHERE Actif = 1 AND Email IS NOT NULL AND Email <> "" AND (Login = :i OR Email = :i)
+             WHERE Actif = 1 AND Email IS NOT NULL AND Email <> "" AND (Login = :login OR Email = :email)
              LIMIT 1'
         );
-        $stmt->execute([':i' => $ident]);
+        $stmt->execute([':login' => $ident, ':email' => $ident]);
         $u = $stmt->fetch();
         if (!$u) {
             return;

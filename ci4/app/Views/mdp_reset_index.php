@@ -114,7 +114,7 @@
 
     <div class="pwd-footer">
         <span>NIJAC</span>
-        <a href="<?= site_url('login') ?>" class="text-decoration-none">
+        <a href="<?= site_url('login') ?>" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-arrow-left me-1"></i>Connexion
         </a>
     </div>

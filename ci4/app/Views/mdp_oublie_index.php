@@ -82,9 +82,11 @@
                 <input type="text" class="form-control" id="identifiant" name="identifiant" autocomplete="username" autofocus>
             </div>
 
+            <?php if ($statutClass !== 'text-secondary'): ?>
             <div id="lbl-status" class="mb-3 <?= $statutClass ?>">
                 <i class="bi bi-info-circle me-1"></i><?= esc($status) ?>
             </div>
+            <?php endif; ?>
 
             <button type="submit" class="btn btn-valider w-100">
                 <i class="bi bi-envelope-arrow-up me-1"></i>Envoyer le lien
@@ -103,7 +105,7 @@
 
     <div class="pwd-footer">
         <span>NIJAC</span>
-        <a href="<?= site_url('login') ?>" class="text-decoration-none">
+        <a href="<?= site_url('login') ?>" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-arrow-left me-1"></i>Connexion
         </a>
     </div>

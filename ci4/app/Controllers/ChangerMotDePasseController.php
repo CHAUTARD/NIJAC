@@ -12,9 +12,14 @@ namespace App\Controllers;
  * rôle JA ailleurs, exactement comme includes/auth_required.php sans
  * $allowJa — ce dernier n'était jamais activé par le fichier legacy.
  *
- * La session est déjà fermée par le filtre "auth" en lecture seule ; comme la
- * mise à jour de ChangeLogin doit être persistée, la session est rouverte ici
- * puis refermée après écriture.
+ * Le filtre "auth" a déjà ouvert puis refermé la session ; $_SESSION['utilisateur']
+ * reste en mémoire (le superglobal survit à session_write_close()), on le lit donc
+ * directement comme les autres écrans "auth". NE PAS rappeler demarrerSessionNijac()
+ * ici : son 2e appel (2e session_save_path()/session_set_cookie_params() avant
+ * session_start()) empêche PHP de recharger $_SESSION depuis le fichier → tableau
+ * vide et "Undefined array key utilisateur". Pour persister ChangeLogin=0 dans la
+ * session vivante, on rouvre avec un session_start() BRUT (sans re-réglage), qui
+ * lui recharge bien le fichier, puis on referme.
  */
 class ChangerMotDePasseController extends BaseController
 {
@@ -27,9 +32,11 @@ class ChangerMotDePasseController extends BaseController
 
     public function index()
     {
-        demarrerSessionNijac();
+        $moi = $_SESSION['utilisateur'] ?? null;
+        if (!$moi) {
+            return redirect()->to(site_url('login'));
+        }
 
-        $moi    = $_SESSION['utilisateur'];
         $retour = !empty($moi['is_admin']) ? site_url('admin-menu') : site_url('nominateur-menu');
         $isAjax = strtolower($this->request->getHeaderLine('X-Requested-With')) === 'xmlhttprequest';
 
@@ -68,8 +75,11 @@ class ChangerMotDePasseController extends BaseController
                         $pdo->prepare('UPDATE Utilisateur SET Password = ?, ChangeLogin = 0 WHERE Id_Utilisateur = ?')
                             ->execute([$hash, $moi['id']]);
 
-                        demarrerSessionNijac();
-                        $_SESSION['utilisateur']['change_login'] = false;
+                        $moi['change_login'] = false;
+                        if (session_status() === PHP_SESSION_NONE) {
+                            session_start(); // reprise brute : PAS demarrerSessionNijac() (voir docblock)
+                        }
+                        $_SESSION['utilisateur'] = $moi; // réécrit le tableau complet
                         session_write_close();
 
                         $status       = 'Mot de passe modifié avec succès.';
