@@ -39,6 +39,17 @@ table.recap tr:hover td { background:#f4f9f4; }
 #tbl-compteurs th, #tbl-compteurs td { padding:.4rem .7rem; border-bottom:1px solid #eee; text-align:left; }
 #tbl-compteurs th { background:#1a3a6b; color:#fff; }
 #tbl-compteurs td.nb { text-align:right; font-weight:700; font-variant-numeric:tabular-nums; }
+
+#tbl-clubs { width:100%; min-width:560px; border-collapse:collapse; font-size:.85rem; background:#fff; }
+#tbl-clubs th, #tbl-clubs td { padding:.4rem .7rem; border-bottom:1px solid #eee; text-align:left; }
+#tbl-clubs th { background:#1a3a6b; color:#fff; }
+#tbl-clubs th.num, #tbl-clubs td.num { text-align:right; font-variant-numeric:tabular-nums; }
+#tbl-clubs td.ratio { text-align:right; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+#tbl-clubs tr.complet td.ratio { color:#2e7d32; }
+#tbl-clubs tr.court   td.ratio { color:#e65100; }
+.jauge { position:relative; height:6px; border-radius:3px; background:#e9edf3; margin-top:.2rem; overflow:hidden; }
+.jauge > span { position:absolute; inset:0 auto 0 0; background:var(--nom-green); border-radius:3px; }
+#tbl-clubs tr.court .jauge > span { background:#f0a020; }
 h2.section { font-size:1rem; color:#1a3a6b; margin:1.5rem 0 .6rem; }
 #chargement { text-align:center; color:#888; padding:2rem; }
 
@@ -105,6 +116,24 @@ h2.section { font-size:1rem; color:#1a3a6b; margin:1.5rem 0 .6rem; }
             <thead><tr><th>Juge-arbitre</th><th style="text-align:right">Nominations</th></tr></thead>
             <tbody id="compteurs-body"></tbody>
         </table>
+
+        <h2 class="section"><i class="bi bi-building me-1"></i>Clubs avec équipes en régionale
+            <span class="text-muted fw-normal" style="font-size:.8rem">— nominations faites par les JA du club sur le nombre à effectuer
+                (<span id="coef-nat"></span> par équipe nationale, <span id="coef-reg"></span> par équipe régionale)</span>
+        </h2>
+        <div class="recap-scroll">
+        <table id="tbl-clubs">
+            <thead><tr>
+                <th>Club</th>
+                <th class="num">Éq. rég.</th>
+                <th class="num">Éq. nat.</th>
+                <th class="num">Réalisées</th>
+                <th class="num">À effectuer</th>
+                <th class="ratio">Avancement</th>
+            </tr></thead>
+            <tbody id="clubs-body"></tbody>
+        </table>
+        </div>
     </div>
 
 </div>
@@ -270,6 +299,30 @@ function rendu(res) {
         cbody += `<tr><td>${escHtml(c.Nom + ' ' + c.Prenom)}</td><td class="nb">${escHtml(c.Nb)}</td></tr>`;
     });
     $('#compteurs-body').html(cbody);
+
+    // Cartouche clubs — nominations faites par les JA du club / nombre à effectuer
+    $('#coef-nat').text('× ' + (res.coefNat ?? ''));
+    $('#coef-reg').text('× ' + (res.coefReg ?? ''));
+    let kbody = '';
+    const clubs = res.clubs || [];
+    if (!clubs.length) kbody = '<tr><td colspan="6" class="text-muted">Aucun club avec équipe en régionale dans votre périmètre.</td></tr>';
+    clubs.forEach(k => {
+        const quota = parseInt(k.Quota) || 0;
+        const nom   = parseInt(k.NbNom) || 0;
+        const pct   = quota ? Math.min(100, Math.round(nom / quota * 100)) : 0;
+        const cls   = quota && nom >= quota ? 'complet' : 'court';
+        kbody += `<tr class="${cls}">
+            <td>${escHtml(k.Nom)}</td>
+            <td class="num">${escHtml(k.NbReg)}</td>
+            <td class="num">${escHtml(k.NbNat)}</td>
+            <td class="num">${nom}</td>
+            <td class="num">${quota}</td>
+            <td class="ratio">${nom} / ${quota}
+                <div class="jauge"><span style="width:${pct}%"></span></div>
+            </td>
+        </tr>`;
+    });
+    $('#clubs-body').html(kbody);
 
     buildCalendrier(groupes);   // affichage permanent ; mois repliés par défaut, état conservé au rechargement
 

@@ -44,7 +44,7 @@ class StatsNominationController extends BaseController
         try {
             $depts = $this->deptsAutorises();
             if (!$depts) {
-                return $this->response->setJSON(['ok' => true, 'rencontres' => [], 'jas' => [], 'compteurs' => [], 'disposParDate' => []]);
+                return $this->response->setJSON(['ok' => true, 'rencontres' => [], 'jas' => [], 'compteurs' => [], 'clubs' => [], 'disposParDate' => []]);
             }
 
             $pdo = getPDO();
@@ -99,6 +99,48 @@ class StatsNominationController extends BaseController
             $stmt->execute($depts);
             $compteurs = $stmt->fetchAll();
 
+            // Cartouche « Clubs » : pour chaque club du périmètre ayant au moins une équipe
+            // régionale, nombre de nominations faites par ses JA (ja.Id_Club) rapporté au
+            // quota = nb équipes nationales × nombre_arbitrage_national
+            //        + nb équipes régionales × nombre_arbitrage_regional.
+            // Régionales = table `equipe` (Division NOT LIKE 'N%'), club porteur principal
+            // (Id_Club) ; nationales = table `equipe_nationale`. Les nominations comptées ne
+            // sont pas restreintes au périmètre : c'est un indicateur de complétude du club.
+            $coefReg = (int) getConfig('nombre_arbitrage_regional', '5');
+            $coefNat = (int) getConfig('nombre_arbitrage_national', '7');
+
+            $stmt = $pdo->prepare("
+                SELECT c.Id_Club, c.Nom,
+                       er.nb              AS NbReg,
+                       COALESCE(en.nb, 0) AS NbNat,
+                       COALESCE(nm.nb, 0) AS NbNom
+                FROM Club c
+                JOIN (
+                    SELECT Id_Club, COUNT(*) nb FROM equipe
+                    WHERE Division NOT LIKE 'N%' GROUP BY Id_Club
+                ) er ON er.Id_Club = c.Id_Club
+                LEFT JOIN (
+                    SELECT Id_Club, COUNT(*) nb FROM equipe_nationale GROUP BY Id_Club
+                ) en ON en.Id_Club = c.Id_Club
+                LEFT JOIN (
+                    SELECT ja.Id_Club, COUNT(*) nb
+                    FROM nomination n
+                    JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                    JOIN ja           ON ja.Id_JA        = d.Id_JA
+                    GROUP BY ja.Id_Club
+                ) nm ON nm.Id_Club = c.Id_Club
+                WHERE SUBSTRING(c.Id_Club, 3, 2) IN ($ph)
+                ORDER BY c.Nom
+            ");
+            $stmt->execute($depts);
+            $clubs = array_map(static function (array $r) use ($coefReg, $coefNat): array {
+                $r['NbReg']  = (int) $r['NbReg'];
+                $r['NbNat']  = (int) $r['NbNat'];
+                $r['NbNom']  = (int) $r['NbNom'];
+                $r['Quota']  = $r['NbNat'] * $coefNat + $r['NbReg'] * $coefReg;
+                return $r;
+            }, $stmt->fetchAll());
+
             // JA disponibles (Reponse='O', niveau journée ou rencontre précise) pour chaque
             // date de rencontre du périmètre — alimente le filtrage de la combo côté client.
             $stmt = $pdo->prepare("
@@ -120,6 +162,9 @@ class StatsNominationController extends BaseController
                 'rencontres'    => $rencontres,
                 'jas'           => $jas,
                 'compteurs'     => $compteurs,
+                'clubs'         => $clubs,
+                'coefReg'       => $coefReg,
+                'coefNat'       => $coefNat,
                 'disposParDate' => $disposParDate,
             ]);
         } catch (\Throwable $e) {
