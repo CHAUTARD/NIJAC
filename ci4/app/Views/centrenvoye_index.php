@@ -28,26 +28,29 @@
         /* ── Onglets ── */
         #type-tabs {
             display: flex;
-            border-bottom: 2px solid #c8d4e8;
+            gap: .3rem;
+            padding: .4rem .5rem 0;
+            border-bottom: 3px solid #1f7a3d;
             flex-shrink: 0;
             background: #f0f4fa;
         }
 
         .type-tab {
-            padding: .45rem .9rem;
+            padding: .5rem 1rem;
             font-size: .8rem;
-            font-weight: 600;
+            font-weight: 700;
             cursor: pointer;
-            border: none;
-            border-bottom: 3px solid transparent;
-            background: none;
-            color: #6b7280;
+            border: 1px solid #d5dbe6;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            background: #e7ebf1;
+            color: #5b6472;
             white-space: nowrap;
-            transition: color .15s, border-color .15s;
+            transition: background .15s, color .15s;
         }
 
-        .type-tab:hover   { color: var(--nijac-blue); }
-        .type-tab.active  { color: var(--nijac-blue); border-bottom-color: var(--nijac-blue); background: #fff; }
+        .type-tab:hover   { background: #d7ede0; color: #15612f; }
+        .type-tab.active  { background: #1f7a3d; color: #fff; border-color: #1f7a3d; }
 
         /* ── Corps du panneau message ── */
         #panel-message-body {
@@ -204,6 +207,7 @@
         tr.masque { display: none; }
 
     </style>
+    <link rel="stylesheet" href="<?= base_url('asset/css/nijac-skin.css') ?>">
 </head>
 <body>
 
@@ -366,7 +370,7 @@
         <!-- Recherche -->
         <div id="ja-search-bar">
             <i class="bi bi-search text-muted" style="font-size:.82rem;"></i>
-            <input type="text" id="txt-recherche-ja" placeholder="Rechercher…">
+            <input type="text" id="txt-recherche-ja" placeholder="Rechercher dans tout le tableau">
             <button class="btn btn-sm btn-outline-secondary py-0 px-2" id="btn-effacer-recherche" title="Effacer">
                 <i class="bi bi-x"></i>
             </button>

@@ -76,7 +76,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
     transition:box-shadow .12s, transform .1s, border-color .12s;
     text-decoration:none; color:inherit;
 }
-.ja-card:hover { box-shadow:0 3px 12px rgba(0,0,0,.15); transform:translateY(-1px); border-color:#90a8d0; color:inherit; }
+.ja-card:hover { box-shadow:0 3px 12px rgba(0,0,0,.15); transform:translateY(-1px); border-color:#1f7a3d; background:#eefaf2; color:inherit; }
 .ja-card:active { transform:translateY(0); box-shadow:0 1px 4px rgba(0,0,0,.1); }
 
 .ja-avatar { width:38px; height:38px; border-radius:50%; background:#e8eaf6; display:flex; align-items:center; justify-content:center; font-size:.9rem; font-weight:800; color:var(--nijac-blue); flex-shrink:0; }
@@ -85,12 +85,14 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 .ja-meta { font-size:.73rem; color:#888; margin-top:.1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .ja-grade { font-size:.68rem; background:var(--nijac-blue); color:#fff; padding:.06rem .32rem; border-radius:3px; margin-right:.25rem; }
 .ja-arrow { color:#bbb; font-size:.9rem; flex-shrink:0; }
-.ja-card:hover .ja-arrow { color:var(--nijac-blue); }
+.ja-card:hover .ja-arrow { color:#1f7a3d; }
 
 /* ── JA sans disponibilité saisie ── */
 .ja-card.no-dispo .ja-avatar { background:#c62828 !important; color:#fff !important; }
 .ja-card.no-dispo { border-color:#ef9a9a; background:#fff5f5 !important; }
 .ja-card.no-dispo .ja-nom { color:#c62828; }
+.ja-card.no-dispo:hover { background:#ffdede !important; border-color:#c62828; box-shadow:0 3px 12px rgba(198,40,40,.28); }
+.ja-card.no-dispo:hover .ja-arrow { color:#c62828; }
 
 /* ── JA avec disponibilité saisie ── */
 .ja-dispo-badge {
@@ -141,6 +143,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
 
 </style>
+<link rel="stylesheet" href="<?= base_url('asset/css/nijac-skin.css') ?>">
 </head>
 <body>
 

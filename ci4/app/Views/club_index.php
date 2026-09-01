@@ -77,14 +77,8 @@
         }
 
         #tbl-clubs tbody tr { border-bottom: 1px solid #e0e8f0; cursor: pointer; }
-        #tbl-clubs tbody tr:nth-child(even) { background: #f7faff; }
-        #tbl-clubs tbody tr:hover   { background: #dce8f8; }
-        #tbl-clubs tbody tr.en-region { background: #d1fae5; }
-        #tbl-clubs tbody tr.en-region:nth-child(even) { background: #a7f3d0; }
-        #tbl-clubs tbody tr.en-region:hover { background: #6ee7b7; }
-        #tbl-clubs tbody tr.hors-region { background: #e5e7eb; }
-        #tbl-clubs tbody tr.hors-region:nth-child(even) { background: #d1d5db; }
-        #tbl-clubs tbody tr.hors-region:hover { background: #9ca3af; }
+        #tbl-clubs tbody tr:hover   { background: #eef4ff; }
+        /* .en-region / .hors-region : voir asset/css/nijac-skin.css */
         #tbl-clubs tbody td { border: 1px solid #e0e8f0; padding: 0; }
 
         .cell-inner {
@@ -94,12 +88,6 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-        }
-
-        td.col-id .cell-inner {
-            color: #6b7280;
-            font-style: italic;
-            background: #f0f4fa;
         }
 
         /* Colonne actions : 2 boutons icônes serrés */
@@ -164,6 +152,7 @@
         }
         #menu-colonnes-list label:hover { background: #eef4ff; border-radius: 4px; }
     </style>
+    <link rel="stylesheet" href="<?= base_url('asset/css/nijac-skin.css') ?>">
 </head>
 <body>
 
@@ -221,7 +210,7 @@
     <button class="menu-item" id="btn-filtre-region" title="Cliquer pour n'afficher que les clubs de la région, ou tous les clubs" style="border-color:transparent;">
         <i class="bi bi-geo-alt me-1"></i><span id="lbl-filtre-region">Région</span>
     </button>
-    <input type="search" id="search-input" placeholder="🔍 Rechercher…">
+    <input type="search" id="search-input" placeholder="🔍 Rechercher dans tout le tableau">
 </div>
 
 <!-- Grille -->

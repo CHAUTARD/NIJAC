@@ -37,7 +37,9 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 #col-rencontres .col-titre { background:#f8f9fa; border-bottom:1px solid #dee2e6; padding:.55rem .85rem; font-size:.82rem; font-weight:700; color:#444; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:5; }
 
 .renc-item { padding:.55rem .85rem; border-bottom:1px solid #f0f0f0; cursor:pointer; transition:background .12s; display:flex; align-items:center; gap:.5rem; }
-.renc-item:hover { background:#e8f5e9; }
+.renc-item:nth-child(odd) { background:#e3f4e9; }
+/* Survol : s'applique à toutes les lignes, y compris attribuée / sélectionnée */
+#liste-rencontres .renc-item:hover { background:#d3ecdd; }
 .renc-item.selected { background:#c8e6c9; border-left:3px solid var(--nom-green); }
 .renc-item.attribue { background:#e8eaf6; }
 .renc-item.attribue.selected { background:#c5cae9; border-left:3px solid #3949ab; }
@@ -123,6 +125,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 #page-footer.pf-status-left #status-bar { grid-column:1; justify-self:start; text-align:left; }
 #page-footer.pf-status-left .footer-copyright { grid-column:2; justify-self:center; }
 </style>
+<link rel="stylesheet" href="<?= base_url('asset/css/nijac-skin.css') ?>">
 </head>
 <body>
 

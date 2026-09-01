@@ -180,8 +180,6 @@
         }
 
         #tbl-frais tbody tr:hover { background: #f0f4fa; }
-        #tbl-frais tbody tr:nth-child(even) { background: #f8faff; }
-        #tbl-frais tbody tr:nth-child(even):hover { background: #e8edf8; }
 
         #tbl-frais td {
             padding: .38rem .75rem;
@@ -234,6 +232,7 @@
         #page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
         #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
     </style>
+    <link rel="stylesheet" href="<?= base_url('asset/css/nijac-skin.css') ?>">
 </head>
 <body>
 

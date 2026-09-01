@@ -35,8 +35,7 @@
         .stats-table thead th:hover { background: #2a4a8b; }
         .stats-table thead th.sort-asc::after  { content: ' ▲'; }
         .stats-table thead th.sort-desc::after { content: ' ▼'; }
-        .stats-table tbody tr:nth-child(even) { background: #f4f7fb; }
-        .stats-table tbody tr:hover { background: #dbeafe; }
+        .stats-table tbody tr:hover { background: #eef4ff; }
         .stats-table td { padding: .35rem .6rem; border-bottom: 1px solid #e5e7eb; }
         .stats-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
         .stats-table tfoot td { font-weight: 700; background: #e8eef7; padding: .4rem .6rem; border-top: 2px solid var(--nijac-blue); }
@@ -79,6 +78,7 @@
         #page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
         #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
     </style>
+    <link rel="stylesheet" href="<?= base_url('asset/css/nijac-skin.css') ?>">
 </head>
 <body>
 

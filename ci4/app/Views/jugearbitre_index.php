@@ -118,7 +118,6 @@
         #menu-colonnes-list label:hover { background: #eef4ff; border-radius: 4px; }
 
         #tbl-ja tbody tr { border-bottom: 1px solid #e0e8f0; }
-        #tbl-ja tbody tr:nth-child(even) { background: #f7faff; }
         #tbl-ja tbody tr:hover   { background: #dce8f8; }
         #tbl-ja tbody tr.selected { background: #b8d0f0 !important; }
         #tbl-ja tbody td { border: 1px solid #e0e8f0; padding: 0; }
@@ -256,17 +255,50 @@
         #page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
         #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
     </style>
+
+    <link rel="stylesheet" href="<?= base_url('asset/css/nijac-skin.css') ?>">
 </head>
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'person-badge-fill', 'phTitle' => 'Gestion des Juges-Arbitres', 'phCode' => 'EN11',
+    'phIcon' => 'grid-3x3-gap-fill', 'phTitle' => 'Gestion des Juges-Arbitres', 'phCode' => 'EN11',
     'phCrumbLabel' => 'Nominateur', 'phCrumbUrl' => site_url('nominateur-menu'), 'phBackUrl' => site_url('nominateur-menu'),
     'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
 ]) ?>
 
-<!-- Toolbar : recopié de includes/toolbar.php -->
-<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
+<!-- Bandeau utilisateur + cartes statistiques (EN11) -->
+<div id="toolbar">
+    <div class="en-user">
+        <span class="en-avatar"><i class="bi bi-person-fill"></i></span>
+        <div>
+            <div class="en-u-label">Utilisateur</div>
+            <div class="en-u-name"><?= esc($nomComplet) ?><?= $departement ? ' · ' . esc($departement) : '' ?></div>
+        </div>
+    </div>
+    <?php if ($changeLogin): ?>
+    <a class="ts-pwd-warning" href="<?= site_url('changer-mot-de-passe') ?>" id="lnk-chg-pwd" data-base="<?= site_url('changer-mot-de-passe') ?>">
+        <i class="bi bi-key-fill"></i>Mot de passe à modifier
+    </a>
+    <?php endif; ?>
+    <span style="flex:1"></span>
+    <div id="stat-cards">
+        <div class="stat-card">
+            <div class="sc-label">Juges-arbitres actifs</div>
+            <div class="sc-value" id="sc-actifs">—</div>
+            <div class="sc-sub" id="sc-actifs-sub">&nbsp;</div>
+        </div>
+        <div class="stat-card">
+            <div class="sc-label">Clubs représentés</div>
+            <div class="sc-value" id="sc-clubs">—</div>
+            <div class="sc-sub" id="sc-clubs-sub">&nbsp;</div>
+        </div>
+        <div class="stat-card sc-alert">
+            <div class="sc-label">Anomalies CP/Ville</div>
+            <div class="sc-value" id="sc-anomalies">—</div>
+            <div class="sc-sub">à corriger</div>
+        </div>
+    </div>
+</div>
 
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 
@@ -337,7 +369,7 @@
     <button class="menu-item" id="btn-filtre-region" title="Cliquer pour n'afficher que les JA de la région, ou tous les JA" style="border-color:transparent;">
         <i class="bi bi-geo-alt me-1"></i><span id="lbl-filtre-region">Région</span>
     </button>
-    <input type="search" id="search-input" placeholder="🔍 Rechercher…">
+    <input type="search" id="search-input" placeholder="🔍 Rechercher un JA, un club, une ville">
 </div>
 
 <!-- Grille -->
@@ -762,6 +794,9 @@ function renderGrille() {
         affichees.forEach(l => {
             const idx  = l._idx;          // index stable, indépendant du filtre/tri
             const $tr  = $('<tr>').attr('data-idx', idx);
+            const dja = deptDeJA(l);      // coloration ligne : en région / hors région (comme EN27)
+            if (dja && !DEPTS_REGION.has(dja)) $tr.addClass('hors-region').attr('title', `Département ${dja} hors région`);
+            else if (dja) $tr.addClass('en-region');
             const actifHtml = l.actif
                 ? '<span class="badge-actif">Oui</span>'
                 : '<span class="badge-inactif">Non</span>';
@@ -813,6 +848,14 @@ function renderGrille() {
     setStatus(`${info}Double-cliquez sur une ligne pour la modifier.`);
     $('#lbl-count').text(`${affichees.length}/${lignes.length} JA`);
 
+    // Cartes statistiques (EN11)
+    const deptTxt = ($('#sel-dept option:selected').text().split('—').pop() || '').trim();
+    $('#sc-actifs').text(lignes.filter(l => l.actif === 1).length);
+    $('#sc-actifs-sub').text(`/ ${lignes.length} au total`);
+    $('#sc-clubs').text(new Set(affichees.map(l => l.id_club).filter(Boolean)).size);
+    $('#sc-clubs-sub').text(deptTxt || 'Tous départements');
+    $('#sc-anomalies').text(affichees.filter(l => l.id_laposte == null).length);
+
     appliquerColonnesCachees();
 }
 
@@ -829,19 +872,19 @@ function makeTdHtml(html, idx, field) {
 }
 
 // ── Cellules CP / Ville (lecture seule — modification via bouton adresse) ────
+function couleurLaposte(l, val) {
+    return l.id_laposte != null ? '#15612f' : (val ? '#c0392b' : '');
+}
+
 function makeCpTd(l, idx) {
-    const trouve = l.id_laposte != null;
-    const bg     = trouve ? '#d1fae5' : (l.cp ? '#fee2e2' : '');
-    const $td = $('<td>').attr('data-idx', idx).attr('data-field', 'cp').css({ background: bg });
-    $('<div class="cell-inner">').text(l.cp ?? '').appendTo($td);
+    const $td = $('<td>').attr('data-idx', idx).attr('data-field', 'cp');
+    $('<div class="cell-inner">').text(l.cp ?? '').css('color', couleurLaposte(l, l.cp)).appendTo($td);
     return $td;
 }
 
 function makeVilleTd(l, idx) {
-    const trouve = l.id_laposte != null;
-    const bg     = trouve ? '#d1fae5' : (l.ville ? '#fee2e2' : '');
-    const $td = $('<td>').attr('data-idx', idx).attr('data-field', 'ville').css({ background: bg });
-    $('<div class="cell-inner">').text(l.ville ?? '').appendTo($td);
+    const $td = $('<td>').attr('data-idx', idx).attr('data-field', 'ville');
+    $('<div class="cell-inner">').text(l.ville ?? '').css('color', couleurLaposte(l, l.ville)).appendTo($td);
     return $td;
 }
 

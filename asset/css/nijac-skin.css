@@ -1,0 +1,141 @@
+/* ══════════════════════════════════════════════
+   NIJAC – Habillage « fiche moderne »
+   Surcharge additive : à charger APRÈS le <style> inline de la vue.
+   Écrans : EN11, EN13, EN14, EN15, EN16, EN17, EN27
+   ══════════════════════════════════════════════ */
+
+:root {
+    --en-green: #1f7a3d; --en-green-d: #15612f; --en-ink: #1f2937;
+    --en-muted: #8a94a6; --en-line: #eceef2; --en-card: #fff;
+    --en-bg: #f7fbf8; --en-radius: 14px;
+}
+body { background: var(--en-bg); color: var(--en-ink); }
+
+/* ── En-tête vert dégradé ── */
+#page-header {
+    background: linear-gradient(90deg, var(--en-green-d), var(--en-green) 55%, #2e8b4a);
+    padding: .9rem 1.4rem; font-size: 1rem; letter-spacing: .2px;
+    box-shadow: 0 1px 0 rgba(0,0,0,.08);
+}
+#page-header small {
+    display: inline-block; background: rgba(255,255,255,.18); color: #fff !important;
+    border-radius: 999px; padding: .08rem .55rem; font-size: .68rem;
+    font-weight: 700; vertical-align: middle; letter-spacing: .5px;
+}
+#page-header a.btn {
+    background: rgba(255,255,255,.15) !important; color: #fff !important;
+    border: 1px solid rgba(255,255,255,.35) !important; border-radius: 999px !important;
+    padding: .3rem .95rem !important; font-weight: 600;
+}
+#page-header a.btn:hover { background: rgba(255,255,255,.28) !important; }
+
+/* ── Bandeau utilisateur ── */
+#toolbar, #toolbar-user {
+    background: var(--en-bg); border: 0; padding: 1rem 1.4rem .25rem;
+    display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+}
+/* Avatar rond autour de l'icône « personne » de la toolbar partagée */
+#toolbar .ts-user i.bi-person-fill,
+#toolbar-user .ts-user i.bi-person-fill {
+    display: inline-flex; width: 34px; height: 34px; border-radius: 50%;
+    background: #e3f4e9; color: var(--en-green-d);
+    align-items: center; justify-content: center; margin-right: .55rem; font-size: 1rem;
+}
+#toolbar .ts-user, #toolbar-user .ts-user { display: inline-flex; align-items: center; font-weight: 700; color: var(--en-ink); }
+
+/* Variante EN11 : bloc utilisateur sur mesure (avatar + libellé + nom) */
+.en-user { display: flex; align-items: center; gap: .8rem; padding: .7rem 0; flex: 1 1 260px; }
+.en-user .en-avatar {
+    width: 38px; height: 38px; border-radius: 50%; background: #e3f4e9;
+    color: var(--en-green-d); display: flex; align-items: center;
+    justify-content: center; font-size: 1.1rem; flex-shrink: 0;
+}
+.en-user .en-u-label { font-size: .66rem; font-weight: 700; letter-spacing: .6px; color: var(--en-muted); text-transform: uppercase; }
+.en-user .en-u-name  { font-size: 1rem; font-weight: 700; color: var(--en-ink); }
+#toolbar .ts-pwd-warning { align-self: center; }
+
+/* ── Cartes statistiques (EN11) ── */
+#stat-cards { display: flex; gap: .8rem; flex-wrap: wrap; }
+.stat-card {
+    background: var(--en-card); border: 1px solid var(--en-line);
+    border-radius: var(--en-radius); padding: .65rem 1.1rem; min-width: 150px;
+    box-shadow: 0 1px 2px rgba(16,24,40,.04);
+}
+.stat-card .sc-label { font-size: .62rem; font-weight: 700; letter-spacing: .6px; color: #006552; text-transform: uppercase; }
+.stat-card .sc-value { font-size: 1.5rem; font-weight: 800; line-height: 1.1; color: #006552; }
+.stat-card .sc-sub   { font-size: .72rem; color: var(--en-muted); }
+.stat-card.sc-alert .sc-value { color: #c0392b; }
+
+/* ── Barre d'outils : puces arrondies ── */
+#menu-strip { background: var(--en-bg); border: 0; padding: .4rem 1.4rem 1rem; gap: .55rem; flex-wrap: wrap; }
+#menu-strip .win-menu-btn,
+#menu-strip .menu-item,
+#menu-strip #search-input,
+#menu-strip #sel-dept,
+#menu-strip #toggle-actif,
+#menu-strip select.form-select,
+#menu-strip input[type="search"] {
+    border-radius: 999px !important; background: var(--en-card);
+    border: 1px solid var(--en-line); box-shadow: 0 1px 2px rgba(16,24,40,.04);
+}
+#win-menu-trigger,
+#btn-filtre-region {
+    background: var(--en-green) !important; color: #fff !important;
+    border-color: var(--en-green) !important; font-weight: 600;
+}
+#win-menu-trigger:hover,
+#btn-filtre-region:hover { background: var(--en-green-d) !important; }
+#menu-strip .menu-item { padding: .32rem .9rem; }
+#menu-colonnes > summary { padding: .32rem .9rem; }
+#search-input { width: 290px; padding: .32rem .9rem; }
+#menu-strip #sel-dept {
+    padding: .28rem 1.9rem .28rem .9rem; height: auto;
+    -webkit-appearance: none; -moz-appearance: none; appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23006552' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+    background-repeat: no-repeat; background-position: right .7rem center; background-size: 12px;
+}
+
+#toggle-actif { overflow: hidden; }
+#toggle-actif button { padding: .32rem .95rem; font-size: .8rem; background: transparent; }
+#toggle-actif button.active { background: var(--en-green); color: #fff; }
+#btn-erreurs-cp.active { background: #e08e0b; color: #fff; }
+
+#lbl-count {
+    background: #e3f4e9; color: var(--en-green); border: 1px solid #cfe9d8;
+    border-radius: 999px; font-weight: 700; margin-left: .25rem;
+}
+
+/* ── Feuille blanche contenant la grille ── */
+#grid-wrapper {
+    background: var(--en-card); margin: 0 1.4rem 1rem; border: 1px solid var(--en-line);
+    border-radius: var(--en-radius); box-shadow: 0 1px 3px rgba(16,24,40,.06);
+}
+:is(#tbl-ja, #tbl-clubs, #tbl-frais, #stats-table) { font-size: .82rem; }
+:is(#tbl-ja, #tbl-clubs, #tbl-frais, #stats-table) thead th {
+    background: var(--en-card); border: 0; border-bottom: 2px solid var(--en-line);
+    color: var(--en-muted); font-size: .68rem; font-weight: 700;
+    letter-spacing: .5px; text-transform: uppercase; padding: .7rem .6rem;
+}
+:is(#tbl-ja, #tbl-clubs, #tbl-frais, #stats-table) thead th:hover { background: #f6f8fb; }
+:is(#tbl-ja, #tbl-clubs, #tbl-frais, #stats-table) tbody tr { border-bottom: 1px solid #f2f3f6; }
+/* Zébrage : la 1re ligne est colorée — une ligne vert clair, une ligne blanche */
+:is(#tbl-ja, #tbl-clubs, #tbl-frais, #stats-table) tbody tr:nth-child(odd) { background: #e3f4e9; }
+:is(#tbl-ja, #tbl-clubs, #tbl-frais, #stats-table) tbody tr:hover { background: #d3ecdd; }
+:is(#tbl-ja, #tbl-clubs, #tbl-frais, #stats-table) tbody tr.selected { background: #c2e6cf !important; }
+/* Hors région : lignes grisées (le zébrage reste visible) */
+:is(#tbl-ja, #tbl-clubs, #tbl-frais, #stats-table) tbody tr.hors-region { background: #eef0f3; }
+:is(#tbl-ja, #tbl-clubs, #tbl-frais, #stats-table) tbody tr.hors-region:nth-child(odd) { background: #e4e7ec; }
+:is(#tbl-ja, #tbl-clubs, #tbl-frais, #stats-table) tbody tr.hors-region:hover { background: #dcdfe4; }
+:is(#tbl-ja, #tbl-clubs, #tbl-frais, #stats-table) tbody td { border: 0; }
+.cell-inner { padding: .55rem .6rem; }
+td.col-readonly { background: transparent; }
+td.col-readonly .cell-inner { font-style: normal; }
+td[data-field="nom_club"] .cell-inner { font-style: italic; color: var(--en-muted); }
+td[data-field="id"] .cell-inner { color: var(--en-muted); }
+
+.badge-actif   { background: #e3f4e9; color: var(--en-green); border-radius: 999px; padding: .12rem .6rem; }
+.badge-inactif { background: #fdecec; color: #c0392b; border-radius: 999px; padding: .12rem .6rem; }
+#tbl-ja .btn-lien-dispo,
+#tbl-ja .btn-lien-adresse { border-radius: 8px; }
+
+#page-footer { background: var(--en-bg); border: 0; }
