@@ -181,13 +181,18 @@ class SalleController extends BaseController
         $cp            = trim($this->request->getPost('cp') ?? '') ?: null;
         $ville         = trim($this->request->getPost('ville') ?? '') ?: null;
         $idLaposte     = ($this->request->getPost('id_laposte') ?? '') !== '' ? (int) $this->request->getPost('id_laposte') : null;
+        $idClub        = trim($this->request->getPost('id_club') ?? '');
         $estPrincipale = $this->request->getPost('est_principale') ? 1 : 0;
+
+        if ($idClub === '') {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Le N° de club est obligatoire.']);
+        }
 
         $pdo  = getPDO();
         $stmt = $pdo->prepare(
-            'INSERT INTO Salle (Nom, Adresse, Telephone, Cp, Ville, Id_Laposte, Id_Club, EstPrincipale) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)'
+            'INSERT INTO Salle (Nom, Adresse, Telephone, Cp, Ville, Id_Laposte, Id_Club, EstPrincipale) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
         );
-        $stmt->execute([$nom, $adresse, $telephone, $cp, $ville, $idLaposte, $estPrincipale]);
+        $stmt->execute([$nom, $adresse, $telephone, $cp, $ville, $idLaposte, $idClub, $estPrincipale]);
 
         return $this->response->setJSON(['ok' => true, 'msg' => 'Salle créée.', 'id_salle' => (int) $pdo->lastInsertId()]);
     }
@@ -213,6 +218,8 @@ class SalleController extends BaseController
         $cp            = trim($input['cp'] ?? '') ?: null;
         $ville         = trim($input['ville'] ?? '') ?: null;
         $idLaposte     = ($input['id_laposte'] ?? '') !== '' ? (int) $input['id_laposte'] : null;
+        // Non bloquant ici (contrairement à store()) : la bascule « salle principale »
+        // de la grille passe par update() et peut concerner une salle héritée sans club.
         $idClub        = ($input['id_club'] ?? '') !== '' ? trim($input['id_club']) : null;
         $estPrincipale = !empty($input['est_principale']) ? 1 : 0;
 

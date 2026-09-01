@@ -130,6 +130,22 @@
         }
         #page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
         #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
+
+        /* Menu « Colonnes » (affichage/masquage des colonnes, mémorisé par le navigateur) */
+        #menu-colonnes { position: relative; }
+        #menu-colonnes > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; }
+        #menu-colonnes > summary::-webkit-details-marker { display: none; }
+        #menu-colonnes-list {
+            position: absolute; right: 0; top: calc(100% + 4px); z-index: 60;
+            background: #fff; border: 1px solid #ccc; border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,.15); padding: .35rem;
+            min-width: 180px; max-height: 60vh; overflow: auto;
+        }
+        #menu-colonnes-list label {
+            display: flex; align-items: center; gap: .45rem;
+            padding: .25rem .4rem; font-size: .85rem; cursor: pointer; white-space: nowrap;
+        }
+        #menu-colonnes-list label:hover { background: #eef4ff; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -158,10 +174,12 @@
     <button class="menu-item" id="btn-ajouter">
         <i class="bi bi-plus-circle"></i>Ajouter
     </button>
-    <button class="menu-item danger" id="btn-supprimer">
-        <i class="bi bi-trash3"></i>Supprimer
-    </button>
     <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 salle(s)</span>
+    <span style="flex:1"></span>
+    <details id="menu-colonnes">
+        <summary class="menu-item" style="border-color:transparent;"><i class="bi bi-layout-three-columns me-1"></i>Colonnes</summary>
+        <div id="menu-colonnes-list"></div>
+    </details>
     <span style="flex:1"></span>
     <label for="sel-dept" style="font-size:.85rem;font-weight:700;color:#444;white-space:nowrap;margin:0;">
         <i class="bi bi-map me-1"></i>Département
@@ -181,12 +199,15 @@
     </span>
     <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 salle(s)</span>
     <span style="flex:1"></span>
+    <details id="menu-colonnes">
+        <summary class="menu-item" style="border-color:transparent;"><i class="bi bi-layout-three-columns me-1"></i>Colonnes</summary>
+        <div id="menu-colonnes-list"></div>
+    </details>
+    <span style="flex:1"></span>
 <?php endif; ?>
-    <select id="sel-la-poste" class="form-select form-select-sm w-auto">
-        <option value="">— La Poste —</option>
-        <option value="1">Oui</option>
-        <option value="0">Non</option>
-    </select>
+    <button class="menu-item" id="btn-filtre-laposte" title="Cliquer pour n'afficher que les salles sans coordonnées La Poste, ou toutes les salles" style="border-color:transparent;">
+        <i class="bi bi-geo-alt-fill me-1"></i><span id="lbl-filtre-laposte">La Poste</span>
+    </button>
     <input type="search" id="search-input" placeholder="🔍 Rechercher…">
 </div>
 
@@ -206,7 +227,7 @@
                 <th style="width:80px"  data-field="la_poste">La Poste<span class="sort-icon"></span></th>
                 <th style="width:90px"  data-field="est_principale">Principale<span class="sort-icon"></span></th>
                 <?php if ($isAdmin): ?>
-                <th style="width:70px"></th>
+                <th style="width:96px"></th>
                 <?php endif; ?>
             </tr>
         </thead>
@@ -226,6 +247,12 @@
       </div>
       <div class="modal-body" style="font-size:.88rem;">
         <input type="hidden" id="mms-idx">
+        <div class="mb-2">
+          <label class="form-label fw-semibold" style="font-size:.82rem;">N° Club <span class="text-danger">*</span></label>
+          <input type="text" id="mms-club" class="form-control form-control-sm" list="mms-club-list" placeholder="ex. 07640001" autocomplete="off">
+          <datalist id="mms-club-list"></datalist>
+          <div id="mms-club-nom" class="form-text" style="min-height:1.1em;"></div>
+        </div>
         <div class="mb-2">
           <label class="form-label fw-semibold" style="font-size:.82rem;">Nom <span class="text-danger">*</span></label>
           <input type="text" id="mms-nom" class="form-control form-control-sm">
@@ -355,7 +382,7 @@ let clubs      = [];
 let rowActive  = null;
 const sortState = { col: 'nom_club', asc: true };
 let searchTerm = '';
-let laPosteFiltre = '';
+let filtreLaPosteManquant = false; // true = uniquement les salles sans coordonnées La Poste
 let deptFiltre = IS_ADMIN ? '' : (DEPT_USER ?? '');
 let filtreEnRegion = true; // true = En région uniquement (par défaut), false = Tous
 
@@ -373,7 +400,7 @@ function lignesFiltreesTriees() {
     const term = searchTerm.toLowerCase();
     let result = [...lignes];
     if (IS_ADMIN && filtreEnRegion) result = result.filter(l => DEPTS_REGION.has(deptDeSalle(l)));
-    if (laPosteFiltre !== '') result = result.filter(l => (laPosteFiltre === '1') === !!l.id_laposte);
+    if (filtreLaPosteManquant) result = result.filter(l => !l.id_laposte);
     if (term) result = result.filter(l =>
             String(l.id_salle   ?? '').toLowerCase().includes(term) ||
             String(l.nom        ?? '').toLowerCase().includes(term) ||
@@ -437,6 +464,7 @@ function renderGrille() {
     const info = searchTerm ? `${affichees.length} résultat(s) sur ${lignes.length}. ` : '';
     setStatus(`${info}Prêt.`);
     $('#lbl-count').text(`${affichees.length} / ${lignes.length} salle(s)`);
+    appliquerColonnesCachees();
 }
 
 function makeTd(val, idx, field, readonly) {
@@ -449,9 +477,14 @@ function makeTd(val, idx, field, readonly) {
 function makeActionsTd(idx) {
     const $td = $('<td class="text-center">');
     $td.append(
-        $('<button type="button" class="btn btn-sm btn-outline-primary btn-modifier-salle" title="Modifier">')
+        $('<button type="button" class="btn btn-sm btn-outline-primary btn-modifier-salle me-1" title="Modifier">')
             .attr('data-idx', idx)
             .html('<i class="bi bi-pencil-fill"></i>')
+    );
+    $td.append(
+        $('<button type="button" class="btn btn-sm btn-outline-danger btn-supprimer-salle" title="Supprimer">')
+            .attr('data-idx', idx)
+            .html('<i class="bi bi-trash-fill"></i>')
     );
     return $td;
 }
@@ -498,9 +531,24 @@ function persisterSalle(idx, overrides, onSuccess, onError) {
 
 function chargerClubs() {
     return $.get(`${SALLE_BASE}/clubs`, function (res) {
-        if (res.ok) clubs = res.data.map(r => ({ id_club: r.Id_Club, nom: r.Nom }));
+        if (res.ok) {
+            clubs = res.data.map(r => ({ id_club: r.Id_Club, nom: r.Nom }));
+            const $dl = $('#mms-club-list').empty();
+            clubs.forEach(c => $('<option>').attr('value', c.id_club).text(c.nom).appendTo($dl));
+        }
     }, 'json');
 }
+
+// Affiche le nom du club correspondant au N° saisi dans la modale salle
+function majClubNom() {
+    const v = $('#mms-club').val().trim();
+    if (!v) { $('#mms-club-nom').text('').css('color', ''); return; }
+    const c = clubs.find(c => String(c.id_club) === v);
+    $('#mms-club-nom')
+        .text(c ? `✓ ${c.nom}` : 'N° de club inconnu')
+        .css('color', c ? '#065f46' : '#c00');
+}
+$('#mms-club').on('input', majClubNom);
 
 function chargerListe() {
     spinner(true);
@@ -546,6 +594,8 @@ function ouvrirModalModifierSalle(idx) {
         ? '<i class="bi bi-building me-2"></i>Modifier la salle'
         : '<i class="bi bi-building me-2"></i>Ajouter une salle');
     $('#mms-nom').val(l ? (l.nom ?? '') : '');
+    $('#mms-club').val(l ? (l.id_club ?? '') : '');
+    majClubNom();
     $('#mms-adresse').val(l ? (l.adresse ?? '') : '');
     $('#mms-telephone').val(formaterTelephone(l ? (l.telephone ?? '') : ''));
     $('#mms-cp').val(l ? (l.cp ?? '') : '');
@@ -561,7 +611,7 @@ function ouvrirModalModifierSalle(idx) {
     if (!modal) modal = new bootstrap.Modal(el);
     modal.show();
     el.addEventListener('shown.bs.modal', () => {
-        $('#mms-nom').trigger('focus').trigger('select');
+        $(l ? '#mms-nom' : '#mms-club').trigger('focus').trigger('select');
     }, { once: true });
 }
 
@@ -633,6 +683,7 @@ $('#mms-ville').on('keydown', function (e) { if (e.key === 'Enter') { e.preventD
 $('#mms-btn-ok').on('click', function () {
     const idxVal        = $('#mms-idx').val();
     const nom           = $('#mms-nom').val().trim();
+    const idClub        = $('#mms-club').val().trim() || null;
     const adresse       = $('#mms-adresse').val().trim() || null;
     const telephone     = $('#mms-telephone').val().trim() || null;
     const cp            = $('#mms-cp').val().trim() || null;
@@ -647,9 +698,17 @@ $('#mms-btn-ok').on('click', function () {
         $('#mms-msg').html('<span class="text-danger">Le téléphone doit être saisi sous la forme 00.00.00.00.00.</span>');
         return;
     }
+    if (!idClub) {
+        $('#mms-msg').html('<span class="text-danger">Le N° de club est obligatoire.</span>');
+        return;
+    }
+    if (!clubs.some(c => String(c.id_club) === idClub)) {
+        $('#mms-msg').html('<span class="text-danger">N° de club inconnu.</span>');
+        return;
+    }
 
     const champs = {
-        nom, adresse, telephone, cp, ville,
+        nom, adresse, telephone, cp, ville, id_club: idClub,
         id_laposte: mmsIdLaposteVerifie, est_principale: estPrincipale,
     };
 
@@ -670,6 +729,8 @@ $('#mms-btn-ok').on('click', function () {
 
     persisterSalle(+idxVal, champs,
         (res) => {
+            const l = lignes[+idxVal];
+            if (l) l.nom_club = (clubs.find(c => String(c.id_club) === String(l.id_club)) || {}).nom || '';
             bootstrap.Modal.getInstance(document.getElementById('modal-modifier-salle')).hide();
             renderGrille();
             toast(res.msg, true);
@@ -677,20 +738,19 @@ $('#mms-btn-ok').on('click', function () {
         (res) => $('#mms-msg').html('<span class="text-danger">✖ ' + (res.msg ?? 'Erreur réseau.') + '</span>'));
 });
 
-$('#btn-supprimer').on('click', function () {
-    if (rowActive === null) { toast('Sélectionnez une ligne à supprimer.', false); return; }
-    const l = lignes[rowActive];
+$('#tbody-grille').on('click', '.btn-supprimer-salle', function (e) {
+    e.stopPropagation();
+    const l = lignes[+$(this).attr('data-idx')];
     if (!l) return;
 
-    const label = l.nom || '(salle)';
-    if (!confirm(`Supprimer la salle « ${label} » ?`)) return;
-
-    spinner(true);
-    $.ajax({ url: `${SALLE_BASE}/${l.id_salle}`, method: 'DELETE', dataType: 'json' }).done(function (res) {
-        spinner(false);
-        toast(res.msg, res.ok);
-        if (res.ok) { rowActive = null; chargerListe(); }
-    }).fail(() => { spinner(false); toast('Erreur réseau.', false); });
+    nijacConfirm(`Supprimer la salle « ${l.nom || '(salle)'} » ?`, function () {
+        spinner(true);
+        $.ajax({ url: `${SALLE_BASE}/${l.id_salle}`, method: 'DELETE', dataType: 'json' }).done(function (res) {
+            spinner(false);
+            toast(res.msg, res.ok);
+            if (res.ok) { rowActive = null; chargerListe(); }
+        }).fail(() => { spinner(false); toast('Erreur réseau.', false); });
+    }, null, { type: 'danger' });
 });
 
 let refreshTriEntetes = () => {};
@@ -698,8 +758,59 @@ $(function () {
     refreshTriEntetes = nijacSortableTable('#tbl-salles thead th[data-field]', 'field', sortState, renderGrille);
 });
 
-$('#sel-la-poste').on('change', function () {
-    laPosteFiltre = $(this).val();
+// ── Affichage / masquage des colonnes (mémorisé dans le navigateur) ──────────
+const LS_COLONNES = 'nijac_ea81_colonnes_cachees';
+const COLONNES_CACHEES_DEFAUT = ['id_salle'];   // N° masqué tant que l'utilisateur n'a rien choisi
+let colonnesCachees;
+try {
+    const brut = localStorage.getItem(LS_COLONNES);
+    colonnesCachees = new Set(brut !== null ? JSON.parse(brut) : COLONNES_CACHEES_DEFAUT);
+} catch (e) {
+    colonnesCachees = new Set(COLONNES_CACHEES_DEFAUT);
+}
+
+function appliquerColonnesCachees() {
+    document.querySelectorAll('#tbl-salles [data-field]').forEach(el => {
+        el.style.display = colonnesCachees.has(el.getAttribute('data-field')) ? 'none' : '';
+    });
+}
+
+function construireMenuColonnes() {
+    const $box = $('#menu-colonnes-list').empty();
+    document.querySelectorAll('#tbl-salles thead th[data-field]').forEach(th => {
+        const field = th.getAttribute('data-field');
+        const label = (th.textContent || '').replace(/[⇅▲▼]/g, '').trim();
+        const $chk  = $('<input type="checkbox">').prop('checked', !colonnesCachees.has(field));
+        $chk.on('change', function () {
+            if (this.checked) colonnesCachees.delete(field);
+            else              colonnesCachees.add(field);
+            try { localStorage.setItem(LS_COLONNES, JSON.stringify([...colonnesCachees])); } catch (e) {}
+            appliquerColonnesCachees();
+        });
+        $('<label>').append($chk).append(document.createTextNode(' ' + label)).appendTo($box);
+    });
+}
+construireMenuColonnes();
+appliquerColonnesCachees();
+
+// Ferme le menu « Colonnes » au clic hors de celui-ci
+$(document).on('click', function (e) {
+    if (!$(e.target).closest('#menu-colonnes').length) $('#menu-colonnes').removeAttr('open');
+});
+
+function appliquerStyleFiltreLaPoste() {
+    $('#lbl-filtre-laposte').text(filtreLaPosteManquant ? 'Sans coord.' : 'La Poste');
+    $('#btn-filtre-laposte').css({
+        background:  filtreLaPosteManquant ? '#166534' : '',
+        color:       filtreLaPosteManquant ? '#fff'    : '',
+        borderColor: filtreLaPosteManquant ? '#166534' : 'transparent',
+    });
+}
+appliquerStyleFiltreLaPoste();
+
+$('#btn-filtre-laposte').on('click', function () {
+    filtreLaPosteManquant = !filtreLaPosteManquant;
+    appliquerStyleFiltreLaPoste();
     renderGrille();
 });
 

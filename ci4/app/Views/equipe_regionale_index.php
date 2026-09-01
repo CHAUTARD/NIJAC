@@ -60,7 +60,7 @@
                 <button type="button" class="btn btn-sm btn-light" id="btn-importer-txt" title="Importer club_Reg_R4.PN.txt">
                     <i class="bi bi-upload me-1"></i>Importer .txt
                 </button>
-                <select id="sel-division" class="form-select form-select-sm" style="width:auto;font-size:.82rem;">
+                <select id="sel-division" class="form-select form-select-sm" style="width:auto;min-width:250px;font-size:.82rem;">
                     <option value="">— Toutes divisions —</option>
                 </select>
                 <input type="search" id="search-input" placeholder="🔍 Rechercher…">

@@ -78,6 +78,14 @@
         #e016-tabs .nav-restauration        { color: #1e3a8a; background: #dbeafe; }
         #e016-tabs .nav-restauration:hover  { color: #1e3a8a; }
         #e016-tabs .nav-restauration.active { background: #eff6ff; border-color: #93c5fd; color: #1e3a8a; }
+        /* Onglet Fin de phase : ambre */
+        #e016-tabs .nav-fin-phase        { color: #92400e; background: #fef3c7; }
+        #e016-tabs .nav-fin-phase:hover  { color: #92400e; }
+        #e016-tabs .nav-fin-phase.active { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
+        /* Onglet Fin de saison : violet */
+        #e016-tabs .nav-fin-saison        { color: #5b21b6; background: #ede9fe; }
+        #e016-tabs .nav-fin-saison:hover  { color: #5b21b6; }
+        #e016-tabs .nav-fin-saison.active { background: #f5f3ff; border-color: #c4b5fd; color: #5b21b6; }
 
         .tab-content { width: 100%; }
         .cards-row {
@@ -91,6 +99,17 @@
         .tab-content > .tab-pane.cards-row.active { display: flex; }
         #pane-sauvegarde   { background: #ecfdf5; border: 1px solid #6ee7b7; }
         #pane-restauration { background: #eff6ff; border: 1px solid #93c5fd; }
+        #pane-fin-phase    { background: #fffbeb; border: 1px solid #fcd34d; }
+        #pane-fin-saison   { background: #f5f3ff; border: 1px solid #c4b5fd; }
+
+        /* ── Cartes récapitulatives (Fin de phase / Fin de saison) ── */
+        .op-card.card-recap { width: 720px; }
+        .card-recap .card-head    { background: #f3f4f6; border-color: #9ca3af; }
+        .card-recap .card-head h2 { color: #1f2937; }
+        .recap-intro { font-size: .84rem; color: #6b7280; margin: 0 0 1rem; }
+        .recap-list  { margin: 0; padding-left: 1.4rem; font-size: .86rem; color: #374151; }
+        .recap-list li   { margin-bottom: .55rem; }
+        .recap-list code { background: #eef2ff; padding: .05rem .35rem; border-radius: 4px; font-size: .8rem; }
 
         /* ── Carte commune ── */
         .op-card {
@@ -428,6 +447,16 @@
                 <i class="bi bi-database-fill-up me-1"></i>Restauration
             </button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link nav-fin-phase" data-bs-toggle="tab" data-bs-target="#pane-fin-phase" type="button" role="tab">
+                <i class="bi bi-calendar2-check me-1"></i>Fin de phase
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link nav-fin-saison" data-bs-toggle="tab" data-bs-target="#pane-fin-saison" type="button" role="tab">
+                <i class="bi bi-calendar2-x me-1"></i>Fin de saison
+            </button>
+        </li>
     </ul>
 
     <div class="tab-content">
@@ -680,6 +709,58 @@
     </div>
 
     </div><!-- /#pane-restauration -->
+
+    <!-- ════════════════════ ONGLET FIN DE PHASE ════════════════════ -->
+    <div class="tab-pane fade cards-row" id="pane-fin-phase">
+    <div class="op-card card-recap">
+        <div class="card-head">
+            <h2><i class="bi bi-calendar2-check warn-icon"></i>Fin de phase — opérations à réaliser</h2>
+            <p class="recap-intro">
+                Ordre conseillé pour clôturer la phase en cours et démarrer la phase suivante
+                (bascule phase&nbsp;1 → phase&nbsp;2). Rien n'est exécuté ici : ce n'est qu'un rappel.
+            </p>
+        </div>
+        <div class="card-body-custom">
+            <ol class="recap-list">
+                <li><strong>Comptabilité</strong> — générer le journal comptable de la phase (<code>EN16</code>) et transmettre les pièces ; les indemnités JA sont soldées en fin de phase.</li>
+                <li><strong>Sauvegarde totale</strong> — onglet « Sauvegarde » → « Sauvegarder toute la base de données » (fichier <code>Full_*.sql</code>, à conserver hors serveur).</li>
+                <li><strong>Vérifier la configuration</strong> (<code>EA91</code>) — bornes <code>phase2_debut</code> / <code>phase2_fin</code> et saison courante.</li>
+                <li><strong>Nettoyage de phase</strong> — onglet « Sauvegarde » → « Sauvegarder et démarrer nouvelle phase » : sauvegarde SQL puis vidage de <code>Disponible</code>, <code>Equipe</code>, <code>Equipe_Nationale</code>, <code>Rencontre</code>, <code>Nomination</code>, <code>Competition_Regionale</code> ; désactivation des JA (<code>Actif&nbsp;=&nbsp;0</code>, conservés) ; purge des <code>.xlsx</code> de <code>Importation/Rencontres</code>.</li>
+                <li><strong>Ré-importer les équipes régionales</strong> (<code>EA92</code>) si la composition change pour la nouvelle phase.</li>
+                <li><strong>Ré-importer les rencontres</strong> — régionales (<code>EA82</code>) puis nationales (<code>EA83</code>) ; recharger le calendrier régional (<code>EA84</code>) si nécessaire.</li>
+                <li><strong>Réactiver les JA</strong> concernés (<code>EN11</code>) et vérifier grades / dates de validation FFTT.</li>
+                <li><strong>Relancer le recueil des disponibilités</strong> (<code>EN13</code>) et l'envoi aux JA (<code>EN15</code>).</li>
+            </ol>
+        </div>
+    </div>
+    </div><!-- /#pane-fin-phase -->
+
+    <!-- ════════════════════ ONGLET FIN DE SAISON ════════════════════ -->
+    <div class="tab-pane fade cards-row" id="pane-fin-saison">
+    <div class="op-card card-recap">
+        <div class="card-head">
+            <h2><i class="bi bi-calendar2-x warn-icon"></i>Fin de saison — opérations à réaliser</h2>
+            <p class="recap-intro">
+                À réaliser en fin de saison sportive, avant de basculer sur la nouvelle année.
+                Rien n'est exécuté ici : ce n'est qu'un rappel.
+            </p>
+        </div>
+        <div class="card-body-custom">
+            <ol class="recap-list">
+                <li><strong>Clôture comptable</strong> de la dernière phase (<code>EN16</code>) — toutes les pièces transmises, indemnités soldées.</li>
+                <li><strong>Sauvegarde totale + archivage</strong> — onglet « Sauvegarde » → « Sauvegarder toute la base », puis récupérer le fichier <code>Full_*.sql</code> hors du serveur : c'est l'archive de la saison.</li>
+                <li><strong>Changer la saison courante</strong> dans <code>EA91</code> (clé <code>saison</code>, ex. <code>2026-2027</code>) et ajuster les bornes de phase.</li>
+                <li><strong>Ré-engagement des clubs</strong> — envoi du questionnaire de désidératas (menu CSR <code>ES31</code> / <code>ES32</code>, ou <code>EN12</code>) → saisie par les clubs via <code>EN18</code>.</li>
+                <li><strong>Nettoyage complet</strong> — onglet « Sauvegarde » → « Sauvegarder et démarrer nouvelle phase » (même opération : vidage des tables de compétition, désactivation des JA, purge des imports).</li>
+                <li><strong>Mise à jour des JA</strong> — import FFTT (<code>EN11</code>), réactivation, vérification coordonnées / clubs / dates de validation.</li>
+                <li><strong>Import de la nouvelle saison</strong> — équipes régionales (<code>EA92</code>), rencontres régionales (<code>EA82</code>) et nationales (<code>EA83</code>), calendrier régional (<code>EA84</code>).</li>
+                <li><strong>Vérifier la configuration</strong> (<code>EA91</code>) — départements actifs, règles départements, barème kilométrique / indemnité forfaitaire, comptes EBP, nombre de candidats JA (EN14), SMTP.</li>
+                <li><strong>Purger les anciennes sauvegardes</strong> — boutons « Supprimer les anciennes sauvegardes » des onglets Sauvegarde / Restauration.</li>
+            </ol>
+        </div>
+    </div>
+    </div><!-- /#pane-fin-saison -->
+
     </div><!-- /.tab-content -->
 
 </div><!-- /main-content -->

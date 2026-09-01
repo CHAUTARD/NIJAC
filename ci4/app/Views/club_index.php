@@ -44,7 +44,7 @@
 
         /* ── En-tête ── */
         #page-header {
-            background: var(--nijac-blue);
+            background: #2e7d32;   /* vert nominateur, comme EN11/EN14/EN15 */
             color: #fff;
             padding: .5rem 1.25rem;
             font-size: .9rem;

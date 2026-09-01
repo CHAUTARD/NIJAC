@@ -256,6 +256,7 @@
         .btn-envoi         { background-color: #e0f7fa; }
         .btn-r34           { background-color: #fbe9e7; }
         .btn-correspondant { background-color: #fff8e1; }
+        .btn-club          { background-color: #ede7f6; }
 
         /* Code écran en haut à droite de chaque bouton */
         .menu-btn { position: relative; }
@@ -380,7 +381,7 @@
     </div>
 
     <div class="menu-btn-wrap">
-        <a href="<?= site_url('club') ?>" class="menu-btn btn-correspondant">
+        <a href="<?= site_url('club') ?>" class="menu-btn btn-club">
             <span class="btn-code">EN27</span>
             <div class="btn-icon"><img src="<?= base_url('img/Association.png') ?>" alt="Club / Association"></div>
             <span>Club / Association</span>
