@@ -5,7 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Club CSR (ES31), variante de la Gestion des clubs (EA80) pour le rôle CSR
+ * NIJAC – Club CSR (ES31), variante de la Gestion des clubs (EN27) pour le rôle CSR
  * (Commission Sportive Régionale) : même liste de clubs, sans la synchronisation FFTT ni le
  * filtre "Plusieurs salles", avec une case à cocher par ligne et un envoi groupé d'email aux
  * correspondants des clubs sélectionnés — message n°6 (Réengagements), le même que celui déjà

@@ -487,14 +487,13 @@ function majColonnesJA(type) {
     $thead.find('th:gt(3)').remove();
     if (type === 'Convocation') {
         $thead.append(
-            '<th>Date</th><th>Heure</th><th>Division</th><th>Dom vs Ext</th><th class="text-center">Km</th>'
+            '<th>Date</th><th>Heure</th><th>Division</th><th>Dom vs Ext</th>'
         );
     } else if (type === 'Liste nomination') {
         $thead.append('<th class="text-center">Nominations</th>');
     } else if (type === 'Demande adresse') {
         $thead.append('<th>CP / Ville actuelle</th>');
     }
-    $('#alerte-sans-km').remove();
 }
 
 // ── Journées (Convocation) ───────────────────────────────────────────────────
@@ -510,7 +509,7 @@ function chargerJournees() {
                 ));
             });
         }
-        $('#tbody-ja').html('<tr><td colspan="8" class="text-center text-muted py-2">Sélectionner une journée</td></tr>');
+        $('#tbody-ja').html('<tr><td colspan="7" class="text-center text-muted py-2">Sélectionner une journée</td></tr>');
     }, 'json');
 }
 
@@ -530,7 +529,7 @@ function chargerJA() {
         data.date    = date;
     }
 
-    const colSpan = typeActif === 'Convocation' ? 8 : (typeActif === 'Liste nomination' ? 5 : (typeActif === 'Demande adresse' ? 5 : 4));
+    const colSpan = typeActif === 'Convocation' ? 7 : (typeActif === 'Liste nomination' ? 5 : (typeActif === 'Demande adresse' ? 5 : 4));
     $('#tbody-ja').html(`<tr><td colspan="${colSpan}" class="text-center text-muted py-2"><i class="bi bi-hourglass-split me-1"></i>Chargement…</td></tr>`);
 
     $.get(`${CENTRENVOYE_BASE}/ja`, data, function (res) {
@@ -542,7 +541,6 @@ function chargerJA() {
             return;
         }
         let nbEmail = 0;
-        const sansKm = [];
         res.data.forEach(ja => {
             const aEmail = ja.Email && ja.Email.trim() !== '';
             if (aEmail) nbEmail++;
@@ -558,17 +556,11 @@ function chargerJA() {
             );
 
             if (typeActif === 'Convocation') {
-                const km = parseInt(ja.Kilometre ?? 0);
-                const kmCell = km > 0
-                    ? $('<td class="text-center fw-semibold text-success">').text(km + ' km')
-                    : $('<td class="text-center">').html('<span class="badge bg-warning text-dark" style="font-size:.7rem;"><i class="bi bi-exclamation-triangle me-1"></i>—</span>');
-                if (km === 0) sansKm.push(`${ja.Prenom} ${ja.Nom}`);
                 $tr.append(
                     $('<td>').text(ja.Date ?? ''),
                     $('<td>').text(ja.Heure ?? ''),
                     $('<td>').text(ja.Division ?? ''),
-                    $('<td>').text((ja.NomDom ?? '') + (ja.NomExt ? ' vs ' + ja.NomExt : '')),
-                    kmCell
+                    $('<td>').text((ja.NomDom ?? '') + (ja.NomExt ? ' vs ' + ja.NomExt : ''))
                 );
             } else if (typeActif === 'Liste nomination') {
                 $tr.append($('<td class="text-center">').text(ja.NbNominations ?? ''));
@@ -578,21 +570,6 @@ function chargerJA() {
             }
             $body.append($tr);
         });
-
-        // Bandeau d'alerte JA sans kilométrage (Convocation uniquement)
-        $('#alerte-sans-km').remove();
-        if (typeActif === 'Convocation' && sansKm.length > 0) {
-            const $alerte = $(`
-                <div id="alerte-sans-km" class="mx-0 px-3 py-2 border-bottom"
-                     style="background:#fff8e1;border-left:4px solid #f59e0b!important;font-size:.8rem;flex-shrink:0;">
-                    <span style="font-weight:700;color:#92400e;">
-                        <i class="bi bi-exclamation-triangle-fill me-1 text-warning"></i>${sansKm.length} JA sans kilométrage :
-                    </span>
-                    <span class="text-muted">${sansKm.join(', ')}</span>
-                </div>
-            `);
-            $('#ja-list-wrapper').before($alerte);
-        }
 
         $('#nb-ja').text(`${res.data.length} JA — ${nbEmail} avec email`);
     }, 'json');
@@ -680,7 +657,7 @@ $('#btn-envoyer').on('click', function () {
         if ($(this).find('.chk-ja').is(':checked')) {
             ids.push($(this).data('id'));
             const tds = $(this).find('td');
-            noms.push(`${tds.eq(1).text().trim()} ${tds.eq(2).text().trim()}`);
+            noms.push(`${tds.eq(2).text().trim()} ${tds.eq(1).text().trim()}`);
         }
     });
 

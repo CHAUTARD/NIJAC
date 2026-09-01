@@ -9,12 +9,11 @@ use CodeIgniter\HTTP\ResponseInterface;
  *
  * Écran de récapitulatif ouvert dans une nouvelle fenêtre depuis EN14 : toutes
  * les journées / rencontres du périmètre du nominateur avec leur JA nominé
- * (modifiable), plus un tableau des JA nominés et de leur nombre de nominations.
+ * affiché en texte seul, plus un tableau des JA nominés et de leur nombre de
+ * nominations.
  *
- * Lecture seule côté serveur : la modification du JA réutilise telles quelles
- * les routes d'écriture d'EN14 (nomination/affecter-ja, nomination/retirer-ja),
- * qui portent déjà le contrôle de périmètre et la règle « 2 nominations max par
- * journée ». Aucune logique métier propre ici.
+ * Écran entièrement en lecture seule : aucune route d'écriture, aucune logique
+ * métier propre. La nomination / le retrait d'un JA se font dans EN14.
  */
 class StatsNominationController extends BaseController
 {
@@ -44,7 +43,7 @@ class StatsNominationController extends BaseController
         try {
             $depts = $this->deptsAutorises();
             if (!$depts) {
-                return $this->response->setJSON(['ok' => true, 'rencontres' => [], 'jas' => [], 'compteurs' => [], 'clubs' => [], 'disposParDate' => []]);
+                return $this->response->setJSON(['ok' => true, 'rencontres' => [], 'compteurs' => [], 'clubs' => []]);
             }
 
             $pdo = getPDO();
@@ -71,18 +70,6 @@ class StatsNominationController extends BaseController
             ");
             $stmt->execute($depts);
             $rencontres = $stmt->fetchAll();
-
-            // JA actifs du périmètre (domicile ou CodeDept) — liste des <select>
-            $stmt = $pdo->prepare("
-                SELECT ja.Id_JA, ja.Nom, ja.Prenom
-                FROM ja
-                LEFT JOIN laposte lp ON lp.Id_LaPoste = ja.Id_LaPoste
-                WHERE ja.Actif = 1
-                  AND (LEFT(lp.CodePostal, 2) IN ($ph) OR ja.CodeDept IN ($ph))
-                ORDER BY ja.Nom, ja.Prenom
-            ");
-            $stmt->execute(array_merge($depts, $depts));
-            $jas = $stmt->fetchAll();
 
             // Nombre de nominations par JA (rencontres du périmètre)
             $stmt = $pdo->prepare("
@@ -141,31 +128,13 @@ class StatsNominationController extends BaseController
                 return $r;
             }, $stmt->fetchAll());
 
-            // JA disponibles (Reponse='O', niveau journée ou rencontre précise) pour chaque
-            // date de rencontre du périmètre — alimente le filtrage de la combo côté client.
-            $stmt = $pdo->prepare("
-                SELECT DISTINCT r.Date AS d, dsp.Id_JA
-                FROM rencontre r
-                JOIN equipe ed     ON ed.Id_Equipe = r.Id_EquipeDom
-                JOIN disponible dsp ON dsp.DateCompetition = r.Date AND dsp.Reponse = 'O'
-                JOIN ja             ON ja.Id_JA = dsp.Id_JA AND ja.Actif = 1
-                WHERE SUBSTRING(ed.Id_Club, 3, 2) IN ($ph)
-            ");
-            $stmt->execute($depts);
-            $disposParDate = [];
-            foreach ($stmt->fetchAll() as $row) {
-                $disposParDate[$row['d']][] = (int) $row['Id_JA'];
-            }
-
             return $this->response->setJSON([
-                'ok'            => true,
-                'rencontres'    => $rencontres,
-                'jas'           => $jas,
-                'compteurs'     => $compteurs,
-                'clubs'         => $clubs,
-                'coefReg'       => $coefReg,
-                'coefNat'       => $coefNat,
-                'disposParDate' => $disposParDate,
+                'ok'         => true,
+                'rencontres' => $rencontres,
+                'compteurs'  => $compteurs,
+                'clubs'      => $clubs,
+                'coefReg'    => $coefReg,
+                'coefNat'    => $coefNat,
             ]);
         } catch (\Throwable $e) {
             return $this->response->setJSON(['ok' => false, 'err' => $e->getMessage()]);

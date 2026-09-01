@@ -43,6 +43,7 @@ class ConfigurationController extends BaseController
         // Auto-heal : la ligne n'est sinon créée qu'à la première sauvegarde
         // totale (EA85) ou au premier enregistrement manuel de ce champ.
         $pdo->exec("INSERT IGNORE INTO configuration (cle, valeur) VALUES ('backup_full_garder', '5')");
+        $pdo->exec("INSERT IGNORE INTO configuration (cle, valeur, description) VALUES ('nomination_nb_candidats', '15', 'EN14 — nombre de candidats JA affichés par rencontre')");
         try {
             $etatCourant       = getConfig('etat_logiciel', 'Developpement');
             $emailDev          = getConfig('email_developpement', 'patrick.chautard@free.fr');
@@ -65,6 +66,7 @@ class ConfigurationController extends BaseController
             $smtpProdFrom      = getConfig('smtp_from', '');
             $smtpProdFromName  = getConfig('smtp_from_name', '');
             $backupFullGarder  = getConfig('backup_full_garder', '5');
+            $nbCandidatsJa     = getConfig('nomination_nb_candidats', '15');
         } catch (\Throwable $e) {
             $etatCourant      = 'Developpement';
             $emailDev         = 'patrick.chautard@free.fr';
@@ -84,6 +86,7 @@ class ConfigurationController extends BaseController
             $smtpProdSecure  = 'tls';
             $smtpProdCredsOk = getSmtpUser() !== '' && getSmtpPassword() !== '';
             $backupFullGarder = '5';
+            $nbCandidatsJa   = '15';
         }
         $deptsActifsArray = array_map('trim', explode(',', $deptsActifs));
 
@@ -114,6 +117,7 @@ class ConfigurationController extends BaseController
             'smtpProdFrom'      => $smtpProdFrom,
             'smtpProdFromName'  => $smtpProdFromName,
             'backupFullGarder'  => $backupFullGarder,
+            'nbCandidatsJa'     => $nbCandidatsJa,
         ];
 
         return view('configuration_index', $data);
@@ -182,7 +186,8 @@ class ConfigurationController extends BaseController
             }
 
             // Validation entier positif pour le nombre de sauvegardes totales à conserver
-            if ($cle === 'backup_full_garder') {
+            // et le nombre de candidats JA listés dans EN14
+            if (in_array($cle, ['backup_full_garder', 'nomination_nb_candidats'], true)) {
                 if ($valeur === '' || !ctype_digit($valeur) || (int) $valeur < 1) {
                     return $this->response->setJSON(['ok' => false, 'msg' => 'Nombre entier positif attendu.']);
                 }

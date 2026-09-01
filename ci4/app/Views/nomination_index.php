@@ -299,6 +299,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 
 const NOM_BASE = '<?= site_url('nomination') ?>';
 const DEPT_NOMS = <?= json_encode($deptNoms ?? [], JSON_UNESCAPED_UNICODE) ?>;
+const MAX_CANDIDATS = <?= (int) ($nbCandidats ?? 15) ?> || 15;  // EA91 → nomination_nb_candidats
 
 // ── État ─────────────────────────────────────────────────────────────────────
 let journeeCourante = null;  // {Journee, Date}
@@ -558,6 +559,9 @@ function afficherCandidatsPourRencontre(idRenc) {
     const venueLon = rc.VenueLon != null ? parseFloat(rc.VenueLon) : null;
     const clubDom  = rc.IdClubDom;
     const divNat   = (rc.DivisionCode || '').startsWith('N');
+    // R3M/R4M : un JA peut arbitrer une rencontre de son propre club
+    // (aucune limite du nombre d'arbitrages d'un JA pour un club).
+    const divArbClub = ['R3M', 'R4M'].includes(rc.DivisionCode || '');
 
     const candidats = [];
     jaList.forEach(ja => {
@@ -575,7 +579,8 @@ function afficherCandidatsPourRencontre(idRenc) {
             if (!coches.includes(deptDeJa(ja))) return;
         }
 
-        if (ja.Id_Club && ja.Id_Club === clubDom) return;
+        const sonClub = !!(ja.Id_Club && ja.Id_Club === clubDom);
+        if (sonClub && !divArbClub) return;
 
         // Max 2 nominations par JA sur la journée : on masque le JA seulement
         // s'il est déjà nominé sur 2 autres rencontres du jour.
@@ -594,6 +599,7 @@ function afficherCandidatsPourRencontre(idRenc) {
             ...ja,
             DistanceKm:    dist,
             PrefereRenc:   prefereRenc ? 1 : 0,
+            SonClub:       sonClub ? 1 : 0,
             Disponibilite: dispoJournee ? 'O' : 'P',
             Score:         score
         });
@@ -618,7 +624,7 @@ function afficherCandidatsPourRencontre(idRenc) {
         if (idx > 0) candidats.unshift(candidats.splice(idx, 1)[0]);
     }
 
-    const top5 = candidats.slice(0, 15);
+    const top5 = candidats.slice(0, MAX_CANDIDATS);
     $('#liste-candidats').empty();
 
     if (!top5.length) {
@@ -633,6 +639,7 @@ function afficherCandidatsPourRencontre(idRenc) {
             let badges = '';
             if (ja.HorsDept == 1) badges += '<span class="badge rounded-pill me-1" style="background:#6c757d;color:#fff;"><i class="bi bi-signpost-2 me-1"></i>Autre dépt</span>';
             if (ja.PrefereRenc == 1) badges += '<span class="badge badge-pref rounded-pill me-1"><i class="bi bi-star-fill me-1"></i>Choix JA</span>';
+            if (ja.SonClub == 1) badges += '<span class="badge rounded-pill me-1" style="background:#8e24aa;color:#fff;"><i class="bi bi-house-fill me-1"></i>Son club</span>';
             if (ja.DistanceKm != null && ja.DistanceKm <= 20) badges += '<span class="badge badge-prox rounded-pill me-1"><i class="bi bi-geo-alt-fill me-1"></i>Proche</span>';
             badges += `<span class="badge ${ja.Disponibilite === 'O' ? 'badge-dispo-O' : 'badge-dispo-P'} rounded-pill">${ja.Disponibilite === 'O' ? 'Disponible' : 'Partiel'}</span>`;
 
@@ -703,7 +710,7 @@ function chargerPanelArbitreClub(idRenc) {
         $('#ac-sujet').val(res.sujet || '').prop('disabled', false);
         $('#ac-message').val(res.message || '').prop('disabled', false);
         if (!res.corr_email) {
-            $('#ac-status').addClass('text-danger').text('Aucun email de correspondant pour ce club (à compléter en EA80).');
+            $('#ac-status').addClass('text-danger').text('Aucun email de correspondant pour ce club (à compléter en EN27).');
         } else {
             $('#ac-envoyer').prop('disabled', false);
             $('#ac-status').text('Destinataire : ' + (res.corr_nom || res.corr_email));

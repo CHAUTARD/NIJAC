@@ -471,6 +471,20 @@
         </tbody>
     </table>
 
+    <!--  Défiscalisation  -->
+    <div class="defisc-row" style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin:2mm 0 3mm;font-size:.92rem;">
+        <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;user-select:none;font-weight:700;">
+            <input type="checkbox" id="chk-defisc" style="width:1.1rem;height:1.1rem;cursor:pointer;accent-color:#2e7d32;"
+                   <?= !empty($frais['Defiscalisation']) ? 'checked' : '' ?>>
+            Défiscalisation des frais kilométriques
+        </label>
+        <a href="<?= base_url('Documentation/Plaquette_Defiscalisation.pdf') ?>" target="_blank" rel="noopener"
+           class="btn btn-sm" style="background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-weight:700;"
+           title="Ouvrir la plaquette de défiscalisation (PDF)">
+            <i class="bi bi-file-earmark-pdf-fill me-1"></i>En savoir plus
+        </a>
+    </div>
+
     <!--  Rapport JA  -->
     <table class="tbl-rapport">
         <tr>
@@ -543,6 +557,7 @@ $('#btn-save-frais').on('click', function () {
         km:                  $('#inp-km').val(),
         rapport_accueil:     $('#inp-rapport-accueil').val(),
         rapport_equipements: $('#inp-rapport-eq').val(),
+        defiscalisation:     $('#chk-defisc').is(':checked') ? 1 : 0,
     }, function (r) {
         $btn.prop('disabled', false);
         if (r.ok) {

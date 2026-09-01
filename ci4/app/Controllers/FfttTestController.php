@@ -10,7 +10,7 @@ use CodeIgniter\HTTP\ResponseInterface;
  * Interface de diagnostic de l'API FFTT (Smartping v2) — appel manuel de
  * chaque endpoint, lecture seule, aucune écriture en base. Tout passe par
  * App\Libraries\FfttRawClient/getFfttRawClient(), comme les écrans d'import
- * réels (EN11, EA80, EA81, EA82, EA83) : ce diagnostic ne couvre que les
+ * réels (EN11, EN27, EA81, EA82, EA83) : ce diagnostic ne couvre que les
  * endpoints réellement utilisés en production, pas l'intégralité de
  * l'ancienne façade alamirault/fftt-api (retirée — cURL natif, plus de
  * dépendance Composer pour l'accès à l'API FFTT).

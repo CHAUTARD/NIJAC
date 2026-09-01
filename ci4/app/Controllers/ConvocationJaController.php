@@ -123,7 +123,7 @@ class ConvocationJaController extends BaseController
 
                 try {
                     $stmtF = $pdo->prepare('
-                        SELECT Peage, Kilometre, RapportAccueil, RapportEquipements
+                        SELECT Peage, Kilometre, RapportAccueil, RapportEquipements, Defiscalisation
                         FROM nomination WHERE Id_Nomination = ?
                     ');
                     $stmtF->execute([$idNomination]);
@@ -213,6 +213,7 @@ class ConvocationJaController extends BaseController
             $kmRaw     = trim($this->request->getPost('km') ?? '');
             $rapAcc    = trim($this->request->getPost('rapport_accueil') ?? '');
             $rapEq     = trim($this->request->getPost('rapport_equipements') ?? '');
+            $defisc    = $this->request->getPost('defiscalisation') ? 1 : 0;
 
             $peages = $peagesRaw !== '' ? (float) str_replace(',', '.', $peagesRaw) : null;
             $km     = $kmRaw !== '' ? (int) $kmRaw : null;
@@ -247,7 +248,7 @@ class ConvocationJaController extends BaseController
 
             // Journal de debug conservé à l'identique du fichier legacy (fichier
             // .log local, jamais exposé ni lu par l'application elle-même).
-            $params  = [$peages, $km, $rapAcc ?: null, $rapEq ?: null, $idNomP];
+            $params  = [$peages, $km, $rapAcc ?: null, $rapEq ?: null, $defisc, $idNomP];
             $logFile = __DIR__ . '/../../../logs/convocation_debug.log';
             @mkdir(dirname($logFile), 0755, true);
             file_put_contents(
@@ -255,7 +256,7 @@ class ConvocationJaController extends BaseController
                 date('[Y-m-d H:i:s] ') .
                 "UPDATE nomination SET Peage=$params[0], Kilometre=$params[1], " .
                 'RapportAccueil=' . var_export($params[2], true) . ', ' .
-                'RapportEquipements=' . var_export($params[3], true) . ', DateSaisie=CURDATE() ' .
+                'RapportEquipements=' . var_export($params[3], true) . ", Defiscalisation=$defisc, DateSaisie=CURDATE() " .
                 "WHERE Id_Nomination=$idNomP" . PHP_EOL,
                 FILE_APPEND
             );
@@ -266,6 +267,7 @@ class ConvocationJaController extends BaseController
                     Kilometre          = ?,
                     RapportAccueil     = ?,
                     RapportEquipements = ?,
+                    Defiscalisation    = ?,
                     DateSaisie         = CURDATE()
                 WHERE Id_Nomination = ?
             ');

@@ -150,13 +150,15 @@ $routes->get('import-rencontres/compter-tables', 'ImportRencontresController::co
 $routes->get('import-rencontres/candidats-arbitre', 'ImportRencontresController::candidatsArbitre', ['filter' => 'adminauth']);
 $routes->post('import-rencontres/designer-arbitre', 'ImportRencontresController::designerArbitre', ['filter' => 'adminauth']);
 
-// ── EA80 Clubs / Associations ────────────────────────────────────────────────
-$routes->get('club', 'ClubController::index', ['filter' => 'adminauth']);
-$routes->get('club/liste', 'ClubController::liste', ['filter' => 'adminauth']);
-$routes->put('club/(:segment)', 'ClubController::modifier/$1', ['filter' => 'adminauth']);
-$routes->delete('club/(:segment)', 'ClubController::supprimer/$1', ['filter' => 'adminauth']);
-$routes->post('club/fftt/clubs-dept', 'ClubController::getClubsDeptFftt', ['filter' => 'adminauth']);
-$routes->post('club/fftt/sync', 'ClubController::syncFfttClub', ['filter' => 'adminauth']);
+// ── EN27 Clubs / Associations ───────────────────────────────────────────────
+// Déplacé du menu admin (ex-EA80) vers le menu nominateur (E003, après EN11).
+// Filtre "auth" : Nominateur ou Administrateur.
+$routes->get('club', 'ClubController::index', ['filter' => 'auth']);
+$routes->get('club/liste', 'ClubController::liste', ['filter' => 'auth']);
+$routes->put('club/(:segment)', 'ClubController::modifier/$1', ['filter' => 'auth']);
+$routes->delete('club/(:segment)', 'ClubController::supprimer/$1', ['filter' => 'auth']);
+$routes->post('club/fftt/clubs-dept', 'ClubController::getClubsDeptFftt', ['filter' => 'auth']);
+$routes->post('club/fftt/sync', 'ClubController::syncFfttClub', ['filter' => 'auth']);
 
 // ── EA83 Import Rencontres Nationales ────────────────────────────────────────
 // Admin uniquement (comme includes/admin_required.php côté legacy). Deux onglets pour

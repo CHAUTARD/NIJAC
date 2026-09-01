@@ -288,13 +288,6 @@
         <div class="tab-pane fade show active" id="tab-operation" role="tabpanel">
             <div class="menu-grid">
 
-                <a href="<?= site_url('club') ?>" class="menu-btn btn-club">
-                    <span class="btn-code">EA80</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/Association.png') ?>" alt="Club / Association"></div>
-                    <span>Club / Association</span>
-                    <span class="btn-desc">Gérer les clubs et associations affiliés</span>
-                </a>
-
                 <a href="<?= site_url('salle') ?>" class="menu-btn btn-salle">
                     <span class="btn-code">EA81</span>
                     <div class="btn-icon"><img src="<?= base_url('img/Salle.png') ?>" alt="Salle"></div>

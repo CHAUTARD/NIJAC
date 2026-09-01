@@ -25,7 +25,7 @@
 - [EN20 – Fiche personnelle JA](#en20--fiche-personnelle-ja)
 - [EN21 – Convocation et frais JA](#en21--convocation-et-frais-ja)
 - [EN22 – Disponibilité JA](#en22--disponibilité-ja)
-- [EA80 – Clubs / Associations](#ea80--clubs--associations)
+- [EN27 – Clubs / Associations](#en27--clubs--associations)
 - [EA81 – Salles](#ea81--salles)
 - [EA82 – Import Rencontres](#ea82--import-rencontres)
 - [EA83 – Import Rencontres Nationales](#ea83--import-rencontres-nationales)
@@ -107,7 +107,7 @@ Page d'accueil de l'espace administrateur. Donne accès à tous les écrans de p
 
 | Bouton | Code | Destination |
 |--------|------|-------------|
-| Club / Association | EA80 | `club.php` |
+| Club / Association | EN27 | `club.php` (déplacé vers le menu nominateur E003) |
 | Salle | EA81 | `salle.php` |
 | Utilisateur | EA86 | `utilisateur.php` |
 | Communes | EA87 | `communes.php` |
@@ -126,7 +126,7 @@ Page d'accueil de l'espace administrateur. Donne accès à tous les écrans de p
 - Les boutons **Test API FFTT** (EA96) et **Base de données** (EA98) ne sont visibles que si `$_SESSION['utilisateur']['login'] === 'CHAUTARD'`
 - Le bouton **Se déconnecter** demande une confirmation JavaScript
 
-> **Note :** l'ancien écran Correspondants de clubs (`correspondant.php`) a été supprimé. La gestion des correspondants est désormais intégrée à l'écran EA80 (Clubs / Associations), sous forme de colonnes directement sur la fiche club.
+> **Note :** l'ancien écran Correspondants de clubs (`correspondant.php`) a été supprimé. La gestion des correspondants est désormais intégrée à l'écran EN27 (Clubs / Associations), sous forme de colonnes directement sur la fiche club.
 
 ---
 
@@ -378,10 +378,10 @@ Deux fonctions internes portent cette logique dans `nomination.php` :
 - `resoudreDisponible($pdo, $idJa, $idRenc, $dateRenc)` : trouve/crée la ligne `disponible` à utiliser — priorité à une réponse précise sur la rencontre (`Reponse='O'`), sinon une disponibilité « toute la journée » (`Id_Rencontre IS NULL`) qu'elle matérialise en ligne précise, sinon retourne `null` (JA non disponible → nomination refusée)
 - `affecterNomination($pdo, $idRenc, $idDispo)` : crée la nomination si absente ; si un autre JA était déjà nominé, réinitialise `Peage`, `Kilometre`, `RapportAccueil`, `RapportEquipements`, `DateSaisie`
 
-### Règles métier de nomination
-1. **Exclusion club** : un JA ne peut pas arbitrer une rencontre où son club joue (domicile ou visiteur)
-2. **Max rencontres par club / phase** : un JA ne peut pas arbitrer plus de 2 rencontres du même club sur une phase
-3. **Unicité par date** : un JA ne peut arbitrer qu'une seule rencontre par date (vérifié par jointure `nomination → disponible` sur la même date)
+### Règles métier de nomination (état CI4 — `NominationController` + `nomination_index.php`)
+1. **Exclusion club** : un JA est exclu si son club est le **club recevant** de la rencontre — **sauf en R3M/R4M**, où il peut arbitrer une rencontre de son propre club (badge « Son club »). Aucun contrôle sur le club visiteur.
+2. **Aucune limite par club / par phase** : le nombre d'arbitrages d'un JA pour un même club n'est pas plafonné.
+3. **Max 2 nominations par JA et par date** : refus au-delà de 2 (`affecterJa`, revérifié serveur) ; la 2ᵉ est décidée manuellement par le nominateur.
 4. **Unicité par rencontre** : une rencontre ne peut avoir qu'un seul JA nominé (contrainte `uq_nomination_rencontre`)
 5. **Priorité disponibilité déclarée** : les rencontres choisies par le JA dans ses disponibilités sont prioritaires
 6. **Proximité géographique** : en cas d'égalité, la rencontre la plus proche du domicile du JA est privilégiée
@@ -389,7 +389,7 @@ Deux fonctions internes portent cette logique dans `nomination.php` :
 
 ### Bug corrigé lors du portage CI4 (contrairement à la politique habituelle de préservation)
 Le fichier legacy `Nominateur/nomination.php` testait `!$journee` (avec `$journee` casté en `int`) pour valider le paramètre `journee` dans `rencontres_journee`, `valider_nominations` et `envoyer_convocations` — un test `!0` étant vrai en PHP, `Journee = 0` était traité comme "paramètre manquant". Comme **toutes** les lignes de `rencontre` ont actuellement `Journee = 0` (numérotation jamais renseignée à l'import FFTT), ce bug rendait l'intégralité de l'écran Nomination inutilisable en pratique — contrairement à EN22 où seules deux actions annexes étaient touchées. Corrigé dans `NominationController` (CI4) en distinguant "paramètre absent" (`null`/chaîne vide) de "paramètre valant 0" avant le cast en entier.
-8. **Double rencontre en salle** : si un JA est affecté à une rencontre, une 2ᵉ rencontre dans la même salle le même jour (hors rencontres où son club joue) lui est automatiquement proposée via `resoudreDisponible` / `affecterNomination`, une seule à la fois
+8. **Double rencontre en salle** : *(supprimé au portage CI4)* — plus d'affectation automatique « même salle » ; la 2ᵉ nomination d'un JA sur une journée est entièrement manuelle
 
 ---
 
@@ -596,7 +596,7 @@ Affiche la convocation officielle imprimable (format A4) d'un Juge-Arbitre pour 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `sauvegarder_frais` (`sauvegarderFrais`) | POST | Valide et enregistre péages/km (plafonds `frais_max_peages`/`frais_max_km`) et les deux rapports texte dans `nomination` |
+| `sauvegarder_frais` (`sauvegarderFrais`) | POST | Valide et enregistre péages/km (plafonds `frais_max_peages`/`frais_max_km`), les deux rapports texte et la case défiscalisation (`nomination.Defiscalisation`, 0/1) dans `nomination` |
 
 ### Règles
 - Un journal de debug (`logs/convocation_debug.log`) trace chaque enregistrement — résidu de débogage du fichier legacy, conservé à l'identique
@@ -639,10 +639,10 @@ Les actions `rencontres_journee` et `sauvegarder_dispo_journee` du fichier legac
 
 ---
 
-## EA80 – Clubs / Associations
+## EN27 – Clubs / Associations
 
 **Fichier :** `club.php`  
-**Accès :** Administrateur uniquement
+**Accès :** Nominateur ou Administrateur (filtre "auth") — ex-EA80, déplacé du menu admin vers le menu nominateur (E003, après EN11)
 
 ### Objectif
 Importer et gérer la liste des clubs affiliés à la ligue Normandie.
@@ -1170,7 +1170,7 @@ Créer et gérer les modèles de messages utilisés pour les convocations, rappe
 **Accès :** Administrateur (uniquement utilisateur `CHAUTARD`, même restriction que EA98)
 
 ### Objectif
-Interface de diagnostic/débogage de l'intégration API FFTT (Smartping v2) : vérifier les identifiants, appeler manuellement chaque endpoint FFTT et inspecter la réponse brute (XML/JSON) sans écrire en base. Réutilise la même classe partagée `Classes/FfttApi.php` (factory `getFfttApi()`) que les écrans d'import réels (EN11, EA80, EA81, EA82, EA83) — il n'existe qu'un seul client FFTT dans l'application.
+Interface de diagnostic/débogage de l'intégration API FFTT (Smartping v2) : vérifier les identifiants, appeler manuellement chaque endpoint FFTT et inspecter la réponse brute (XML/JSON) sans écrire en base. Réutilise la même classe partagée `Classes/FfttApi.php` (factory `getFfttApi()`) que les écrans d'import réels (EN11, EN27, EA81, EA82, EA83) — il n'existe qu'un seul client FFTT dans l'application.
 
 ### Actions AJAX
 | Action | Méthode | Description |

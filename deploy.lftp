@@ -1,0 +1,7 @@
+open -u patrick.chautard@ligue-normandie-tt.fr,%n1z5&65C!KEi0xVk8$% 81.88.53.150
+set ssl:verify-certificate no
+# ------------------------------------------------------------
+mkdir -pf "/nijac/config"
+put "F:/wamp64/www/NIJAC/config/db.php" -o "/nijac/config/db.php"
+# ------------------------------------------------------------
+bye

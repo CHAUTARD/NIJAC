@@ -17,7 +17,7 @@ Le détail complet de chaque écran (fonctionnalités, fichier source) est dispo
 | EA81 | Salles | CRUD des salles de compétition, rattachement club, coordonnées GPS |
 | EA87 | Communes | Référentiel codes postaux / communes avec coordonnées GPS (calcul distances) |
 | EN11 | Juges-Arbitres | Import Excel FFTT, fiche JA (grade, club, commune, défiscalisation, nationale) |
-| EA80 | Clubs / Associations | Import et gestion des clubs affiliés (upsert depuis fichier FFTT) |
+| EN27 | Clubs / Associations | Import et gestion des clubs affiliés (upsert depuis fichier FFTT) — menu nominateur, ex-EA80 |
 | EA86 | Utilisateurs | Gestion des comptes, rôles (Admin / Nominateur), département, activation |
 | EA89 | Divisions | Définition des divisions et niveaux hiérarchiques |
 | EA82 | Import Rencontres | Import fichiers Excel FFTT dans la table rencontre (upsert) |
@@ -81,7 +81,7 @@ Tous les paramètres métier sont stockés dans la table `configuration` (clé/v
 NIJAC/
 ├── index.php                   # Point d'entrée / connexion (E001)
 ├── admin_menu.php              # Menu administrateur (E002)
-├── club.php                    # Gestion clubs (EA80)
+├── club.php                    # Gestion clubs (EN27)
 ├── salle.php                   # Gestion salles (EA81)
 ├── utilisateur.php             # Gestion utilisateurs (EA86)
 ├── communes.php                # Gestion communes (EA87)

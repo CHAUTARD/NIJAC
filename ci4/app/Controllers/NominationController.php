@@ -166,11 +166,12 @@ class NominationController extends BaseController
                   + array_column(getDepartementsLimitrophes(), 'nom', 'CodeDept');
 
         $data = [
-            'nomComplet'  => trim(($u['nom'] ?? '') . ' ' . ($u['prenom'] ?? '')),
-            'departement' => $u['id_departement'] ?? '',
-            'changeLogin' => !empty($u['change_login']),
-            'isAdmin'     => !empty($u['is_admin']),
-            'deptNoms'    => $deptNoms,
+            'nomComplet'   => trim(($u['nom'] ?? '') . ' ' . ($u['prenom'] ?? '')),
+            'departement'  => $u['id_departement'] ?? '',
+            'changeLogin'  => !empty($u['change_login']),
+            'isAdmin'      => !empty($u['is_admin']),
+            'deptNoms'     => $deptNoms,
+            'nbCandidats'  => max(1, (int) getConfig('nomination_nb_candidats', '15')),
         ];
 
         return view('nomination_index', $data);
@@ -649,7 +650,7 @@ class NominationController extends BaseController
             $stmt = $pdo->prepare(
                 "SELECT r.Id_Rencontre, r.Date, r.Heure, r.Journee, r.Poule,
                         ed.Division, ed.SouhaitJA, ed.Nom AS NomDom, ev.Nom AS NomExt,
-                        cl.CorNom, cl.CorEmail,
+                        cl.CorNom, cl.CorEmail, cl.RefNom, cl.RefMail,
                         COALESCE(sr.Nom, sc.Nom) AS SalleNom, COALESCE(sr.Adresse, sc.Adresse) AS SalleAdresse,
                         COALESCE(sr.Cp, sc.Cp) AS SalleCp, COALESCE(sr.Ville, sc.Ville) AS SalleVille
                  FROM rencontre r
@@ -674,7 +675,7 @@ class NominationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => 'Un JA est déjà désigné pour cette rencontre.']);
             }
             if (empty($rc['CorEmail'])) {
-                return $this->response->setJSON(['ok' => false, 'err' => "Le club recevant n'a pas d'email de correspondant (à compléter en EA80)."]);
+                return $this->response->setJSON(['ok' => false, 'err' => "Le club recevant n'a pas d'email de correspondant (à compléter en EN27)."]);
             }
 
             if (function_exists('assurerTemplateArbitreClub')) { assurerTemplateArbitreClub($pdo); } // tolère un app_config.php encore en cache opcache
@@ -719,6 +720,10 @@ class NominationController extends BaseController
             $mail = getNijacMailer();
             $mail->isHTML($isHtml);
             $mail->addAddress($dest, (string) $rc['CorNom']);
+            // Référent du club en copie s'il est renseigné (colonne Club.RefMail, EN27).
+            if (!empty($rc['RefMail'])) {
+                $mail->addCC(getEmailDestinataire($rc['RefMail']), (string) ($rc['RefNom'] ?? ''));
+            }
             if (!empty($tpl['ReplyTo']) && !empty($moi['email'])) {
                 $mail->addReplyTo($moi['email'], trim(($moi['prenom'] ?? '') . ' ' . ($moi['nom'] ?? '')));
             }

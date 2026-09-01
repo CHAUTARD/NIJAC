@@ -73,6 +73,25 @@ function initTableConfiguration(\PDO $pdo): void
             // best-effort : ne bloque pas EA98 si l'ALTER échoue (droits, données incohérentes…)
         }
     }
+
+    // Colonnes "référent" du club : 2e contact, mis en copie (Cc) des emails
+    // envoyés au correspondant. Mêmes types que CorNom / CorEmail / CorTelephone.
+    try {
+        $existe = $pdo->query(
+            "SELECT 1 FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'club' AND COLUMN_NAME = 'RefNom'"
+        )->fetchColumn();
+        if (!$existe) {
+            $pdo->exec(
+                "ALTER TABLE Club
+                   ADD COLUMN RefNom       varchar(100) DEFAULT NULL AFTER CorTelephone,
+                   ADD COLUMN RefMail      varchar(150) DEFAULT NULL AFTER RefNom,
+                   ADD COLUMN RefTelephone varchar(20)  DEFAULT NULL AFTER RefMail"
+            );
+        }
+    } catch (\PDOException $e) {
+        // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
+    }
 }
 
 /**

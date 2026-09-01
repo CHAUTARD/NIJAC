@@ -139,6 +139,7 @@ footer{border-top:1px solid var(--rule); padding:26px 0 60px; color:var(--ink-so
   <h2>Nominateurs · déroulé</h2>
   <ul>
         <li><a href="#EN11"><span>EN11</span>Préparer les juges-arbitres</a></li>
+        <li><a href="#EN27"><span>EN27</span>Clubs / Associations</a></li>
         <li><a href="#EN13"><span>EN13</span>Recueillir les disponibilités</a></li>
         <li><a href="#EN14"><span>EN14</span>Désigner les juges-arbitres</a></li>
         <li><a href="#EN15"><span>EN15</span>Informer et convoquer</a></li>
@@ -281,6 +282,7 @@ footer{border-top:1px solid var(--rule); padding:26px 0 60px; color:var(--ink-so
       <ul class="do">
       <li>Vérifier la convocation : journée, division, opposants, date, salle, correspondant du club recevant.</li>
       <li>Après la rencontre : saisir les péages, le kilométrage réel, et remplir le rapport (accueil, équipements) si un problème est constaté.</li>
+      <li>Cocher « Défiscalisation des frais kilométriques » si vous en faites don à la ligue (reçu fiscal) — le lien « En savoir plus » ouvre la plaquette.</li>
       <li>Cliquer « Enregistrer les frais ».</li>
       <li>« Imprimer / PDF » pour conserver la convocation.</li>
       </ul>
@@ -291,6 +293,7 @@ footer{border-top:1px solid var(--rule); padding:26px 0 60px; color:var(--ink-so
       <li>Total = indemnité forfaitaire + péages + km × tarif.</li>
       <li>Les indemnités sont payées en fin de phase directement par la ligue : transmettez votre RIB.</li>
       <li>Le numéro en haut à droite de la convocation est le numéro de rencontre.</li>
+      <li>Le lien de convocation n'expire pas : il reste valable tant que la nomination existe, y compris pour consulter la convocation ou saisir vos frais après la rencontre. Si « Lien de convocation invalide » s'affiche, demandez au nominateur de renvoyer la convocation.</li>
       </ul>
     </div>
   </div>
@@ -457,7 +460,7 @@ footer{border-top:1px solid var(--rule); padding:26px 0 60px; color:var(--ink-so
       <ul class="do">
       <li>Lire le tableau de bord : prochaine journée, JA actifs, nominations à valider, convocations à envoyer, rencontres sans JA.</li>
       <li>Les pastilles rouges sur les boutons signalent une action en attente.</li>
-      <li>Accès aux écrans EN11, EN13, EN14, EN15, EN16, EN17.</li>
+      <li>Accès aux écrans EN11, EN27, EN13, EN14, EN15, EN16, EN17.</li>
       </ul>
     </div>
     <div class="col">
@@ -481,7 +484,7 @@ footer{border-top:1px solid var(--rule); padding:26px 0 60px; color:var(--ink-so
     <div class="col">
       <h4>Ce que vous devez faire</h4>
       <ul class="do">
-      <li>Paramétrage : clubs (EA80), salles (EA81), import des rencontres régionales (EA82) et nationales (EA83), calendrier régional (EA84), nettoyage / saison (EA85).</li>
+      <li>Paramétrage : salles (EA81), import des rencontres régionales (EA82) et nationales (EA83), calendrier régional (EA84), nettoyage / saison (EA85). (La gestion des clubs est passée au menu nominateur, EN27.)</li>
       <li>Onglets « Gestion des tables » et « DBA » pour l&#x27;administration avancée.</li>
       <li>Bascule vers les menus CSR, Défiscalisateur et Nominateur.</li>
       </ul>
@@ -524,6 +527,32 @@ footer{border-top:1px solid var(--rule); padding:26px 0 60px; color:var(--ink-so
       <ul class="know">
       <li>Seuls les JA « Actif » entrent dans les désignations.</li>
       <li>Les villes sont normalisées via la table La Poste.</li>
+      </ul>
+    </div>
+  </div>
+</article>
+<article class="card" id="EN27" data-accent="nom">
+  <header class="card__h">
+    <span class="chip">EN27</span>
+    <h3>Clubs / Associations</h3>
+  </header>
+    <p class="acces"><span class="acces__l">Où&nbsp;:</span> Menu nominateur → « Club / Association » (bouton placé après « Juge-Arbitre »). Anciennement dans le menu administrateur (EA80).</p>
+  <div class="cols">
+    <div class="col">
+      <h4>Ce que vous devez faire</h4>
+      <ul class="do">
+      <li>Rechercher un club, cliquer le crayon pour ouvrir « Modifier le club ».</li>
+      <li>Renseigner le <strong>correspondant</strong> (nom, e-mail, téléphone) et, si besoin, le <strong>référent</strong> (2ᵉ contact).</li>
+      <li>Bouton « Synchroniser depuis FFTT » pour recharger nom du club, salle principale et correspondant depuis l&#x27;API.</li>
+      <li>Menu « Colonnes » (centré dans le bandeau) : afficher / masquer chaque colonne du tableau ; le choix est mémorisé par le navigateur.</li>
+      </ul>
+    </div>
+    <div class="col">
+      <h4>À savoir</h4>
+      <ul class="know">
+      <li>L&#x27;e-mail du référent (<code>RefMail</code>) est mis en copie (Cc) de la demande de JA envoyée au correspondant depuis EN14 (rencontres en arbitrage club).</li>
+      <li>La synchronisation FFTT ne touche que le correspondant : le référent est propre à NIJAC.</li>
+      <li>Écran accessible aux rôles Nominateur et Administrateur.</li>
       </ul>
     </div>
   </div>
@@ -571,7 +600,7 @@ footer{border-top:1px solid var(--rule); padding:26px 0 60px; color:var(--ink-so
       <ul class="do">
       <li>Choisir la journée.</li>
       <li>Pour chaque rencontre : sélectionner un candidat dans la liste de droite et cliquer « Affecter ».</li>
-      <li>La liste des candidats est triée par kilométrage (le plus proche en tête), priorité au JA le moins sollicité.</li>
+      <li>La liste des candidats est triée par kilométrage (le plus proche en tête), priorité au JA le moins sollicité ; elle est limitée aux 15 premiers par défaut (réglable dans EA91).</li>
       <li>Rencontres R3M / R4M en arbitrage club : envoyer la demande au club (circuit EN25).</li>
       <li>« Valider les nominations », puis « Envoyer les convocations » (e-mail avec lien EN21).</li>
       <li>Bouton « Statistiques » : ouvre EN26 dans un nouvel onglet.</li>
@@ -583,6 +612,7 @@ footer{border-top:1px solid var(--rule); padding:26px 0 60px; color:var(--ink-so
       <li>Règles appliquées automatiquement : jamais le club du JA, une seule rencontre par date, 2 rencontres maximum d&#x27;un même club par phase, 2 nominations maximum par JA et par journée (la 2e est décidée manuellement).</li>
       <li>Filtre « Autres dépts » : fait apparaître les JA hors périmètre ayant accepté ce département voisin.</li>
       <li>Kilométrage calculé sur la salle de la rencontre, sinon sur la salle principale du club recevant.</li>
+      <li>En R3M / R4M, un JA peut arbitrer une rencontre de son propre club (badge « Son club ») ; aucune limite du nombre d&#x27;arbitrages pour un même club.</li>
       </ul>
     </div>
   </div>

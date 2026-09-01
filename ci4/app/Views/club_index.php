@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Clubs et Associations (EA80)</title>
+    <title>NIJAC – Clubs et Associations (EN27)</title>
 
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
@@ -147,13 +147,29 @@
         }
         #page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
         #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
+
+        /* Menu « Colonnes » (affichage/masquage des colonnes, mémorisé par le navigateur) */
+        #menu-colonnes { position: relative; }
+        #menu-colonnes > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; }
+        #menu-colonnes > summary::-webkit-details-marker { display: none; }
+        #menu-colonnes-list {
+            position: absolute; right: 0; top: calc(100% + 4px); z-index: 60;
+            background: #fff; border: 1px solid #ccc; border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,.15); padding: .35rem;
+            min-width: 180px; max-height: 60vh; overflow: auto;
+        }
+        #menu-colonnes-list label {
+            display: flex; align-items: center; gap: .45rem;
+            padding: .25rem .4rem; font-size: .85rem; cursor: pointer; white-space: nowrap;
+        }
+        #menu-colonnes-list label:hover { background: #eef4ff; border-radius: 4px; }
     </style>
 </head>
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'building', 'phTitle' => 'Gestion des clubs et Associations', 'phCode' => 'EA80',
-    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
+    'phIcon' => 'building', 'phTitle' => 'Gestion des clubs et Associations', 'phCode' => 'EN27',
+    'phCrumbLabel' => 'Nominateur', 'phCrumbUrl' => site_url('nominateur-menu'), 'phBackUrl' => site_url('nominateur-menu'),
 ]) ?>
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
@@ -173,6 +189,11 @@
         <i class="bi bi-search"></i>Importer un club (N°)
     </button>
     <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 club(s)</span>
+    <span style="flex:1"></span>
+    <details id="menu-colonnes">
+        <summary class="menu-item" style="border-color:transparent;"><i class="bi bi-layout-three-columns me-1"></i>Colonnes</summary>
+        <div id="menu-colonnes-list"></div>
+    </details>
     <span style="flex:1"></span>
     <label for="sel-dept" style="font-size:.85rem;font-weight:700;color:#444;white-space:nowrap;margin:0;">
         <i class="bi bi-map me-1"></i>Département
@@ -208,20 +229,23 @@
     <table id="tbl-clubs">
         <thead>
             <tr>
-                <th style="width:6%"  data-field="id_club" title="N° FFTT">N°<span class="sort-icon"></span></th>
-                <th style="width:24%" data-field="nom">Nom club<span class="sort-icon"></span></th>
-                <th style="width:9%"  data-field="equipe_nom" title="Nom de base utilisé pour les équipes de ce club dans les imports FFTT (ex. « ROUEN SPO » pour « ROUEN SPO 2 »)">Nom équipe<span class="sort-icon"></span></th>
-                <th style="width:12%" data-field="cor_nom">Correspondant<span class="sort-icon"></span></th>
-                <th style="width:14%" data-field="cor_email">Email corresp.<span class="sort-icon"></span></th>
-                <th style="width:9%"  data-field="cor_tel">Téléphone<span class="sort-icon"></span></th>
-                <th style="width:10%" data-field="salle_nom">Salle principale<span class="sort-icon"></span></th>
-                <th style="width:4%"  data-field="salle_cp">CP<span class="sort-icon"></span></th>
-                <th style="width:8%"  data-field="salle_ville">Ville<span class="sort-icon"></span></th>
+                <th style="width:5%"  data-field="id_club" title="N° FFTT">N°<span class="sort-icon"></span></th>
+                <th style="width:16%" data-field="nom">Nom club<span class="sort-icon"></span></th>
+                <th style="width:7%"  data-field="equipe_nom" title="Nom de base utilisé pour les équipes de ce club dans les imports FFTT (ex. « ROUEN SPO » pour « ROUEN SPO 2 »)">Nom équipe<span class="sort-icon"></span></th>
+                <th style="width:9%"  data-field="cor_nom">Correspondant<span class="sort-icon"></span></th>
+                <th style="width:10%" data-field="cor_email">Email Corres.<span class="sort-icon"></span></th>
+                <th style="width:6%"  data-field="cor_tel">Téléphone Corres.<span class="sort-icon"></span></th>
+                <th style="width:9%"  data-field="ref_nom">Référent<span class="sort-icon"></span></th>
+                <th style="width:10%" data-field="ref_mail">Email Réf.<span class="sort-icon"></span></th>
+                <th style="width:6%"  data-field="ref_tel">Téléphone Réf.<span class="sort-icon"></span></th>
+                <th style="width:8%"  data-field="salle_nom">Salle principale<span class="sort-icon"></span></th>
+                <th style="width:3%"  data-field="salle_cp">CP<span class="sort-icon"></span></th>
+                <th style="width:7%"  data-field="salle_ville">Ville<span class="sort-icon"></span></th>
                 <th style="width:4%"></th>
             </tr>
         </thead>
         <tbody id="tbody-grille">
-            <tr><td colspan="10" class="text-center text-muted py-3">Chargement…</td></tr>
+            <tr><td colspan="13" class="text-center text-muted py-3">Chargement…</td></tr>
         </tbody>
     </table>
 </div>
@@ -244,12 +268,12 @@
             </div>
             <div class="modal-body" style="font-size:.88rem;">
                 <input type="hidden" id="mod-club-idx">
-                <div class="mb-2">
-                    <label class="form-label fw-semibold" style="font-size:.82rem;">N° FFTT</label>
-                    <p id="mod-club-id" class="fw-bold mb-0" style="color:#6b7280;"></p>
+                <div class="mb-2 d-flex align-items-center gap-2">
+                    <label class="form-label fw-semibold mb-0" style="font-size:.82rem;white-space:nowrap;">N° FFTT :</label>
+                    <span id="mod-club-id" class="fw-bold" style="color:#6b7280;"></span>
                 </div>
-                <div class="mb-2">
-                    <label class="form-label fw-semibold" style="font-size:.82rem;">Nom du club <span class="text-danger">*</span></label>
+                <div class="mb-2 d-flex align-items-center gap-2">
+                    <label for="mod-club-nom" class="form-label fw-semibold mb-0" style="font-size:.82rem;white-space:nowrap;">Nom du club <span class="text-danger">*</span> :</label>
                     <input type="text" id="mod-club-nom" class="form-control form-control-sm">
                 </div>
                 <div class="mb-2">
@@ -257,18 +281,37 @@
                     <input type="text" id="mod-club-equipe-nom" class="form-control form-control-sm" placeholder="ex. ROUEN SPO">
                     <div class="form-text" style="font-size:.75rem;">Nom de base utilisé pour retrouver ce club lors des imports de rencontres Nationale/Régionale — renseigné automatiquement dès qu'une équipe lui est associée.</div>
                 </div>
-                <div class="mb-2">
-                    <label class="form-label fw-semibold" style="font-size:.82rem;">Correspondant</label>
-                    <input type="text" id="mod-club-cor-nom" class="form-control form-control-sm">
-                </div>
-                <div class="mb-2">
-                    <label class="form-label fw-semibold" style="font-size:.82rem;">Email correspondant</label>
-                    <input type="email" id="mod-club-cor-email" class="form-control form-control-sm">
-                </div>
-                <div class="mb-2">
-                    <label class="form-label fw-semibold" style="font-size:.82rem;">Téléphone correspondant</label>
-                    <input type="text" id="mod-club-cor-tel" class="form-control form-control-sm">
-                </div>
+                <fieldset style="border:1px solid #c8d4e8;border-radius:6px;padding:.5rem .7rem .2rem;margin-bottom:.6rem;">
+                    <legend class="float-none w-auto px-2 mb-1 fw-semibold" style="font-size:.8rem;color:#1a3a6b;">Correspondant</legend>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold" style="font-size:.82rem;">Nom</label>
+                        <input type="text" id="mod-club-cor-nom" class="form-control form-control-sm">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold" style="font-size:.82rem;">Email</label>
+                        <input type="email" id="mod-club-cor-email" class="form-control form-control-sm">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold" style="font-size:.82rem;">Téléphone</label>
+                        <input type="text" id="mod-club-cor-tel" class="form-control form-control-sm">
+                    </div>
+                </fieldset>
+                <fieldset style="border:1px solid #c8d4e8;border-radius:6px;padding:.5rem .7rem .2rem;margin-bottom:.6rem;">
+                    <legend class="float-none w-auto px-2 mb-1 fw-semibold" style="font-size:.8rem;color:#1a3a6b;">Référent</legend>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold" style="font-size:.82rem;">Nom</label>
+                        <input type="text" id="mod-club-ref-nom" class="form-control form-control-sm">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold" style="font-size:.82rem;">Email</label>
+                        <input type="email" id="mod-club-ref-mail" class="form-control form-control-sm">
+                        <div class="form-text" style="font-size:.75rem;">Mis en copie (Cc) de la demande de JA envoyée au correspondant (EN14).</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold" style="font-size:.82rem;">Téléphone</label>
+                        <input type="text" id="mod-club-ref-tel" class="form-control form-control-sm">
+                    </div>
+                </fieldset>
                 <div id="mod-club-msg" style="font-size:.8rem;min-height:18px;margin-top:.4rem;"></div>
             </div>
             <div class="modal-footer">
@@ -469,13 +512,14 @@ function renderGrille() {
 
     if (!rows.length) {
         const msg = searchTerm ? 'Aucun résultat pour cette recherche.' : 'Aucun club.';
-        $body.append(`<tr><td colspan="10" class="text-center text-muted py-3">${msg}</td></tr>`);
+        $body.append(`<tr><td colspan="13" class="text-center text-muted py-3">${msg}</td></tr>`);
         setStatus(searchTerm ? `0 résultat sur ${lignes.length} club(s).` : 'Aucun club enregistré.');
         $('#lbl-count').text(`0 / ${lignes.length} club(s)`);
         return;
     }
 
     rows.forEach((tr) => $body.append(tr));
+    appliquerColonnesCachees();
 
     const info = searchTerm ? `${total} résultat(s) sur ${lignes.length}. ` : '';
     setStatus(`${info}Prêt.`);
@@ -494,6 +538,9 @@ function construireLigne(l) {
     $tr.append(makeTd(l.cor_nom,     'cor_nom'));
     $tr.append(makeTd(l.cor_email,   'cor_email'));
     $tr.append(makeTd(l.cor_tel,     'cor_tel'));
+    $tr.append(makeTd(l.ref_nom,     'ref_nom'));
+    $tr.append(makeTd(l.ref_mail,    'ref_mail'));
+    $tr.append(makeTd(l.ref_tel,     'ref_tel'));
     $tr.append(makeTd(l.salle_nom,   'salle_nom'));
     $tr.append(makeTd(l.salle_cp,    'salle_cp'));
     $tr.append(makeTd(l.salle_ville, 'salle_ville'));
@@ -565,6 +612,9 @@ function ouvrirModaleModifClub(idx) {
     $('#mod-club-cor-nom').val(l.cor_nom ?? '');
     $('#mod-club-cor-email').val(l.cor_email ?? '');
     $('#mod-club-cor-tel').val(l.cor_tel ?? '');
+    $('#mod-club-ref-nom').val(l.ref_nom ?? '');
+    $('#mod-club-ref-mail').val(l.ref_mail ?? '');
+    $('#mod-club-ref-tel').val(l.ref_tel ?? '');
     $('#mod-club-msg').text('');
     const el = document.getElementById('modal-modifier-club');
     let modal = bootstrap.Modal.getInstance(el);
@@ -589,6 +639,9 @@ $('#mod-club-btn-ok').on('click', function () {
     const corNom    = $('#mod-club-cor-nom').val().trim();
     const corEmail  = $('#mod-club-cor-email').val().trim();
     const corTel    = $('#mod-club-cor-tel').val().trim();
+    const refNom    = $('#mod-club-ref-nom').val().trim();
+    const refMail   = $('#mod-club-ref-mail').val().trim();
+    const refTel    = $('#mod-club-ref-tel').val().trim();
 
     if (!nom) {
         $('#mod-club-msg').html('<span class="text-danger">Le nom du club est obligatoire.</span>');
@@ -599,7 +652,7 @@ $('#mod-club-btn-ok').on('click', function () {
     $.ajax({
         url: `${CLUB_BASE}/${encodeURIComponent(l.id_club)}`,
         method: 'PUT',
-        data: { nom, equipe_nom: equipeNom, cor_nom: corNom, cor_email: corEmail, cor_tel: corTel },
+        data: { nom, equipe_nom: equipeNom, cor_nom: corNom, cor_email: corEmail, cor_tel: corTel, ref_nom: refNom, ref_mail: refMail, ref_tel: refTel },
         dataType: 'json',
     }).done(function (res) {
         spinner(false);
@@ -611,6 +664,9 @@ $('#mod-club-btn-ok').on('click', function () {
             l.cor_nom    = corNom;
             l.cor_email  = corEmail;
             l.cor_tel    = corTel;
+            l.ref_nom    = refNom;
+            l.ref_mail   = refMail;
+            l.ref_tel    = refTel;
             invaliderCacheRendu();
             renderGrille();
         } else {
@@ -633,6 +689,9 @@ function chargerListe() {
             cor_nom:      r.CorNom      ?? '',
             cor_email:    r.CorEmail    ?? '',
             cor_tel:      r.CorTelephone ?? '',
+            ref_nom:      r.RefNom      ?? '',
+            ref_mail:     r.RefMail     ?? '',
+            ref_tel:      r.RefTelephone ?? '',
             salle_nom:    r.SallePrincipaleNom  ?? '',
             salle_cp:     r.SallePrincipaleCp   ?? '',
             salle_ville:  r.SallePrincipaleVille ?? '',
@@ -654,6 +713,45 @@ function chargerListe() {
 let refreshTriEntetes = () => {};
 $(function () {
     refreshTriEntetes = nijacSortableTable('#tbl-clubs thead th[data-field]', 'field', sortState, renderGrille);
+});
+
+// ── Affichage / masquage des colonnes (mémorisé dans le navigateur) ──────────
+const LS_COLONNES = 'nijac_en27_colonnes_cachees';
+let colonnesCachees;
+try {
+    const brut = localStorage.getItem(LS_COLONNES);
+    colonnesCachees = new Set(brut !== null ? JSON.parse(brut) : []);
+} catch (e) {
+    colonnesCachees = new Set();
+}
+
+function appliquerColonnesCachees() {
+    document.querySelectorAll('#tbl-clubs [data-field]').forEach(el => {
+        el.style.display = colonnesCachees.has(el.getAttribute('data-field')) ? 'none' : '';
+    });
+}
+
+function construireMenuColonnes() {
+    const $box = $('#menu-colonnes-list').empty();
+    document.querySelectorAll('#tbl-clubs thead th[data-field]').forEach(th => {
+        const field = th.getAttribute('data-field');
+        const label = (th.textContent || '').replace(/[⇅▲▼]/g, '').trim();
+        const $chk  = $('<input type="checkbox">').prop('checked', !colonnesCachees.has(field));
+        $chk.on('change', function () {
+            if (this.checked) colonnesCachees.delete(field);
+            else              colonnesCachees.add(field);
+            try { localStorage.setItem(LS_COLONNES, JSON.stringify([...colonnesCachees])); } catch (e) {}
+            appliquerColonnesCachees();
+        });
+        $('<label>').append($chk).append(document.createTextNode(' ' + label)).appendTo($box);
+    });
+}
+construireMenuColonnes();
+appliquerColonnesCachees();
+
+// Ferme le menu « Colonnes » au clic hors de celui-ci
+$(document).on('click', function (e) {
+    if (!$(e.target).closest('#menu-colonnes').length) $('#menu-colonnes').removeAttr('open');
 });
 
 // ── Filtre plusieurs salles ───────────────────────────────────────────────────

@@ -75,17 +75,22 @@ class CentrenvoyeController extends BaseController
             return $this->response->setJSON(['ok' => true, 'data' => []]);
         }
 
-        $stmt = $pdo->prepare('
+        // Mêmes filtres JA que la liste de convocation (cas "Convocation" de ja()) :
+        // JA1 actifs, sans filtre sur nomination.Valide — sinon le combo affiche 0
+        // tant que la journée n'a pas été validée dans EN14 alors que la liste, elle,
+        // montre déjà le JA nominé.
+        $stmt = $pdo->prepare("
             SELECT r.Journee, r.Date,
-                   COUNT(DISTINCT d.Id_JA) AS NbJA
+                   COUNT(DISTINCT j.Id_JA) AS NbJA
             FROM rencontre r
             JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
-            LEFT JOIN nomination n ON n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
-            LEFT JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+            LEFT JOIN nomination n  ON n.Id_Rencontre   = r.Id_Rencontre
+            LEFT JOIN disponible d  ON d.Id_Disponible  = n.Id_Disponible
+            LEFT JOIN ja j          ON j.Id_JA = d.Id_JA AND j.Actif = 1 AND j.Grade = 'JA1'
             WHERE SUBSTRING(ed.Id_Club, 3, 2) = ?
             GROUP BY r.Journee, r.Date
             ORDER BY r.Date, r.Journee
-        ');
+        ");
         $stmt->execute([$dept]);
         $rows = $stmt->fetchAll();
 
@@ -150,7 +155,6 @@ class CentrenvoyeController extends BaseController
                            ed.Division, RIGHT(ed.Division, 1) AS SexeCode,
                            ed.Nom AS NomDom, ee.Nom AS NomExt,
                            n.Id_Rencontre,
-                           n.Kilometre,
                            s.Nom          AS SalleNom,
                            s.Adresse      AS SalleAdresse,
                            lps.CodePostal AS SalleCP,

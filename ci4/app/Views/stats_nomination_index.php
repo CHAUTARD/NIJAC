@@ -28,8 +28,6 @@ table.recap td { padding:.35rem .6rem; border-bottom:1px solid #f0f0f0; vertical
 table.recap tr:hover td { background:#f4f9f4; }
 .div-badge { font-size:.68rem; font-weight:700; color:#fff; background:#1a3a6b; padding:.1rem .4rem; border-radius:3px; }
 .cell-ja { white-space:nowrap; }
-.sel-ja { font-size:.82rem; padding:.15rem .35rem; max-width:230px; width:auto; display:inline-block; }
-.btn-suppr-ja { font-size:1rem; vertical-align:middle; text-decoration:none; }
 .statut-badge { font-size:.66rem; font-weight:700; padding:.1rem .45rem; border-radius:10px; }
 .statut-badge.valide { background:#e8f5e9; color:#2e7d32; }
 .statut-badge.envoye { background:#e3f2fd; color:#1565c0; }
@@ -97,7 +95,6 @@ details.club-accent { border-left-color:#e65100; } .club-accent .sect-ico { back
     table.recap { font-size:.8rem; }
     table.recap th, table.recap td { padding:.3rem .35rem; }
     .cell-ja { white-space:normal; }
-    .sel-ja { max-width:150px; font-size:.8rem; }
 
     .cal-mois-grille { grid-template-columns:1fr; gap:.75rem; }
     .cal-mois-titre { font-size:.9rem; }
@@ -188,12 +185,7 @@ details.club-accent { border-left-color:#e65100; } .club-accent .sect-ico { back
 <script>
 'use strict';
 
-const DATA_URL     = '<?= site_url('stats-nomination/data') ?>';
-const AFFECTER_URL = '<?= site_url('nomination/affecter-ja') ?>';
-const RETIRER_URL  = '<?= site_url('nomination/retirer-ja') ?>';
-
-let JAS = [];
-let DISPOS = {};   // { "YYYY-MM-DD": [Id_JA, ...] } — JA disponibles ce jour-là
+const DATA_URL = '<?= site_url('stats-nomination/data') ?>';
 
 function escHtml(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -203,28 +195,6 @@ function fmtDate(d) {
     if (!d) return '';
     const [y, m, j] = d.split('-');
     return `${j}/${m}/${y}`;
-}
-
-function optionsJa(selectedId, fallbackName, date) {
-    let html = '<option value="">— aucun —</option>';
-    const selStr    = selectedId ? String(selectedId) : '';
-    const dispoSet  = new Set((DISPOS[date] || []).map(String));
-    const dansListe = JAS.some(j => String(j.Id_JA) === selStr);
-
-    // JA nominé hors du périmètre du nominateur : absent de JAS, on l'ajoute pour
-    // qu'il s'affiche et reste modifiable/supprimable.
-    if (selStr && !dansListe) {
-        html += `<option value="${selStr}" selected>${escHtml(fallbackName || ('JA #' + selStr))} (hors périmètre)</option>`;
-    }
-    JAS.forEach(j => {
-        const idStr = String(j.Id_JA);
-        // On n'affiche que les JA disponibles ce jour-là — mais on garde toujours
-        // celui déjà nominé (désignation club, dispo retirée depuis…).
-        if (!dispoSet.has(idStr) && idStr !== selStr) return;
-        const sel = idStr === selStr ? ' selected' : '';
-        html += `<option value="${j.Id_JA}"${sel}>${escHtml(j.Nom + ' ' + j.Prenom)}</option>`;
-    });
-    return html;
 }
 
 function statutBadge(r) {
@@ -325,10 +295,7 @@ function rendu(res) {
                 <td>${escHtml(r.NomDom)} <span class="text-muted">vs</span> ${escHtml(r.NomExt || '')}</td>
                 <td>${escHtml(r.Poule || '')}</td>
                 <td>${escHtml((r.Heure || '').slice(0,5))}</td>
-                <td class="cell-ja">
-                    <select class="form-select form-select-sm sel-ja" data-renc="${r.Id_Rencontre}" data-prev="${r.IdJaAffecte || ''}">${optionsJa(r.IdJaAffecte, r.NomJaAffecte, r.Date)}</select>
-                    ${r.IdJaAffecte ? `<button type="button" class="btn btn-sm btn-link text-danger p-0 ms-1 btn-suppr-ja" data-renc="${r.Id_Rencontre}" title="Supprimer le JA nominé"><i class="bi bi-trash3"></i></button>` : ''}
-                </td>
+                <td class="cell-ja">${r.IdJaAffecte ? escHtml(r.NomJaAffecte) : '<span class="text-muted">—</span>'}</td>
                 <td class="cell-statut">${statutBadge(r)}</td>
             </tr>`;
         });
@@ -377,44 +344,9 @@ function rendu(res) {
 function charger() {
     $.get(DATA_URL, function (res) {
         if (!res.ok) { nijacToast(res.err || 'Erreur de chargement', 'danger'); return; }
-        JAS    = res.jas || [];
-        DISPOS = res.disposParDate || {};
         rendu(res);
     }, 'json').fail(() => nijacToast('Erreur réseau', 'danger'));
 }
-
-$(document).on('change', '.sel-ja', function () {
-    const $sel   = $(this);
-    const idRenc = $sel.data('renc');
-    const idJa   = $sel.val();
-    const prev   = String($sel.data('prev') || '');
-
-    const done = (ok, msg) => {
-        if (ok) {
-            nijacToast('Nomination mise à jour', 'success');
-            charger();               // recharge tout : lignes + compteurs
-        } else {
-            nijacToast(msg || 'Modification refusée', 'danger');
-            $sel.val(prev);          // revient à l'ancien JA
-        }
-    };
-
-    if (idJa === '') {
-        $.post(RETIRER_URL, { id_rencontre: idRenc }, r => done(r.ok, r.err), 'json').fail(() => done(false, 'Erreur réseau'));
-    } else {
-        $.post(AFFECTER_URL, { id_rencontre: idRenc, id_ja: idJa }, r => done(r.ok, r.err), 'json').fail(() => done(false, 'Erreur réseau'));
-    }
-});
-
-$(document).on('click', '.btn-suppr-ja', function () {
-    const idRenc = $(this).data('renc');
-    nijacConfirm('Supprimer le JA nominé pour cette rencontre ?', function () {
-        $.post(RETIRER_URL, { id_rencontre: idRenc }, r => {
-            if (r.ok) { nijacToast('JA supprimé', 'success'); charger(); }
-            else nijacToast(r.err || 'Suppression refusée', 'danger');
-        }, 'json').fail(() => nijacToast('Erreur réseau', 'danger'));
-    }, null, { type: 'danger' });
-});
 
 $(charger);
 </script>

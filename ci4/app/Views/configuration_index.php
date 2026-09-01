@@ -440,6 +440,33 @@
         </div>
     </div>
 
+    <!-- ── Paramètre : Nomination JA ── -->
+    <div class="param-card">
+        <div class="param-card-head">
+            <i class="bi bi-person-check param-icon"></i>
+            <div>
+                <h2>Nomination JA (EN14)</h2>
+                <small>Réglages de l'écran de nomination des juges-arbitres</small>
+            </div>
+        </div>
+        <div class="param-card-body">
+            <div class="email-dev-group">
+                <label for="input-nb-candidats-ja">
+                    <i class="bi bi-list-ol me-1"></i>Nombre de candidats JA affichés par rencontre
+                </label>
+                <div class="email-dev-row">
+                    <input type="number" id="input-nb-candidats-ja" step="1" min="1"
+                           value="<?= esc($nbCandidatsJa) ?>"
+                           autocomplete="off">
+                    <button id="btn-sauvegarder-nb-candidats-ja">
+                        <i class="bi bi-floppy-fill me-1"></i>Enregistrer
+                    </button>
+                </div>
+                <div id="msg-result-nb-candidats-ja"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- ── Paramètre : Frais JA ── -->
     <div class="param-card">
         <div class="param-card-head">
@@ -1070,6 +1097,41 @@ $('#btn-sauvegarder-backup-full-garder').on('click', function () {
 $('#input-backup-full-garder').on('input', function () {
     $(this).removeClass('is-invalid');
     $('#msg-result-backup-full-garder').text('');
+});
+
+// ── Enregistrement nombre de candidats JA affichés (EN14) ──────────────────
+$('#btn-sauvegarder-nb-candidats-ja').on('click', function () {
+    const $input = $('#input-nb-candidats-ja');
+    const $msg   = $('#msg-result-nb-candidats-ja');
+    const val    = $input.val().trim();
+    if (val === '' || !/^\d+$/.test(val) || parseInt(val, 10) < 1) {
+        $input.addClass('is-invalid');
+        $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Nombre entier positif attendu.</span>');
+        return;
+    }
+    $input.removeClass('is-invalid');
+    spinner(true);
+    $(this).prop('disabled', true);
+    $msg.text('');
+    $.post(`${BASE}/enregistrer`, { cle: 'nomination_nb_candidats', valeur: val }, function (res) {
+        spinner(false);
+        $('#btn-sauvegarder-nb-candidats-ja').prop('disabled', false);
+        if (res.ok) {
+            $msg.html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+            $input.val(res.valeur);
+        } else {
+            $input.addClass('is-invalid');
+            $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+        }
+    }, 'json').fail(() => {
+        spinner(false);
+        $('#btn-sauvegarder-nb-candidats-ja').prop('disabled', false);
+        $msg.html('<span class="text-danger">Erreur réseau.</span>');
+    });
+});
+$('#input-nb-candidats-ja').on('input', function () {
+    $(this).removeClass('is-invalid');
+    $('#msg-result-nb-candidats-ja').text('');
 });
 
 function sauvegarderTexte(cle, $input, $msg, $btn) {

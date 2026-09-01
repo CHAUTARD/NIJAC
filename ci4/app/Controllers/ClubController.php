@@ -5,10 +5,10 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Gestion des clubs et associations (EA80), portage CI4 de club.php.
+ * NIJAC – Gestion des clubs et associations (EN27), portage CI4 de club.php.
  *
- * Admin uniquement (filtre "adminauth", comme includes/admin_required.php
- * côté legacy).
+ * Écran du menu nominateur (E003, après EN11) — ex-EA80 du menu admin.
+ * Filtre "auth" : Nominateur ou Administrateur.
  *
  * Pas de Model : upsert en masse, appels API FFTT — trop éloigné du Query
  * Builder simple. Réutilise getPDO() directement, comme le fichier legacy.
@@ -80,6 +80,7 @@ class ClubController extends BaseController
             $rows = $pdo->query(
                 'SELECT c.Id_Club, c.Nom, c.EquipeNom,
                         c.CorNom, c.CorEmail, c.CorTelephone,
+                        c.RefNom, c.RefMail, c.RefTelephone,
                         (SELECT COUNT(*) FROM Salle s2 WHERE s2.Id_Club = c.Id_Club) AS NbSalles,
                         sp.Nom AS SallePrincipaleNom, sp.Cp AS SallePrincipaleCp, sp.Ville AS SallePrincipaleVille
                  FROM Club c
@@ -102,6 +103,9 @@ class ClubController extends BaseController
             $corNom    = trim($input['cor_nom'] ?? '') ?: null;
             $corEmail  = trim($input['cor_email'] ?? '') ?: null;
             $corTel    = trim($input['cor_tel'] ?? '') ?: null;
+            $refNom    = trim($input['ref_nom'] ?? '') ?: null;
+            $refMail   = trim($input['ref_mail'] ?? '') ?: null;
+            $refTel    = trim($input['ref_tel'] ?? '') ?: null;
 
             if ($nom === '') {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Le nom du club est obligatoire.']);
@@ -116,8 +120,8 @@ class ClubController extends BaseController
                 }
             }
 
-            $stmt = $pdo->prepare('UPDATE Club SET Nom=?, EquipeNom=?, CorNom=?, CorEmail=?, CorTelephone=? WHERE Id_Club=?');
-            $stmt->execute([$nom, $equipeNom, $corNom, $corEmail, $corTel, $idClub]);
+            $stmt = $pdo->prepare('UPDATE Club SET Nom=?, EquipeNom=?, CorNom=?, CorEmail=?, CorTelephone=?, RefNom=?, RefMail=?, RefTelephone=? WHERE Id_Club=?');
+            $stmt->execute([$nom, $equipeNom, $corNom, $corEmail, $corTel, $refNom, $refMail, $refTel, $idClub]);
 
             if ($stmt->rowCount() === 0) {
                 $chk = $pdo->prepare('SELECT COUNT(*) FROM Club WHERE Id_Club = ?');
