@@ -174,6 +174,8 @@
         }
 
         .btn-defiscalisation { background-color: #e8f5e9; }
+        .btn-attestation     { background-color: #ffe0b2; }
+        .btn-attestations    { background-color: #ffe9d1; }
 
         .btn-code {
             position: absolute;
@@ -220,6 +222,20 @@
         <div class="btn-icon"><img src="<?= base_url('img/Defiscalisation.png') ?>" alt="Défiscalisation JA"></div>
         <span>Défiscalisation JA</span>
         <span class="btn-desc">Frais cumulés des JA défiscalisés sur une période, export CSV</span>
+    </a>
+
+    <a href="<?= site_url('attestation-defisc') ?>" class="menu-btn btn-attestation">
+        <span class="btn-code">ED53</span>
+        <div class="btn-icon"><img src="<?= base_url('img/AttestationHonneur.png') ?>" alt="Attestation sur l'honneur"></div>
+        <span>Attestation sur l'honneur</span>
+        <span class="btn-desc">Document à compléter, signer à l'écran et imprimer</span>
+    </a>
+
+    <a href="<?= site_url('attestations-defisc') ?>" class="menu-btn btn-attestations">
+        <span class="btn-code">ED54</span>
+        <div class="btn-icon"><img src="<?= base_url('img/DirDefiscalisation.png') ?>" alt="Attestations reçues"></div>
+        <span>Attestations reçues</span>
+        <span class="btn-desc">Liste des attestations signées déposées par les JA</span>
     </a>
 
 </div>

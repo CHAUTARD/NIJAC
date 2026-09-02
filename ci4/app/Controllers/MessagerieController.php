@@ -39,6 +39,7 @@ class MessagerieController extends BaseController
         assurerTemplateExpirationFfttApi($pdo);
         assurerTemplateDispoRegionale($pdo);
         assurerTemplateMotDePasseOublie($pdo);
+        assurerTemplateRelanceVehicule($pdo);
     }
 
     private function isAdmin(): bool

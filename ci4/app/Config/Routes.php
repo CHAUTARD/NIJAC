@@ -441,4 +441,23 @@ $routes->get('defiscalisateur-menu', 'DefiscalisateurMenuController::index', ['f
 // ── ED51 Défiscalisation JA ──────────────────────────────────────────────────
 $routes->get('defiscalisation', 'DefiscalisationController::index', ['filter' => 'defiscauth']);
 $routes->post('defiscalisation/donnees', 'DefiscalisationController::donnees', ['filter' => 'defiscauth']);
+$routes->post('defiscalisation/vehicule', 'DefiscalisationController::vehicule', ['filter' => 'defiscauth']);
+$routes->post('defiscalisation/relancer-vehicule', 'DefiscalisationController::relancerVehicule', ['filter' => 'defiscauth']);
 $routes->post('defiscalisation/export-csv', 'DefiscalisationController::exportCsv', ['filter' => 'defiscauth']);
+
+// ── ED52 Barème kilométrique — gestion de la table ComptaDefiscalisation ──────
+// Accès depuis ED51. Rôle Defiscalisateur ou Administrateur (filtre "defiscauth").
+$routes->get('defiscalisation-bareme', 'DefiscalisationBaremeController::index', ['filter' => 'defiscauth']);
+$routes->post('defiscalisation-bareme/enregistrer', 'DefiscalisationBaremeController::enregistrer', ['filter' => 'defiscauth']);
+
+// ── ED53 Attestation sur l'honneur défiscalisation ───────────────────────────
+// Public tokenisé (?ja=TOKEN, lien de l'email n°10) OU session Defiscalisateur/
+// Administrateur (menu E005, bouton ED51). Pas de filtre : accès vérifié dans le
+// contrôleur (token valide OU session). `valider` exige un token valide.
+$routes->get('attestation-defisc', 'AttestationDefiscController::index');
+$routes->post('attestation-defisc/valider', 'AttestationDefiscController::valider');
+
+// ── ED54 Attestations reçues — liste du répertoire _Defiscalisation/ ───────────
+// Menu E005. Rôle Defiscalisateur ou Administrateur (filtre "defiscauth").
+$routes->get('attestations-defisc', 'AttestationsListeController::index', ['filter' => 'defiscauth']);
+$routes->get('attestations-defisc/telecharger/(:num)', 'AttestationsListeController::telecharger/$1', ['filter' => 'defiscauth']);

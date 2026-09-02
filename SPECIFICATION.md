@@ -26,6 +26,10 @@
 - [EN21 – Convocation et frais JA](#en21--convocation-et-frais-ja)
 - [EN22 – Disponibilité JA](#en22--disponibilité-ja)
 - [EN27 – Clubs / Associations](#en27--clubs--associations)
+- [ED51 – Défiscalisation JA](#ed51--défiscalisation-ja)
+- [ED52 – Barème kilométrique](#ed52--barème-kilométrique)
+- [ED53 – Attestation sur l'honneur](#ed53--attestation-sur-lhonneur)
+- [ED54 – Attestations reçues](#ed54--attestations-reçues)
 - [EA81 – Salles](#ea81--salles)
 - [EA82 – Import Rencontres](#ea82--import-rencontres)
 - [EA83 – Import Rencontres Nationales](#ea83--import-rencontres-nationales)
@@ -674,6 +678,165 @@ Importer et gérer la liste des clubs affiliés à la ligue Normandie.
 ### Synchronisation FFTT
 - `get_clubs_dept_fftt` liste les clubs d'un département via l'API FFTT pour sélection
 - `sync_fftt_club` récupère le détail d'un club FFTT et met à jour en une fois le nom du club, sa salle principale (nom, adresse, commune) et son correspondant (nom, email, téléphone)
+
+---
+
+## ED51 – Défiscalisation JA
+
+**Fichier :** `DefiscalisationController` (CI4)  
+**Accès :** rôle Defiscalisateur ou Administrateur (filtre `defiscauth`) — menu E005
+
+### Objectif
+Récapituler, par JA ayant opté pour la défiscalisation, les frais de déplacement de l'**année civile en cours** (base des reçus fiscaux « abandon de frais »), et calculer le montant défiscalisable selon le **barème kilométrique fiscal** (table `ComptaDefiscalisation`, éditable en ED52).
+
+### Interface
+- Pas de sélecteur de période : année civile figée (1er janvier → 31 décembre), affichée dans un badge. Chargement automatique au démarrage.
+- 3 cartes résumé : *JA actifs défiscalisés*, *Total péages + km*, *Total défiscalisable (barème)*.
+- Tableau : JA, Adresse (CP Ville), Missions, Péages, Kilomètres, **Frais km + péages** (taux plat `frais_kilometrique`, inchangé), **CV** (menu déroulant `–` / `3` / `4` / `5` / `6` / `7 +`), **Élec.** (case à cocher), **Frais défiscalisables (barème)** ; ligne de totaux.
+- Saisie **inline** de CV / électrique : enregistrement AJAX immédiat puis rechargement de la liste (recalcul du barème côté serveur). Ligne sans CV → mention *« CV manquant »*.
+- Bouton **Gérer le barème** → ED52.
+- Colonne **case à cocher** en tête de ligne (+ case « tout cocher » dans l'en-tête, avec état indéterminé). À chaque (re)chargement, les lignes **sans CV renseigné** sont pré-cochées ; une ligne dont le JA n'a pas d'email (`HasEmail = 0` dans le payload `donnees`) a sa case désactivée.
+- Bouton **Relancer les JA cochés (N)** : email groupé aux JA cochés (confirmation `nijacConfirm`, `POST relancer-vehicule` avec `ids[]`) ; libellé et état actif/inactif suivent le nombre de cases cochées.
+- Bouton **Export CSV**.
+
+### Population de la liste
+`LEFT JOIN` depuis `ja` (`WHERE ja.Actif = 1 AND ja.Defiscalisation = 1`) : les JA sans mission cette année apparaissent aussi, totaux à 0. Cumul via `nomination → disponible → ja`, rencontres dont `rencontre.Date` tombe dans l'année civile, nominations retenues si `Valide = 1 OR Peage IS NOT NULL OR Kilometre IS NOT NULL`.
+
+### Actions AJAX
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `donnees` | POST | Agrégat par JA : `NbMissions`, `Peage`, `Kilometre`, `PuissanceFiscale`, `VehiculeElectrique`, `FraisKmPeages` (taux plat), `MontantBareme` (ou `null`) |
+| `vehicule` | POST (`Id_JA`, `PuissanceFiscale`, `VehiculeElectrique`) | Enregistre `ja.PuissanceFiscale` (∈ {3,4,5,6,7}, ou `NULL` si vide) et `ja.VehiculeElectrique` (0/1) |
+| `relancer-vehicule` | POST (`ids[]`) | Envoie le modèle `messagerie` n°10 aux JA dont l'`Id_JA` est coché — nettoyage des ids (entiers > 0, dédup), filtre serveur `Actif = 1 AND Defiscalisation = 1` + email présent (les ids invalides sont comptés `ignores` dans le message). Un seul mailer (SMTP keep-alive), `Reply-To` selon le modèle, garde-fou `checkRateLimit()` / `enregistrerEnvois()`. Retour `{ok, envoyes, total, erreurs[], msg}` |
+| `export-csv` | POST | Renvoie le CSV en JSON (téléchargement déclenché côté client) |
+
+### Calcul du montant défiscalisable (colonne « Frais défiscalisables (barème) »)
+- `d` = `SUM(Kilometre)` du JA sur l'année civile.
+- Ligne de barème = celle de `ComptaDefiscalisation` où `PuissanceFiscale BETWEEN Cv_Min AND Cv_Max`.
+- Tranche selon `d` : `d ≤ 5 000` → `d × Coef_T1` ; `5 001 ≤ d ≤ 20 000` → `d × Coef_T2 + Fixe_T2` ; `d > 20 000` → `d × Coef_T3`.
+- Si `ja.VehiculeElectrique = 1` : `× (1 + comptadefisc_majoration_electrique / 100)` (config, défaut **+20 %**).
+- `ja.PuissanceFiscale IS NULL` → montant non calculé (`null`).
+- **Les péages n'entrent pas** dans ce montant (remboursés au réel, séparément). Arrondi à 2 décimales.
+
+### Export CSV
+En-tête (ajouté côté client) : `Nom;Prenom;CP;Ville;Missions;Peages;Kilometres;FraisKmPeages;CV;Electrique;FraisDefiscalisables`. Séparateur `;`, décimales à la virgule, `CV` = `7+` pour la tranche haute. Fichier `defiscalisation_{annee}.csv`.
+
+### Email de relance « véhicule non renseigné »
+Modèle système `messagerie` **n°10** (`Type = 'Administratif'`, `Id_Utilisateur = NULL`, `ReplyTo = 1`, `Cc = 0`), marqueurs `{PRENOM}` / `{UTI_PRENOM}` / `{UTI_NOM}`. Auto-créé par `assurerTemplateRelanceVehicule()` (appelée par EA93 et par l'action `relancer-vehicule`), éditable via EA93. Mode Développement : redirection par `getEmailDestinataire()`, sujet préfixé `[DEV]`.
+
+### Colonnes `ja` ajoutées
+`PuissanceFiscale` (`TINYINT UNSIGNED NULL`, `NULL` = non renseignée) et `VehiculeElectrique` (`TINYINT(1) NOT NULL DEFAULT 0`), après `Defiscalisation`. Déployées par `ALTER TABLE` explicite (déjà appliqué en dev et en prod) — pas de migration automatique.
+
+### Règles
+- Période non paramétrable (toujours l'année civile en cours).
+- Un seul barème actif : pas d'historique par millésime (le millésime en vigueur est indiqué dans le `TABLE_COMMENT` de `ComptaDefiscalisation`).
+
+---
+
+## ED52 – Barème kilométrique
+
+**Fichier :** `DefiscalisationBaremeController` (CI4)  
+**Accès :** rôle Defiscalisateur ou Administrateur (filtre `defiscauth`) — accès depuis ED51
+
+### Objectif
+Gérer la table `ComptaDefiscalisation` (barème kilométrique fiscal voiture, valeurs de l'année — cf. `TABLE_COMMENT` « valeurs 2026 ») et le taux de majoration pour véhicule électrique.
+
+### Interface
+- Tableau des **5 tranches de puissance** figées : `Libellé`, `Cv_Min` / `Cv_Max` en lecture seule ; 4 champs éditables par ligne — `Coef_T1` (≤ 5 000 km), `Coef_T2` + `Fixe_T2` (5 001–20 000 km), `Coef_T3` (> 20 000 km).
+- Champ **Véhicules électriques — majoration (%)** (clé config `comptadefisc_majoration_electrique`).
+- Un seul bouton **Enregistrer** (tout le formulaire).
+- Pas d'ajout ni de suppression de ligne (structure figée).
+
+### Actions AJAX
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `index` | GET | Rendu de la vue : 5 lignes + valeur de la majoration |
+| `enregistrer` | POST (`lignes[]` = `{id, coef_t1, coef_t2, fixe_t2, coef_t3}`, `majoration`) | Met à jour les 5 lignes **et** la clé `comptadefisc_majoration_electrique` dans une **transaction** (tout ou rien) |
+
+### Validation
+Chaque coefficient / part fixe / majoration doit être un nombre `≥ 0` (virgule ou point acceptés) ; sinon `rollBack()` + message d'erreur. Coefficients arrondis à 3 décimales, `Fixe_T2` à 2, majoration à 2.
+
+### Table `ComptaDefiscalisation`
+`Id_ComptaDefiscalisation` (PK), `Cv_Min` / `Cv_Max` (intervalle de puissance fiscale ; `7`–`99` = « 7 CV et plus »), `Libelle`, `Coef_T1`, `Coef_T2`, `Fixe_T2`, `Coef_T3`, `UNIQUE (Cv_Min, Cv_Max)`. Millésime des valeurs indiqué dans le `TABLE_COMMENT`. Déployée par SQL explicite (`CREATE TABLE` + seed, déjà appliqué en dev et en prod) — pas de migration automatique.
+
+Seed **valeurs 2026** (`Coef_T1` / `Coef_T2` `+` `Fixe_T2` / `Coef_T3`) :
+
+| Puissance | ≤ 5 000 km | 5 001–20 000 km | > 20 000 km |
+|-----------|-----------|-----------------|-------------|
+| 3 CV et moins | 0,529 | 0,316 + 1 065 | 0,370 |
+| 4 CV | 0,606 | 0,340 + 1 330 | 0,407 |
+| 5 CV | 0,636 | 0,357 + 1 395 | 0,427 |
+| 6 CV | 0,665 | 0,374 + 1 457 | 0,447 |
+| 7 CV et plus | 0,697 | 0,394 + 1 515 | 0,470 |
+
+### Règles
+- Toute modification est immédiatement prise en compte par ED51 (barème relu à chaque appel `donnees`).
+- La majoration électrique est une valeur globale unique (clé de configuration), pas une colonne du barème.
+
+---
+
+## ED53 – Attestation sur l'honneur
+
+**Fichier :** `AttestationDefiscController` (CI4)  
+**Accès :** route **publique sans filtre**, contrôle en contrôleur — soit `?ja=TOKEN` valide (Obfuscator), soit une session Défiscalisateur / Administrateur ; sinon redirection vers `login`.
+
+### Objectif
+Produire l'**attestation sur l'honneur** du JA défiscalisé — propriété du véhicule, usage exclusivement personnel et bénévole sans contrepartie, engagement à fournir la carte grise. Deux usages :
+- **JA (lien tokenisé)** : le JA reçoit `attestation-defisc?ja=TOKEN` dans l'email de relance (marqueur `{URL_ATTESTATION_JA}`, message `messagerie` n°10). Il complète, signe, **valide** → écriture BDD + PDF archivé.
+- **Défiscalisateur / Admin** (carte du menu E005, bouton dans le bandeau d'ED51, sans token) : formulaire vierge, **impression seule**, aucune écriture ni PDF serveur.
+
+### Interface
+- Bandeau (non imprimé) : rappel de la marche à suivre, bouton **Imprimer / PDF**, et — en mode JA uniquement — bouton **Valider et transmettre**.
+- Feuille d'attestation : texte fixe + champs à compléter :
+  - `contenteditable` (soulignés pointillés, hint = libellé) : nom/prénom, adresse, date et lieu de naissance, marque/modèle, immatriculation, ville et date de signature ;
+  - `<select>` **Puissance administrative** (`—` / `3 CV` … `7 CV ou plus`) et `<select>` **Énergie** (7 `<optgroup>` : fossiles liquides, gaz fossiles, biocarburants, électricité, hybride, hydrogène, carburants de synthèse). Chaque `<option>` porte `data-elec="0|1"` ; seul « Batteries lithium-ion (100 % électrique) » a `data-elec="1"`. C'est ce flag (et non le libellé) qui écrit `ja.VehiculeElectrique`, le libellé choisi allant tel quel dans la ligne « Énergie : » du PDF.
+- **Pré-remplissage** :
+  - toujours (PHP) : nom de l'association (`Ligue {configuration.region} de Tennis de Table`), date du jour.
+  - en mode JA (serveur, depuis `ja`) : nom/prénom, adresse (`{Cp} {Ville}`), ville, puissance (`ja.PuissanceFiscale`) ; l'option « Batteries lithium-ion (100 % électrique) » est présélectionnée si `ja.VehiculeElectrique = 1` **et** la puissance est déjà connue (sinon `—`, le carburant thermique exact n'étant pas stocké).
+- **Case « Lu et approuvé »** (`#chk-approuve`) obligatoire ; fait partie du document imprimé/PDF.
+- **Zone de signature** : `<canvas>` sur fond ligné, tracé souris / doigt / stylet (API **Pointer Events**, `touch-action: none`, HiDPI via `devicePixelRatio`), bouton **Effacer**.
+
+### Actions
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `index` | GET | Rend la page. `?ja=TOKEN` → mode JA (pré-remplissage) ; sinon session Défiscalisateur/Admin ; sinon `redirect(login)`. |
+| `valider` | POST | **Token obligatoire.** Valide `puissance` ∈ {3,4,5,6,7} ou vide, `electrique` 0/1 ; décode le `pdf` (dataURI `data:application/pdf;base64,…`, entête `%PDF-`, ≤ 10 Mo) et l'écrit dans `_Defiscalisation/{Id_JA}.pdf` (écrase) ; puis `UPDATE ja SET PuissanceFiscale, VehiculeElectrique`. Retour `{ok, msg}`. CSRF : filtre global (cookie double-submit, sans session). |
+
+### Génération du PDF (côté navigateur)
+`asset/js/jspdf.umd.min.js` (jsPDF 2.5.2, vendoré — pas de Composer, se déploie comme un asset statique). Au clic sur **Valider** : contrôle des champs obligatoires + signature non vide, puis mise en page manuelle du PDF avec l'API texte de jsPDF (paragraphes `splitTextToSize`, puces, `addImage` du PNG de la signature via `canvas.toDataURL`), `doc.output('datauristring')` posté en base64 à `valider`. Le bouton **Imprimer / PDF** (`window.print()` + CSS `@media print`) reste disponible pour une impression locale (les deux modes).
+
+### Stockage des PDF
+`_Defiscalisation/{Id_JA}.pdf` à la racine du dépôt. `_Defiscalisation/.htaccess` (`Require all denied`) empêche tout accès direct par URL (données personnelles + signature). Aucune route de téléchargement pour l'instant (récupération par FTP).
+
+### Règles
+- Écriture BDD limitée à `ja.PuissanceFiscale` / `ja.VehiculeElectrique` (voir ED51). Les autres champs de l'attestation n'ont pas de colonne `ja` → PDF uniquement.
+- Le nom de l'association suit la clé de configuration `region` (EA88/EA91).
+- Le texte fixe de l'attestation est porté par la vue `attestation_defisc_index.php` : sa modification passe par une édition de code + déploiement (document à portée juridique, révisé rarement et à valider). En **mode staff uniquement**, un bandeau d'information (`.att-dev-note`, non imprimé) rappelle ce point au défiscalisateur.
+
+---
+
+## ED54 – Attestations reçues
+
+**Fichier :** `AttestationsListeController` (CI4)  
+**Accès :** rôle Defiscalisateur ou Administrateur (filtre `defiscauth`) — carte du menu E005
+
+### Objectif
+Consulter les attestations sur l'honneur signées que les JA ont déposées via ED53, stockées en PDF dans le répertoire `_Defiscalisation/` (un fichier `{Id_JA}.pdf` par JA).
+
+### Interface
+- Feuille blanche : titre + compteur, puis un tableau **N° JA · Nom · Prénom · Déposée le · [Ouvrir le PDF]**, trié par nom.
+- Un JA dont l'`Id` de fichier n'a pas de ligne en base est affiché « JA inconnu ».
+- État vide si le répertoire ne contient aucun `{n}.pdf`.
+
+### Actions
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `index` | GET | `scandir('_Defiscalisation/')` filtré sur `^\d+\.pdf$`, jointure `ja` (`Id_JA IN (…)`) sur l'Id extrait du nom de fichier ; ajoute la date de dépôt (`filemtime`) et la taille. |
+| `telecharger/{Id_JA}` | GET | Sert `_Defiscalisation/{Id_JA}.pdf` avec `Content-Type: application/pdf`, `Content-Disposition: inline`, `X-Content-Type-Options: nosniff`. 404 si le fichier n'existe pas. C'est le seul moyen d'ouvrir un PDF, `_Defiscalisation/.htaccess` refusant l'accès direct. |
+
+### Règles
+- Lecture seule : aucune suppression / renommage depuis l'écran (les fichiers sont gérés par ED53 à la validation, ou par FTP).
+- La liste reflète le contenu du répertoire à l'instant T, pas une table — un PDF supprimé par FTP disparaît de la liste.
 
 ---
 

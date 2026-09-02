@@ -1,0 +1,11 @@
+# Attestations sur l'honneur signées (ED53) : PDF contenant des données
+# personnelles et une signature manuscrite — jamais servis en accès direct.
+# Le .htaccess racine renvoie normalement les fichiers réels tels quels ;
+# celui-ci les bloque pour ce sous-dossier.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

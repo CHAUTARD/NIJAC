@@ -92,6 +92,11 @@ function initTableConfiguration(\PDO $pdo): void
     } catch (\PDOException $e) {
         // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
     }
+
+    // Note : le barème kilométrique (table ComptaDefiscalisation + config
+    // comptadefisc_majoration_electrique) et les colonnes ja.PuissanceFiscale /
+    // ja.VehiculeElectrique (ED51/ED52) sont déjà déployés en dev et en prod par
+    // ALTER manuel — pas de bloc de migration ici (voir SPECIFICATION.md ED51/ED52).
 }
 
 /**
@@ -334,6 +339,52 @@ function assurerTemplateMotDePasseOublie(\PDO $pdo): void
 }
 
 /**
+ * Garantit le type de message « Administratif » (ENUM messagerie.Type) et le
+ * gabarit n°10 « relance véhicule non renseigné » : email envoyé depuis ED51
+ * aux JA défiscalisés dont ja.PuissanceFiscale est NULL, leur demandant la
+ * puissance fiscale (carte grise, champ P.6) et la motorisation du véhicule.
+ * Marqueurs : {PRENOM}, {UTI_PRENOM}, {UTI_NOM}, {URL_ATTESTATION_JA} (lien vers
+ * ED53 pour saisir/signer en ligne). ReplyTo = 1 (les réponses reviennent au
+ * défiscalisateur qui a lancé l'envoi). Id_Utilisateur NULL = modèle système,
+ * éditable via EA93. Idempotente, appelée par MessagerieController et par
+ * DefiscalisationController::relancerVehicule() — si la ligne existe déjà mais
+ * ne contient pas encore {URL_ATTESTATION_JA}, le bloc lien est ajouté à la fin
+ * sans écraser une reformulation faite en EA93.
+ */
+function assurerTemplateRelanceVehicule(\PDO $pdo): void
+{
+    ajouterTypeMessagerie($pdo, 'Administratif');
+
+    $lienBloc = "\n\nVous pouvez aussi renseigner ces informations et signer l'attestation "
+        . "sur l'honneur directement en ligne :\n{URL_ATTESTATION_JA}";
+
+    $sujet   = 'NIJAC – Défiscalisation : puissance fiscale de votre véhicule';
+    $message = "Bonjour {PRENOM},\n\n"
+        . "Vous avez demandé à bénéficier de la défiscalisation de vos frais de juge-arbitre "
+        . "(abandon de frais donnant lieu à un reçu fiscal).\n\n"
+        . "Pour calculer vos frais kilométriques selon le barème fiscal, il nous manque deux "
+        . "informations sur votre véhicule :\n\n"
+        . "  1. la puissance fiscale, en chevaux fiscaux (champ P.6 de la carte grise) ;\n"
+        . "  2. s'il s'agit d'un véhicule électrique (oui / non).\n\n"
+        . "Merci de répondre à cet email en précisant ces deux éléments, par exemple :\n"
+        . "    Puissance fiscale : 5 CV — Électrique : non\n\n"
+        . "Sans cette information, vos frais kilométriques ne pourront pas figurer sur votre reçu fiscal.\n\n"
+        . "Cordialement,\n{UTI_PRENOM} {UTI_NOM}\nLigue Normandie de Tennis de Table"
+        . $lienBloc;
+
+    $row = $pdo->query('SELECT Message FROM messagerie WHERE Id_Messagerie = 10')->fetch();
+    if (!$row) {
+        $pdo->prepare('INSERT INTO messagerie (Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, Cc, ReplyTo) VALUES (10, ?, ?, ?, NULL, 0, 1)')
+            ->execute(['Administratif', $sujet, $message]);
+        return;
+    }
+    if (strpos((string) $row['Message'], '{URL_ATTESTATION_JA}') === false) {
+        $pdo->prepare('UPDATE messagerie SET Message = CONCAT(Message, ?) WHERE Id_Messagerie = 10')
+            ->execute([$lienBloc]);
+    }
+}
+
+/**
  * Règle de robustesse du mot de passe (E008 « mot de passe oublié ») : 10 caractères
  * minimum, avec au moins une minuscule, une majuscule, un chiffre et un caractère
  * spécial. Retourne null si conforme, sinon le message d'erreur à afficher.
@@ -547,6 +598,7 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
         '{URL_LIGUE}'            => getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),
         '{URL_ADRESSE_JA}'       => $token !== '' ? (site_url('adresse-ja') . '?ja=' . $token) : '',
         '{URL_DISPONIBILITE_JA}' => $token !== '' ? (site_url('disponibilite-ja') . '?ja=' . $token) : '',
+        '{URL_ATTESTATION_JA}'   => $token !== '' ? (site_url('attestation-defisc') . '?ja=' . $token) : '',
         '{URL_DISPO_REGIONALE_JA}' => $token !== '' ? (site_url('dispo-regionale-ja') . '?ja=' . $token) : '',
         '{URL_INFO_RENCONTRE}'   => $token !== '' ? (site_url('info-rencontre') . '?ja=' . $token) : '',
         '{URL_CONVOCATION_JA}'   => !empty($idNomination) ? (site_url('convocation-ja') . '?nomination=' . $idNomination . '&cnv=' . $tokenNomination) : '',

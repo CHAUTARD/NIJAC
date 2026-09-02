@@ -1,0 +1,143 @@
+/* ══════════════════════════════════════════════
+   NIJAC – Habillage « fiche moderne » — variante ORANGE
+   Même charte que nijac-skin.css (EN11) sur base de couleur orange.
+   Surcharge additive : à charger APRÈS le <style> inline de la vue.
+   Écrans : ED51 (Défiscalisation JA), ED52 (Barème kilométrique)
+   ══════════════════════════════════════════════ */
+
+:root {
+    --or-500: #e8590c; --or-700: #c2410c; --or-900: #9a3412;
+    --or-tint: #fff1e6; --or-tint-2: #ffe4d1; --or-sel: #ffd7bd;
+    --en-ink: #1f2937; --en-muted: #8a94a6; --en-line: #f1ece8;
+    --en-card: #fff; --en-bg: #fffaf6; --en-radius: 14px;
+}
+
+body { background: var(--en-bg); color: var(--en-ink); }
+
+/* ── En-tête orange dégradé ── */
+#page-header {
+    background: linear-gradient(90deg, var(--or-700), var(--or-500) 55%, #f6811f);
+    color: #fff;
+    padding: .9rem 1.4rem; font-size: 1rem; letter-spacing: .2px;
+    box-shadow: 0 1px 0 rgba(0,0,0,.08);
+}
+#page-header small {
+    display: inline-block; background: rgba(255,255,255,.18); color: #fff !important;
+    border-radius: 999px; padding: .08rem .55rem; font-size: .68rem;
+    font-weight: 700; vertical-align: middle; letter-spacing: .5px;
+}
+#page-header a.btn {
+    background: rgba(255,255,255,.15) !important; color: #fff !important;
+    border: 1px solid rgba(255,255,255,.35) !important; border-radius: 999px !important;
+    padding: .3rem .95rem !important; font-weight: 600;
+}
+#page-header a.btn:hover { background: rgba(255,255,255,.28) !important; }
+
+/* ── Bandeau utilisateur ── */
+#toolbar-user {
+    background: var(--en-bg); border: 0; padding: 1rem 1.4rem .25rem;
+    display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+}
+#toolbar-user .ts-user {
+    display: inline-flex; align-items: center; font-weight: 700; color: var(--en-ink);
+}
+#toolbar-user .ts-user i.bi-person-fill {
+    display: inline-flex; width: 34px; height: 34px; border-radius: 50%;
+    background: var(--or-tint); color: var(--or-700);
+    align-items: center; justify-content: center; margin-right: .55rem; font-size: 1rem;
+}
+#toolbar-user .ts-pwd-warning { align-self: center; }
+
+/* ── Barre d'outils : puces arrondies ── */
+#toolbar {
+    background: var(--en-bg); border: 0; padding: .4rem 1.4rem 1rem; gap: .6rem; flex-wrap: wrap;
+}
+#toolbar .annee-badge {
+    background: var(--or-tint); color: var(--or-900); border: 1px solid #f6d8c2;
+    border-radius: 999px; padding: .32rem .9rem; font-weight: 700;
+}
+
+/* Boutons d'action : pilules ; l'action principale est pleine orange */
+.btn-bareme, .btn-export, .btn-save {
+    border-radius: 999px !important;
+    font-weight: 600; padding: .4rem 1.1rem;
+    display: inline-flex; align-items: center; gap: .4rem;
+    text-decoration: none; border: 1px solid var(--or-500);
+    box-shadow: 0 1px 2px rgba(16,24,40,.06); transition: background .15s;
+}
+.btn-bareme { background: var(--en-card); color: var(--or-700); }
+.btn-bareme:hover { background: var(--or-tint); }
+.btn-export, .btn-save { background: var(--or-500); color: #fff; }
+.btn-export:hover, .btn-save:hover { background: var(--or-700); opacity: 1; }
+.btn-export:disabled, .btn-save:disabled { opacity: .5; }
+
+/* ── Cartes résumé (façon stat-cards EN11) ── */
+#resume-totaux { gap: .8rem; }
+.resume-card {
+    background: var(--en-card); border: 1px solid var(--en-line);
+    border-left: 1px solid var(--en-line); border-radius: var(--en-radius);
+    padding: .7rem 1.15rem; min-width: 160px; box-shadow: 0 1px 2px rgba(16,24,40,.04);
+}
+.resume-card .rc-label {
+    font-size: .62rem; font-weight: 700; letter-spacing: .6px;
+    color: var(--or-900); text-transform: uppercase;
+}
+.resume-card .rc-value { font-size: 1.5rem; font-weight: 800; line-height: 1.1; color: var(--or-700); }
+.resume-card.rc-blue  .rc-value,
+.resume-card.rc-green .rc-value,
+.resume-card.rc-orange .rc-value { color: var(--or-700); }
+
+/* ── Feuille blanche contenant le tableau / le formulaire ── */
+#wrap-table, #wrap {
+    background: var(--en-card); border: 1px solid var(--en-line);
+    border-radius: var(--en-radius); box-shadow: 0 1px 3px rgba(16,24,40,.06);
+}
+#wrap h1 { color: var(--or-900); }
+#wrap .sub code { background: var(--or-tint); }
+
+/* ── Tableaux : en-tête clair, libellés capitales, zébrage orange clair ── */
+#tbl-defisc, table.bar { font-size: .82rem; }
+#tbl-defisc thead th,
+table.bar thead th {
+    background: var(--en-card) !important; color: var(--en-muted) !important;
+    border: 0 !important; border-bottom: 2px solid var(--en-line) !important;
+    font-size: .68rem; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+    padding: .7rem .6rem;
+}
+#tbl-defisc tbody tr,
+table.bar tbody tr { border-bottom: 1px solid #f2f0ee; }
+#tbl-defisc tbody tr:nth-child(odd),
+table.bar tbody tr:nth-child(odd) { background: var(--or-tint); }
+#tbl-defisc tbody tr:nth-child(even),
+table.bar tbody tr:nth-child(even) { background: var(--en-card); }
+#tbl-defisc tbody tr:hover,
+table.bar tbody tr:hover,
+#tbl-defisc tbody tr:nth-child(even):hover,
+#tbl-defisc tbody tr:nth-child(odd):hover { background: var(--or-tint-2); }
+#tbl-defisc tbody td { border: 0; padding: .55rem .6rem; }
+table.bar td { border: 0; }
+table.bar td.lib { color: var(--or-900); }
+
+/* Pied de tableau : bandeau orange discret au lieu du bleu */
+#tbl-defisc tfoot td {
+    background: var(--or-900); color: #fff; font-weight: 700; padding: .5rem .6rem;
+}
+
+/* Champs de saisie en pilule */
+#tbl-defisc .sel-cv,
+table.bar input {
+    border-radius: 999px; border: 1px solid #e4d7cd; background: var(--en-card);
+    box-shadow: 0 1px 2px rgba(16,24,40,.04);
+}
+#tbl-defisc .sel-cv:focus,
+table.bar input:focus { outline: none; border-color: var(--or-500); }
+
+.bareme-manquant { color: var(--or-700); }
+
+.formule { background: var(--or-tint); border-left: 3px solid var(--or-500); }
+.formule strong { color: var(--or-900); }
+.maj-row label { color: var(--or-900); }
+.maj-row input { border-radius: 999px; border: 1px solid #e4d7cd; }
+
+/* ── Pied de page ── */
+#page-footer { background: var(--en-bg); border: 0; }
