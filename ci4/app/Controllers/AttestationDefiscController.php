@@ -126,32 +126,76 @@ class AttestationDefiscController extends BaseController
             }
             $elec = $this->request->getPost('electrique') ? 1 : 0;
 
-            $pdfData = (string) $this->request->getPost('pdf');
-            if (!str_starts_with($pdfData, 'data:application/pdf;base64,')) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'PDF manquant ou invalide.']);
+            $att = $this->decoderJustificatif((string) $this->request->getPost('pdf'));
+            if (!$att['ok'] || $att['ext'] !== 'pdf') {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'PDF de l\'attestation : ' . ($att['msg'] ?? 'invalide') . '.']);
             }
-            $bin = base64_decode(substr($pdfData, strpos($pdfData, ',') + 1), true);
-            if ($bin === false || strncmp($bin, '%PDF-', 5) !== 0) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Contenu PDF invalide.']);
-            }
-            if (strlen($bin) > 10 * 1024 * 1024) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'PDF trop volumineux.']);
+
+            // Carte grise facultative (PDF ou image) jointe par le JA.
+            $cg = null;
+            $cgData = trim((string) $this->request->getPost('carte_grise'));
+            if ($cgData !== '') {
+                $cgRes = $this->decoderJustificatif($cgData);
+                if (!$cgRes['ok']) {
+                    return $this->response->setJSON(['ok' => false, 'msg' => 'Carte grise : ' . $cgRes['msg'] . '.']);
+                }
+                $cg = $cgRes;
             }
 
             $dir = __DIR__ . '/../../../_Defiscalisation';
             if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Répertoire _Defiscalisation absent.']);
             }
-            if (file_put_contents($dir . '/' . $idJa . '.pdf', $bin) === false) {
+            if (file_put_contents($dir . '/' . $idJa . '.pdf', $att['bin']) === false) {
                 return $this->response->setJSON(['ok' => false, 'msg' => "Écriture du PDF impossible."]);
+            }
+            if ($cg !== null) {
+                foreach (glob($dir . '/' . $idJa . '_cg.*') ?: [] as $vieux) {
+                    @unlink($vieux);
+                }
+                file_put_contents($dir . '/' . $idJa . '_cg.' . $cg['ext'], $cg['bin']);
             }
 
             getPDO()->prepare('UPDATE ja SET PuissanceFiscale = :cv, VehiculeElectrique = :e WHERE Id_JA = :id')
                 ->execute([':cv' => $cv, ':e' => $elec, ':id' => $idJa]);
 
-            return $this->response->setJSON(['ok' => true, 'msg' => 'Attestation enregistrée. Merci !']);
+            return $this->response->setJSON([
+                'ok'  => true,
+                'msg' => 'Attestation enregistrée' . ($cg !== null ? ' avec la carte grise' : '') . '. Merci !',
+            ]);
         } catch (\Throwable $e) {
             return $this->response->setJSON(['ok' => false, 'msg' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Décode un data-URI base64 (sortie jsPDF ou fichier téléversé) et valide le
+     * type par la signature du contenu. Retourne
+     * ['ok'=>bool, 'bin'=>?string, 'ext'=>?string ('pdf'|'jpg'|'png'), 'msg'=>string].
+     */
+    private function decoderJustificatif(string $dataUri): array
+    {
+        $virgule = strpos($dataUri, ',');
+        if ($virgule === false || stripos(substr($dataUri, 0, $virgule), 'base64') === false) {
+            return ['ok' => false, 'ext' => null, 'msg' => 'fichier manquant ou format non reconnu'];
+        }
+        $bin = base64_decode(substr($dataUri, $virgule + 1), true);
+        if ($bin === false || $bin === '') {
+            return ['ok' => false, 'ext' => null, 'msg' => 'contenu illisible'];
+        }
+        if (strlen($bin) > 10 * 1024 * 1024) {
+            return ['ok' => false, 'ext' => null, 'msg' => 'fichier trop volumineux (max 10 Mo)'];
+        }
+        $ext = match (true) {
+            strncmp($bin, '%PDF-', 5) === 0             => 'pdf',
+            strncmp($bin, "\xFF\xD8\xFF", 3) === 0      => 'jpg',
+            strncmp($bin, "\x89PNG\r\n\x1a\n", 8) === 0 => 'png',
+            default                                     => null,
+        };
+        if ($ext === null) {
+            return ['ok' => false, 'ext' => null, 'msg' => 'seuls les fichiers PDF, JPEG ou PNG sont acceptés'];
+        }
+
+        return ['ok' => true, 'bin' => $bin, 'ext' => $ext, 'msg' => ''];
     }
 }

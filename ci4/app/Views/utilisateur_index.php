@@ -173,6 +173,7 @@
 const UTILISATEUR_BASE = '<?= site_url('utilisateur') ?>';
 const MOI_ID = <?= (int) $moiId ?>;
 let   currentId = null; // null = nouvel utilisateur
+let   loginCharge = ''; // login chargé dans le formulaire (détection renommage vs création oubliée)
 const sortState = { col: null, asc: true };
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
@@ -221,6 +222,7 @@ function selectionnerLigne($tr) {
         if (!res.ok) return;
         const u = res.data;
         currentId = parseInt(u.Id_Utilisateur);
+        loginCharge = u.Login || '';
         $('#txt-id').val(currentId);
         $('#txt-login').val(u.Login);
         $('#txt-nom').val(u.Nom);
@@ -240,6 +242,7 @@ function selectionnerLigne($tr) {
 // ── Nouveau ───────────────────────────────────────────────────────────────────
 $('#btn-nouveau').on('click', function () {
     currentId = null;
+    loginCharge = '';
     $('#tbody-liste tr').removeClass('selected');
     $('#txt-id').val('');
     $('#txt-login').val('').trigger('focus');
@@ -273,10 +276,12 @@ $('#btn-enregistrer').on('click', function () {
     const url    = isNew ? UTILISATEUR_BASE : `${UTILISATEUR_BASE}/${currentId}`;
     const method = isNew ? 'POST' : 'PUT';
 
+    function envoyer() {
     $.ajax({ url, method, data: payload, dataType: 'json' }).done(function (res) {
         if (!res.ok) { toast(res.msg, false); setStatus(res.msg, false); return; }
         toast(res.msg);
         currentId = res.id;
+        loginCharge = payload.login;
         $('#txt-id').val(res.id);
         $('#chk-ecraser').prop('checked', false).prop('disabled', false);
         $('#ecraser-force').addClass('d-none');
@@ -289,6 +294,21 @@ $('#btn-enregistrer').on('click', function () {
         chargerListe();   // rafraîchit la liste sans re-sélection (préserve l'encadré mot de passe)
         $('#btn-supprimer').prop('disabled', currentId === MOI_ID);
     });
+    }
+
+    // Garde-fou : on est en modification et le login a changé -> soit renommage
+    // volontaire, soit « Nouveau » oublié après avoir sélectionné une ligne.
+    if (!isNew && payload.login !== loginCharge) {
+        nijacConfirm(
+            `Vous modifiez le compte n°${currentId} : son login passe de « ${loginCharge} » à « ${payload.login} ».\n\n`
+            + `Pour créer un NOUVEAU compte, cliquez d'abord sur « Nouveau ».`,
+            envoyer,
+            null,
+            { type: 'warning', title: 'Modification du login', confirmLabel: 'Modifier ce compte' }
+        );
+        return;
+    }
+    envoyer();
 });
 
 // ── Supprimer ─────────────────────────────────────────────────────────────────

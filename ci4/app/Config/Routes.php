@@ -461,3 +461,4 @@ $routes->post('attestation-defisc/valider', 'AttestationDefiscController::valide
 // Menu E005. Rôle Defiscalisateur ou Administrateur (filtre "defiscauth").
 $routes->get('attestations-defisc', 'AttestationsListeController::index', ['filter' => 'defiscauth']);
 $routes->get('attestations-defisc/telecharger/(:num)', 'AttestationsListeController::telecharger/$1', ['filter' => 'defiscauth']);
+$routes->get('attestations-defisc/carte-grise/(:num)', 'AttestationsListeController::carteGrise/$1', ['filter' => 'defiscauth']);

@@ -351,6 +351,7 @@
 <?= view('partials/page_footer', ['pfStatusAlign' => 'left']) ?>
 
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
+<script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-sortable-table.js') ?>"></script>
 <script>
@@ -425,8 +426,6 @@ function filtrerEtAfficher() {
     }
     afficherTableau(trier(rows));
 }
-$('#search-defisc').on('input', filtrerEtAfficher);
-nijacSortableTable('#tbl-defisc thead th[data-col]', 'col', sortState, filtrerEtAfficher);
 
 function afficherTableau(data) {
     const $tbody = $('#tbody-defisc').empty();
@@ -540,7 +539,7 @@ $('#tbody-defisc').on('change', '.sel-cv, .chk-elec', function () {
 // ── Relance email : JA cochés dans le tableau ────────────────────────────────
 $('#btn-relance').on('click', function () {
     const ids = idsRelanceCoches();
-    if (!ids.length) return;
+    if (!ids.length) { toast('Cochez au moins un JA à relancer.', false); return; }
 
     nijacConfirm(
         `Envoyer un email de relance à ${ids.length} juge(s)-arbitre(s) coché(s) pour qu'il(s) renseigne(nt) et signe(nt) l'attestation ?`,
@@ -594,7 +593,13 @@ $('#btn-export').on('click', function () {
 });
 
 // ── Init : chargement automatique, pas de bouton "Charger" ──────────────────
-$(function () { chargerListe(); });
+$(function () {
+    $('#search-defisc').on('input', filtrerEtAfficher);
+    if (typeof nijacSortableTable === 'function') {
+        nijacSortableTable('#tbl-defisc thead th[data-col]', 'col', sortState, filtrerEtAfficher);
+    }
+    chargerListe();
+});
 </script>
 <script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
 </body>

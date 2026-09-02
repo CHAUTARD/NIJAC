@@ -787,6 +787,7 @@ Produire l'**attestation sur l'honneur** du JA défiscalisé — propriété du 
 
 ### Interface
 - Bandeau (non imprimé) : rappel de la marche à suivre, bouton **Imprimer / PDF**, et — en mode JA uniquement — bouton **Valider et transmettre**.
+- **Mode staff uniquement** : bandeau d'information `.att-dev-note` (non imprimé) rappelant que le texte de l'attestation est codé dans la vue et que toute modification passe par le développeur.
 - Feuille d'attestation : texte fixe + champs à compléter :
   - `contenteditable` (soulignés pointillés, hint = libellé) : nom/prénom, adresse, date et lieu de naissance, marque/modèle, immatriculation, ville et date de signature ;
   - `<select>` **Puissance administrative** (`—` / `3 CV` … `7 CV ou plus`) et `<select>` **Énergie** (7 `<optgroup>` : fossiles liquides, gaz fossiles, biocarburants, électricité, hybride, hydrogène, carburants de synthèse). Chaque `<option>` porte `data-elec="0|1"` ; seul « Batteries lithium-ion (100 % électrique) » a `data-elec="1"`. C'est ce flag (et non le libellé) qui écrit `ja.VehiculeElectrique`, le libellé choisi allant tel quel dans la ligne « Énergie : » du PDF.
@@ -795,18 +796,19 @@ Produire l'**attestation sur l'honneur** du JA défiscalisé — propriété du 
   - en mode JA (serveur, depuis `ja`) : nom/prénom, adresse (`{Cp} {Ville}`), ville, puissance (`ja.PuissanceFiscale`) ; l'option « Batteries lithium-ion (100 % électrique) » est présélectionnée si `ja.VehiculeElectrique = 1` **et** la puissance est déjà connue (sinon `—`, le carburant thermique exact n'étant pas stocké).
 - **Case « Lu et approuvé »** (`#chk-approuve`) obligatoire ; fait partie du document imprimé/PDF.
 - **Zone de signature** : `<canvas>` sur fond ligné, tracé souris / doigt / stylet (API **Pointer Events**, `touch-action: none`, HiDPI via `devicePixelRatio`), bouton **Effacer**.
+- **Pièce jointe carte grise** (mode JA, facultatif) : `<input type="file" accept=".pdf,image/*">`, lu en base64 (`FileReader`), envoyé dans `carte_grise` ; type validé côté serveur par la signature du contenu (`%PDF-` / JPEG / PNG), ≤ 10 Mo, écrit dans `_Defiscalisation/{Id_JA}_cg.{pdf|jpg|png}` (remplace l'existant).
 
 ### Actions
 | Action | Méthode | Description |
 |--------|---------|-------------|
 | `index` | GET | Rend la page. `?ja=TOKEN` → mode JA (pré-remplissage) ; sinon session Défiscalisateur/Admin ; sinon `redirect(login)`. |
-| `valider` | POST | **Token obligatoire.** Valide `puissance` ∈ {3,4,5,6,7} ou vide, `electrique` 0/1 ; décode le `pdf` (dataURI `data:application/pdf;base64,…`, entête `%PDF-`, ≤ 10 Mo) et l'écrit dans `_Defiscalisation/{Id_JA}.pdf` (écrase) ; puis `UPDATE ja SET PuissanceFiscale, VehiculeElectrique`. Retour `{ok, msg}`. CSRF : filtre global (cookie double-submit, sans session). |
+| `valider` | POST | **Token obligatoire.** Valide `puissance` ∈ {3,4,5,6,7} ou vide, `electrique` 0/1 ; décode `pdf` (dataURI, entête `%PDF-`, ≤ 10 Mo — `decoderJustificatif()`, tolère le préfixe jsPDF `;filename=…`) → `_Defiscalisation/{Id_JA}.pdf` ; si `carte_grise` fourni → `_Defiscalisation/{Id_JA}_cg.{ext}` ; puis `UPDATE ja SET PuissanceFiscale, VehiculeElectrique`. Retour `{ok, msg}`. CSRF : filtre global (cookie double-submit, sans session). |
 
 ### Génération du PDF (côté navigateur)
-`asset/js/jspdf.umd.min.js` (jsPDF 2.5.2, vendoré — pas de Composer, se déploie comme un asset statique). Au clic sur **Valider** : contrôle des champs obligatoires + signature non vide, puis mise en page manuelle du PDF avec l'API texte de jsPDF (paragraphes `splitTextToSize`, puces, `addImage` du PNG de la signature via `canvas.toDataURL`), `doc.output('datauristring')` posté en base64 à `valider`. Le bouton **Imprimer / PDF** (`window.print()` + CSS `@media print`) reste disponible pour une impression locale (les deux modes).
+`asset/js/jspdf.umd.min.js` (jsPDF 2.5.2, vendoré — pas de Composer, se déploie comme un asset statique). Au clic sur **Valider** : contrôle des champs obligatoires + case « Lu et approuvé » + signature non vide ; mise en page manuelle du PDF avec l'API texte de jsPDF (paragraphes `splitTextToSize`, puces, `addImage` du PNG de la signature via `canvas.toDataURL`) → `doc.output('datauristring')`. Si une carte grise est jointe, elle est lue en base64 (`FileReader`) puis l'envoi part avec `pdf` **et** `carte_grise` ; sinon envoi direct. Côté serveur, l'attestation doit se décoder en **PDF** (`decoderJustificatif()` → `ext === 'pdf'`), la carte grise en PDF, JPEG ou PNG. Le bouton **Imprimer / PDF** (`window.print()` + CSS `@media print`) reste disponible pour une impression locale (les deux modes).
 
-### Stockage des PDF
-`_Defiscalisation/{Id_JA}.pdf` à la racine du dépôt. `_Defiscalisation/.htaccess` (`Require all denied`) empêche tout accès direct par URL (données personnelles + signature). Aucune route de téléchargement pour l'instant (récupération par FTP).
+### Stockage
+`_Defiscalisation/{Id_JA}.pdf` (attestation signée) + `_Defiscalisation/{Id_JA}_cg.{pdf|jpg|png}` (carte grise, si jointe), à la racine du dépôt. `_Defiscalisation/.htaccess` (`Require all denied`) bloque l'accès direct par URL ; la consultation passe par ED54 (`telecharger` / `carte-grise`).
 
 ### Règles
 - Écriture BDD limitée à `ja.PuissanceFiscale` / `ja.VehiculeElectrique` (voir ED51). Les autres champs de l'attestation n'ont pas de colonne `ja` → PDF uniquement.
@@ -821,18 +823,20 @@ Produire l'**attestation sur l'honneur** du JA défiscalisé — propriété du 
 **Accès :** rôle Defiscalisateur ou Administrateur (filtre `defiscauth`) — carte du menu E005
 
 ### Objectif
-Consulter les attestations sur l'honneur signées que les JA ont déposées via ED53, stockées en PDF dans le répertoire `_Defiscalisation/` (un fichier `{Id_JA}.pdf` par JA).
+Consulter les documents déposés par les JA via ED53 dans le répertoire `_Defiscalisation/` : l'attestation signée (`{Id_JA}.pdf`) et, si elle a été jointe, la carte grise (`{Id_JA}_cg.{pdf|jpg|png}`).
 
 ### Interface
-- Feuille blanche : titre + compteur, puis un tableau **N° JA · Nom · Prénom · Déposée le · [Ouvrir le PDF]**, trié par nom.
+- Feuille blanche : titre + compteur, puis un tableau **N° JA · Nom · Prénom · Déposée le · actions**, trié par nom.
+- Colonne actions : bouton **Attestation** (toujours) et bouton **Carte grise** (seulement si le fichier `{Id_JA}_cg.*` existe).
 - Un JA dont l'`Id` de fichier n'a pas de ligne en base est affiché « JA inconnu ».
 - État vide si le répertoire ne contient aucun `{n}.pdf`.
 
 ### Actions
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `index` | GET | `scandir('_Defiscalisation/')` filtré sur `^\d+\.pdf$`, jointure `ja` (`Id_JA IN (…)`) sur l'Id extrait du nom de fichier ; ajoute la date de dépôt (`filemtime`) et la taille. |
-| `telecharger/{Id_JA}` | GET | Sert `_Defiscalisation/{Id_JA}.pdf` avec `Content-Type: application/pdf`, `Content-Disposition: inline`, `X-Content-Type-Options: nosniff`. 404 si le fichier n'existe pas. C'est le seul moyen d'ouvrir un PDF, `_Defiscalisation/.htaccess` refusant l'accès direct. |
+| `index` | GET | `scandir('_Defiscalisation/')` filtré sur `^\d+\.pdf$`, jointure `ja` (`Id_JA IN (…)`) sur l'Id extrait du nom de fichier ; par ligne : date de dépôt (`filemtime`), taille, et présence d'une carte grise (`glob('{id}_cg.*')`). |
+| `telecharger/{Id_JA}` | GET | Sert `_Defiscalisation/{Id_JA}.pdf` en `inline` (`application/pdf`, `nosniff`). 404 sinon. Seul moyen d'ouvrir le fichier, `_Defiscalisation/.htaccess` refusant l'accès direct. |
+| `carte-grise/{Id_JA}` | GET | Sert `_Defiscalisation/{Id_JA}_cg.*` en `inline` (Content-Type déduit de l'extension : pdf/jpeg/png). 404 si absent. Lien affiché dans la liste seulement quand le fichier existe. |
 
 ### Règles
 - Lecture seule : aucune suppression / renommage depuis l'écran (les fichiers sont gérés par ED53 à la validation, ou par FTP).

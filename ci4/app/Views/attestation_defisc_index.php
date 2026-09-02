@@ -57,7 +57,7 @@ $enElec = ($modeJa && $fiche && $fiche['cv'] !== null && $fiche['electrique']);
             gap: .75rem;
             flex-wrap: wrap;
         }
-        #toolbar .att-hint { font-size: .82rem; color: #6b7280; }
+        .att-hint { font-size: .82rem; color: #6b7280; margin: .8rem 0 0; }
 
         .btn-imprimer, .btn-valider {
             border: none; border-radius: 6px;
@@ -69,7 +69,7 @@ $enElec = ($modeJa && $fiche && $fiche['cv'] !== null && $fiche['electrique']);
         .btn-valider { background: #1a7f4b; color: #fff; margin-left: auto; }
         .btn-valider:hover { opacity: .9; }
         .btn-valider:disabled { opacity: .5; cursor: not-allowed; }
-        #toolbar .att-hint + .btn-imprimer { margin-left: auto; }
+        #toolbar .btn-imprimer:first-child { margin-left: auto; }
         #toolbar .btn-valider ~ .btn-imprimer { margin-left: 0; }
 
         .att-ok { color: #1a7f4b; font-weight: 700; display: inline-flex; align-items: center; gap: .4rem; margin-left: auto; }
@@ -155,6 +155,12 @@ $enElec = ($modeJa && $fiche && $fiche['cv'] !== null && $fiche['electrique']);
             color: #9aa7b8; font-size: .85rem; font-style: italic; pointer-events: none;
         }
         .sig-tools { margin-top: .5rem; }
+        #toolbar .cg-field {
+            display: inline-flex; align-items: center; gap: .4rem; flex-wrap: wrap;
+            font-size: .82rem; font-weight: 600; color: #374151;
+        }
+        #toolbar .cg-field .cg-opt { font-weight: 400; color: #6b7280; }
+        #toolbar .cg-field input[type=file] { font-size: .78rem; max-width: 210px; }
         .btn-sig-clear {
             background: #fff; color: #b45309; border: 1px solid #e4c9a8;
             border-radius: 6px; font-size: .8rem; font-weight: 600;
@@ -215,13 +221,11 @@ $enElec = ($modeJa && $fiche && $fiche['cv'] !== null && $fiche['electrique']);
 <?php endif; ?>
 
 <div id="toolbar" class="no-print">
-    <span class="att-hint">
-        <i class="bi bi-pencil-square me-1"></i>
-        <?= $modeJa
-            ? 'Complétez les champs soulignés, choisissez la puissance et l\'énergie, cochez « Lu et approuvé », signez, puis validez.'
-            : 'Complétez les champs soulignés, cochez « Lu et approuvé », signez puis imprimez.' ?>
-    </span>
     <?php if ($modeJa): ?>
+    <label class="cg-field" for="f-cartegrise">
+        <i class="bi bi-paperclip"></i>Carte grise <span class="cg-opt">(PDF/image, facultatif)</span>
+        <input type="file" id="f-cartegrise" accept=".pdf,image/*">
+    </label>
     <button class="btn-valider" id="btn-valider"><i class="bi bi-send-check"></i>Valider et transmettre</button>
     <?php endif; ?>
     <button class="btn-imprimer" id="btn-imprimer"><i class="bi bi-printer"></i>Imprimer / PDF</button>
@@ -260,7 +264,7 @@ $enElec = ($modeJa && $fiche && $fiche['cv'] !== null && $fiche['electrique']);
                 Je suis propriétaire du véhicule suivant&nbsp;:
                 <ul>
                     <li>Marque / Modèle&nbsp;: <span class="ph" contenteditable="true" data-ph="ex. Renault Zoé" id="f-marque"></span></li>
-                    <li>Immatriculation&nbsp;: <span class="ph" contenteditable="true" data-ph="AB-123-CD" id="f-immat"></span></li>
+                    <li>Immatriculation&nbsp;: <span class="ph" contenteditable="true" data-ph="AB-123-CD" id="f-immat" style="text-transform:uppercase"></span></li>
                     <li>Puissance administrative&nbsp;:
                         <select class="ph-sel" id="f-puissance">
                             <option value="">—</option>
@@ -337,6 +341,13 @@ $enElec = ($modeJa && $fiche && $fiche['cv'] !== null && $fiche['electrique']);
         <div class="sig-tools no-print">
             <button type="button" id="btn-sig-clear" class="btn-sig-clear"><i class="bi bi-eraser"></i>Effacer la signature</button>
         </div>
+
+        <p class="att-hint no-print">
+            <i class="bi bi-pencil-square me-1"></i>
+            <?= $modeJa
+                ? 'Complétez les champs soulignés, choisissez la puissance et l\'énergie, cochez « Lu et approuvé », signez, puis validez.'
+                : 'Complétez les champs soulignés, cochez « Lu et approuvé », signez puis imprimez.' ?>
+        </p>
     </div>
 </div>
 
@@ -430,7 +441,7 @@ function genererPdf() {
     y += 1;
     puce('Je suis propriétaire du véhicule suivant :');
     puce(`Marque / Modèle : ${champ('f-marque')}`, 6);
-    puce(`Immatriculation : ${champ('f-immat')}`, 6);
+    puce(`Immatriculation : ${champ('f-immat').toUpperCase()}`, 6);
     puce(`Puissance administrative : ${champ('f-puissance')}`, 6);
     puce(`Énergie : ${energieTexte()}`, 6);
     puce(`Ce véhicule est utilisé exclusivement pour mes déplacements personnels et pour les besoins `
@@ -480,19 +491,34 @@ if (MODE_JA) {
         try { pdf = genererPdf(); }
         catch (err) { toast('Génération du PDF impossible : ' + err.message, false); $b.prop('disabled', false); return; }
 
-        $.post(`${BASE}/valider`, {
-            ja:         TOKEN,
-            puissance:  document.getElementById('f-puissance').value,
-            electrique: energieEstElectrique() ? 1 : 0,
-            pdf:        pdf
-        })
-            .done(function (res) {
-                if (!res.ok) { toast(res.msg || 'Échec.', false); $b.prop('disabled', false); return; }
-                toast(res.msg || 'Attestation enregistrée.', true);
-                $('#attestation').addClass('att-verrouille');
-                $b.replaceWith('<span class="att-ok"><i class="bi bi-check-circle-fill"></i>Attestation transmise</span>');
+        function envoyer(carteGrise) {
+            $.post(`${BASE}/valider`, {
+                ja:          TOKEN,
+                puissance:   document.getElementById('f-puissance').value,
+                electrique:  energieEstElectrique() ? 1 : 0,
+                pdf:         pdf,
+                carte_grise: carteGrise || ''
             })
-            .fail(function () { toast('Erreur réseau.', false); $b.prop('disabled', false); });
+                .done(function (res) {
+                    if (!res.ok) { toast(res.msg || 'Échec.', false); $b.prop('disabled', false); return; }
+                    toast(res.msg || 'Attestation enregistrée.', true);
+                    $('#attestation').addClass('att-verrouille');
+                    $b.replaceWith('<span class="att-ok"><i class="bi bi-check-circle-fill"></i>Attestation transmise</span>');
+                })
+                .fail(function () { toast('Erreur réseau.', false); $b.prop('disabled', false); });
+        }
+
+        const f = document.getElementById('f-cartegrise').files[0];
+        if (!f) { envoyer(''); return; }
+        if (f.size > 10 * 1024 * 1024) {
+            toast('Carte grise : fichier trop volumineux (max 10 Mo).', false);
+            $b.prop('disabled', false);
+            return;
+        }
+        const fr = new FileReader();
+        fr.onload  = () => envoyer(fr.result);
+        fr.onerror = () => { toast('Lecture du fichier carte grise impossible.', false); $b.prop('disabled', false); };
+        fr.readAsDataURL(f);
     });
 }
 </script>

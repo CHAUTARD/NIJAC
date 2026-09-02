@@ -87,7 +87,7 @@ class UtilisateurController extends BaseController
     {
 
         $mdpGenere = null;
-        $fields = $this->extractFields($this->request->getPost(), true, $mdpGenere);
+        $fields = $this->extractFields($this->request->getPost(), true, $mdpGenere, 0);
 
         if (is_string($fields)) {
             return $this->response->setJSON(['ok' => false, 'msg' => $fields]);
@@ -104,7 +104,7 @@ class UtilisateurController extends BaseController
 
         $id     = (int) $id;
         $mdpGenere = null;
-        $fields = $this->extractFields($this->request->getRawInput(), false, $mdpGenere);
+        $fields = $this->extractFields($this->request->getRawInput(), false, $mdpGenere, $id);
 
         if (is_string($fields)) {
             return $this->response->setJSON(['ok' => false, 'msg' => $fields]);
@@ -144,7 +144,7 @@ class UtilisateurController extends BaseController
      * $mdpGenere (pour affichage à l'admin). Sinon aucune clé Password/ChangeLogin
      * n'est écrite (valeurs BDD inchangées).
      */
-    private function extractFields(array $input, bool $isNew, ?string &$mdpGenere = null)
+    private function extractFields(array $input, bool $isNew, ?string &$mdpGenere = null, int $idCourant = 0)
     {
         $mdpGenere = null;
 
@@ -159,6 +159,11 @@ class UtilisateurController extends BaseController
 
         if ($login === '') {
             return 'Le login ne peut pas être vide.';
+        }
+        $doublon = getPDO()->prepare('SELECT 1 FROM utilisateur WHERE Login = ? AND Id_Utilisateur <> ? LIMIT 1');
+        $doublon->execute([$login, $idCourant]);
+        if ($doublon->fetchColumn()) {
+            return 'Ce login est déjà utilisé par un autre compte.';
         }
         if ($nom === '') {
             return 'Le nom ne peut pas être vide.';

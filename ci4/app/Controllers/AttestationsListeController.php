@@ -54,6 +54,7 @@ class AttestationsListeController extends BaseController
                 'inconnu' => !isset($noms[$id]),
                 'depose'  => date('d/m/Y H:i', (int) filemtime(self::DIR . '/' . $f)),
                 'taille'  => filesize(self::DIR . '/' . $f),
+                'cg'      => (glob(self::DIR . '/' . $id . '_cg.*') ?: []) !== [],
             ];
         }
         usort($lignes, static fn ($a, $b) => [$a['nom'], $a['prenom']] <=> [$b['nom'], $b['prenom']]);
@@ -79,6 +80,29 @@ class AttestationsListeController extends BaseController
         return $this->response
             ->setHeader('Content-Type', 'application/pdf')
             ->setHeader('Content-Disposition', 'inline; filename="attestation_' . $idJa . '.pdf"')
+            ->setHeader('X-Content-Type-Options', 'nosniff')
+            ->setBody(file_get_contents($path));
+    }
+
+    /** Sert la carte grise `{Id_JA}_cg.{pdf|jpg|png}` en consultation (inline). */
+    public function carteGrise($idJa = null): ResponseInterface
+    {
+        $idJa  = (int) $idJa;
+        $match = $idJa > 0 ? (glob(self::DIR . '/' . $idJa . '_cg.*') ?: []) : [];
+        if ($match === []) {
+            return $this->response->setStatusCode(404)->setBody('Carte grise introuvable.');
+        }
+
+        $path = $match[0];
+        $mime = [
+            'pdf' => 'application/pdf',
+            'jpg' => 'image/jpeg',
+            'png' => 'image/png',
+        ][strtolower(pathinfo($path, PATHINFO_EXTENSION))] ?? 'application/octet-stream';
+
+        return $this->response
+            ->setHeader('Content-Type', $mime)
+            ->setHeader('Content-Disposition', 'inline; filename="carte_grise_' . $idJa . '.' . pathinfo($path, PATHINFO_EXTENSION) . '"')
             ->setHeader('X-Content-Type-Options', 'nosniff')
             ->setBody(file_get_contents($path));
     }

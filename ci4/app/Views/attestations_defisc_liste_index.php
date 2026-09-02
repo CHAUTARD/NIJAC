@@ -134,10 +134,15 @@
                     <td class="nom"><?= $l['inconnu'] ? '<span class="att-inconnu">JA inconnu</span>' : esc($l['nom']) ?></td>
                     <td><?= esc($l['prenom']) ?></td>
                     <td><?= esc($l['depose']) ?></td>
-                    <td>
+                    <td style="white-space:nowrap">
                         <a class="btn-ouvrir" href="<?= site_url('attestations-defisc/telecharger/' . (int) $l['idJa']) ?>" target="_blank" rel="noopener">
-                            <i class="bi bi-file-earmark-pdf"></i>Ouvrir le PDF
+                            <i class="bi bi-file-earmark-pdf"></i>Attestation
                         </a>
+                        <?php if (!empty($l['cg'])): ?>
+                        <a class="btn-ouvrir" href="<?= site_url('attestations-defisc/carte-grise/' . (int) $l['idJa']) ?>" target="_blank" rel="noopener">
+                            <i class="bi bi-card-image"></i>Carte grise
+                        </a>
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <?php endforeach; ?>
