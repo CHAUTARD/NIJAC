@@ -722,7 +722,7 @@ Récapituler, par JA ayant opté pour la défiscalisation, les frais de déplace
 En-tête (ajouté côté client) : `Nom;Prenom;CP;Ville;Missions;Peages;Kilometres;FraisKmPeages;CV;Electrique;FraisDefiscalisables`. Séparateur `;`, décimales à la virgule, `CV` = `7+` pour la tranche haute. Fichier `defiscalisation_{annee}.csv`.
 
 ### Email de relance « véhicule non renseigné »
-Modèle système `messagerie` **n°10** (`Type = 'Administratif'`, `Id_Utilisateur = NULL`, `ReplyTo = 1`, `Cc = 0`), marqueurs `{PRENOM}` / `{UTI_PRENOM}` / `{UTI_NOM}`. Auto-créé par `assurerTemplateRelanceVehicule()` (appelée par EA93 et par l'action `relancer-vehicule`), éditable via EA93. Mode Développement : redirection par `getEmailDestinataire()`, sujet préfixé `[DEV]`.
+Modèle système `messagerie` **n°10** (`Type = 'Administratif'`, `Id_Utilisateur = NULL`, `ReplyTo = 1`, `Cc = 0`), marqueurs `{PRENOM}` / `{UTI_PRENOM}` / `{UTI_NOM}` / `{URL_ATTESTATION_JA}`, éditable via EA93. Plus d'auto-création : la ligne n°10 (et la valeur `'Administratif'` de l'ENUM `messagerie.Type`) doit exister en base, sinon `relancer-vehicule` renvoie « Modèle introuvable ». Mode Développement : redirection par `getEmailDestinataire()`, sujet préfixé `[DEV]`.
 
 ### Colonnes `ja` ajoutées
 `PuissanceFiscale` (`TINYINT UNSIGNED NULL`, `NULL` = non renseignée) et `VehiculeElectrique` (`TINYINT(1) NOT NULL DEFAULT 0`), après `Defiscalisation`. Déployées par `ALTER TABLE` explicite (déjà appliqué en dev et en prod) — pas de migration automatique.
@@ -786,17 +786,17 @@ Produire l'**attestation sur l'honneur** du JA défiscalisé — propriété du 
 - **Défiscalisateur / Admin** (carte du menu E005, bouton dans le bandeau d'ED51, sans token) : formulaire vierge, **impression seule**, aucune écriture ni PDF serveur.
 
 ### Interface
-- Bandeau (non imprimé) : rappel de la marche à suivre, bouton **Imprimer / PDF**, et — en mode JA uniquement — bouton **Valider et transmettre**.
+- Bandeau `#toolbar` (non imprimé) : bouton **Imprimer / PDF** et — mode JA uniquement — champ **Carte grise** (`<input type="file">`) et bouton **Valider et transmettre**, alignés sur une même ligne.
 - **Mode staff uniquement** : bandeau d'information `.att-dev-note` (non imprimé) rappelant que le texte de l'attestation est codé dans la vue et que toute modification passe par le développeur.
 - Feuille d'attestation : texte fixe + champs à compléter :
-  - `contenteditable` (soulignés pointillés, hint = libellé) : nom/prénom, adresse, date et lieu de naissance, marque/modèle, immatriculation, ville et date de signature ;
+  - `contenteditable` (soulignés pointillés, hint = libellé) : nom/prénom, adresse, date et lieu de naissance, marque/modèle, immatriculation (forcée en **majuscules** — `text-transform` à l'affichage/impression, `.toUpperCase()` dans le PDF), ville et date de signature ;
   - `<select>` **Puissance administrative** (`—` / `3 CV` … `7 CV ou plus`) et `<select>` **Énergie** (7 `<optgroup>` : fossiles liquides, gaz fossiles, biocarburants, électricité, hybride, hydrogène, carburants de synthèse). Chaque `<option>` porte `data-elec="0|1"` ; seul « Batteries lithium-ion (100 % électrique) » a `data-elec="1"`. C'est ce flag (et non le libellé) qui écrit `ja.VehiculeElectrique`, le libellé choisi allant tel quel dans la ligne « Énergie : » du PDF.
 - **Pré-remplissage** :
   - toujours (PHP) : nom de l'association (`Ligue {configuration.region} de Tennis de Table`), date du jour.
   - en mode JA (serveur, depuis `ja`) : nom/prénom, adresse (`{Cp} {Ville}`), ville, puissance (`ja.PuissanceFiscale`) ; l'option « Batteries lithium-ion (100 % électrique) » est présélectionnée si `ja.VehiculeElectrique = 1` **et** la puissance est déjà connue (sinon `—`, le carburant thermique exact n'étant pas stocké).
 - **Case « Lu et approuvé »** (`#chk-approuve`) obligatoire ; fait partie du document imprimé/PDF.
-- **Zone de signature** : `<canvas>` sur fond ligné, tracé souris / doigt / stylet (API **Pointer Events**, `touch-action: none`, HiDPI via `devicePixelRatio`), bouton **Effacer**.
-- **Pièce jointe carte grise** (mode JA, facultatif) : `<input type="file" accept=".pdf,image/*">`, lu en base64 (`FileReader`), envoyé dans `carte_grise` ; type validé côté serveur par la signature du contenu (`%PDF-` / JPEG / PNG), ≤ 10 Mo, écrit dans `_Defiscalisation/{Id_JA}_cg.{pdf|jpg|png}` (remplace l'existant).
+- **Zone de signature** : `<canvas>` sur fond ligné, tracé souris / doigt / stylet (API **Pointer Events**, `touch-action: none`, HiDPI via `devicePixelRatio`), bouton **Effacer** ; sous ce bouton, le rappel de la marche à suivre (`.att-hint`, non imprimé).
+- **Carte grise** (mode JA, facultatif — champ dans `#toolbar`) : `<input type="file" accept=".pdf,image/*">` lu en base64 (`FileReader`, ≤ 10 Mo), envoyé dans `carte_grise` ; type validé côté serveur par la signature du contenu (`%PDF-` / JPEG / PNG), écrit dans `_Defiscalisation/{Id_JA}_cg.{pdf|jpg|png}` (remplace l'existant).
 
 ### Actions
 | Action | Méthode | Description |

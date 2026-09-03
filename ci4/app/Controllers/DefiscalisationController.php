@@ -35,6 +35,7 @@ class DefiscalisationController extends BaseController
     {
         require_once __DIR__ . '/../../../config/db.php';
         require_once __DIR__ . '/../../../config/app_config.php';
+        require_once __DIR__ . '/../../../config/helpers.php';
     }
 
     private function tryJson(\Closure $fn): ResponseInterface
@@ -62,52 +63,15 @@ class DefiscalisationController extends BaseController
         return view('defiscalisation_index', $data);
     }
 
-    /**
-     * Barème kilométrique : les 5 tranches de puissance + le coefficient de
-     * majoration électrique (clé de config comptadefisc_majoration_electrique,
-     * en %). Retour : ['lignes' => [...], 'majoration' => 1.20].
-     */
+    /** @see chargerBaremeKilometrique() / montantBaremeKilometrique() dans config/helpers.php */
     private function chargerBareme(\PDO $pdo): array
     {
-        $lignes = $pdo->query(
-            'SELECT Cv_Min, Cv_Max, Coef_T1, Coef_T2, Fixe_T2, Coef_T3
-             FROM ComptaDefiscalisation ORDER BY Cv_Min'
-        )->fetchAll(\PDO::FETCH_ASSOC);
-
-        $pct = (float) getConfig('comptadefisc_majoration_electrique', '20');
-
-        return ['lignes' => $lignes, 'majoration' => 1 + $pct / 100];
+        return chargerBaremeKilometrique($pdo);
     }
 
-    /**
-     * Applique le barème au cumul annuel $km pour la puissance fiscale $cv.
-     * Retourne null si la puissance n'est pas renseignée / hors barème.
-     */
     private function montantBareme(array $bareme, ?int $cv, float $km, bool $electrique): ?float
     {
-        if ($cv === null) {
-            return null;
-        }
-
-        foreach ($bareme['lignes'] as $l) {
-            if ($cv < (int) $l['Cv_Min'] || $cv > (int) $l['Cv_Max']) {
-                continue;
-            }
-            if ($km <= 5000) {
-                $montant = $km * (float) $l['Coef_T1'];
-            } elseif ($km <= 20000) {
-                $montant = $km * (float) $l['Coef_T2'] + (float) $l['Fixe_T2'];
-            } else {
-                $montant = $km * (float) $l['Coef_T3'];
-            }
-            if ($electrique) {
-                $montant *= $bareme['majoration'];
-            }
-
-            return round($montant, 2);
-        }
-
-        return null;
+        return montantBaremeKilometrique($bareme, $cv, $km, $electrique);
     }
 
     /**
@@ -215,12 +179,11 @@ class DefiscalisationController extends BaseController
             $pdo = getPDO();
             $moi = $_SESSION['utilisateur'] ?? [];
 
-            assurerTemplateRelanceVehicule($pdo);
             $modele = resoudreModeleMessagerie($pdo, self::ID_MESSAGE_RELANCE_VEHICULE, (int) ($moi['id'] ?? 0));
             if (!$modele) {
                 return $this->response->setJSON([
                     'ok' => false,
-                    'msg' => 'Modèle « Administratif » (Id_Messagerie=' . self::ID_MESSAGE_RELANCE_VEHICULE . ') introuvable en base.',
+                    'msg' => 'Modèle « Administratif » (Id_Messagerie=' . self::ID_MESSAGE_RELANCE_VEHICULE . ') introuvable en base — à créer via EA93.',
                 ]);
             }
 

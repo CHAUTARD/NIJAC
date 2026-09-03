@@ -1,0 +1,40 @@
+{
+	"folders": {},
+	"connections": {
+		"mariaDB-1a065f1c5b8-24ef6073c41f2412": {
+			"provider": "mysql",
+			"driver": "mariaDB",
+			"name": "Nijac",
+			"save-password": true,
+			"configuration": {
+				"host": "localhost",
+				"port": "3307",
+				"database": "Nijac",
+				"url": "jdbc:mariadb://localhost:3307/Nijac",
+				"configurationType": "MANUAL",
+				"type": "dev",
+				"provider-properties": {
+					"@dbeaver-show-all-dbs@": "true"
+				},
+				"auth-model": "native"
+			}
+		}
+	},
+	"connection-types": {
+		"dev": {
+			"name": "Development",
+			"color": "255,255,255",
+			"colorDark": "255,255,255",
+			"description": "Regular development database",
+			"auto-commit": true,
+			"confirm-execute": false,
+			"confirm-data-change": false,
+			"smart-commit": false,
+			"smart-commit-recover": true,
+			"auto-close-transactions": true,
+			"close-transactions-period": 1800,
+			"auto-close-connections": true,
+			"close-connections-period": 14400
+		}
+	}
+}

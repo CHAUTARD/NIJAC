@@ -73,6 +73,61 @@ function ffttStr($valeur): string
 }
 
 /**
+ * Barème kilométrique fiscal (table ComptaDefiscalisation) : les 5 tranches de
+ * puissance + le coefficient multiplicateur pour véhicule électrique (clé de
+ * config comptadefisc_majoration_electrique, en %).
+ * Retour : ['lignes' => [...], 'majoration' => 1.20]. À charger une fois puis
+ * réutiliser (voir montantBaremeKilometrique()).
+ */
+function chargerBaremeKilometrique(PDO $pdo): array
+{
+    $lignes = $pdo->query(
+        'SELECT Cv_Min, Cv_Max, Coef_T1, Coef_T2, Fixe_T2, Coef_T3
+         FROM ComptaDefiscalisation ORDER BY Cv_Min'
+    )->fetchAll(PDO::FETCH_ASSOC);
+
+    $pct = (float) getConfig('comptadefisc_majoration_electrique', '20');
+
+    return ['lignes' => $lignes, 'majoration' => 1 + $pct / 100];
+}
+
+/**
+ * Applique le barème kilométrique au cumul annuel $km (km) pour la puissance
+ * fiscale $cv (en CV). Tranches officielles du barème voiture :
+ *   d ≤ 5000            → Coef_T1 · d
+ *   5000 < d ≤ 20000    → Coef_T2 · d + Fixe_T2
+ *   d > 20000           → Coef_T3 · d
+ * Montant majoré (× 'majoration') si $electrique. Retourne null si $cv est
+ * absent ou hors barème. Arrondi à 2 décimales.
+ */
+function montantBaremeKilometrique(array $bareme, ?int $cv, float $km, bool $electrique = false): ?float
+{
+    if ($cv === null) {
+        return null;
+    }
+
+    foreach ($bareme['lignes'] as $l) {
+        if ($cv < (int) $l['Cv_Min'] || $cv > (int) $l['Cv_Max']) {
+            continue;
+        }
+        if ($km <= 5000) {
+            $montant = $km * (float) $l['Coef_T1'];
+        } elseif ($km <= 20000) {
+            $montant = $km * (float) $l['Coef_T2'] + (float) $l['Fixe_T2'];
+        } else {
+            $montant = $km * (float) $l['Coef_T3'];
+        }
+        if ($electrique) {
+            $montant *= $bareme['majoration'];
+        }
+
+        return round($montant, 2);
+    }
+
+    return null;
+}
+
+/**
  * Assure la présence du club $numClub dans la table Club locale à partir
  * d'une réponse déjà récupérée de retrieveClubDetails() / xml_club_detail
  * (insert si absent, update du nom si déjà présent).

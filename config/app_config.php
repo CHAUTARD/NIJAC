@@ -74,6 +74,45 @@ function initTableConfiguration(\PDO $pdo): void
         }
     }
 
+    // FK implicites ajoutées (09/2026) : ententes de clubs (equipe.Id_Club2 /
+    // Id_Club3), département de rattachement du JA (ja.CodeDept) et
+    // disponibilités régionales (disponible_regionale). Idempotent (garde
+    // information_schema). Id_Club2/3 et CodeDept : ON DELETE SET NULL (un club
+    // ou un département qui disparaît ne doit pas effacer l'équipe / le JA).
+    // disponible_regionale : ON DELETE CASCADE (mêmes règles que fk_disponible_ja
+    // et que la purge en cascade d'EA84). Aucune valeur orpheline en base au
+    // moment de l'ajout — voir SQL/2026-09_fk_manquantes.sql pour le détail /
+    // les contrôles de pré-vol côté prod.
+    foreach ([
+        ['equipe',              'fk_equipe_club2',       'Id_Club2',                'club',                  'Id_Club',                 'SET NULL'],
+        ['equipe',              'fk_equipe_club3',       'Id_Club3',                'club',                  'Id_Club',                 'SET NULL'],
+        ['ja',                  'fk_ja_departement',     'CodeDept',                'departement',           'CodeDept',                'SET NULL'],
+        ['disponible_regionale','fk_dispreg_ja',         'Id_JA',                   'ja',                    'Id_JA',                   'CASCADE'],
+        ['disponible_regionale','fk_dispreg_competition', 'Id_CompetitionRegionale', 'competition_regionale', 'Id_CompetitionRegionale', 'CASCADE'],
+    ] as [$table, $contrainte, $col, $refTable, $refCol, $onDelete]) {
+        try {
+            $existe = $pdo->query(
+                "SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
+                 WHERE CONSTRAINT_SCHEMA = DATABASE()
+                   AND TABLE_NAME = " . $pdo->quote($table) . "
+                   AND CONSTRAINT_NAME = " . $pdo->quote($contrainte)
+            )->fetchColumn();
+            if (!$existe) {
+                if ($onDelete === 'SET NULL') {
+                    // chaîne vide -> NULL, sinon la FK échoue sur ces lignes
+                    $pdo->exec("UPDATE $table SET $col = NULL WHERE $col = ''");
+                }
+                $pdo->exec(
+                    "ALTER TABLE $table
+                     ADD CONSTRAINT $contrainte FOREIGN KEY ($col) REFERENCES $refTable ($refCol)
+                     ON DELETE $onDelete ON UPDATE CASCADE"
+                );
+            }
+        } catch (\PDOException $e) {
+            // best-effort : ne bloque pas EA98 si l'ALTER échoue (droits, données incohérentes…)
+        }
+    }
+
     // Colonnes "référent" du club : 2e contact, mis en copie (Cc) des emails
     // envoyés au correspondant. Mêmes types que CorNom / CorEmail / CorTelephone.
     try {
@@ -336,52 +375,6 @@ function assurerTemplateMotDePasseOublie(\PDO $pdo): void
             . "Cliquez sur le lien suivant pour choisir un nouveau mot de passe :\n{URL_RESET_MDP}\n\n"
             . "Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.",
         ]);
-}
-
-/**
- * Garantit le type de message « Administratif » (ENUM messagerie.Type) et le
- * gabarit n°10 « relance véhicule non renseigné » : email envoyé depuis ED51
- * aux JA défiscalisés dont ja.PuissanceFiscale est NULL, leur demandant la
- * puissance fiscale (carte grise, champ P.6) et la motorisation du véhicule.
- * Marqueurs : {PRENOM}, {UTI_PRENOM}, {UTI_NOM}, {URL_ATTESTATION_JA} (lien vers
- * ED53 pour saisir/signer en ligne). ReplyTo = 1 (les réponses reviennent au
- * défiscalisateur qui a lancé l'envoi). Id_Utilisateur NULL = modèle système,
- * éditable via EA93. Idempotente, appelée par MessagerieController et par
- * DefiscalisationController::relancerVehicule() — si la ligne existe déjà mais
- * ne contient pas encore {URL_ATTESTATION_JA}, le bloc lien est ajouté à la fin
- * sans écraser une reformulation faite en EA93.
- */
-function assurerTemplateRelanceVehicule(\PDO $pdo): void
-{
-    ajouterTypeMessagerie($pdo, 'Administratif');
-
-    $lienBloc = "\n\nVous pouvez aussi renseigner ces informations et signer l'attestation "
-        . "sur l'honneur directement en ligne :\n{URL_ATTESTATION_JA}";
-
-    $sujet   = 'NIJAC – Défiscalisation : puissance fiscale de votre véhicule';
-    $message = "Bonjour {PRENOM},\n\n"
-        . "Vous avez demandé à bénéficier de la défiscalisation de vos frais de juge-arbitre "
-        . "(abandon de frais donnant lieu à un reçu fiscal).\n\n"
-        . "Pour calculer vos frais kilométriques selon le barème fiscal, il nous manque deux "
-        . "informations sur votre véhicule :\n\n"
-        . "  1. la puissance fiscale, en chevaux fiscaux (champ P.6 de la carte grise) ;\n"
-        . "  2. s'il s'agit d'un véhicule électrique (oui / non).\n\n"
-        . "Merci de répondre à cet email en précisant ces deux éléments, par exemple :\n"
-        . "    Puissance fiscale : 5 CV — Électrique : non\n\n"
-        . "Sans cette information, vos frais kilométriques ne pourront pas figurer sur votre reçu fiscal.\n\n"
-        . "Cordialement,\n{UTI_PRENOM} {UTI_NOM}\nLigue Normandie de Tennis de Table"
-        . $lienBloc;
-
-    $row = $pdo->query('SELECT Message FROM messagerie WHERE Id_Messagerie = 10')->fetch();
-    if (!$row) {
-        $pdo->prepare('INSERT INTO messagerie (Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, Cc, ReplyTo) VALUES (10, ?, ?, ?, NULL, 0, 1)')
-            ->execute(['Administratif', $sujet, $message]);
-        return;
-    }
-    if (strpos((string) $row['Message'], '{URL_ATTESTATION_JA}') === false) {
-        $pdo->prepare('UPDATE messagerie SET Message = CONCAT(Message, ?) WHERE Id_Messagerie = 10')
-            ->execute([$lienBloc]);
-    }
 }
 
 /**

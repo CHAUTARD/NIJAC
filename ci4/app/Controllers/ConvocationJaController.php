@@ -25,6 +25,7 @@ class ConvocationJaController extends BaseController
     {
         require_once __DIR__ . '/../../../config/db.php';
         require_once __DIR__ . '/../../../config/app_config.php';
+        require_once __DIR__ . '/../../../config/helpers.php';
         require_once __DIR__ . '/../../../Classes/Obfuscator.php';
 
         $this->obf = new \Obfuscator(OBFUSCATOR_SEED);
@@ -69,6 +70,7 @@ class ConvocationJaController extends BaseController
             try {
                 $stmtJa = $pdo->prepare('
                     SELECT ja.Id_JA, ja.Nom, ja.Prenom, ja.Grade,
+                           ja.PuissanceFiscale, ja.VehiculeElectrique,
                            cl.Nom AS Association,
                            lp.CodePostal AS Cp,
                            lp.Nom        AS Ville,
@@ -157,6 +159,22 @@ class ConvocationJaController extends BaseController
         $km               = $frais['Kilometre'] ?? $kmCalc ?? 0;
         $total            = $indemniteForfait + $peages + ($km * $tauxKm);
 
+        // Tarif défiscalisation en €/km pour ce JA (barème fiscal selon sa
+        // puissance fiscale + majoration véhicule électrique). null si la
+        // puissance fiscale n'est pas renseignée. Le km d'une convocation reste
+        // toujours dans la 1re tranche du barème (≤ 5000 km) : on récupère le
+        // tarif unitaire via une sonde à 1000 km pour éviter l'arrondi à 2 déc.
+        $defiscEuroParKm = null;
+        if ($ja && ($ja['PuissanceFiscale'] ?? null) !== null) {
+            $m = montantBaremeKilometrique(
+                chargerBaremeKilometrique($pdo),
+                (int) $ja['PuissanceFiscale'],
+                1000,
+                (bool) $ja['VehiculeElectrique']
+            );
+            $defiscEuroParKm = $m !== null ? $m / 1000 : null;
+        }
+
         $dateFormatee = '';
         if ($rencontre && $rencontre['Date']) {
             $jours = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -181,6 +199,7 @@ class ConvocationJaController extends BaseController
             'peages'           => $peages,
             'km'               => $km,
             'total'            => $total,
+            'defiscEuroParKm'  => $defiscEuroParKm,
             'dateFormatee'     => $dateFormatee,
             'heure'            => $heure,
         ]);

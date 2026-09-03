@@ -478,6 +478,7 @@
                    <?= !empty($frais['Defiscalisation']) ? 'checked' : '' ?>>
             Défiscalisation des frais kilométriques
         </label>
+        <span id="defisc-montant" style="font-weight:700;color:#2e7d32;"></span>
         <a href="<?= base_url('Documentation/Plaquette_Defiscalisation.pdf') ?>" target="_blank" rel="noopener"
            class="btn btn-sm" style="background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-weight:700;"
            title="Ouvrir la plaquette de défiscalisation (PDF)">
@@ -538,6 +539,7 @@ const INDEM   = <?= json_encode((float) $indemniteForfait) ?>;
 const TAUX_KM = <?= json_encode((float) $tauxKm) ?>;
 const ID_NOMINATION = <?= (int) $idNomination ?>;
 const CNV_TOKEN = <?= json_encode($tokenCnv ?? '') ?>;
+const DEFISC_EUR_KM = <?= json_encode($defiscEuroParKm) ?>; // null si puissance fiscale non renseignée
 
 function recalcTotal() {
     const peages = parseFloat($('#inp-peages').val()) || 0;
@@ -546,7 +548,23 @@ function recalcTotal() {
     $('#td-total').text(total.toLocaleString('fr-FR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €');
 }
 
+function recalcDefisc() {
+    const km = parseInt($('#inp-km').val()) || 0;
+    const $out = $('#defisc-montant');
+    if (!$('#chk-defisc').is(':checked') || km === 0) { $out.text(''); return; }
+    if (DEFISC_EUR_KM === null) {
+        $out.text('Puissance fiscale non renseignée — contactez la ligue.').css('color', '#c00');
+        return;
+    }
+    const m = km * DEFISC_EUR_KM;
+    $out.css('color', '#2e7d32')
+        .text('Montant défiscalisable : ' + m.toLocaleString('fr-FR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €');
+}
+
 $('#inp-peages, #inp-km').on('input', recalcTotal);
+$('#inp-km').on('input', recalcDefisc);
+$('#chk-defisc').on('change', recalcDefisc);
+recalcDefisc();
 
 $('#btn-save-frais').on('click', function () {
     const $btn = $(this).prop('disabled', true);

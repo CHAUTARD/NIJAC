@@ -418,22 +418,6 @@ $routes->post('club-csr/envoyer', 'ClubCsrController::envoyer', ['filter' => 'cs
 $routes->get('dispo-regionale-ja', 'DispoRegionaleJaController::index');
 $routes->post('dispo-regionale-ja/sauvegarder', 'DispoRegionaleJaController::sauvegarder');
 
-// ── EN24 Disponibilité JA v2 ─────────────────────────────────────────────────
-// Copie de EN22 pour utilisation ultérieure (nom provisoire) — pas encore liée
-// à un menu. Page PUBLIQUE (sans authentification) — accessible via ?ja=TOKEN
-// ou ?id_ja=N.
-$routes->get('disponibilite-ja-v2', 'DisponibiliteJaV2Controller::index');
-$routes->get('disponibilite-ja-v2/liste-ja', 'DisponibiliteJaV2Controller::listeJa');
-$routes->get('disponibilite-ja-v2/ja', 'DisponibiliteJaV2Controller::ja');
-$routes->get('disponibilite-ja-v2/journees', 'DisponibiliteJaV2Controller::journees');
-$routes->get('disponibilite-ja-v2/rencontres-journee', 'DisponibiliteJaV2Controller::rencontresJournee');
-$routes->post('disponibilite-ja-v2/sauvegarder-dispo-journee', 'DisponibiliteJaV2Controller::sauvegarderDispoJournee');
-$routes->get('disponibilite-ja-v2/token', 'DisponibiliteJaV2Controller::token');
-$routes->post('disponibilite-ja-v2/token', 'DisponibiliteJaV2Controller::token');
-$routes->get('disponibilite-ja-v2/lire-note', 'DisponibiliteJaV2Controller::lireNote');
-$routes->post('disponibilite-ja-v2/sauvegarder-note', 'DisponibiliteJaV2Controller::sauvegarderNote');
-$routes->post('disponibilite-ja-v2/sauvegarder-defiscalisation', 'DisponibiliteJaV2Controller::sauvegarderDefiscalisation');
-
 // ── E005 Menu Défiscalisateur ────────────────────────────────────────────────
 // Rôle Defiscalisateur ou Administrateur — voir DefiscalisateurAuth.php.
 $routes->get('defiscalisateur-menu', 'DefiscalisateurMenuController::index', ['filter' => 'defiscauth']);
