@@ -337,11 +337,46 @@
                     <span class="btn-desc">Gérer les comptes et droits d'accès</span>
                 </a>
 
+                <a href="<?= site_url('messagerie') ?>" class="menu-btn btn-messagerie">
+                    <span class="btn-code">EA93</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/Messagerie.png') ?>" alt="Gestion des messages"></div>
+                    <span>Gestion des messages</span>
+                    <span class="btn-desc">Préparer les messages pour JA et correspondants de club</span>
+                </a>
+
+                <a href="<?= site_url('equipe-regionale') ?>" class="menu-btn btn-equipe-regionale">
+                    <span class="btn-code">EA92</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/Equipe.png') ?>" alt="Chargement équipe régionale"></div>
+                    <span>Chargement équipe régionale</span>
+                    <span class="btn-desc">Consulter et modifier les équipes régionales importées</span>
+                </a>
+
+                <a href="<?= site_url('gestion-equipes') ?>" class="menu-btn btn-gestion-equipes">
+                    <span class="btn-code">EA94</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/GestEquipe.png') ?>" alt="Gestion des équipes"></div>
+                    <span>Gestion des équipes</span>
+                    <span class="btn-desc">Filtrer et modifier les équipes (club, division, nom)</span>
+                </a>
+
+                <a href="<?= site_url('gestion-rencontres') ?>" class="menu-btn btn-gestion-rencontres">
+                    <span class="btn-code">EA95</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/Rencontre.png') ?>" alt="Gestion des rencontres"></div>
+                    <span>Gestion des rencontres</span>
+                    <span class="btn-desc">Filtrer et modifier date, heure, poule, journée</span>
+                </a>
+
                 <a href="<?= site_url('commune') ?>" class="menu-btn btn-communes">
                     <span class="btn-code">EA87</span>
                     <div class="btn-icon"><img src="<?= base_url('img/La_Poste.png') ?>" alt="Communes"></div>
                     <span>Communes</span>
                     <span class="btn-desc">Base des codes postaux et coordonnées GPS</span>
+                </a>
+
+                <a href="<?= site_url('departement') ?>" class="menu-btn btn-departement">
+                    <span class="btn-code">EA90</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/Departement.png') ?>" alt="Départements"></div>
+                    <span>Départements</span>
+                    <span class="btn-desc">Gérer les départements et leur région</span>
                 </a>
 
                 <a href="<?= site_url('region') ?>" class="menu-btn btn-region">
@@ -358,46 +393,11 @@
                     <span class="btn-desc">Définir les divisions et leur niveau</span>
                 </a>
 
-                <a href="<?= site_url('departement') ?>" class="menu-btn btn-departement">
-                    <span class="btn-code">EA90</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/Departement.png') ?>" alt="Départements"></div>
-                    <span>Départements</span>
-                    <span class="btn-desc">Gérer les départements et leur région</span>
-                </a>
-
                 <a href="<?= site_url('configuration') ?>" class="menu-btn btn-configuration">
                     <span class="btn-code">EA91</span>
                     <div class="btn-icon"><img src="<?= base_url('img/Parametres.png') ?>" alt="Configuration"></div>
                     <span>Configuration</span>
                     <span class="btn-desc">Paramètres généraux de l'application</span>
-                </a>
-
-                <a href="<?= site_url('equipe-regionale') ?>" class="menu-btn btn-equipe-regionale">
-                    <span class="btn-code">EA92</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/Equipe.png') ?>" alt="Chargement équipe régionale"></div>
-                    <span>Chargement équipe régionale</span>
-                    <span class="btn-desc">Consulter et modifier les équipes régionales importées</span>
-                </a>
-
-                <a href="<?= site_url('messagerie') ?>" class="menu-btn btn-messagerie">
-                    <span class="btn-code">EA93</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/Messagerie.png') ?>" alt="Gestion des messages"></div>
-                    <span>Gestion des messages</span>
-                    <span class="btn-desc">Préparer les messages pour JA et correspondants de club</span>
-                </a>
-
-                <a href="<?= site_url('gestion-equipes') ?>" class="menu-btn btn-gestion-equipes">
-                    <span class="btn-code">EA94</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/GestEquipe.png') ?>" alt="Gestion des équipes"></div>
-                    <span>Gestion des équipes</span>
-                    <span class="btn-desc">Filtrer et modifier les équipes (club, division, nom)</span>
-                </a>
-
-                <a href="<?= site_url('gestion-rencontres') ?>" class="menu-btn btn-gestion-rencontres">
-                    <span class="btn-code">EA95</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/Rencontre.png') ?>" alt="Gestion des rencontres"></div>
-                    <span>Gestion des rencontres</span>
-                    <span class="btn-desc">Filtrer et modifier date, heure, poule, journée</span>
                 </a>
 
             </div>
