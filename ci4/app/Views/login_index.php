@@ -186,17 +186,13 @@
 
                 <div class="mb-1">
                     <label for="password" class="form-label">Mot de passe :</label>
-                    <div class="input-group">
-                        <input
-                            type="password"
-                            class="form-control"
-                            id="password"
-                            name="password"
-                            autocomplete="current-password"
-                        >
-                        <button class="btn btn-outline-secondary" type="button" id="btn-toggle-pwd" tabindex="-1"
-                                title="Afficher / masquer le mot de passe" aria-label="Afficher / masquer le mot de passe">👁️</button>
-                    </div>
+                    <input
+                        type="password"
+                        class="form-control"
+                        id="password"
+                        name="password"
+                        autocomplete="current-password"
+                    >
                 </div>
 
                 <div class="d-flex gap-2 mt-3">
@@ -237,18 +233,12 @@
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-pwd-toggle.js') ?>"></script>
 
 <script>
 'use strict';
 
 $(function () {
-
-    $('#btn-toggle-pwd').on('click', function () {
-        const pwd = document.getElementById('password');
-        const hidden = pwd.type === 'password';
-        pwd.type = hidden ? 'text' : 'password';
-        this.textContent = hidden ? '🙈' : '👁️';
-    });
 
     function checkCapsLock(e) {
         const capsOn = e.getModifierState && e.getModifierState('CapsLock');

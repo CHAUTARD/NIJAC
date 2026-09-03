@@ -27,6 +27,7 @@
     </div>
 </div>
 
+<script src="<?= base_url('asset/js/nijac-pwd-toggle.js') ?>"></script>
 <script>
 (function () {
     var lien    = document.getElementById('lnk-chg-pwd');
@@ -40,7 +41,7 @@
         body.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-hourglass-split me-1"></i>Chargement…</div>';
         fetch(base, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(function (r) { return r.text(); })
-            .then(function (html) { body.innerHTML = html; })
+            .then(function (html) { body.innerHTML = html; window.nijacPwdToggle(body); })
             .catch(function () { body.innerHTML = '<div class="text-danger">Erreur de chargement.</div>'; });
     }
 

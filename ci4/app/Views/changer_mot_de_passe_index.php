@@ -177,5 +177,6 @@
 
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-pwd-toggle.js') ?>"></script>
 </body>
 </html>
