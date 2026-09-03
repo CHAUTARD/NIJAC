@@ -194,9 +194,8 @@
                             name="password"
                             autocomplete="current-password"
                         >
-                        <button class="btn btn-outline-secondary" type="button" id="btn-toggle-pwd" tabindex="-1" title="Afficher / masquer le mot de passe">
-                            <i id="eye-icon" class="bi bi-eye-slash"></i>
-                        </button>
+                        <button class="btn btn-outline-secondary" type="button" id="btn-toggle-pwd" tabindex="-1"
+                                title="Afficher / masquer le mot de passe" aria-label="Afficher / masquer le mot de passe">👁️</button>
                     </div>
                 </div>
 
@@ -245,15 +244,10 @@
 $(function () {
 
     $('#btn-toggle-pwd').on('click', function () {
-        const $pwd  = $('#password');
-        const $icon = $('#eye-icon');
-        if ($pwd.attr('type') === 'password') {
-            $pwd.attr('type', 'text');
-            $icon.removeClass('bi-eye-slash').addClass('bi-eye');
-        } else {
-            $pwd.attr('type', 'password');
-            $icon.removeClass('bi-eye').addClass('bi-eye-slash');
-        }
+        const pwd = document.getElementById('password');
+        const hidden = pwd.type === 'password';
+        pwd.type = hidden ? 'text' : 'password';
+        this.textContent = hidden ? '🙈' : '👁️';
     });
 
     function checkCapsLock(e) {
