@@ -1447,3 +1447,4 @@ Interface d'administration directe de la base de données MySQL : consultation, 
 - CSRF vérifié sur toutes les actions POST
 - Tous les noms de tables et colonnes sont validés par regex `^\w+$` avant injection dans les requêtes
 - Les noms de colonnes dans `insert` / `update` sont comparés à la liste réelle de `DESCRIBE` avant utilisation
+

@@ -184,6 +184,14 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
     <div id="col-candidats">
         <div class="col-titre">
             <span><i class="bi bi-people-fill me-1"></i>Candidats JA</span>
+            <span style="display:flex;gap:.75rem;font-weight:400;font-size:.72rem;">
+                <label style="display:flex;align-items:center;gap:.25rem;cursor:pointer;">
+                    <input type="checkbox" id="chk-tous-candidats" class="form-check-input mt-0">Tous les candidats
+                </label>
+                <label style="display:flex;align-items:center;gap:.25rem;cursor:pointer;">
+                    <input type="checkbox" id="chk-tous-hors-dept" class="form-check-input mt-0">Tous hors dépt
+                </label>
+            </span>
         </div>
         <!-- Filtre des candidats d'un autre département (voir majFiltreHorsDept()) -->
         <div id="hors-dept-box" style="display:none;align-items:center;flex-wrap:wrap;gap:.4rem;padding:.4rem .85rem;background:#fbfbfd;border-bottom:1px solid #eee;font-size:.75rem;">
@@ -536,6 +544,10 @@ function rafraichirCandidats() {
 $('#hd-checks').on('change', '.hd-chk', rafraichirCandidats);
 $('#btn-hd-tous').on('click', function () { $('.hd-chk').prop('checked', true); rafraichirCandidats(); });
 $('#btn-hd-inv').on('click', function () { $('.hd-chk').each(function () { this.checked = !this.checked; }); rafraichirCandidats(); });
+// Option 1 : ignore la troncature à MAX_CANDIDATS. Option 2 : ignore le filtre
+// « Autres dépts » (cases à cocher par département) et affiche tous les JA
+// hors périmètre disponibles.
+$('#chk-tous-candidats, #chk-tous-hors-dept').on('change', rafraichirCandidats);
 
 // ── Candidats JA pour une rencontre — filtrage et tri côté client ─────────────
 function afficherCandidatsPourRencontre(idRenc) {
@@ -576,8 +588,9 @@ function afficherCandidatsPourRencontre(idRenc) {
         if (!dispoJournee && !prefereRenc) return;
 
         // JA d'un autre département (accepte via EN22) : affiché seulement si la
-        // case de SON département est cochée dans le filtre « Autres dépts ».
-        if (ja.HorsDept == 1) {
+        // case de SON département est cochée dans le filtre « Autres dépts »
+        // — sauf option « Tous hors dépt » qui les affiche tous d'office.
+        if (ja.HorsDept == 1 && !$('#chk-tous-hors-dept').is(':checked')) {
             const coches = $('.hd-chk:checked').map(function () { return this.value; }).get();
             if (!coches.includes(deptDeJa(ja))) return;
         }
@@ -627,7 +640,8 @@ function afficherCandidatsPourRencontre(idRenc) {
         if (idx > 0) candidats.unshift(candidats.splice(idx, 1)[0]);
     }
 
-    const top5 = candidats.slice(0, MAX_CANDIDATS);
+    // Option « Tous les candidats » : ignore la troncature à MAX_CANDIDATS.
+    const top5 = $('#chk-tous-candidats').is(':checked') ? candidats : candidats.slice(0, MAX_CANDIDATS);
     $('#liste-candidats').empty();
 
     if (!top5.length) {
