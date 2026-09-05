@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aide – Activer les JA inactif depuis (102_*.csv)</title>
+<link rel="stylesheet" href="../css/bootstrap.min.css">
+<link rel="stylesheet" href="../css/bootstrap-icons.min.css">
+<style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; }
+    header { background: #1a3a6b; color: #fff; padding: .9rem 1.2rem; }
+    header h1 { font-size: 1.05rem; margin: 0; }
+    main { padding: 1.2rem; font-size: .88rem; line-height: 1.7; }
+    footer { padding: .8rem 1.2rem; border-top: 1px solid #dee2e6; display: flex; justify-content: flex-end; gap: .5rem; }
+</style>
+</head>
+<body>
+<header>
+    <h1><i class="bi bi-person-check-fill me-2"></i>Activer les JA inactif depuis (102_*.csv)</h1>
+</header>
+<main>
+    <p style="margin-top:0;">
+        Cette action rejoue un fichier <strong>102</strong> FFTT <em>sans réimporter la grille</em> :
+        pour chaque licence marquée <strong>« actif »</strong> dans le fichier, si le JA est actuellement
+        <strong>Inactif</strong> dans NIJAC, il est repassé à <strong>Actif</strong> et sa
+        <strong>date de validation</strong> est mise à jour. Aucun JA déjà actif ni absent de la base n'est modifié.
+    </p>
+    <ol style="padding-left:1.3rem;margin:0;">
+        <li style="margin-bottom:1rem;">
+            <strong>Se connecter au SPID FFTT</strong><br>
+            Rendez-vous sur
+            <a href="https://spid.fftt.com/" target="_blank" rel="noopener">
+                <i class="bi bi-box-arrow-up-right me-1"></i>spid.fftt.com
+            </a>
+            et connectez-vous avec vos identifiants.
+        </li>
+        <li style="margin-bottom:1rem;">
+            <strong>Menu Licenciés → Éditions</strong><br>
+            Dans le menu de gauche <strong>Licenciés</strong>, cliquez sur <strong>Éditions</strong>.
+            <br><img src="Image1.png" alt="Menu Licenciés" style="max-width:100%;border:1px solid #dee2e6;border-radius:6px;margin-top:.5rem;">
+        </li>
+        <li style="margin-bottom:1rem;">
+            <strong>Choisir l'édition « 102 »</strong><br>
+            Dans la liste des éditions, sélectionnez
+            <code style="background:#f0f4fa;padding:.15rem .4rem;border-radius:4px;">102 - Liste des arbitres et juges-arbitres</code>,
+            puis renseignez :
+            <ul style="margin-top:.5rem;margin-bottom:.3rem;">
+                <li style="margin-bottom:.3rem;"><strong>Organismes</strong> : L09 - NORMANDIE</li>
+                <li style="margin-bottom:.3rem;"><strong>Grade</strong> : Juge Arbitre par Équipe (JA1)</li>
+                <li style="margin-bottom:.3rem;"><strong>Inactivité</strong> : Oui <span class="text-muted">(pour récupérer aussi les JA redevenus actifs)</span></li>
+                <li><strong>Format</strong> : CSV</li>
+            </ul>
+            <img src="Image2.png" alt="Édition 102" style="max-width:100%;border:1px solid #dee2e6;border-radius:6px;margin-top:.5rem;">
+        </li>
+        <li style="margin-bottom:1rem;">
+            <strong>Générer et sauvegarder</strong><br>
+            Cliquez sur <strong>Générer</strong>, puis enregistrez le fichier sur votre poste.
+        </li>
+        <li style="margin-bottom:1rem;">
+            <strong>Lancer la vérification</strong><br>
+            Cliquez sur le bouton ci-dessous et sélectionnez le fichier téléchargé.
+        </li>
+        <li>
+            <strong>Résultat</strong><br>
+            Le nombre de JA réactivés s'affiche et la grille se recharge.
+        </li>
+    </ol>
+</main>
+<footer>
+    <input type="file" id="file-input-verif" accept=".csv,.txt" style="display:none">
+    <button type="button" class="btn btn-primary btn-sm" id="btn-ouvrir-fichier">
+        <i class="bi bi-folder2-open me-1"></i>Choisir le fichier local
+    </button>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="window.close()">Fermer</button>
+</footer>
+<script>
+// Le sélecteur de fichier doit s'ouvrir dans CETTE fenêtre (celle qui a le geste
+// utilisateur) : déclencher le file-input de la fenêtre parente depuis ici est
+// silencieusement ignoré par les navigateurs. On récupère donc le fichier ici,
+// puis on le transmet directement à la fenêtre parente pour la vérification.
+var fileInputVerif = document.getElementById('file-input-verif');
+document.getElementById('btn-ouvrir-fichier').addEventListener('click', function () {
+    fileInputVerif.value = '';
+    fileInputVerif.click();
+});
+fileInputVerif.addEventListener('change', function () {
+    var file = this.files[0];
+    if (file && window.opener && !window.opener.closed) {
+        window.opener.verifierActifs102(file);
+    }
+    window.close();
+});
+</script>
+</body>
+</html>

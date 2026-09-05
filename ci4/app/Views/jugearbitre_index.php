@@ -325,6 +325,9 @@
             <button class="drop-item" id="btn-importer">
                 <i class="bi bi-file-earmark-spreadsheet"></i>Importer depuis fichier FFTT (102_*.csv)
             </button>
+            <button class="drop-item" id="btn-verif-actifs-102">
+                <i class="bi bi-person-check-fill"></i>Activer les JA inactif depuis (102_*.csv)
+            </button>
             <hr class="drop-sep">
             <?php endif; ?>
             <button class="drop-item" id="btn-import-ebp">
@@ -1851,6 +1854,33 @@ $('#btn-importer').on('click', function () {
     // son propre fichier local et le transmet directement à cette fenêtre.
     window.importerFichier102 = importerFichier102;
 }());
+
+// ── Réactiver les JA redevenus actifs d'après le fichier 102 ──────────────────
+// Rejoue un 102_*.csv sans le réimporter : ne repasse à Actif=1 (et met à jour
+// DateValidationFFTT) que les JA déjà en base et marqués « actif » dans le fichier.
+// Ouvre la popup d'aide, qui sélectionne son propre fichier local (cf. import 102).
+$('#btn-verif-actifs-102').on('click', function () {
+    window.open('<?= base_url('asset/aide/verif-actifs-102.html') ?>', 'aideVerifActifs102', 'width=640,height=720,resizable=yes,scrollbars=yes');
+});
+
+function verifierActifs102(file) {
+    if (!file) return;
+    spinner(true);
+    const fd = new FormData();
+    fd.append('fichier', file);
+    $.ajax({
+        url: `${JUGEARBITRE_BASE}/verif-actifs-102`, type: 'POST',
+        data: fd, processData: false, contentType: false, dataType: 'json',
+        success(r) {
+            spinner(false);
+            if (!r.ok) { nijacToast(r.msg || 'Erreur lors de la vérification.', 'danger'); return; }
+            nijacToast(`${r.modifies} JA réactivé(s) d'après le fichier 102.`, r.modifies > 0 ? 'success' : 'info');
+            if (r.modifies > 0) chargerListe();
+        },
+        error() { spinner(false); nijacToast('Erreur réseau.', 'danger'); }
+    });
+}
+window.verifierActifs102 = verifierActifs102;
 <?php endif; ?>
 
 // ── Init ──────────────────────────────────────────────────────────────────────

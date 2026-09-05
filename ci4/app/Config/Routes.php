@@ -135,6 +135,7 @@ $routes->post('jugearbitre/fftt/import-selected', 'JugearbitreController::import
 $routes->post('jugearbitre/import-csv-ebp', 'JugearbitreController::importCsvEbp', ['filter' => 'auth']);
 $routes->post('jugearbitre/fftt/enrichir', 'JugearbitreController::enrichirFftt', ['filter' => 'auth']);
 $routes->post('jugearbitre/import-excel', 'JugearbitreController::importerExcel', ['filter' => 'auth']);
+$routes->post('jugearbitre/verif-actifs-102', 'JugearbitreController::verifActifs102', ['filter' => 'auth']);
 $routes->post('jugearbitre/fftt/reset-actif-tous', 'JugearbitreController::reinitialiserActifTous', ['filter' => 'auth']);
 
 // ── EA82 Import Rencontres FFTT ──────────────────────────────────────────────

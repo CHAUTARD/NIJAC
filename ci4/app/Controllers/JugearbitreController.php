@@ -952,4 +952,74 @@ class JugearbitreController extends BaseController
 
         return $this->response->setJSON(['ok' => true, 'data' => $lignes, 'count' => count($lignes), 'clubs_crees' => $clubsCrees]);
     }
+
+    /**
+     * Rejoue un fichier 102_*.csv sans le réimporter : pour chaque licence
+     * marquée « actif » dans le fichier, si le JA existe en base avec Actif=0,
+     * on le repasse à Actif=1 et on met à jour DateValidationFFTT (si le fichier
+     * fournit une date d/m/Y valide). Ne crée rien, ne touche jamais un JA déjà
+     * actif ni un JA absent de la base. Renvoie le nombre de lignes modifiées.
+     */
+    public function verifActifs102(): ResponseInterface
+    {
+        if (!$this->isAdmin()) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Accès refusé']);
+        }
+
+        $file = $this->request->getFile('fichier');
+        if ($file === null || !$file->isValid()) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Aucun fichier reçu (post_max_size = ' . ini_get('post_max_size') . ').']);
+        }
+        if (!in_array(strtolower($file->getClientExtension()), ['csv', 'txt'], true)) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Seul le format .csv ou .txt est accepté.']);
+        }
+
+        set_time_limit(180);
+
+        $handle = fopen($file->getTempName(), 'r');
+        if ($handle === false) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Fichier illisible ou corrompu.']);
+        }
+
+        $header = fgetcsv($handle);
+        if ($header === false) {
+            fclose($handle);
+
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Fichier CSV vide ou illisible.']);
+        }
+        $header = array_map(static fn ($h) => trim((string) $h), $header);
+        $col    = array_flip($header);
+
+        $colonnesRequises = ['N° Licence', 'Inactivité', 'Date de validation'];
+        $manquantes       = array_values(array_diff($colonnesRequises, $header));
+        if ($manquantes) {
+            fclose($handle);
+
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Colonne(s) attendue(s) absente(s) du CSV : ' . implode(', ', $manquantes)]);
+        }
+
+        $stmt = getPDO()->prepare(
+            'UPDATE ja SET Actif = 1, DateValidationFFTT = COALESCE(?, DateValidationFFTT)
+             WHERE Id_JA = ? AND Actif = 0'
+        );
+
+        $modifies = 0;
+        while (($ligne = fgetcsv($handle)) !== false) {
+            if (strtolower(trim((string) ($ligne[$col['Inactivité']] ?? ''))) !== 'actif') {
+                continue;
+            }
+            $idJA = trim((string) ($ligne[$col['N° Licence']] ?? ''));
+            if ($idJA === '') {
+                continue;
+            }
+            $dateValidRaw = trim((string) ($ligne[$col['Date de validation']] ?? ''));
+            $dateValidStr = preg_match('#^\d{1,2}/\d{2}/\d{4}$#', $dateValidRaw) ? $dateValidRaw : null;
+
+            $stmt->execute([$dateValidStr, $idJA]);
+            $modifies += $stmt->rowCount();
+        }
+        fclose($handle);
+
+        return $this->response->setJSON(['ok' => true, 'modifies' => $modifies]);
+    }
 }
