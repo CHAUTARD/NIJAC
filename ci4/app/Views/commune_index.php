@@ -368,7 +368,13 @@
             <div class="modal-body" style="font-size:.88rem;">
                 <div class="mb-2">
                     <label class="form-label fw-semibold" style="font-size:.82rem;">N° INSEE <span class="text-danger">*</span></label>
-                    <input type="number" id="add-insee" class="form-control form-control-sm" placeholder="ex : 14118" min="1">
+                    <div class="input-group input-group-sm">
+                        <input type="number" id="add-insee" class="form-control form-control-sm" placeholder="ex : 14118" min="1">
+                        <a class="btn btn-outline-secondary" href="https://www.insee.fr/fr/recherche/recherche-geographique?debut=0"
+                           target="_blank" rel="noopener noreferrer" title="Rechercher le code INSEE sur insee.fr">
+                            <i class="bi bi-search me-1"></i>insee.fr
+                        </a>
+                    </div>
                 </div>
                 <div class="mb-2">
                     <label class="form-label fw-semibold" style="font-size:.82rem;">Nom de la commune <span class="text-danger">*</span></label>
