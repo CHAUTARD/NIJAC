@@ -21,9 +21,8 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 .ts-user { color:#1a3a6b; font-weight:600; }
 .ts-pwd-warning { display:<?= $changeLogin ? 'inline-flex' : 'none' ?>; align-items:center; gap:.35rem; color:#c00; font-weight:700; cursor:pointer; text-decoration:underline dotted; }
 
-#barre-selection { background:#fff; border-bottom:1px solid #dee2e6; padding:.6rem 1.25rem; display:flex; align-items:center; gap:1rem; flex-wrap:wrap; flex-shrink:0; }
-#barre-selection label { font-size:.85rem; font-weight:600; color:#555; margin-bottom:0; }
-#barre-selection select { font-size:.85rem; min-width:130px; }
+#barre-selection { --strip-bg:#fff; background:#fff; border-bottom:1px solid #dee2e6; padding:.5rem 1.25rem; display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; flex-shrink:0; }
+#barre-selection .combo-field > select { min-width:150px; }
 .badge-journee { font-size:.72rem; }
 
 /* ── Info journée ── */
@@ -142,10 +141,12 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 
 <!-- Barre de sélection -->
 <div id="barre-selection">
-    <label for="sel-journee"><i class="bi bi-calendar-event me-1"></i>Journée</label>
-    <select id="sel-journee" class="form-select form-select-sm w-auto" disabled>
-        <option value="">— chargement —</option>
-    </select>
+    <span class="combo-field">
+        <label for="sel-journee">Journée</label>
+        <select id="sel-journee" disabled>
+            <option value="">— chargement —</option>
+        </select>
+    </span>
     <div id="spinner-barre" class="spinner-border spinner-sm text-secondary ms-2" role="status" style="display:none"><span class="visually-hidden">Chargement…</span></div>
     <a href="<?= site_url('stats-nomination') ?>" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm ms-auto">
         <i class="bi bi-bar-chart-line me-1"></i>Statistiques

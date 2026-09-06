@@ -282,7 +282,7 @@
         <div class="card-body">
             <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
                 <span id="lbl-assoc-count" class="text-muted" style="font-size:.82rem;"></span>
-                <select id="sel-div-filtre" class="form-select form-select-sm w-auto ms-2">
+                <select id="sel-div-filtre" class="filter-ctl ms-2">
                     <option value="">Toutes les divisions</option>
                     <?php foreach ([
                         'N1M' => 'Nationale 1 Messieurs', 'N2M' => 'Nationale 2 Messieurs', 'N3M' => 'Nationale 3 Messieurs',

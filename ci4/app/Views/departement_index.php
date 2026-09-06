@@ -25,6 +25,14 @@
         #tbl-depts td.col-limitrophe.col-calc,
         #tbl-depts th.th-calc,
         #txt-limitrophe-region { color: #0b7285; font-style: italic; }
+
+        /* Barre de filtre : bords arrondis façon combobox (asset/css/nijac.css) */
+        #filtre-bar input, #filtre-bar select {
+            font-size: .82rem; padding: .3rem .6rem;
+            border: 1.5px solid #d3dae6; border-radius: 12px; background: #fff;
+        }
+        #filtre-bar select { font-weight: 600; color: var(--nijac-blue); }
+        #filtre-bar input:focus, #filtre-bar select:focus { outline: none; border-color: var(--nijac-blue); }
     </style>
 </head>
 <body>
@@ -44,8 +52,8 @@
     <div id="panel-liste">
         <div id="liste-header">Départements</div>
         <div id="filtre-bar" style="padding:.35rem .5rem; background:#f0f4fa; border-bottom:1px solid #c8d4e8; display:flex; gap:.4rem; align-items:center; flex-shrink:0;">
-            <input type="search" id="filtre-texte" class="form-control form-control-sm" placeholder="Code ou nom…" style="width:130px;">
-            <select id="filtre-region" class="form-select form-select-sm" style="flex:1; min-width:0;">
+            <input type="search" id="filtre-texte" placeholder="Code ou nom…" style="width:130px;">
+            <select id="filtre-region" style="flex:1; min-width:0;">
                 <option value="">Toutes les régions</option>
             </select>
             <button id="btn-filtre-reset" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Effacer les filtres"><i class="bi bi-x-lg"></i></button>

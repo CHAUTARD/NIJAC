@@ -28,23 +28,23 @@
     <div id="panel-liste">
         <div id="liste-header">
             <span>Rencontres</span>
-            <input type="search" id="search-equipe" placeholder="🔍 Équipe…" style="width:220px;">
-            <select id="sel-dept" class="form-select form-select-sm" style="width:170px;">
+            <input type="search" id="search-equipe" class="filter-ctl" placeholder="Équipe…" style="width:220px;">
+            <select id="sel-dept" class="filter-ctl" style="width:170px;">
                 <option value="">— Département —</option>
                 <?php foreach ($deptActifs as $d): ?>
                 <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
                 <?php endforeach; ?>
             </select>
-            <select id="sel-division" class="form-select form-select-sm" style="width:130px;">
+            <select id="sel-division" class="filter-ctl" style="width:130px;">
                 <option value="">— Division —</option>
             </select>
-            <select id="sel-poule" class="form-select form-select-sm" style="width:110px;">
+            <select id="sel-poule" class="filter-ctl" style="width:110px;">
                 <option value="">— Poule —</option>
             </select>
-            <select id="sel-journee" class="form-select form-select-sm" style="width:120px;">
+            <select id="sel-journee" class="filter-ctl" style="width:120px;">
                 <option value="">— Journée —</option>
             </select>
-            <select id="sel-date" class="form-select form-select-sm" style="width:auto;">
+            <select id="sel-date" class="filter-ctl" style="width:auto;">
                 <option value="">— Date —</option>
             </select>
             <button type="button" class="btn btn-sm btn-outline-warning" id="btn-doublons" title="N'afficher que les rencontres en doublon : même affiche (domicile / extérieur / phase), quelles que soient la date, l'heure ou la journée">

@@ -42,14 +42,7 @@
         }
         #toolbar .ts-pwd-warning:hover { color: #900; }
 
-        /* ── Recherche ── */
-        #search-input {
-            font-size: .85rem;
-            padding: .2rem .5rem;
-            border: 1px solid #c8d4e8;
-            border-radius: 4px;
-            width: 260px;
-        }
+        /* Recherche / comboboxes / badge : style partagé (asset/css/nijac.css) */
 
         /* ── En-tête ── */
         #page-header {
@@ -63,6 +56,7 @@
 
         /* ── MenuStrip ── */
         #menu-strip {
+            --strip-bg: #f8fafc;      /* fond du bandeau → encoche des .combo-field */
             display: flex;
             align-items: center;
             gap: .5rem;
@@ -101,21 +95,6 @@
         #tbl-ja thead th.sort-desc .sort-icon::after { content: '▼'; opacity: 1; }
         #tbl-ja thead th:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
 
-        /* Menu « Colonnes » (affichage/masquage des colonnes, mémorisé par le navigateur) */
-        #menu-colonnes { position: relative; }
-        #menu-colonnes > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; }
-        #menu-colonnes > summary::-webkit-details-marker { display: none; }
-        #menu-colonnes-list {
-            position: absolute; right: 0; top: calc(100% + 4px); z-index: 60;
-            background: #fff; border: 1px solid #ccc; border-radius: 6px;
-            box-shadow: 0 4px 12px rgba(0,0,0,.15); padding: .35rem;
-            min-width: 180px; max-height: 60vh; overflow: auto;
-        }
-        #menu-colonnes-list label {
-            display: flex; align-items: center; gap: .45rem;
-            padding: .25rem .4rem; font-size: .85rem; cursor: pointer; white-space: nowrap;
-        }
-        #menu-colonnes-list label:hover { background: #eef4ff; border-radius: 4px; }
 
         #tbl-ja tbody tr { border-bottom: 1px solid #e0e8f0; }
         #tbl-ja tbody tr:hover   { background: #dce8f8; }
@@ -140,20 +119,22 @@
         .badge-defisc    { background: #dbeafe; color: #1e40af; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
         .badge-no-defisc { background: #f3f4f6; color: #6b7280; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
 
-        /* ── Toggle Tous / Actifs ── */
+        /* ── Toggle Tous / Actifs (aligné sur les comboboxes) ── */
         #toggle-actif {
-            display: inline-flex;
-            border: 1px solid #c8d4e8;
-            border-radius: 4px;
+            display: inline-flex; align-items: stretch;
+            height: 2.15rem; margin-top: .6rem; box-sizing: border-box;
+            border: 1.5px solid #d3dae6;
+            border-radius: 999px;
             overflow: hidden;
             font-size: .82rem;
         }
         #toggle-actif button {
-            padding: .2rem .65rem;
+            display: inline-flex; align-items: center; white-space: nowrap;
+            padding: 0 .8rem;
             border: none;
             background: #fff;
             cursor: pointer;
-            color: #374151;
+            color: #374151; font-weight: 600;
             transition: background .15s, color .15s;
         }
         #toggle-actif button:hover { background: #e8eef7; }
@@ -221,17 +202,6 @@
         .win-menu-drop .drop-item.green:hover { background: #d1fae5; }
 
         /* ── Spinner ── */
-
-        #lbl-count {
-            margin-left: .75rem;
-            padding: .2rem .6rem;
-            background: #e8eef7;
-            border: 1px solid #c8d4e8;
-            border-radius: 4px;
-            font-size: .82rem;
-            color: #1a3a6b;
-            font-weight: 600;
-        }
 
         #page-footer {
             background: #e8eef7;
@@ -344,32 +314,41 @@
         <button id="btn-actifs"       class="active">Actifs seulement</button>
         <button id="btn-erreurs-cp">⚠ Erreurs CP/Ville</button>
     </div>
-    <span id="lbl-count">0 JA</span>
+    <span class="count-badge" id="lbl-count">0 JA</span>
     <span style="flex:1"></span>
-    <details id="menu-colonnes">
-        <summary class="menu-item" style="border-color:transparent;"><i class="bi bi-layout-three-columns me-1"></i>Colonnes</summary>
-        <div id="menu-colonnes-list"></div>
-    </details>
+    <span class="combo-field">
+        <details id="menu-colonnes">
+            <summary id="menu-colonnes-resume">Colonnes</summary>
+            <div id="menu-colonnes-list"></div>
+        </details>
+    </span>
     <span style="flex:1"></span>
-    <label for="sel-dept" style="font-size:.85rem;font-weight:700;color:#444;white-space:nowrap;margin:0;">
-        <i class="bi bi-map me-1"></i>Département
-    </label>
-    <select id="sel-dept" class="form-select form-select-sm w-auto">
-        <option value="">— Tous —</option>
-        <?php foreach ($deptActifs as $d): ?>
-        <option value="<?= (int) $d['CodeDept'] ?>" <?= ((string) (int) $d['CodeDept'] === (string) (int) $deptUser) ? 'selected' : '' ?>><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?></option>
-        <?php endforeach; ?>
-        <?php if ($deptLimitrophes): ?>
-        <option disabled>── Limitrophes ──</option>
-        <?php foreach ($deptLimitrophes as $d): ?>
-        <option value="<?= (int) $d['CodeDept'] ?>" <?= ((string) (int) $d['CodeDept'] === (string) (int) $deptUser) ? 'selected' : '' ?>><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?> (<?= esc($d['region']) ?>)</option>
-        <?php endforeach; ?>
-        <?php endif; ?>
-    </select>
-    <button class="menu-item" id="btn-filtre-region" title="Cliquer pour n'afficher que les JA de la région, ou tous les JA" style="border-color:transparent;">
-        <i class="bi bi-geo-alt me-1"></i><span id="lbl-filtre-region">Région</span>
-    </button>
-    <input type="search" id="search-input" placeholder="🔍 Rechercher un JA, un club, une ville">
+    <span class="combo-field">
+        <label for="sel-dept">Département</label>
+        <select id="sel-dept">
+            <option value="">Tous les départements</option>
+            <?php foreach ($deptActifs as $d): ?>
+            <option value="<?= (int) $d['CodeDept'] ?>" <?= ((string) (int) $d['CodeDept'] === (string) (int) $deptUser) ? 'selected' : '' ?>><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?></option>
+            <?php endforeach; ?>
+            <?php if ($deptLimitrophes): ?>
+            <option disabled>── Limitrophes ──</option>
+            <?php foreach ($deptLimitrophes as $d): ?>
+            <option value="<?= (int) $d['CodeDept'] ?>" <?= ((string) (int) $d['CodeDept'] === (string) (int) $deptUser) ? 'selected' : '' ?>><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?> (<?= esc($d['region']) ?>)</option>
+            <?php endforeach; ?>
+            <?php endif; ?>
+        </select>
+    </span>
+    <span class="combo-field">
+        <label for="sel-perimetre">Périmètre</label>
+        <select id="sel-perimetre">
+            <option value="1">Région uniquement</option>
+            <option value="0">Tous les JA</option>
+        </select>
+    </span>
+    <span class="combo-field">
+        <label for="search-input">Recherche</label>
+        <input type="search" id="search-input" placeholder="JA, club, ville…">
+    </span>
 </div>
 
 <!-- Grille -->
@@ -1246,6 +1225,8 @@ function appliquerColonnesCachees() {
     document.querySelectorAll('#tbl-ja [data-field]').forEach(el => {
         el.style.display = colonnesCachees.has(el.getAttribute('data-field')) ? 'none' : '';
     });
+    const total = document.querySelectorAll('#tbl-ja thead th[data-field]').length;
+    $('#menu-colonnes-resume').text(`Colonnes ${total - colonnesCachees.size}/${total}`);
 }
 
 function construireMenuColonnes() {
@@ -1272,19 +1253,8 @@ $('#sel-dept').on('change', function () {
     chargerListe();
 });
 
-function appliquerStyleFiltreRegion() {
-    $('#lbl-filtre-region').text(filtreEnRegion ? 'Région' : 'Tous');
-    $('#btn-filtre-region').css({
-        background:  filtreEnRegion ? '#166534' : '',
-        color:       filtreEnRegion ? '#fff'    : '',
-        borderColor: filtreEnRegion ? '#166534' : 'transparent',
-    });
-}
-appliquerStyleFiltreRegion();
-
-$('#btn-filtre-region').on('click', function () {
-    filtreEnRegion = !filtreEnRegion;
-    appliquerStyleFiltreRegion();
+$('#sel-perimetre').on('change', function () {
+    filtreEnRegion = $(this).val() === '1';
     renderGrille();
 });
 

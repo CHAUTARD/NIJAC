@@ -42,13 +42,6 @@
         }
         #toolbar .ts-pwd-warning:hover { color: #900; }
 
-        #search-input {
-            font-size: .85rem;
-            padding: .2rem .5rem;
-            border: 1px solid #c8d4e8;
-            border-radius: 4px;
-            width: 250px;
-        }
 
         #page-header {
             background: var(--nijac-blue);
@@ -131,21 +124,8 @@
         #page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
         #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
 
-        /* Menu « Colonnes » (affichage/masquage des colonnes, mémorisé par le navigateur) */
-        #menu-colonnes { position: relative; }
-        #menu-colonnes > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; }
-        #menu-colonnes > summary::-webkit-details-marker { display: none; }
-        #menu-colonnes-list {
-            position: absolute; right: 0; top: calc(100% + 4px); z-index: 60;
-            background: #fff; border: 1px solid #ccc; border-radius: 6px;
-            box-shadow: 0 4px 12px rgba(0,0,0,.15); padding: .35rem;
-            min-width: 180px; max-height: 60vh; overflow: auto;
-        }
-        #menu-colonnes-list label {
-            display: flex; align-items: center; gap: .45rem;
-            padding: .25rem .4rem; font-size: .85rem; cursor: pointer; white-space: nowrap;
-        }
-        #menu-colonnes-list label:hover { background: #eef4ff; border-radius: 4px; }
+        /* Comboboxes de filtre, badge de comptage et menu « Colonnes » :
+           style partagé dans asset/css/nijac.css (.combo-field, .count-badge). */
     </style>
 </head>
 <body>
@@ -174,41 +154,56 @@
     <button class="menu-item" id="btn-ajouter">
         <i class="bi bi-plus-circle"></i>Ajouter
     </button>
-    <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 salle(s)</span>
+    <span class="count-badge" id="lbl-count">0 salle(s)</span>
     <span style="flex:1"></span>
-    <details id="menu-colonnes">
-        <summary class="menu-item" style="border-color:transparent;"><i class="bi bi-layout-three-columns me-1"></i>Colonnes</summary>
-        <div id="menu-colonnes-list"></div>
-    </details>
+    <span class="combo-field">
+        <details id="menu-colonnes">
+            <summary id="menu-colonnes-resume">Colonnes</summary>
+            <div id="menu-colonnes-list"></div>
+        </details>
+    </span>
     <span style="flex:1"></span>
-    <label for="sel-dept" style="font-size:.85rem;font-weight:700;color:#444;white-space:nowrap;margin:0;">
-        <i class="bi bi-map me-1"></i>Département
-    </label>
-    <select id="sel-dept" class="form-select form-select-sm w-auto">
-        <option value="">— Tous —</option>
-        <?php foreach ($deptActifs as $d): ?>
-        <option value="<?= (int) $d['CodeDept'] ?>"><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?></option>
-        <?php endforeach; ?>
-    </select>
-    <button class="menu-item" id="btn-filtre-region" title="Cliquer pour n'afficher que les salles de la région, ou toutes les salles" style="border-color:transparent;">
-        <i class="bi bi-geo-alt me-1"></i><span id="lbl-filtre-region">Région</span>
-    </button>
+    <span class="combo-field">
+        <label for="sel-dept">Département</label>
+        <select id="sel-dept">
+            <option value="">Tous les départements</option>
+            <?php foreach ($deptActifs as $d): ?>
+            <option value="<?= (int) $d['CodeDept'] ?>"><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </span>
+    <span class="combo-field">
+        <label for="sel-perimetre">Périmètre</label>
+        <select id="sel-perimetre">
+            <option value="1">Région uniquement</option>
+            <option value="0">Tous les départements</option>
+        </select>
+    </span>
 <?php else: ?>
     <span style="padding:.2rem .6rem; background:#fff3cd; border:1px solid #ffc107; border-radius:4px; font-size:.82rem; color:#856404;">
         <i class="bi bi-eye-fill me-1"></i>Consultation — département <?= esc($departement) ?>
     </span>
-    <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 salle(s)</span>
+    <span class="count-badge" id="lbl-count">0 salle(s)</span>
     <span style="flex:1"></span>
-    <details id="menu-colonnes">
-        <summary class="menu-item" style="border-color:transparent;"><i class="bi bi-layout-three-columns me-1"></i>Colonnes</summary>
-        <div id="menu-colonnes-list"></div>
-    </details>
+    <span class="combo-field">
+        <details id="menu-colonnes">
+            <summary id="menu-colonnes-resume">Colonnes</summary>
+            <div id="menu-colonnes-list"></div>
+        </details>
+    </span>
     <span style="flex:1"></span>
 <?php endif; ?>
-    <button class="menu-item" id="btn-filtre-laposte" title="Cliquer pour n'afficher que les salles sans coordonnées La Poste, ou toutes les salles" style="border-color:transparent;">
-        <i class="bi bi-geo-alt-fill me-1"></i><span id="lbl-filtre-laposte">La Poste</span>
-    </button>
-    <input type="search" id="search-input" placeholder="🔍 Rechercher…">
+    <span class="combo-field">
+        <label for="sel-laposte">Coordonnées</label>
+        <select id="sel-laposte">
+            <option value="0">Toutes les salles</option>
+            <option value="1">Sans coordonnées La Poste</option>
+        </select>
+    </span>
+    <span class="combo-field">
+        <label for="search-input">Recherche</label>
+        <input type="search" id="search-input" placeholder="Nom, ville, club…">
+    </span>
 </div>
 
 <!-- Grille -->
@@ -773,6 +768,8 @@ function appliquerColonnesCachees() {
     document.querySelectorAll('#tbl-salles [data-field]').forEach(el => {
         el.style.display = colonnesCachees.has(el.getAttribute('data-field')) ? 'none' : '';
     });
+    const total = document.querySelectorAll('#tbl-salles thead th[data-field]').length;
+    $('#menu-colonnes-resume').text(`Colonnes ${total - colonnesCachees.size}/${total}`);
 }
 
 function construireMenuColonnes() {
@@ -798,19 +795,8 @@ $(document).on('click', function (e) {
     if (!$(e.target).closest('#menu-colonnes').length) $('#menu-colonnes').removeAttr('open');
 });
 
-function appliquerStyleFiltreLaPoste() {
-    $('#lbl-filtre-laposte').text(filtreLaPosteManquant ? 'Sans coord.' : 'La Poste');
-    $('#btn-filtre-laposte').css({
-        background:  filtreLaPosteManquant ? '#166534' : '',
-        color:       filtreLaPosteManquant ? '#fff'    : '',
-        borderColor: filtreLaPosteManquant ? '#166534' : 'transparent',
-    });
-}
-appliquerStyleFiltreLaPoste();
-
-$('#btn-filtre-laposte').on('click', function () {
-    filtreLaPosteManquant = !filtreLaPosteManquant;
-    appliquerStyleFiltreLaPoste();
+$('#sel-laposte').on('change', function () {
+    filtreLaPosteManquant = $(this).val() === '1';
     renderGrille();
 });
 
@@ -824,19 +810,8 @@ $('#sel-dept').on('change', function () {
     chargerListe();
 });
 
-function appliquerStyleFiltreRegion() {
-    $('#lbl-filtre-region').text(filtreEnRegion ? 'Région' : 'Tous');
-    $('#btn-filtre-region').css({
-        background:  filtreEnRegion ? '#166534' : '',
-        color:       filtreEnRegion ? '#fff'    : '',
-        borderColor: filtreEnRegion ? '#166534' : 'transparent',
-    });
-}
-appliquerStyleFiltreRegion();
-
-$('#btn-filtre-region').on('click', function () {
-    filtreEnRegion = !filtreEnRegion;
-    appliquerStyleFiltreRegion();
+$('#sel-perimetre').on('change', function () {
+    filtreEnRegion = $(this).val() === '1';
     renderGrille();
 });
 

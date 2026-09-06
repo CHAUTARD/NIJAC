@@ -67,9 +67,10 @@
         }
         #search-defisc {
             margin-left: auto; align-self: center;
-            font-size: .85rem; padding: .3rem .8rem;
-            border: 1px solid #c8d4e8; border-radius: 999px; width: 280px;
+            font-size: .85rem; padding: .34rem .9rem;
+            border: 1.5px solid #d3dae6; border-radius: 999px; width: 280px;
         }
+        #search-defisc:focus { outline: none; border-color: var(--nijac-blue); }
         #tbl-defisc thead th[data-col] { cursor: pointer; user-select: none; white-space: nowrap; }
         #tbl-defisc thead th[data-col]::after { content: ' \2195'; opacity: .35; font-size: .8em; }
         #tbl-defisc thead th.sort-asc::after  { content: ' \25B2'; opacity: 1; }

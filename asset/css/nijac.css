@@ -45,3 +45,90 @@
     justify-content: center;
 }
 #spinner.show { display: flex; }
+
+/* ══════════════════════════════════════════════
+   Comboboxes de filtre + badge de comptage
+   Style « label en encoche + bord arrondi ».
+   Utilisé dans les bandeaux #menu-strip (EA81, EN11, …).
+   Le label vit DANS le padding-haut de .combo-field : il ne peut
+   jamais dépasser au-dessus du bandeau, quelle que soit la hauteur
+   du contrôle. Chaque écran peut fixer --strip-bg sur son #menu-strip
+   si son fond n'est pas #f8f9fa.
+   ══════════════════════════════════════════════ */
+#menu-strip { --strip-bg: #f8f9fa; }
+#menu-strip:has(.combo-field) { padding-top: .4rem; padding-bottom: .4rem; gap: .5rem; }
+
+.combo-field {
+    position: relative; display: inline-block; vertical-align: middle;
+    padding-top: .6rem;
+}
+.combo-field > label {
+    position: absolute; top: 0; left: .7rem; padding: 0 .3rem;
+    background: var(--strip-bg, #f8f9fa);
+    font-size: .7rem; font-weight: 600; color: #6b7280; line-height: 1.15;
+    pointer-events: none; transition: color .12s;
+}
+.combo-field > select,
+.combo-field > input,
+#menu-colonnes > summary {
+    box-sizing: border-box; height: 2.15rem; line-height: 1.2; vertical-align: middle;
+    font-size: .85rem; font-weight: 600; color: var(--nijac-blue);
+    border: 1.5px solid #d3dae6; border-radius: 12px;
+    background-color: #fff; transition: border-color .12s;
+}
+.combo-field > select,
+#menu-colonnes > summary {
+    appearance: none; -webkit-appearance: none; -moz-appearance: none;
+    padding: .42rem 2rem .42rem .8rem; cursor: pointer; white-space: nowrap;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%236b7280' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right .7rem center; background-size: .85rem;
+}
+.combo-field > input { padding: .42rem .8rem; width: 230px; }
+.combo-field > input::placeholder { color: #9aa5b8; font-weight: 400; }
+.combo-field > select:hover,
+.combo-field > input:hover,
+#menu-colonnes > summary:hover { border-color: #b9c3d6; }
+.combo-field > select:focus,
+.combo-field > input:focus { outline: none; border-color: var(--nijac-blue); }
+.combo-field > select:disabled { opacity: .55; cursor: default; }
+.combo-field:focus-within > label,
+.combo-field:has(> #menu-colonnes[open]) > label { color: var(--nijac-blue); }
+
+/* Menu « Colonnes » : même style combobox + panneau déroulant */
+#menu-colonnes { position: relative; display: inline-block; }
+#menu-colonnes > summary { list-style: none; }
+#menu-colonnes > summary::-webkit-details-marker { display: none; }
+#menu-colonnes[open] > summary { border-color: var(--nijac-blue); }
+#menu-colonnes-list {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 60;
+    background: #fff; border: 1px solid #ccc; border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.15); padding: .35rem;
+    min-width: 180px; max-height: 60vh; overflow: auto;
+}
+#menu-colonnes-list label {
+    display: flex; align-items: center; gap: .45rem;
+    padding: .25rem .4rem; font-size: .85rem; cursor: pointer; white-space: nowrap;
+}
+#menu-colonnes-list label:hover { background: #eef4ff; border-radius: 4px; }
+
+/* Badge de comptage arrondi, aligné sur les comboboxes */
+.count-badge {
+    margin-left: .75rem; margin-top: .6rem;
+    box-sizing: border-box; height: 2.15rem;
+    display: inline-flex; align-items: center; padding: 0 .9rem;
+    background: #eef2f9; border: 1.5px solid #d3dae6; border-radius: 999px;
+    font-size: .82rem; font-weight: 700; color: var(--nijac-blue); white-space: nowrap;
+}
+
+/* Contrôle de filtre « léger » : bords arrondis façon combobox, sans encoche.
+   Pour les barres compactes / panneaux où .combo-field serait trop haute.
+   Remplace class="form-control form-select form-*-sm" sur les champs de filtre. */
+.filter-ctl {
+    font-size: .82rem; font-weight: 600; color: var(--nijac-blue);
+    padding: .34rem .7rem; border: 1.5px solid #d3dae6; border-radius: 12px;
+    background: #fff; box-sizing: border-box;
+}
+input.filter-ctl { font-weight: 400; color: inherit; }
+.filter-ctl:hover  { border-color: #b9c3d6; }
+.filter-ctl:focus  { outline: none; border-color: var(--nijac-blue); }
+.filter-ctl:disabled { opacity: .55; }

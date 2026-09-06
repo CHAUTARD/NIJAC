@@ -14,11 +14,17 @@
         #liste-header { justify-content: space-between; }
         #search-input {
             font-size: .82rem;
-            padding: .15rem .5rem;
-            border: 1px solid #c8d4e8;
-            border-radius: 4px;
+            padding: .32rem .7rem;
+            border: 1.5px solid #d3dae6;
+            border-radius: 12px;
             width: 200px;
         }
+        #search-input:focus { outline: none; border-color: var(--nijac-blue); }
+        #sel-division {
+            font-size: .82rem; font-weight: 600; color: var(--nijac-blue);
+            padding: .32rem .7rem; border: 1.5px solid #d3dae6; border-radius: 12px; background: #fff;
+        }
+        #sel-division:focus { outline: none; border-color: var(--nijac-blue); }
 
         #import-result {
             margin: .6rem .75rem 0;
@@ -60,8 +66,8 @@
                 <button type="button" class="btn btn-sm btn-light" id="btn-importer-txt" title="Importer club_Reg_R4.PN.txt">
                     <i class="bi bi-upload me-1"></i>Importer .txt
                 </button>
-                <select id="sel-division" class="form-select form-select-sm" style="width:auto;min-width:250px;font-size:.82rem;">
-                    <option value="">— Toutes divisions —</option>
+                <select id="sel-division" style="width:auto;min-width:250px;">
+                    <option value="">Toutes les divisions</option>
                 </select>
                 <input type="search" id="search-input" placeholder="🔍 Rechercher…">
             </div>

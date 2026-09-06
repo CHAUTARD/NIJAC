@@ -30,9 +30,8 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 #page-header { background:#2e7d32; color:#fff; padding:.5rem 1.25rem; display:flex; align-items:center; gap:.75rem; font-size:.9rem; font-weight:600; flex-shrink:0; }
 
 /* ── Bandeau département ── */
-#barre-dept { background:#fff; border-bottom:2px solid #dee2e6; padding:.65rem 1.25rem; display:flex; align-items:center; gap:1.25rem; flex-wrap:wrap; }
-#barre-dept label { font-weight:700; color:#444; font-size:.88rem; margin:0; white-space:nowrap; }
-#sel-dept { min-width:260px; font-size:.88rem; }
+#barre-dept { --strip-bg:#fff; background:#fff; border-bottom:2px solid #dee2e6; padding:.6rem 1.25rem; display:flex; align-items:center; gap:.9rem; flex-wrap:wrap; }
+#barre-dept > .combo-field > select#sel-dept { min-width:260px; }
 
 /* ── Corps ── */
 #corps { flex:1; overflow-y:auto; padding:1.25rem clamp(1rem, 4vw, 4rem); width:100%; box-sizing:border-box; }
@@ -160,22 +159,24 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 
 <!-- Bandeau département -->
 <div id="barre-dept">
-    <label for="sel-dept"><i class="bi bi-map me-1"></i>Département</label>
-    <select id="sel-dept" class="form-select form-select-sm w-auto">
-        <option value="">— Choisir un département —</option>
-        <optgroup label="Normandie">
-        <?php foreach ($deptActifs as $d): ?>
-        <option value="<?= (int) $d['CodeDept'] ?>" <?= (string) $d['CodeDept'] === $departement ? 'selected' : '' ?>><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?></option>
-        <?php endforeach; ?>
-        </optgroup>
-        <?php if ($deptLimitrophes): ?>
-        <optgroup label="Départements limitrophes">
-        <?php foreach ($deptLimitrophes as $d): ?>
-        <option value="<?= (int) $d['CodeDept'] ?>"><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?> (<?= esc($d['region']) ?>)</option>
-        <?php endforeach; ?>
-        </optgroup>
-        <?php endif; ?>
-    </select>
+    <span class="combo-field">
+        <label for="sel-dept">Département</label>
+        <select id="sel-dept">
+            <option value="">— Choisir un département —</option>
+            <optgroup label="Normandie">
+            <?php foreach ($deptActifs as $d): ?>
+            <option value="<?= (int) $d['CodeDept'] ?>" <?= (string) $d['CodeDept'] === $departement ? 'selected' : '' ?>><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?></option>
+            <?php endforeach; ?>
+            </optgroup>
+            <?php if ($deptLimitrophes): ?>
+            <optgroup label="Départements limitrophes">
+            <?php foreach ($deptLimitrophes as $d): ?>
+            <option value="<?= (int) $d['CodeDept'] ?>"><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?> (<?= esc($d['region']) ?>)</option>
+            <?php endforeach; ?>
+            </optgroup>
+            <?php endif; ?>
+        </select>
+    </span>
     <div id="spinner-dept" class="spinner-border spinner-border-sm text-secondary" role="status">
         <span class="visually-hidden">Chargement…</span>
     </div>
@@ -189,18 +190,18 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
         <span class="leg-item"><span class="leg-dot leg-dot-ok"></span>Disponibilités saisies</span>
         <span class="leg-item"><span class="leg-dot leg-dot-ko"></span>Non renseigné</span>
     </div>
-    <div class="input-group input-group-sm" style="max-width:200px; display:none" id="wrap-filtre-dispo">
-        <label class="input-group-text" for="sel-filtre-dispo"><i class="bi bi-funnel-fill"></i></label>
-        <select id="sel-filtre-dispo" class="form-select form-select-sm">
+    <span class="combo-field" style="display:none" id="wrap-filtre-dispo">
+        <label for="sel-filtre-dispo">Filtre</label>
+        <select id="sel-filtre-dispo">
             <option value="">Tous les JA</option>
             <option value="ok">Avec disponibilités</option>
             <option value="ko">Non renseigné</option>
         </select>
-    </div>
-    <div class="input-group input-group-sm ms-2" style="max-width:240px; display:none" id="wrap-filtre-ja">
-        <span class="input-group-text"><i class="bi bi-search"></i></span>
-        <input type="search" id="filtre-ja" class="form-control" placeholder="Filtrer par nom / prénom…" autocomplete="off">
-    </div>
+    </span>
+    <span class="combo-field" style="display:none" id="wrap-filtre-ja">
+        <label for="filtre-ja">Rechercher</label>
+        <input type="search" id="filtre-ja" placeholder="Nom / prénom…" autocomplete="off">
+    </span>
 </div>
 
 <!-- Corps -->

@@ -21,7 +21,7 @@
         }
         #toolbar-user .ts-pwd-warning:hover { color: #900; }
 
-        #toolbar { background: #f8fafc; border-bottom: 1px solid #dde5f0; padding: .4rem 1rem; display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; font-size: .85rem; }
+        #toolbar { --strip-bg: #f8fafc; background: #f8fafc; border-bottom: 1px solid #dde5f0; padding: .4rem 1rem; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; font-size: .85rem; }
 
         #stats-wrap { padding: 1.25rem; flex: 1; }
 
@@ -95,17 +95,21 @@
 
 <!-- Barre de filtres -->
 <div id="toolbar">
-    <label class="fw-bold" style="font-size:.82rem;" for="filtre-phase">Phase :</label>
-    <select id="filtre-phase" class="form-select form-select-sm" style="width:auto;">
-        <option value="1"<?= (int) $defaultPhase === 1 ? ' selected' : '' ?>>Phase 1</option>
-        <option value="2"<?= (int) $defaultPhase === 2 ? ' selected' : '' ?>>Phase 2</option>
-    </select>
-    <label class="fw-bold" style="font-size:.82rem;" for="filtre-annee">Saison :</label>
-    <select id="filtre-annee" class="form-select form-select-sm" style="width:auto;">
-        <?php foreach ($anneesDispo as $a): ?>
-        <option value="<?= $a ?>"<?= (int) $a === (int) $defaultAnnee ? ' selected' : '' ?>><?= $a ?>&#8209;<?= $a + 1 ?></option>
-        <?php endforeach; ?>
-    </select>
+    <span class="combo-field">
+        <label for="filtre-phase">Phase</label>
+        <select id="filtre-phase">
+            <option value="1"<?= (int) $defaultPhase === 1 ? ' selected' : '' ?>>Phase 1</option>
+            <option value="2"<?= (int) $defaultPhase === 2 ? ' selected' : '' ?>>Phase 2</option>
+        </select>
+    </span>
+    <span class="combo-field">
+        <label for="filtre-annee">Saison</label>
+        <select id="filtre-annee">
+            <?php foreach ($anneesDispo as $a): ?>
+            <option value="<?= $a ?>"<?= (int) $a === (int) $defaultAnnee ? ' selected' : '' ?>><?= $a ?>&#8209;<?= $a + 1 ?></option>
+            <?php endforeach; ?>
+        </select>
+    </span>
     <button class="btn btn-sm btn-primary" id="btn-charger">
         <i class="bi bi-search me-1"></i>Afficher
     </button>

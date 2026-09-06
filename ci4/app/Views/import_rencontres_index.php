@@ -238,9 +238,9 @@
         </div>
 
         <div class="d-flex gap-2 mb-2 flex-wrap align-items-center">
-            <input type="search" id="filtre-renc" class="form-control form-control-sm"
+            <input type="search" id="filtre-renc" class="filter-ctl"
                    placeholder="Filtrer…" style="max-width:240px;">
-            <select id="filtre-div" class="form-select form-select-sm" style="max-width:280px;">
+            <select id="filtre-div" class="filter-ctl" style="max-width:280px;">
                 <option value="">Toutes les divisions</option>
             </select>
             <button id="btn-refresh-renc" class="btn btn-sm btn-outline-secondary ms-auto">

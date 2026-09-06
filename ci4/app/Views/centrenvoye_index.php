@@ -175,10 +175,17 @@
         #txt-recherche-ja {
             flex: 1;
             font-size: .82rem;
-            padding: .2rem .4rem;
-            border: 1px solid #c8d4e8;
-            border-radius: 4px;
+            padding: .35rem .7rem;
+            border: 1.5px solid #d3dae6;
+            border-radius: 12px;
         }
+        #txt-recherche-ja:focus { outline: none; border-color: var(--nijac-blue); }
+        #journee-bar > select {
+            font-size: .82rem; font-weight: 600; color: var(--nijac-blue);
+            padding: .3rem .7rem; border: 1.5px solid #d3dae6; border-radius: 12px;
+            background: #fff;
+        }
+        #journee-bar > select:focus { outline: none; border-color: var(--nijac-blue); }
 
         #ja-list-wrapper { flex: 1; overflow-y: auto; }
 
@@ -361,7 +368,7 @@
         <div id="journee-bar">
             <i class="bi bi-calendar3 text-warning"></i>
             <label class="fw-bold mb-0" style="font-size:.82rem;">Journée :</label>
-            <select id="cbo-journee" class="form-select form-select-sm" style="max-width:300px;">
+            <select id="cbo-journee" style="max-width:300px;">
                 <option value="">— Sélectionner —</option>
             </select>
             <span id="nb-ja-journee" class="text-muted" style="font-size:.78rem;"></span>

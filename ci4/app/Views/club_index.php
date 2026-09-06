@@ -95,14 +95,7 @@
         #tbl-clubs td:last-child .btn { padding: .15rem .3rem; }
         #tbl-clubs td:last-child .btn.me-1 { margin-right: 2px !important; }
 
-        /* ── Recherche ── */
-        #search-input {
-            font-size: .85rem;
-            padding: .2rem .5rem;
-            border: 1px solid #c8d4e8;
-            border-radius: 4px;
-            width: 220px;
-        }
+        /* Recherche / comboboxes / badge : style partagé (asset/css/nijac.css) */
 
         /* ── En-têtes triables ── */
         #tbl-clubs thead th { cursor: pointer; user-select: none; }
@@ -136,21 +129,6 @@
         #page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
         #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
 
-        /* Menu « Colonnes » (affichage/masquage des colonnes, mémorisé par le navigateur) */
-        #menu-colonnes { position: relative; }
-        #menu-colonnes > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; }
-        #menu-colonnes > summary::-webkit-details-marker { display: none; }
-        #menu-colonnes-list {
-            position: absolute; right: 0; top: calc(100% + 4px); z-index: 60;
-            background: #fff; border: 1px solid #ccc; border-radius: 6px;
-            box-shadow: 0 4px 12px rgba(0,0,0,.15); padding: .35rem;
-            min-width: 180px; max-height: 60vh; overflow: auto;
-        }
-        #menu-colonnes-list label {
-            display: flex; align-items: center; gap: .45rem;
-            padding: .25rem .4rem; font-size: .85rem; cursor: pointer; white-space: nowrap;
-        }
-        #menu-colonnes-list label:hover { background: #eef4ff; border-radius: 4px; }
     </style>
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-skin.css') ?>">
 </head>
@@ -177,40 +155,53 @@
     <button class="menu-item" id="btn-import-club-numero" data-bs-toggle="modal" data-bs-target="#modal-import-club-numero">
         <i class="bi bi-search"></i>Importer un club (N°)
     </button>
-    <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 club(s)</span>
+    <span class="count-badge" id="lbl-count">0 club(s)</span>
     <span style="flex:1"></span>
-    <details id="menu-colonnes">
-        <summary class="menu-item" style="border-color:transparent;"><i class="bi bi-layout-three-columns me-1"></i>Colonnes</summary>
-        <div id="menu-colonnes-list"></div>
-    </details>
+    <span class="combo-field">
+        <details id="menu-colonnes">
+            <summary id="menu-colonnes-resume">Colonnes</summary>
+            <div id="menu-colonnes-list"></div>
+        </details>
+    </span>
     <span style="flex:1"></span>
-    <label for="sel-dept" style="font-size:.85rem;font-weight:700;color:#444;white-space:nowrap;margin:0;">
-        <i class="bi bi-map me-1"></i>Département
-    </label>
     <?php
         $codesRegion = array_column($deptActifs, 'CodeDept');
         $deptsAutres = array_filter($tousDepts, fn ($d) => !in_array($d['CodeDept'], $codesRegion, true));
     ?>
-    <select id="sel-dept" class="form-select form-select-sm w-auto">
-        <option value="">— Tous —</option>
-        <optgroup label="Région">
-        <?php foreach ($deptActifs as $d): ?>
-        <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
-        <?php endforeach; ?>
-        </optgroup>
-        <optgroup label="Autres départements">
-        <?php foreach ($deptsAutres as $d): ?>
-        <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
-        <?php endforeach; ?>
-        </optgroup>
-    </select>
-    <button class="menu-item" id="btn-plusieurs-salles" title="Afficher uniquement les clubs ayant plusieurs salles" style="border-color:transparent;">
-        <i class="bi bi-door-open me-1"></i>Plusieurs salles
-    </button>
-    <button class="menu-item" id="btn-filtre-region" title="Cliquer pour n'afficher que les clubs de la région, ou tous les clubs" style="border-color:transparent;">
-        <i class="bi bi-geo-alt me-1"></i><span id="lbl-filtre-region">Région</span>
-    </button>
-    <input type="search" id="search-input" placeholder="🔍 Rechercher dans tout le tableau">
+    <span class="combo-field">
+        <label for="sel-dept">Département</label>
+        <select id="sel-dept">
+            <option value="">Tous les départements</option>
+            <optgroup label="Région">
+            <?php foreach ($deptActifs as $d): ?>
+            <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
+            <?php endforeach; ?>
+            </optgroup>
+            <optgroup label="Autres départements">
+            <?php foreach ($deptsAutres as $d): ?>
+            <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
+            <?php endforeach; ?>
+            </optgroup>
+        </select>
+    </span>
+    <span class="combo-field" id="wrap-salles">
+        <label for="sel-salles">Salles</label>
+        <select id="sel-salles">
+            <option value="0">Toutes les salles</option>
+            <option value="1">Plusieurs salles</option>
+        </select>
+    </span>
+    <span class="combo-field">
+        <label for="sel-perimetre">Périmètre</label>
+        <select id="sel-perimetre">
+            <option value="1">Région uniquement</option>
+            <option value="0">Tous les clubs</option>
+        </select>
+    </span>
+    <span class="combo-field">
+        <label for="search-input">Recherche</label>
+        <input type="search" id="search-input" placeholder="Rechercher…">
+    </span>
 </div>
 
 <!-- Grille -->
@@ -687,10 +678,10 @@ function chargerListe() {
         }));
         invaliderCacheRendu();
         const aMultiSalles = lignes.some(l => l.nb_salles > 1);
-        $('#btn-plusieurs-salles').toggle(aMultiSalles);
+        $('#wrap-salles').toggle(aMultiSalles);
         if (!aMultiSalles && filtreMultiSalle) {
             filtreMultiSalle = false;
-            $('#btn-plusieurs-salles').css({ background: '', color: '', borderColor: 'transparent' });
+            $('#sel-salles').val('0');
         }
         renderGrille();
     }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
@@ -718,6 +709,8 @@ function appliquerColonnesCachees() {
     document.querySelectorAll('#tbl-clubs [data-field]').forEach(el => {
         el.style.display = colonnesCachees.has(el.getAttribute('data-field')) ? 'none' : '';
     });
+    const total = document.querySelectorAll('#tbl-clubs thead th[data-field]').length;
+    $('#menu-colonnes-resume').text(`Colonnes ${total - colonnesCachees.size}/${total}`);
 }
 
 function construireMenuColonnes() {
@@ -744,31 +737,14 @@ $(document).on('click', function (e) {
 });
 
 // ── Filtre plusieurs salles ───────────────────────────────────────────────────
-$('#btn-plusieurs-salles').on('click', function () {
-    filtreMultiSalle = !filtreMultiSalle;
-    $(this).toggleClass('active', filtreMultiSalle)
-           .css({
-               background:   filtreMultiSalle ? '#1a3a6b' : '',
-               color:        filtreMultiSalle ? '#fff'    : '',
-               borderColor:  filtreMultiSalle ? '#1a3a6b' : 'transparent',
-           });
+$('#sel-salles').on('change', function () {
+    filtreMultiSalle = $(this).val() === '1';
     renderGrille();
 });
 
-// ── Filtre région / tous (bascule) ───────────────────────────────────────────
-function appliquerStyleFiltreRegion() {
-    $('#lbl-filtre-region').text(filtreEnRegion ? 'Région' : 'Tous');
-    $('#btn-filtre-region').css({
-        background:  filtreEnRegion ? '#166534' : '',
-        color:       filtreEnRegion ? '#fff'    : '',
-        borderColor: filtreEnRegion ? '#166534' : 'transparent',
-    });
-}
-appliquerStyleFiltreRegion();
-
-$('#btn-filtre-region').on('click', function () {
-    filtreEnRegion = !filtreEnRegion;
-    appliquerStyleFiltreRegion();
+// ── Filtre région / tous ─────────────────────────────────────────────────────
+$('#sel-perimetre').on('change', function () {
+    filtreEnRegion = $(this).val() === '1';
 
     const cached = renduCache[filtreEnRegion];
     if (cached && cached.signature === signatureFiltres()) {

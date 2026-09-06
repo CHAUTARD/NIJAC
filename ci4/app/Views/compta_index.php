@@ -54,12 +54,13 @@
 
         /* ── Toolbar filtres ── */
         #toolbar {
+            --strip-bg: #fff;
             background: #fff;
             border-bottom: 1px solid #dde3ed;
             padding: .5rem 1.25rem;
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: .75rem;
             flex-wrap: wrap;
         }
 
@@ -88,23 +89,6 @@
         }
         .btn-nijac:hover { opacity: .85; }
         .btn-nijac:disabled { opacity: .5; cursor: not-allowed; }
-
-        .btn-phase {
-            background: #e8f0fe;
-            color: #1a3a6b;
-            border: 1px solid #b3c6f0;
-            border-radius: 6px;
-            font-size: .82rem;
-            font-weight: 600;
-            padding: .32rem .9rem;
-            display: inline-flex;
-            align-items: center;
-            gap: .35rem;
-            cursor: pointer;
-            transition: background .15s;
-        }
-        .btn-phase:hover { background: #d0e0fb; }
-        .btn-phase.active { background: #1a3a6b; color: #fff; border-color: #1a3a6b; }
 
         .btn-export {
             background: #1a7f4b;
@@ -252,14 +236,15 @@
     <!-- Plage de dates pilotée uniquement par les boutons Phase 1 / Phase 2 (plus de sélecteurs de date). -->
     <input type="hidden" id="inp-debut" value="<?= esc($defaultDebut) ?>">
     <input type="hidden" id="inp-fin" value="<?= esc($defaultFin) ?>">
-    <span class="fw-bold">Période :</span>
 
-    <button class="btn-phase" id="btn-phase1" data-debut="<?= esc($dateP1Debut) ?>" data-fin="<?= esc($dateP1Fin) ?>">
-        <i class="bi bi-1-circle"></i>Phase 1
-    </button>
-    <button class="btn-phase" id="btn-phase2" data-debut="<?= esc($dateP2Debut) ?>" data-fin="<?= esc($dateP2Fin) ?>">
-        <i class="bi bi-2-circle"></i>Phase 2
-    </button>
+    <span class="combo-field">
+        <label for="sel-phase">Période</label>
+        <select id="sel-phase">
+            <option value="" data-debut="<?= esc($defaultDebut) ?>" data-fin="<?= esc($defaultFin) ?>">— Période —</option>
+            <option value="1" data-debut="<?= esc($dateP1Debut) ?>" data-fin="<?= esc($dateP1Fin) ?>">Phase 1</option>
+            <option value="2" data-debut="<?= esc($dateP2Debut) ?>" data-fin="<?= esc($dateP2Fin) ?>">Phase 2</option>
+        </select>
+    </span>
 
     <button class="btn-nijac" id="btn-charger">
         <i class="bi bi-search"></i>Charger
@@ -336,14 +321,11 @@
 <script>
 const BASE = '<?= site_url('compta') ?>';
 
-// ── Boutons Phase 1 / Phase 2 ─────────────────────────────────────────────
-$('.btn-phase').on('click', function () {
-    const debut = $(this).data('debut');
-    const fin   = $(this).data('fin');
-    $('#inp-debut').val(debut);
-    $('#inp-fin').val(fin);
-    $('.btn-phase').removeClass('active');
-    $(this).addClass('active');
+// ── Sélecteur de période (Phase 1 / Phase 2) ──────────────────────────────
+$('#sel-phase').on('change', function () {
+    const opt = this.options[this.selectedIndex];
+    $('#inp-debut').val(opt.dataset.debut || '');
+    $('#inp-fin').val(opt.dataset.fin || '');
 });
 
 function money(v) {

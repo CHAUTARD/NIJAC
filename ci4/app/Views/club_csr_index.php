@@ -96,14 +96,7 @@
             background: #f0f4fa;
         }
 
-        /* ── Recherche ── */
-        #search-input {
-            font-size: .85rem;
-            padding: .2rem .5rem;
-            border: 1px solid #c8d4e8;
-            border-radius: 4px;
-            width: 220px;
-        }
+        /* Recherche / comboboxes / badge : style partagé (asset/css/nijac.css) */
 
         /* ── En-têtes triables ── */
         #tbl-clubs thead th[data-field] { cursor: pointer; user-select: none; }
@@ -156,35 +149,46 @@
     <button class="menu-item" id="btn-envoyer" disabled style="background:#00695c;color:#fff;border-color:#00695c;">
         <i class="bi bi-envelope-fill me-1"></i>Envoyer un Email à tous <span id="lbl-selection">(0)</span>
     </button>
-    <span style="margin-left:.75rem; padding:.2rem .6rem; background:#e8eef7; border:1px solid #c8d4e8; border-radius:4px; font-size:.82rem; color:#1a3a6b; font-weight:600;" id="lbl-count">0 club(s)</span>
+    <span class="count-badge" id="lbl-count">0 club(s)</span>
     <span style="flex:1"></span>
-    <label for="sel-dept" style="font-size:.85rem;font-weight:700;color:#444;white-space:nowrap;margin:0;">
-        <i class="bi bi-map me-1"></i>Département
-    </label>
     <?php
         $codesRegion = array_column($deptActifs, 'CodeDept');
         $deptsAutres = array_filter($tousDepts, fn ($d) => !in_array($d['CodeDept'], $codesRegion, true));
     ?>
-    <select id="sel-dept" class="form-select form-select-sm w-auto">
-        <option value="">— Tous —</option>
-        <optgroup label="Région">
-        <?php foreach ($deptActifs as $d): ?>
-        <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
-        <?php endforeach; ?>
-        </optgroup>
-        <optgroup label="Autres départements">
-        <?php foreach ($deptsAutres as $d): ?>
-        <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
-        <?php endforeach; ?>
-        </optgroup>
-    </select>
-    <button class="menu-item" id="btn-filtre-region" title="Cliquer pour n'afficher que les clubs de la région, ou tous les clubs" style="border-color:transparent;">
-        <i class="bi bi-geo-alt me-1"></i><span id="lbl-filtre-region">Région</span>
-    </button>
-    <button class="menu-item" id="btn-filtre-regional" title="Cliquer pour n'afficher que les clubs ayant une équipe Régionale/Pré-Nationale, ou tous les clubs" style="border-color:transparent;">
-        <i class="bi bi-trophy me-1"></i><span id="lbl-filtre-regional">R4-PN</span>
-    </button>
-    <input type="search" id="search-input" placeholder="🔍 Rechercher…">
+    <span class="combo-field">
+        <label for="sel-dept">Département</label>
+        <select id="sel-dept">
+            <option value="">Tous les départements</option>
+            <optgroup label="Région">
+            <?php foreach ($deptActifs as $d): ?>
+            <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
+            <?php endforeach; ?>
+            </optgroup>
+            <optgroup label="Autres départements">
+            <?php foreach ($deptsAutres as $d): ?>
+            <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
+            <?php endforeach; ?>
+            </optgroup>
+        </select>
+    </span>
+    <span class="combo-field">
+        <label for="sel-perimetre">Périmètre</label>
+        <select id="sel-perimetre">
+            <option value="1">Région uniquement</option>
+            <option value="0">Tous les clubs</option>
+        </select>
+    </span>
+    <span class="combo-field">
+        <label for="sel-regional">Niveau</label>
+        <select id="sel-regional">
+            <option value="0">Tous les clubs</option>
+            <option value="1">Équipe R4 / PN</option>
+        </select>
+    </span>
+    <span class="combo-field">
+        <label for="search-input">Recherche</label>
+        <input type="search" id="search-input" placeholder="Rechercher…">
+    </span>
 </div>
 
 <!-- Grille -->
@@ -505,37 +509,13 @@ $(function () {
     refreshTriEntetes = nijacSortableTable('#tbl-clubs thead th[data-field]', 'field', sortState, renderGrille);
 });
 
-// ── Filtre région / tous (bascule) ───────────────────────────────────────────
-function appliquerStyleFiltreRegion() {
-    $('#lbl-filtre-region').text(filtreEnRegion ? 'Région' : 'Tous');
-    $('#btn-filtre-region').css({
-        background:  filtreEnRegion ? '#166534' : '',
-        color:       filtreEnRegion ? '#fff'    : '',
-        borderColor: filtreEnRegion ? '#166534' : 'transparent',
-    });
-}
-appliquerStyleFiltreRegion();
-
-$('#btn-filtre-region').on('click', function () {
-    filtreEnRegion = !filtreEnRegion;
-    appliquerStyleFiltreRegion();
+// ── Filtre région / niveau ───────────────────────────────────────────────────
+$('#sel-perimetre').on('change', function () {
+    filtreEnRegion = $(this).val() === '1';
     renderGrille();
 });
-
-// ── Filtre club régional (bascule) ───────────────────────────────────────────
-function appliquerStyleFiltreRegional() {
-    $('#lbl-filtre-regional').text('R4-PN');
-    $('#btn-filtre-regional').css({
-        background:  filtreRegional ? '#166534' : '',
-        color:       filtreRegional ? '#fff'    : '',
-        borderColor: filtreRegional ? '#166534' : 'transparent',
-    });
-}
-appliquerStyleFiltreRegional();
-
-$('#btn-filtre-regional').on('click', function () {
-    filtreRegional = !filtreRegional;
-    appliquerStyleFiltreRegional();
+$('#sel-regional').on('change', function () {
+    filtreRegional = $(this).val() === '1';
     renderGrille();
 });
 

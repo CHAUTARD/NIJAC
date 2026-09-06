@@ -242,19 +242,19 @@
 <!-- Barre de filtres -->
 <div id="filter-bar">
     <label for="sel-dept"><i class="bi bi-geo-alt me-1"></i>Département :</label>
-    <select id="sel-dept" class="form-select form-select-sm">
+    <select id="sel-dept" class="filter-ctl">
         <option value="0">— Tous —</option>
     </select>
 
     <label for="sel-statut" class="ms-3">Statut :</label>
-    <select id="sel-statut" class="form-select form-select-sm">
+    <select id="sel-statut" class="filter-ctl">
         <option value="">— Tous —</option>
         <option value="soumis">Soumis (saison en cours)</option>
         <option value="attente">En attente</option>
     </select>
 
     <label for="txt-recherche" class="ms-3"><i class="bi bi-search me-1"></i>Recherche :</label>
-    <input type="search" id="txt-recherche" class="form-control form-control-sm"
+    <input type="search" id="txt-recherche" class="filter-ctl"
            placeholder="Club…" autocomplete="off">
 
     <span id="lbl-count" class="ms-3 text-muted" style="font-size:.82rem;"></span>

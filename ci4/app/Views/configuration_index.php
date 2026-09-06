@@ -178,9 +178,10 @@
 
         #table-toolbar { display: flex; align-items: center; gap: .75rem; margin-bottom: .9rem; }
         #search-input-config {
-            font-size: .85rem; padding: .2rem .5rem;
-            border: 1px solid #c8d4e8; border-radius: 4px; width: 240px;
+            font-size: .85rem; padding: .34rem .7rem;
+            border: 1.5px solid #d3dae6; border-radius: 12px; width: 240px;
         }
+        #search-input-config:focus { outline: none; border-color: var(--nijac-blue); }
         #table-grid-wrapper { flex: 1; overflow: auto; }
         .table-config { width: 100%; font-size: .83rem; border-collapse: collapse; background: #fff; }
         .table-config thead th {
@@ -629,7 +630,7 @@
                 <label for="cbo-region" style="font-size:.85rem;font-weight:600;color:#374151;white-space:nowrap;">
                     <i class="bi bi-geo-alt-fill me-1"></i>Sélection par région :
                 </label>
-                <select id="cbo-region" class="form-select form-select-sm" style="max-width:320px;">
+                <select id="cbo-region" class="filter-ctl" style="max-width:320px;">
                     <option value="">— Choisir une région —</option>
                     <option value="auvergne-rhone-alpes">Auvergne-Rhône-Alpes</option>
                     <option value="bourgogne-franche-comte">Bourgogne-Franche-Comté</option>

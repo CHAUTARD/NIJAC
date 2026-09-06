@@ -54,13 +54,7 @@
         }
         #import-options.show { display: inline-flex; }
 
-        #search-input {
-            font-size: .85rem;
-            padding: .2rem .5rem;
-            border: 1px solid #c8d4e8;
-            border-radius: 4px;
-            width: 250px;
-        }
+        /* recherche / comboboxes : style partagé (asset/css/nijac.css) */
 
         #page-header {
             background: var(--nijac-blue);
@@ -132,10 +126,6 @@
         #pagination-bar button:not(:disabled):hover { background: #e8eef7; }
         #quick-jump { display: inline-flex; gap: .25rem; margin-left: .75rem; }
 
-        #btn-sans-coords.actif {
-            background: #fff3cd; border-color: #f59e0b; color: #78350f; font-weight: 700;
-        }
-        #btn-sans-coords.actif i { color: #d97706; }
 
         #tbl-communes tbody tr { cursor: pointer; }
         #tbl-communes tbody tr.row-selected td { background: #b8d0f0 !important; }
@@ -249,26 +239,37 @@
         </button>
     </div>
     <input type="file" id="file-input" accept=".csv,.001,.002,.003,.004,.005" multiple style="display:none">
-    <button class="menu-item" id="btn-sans-coords" title="Afficher uniquement les communes sans latitude/longitude">
-        <i class="bi bi-geo-alt" style="font-size:1rem;margin-right:.35rem;"></i>Sans géolocalisation
-    </button>
     <button class="menu-item" id="btn-aide-coords" style="color:#1a3a6b;" data-bs-toggle="modal" data-bs-target="#modal-aide-coords">
         <i class="bi bi-question-circle-fill" style="font-size:1.1rem;margin-right:.35rem;color:#2557a7;"></i>Comment obtenir les coordonnées GPS ?
     </button>
     <span style="flex:1"></span>
-    <label for="sel-dept" style="font-size:.85rem;font-weight:700;color:#444;white-space:nowrap;margin:0;">
-        <i class="bi bi-map me-1"></i>Département
-    </label>
-    <select id="sel-dept" class="form-select form-select-sm w-auto">
-        <option value="">— Tous —</option>
-        <?php foreach ($departements as $d): ?>
-        <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
-        <?php endforeach; ?>
-    </select>
-    <button class="menu-item" id="btn-filtre-region" title="Cliquer pour n'afficher que les communes de la région, ou toutes les communes" style="border-color:transparent;">
-        <i class="bi bi-geo-alt me-1"></i><span id="lbl-filtre-region">Région</span>
-    </button>
-    <input type="search" id="search-input" placeholder="🔍 Code postal ou commune (jokers * et ?)…" title="* remplace plusieurs caractères, ? un seul — ex : SAINT*, 14?00, *SUR MER">
+    <span class="combo-field">
+        <label for="sel-dept">Département</label>
+        <select id="sel-dept">
+            <option value="">Tous les départements</option>
+            <?php foreach ($departements as $d): ?>
+            <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </span>
+    <span class="combo-field">
+        <label for="sel-perimetre">Périmètre</label>
+        <select id="sel-perimetre">
+            <option value="1">Région uniquement</option>
+            <option value="0">Toutes les communes</option>
+        </select>
+    </span>
+    <span class="combo-field">
+        <label for="sel-coords">Coordonnées</label>
+        <select id="sel-coords">
+            <option value="0">Toutes les communes</option>
+            <option value="1">Sans géolocalisation</option>
+        </select>
+    </span>
+    <span class="combo-field">
+        <label for="search-input">Recherche</label>
+        <input type="search" id="search-input" placeholder="CP ou commune (jokers * ?)…" title="* remplace plusieurs caractères, ? un seul — ex : SAINT*, 14?00, *SUR MER">
+    </span>
 </div>
 
 <!-- ── Modale : aide coordonnées GPS ── -->
@@ -627,19 +628,8 @@ $('#sel-dept').on('change', function () {
     chargerListe();
 });
 
-function appliquerStyleFiltreRegion() {
-    $('#lbl-filtre-region').text(filtreEnRegion ? 'Région' : 'Tous');
-    $('#btn-filtre-region').css({
-        background:  filtreEnRegion ? '#166534' : '',
-        color:       filtreEnRegion ? '#fff'    : '',
-        borderColor: filtreEnRegion ? '#166534' : 'transparent',
-    });
-}
-appliquerStyleFiltreRegion();
-
-$('#btn-filtre-region').on('click', function () {
-    filtreEnRegion = !filtreEnRegion;
-    appliquerStyleFiltreRegion();
+$('#sel-perimetre').on('change', function () {
+    filtreEnRegion = $(this).val() === '1';
     chargerListe();
 });
 
@@ -764,10 +754,8 @@ $('#modal-modifier').on('keydown', function (e) {
     if (e.key === 'Enter') { e.preventDefault(); $('#mod-btn-ok').trigger('click'); }
 });
 
-$('#btn-sans-coords').on('click', function () {
-    sansCoords = !sansCoords;
-    $(this).toggleClass('actif', sansCoords);
-    $(this).find('i').toggleClass('bi-geo-alt', !sansCoords).toggleClass('bi-geo-alt-fill', sansCoords);
+$('#sel-coords').on('change', function () {
+    sansCoords = $(this).val() === '1';
     chargerListe();
 });
 

@@ -16,11 +16,12 @@
         #liste-header { justify-content: space-between; }
         #search-input {
             font-size: .82rem;
-            padding: .15rem .5rem;
-            border: 1px solid #c8d4e8;
-            border-radius: 4px;
+            padding: .32rem .7rem;
+            border: 1.5px solid #d3dae6;
+            border-radius: 12px;
             width: 200px;
         }
+        #search-input:focus { outline: none; border-color: var(--nijac-blue); }
         #liste-header label { font-size: .82rem; color: #374151; display: flex; align-items: center; gap: .3rem; }
         #hint-division { font-size: .8rem; color: #92400e; background: #fff3cd; border: 1px solid #f59e0b; border-radius: 6px; padding: .4rem .6rem; }
         tr.hors-saisie td { color: #9ca3af; }

@@ -27,16 +27,16 @@
     <div id="panel-liste">
         <div id="liste-header">
             <span>Équipes</span>
-            <select id="sel-club" class="form-select form-select-sm" style="width:auto;">
+            <select id="sel-club" class="filter-ctl" style="width:auto;">
                 <option value="">— Tous clubs —</option>
             </select>
-            <select id="sel-departement" class="form-select form-select-sm" style="width:auto;">
+            <select id="sel-departement" class="filter-ctl" style="width:auto;">
                 <option value="">Tous</option>
             </select>
-            <select id="sel-division" class="form-select form-select-sm" style="width:180px;">
+            <select id="sel-division" class="filter-ctl" style="width:180px;">
                 <option value="">— Toutes divisions —</option>
             </select>
-            <input type="search" id="search-nom" placeholder="🔍 Nom…" style="width:260px;">
+            <input type="search" id="search-nom" class="filter-ctl" placeholder="Nom…" style="width:260px;">
             <span id="lbl-count">0 / 0</span>
         </div>
         <div id="table-wrapper">
