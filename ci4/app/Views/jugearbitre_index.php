@@ -1796,6 +1796,25 @@ $('#btn-importer').on('click', function () {
             xlsxLog(`<i class="bi bi-check-circle-fill text-success"></i> <strong>${resolues}</strong> commune(s) résolue(s).`);
             if (multiples) xlsxLog(`<span class="text-warning"><i class="bi bi-exclamation-triangle-fill"></i> <strong>${multiples}</strong> CP avec plusieurs communes — à préciser (clic CP/Ville dans la grille).</span>`);
             if (inconnues) xlsxLog(`<span class="text-danger"><i class="bi bi-x-circle-fill"></i> <strong>${inconnues}</strong> commune(s) introuvable(s) — à corriger dans la grille.</span>`);
+            xlsxProgress(95, 'En attente de confirmation…');
+
+            nijacConfirm(
+                'Désactiver tous les JA avant l\'import ? '
+                + 'Oui : seuls les JA présents dans le fichier resteront actifs. '
+                + 'Non : l\'Actif de chaque JA suit la colonne « Inactivité » du fichier, les autres sont inchangés.',
+                () => resetPuisEnregistrer(true),
+                () => resetPuisEnregistrer(false),
+                { type: 'warning', title: 'Import 102', confirmLabel: 'Oui, tout désactiver', cancelLabel: 'Non' }
+            );
+        }
+
+        function resetPuisEnregistrer(desactiverTous) {
+            if (!desactiverTous) {
+                xlsxLog(`<hr class="my-1"><i class="bi bi-info-circle text-primary"></i> Désactivation globale ignorée — Actif suivant le fichier.`);
+                enregistrerImportExcel();
+                return;
+            }
+
             xlsxLog(`<hr class="my-1"><i class="bi bi-person-dash-fill text-primary"></i> Passage de tous les JA à Inactif avant import…`);
             xlsxProgress(95, 'Réinitialisation des JA…');
 
