@@ -130,6 +130,7 @@
         }
         #pagination-bar button:disabled { opacity: .4; cursor: default; }
         #pagination-bar button:not(:disabled):hover { background: #e8eef7; }
+        #quick-jump { display: inline-flex; gap: .25rem; margin-left: .75rem; }
 
         #btn-sans-coords.actif {
             background: #fff3cd; border-color: #f59e0b; color: #78350f; font-weight: 700;
@@ -267,7 +268,7 @@
     <button class="menu-item" id="btn-filtre-region" title="Cliquer pour n'afficher que les communes de la région, ou toutes les communes" style="border-color:transparent;">
         <i class="bi bi-geo-alt me-1"></i><span id="lbl-filtre-region">Région</span>
     </button>
-    <input type="search" id="search-input" placeholder="🔍 Code postal ou commune…">
+    <input type="search" id="search-input" placeholder="🔍 Code postal ou commune (jokers * et ?)…" title="* remplace plusieurs caractères, ? un seul — ex : SAINT*, 14?00, *SUR MER">
 </div>
 
 <!-- ── Modale : aide coordonnées GPS ── -->
@@ -475,9 +476,8 @@
 
 <!-- Pagination -->
 <div id="pagination-bar">
-    <button id="btn-prev" disabled>&#8592; Précédent</button>
     <span id="page-info">—</span>
-    <button id="btn-next" disabled>Suivant &#8594;</button>
+    <span id="quick-jump" title="Saut rapide : 5 repères espacés d'un cinquième des résultats"></span>
 </div>
 
 <!-- Pied de page : recopié de includes/footer.php (setStatus() écrit dans #status-bar) -->
@@ -491,8 +491,6 @@ const COMMUNE_BASE = '<?= site_url('commune') ?>';
 
 let lignes           = [];
 let totalRows        = 0;
-let currentOffset    = 0;
-const PAGE_SIZE      = 500;
 const sortState      = { col: 'CodePostal', asc: true };
 let refreshTriEntetes = () => {};
 let searchTerm       = '';
@@ -536,77 +534,97 @@ function renderGrille() {
         return;
     }
 
-    affichees.forEach(r => {
+    // Tout est rendu sur une seule page (jusqu'à 20 000 lignes) : on construit
+    // le HTML en une passe et on l'injecte d'un bloc plutôt que ligne par ligne.
+    const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+    const html = affichees.map(r => {
         const latVal = r.Latitude  ?? '';
         const lonVal = r.Longitude ?? '';
         const latCls = latVal === '' ? 'col-coords text-muted fst-italic' : 'col-coords';
         const lonCls = lonVal === '' ? 'col-coords text-muted fst-italic' : 'col-coords';
-        const $tr = $('<tr>')
-            .attr('data-insee',  r.Id_LaPoste)
-            .attr('data-nom',    r.Nom ?? '')
-            .attr('data-cp',     r.CodePostal ?? '')
-            .attr('data-lat',    latVal)
-            .attr('data-lon',    lonVal);
-        $tr.append(`<td class="col-id">${String(r.Id_LaPoste).padStart(5, '0')}</td>`);
-        $tr.append(`<td>${r.CodePostal ?? ''}</td>`);
-        $tr.append(`<td>${r.Nom ?? ''}</td>`);
-        $tr.append(`<td class="${latCls}">${latVal !== '' ? latVal : '—'}</td>`);
-        $tr.append(`<td class="${lonCls}">${lonVal !== '' ? lonVal : '—'}</td>`);
-        $tr.append(`<td>${r.CodeDept ?? ''} ${r.NomDept ? '– ' + r.NomDept : ''}</td>`);
-        $body.append($tr);
-    });
-
-    $('#tbody-grille tr').on('click', function () {
-        $('#tbody-grille tr').removeClass('row-selected');
-        $(this).addClass('row-selected');
-        ligneSelectionnee = $(this);
-        setStatus(`<b>${$(this).data('nom')}</b> (${$(this).data('cp')}) sélectionnée — appuyez sur <kbd>F2</kbd> pour modifier les coordonnées.`);
-    });
-
-    $('#tbody-grille tr').on('dblclick', function () {
-        $('#tbody-grille tr').removeClass('row-selected');
-        $(this).addClass('row-selected');
-        ligneSelectionnee = $(this);
-        ouvrirModaleModif($(this));
-    });
+        return `<tr data-insee="${esc(r.Id_LaPoste)}" data-nom="${esc(r.Nom)}" data-cp="${esc(r.CodePostal)}" data-lat="${esc(latVal)}" data-lon="${esc(lonVal)}">`
+            + `<td class="col-id">${String(r.Id_LaPoste).padStart(5, '0')}</td>`
+            + `<td>${esc(r.CodePostal)}</td>`
+            + `<td>${esc(r.Nom)}</td>`
+            + `<td class="${latCls}">${latVal !== '' ? esc(latVal) : '—'}</td>`
+            + `<td class="${lonCls}">${lonVal !== '' ? esc(lonVal) : '—'}</td>`
+            + `<td>${esc(r.CodeDept)} ${r.NomDept ? '– ' + esc(r.NomDept) : ''}</td>`
+            + `</tr>`;
+    }).join('');
+    $body.html(html);
 }
+
+// Sélection déléguée (une seule liaison, quel que soit le nombre de lignes).
+$('#tbody-grille').on('click', 'tr', function () {
+    $('#tbody-grille tr').removeClass('row-selected');
+    $(this).addClass('row-selected');
+    ligneSelectionnee = $(this);
+    setStatus(`<b>${$(this).data('nom')}</b> (${$(this).data('cp')}) sélectionnée — appuyez sur <kbd>F2</kbd> pour modifier les coordonnées.`);
+});
+$('#tbody-grille').on('dblclick', 'tr', function () {
+    $('#tbody-grille tr').removeClass('row-selected');
+    $(this).addClass('row-selected');
+    ligneSelectionnee = $(this);
+    ouvrirModaleModif($(this));
+});
 
 function majPagination() {
-    const debut = currentOffset + 1;
-    const fin   = Math.min(currentOffset + lignes.length, totalRows);
-    const total = totalRows.toLocaleString('fr-FR');
+    const affichees = $('#tbody-grille tr').length;
+    $('#page-info').text(
+        totalRows > affichees
+            ? `${affichees.toLocaleString('fr-FR')} affichées sur ${totalRows.toLocaleString('fr-FR')} (résultat tronqué — affinez le filtre)`
+            : `${totalRows.toLocaleString('fr-FR')} commune(s)`
+    );
 
-    $('#page-info').text(`${debut.toLocaleString('fr-FR')}–${fin.toLocaleString('fr-FR')} sur ${total}`);
-    $('#btn-prev').prop('disabled', currentOffset === 0);
-    $('#btn-next').prop('disabled', currentOffset + PAGE_SIZE >= totalRows);
+    // 5 repères de saut rapide : défilement de la grille au 1/5, 2/5… des lignes
+    // affichées (pas = nombre de lignes / 5). Masqués s'il n'y a qu'un écran.
+    const $qj = $('#quick-jump').empty();
+    if (affichees > 100) {
+        const step = Math.floor(affichees / 5);
+        for (let i = 0; i < 5; i++) {
+            const row = i * step;
+            $qj.append(
+                $('<button>')
+                    .text((row + 1).toLocaleString('fr-FR'))
+                    .attr('data-row', row)
+                    .attr('title', `Défiler jusqu'à la ligne ${(row + 1).toLocaleString('fr-FR')}`)
+            );
+        }
+    }
 }
 
-function chargerListe(offset = 0) {
+function chargerListe() {
     spinner(true);
-    currentOffset     = offset;
     ligneSelectionnee = null;
-    $.get(`${COMMUNE_BASE}/data`, { q: searchTerm, offset, sans_coords: sansCoords ? 1 : 0, dept: deptFilter, region: filtreEnRegion ? 1 : 0 }, function (res) {
+    $.get(`${COMMUNE_BASE}/data`, { q: searchTerm, sans_coords: sansCoords ? 1 : 0, dept: deptFilter, region: filtreEnRegion ? 1 : 0 }, function (res) {
         spinner(false);
         if (!res.ok) { toast(res.msg, false); return; }
         lignes    = res.data;
         totalRows = res.total;
         renderGrille();
         majPagination();
+        $('#grid-wrapper').scrollTop(0);
     }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
 }
+
+$('#quick-jump').on('click', 'button', function () {
+    const row = parseInt($(this).attr('data-row'), 10) || 0;
+    const $tr = $('#tbody-grille tr').eq(row);
+    if ($tr.length) $tr[0].scrollIntoView({ block: 'start' });
+});
 
 $('#search-input').on('input', function () {
     clearTimeout(searchTimer);
     const val = $(this).val().trim();
     searchTimer = setTimeout(() => {
         searchTerm = val;
-        chargerListe(0);
+        chargerListe();
     }, 400);
 });
 
 $('#sel-dept').on('change', function () {
     deptFilter = $(this).val();
-    chargerListe(0);
+    chargerListe();
 });
 
 function appliquerStyleFiltreRegion() {
@@ -622,11 +640,8 @@ appliquerStyleFiltreRegion();
 $('#btn-filtre-region').on('click', function () {
     filtreEnRegion = !filtreEnRegion;
     appliquerStyleFiltreRegion();
-    chargerListe(0);
+    chargerListe();
 });
-
-$('#btn-prev').on('click', () => chargerListe(Math.max(0, currentOffset - PAGE_SIZE)));
-$('#btn-next').on('click', () => chargerListe(currentOffset + PAGE_SIZE));
 
 $('#btn-exporter').on('click', function () {
     window.location = `${COMMUNE_BASE}/export`;
@@ -672,7 +687,7 @@ $('#btn-confirmer-import').on('click', function () {
             const msg = `Import terminé : ${totalIns} insérée(s), ${totalUpd} mise(s) à jour.`
                       + (erreurs.length ? ' Erreurs : ' + erreurs.join(' | ') : '');
             toast(msg, !erreurs.length);
-            chargerListe(0);
+            chargerListe();
             return;
         }
 
@@ -753,7 +768,7 @@ $('#btn-sans-coords').on('click', function () {
     sansCoords = !sansCoords;
     $(this).toggleClass('actif', sansCoords);
     $(this).find('i').toggleClass('bi-geo-alt', !sansCoords).toggleClass('bi-geo-alt-fill', sansCoords);
-    chargerListe(0);
+    chargerListe();
 });
 
 function parserCoords(text, idLat, idLon, idMsg) {
@@ -822,7 +837,7 @@ $('#add-btn-ok').on('click', function () {
             bootstrap.Modal.getInstance(document.getElementById('modal-ajouter')).hide();
             $('#add-insee, #add-nom, #add-cp, #add-lat, #add-lon').val('');
             $('#add-msg').text('');
-            chargerListe(currentOffset);
+            chargerListe();
         } else {
             $('#add-msg').html('<span class="text-danger">✖ ' + res.msg + '</span>');
         }
@@ -859,7 +874,7 @@ $('#mod-btn-ok').on('click', function () {
 
 $(function () {
     refreshTriEntetes = nijacSortableTable('#tbl-communes thead th[data-field]', 'field', sortState, renderGrille);
-    chargerListe(0);
+    chargerListe();
 });
 </script>
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>

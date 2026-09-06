@@ -1151,6 +1151,10 @@ Gérer le référentiel INSEE des codes postaux et communes utilisé pour la gé
 | `modifier_coords` | POST | Modifier les coordonnées GPS d'une commune |
 | `compter` | GET | Retourne le nombre total de communes |
 
+### Règles
+- Recherche (`q`) sur `CodePostal` / `Nom` / `Id_LaPoste` avec caractères génériques : `*` = plusieurs caractères, `?` = un seul (traduits en `%` / `_` SQL) ; les `%` `_` `\` littéraux saisis sont échappés. Sans joker, recherche « contient » (`%q%`).
+- Pas de pagination : tout le résultat filtré est rendu sur une seule page (garde-fou serveur `LIMIT 20000`, message « résultat tronqué » au-delà). Barre du bas : nombre de communes + 5 boutons de saut rapide qui **défilent** la grille au 1/5, 2/5… des lignes affichées (masqués si < 100 lignes).
+
 ---
 
 ## EA88 – Régions

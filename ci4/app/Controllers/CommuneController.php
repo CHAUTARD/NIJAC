@@ -41,11 +41,10 @@ class CommuneController extends BaseController
         $pdo = getPDO();
 
         $q          = trim($_GET['q'] ?? '');
-        $offset     = max(0, (int) ($_GET['offset'] ?? 0));
         $sansCoords = !empty($_GET['sans_coords'] ?? '');
         $dept       = trim($_GET['dept'] ?? '');
         $region     = !empty($_GET['region'] ?? '');
-        $limit      = 500;
+        $limit      = 20000; // garde-fou : tout sur une page, mais on borne l'envoi
 
         $where  = $sansCoords ? '(lp.Latitude IS NULL OR lp.Longitude IS NULL OR lp.Latitude = 0 OR lp.Longitude = 0)' : '1';
         $params = [];
@@ -56,7 +55,7 @@ class CommuneController extends BaseController
         } elseif ($region) {
             $codes = array_column(getDeptActifs(), 'CodeDept');
             if (!$codes) {
-                return $this->response->setJSON(['ok' => true, 'data' => [], 'total' => 0, 'offset' => $offset, 'limit' => $limit]);
+                return $this->response->setJSON(['ok' => true, 'data' => [], 'total' => 0, 'limit' => $limit]);
             }
             $ph      = implode(',', array_fill(0, count($codes), '?'));
             $where  .= " AND LEFT(lp.CodePostal, 2) IN ($ph)";
@@ -64,10 +63,17 @@ class CommuneController extends BaseController
         }
 
         if ($q !== '') {
-            $like     = '%' . $q . '%';
-            $where   .= ' AND (lp.CodePostal LIKE ? OR lp.Nom LIKE ?)';
-            $params[] = $like;
-            $params[] = $like;
+            // Recherche avec caractères génériques : * = plusieurs caractères,
+            // ? = un seul. Les % / _ / \ saisis sont échappés (littéraux) puis
+            // * et ? sont convertis en jokers SQL. Sans joker, on garde la
+            // recherche « contient » (%q%). Porte sur CodePostal, Nom et Id_LaPoste.
+            $esc     = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q);
+            $esc     = strtr($esc, ['*' => '%', '?' => '_']);
+            $pattern = (strpbrk($q, '*?') !== false) ? $esc : '%' . $esc . '%';
+            $where   .= ' AND (lp.CodePostal LIKE ? OR lp.Nom LIKE ? OR lp.Id_LaPoste LIKE ?)';
+            $params[] = $pattern;
+            $params[] = $pattern;
+            $params[] = $pattern;
         }
 
         $cntStmt = $pdo->prepare("SELECT COUNT(*) FROM laposte lp WHERE $where");
@@ -80,12 +86,12 @@ class CommuneController extends BaseController
              FROM laposte lp
              LEFT JOIN departement d ON d.CodeDept = LEFT(lp.CodePostal, 2)
              WHERE $where
-             ORDER BY lp.CodePostal, lp.Nom LIMIT ? OFFSET ?"
+             ORDER BY lp.CodePostal, lp.Nom LIMIT ?"
         );
-        $stmt->execute([...$params, $limit, $offset]);
+        $stmt->execute([...$params, $limit]);
         $rows = $stmt->fetchAll();
 
-        return $this->response->setJSON(['ok' => true, 'data' => $rows, 'total' => $total, 'offset' => $offset, 'limit' => $limit]);
+        return $this->response->setJSON(['ok' => true, 'data' => $rows, 'total' => $total, 'limit' => $limit]);
     }
 
     public function store(): ResponseInterface
