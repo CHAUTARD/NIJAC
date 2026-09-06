@@ -208,7 +208,7 @@
                 <li>Pour une grande ville avec plusieurs codes postaux (ex : Rouen), indiquez le code postal exact figurant sur votre justificatif de domicile plutôt que le nom de la ville seul.</li>
                 <li>Pour une commune associée à une autre (ex : « Saint-Étienne-du-Rouvray »), essayez aussi une orthographe abrégée (« St Etienne du Rouvray »).</li>
                 <li>En cas de doute sur votre code postal, vous pouvez le vérifier sur
-                    <a href="https://www.dcode.fr/code-postal" target="_blank" rel="noopener noreferrer">dcode.fr <i class="bi bi-box-arrow-up-right"></i></a>.</li>
+                    <a href="https://www.dcode.fr/code-postal&v5" target="_blank" rel="noopener noreferrer">dcode.fr <i class="bi bi-box-arrow-up-right"></i></a>.</li>
             </ul>
         </div>
 
