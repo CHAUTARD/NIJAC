@@ -1243,7 +1243,7 @@ class ImportRencontresNatController extends BaseController
                        en.CodeDept, en.Id_Club,
                        (SELECT c.Nom FROM club c WHERE c.Id_Club = en.Id_Club LIMIT 1) AS NomClub
                 FROM equipe_nationale en
-                ORDER BY en.Division, en.Poule, en.Nom
+                ORDER BY en.Division, en.Poule, en.Rang, en.Nom
             ')->fetchAll();
 
             return $this->response->setJSON(['ok' => true, 'equipes' => $rows]);

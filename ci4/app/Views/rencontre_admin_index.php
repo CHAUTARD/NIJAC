@@ -12,6 +12,29 @@
     <style>
         #panel-liste { width: 68%; }
         .cell-equipe:hover { text-decoration: underline; cursor: pointer; }
+
+        /* Bandeau de filtres : comboboxes « label en encoche » comme EN11
+           (nijac.css .combo-field). Strip clair, l'encoche du label reprend
+           --strip-bg pour s'y fondre. */
+        #menu-strip {
+            --strip-bg: #f8fafc;
+            background: #f8fafc;
+            border-bottom: 1px solid #dde5f0;
+            padding: .4rem .75rem;
+            flex-wrap: wrap;
+        }
+        #menu-strip > .strip-titre { font-weight: 700; color: var(--nijac-blue); margin-right: .25rem; }
+        #menu-strip .btn { margin-top: .6rem; border-radius: 999px; }
+        /* Badge « n / n » : pastille arrondie comme EN11 (.count-badge),
+           en surchargeant le #lbl-count de nijac-liste-edit.css (plus spécifique). */
+        #menu-strip #lbl-count {
+            margin-left: 0; margin-top: .6rem;
+            height: 2.15rem; padding: 0 .9rem;
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 5.5rem;
+            background: #eef2f9; border: 1.5px solid #d3dae6; border-radius: 999px;
+            font-size: .82rem; font-weight: 700; color: var(--nijac-blue);
+        }
     </style>
 </head>
 <body>
@@ -26,34 +49,53 @@
 <div id="split-container">
 
     <div id="panel-liste">
-        <div id="liste-header">
-            <span>Rencontres</span>
-            <input type="search" id="search-equipe" class="filter-ctl" placeholder="Équipe…" style="width:220px;">
-            <select id="sel-dept" class="filter-ctl" style="width:170px;">
-                <option value="">— Département —</option>
-                <?php foreach ($deptActifs as $d): ?>
-                <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
-                <?php endforeach; ?>
-            </select>
-            <select id="sel-division" class="filter-ctl" style="width:130px;">
-                <option value="">— Division —</option>
-            </select>
-            <select id="sel-poule" class="filter-ctl" style="width:110px;">
-                <option value="">— Poule —</option>
-            </select>
-            <select id="sel-journee" class="filter-ctl" style="width:120px;">
-                <option value="">— Journée —</option>
-            </select>
-            <select id="sel-date" class="filter-ctl" style="width:auto;">
-                <option value="">— Date —</option>
-            </select>
+        <div id="menu-strip">
+            <span class="strip-titre">Rencontres</span>
+            <span class="combo-field">
+                <label for="search-equipe">Équipe</label>
+                <input type="search" id="search-equipe" placeholder="Équipe…" style="width:220px;">
+            </span>
+            <span class="combo-field">
+                <label for="sel-dept">Département</label>
+                <select id="sel-dept" style="width:170px;">
+                    <option value="">Tous</option>
+                    <?php foreach ($deptActifs as $d): ?>
+                    <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </span>
+            <span class="combo-field">
+                <label for="sel-division">Division</label>
+                <select id="sel-division" style="width:130px;">
+                    <option value="">Toutes</option>
+                </select>
+            </span>
+            <span class="combo-field">
+                <label for="sel-poule">Poule</label>
+                <select id="sel-poule" style="width:110px;">
+                    <option value="">Toutes</option>
+                </select>
+            </span>
+            <span class="combo-field">
+                <label for="sel-journee">Journée</label>
+                <select id="sel-journee" style="width:120px;">
+                    <option value="">Toutes</option>
+                </select>
+            </span>
+            <span class="combo-field">
+                <label for="sel-date">Date</label>
+                <select id="sel-date" style="width:auto;">
+                    <option value="">Toutes</option>
+                </select>
+            </span>
             <button type="button" class="btn btn-sm btn-outline-warning" id="btn-doublons" title="N'afficher que les rencontres en doublon : même affiche (domicile / extérieur / phase), quelles que soient la date, l'heure ou la journée">
                 <i class="bi bi-files"></i> Doublons
             </button>
             <button type="button" class="btn btn-sm btn-light" id="btn-reset-filtres" title="Réinitialiser les filtres">
                 <i class="bi bi-x-circle"></i>
             </button>
-            <span id="lbl-count">0 / 0</span>
+            <span style="flex:1"></span>
+            <span class="count-badge" id="lbl-count">0 / 0</span>
         </div>
         <div id="table-wrapper">
             <table id="tbl-rencontres">

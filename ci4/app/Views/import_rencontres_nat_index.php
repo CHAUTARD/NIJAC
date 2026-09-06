@@ -307,6 +307,7 @@
                     <thead><tr>
                         <th style="width:55px;">Division</th>
                         <th style="width:35px;">P.</th>
+                        <th style="width:35px;" title="Numéro (rang) de l'équipe dans la poule">N°</th>
                         <th style="width:75px;">N° Club</th>
                         <th style="width:280px;">Club</th>
                         <th>Équipe</th>
@@ -314,7 +315,7 @@
                         <th style="width:55px; text-align:center;">Sauver</th>
                     </tr></thead>
                     <tbody id="tbody-assoc">
-                        <tr><td colspan="7" class="text-center text-muted py-3">Chargez les équipes depuis l'API FFTT.</td></tr>
+                        <tr><td colspan="8" class="text-center text-muted py-3">Chargez les équipes depuis l'API FFTT.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -432,7 +433,7 @@ function renderAssoc() {
     $('#lbl-assoc-count').text(`${avecDept}/${total} avec dépt — ${normands} ${REGION_GENTILE} — ${avecClub} avec club`);
 
     const $body = $('#tbody-assoc').empty();
-    if (!data.length) { $body.append('<tr><td colspan="7" class="text-center text-muted py-3">Aucune équipe.</td></tr>'); return; }
+    if (!data.length) { $body.append('<tr><td colspan="8" class="text-center text-muted py-3">Aucune équipe.</td></tr>'); return; }
 
     data.forEach(e => {
         const norm      = isNorm(e.CodeDept);
@@ -451,6 +452,7 @@ function renderAssoc() {
         $tr.html(`
             <td><span class="badge-div bdiv-${esc(e.id_division)}">${esc(e.id_division)}</span></td>
             <td style="text-align:center;">${e.Poule||'—'}</td>
+            <td style="text-align:center;">${e.Rang||'—'}</td>
             <td class="cell-num-club" style="text-align:center;">
                 <input type="text" class="input-numclub form-control form-control-sm text-center px-1" value="${haClub ? esc(e.Id_Club) : ''}" placeholder="N° club" maxlength="8" style="width:80px;font-size:.8rem;" data-id="${e.Id_EquipeNat}">
             </td>

@@ -229,10 +229,12 @@ $routes->get('desiderata-clubs/ja-club', 'DesiderataClubsController::jaClub', ['
 $routes->get('desiderata-clubs/apercu', 'DesiderataClubsController::apercu', ['filter' => 'auth']);
 $routes->post('desiderata-clubs/envoyer', 'DesiderataClubsController::envoyer', ['filter' => 'auth']);
 
-// ── EN16 Comptabilité frais JA ───────────────────────────────────────────────
+// ── EN16 Comptes EBP des JA ──────────────────────────────────────────────────
 $routes->get('compta', 'ComptaController::index', ['filter' => 'auth']);
-$routes->post('compta/donnees', 'ComptaController::donnees', ['filter' => 'auth']);
-$routes->post('compta/export-csv', 'ComptaController::exportCsv', ['filter' => 'auth']);
+$routes->get('compta/export-csv', 'ComptaController::exportCsv', ['filter' => 'auth']);
+$routes->get('compta/ja-sans-compte', 'ComptaController::jaSansCompte', ['filter' => 'auth']);
+$routes->post('compta/maj-compte', 'ComptaController::majCompte', ['filter' => 'auth']);
+$routes->post('compta/import-ebp', 'ComptaController::importEbp', ['filter' => 'auth']);
 
 // ── EN17 Statistiques JA ─────────────────────────────────────────────────────
 $routes->get('stats-ja', 'StatsJaController::index', ['filter' => 'auth']);

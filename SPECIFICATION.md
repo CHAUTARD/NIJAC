@@ -18,7 +18,7 @@
 - [EN13 – Disponibilités JA](#en13--disponibilités-ja)
 - [EN14 – Nomination JA](#en14--nomination-ja)
 - [EN15 – Centre d'envoi](#en15--centre-denvoi)
-- [EN16 – Comptabilité frais JA](#en16--comptabilité-frais-ja)
+- [EN16 – Comptes EBP des JA](#en16--comptes-ebp-des-ja)
 - [EN17 – Statistiques JA](#en17--statistiques-ja)
 - [EN18 – Désidératas club](#en18--désidératas-club)
 - [EN19 – Adresse domicile JA](#en19--adresse-domicile-ja)
@@ -161,7 +161,7 @@ Les indicateurs affichent un **badge rouge** sur le bouton de menu correspondant
 | Nomination JA | EN14 | `nomination.php` |
 | Gestion des messages | EA93 | `messagerie.php` |
 | Centre d'envoi | EN15 | `centrenvoye.php` |
-| Comptabilité | EN16 | `compta.php` |
+| Comptes EBP des JA | EN16 | `compta.php` |
 | Désidératas clubs | EN12 | `JA_R3R4.php` |
 | Statistiques JA | EN17 | `stats_ja.php` |
 | Se déconnecter | — | `../logout.php` |
@@ -427,38 +427,36 @@ Envoyer les messages aux JA actifs du département (convocations, rappels, annul
 
 ---
 
-## EN16 – Comptabilité frais JA
+## EN16 – Comptes EBP des JA
 
 **Fichier :** `Nominateur/compta.php`  
 **Accès :** Administrateur et Nominateur
 
 ### Objectif
-Générer le récapitulatif des frais de déplacement des JA pour une période et l'exporter pour le logiciel comptable EBP.
+Renseigner le champ `ja.NumCompteEBP` (n° de compte fournisseur dans le logiciel comptable EBP) pour les JA du périmètre de l'utilisateur (`getDepartementsAutorises()` sur `ja.CodeDept`).
 
 ### Interface
-- Période choisie via les boutons **Phase 1** / **Phase 2** uniquement (plus de sélecteurs de date ; les bornes proviennent de la config EA91, portées par des champs cachés `#inp-debut` / `#inp-fin`)
-- Tableau récapitulatif : JA, rencontres arbitrées, kilométrage, péages, indemnité forfaitaire, total
-- Bouton export CSV
+Motif partagé **liste + panneau d'édition** (`asset/css/nijac-liste-edit.css`).
+
+- **Volet liste** (gauche) : table triable des JA du périmètre. Bandeau de filtres au style comboboxes « label en encoche » de EN11 (`#menu-strip` + `.combo-field`) : recherche nom/prénom, **Compte EBP** (tous / sans compte [défaut] / avec compte), **Défisc.** (tous / oui / non), **Actif** (tous [défaut] / oui / non), bouton de réinitialisation ; badge `affichés / total`.
+  Colonnes : Nom, Prénom, **Actif** (Oui/Non), **Défisc.** (Oui/Non), puis — **uniquement pour les JA ayant demandé la défiscalisation** (`ja.Defiscalisation = 1`) — **Km total** (somme de `nomination.Kilometre` sur toutes les nominations du JA en base), **CV** (`ja.PuissanceFiscale`), **Énergie** (`ja.VehiculeElectrique` → `Therm.` / `Élec.`) — puis N° compte EBP. Lignes des JA inactifs grisées.
+- **Volet édition** (droite) : sur sélection d'une ligne, Nom / Prénom / Actif en lecture seule, rappel défiscalisation (`n CV · thermique|électrique · n km cumulés`) le cas échéant, champ **N° de compte EBP** (vide = efface) + bouton **Enregistrer**.
+- **Importer CSV** (bouton du bandeau liste) : fichier `.csv`, deux colonnes — « nom + prénom » et « n° de compte EBP » — dans un **ordre indifférent** (la colonne 100 % chiffres est prise pour le compte, l'autre pour le nom), séparateur `;` ou `,` ; lignes d'en-tête / sous-totaux (0 ou 2 colonnes numériques) ignorées. Compte-rendu dans un encart, **lignes sans correspondance en tête** : chaque nom sans correspondance (et chaque cas ambigu) est cliquable → filtre la liste sur le nom de famille pour retrouver et compléter le JA manuellement.
+- **Exporter CSV** (bouton du bandeau liste) : télécharge `comptes_ebp_ja.csv`.
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `donnees` | POST | Retourne les frais par JA pour la période |
-| `export_csv` | POST | Retourne le CSV au format EBP (le fichier est ensuite déclenché en téléchargement côté client) |
+| `ja-sans-compte` | GET | Liste des JA du périmètre sans `NumCompteEBP` (ou tous avec `?tous=1`) ; inclut `Defiscalisation`, `PuissanceFiscale`, `VehiculeElectrique` et `KmTotal` (SUM des `nomination.Kilometre` du JA) |
+| `maj-compte` | POST | Mise à jour manuelle du `NumCompteEBP` d'un JA (`id_ja`, `num_compte` ; vide = efface) |
+| `import-ebp` | POST | Import CSV : rapproche chaque ligne avec un JA du périmètre sur le nom normalisé (sans accents, casse et espaces multiples ignorés, `NOM Prénom` et `Prénom NOM` testés) et renseigne le compte ; renvoie le détail ligne à ligne (`maj` / `inchange` / `introuvable` / `ambigu`) |
+| `export-csv` | GET | Renvoie le CSV `compte;nom` (en-tête `compte;nom`, `NOM` en majuscules + `Prénom`) des JA du périmètre ayant un `NumCompteEBP` — réimportable tel quel ; téléchargement déclenché côté client, fichier `comptes_ebp_ja.csv` |
 
-### Calcul des frais
-- **Indemnité forfaitaire** : `COUNT(nominations validées) × configuration.indemnite_forfaitaire`
-- **Frais kilométriques + péages** : `SUM(Kilometre) × frais_kilometrique + SUM(Peage)`
-- Nominations prises en compte : `Valide = 1` OU `Peage`/`Kilometre` renseignés, sur la période sélectionnée
-
-### Export CSV (format EBP)
-- Une ligne d'en-tête ajoutée côté client : `journal,date,cpte,sens,montant,mode_reglement,libelle,poste analytique`
-- Par JA ayant des frais > 0, jusqu'à 3 lignes, code journal **`AC`**, date = date de fin de période, mode de règlement `virement` :
-  1. Débit (`D`) frais kilométriques + péages sur le compte `compte_frais_km` (config, défaut `62511`)
-  2. Débit (`D`) indemnité/prestations sur le compte `compte_prestations` (config, défaut `62261`)
-  3. Crédit (`C`) du total sur le compte du JA (`ja.NumCompteEBP`, ou `?????` si absent)
-- Poste analytique (config `code_analytique_compta`, défaut `04EPR232`) renseigné uniquement sur les lignes de débit
-- Une ligne vide sépare chaque JA ; nom de fichier `import_JA_{datefin sans tirets}.csv`
+### Rapprochement des noms (`import-ebp`)
+- Normalisation : accents retirés, majuscules, tout caractère non alphanumérique → espace simple.
+- Index construit sur `NOM Prénom` **et** `Prénom NOM` de chaque JA du périmètre.
+- 1 seul JA correspondant → `UPDATE` (ou `inchange` si déjà la même valeur) ; 0 → `introuvable` ; ≥ 2 → `ambigu` (non modifié).
+- Les espaces ne sont pas supprimés (« LE ROY » ≠ « LEROY ») : un écart de graphie (ex. « JEANCLAUDE » collé côté EBP vs « Jean-Claude » en base) reste `introuvable`, à corriger via la saisie manuelle.
 
 ---
 
@@ -468,7 +466,7 @@ Générer le récapitulatif des frais de déplacement des JA pour une période e
 **Accès :** Administrateur et Nominateur
 
 ### Objectif
-Rapport agrégé, en lecture seule, des arbitrages et frais par JA pour une phase d'une saison (complémentaire de l'export comptable détaillé EN16).
+Rapport agrégé, en lecture seule, des arbitrages et frais par JA pour une phase d'une saison.
 
 ### Interface
 - Filtres **Phase** (`1` / `2`) et **Saison** (liste des 7 dernières années, libellé `AAAA‑AAAA+1`), bouton **Afficher** ; défaut = phase en cours (ou phase 2 de la saison écoulée pendant la coupure estivale)
@@ -490,7 +488,7 @@ Rapport agrégé, en lecture seule, des arbitrages et frais par JA pour une phas
 - `total_km` = `SUM(Kilometre)`, `total_peages` = `SUM(Peage)`
 - `total_indemnite` = `COUNT(nominations) × indemnite_forfaitaire`
 - `total_frais` = `total_km × frais_kilometrique + total_peages + total_indemnite`
-- Utilise les mêmes clés de configuration (`indemnite_forfaitaire`, `frais_kilometrique`) que EN16, mais comme rapport de synthèse par JA plutôt que comme export comptable ligne à ligne
+- Utilise les clés de configuration `indemnite_forfaitaire` et `frais_kilometrique` (EA91) pour valoriser les frais, en rapport de synthèse par JA
 
 ---
 

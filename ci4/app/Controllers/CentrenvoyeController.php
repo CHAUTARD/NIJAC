@@ -35,6 +35,21 @@ class CentrenvoyeController extends BaseController
         return str_pad((string) ($this->moi()['id_departement'] ?? '76'), 2, '0', STR_PAD_LEFT);
     }
 
+    /**
+     * Départements dont ce nominateur gère les rencontres, règle région incluse
+     * (getDepartementsAutorises : ex. 76 ⇒ 76 + 27). Codes sur 2 chiffres pour
+     * comparer à SUBSTRING(ed.Id_Club, 3, 2).
+     */
+    private function deptsAutorises(): array
+    {
+        $depts = array_map(
+            static fn ($d) => str_pad((string) $d, 2, '0', STR_PAD_LEFT),
+            getDepartementsAutorises($this->moi()['id_departement'] ?? null)
+        );
+
+        return $depts ?: [$this->dept()];
+    }
+
     private function obfuscator(): \Obfuscator
     {
         return new \Obfuscator(OBFUSCATOR_SEED);
@@ -68,7 +83,6 @@ class CentrenvoyeController extends BaseController
     public function journees(): ResponseInterface
     {
         $pdo    = getPDO();
-        $dept   = $this->dept();
         $saison = getConfig('saison') ?: null;
 
         if (!$saison) {
@@ -79,6 +93,8 @@ class CentrenvoyeController extends BaseController
         // JA1 actifs, sans filtre sur nomination.Valide — sinon le combo affiche 0
         // tant que la journée n'a pas été validée dans EN14 alors que la liste, elle,
         // montre déjà le JA nominé.
+        $depts = $this->deptsAutorises();
+        $ph    = implode(',', array_fill(0, count($depts), '?'));
         $stmt = $pdo->prepare("
             SELECT r.Journee, r.Date,
                    COUNT(DISTINCT j.Id_JA) AS NbJA
@@ -87,11 +103,11 @@ class CentrenvoyeController extends BaseController
             LEFT JOIN nomination n  ON n.Id_Rencontre   = r.Id_Rencontre
             LEFT JOIN disponible d  ON d.Id_Disponible  = n.Id_Disponible
             LEFT JOIN ja j          ON j.Id_JA = d.Id_JA AND j.Actif = 1 AND j.Grade = 'JA1'
-            WHERE SUBSTRING(ed.Id_Club, 3, 2) = ?
+            WHERE SUBSTRING(ed.Id_Club, 3, 2) IN ($ph)
             GROUP BY r.Journee, r.Date
             ORDER BY r.Date, r.Journee
         ");
-        $stmt->execute([$dept]);
+        $stmt->execute($depts);
         $rows = $stmt->fetchAll();
 
         return $this->response->setJSON(['ok' => true, 'data' => $rows, 'saison' => $saison]);
@@ -149,6 +165,8 @@ class CentrenvoyeController extends BaseController
                     $rows = [];
                     break;
                 }
+                $depts = $this->deptsAutorises();
+                $ph    = implode(',', array_fill(0, count($depts), '?'));
                 $stmt = $pdo->prepare("
                     SELECT n.Id_Nomination, j.Id_JA, j.Nom, j.Prenom, j.Email,
                            r.Date, r.Heure, r.Journee, r.Poule,
@@ -173,10 +191,10 @@ class CentrenvoyeController extends BaseController
                     LEFT JOIN Club co ON co.Id_Club = ed.Id_Club
                     WHERE r.Journee = ? AND r.Date = ? AND j.Actif = 1
                       AND j.Grade = 'JA1'
-                      AND SUBSTRING(ed.Id_Club, 3, 2) = ?
+                      AND SUBSTRING(ed.Id_Club, 3, 2) IN ($ph)
                     ORDER BY j.Nom, j.Prenom
                 ");
-                $stmt->execute([$journee, $date, $dept]);
+                $stmt->execute(array_merge([$journee, $date], $depts));
                 $rows = $stmt->fetchAll();
                 break;
 
@@ -292,6 +310,8 @@ class CentrenvoyeController extends BaseController
         $saison       = trim($this->request->getPost('saison') ?? '');
         $cc           = trim($this->request->getPost('cc') ?? '');
         $replyTo      = $this->request->getPost('reply_to') === '1';
+        $ccCorr       = $this->request->getPost('cc_corr') === '1'; // Convocation : copie au correspondant du club recevant
+        $ccRef        = $this->request->getPost('cc_ref') === '1';  // Convocation : copie au référent du club recevant
 
         $identifiant = ($type === 'Convocation') ? $idNomination : $idJa;
         if (!$identifiant || $sujet === '' || $message === '') {
@@ -400,6 +420,13 @@ class CentrenvoyeController extends BaseController
                     ->execute([$idNomination]);
             }
 
+            // Copie informative au correspondant / référent du club recevant (cases
+            // cochées dans EN15) : même convocation, mais sans le lien de saisie des
+            // frais (bouton "Enregistrer" du formulaire EN21) — copie en lecture seule.
+            if ($type === 'Convocation') {
+                $this->envoyerCopiesClub($ja, $ccCorr, $ccRef, $sujetRendu, $corps, $isHtml, $modeDev, $moi, $replyTo, $marqueurs['{URL_CONVOCATION_JA}'] ?? '');
+            }
+
             return $this->response->setJSON(['ok' => true, 'nom' => $ja['Prenom'] . ' ' . $ja['Nom']]);
         } catch (\Exception $e) {
             // Log du corps pour diagnostiquer les rejets SMTP
@@ -420,6 +447,53 @@ class CentrenvoyeController extends BaseController
     }
 
     /**
+     * Envoie une copie de la convocation au correspondant et/ou au référent du
+     * club recevant (colonnes Club.CorEmail / Club.RefMail), selon les cases
+     * cochées dans EN15. Le corps est celui du JA, mais le lien de convocation
+     * ({URL_CONVOCATION_JA} → formulaire EN21 avec bouton "Enregistrer") est
+     * retiré : ces destinataires reçoivent une copie informative, pas un accès
+     * à la saisie des frais. Un échec ici n'invalide pas l'envoi au JA.
+     */
+    private function envoyerCopiesClub(array $ja, bool $ccCorr, bool $ccRef, string $sujet, string $corps, bool $isHtml, bool $modeDev, array $moi, bool $replyTo, string $urlConvoc): void
+    {
+        $destinataires = [];
+        if ($ccCorr && !empty($ja['CorrEmail']) && filter_var($ja['CorrEmail'], FILTER_VALIDATE_EMAIL)) {
+            $destinataires[$ja['CorrEmail']] = $ja['CorrNom'] ?: 'Correspondant';
+        }
+        if ($ccRef && !empty($ja['RefMail']) && filter_var($ja['RefMail'], FILTER_VALIDATE_EMAIL)) {
+            $destinataires[$ja['RefMail']] = $ja['RefNom'] ?: 'Référent';
+        }
+        if (!$destinataires) {
+            return;
+        }
+
+        // Retire le lien de convocation + la phrase qui l'introduit.
+        $corpsCopie = $urlConvoc !== '' ? str_replace($urlConvoc, '', $corps) : $corps;
+        $corpsCopie = preg_replace('/^.*lien vers la convocation.*\R?/mi', '', $corpsCopie);
+
+        try {
+            $mail = getNijacMailer();
+            $mail->isHTML($isHtml);
+            foreach ($destinataires as $adresse => $nom) {
+                $mail->addAddress(getEmailDestinataire($adresse), $nom);
+            }
+            if ($replyTo && !empty($moi['email'])) {
+                $mail->addReplyTo($moi['email'], ($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? ''));
+            }
+            $sujetCopie    = 'Copie convocation — ' . $sujet;
+            $mail->Subject = $modeDev ? "[DEV] $sujetCopie" : $sujetCopie;
+            $mail->Body    = $corpsCopie;
+            if ($isHtml) {
+                $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $corpsCopie));
+            }
+            $mail->send();
+            enregistrerEnvois(count($destinataires)); // ponytail: hors du checkRateLimit initial, dérive mineure acceptée
+        } catch (\Exception $e) {
+            error_log('[NIJAC] centrenvoye copie club error : ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Charge une nomination + JA + rencontre + salle + correspondant pour la
      * Convocation d'Id_Nomination donné — requête partagée par apercu() et
      * envoyerUn(). Correspondant lu depuis Club.CorNom/CorEmail/CorTelephone,
@@ -436,7 +510,8 @@ class CentrenvoyeController extends BaseController
                    ed.Nom AS NomDom, ee.Nom AS NomExt,
                    s.Nom AS SalleNom, s.Adresse AS SalleAdresse,
                    lps.CodePostal AS SalleCP, lps.Nom AS SalleVille,
-                   co.CorNom AS CorrNom, co.CorEmail AS CorrEmail, co.CorTelephone AS CorrTel
+                   co.CorNom AS CorrNom, co.CorEmail AS CorrEmail, co.CorTelephone AS CorrTel,
+                   co.RefNom AS RefNom, co.RefMail AS RefMail
             FROM nomination n
             JOIN disponible dn     ON dn.Id_Disponible = n.Id_Disponible
             JOIN ja j              ON j.Id_JA        = dn.Id_JA

@@ -256,6 +256,23 @@
         <!-- Corps -->
         <div id="panel-message-body">
 
+            <!-- Bandeau copie club recevant (Convocation uniquement) -->
+            <div id="conv-copie-bar" class="mb-2" style="display:none;background:#eef6ef;border:1px solid #cfe6d4;border-radius:6px;padding:.4rem .6rem;">
+                <div class="fw-semibold mb-1" style="font-size:.72rem;color:#15612f;text-transform:uppercase;letter-spacing:.04em;">
+                    <i class="bi bi-people-fill me-1"></i>Copie au club recevant — sans le lien de saisie des frais
+                </div>
+                <div class="d-flex flex-wrap gap-3">
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="chk-cc-corr">
+                        <label class="form-check-label" for="chk-cc-corr" style="font-size:.82rem;">Cc au correspondant du club reçu</label>
+                    </div>
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="chk-cc-ref">
+                        <label class="form-check-label" for="chk-cc-ref" style="font-size:.82rem;">Cc au référent du club reçu</label>
+                    </div>
+                </div>
+            </div>
+
             <div class="mb-2 d-flex align-items-center gap-2" id="grp-cc">
                 <div class="form-check mb-0">
                     <input class="form-check-input" type="checkbox" id="chk-cc">
@@ -486,6 +503,7 @@ function chargerModele(type) {
     $('#chk-replyto').prop('checked', !!m.replyto);
     $('#txt-replyto').val(MON_EMAIL).prop('disabled', !m.replyto);
     // Afficher/masquer les sections du cartouche selon le type actif
+    $('#conv-copie-bar').toggle(type === 'Convocation');
     $('#cart-convocation').toggle(type === 'Convocation');
     $('#cart-liste-nom').toggle(type === 'Liste nomination');
     $('#cart-demande-adresse').toggle(type === 'Demande adresse');
@@ -751,6 +769,8 @@ function demarrerEnvoi(sujet, message, ids) {
             };
             if (typeActif === 'Convocation') {
                 postData.id_nomination = id;
+                postData.cc_corr = $('#chk-cc-corr').is(':checked') ? '1' : '0';
+                postData.cc_ref  = $('#chk-cc-ref').is(':checked')  ? '1' : '0';
             } else {
                 postData.id_ja = id;
             }

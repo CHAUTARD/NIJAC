@@ -422,9 +422,9 @@
 <div id="pwd-banner">
     <label for="pwd-global"><i class="bi bi-key-fill me-1"></i>Mot de passe administrateur :</label>
     <div class="pwd-wrap">
-        <input type="password" id="pwd-global" autocomplete="current-password" placeholder="Entrez votre mot de passe…">
-        <button type="button" id="pwd-toggle-btn" tabindex="-1" title="Afficher / masquer">
-            <i id="pwd-eye" class="bi bi-eye-slash"></i>
+        <input type="password" id="pwd-global" data-pwd-toggle="1" autocomplete="current-password" placeholder="Entrez votre mot de passe…">
+        <button type="button" id="pwd-toggle-btn" tabindex="-1" title="Afficher / masquer le mot de passe">
+            <span id="pwd-eye">👁️</span>
         </button>
     </div>
     <div id="pwd-msg-global"></div>
@@ -824,7 +824,7 @@ $('#pwd-toggle-btn').on('click', function () {
     const $i = $('#pwd-global');
     const isHidden = $i.attr('type') === 'password';
     $i.attr('type', isHidden ? 'text' : 'password');
-    $('#pwd-eye').toggleClass('bi-eye-slash', !isHidden).toggleClass('bi-eye', isHidden);
+    $('#pwd-eye').text(isHidden ? '🙈' : '👁️');
 });
 
 $('#btn-executer').on('click', function () {
@@ -1150,10 +1150,13 @@ function restaurerTotal(fichier) {
     setStatus('Restauration totale en cours : ' + fichier + ' …');
     $('#btn-restaurer-total').prop('disabled', true);
 
-    $.post(`${CLEAN_BASE}/restaurer-total`, {
-        fichier:  fichier,
-        password: $('#pwd-global').val()
-    }, res => {
+    $.ajax({
+        url: `${CLEAN_BASE}/restaurer-total`,
+        method: 'POST',
+        dataType: 'json',
+        timeout: 600000, // 10 min : une restauration complète peut être longue
+        data: { fichier: fichier, password: $('#pwd-global').val() }
+    }).done(res => {
         spinner(false);
         const $box = $('#full-restore-result').addClass('show');
         if (res.ok) {
@@ -1170,9 +1173,12 @@ function restaurerTotal(fichier) {
             majBoutonsAvecPwd();
             setStatus('Erreur restauration totale : ' + res.msg);
         }
-    }, 'json').fail(() => {
+    }).fail((xhr, textStatus) => {
         spinner(false);
-        $('#full-restore-result').addClass('show').html('<div class="result-err"><strong>Erreur réseau.</strong></div>');
+        const msg = textStatus === 'timeout'
+            ? 'La restauration dépasse 10 min — elle continue peut-être côté serveur, vérifiez la base avant de relancer.'
+            : 'Erreur réseau.';
+        $('#full-restore-result').addClass('show').html(`<div class="result-err"><strong>${msg}</strong></div>`);
         majBoutonsAvecPwd();
     });
 }

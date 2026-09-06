@@ -350,10 +350,7 @@ class CleanController extends BaseController
                 $rows    = $pdo->query("SELECT * FROM `$table`")->fetchAll(\PDO::FETCH_ASSOC);
                 if ($rows) {
                     $colList = '`' . implode('`, `', $cols) . '`';
-                    foreach ($rows as $r) {
-                        $vals    = array_map(fn ($v) => $v === null ? 'NULL' : $pdo->quote($v), array_values($r));
-                        $lines[] = "INSERT INTO `$table` ($colList) VALUES (" . implode(', ', $vals) . ');';
-                    }
+                    array_push($lines, ...$this->insertsGroupes($pdo, $table, $colList, $rows));
                 }
                 $lines[] = '';
             }
@@ -400,6 +397,43 @@ class CleanController extends BaseController
      *
      * @return string[]
      */
+    /**
+     * INSERT étendus (multi-lignes) : le préfixe « INSERT INTO `t` (...) VALUES »
+     * n'est écrit qu'une fois par lot au lieu d'une fois par ligne. Réduit
+     * fortement la taille du fichier .sql et le nombre d'instructions à rejouer
+     * à la restauration (donc le risque de timeout). Lots bornés à 200 lignes ou
+     * ~800 Ko (sous max_allowed_packet).
+     */
+    private function insertsGroupes(\PDO $pdo, string $table, string $colList, array $rows): array
+    {
+        $lines   = [];
+        $prefixe = "INSERT INTO `$table` ($colList) VALUES";
+        $tuples  = [];
+        $taille  = 0;
+
+        $flush = static function () use (&$lines, &$tuples, &$taille, $prefixe) {
+            if (!$tuples) {
+                return;
+            }
+            $lines[] = $prefixe . "\n" . implode(",\n", $tuples) . ';';
+            $tuples  = [];
+            $taille  = 0;
+        };
+
+        foreach ($rows as $r) {
+            $vals     = array_map(fn ($v) => $v === null ? 'NULL' : $pdo->quote($v), array_values($r));
+            $tuple    = '(' . implode(', ', $vals) . ')';
+            $tuples[] = $tuple;
+            $taille  += strlen($tuple) + 2;
+            if (count($tuples) >= 200 || $taille >= 800000) {
+                $flush();
+            }
+        }
+        $flush();
+
+        return $lines;
+    }
+
     private function dumpTableComplete(\PDO $pdo, string $table): array
     {
         $lines   = [];
@@ -418,10 +452,7 @@ class CleanController extends BaseController
         $rows = $pdo->query("SELECT * FROM `$table`")->fetchAll(\PDO::FETCH_ASSOC);
         if ($rows) {
             $colList = '`' . implode('`, `', $cols) . '`';
-            foreach ($rows as $r) {
-                $vals    = array_map(fn ($v) => $v === null ? 'NULL' : $pdo->quote($v), array_values($r));
-                $lines[] = "INSERT INTO `$table` ($colList) VALUES (" . implode(', ', $vals) . ');';
-            }
+            array_push($lines, ...$this->insertsGroupes($pdo, $table, $colList, $rows));
             $lines[] = '';
         }
 
@@ -595,6 +626,13 @@ class CleanController extends BaseController
                 return $err;
             }
 
+            // Restauration complète = milliers d'INSERT joués un par un : sans ça,
+            // max_execution_time / memory_limit tuent le script (fatal non
+            // catchable) → côté JS ça remonte en « Erreur réseau ».
+            set_time_limit(0);
+            ini_set('memory_limit', '512M');
+            ignore_user_abort(true);
+
             $nomFichier = trim($this->request->getPost('fichier') ?? '');
             $filepath   = $this->resoudreFichierSauvegarde($nomFichier, '/^Full_\d{12}\.sql$/');
             if ($filepath === false) {
@@ -631,6 +669,10 @@ class CleanController extends BaseController
             if ($err = $this->verifierMdpRequete()) {
                 return $err;
             }
+
+            set_time_limit(0);
+            ini_set('memory_limit', '512M');
+            ignore_user_abort(true);
 
             $nomFichier = trim($this->request->getPost('fichier') ?? '');
             $table      = trim($this->request->getPost('table') ?? '');

@@ -425,8 +425,8 @@
         <a href="<?= site_url('compta') ?>" class="menu-btn btn-envoi">
             <span class="btn-code">EN16</span>
             <div class="btn-icon"><img src="<?= base_url('img/Compta.png') ?>" alt="Comptabilite"></div>
-            <span>Comptabilité</span>
-            <span class="btn-desc">Génération des pièces pour la comptabilité</span>
+            <span>Comptes EBP des JA</span>
+            <span class="btn-desc">Import CSV et saisie du n° de compte EBP des JA</span>
         </a>
     </div>
 
