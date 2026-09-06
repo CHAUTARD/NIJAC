@@ -422,24 +422,6 @@ class JugearbitreController extends BaseController
     }
 
     /**
-     * Réinitialise Actif=0 pour TOUS les JA (tous départements), appelée par le
-     * JS juste avant l'enregistrement en base de l'import CSV FFTT (102_*.csv,
-     * fichier national) — même principe que reinitialiserActifDept() pour
-     * l'import/scan API par département : les JA absents du nouveau fichier
-     * (donc jamais réactivés ensuite par maj-bdd()) restent Inactif.
-     */
-    public function reinitialiserActifTous(): ResponseInterface
-    {
-        if (!$this->isAdmin()) {
-            return $this->response->setJSON(['ok' => false, 'err' => 'Accès refusé']);
-        }
-
-        $stmt = getPDO()->query('UPDATE ja SET Actif = 0');
-
-        return $this->response->setJSON(['ok' => true, 'maj' => $stmt->rowCount()]);
-    }
-
-    /**
      * listJoueursByClub pour la liste des licences, puis xml_licence_b en
      * appel direct (request(), pas retrieveJoueurDetails()) pour le détail :
      * accède au tableau brut, qui expose email/Cp/Ville — ces champs
