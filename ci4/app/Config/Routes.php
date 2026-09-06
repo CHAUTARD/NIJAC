@@ -76,6 +76,7 @@ $routes->post('salle/fftt/sync', 'SalleController::ffttSync', ['filter' => 'auth
 // ── EA87 Communes / La Poste ─────────────────────────────────────────────────
 $routes->get('commune', 'CommuneController::index', ['filter' => 'adminauth']);
 $routes->get('commune/data', 'CommuneController::data', ['filter' => 'adminauth']);
+$routes->get('commune/recherche-insee', 'CommuneController::rechercheInsee', ['filter' => 'adminauth']);
 $routes->get('commune/prochain-insee', 'CommuneController::prochainInsee', ['filter' => 'adminauth']);
 $routes->get('commune/export', 'CommuneController::exportCsv', ['filter' => 'adminauth']);
 $routes->post('commune', 'CommuneController::store', ['filter' => 'adminauth']);

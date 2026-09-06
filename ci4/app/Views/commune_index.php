@@ -368,15 +368,21 @@
             <div class="modal-body" style="font-size:.88rem;">
                 <div id="add-step1">
                     <div class="mb-2">
-                        <label class="form-label fw-semibold" style="font-size:.82rem;">N° INSEE de la nouvelle commune <span class="text-danger">*</span></label>
-                        <input type="number" id="add-insee" class="form-control form-control-sm" placeholder="ex : 14118" min="1">
-                        <div class="text-muted" style="font-size:.76rem;margin-top:.15rem;">
-                            Saisir le code INSEE réel : le premier numéro libre au-dessus sera attribué à l'enregistrement.
+                        <label class="form-label fw-semibold" style="font-size:.82rem;">Nom de la nouvelle commune <span class="text-danger">*</span></label>
+                        <div class="input-group input-group-sm">
+                            <input type="text" id="add-nom" class="form-control form-control-sm" placeholder="ex : CAEN">
+                            <button type="button" class="btn btn-outline-success" id="add-btn-search">
+                                <i class="bi bi-search me-1"></i>Rechercher le n° INSEE
+                            </button>
                         </div>
                     </div>
                     <div class="mb-2">
-                        <label class="form-label fw-semibold" style="font-size:.82rem;">Nom de la commune <span class="text-danger">*</span></label>
-                        <input type="text" id="add-nom" class="form-control form-control-sm" placeholder="ex : CAEN">
+                        <label class="form-label fw-semibold" style="font-size:.82rem;">N° INSEE de référence <span class="text-danger">*</span></label>
+                        <select id="add-insee-choix" class="form-select form-select-sm mb-1" style="display:none;"></select>
+                        <input type="number" id="add-insee" class="form-control form-control-sm" placeholder="issu de la recherche par nom" min="1">
+                        <div class="text-muted" style="font-size:.76rem;margin-top:.15rem;">
+                            Code INSEE de la commune trouvée dans la base : le premier numéro libre au-dessus sera attribué à l'enregistrement.
+                        </div>
                     </div>
                     <div class="mb-2">
                         <label class="form-label fw-semibold" style="font-size:.82rem;">Code postal <span class="text-danger">*</span></label>
@@ -818,16 +824,56 @@ bindPasteCoords('add-lat', 'add-lon', 'add-msg');
 bindPasteCoords('mod-lat', 'mod-lon', 'mod-msg');
 
 // EA87 – Ajout d'une commune en deux étapes :
-//   Étape 1 : recherche du code INSEE + saisie des champs (bouton « Suivant »).
+//   Étape 1 : saisie du nom → recherche de son n° INSEE dans la base, puis
+//             saisie des champs (bouton « Suivant »).
 //   Étape 2 : récapitulatif avec le code réellement attribué (premier numéro
-//             libre après l'INSEE saisi), puis « Enregistrer ».
+//             libre après l'INSEE de référence), puis « Enregistrer ».
 function addResetSteps() {
     $('#add-step1').show();
     $('#add-step2').hide();
     $('#add-btn-next').show();
     $('#add-btn-back, #add-btn-ok').hide();
+    $('#add-insee-choix').hide().empty();
     $('#add-msg').text('');
 }
+
+// Étape 1 – rechercher dans laposte le n° INSEE de la commune saisie par son nom.
+$('#add-btn-search').on('click', function () {
+    $('#add-msg').text('');
+    const nom = $('#add-nom').val().trim();
+    if (nom.length < 2) {
+        $('#add-msg').html('<span class="text-danger">Saisir au moins 2 caractères.</span>');
+        return;
+    }
+    spinner(true);
+    $.get(`${COMMUNE_BASE}/recherche-insee`, { nom }, function (res) {
+        spinner(false);
+        const $sel = $('#add-insee-choix').empty();
+        if (!res.ok) {
+            $('#add-msg').html('<span class="text-danger">✖ ' + res.msg + '</span>');
+            return;
+        }
+        if (!res.communes.length) {
+            $sel.hide();
+            $('#add-msg').html('<span class="text-warning">Aucune commune de ce nom dans la base — saisir le n° INSEE de référence manuellement.</span>');
+            $('#add-insee').val('').trigger('focus');
+            return;
+        }
+        res.communes.forEach(c => {
+            $sel.append(new Option(`${c.Nom} — ${c.CodePostal} (INSEE ${c.Id_LaPoste})`, `${c.Id_LaPoste}|${c.CodePostal}`));
+        });
+        $sel.show();
+        appliquerChoixInsee();
+        $('#add-msg').html(`<span class="text-success">${res.communes.length} commune(s) trouvée(s).</span>`);
+    }, 'json').fail(() => { spinner(false); $('#add-msg').html('<span class="text-danger">Erreur réseau.</span>'); });
+});
+
+function appliquerChoixInsee() {
+    const v = ($('#add-insee-choix').val() || '').split('|');
+    if (v[0]) $('#add-insee').val(v[0]);
+    if (v[1] && !$('#add-cp').val().trim()) $('#add-cp').val(v[1]);
+}
+$('#add-insee-choix').on('change', appliquerChoixInsee);
 
 function addLireChamps() {
     return {

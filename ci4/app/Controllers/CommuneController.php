@@ -89,10 +89,35 @@ class CommuneController extends BaseController
     }
 
     /**
-     * Étape 1 de l'ajout d'une commune (EA87) : à partir du code INSEE réel saisi,
-     * renvoie le premier Id_LaPoste libre STRICTEMENT au-dessus — c'est ce code
-     * qui sera attribué à l'enregistrement (le code INSEE réel reste disponible
-     * pour un futur import CSV La Poste).
+     * Étape 1 de l'ajout d'une commune (EA87) : recherche dans laposte les
+     * communes dont le nom contient $_GET['nom'], pour récupérer leur code INSEE
+     * de référence. Renvoie Id_LaPoste / Nom / CodePostal (max 25, nom exact en
+     * tête).
+     */
+    public function rechercheInsee(): ResponseInterface
+    {
+        $nom = mb_strtoupper(trim($_GET['nom'] ?? ''), 'UTF-8');
+        if (mb_strlen($nom) < 2) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Saisir au moins 2 caractères.']);
+        }
+
+        $stmt = getPDO()->prepare(
+            'SELECT Id_LaPoste, Nom, CodePostal
+             FROM laposte
+             WHERE Nom LIKE ?
+             ORDER BY (Nom = ?) DESC, Nom, CodePostal
+             LIMIT 25'
+        );
+        $stmt->execute(['%' . $nom . '%', $nom]);
+
+        return $this->response->setJSON(['ok' => true, 'communes' => $stmt->fetchAll()]);
+    }
+
+    /**
+     * Étape 2 de l'ajout d'une commune (EA87) : à partir du code INSEE de
+     * référence, renvoie le premier Id_LaPoste libre STRICTEMENT au-dessus —
+     * c'est ce code qui sera attribué à l'enregistrement (le code INSEE réel
+     * reste disponible pour un futur import CSV La Poste).
      */
     public function prochainInsee(): ResponseInterface
     {
