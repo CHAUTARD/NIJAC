@@ -88,16 +88,50 @@ class CommuneController extends BaseController
         return $this->response->setJSON(['ok' => true, 'data' => $rows, 'total' => $total, 'offset' => $offset, 'limit' => $limit]);
     }
 
+    /**
+     * Étape 1 de l'ajout d'une commune (EA87) : à partir du code INSEE réel saisi,
+     * renvoie le premier Id_LaPoste libre STRICTEMENT au-dessus — c'est ce code
+     * qui sera attribué à l'enregistrement (le code INSEE réel reste disponible
+     * pour un futur import CSV La Poste).
+     */
+    public function prochainInsee(): ResponseInterface
+    {
+        $insee = (int) ($_GET['insee'] ?? 0);
+        if ($insee <= 0) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'N° INSEE invalide.']);
+        }
+
+        return $this->response->setJSON([
+            'ok'             => true,
+            'insee_saisi'    => $insee,
+            'insee_attribue' => $this->prochainInseeLibre(getPDO(), $insee),
+        ]);
+    }
+
+    /** Premier entier libre dans laposte.Id_LaPoste strictement supérieur à $insee. */
+    private function prochainInseeLibre(\PDO $pdo, int $insee): int
+    {
+        $chk       = $pdo->prepare('SELECT 1 FROM laposte WHERE Id_LaPoste = ?');
+        $candidat  = $insee + 1;
+        for ($i = 0; $i < 10000; $i++, $candidat++) {
+            $chk->execute([$candidat]);
+            if ($chk->fetchColumn() === false) {
+                return $candidat;
+            }
+        }
+        throw new \RuntimeException("Aucun code INSEE libre trouvé après $insee.");
+    }
+
     public function store(): ResponseInterface
     {
 
-        $insee = (int) ($_POST['insee'] ?? 0);
+        $inseeSaisi = (int) ($_POST['insee'] ?? 0);
         $nom   = mb_strtoupper(trim($_POST['nom'] ?? ''), 'UTF-8');
         $cp    = trim($_POST['cp'] ?? '');
         $lat   = str_replace(',', '.', trim($_POST['lat'] ?? ''));
         $lon   = str_replace(',', '.', trim($_POST['lon'] ?? ''));
 
-        if ($insee <= 0 || $nom === '' || $cp === '') {
+        if ($inseeSaisi <= 0 || $nom === '' || $cp === '') {
             return $this->response->setJSON(['ok' => false, 'msg' => 'N° INSEE, nom et code postal sont obligatoires.']);
         }
         if ($lat !== '' && !is_numeric($lat)) {
@@ -109,11 +143,8 @@ class CommuneController extends BaseController
 
         $pdo = getPDO();
 
-        $chk = $pdo->prepare('SELECT COUNT(*) FROM laposte WHERE Id_LaPoste = ?');
-        $chk->execute([$insee]);
-        if ((int) $chk->fetchColumn() > 0) {
-            return $this->response->setJSON(['ok' => false, 'msg' => "Le code INSEE $insee existe déjà."]);
-        }
+        // Étape 2 : le code stocké est le premier numéro libre après l'INSEE saisi.
+        $insee = $this->prochainInseeLibre($pdo, $inseeSaisi);
 
         $pdo->prepare(
             'INSERT INTO laposte (Id_LaPoste, Nom, CodePostal, Latitude, Longitude) VALUES (?, ?, ?, ?, ?)'
@@ -133,7 +164,7 @@ class CommuneController extends BaseController
         $stmt->execute([$insee]);
         $row = $stmt->fetch();
 
-        return $this->response->setJSON(['ok' => true, 'msg' => "Commune « $nom » ajoutée.", 'row' => $row]);
+        return $this->response->setJSON(['ok' => true, 'msg' => "Commune « $nom » ajoutée sous le code INSEE $insee (recherché : $inseeSaisi).", 'row' => $row]);
     }
 
     public function updateCoords($insee = null): ResponseInterface

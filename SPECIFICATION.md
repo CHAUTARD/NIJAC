@@ -1147,9 +1147,13 @@ Gérer le référentiel INSEE des codes postaux et communes utilisé pour la gé
 | `liste` | GET | Retourne les communes (paginées ou filtrées) |
 | `importer_csv` | POST | Import depuis fichier CSV La Poste |
 | `exporter_csv` | GET | Export CSV de toute la table |
-| `ajouter` | POST | Ajouter une commune manuellement |
+| `prochain-insee` | GET | Étape 1 de l'ajout : renvoie le premier `Id_LaPoste` libre strictement au-dessus du code INSEE saisi |
+| `ajouter` | POST | Ajouter une commune manuellement (le code stocké est le premier numéro libre après l'INSEE saisi, jamais l'INSEE lui-même) |
 | `modifier_coords` | POST | Modifier les coordonnées GPS d'une commune |
 | `compter` | GET | Retourne le nombre total de communes |
+
+### Règles
+- Ajout d'une commune en deux étapes : (1) saisie du code INSEE réel + nom / code postal / GPS puis « Suivant » (appel `prochain-insee`) ; (2) récapitulatif affichant le code réellement attribué — le **premier numéro disponible après** l'INSEE saisi — puis « Enregistrer ». L'INSEE réel n'est jamais utilisé comme `Id_LaPoste` : il reste libre pour un futur import CSV La Poste.
 
 ---
 

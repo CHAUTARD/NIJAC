@@ -366,41 +366,62 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" style="font-size:.88rem;">
-                <div class="mb-2">
-                    <label class="form-label fw-semibold" style="font-size:.82rem;">N° INSEE <span class="text-danger">*</span></label>
-                    <input type="number" id="add-insee" class="form-control form-control-sm" placeholder="ex : 14118" min="1">
-                </div>
-                <div class="mb-2">
-                    <label class="form-label fw-semibold" style="font-size:.82rem;">Nom de la commune <span class="text-danger">*</span></label>
-                    <input type="text" id="add-nom" class="form-control form-control-sm" placeholder="ex : CAEN">
-                </div>
-                <div class="mb-2">
-                    <label class="form-label fw-semibold" style="font-size:.82rem;">Code postal <span class="text-danger">*</span></label>
-                    <input type="text" id="add-cp" class="form-control form-control-sm" placeholder="ex : 14000" maxlength="10">
-                </div>
-                <hr style="margin:.75rem 0;">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="fw-semibold" style="font-size:.82rem;">Coordonnées GPS</span>
-                    <button type="button" class="btn-coller" id="add-btn-coller">
-                        <i class="bi bi-clipboard me-1"></i>Coller depuis Google Maps
-                    </button>
-                </div>
-                <div class="coords-row mb-1">
-                    <div class="coords-field">
-                        <label>Latitude</label>
-                        <input type="text" id="add-lat" placeholder="ex : 49.1825">
+                <div id="add-step1">
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold" style="font-size:.82rem;">N° INSEE de la nouvelle commune <span class="text-danger">*</span></label>
+                        <input type="number" id="add-insee" class="form-control form-control-sm" placeholder="ex : 14118" min="1">
+                        <div class="text-muted" style="font-size:.76rem;margin-top:.15rem;">
+                            Saisir le code INSEE réel : le premier numéro libre au-dessus sera attribué à l'enregistrement.
+                        </div>
                     </div>
-                    <div class="coords-field">
-                        <label>Longitude</label>
-                        <input type="text" id="add-lon" placeholder="ex : -0.3708">
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold" style="font-size:.82rem;">Nom de la commune <span class="text-danger">*</span></label>
+                        <input type="text" id="add-nom" class="form-control form-control-sm" placeholder="ex : CAEN">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold" style="font-size:.82rem;">Code postal <span class="text-danger">*</span></label>
+                        <input type="text" id="add-cp" class="form-control form-control-sm" placeholder="ex : 14000" maxlength="10">
+                    </div>
+                    <hr style="margin:.75rem 0;">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="fw-semibold" style="font-size:.82rem;">Coordonnées GPS</span>
+                        <button type="button" class="btn-coller" id="add-btn-coller">
+                            <i class="bi bi-clipboard me-1"></i>Coller depuis Google Maps
+                        </button>
+                    </div>
+                    <div class="coords-row mb-1">
+                        <div class="coords-field">
+                            <label>Latitude</label>
+                            <input type="text" id="add-lat" placeholder="ex : 49.1825">
+                        </div>
+                        <div class="coords-field">
+                            <label>Longitude</label>
+                            <input type="text" id="add-lon" placeholder="ex : -0.3708">
+                        </div>
+                    </div>
+                </div>
+                <div id="add-step2" style="display:none;">
+                    <div class="alert alert-light border mb-0" style="font-size:.84rem;">
+                        <div class="mb-1"><span class="text-muted">Commune :</span> <strong id="rc-nom"></strong> <span id="rc-cp" class="text-muted"></span></div>
+                        <div class="mb-1"><span class="text-muted">Coordonnées GPS :</span> <span id="rc-coords"></span></div>
+                        <hr class="my-2">
+                        <div class="mb-1"><span class="text-muted">Code INSEE recherché :</span> <strong id="rc-insee-saisi"></strong></div>
+                        <div><span class="text-muted">Code INSEE attribué :</span> <strong id="rc-insee-attr" class="text-success"></strong></div>
+                        <div class="text-muted mt-1" style="font-size:.78rem;">Premier numéro disponible après le code recherché.</div>
                     </div>
                 </div>
                 <div id="add-msg" style="font-size:.8rem;min-height:18px;margin-top:.4rem;"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
-                <button type="button" class="btn btn-success btn-sm" id="add-btn-ok">
-                    <i class="bi bi-check-lg me-1"></i>Ajouter
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="add-btn-back" style="display:none;">
+                    <i class="bi bi-arrow-left me-1"></i>Retour
+                </button>
+                <button type="button" class="btn btn-success btn-sm" id="add-btn-next">
+                    Suivant<i class="bi bi-arrow-right ms-1"></i>
+                </button>
+                <button type="button" class="btn btn-success btn-sm" id="add-btn-ok" style="display:none;">
+                    <i class="bi bi-check-lg me-1"></i>Enregistrer
                 </button>
             </div>
         </div>
@@ -796,26 +817,71 @@ $('#mod-btn-coller').on('click', () => collerCoords('mod-lat', 'mod-lon', 'mod-m
 bindPasteCoords('add-lat', 'add-lon', 'add-msg');
 bindPasteCoords('mod-lat', 'mod-lon', 'mod-msg');
 
-$('#add-btn-ok').on('click', function () {
+// EA87 – Ajout d'une commune en deux étapes :
+//   Étape 1 : recherche du code INSEE + saisie des champs (bouton « Suivant »).
+//   Étape 2 : récapitulatif avec le code réellement attribué (premier numéro
+//             libre après l'INSEE saisi), puis « Enregistrer ».
+function addResetSteps() {
+    $('#add-step1').show();
+    $('#add-step2').hide();
+    $('#add-btn-next').show();
+    $('#add-btn-back, #add-btn-ok').hide();
     $('#add-msg').text('');
-    const insee = $('#add-insee').val().trim();
-    const nom   = $('#add-nom').val().trim();
-    const cp    = $('#add-cp').val().trim();
-    const lat   = $('#add-lat').val().trim();
-    const lon   = $('#add-lon').val().trim();
+}
 
-    if (!insee || !nom || !cp) {
+function addLireChamps() {
+    return {
+        insee: $('#add-insee').val().trim(),
+        nom:   $('#add-nom').val().trim(),
+        cp:    $('#add-cp').val().trim(),
+        lat:   $('#add-lat').val().trim(),
+        lon:   $('#add-lon').val().trim(),
+    };
+}
+
+$('#add-btn-next').on('click', function () {
+    $('#add-msg').text('');
+    const c = addLireChamps();
+    if (!c.insee || !c.nom || !c.cp) {
         $('#add-msg').html('<span class="text-danger">N° INSEE, nom et code postal sont obligatoires.</span>');
         return;
     }
     spinner(true);
-    $.post(COMMUNE_BASE, { insee, nom, cp, lat, lon }, function (res) {
+    $.get(`${COMMUNE_BASE}/prochain-insee`, { insee: c.insee }, function (res) {
+        spinner(false);
+        if (!res.ok) {
+            $('#add-msg').html('<span class="text-danger">✖ ' + res.msg + '</span>');
+            return;
+        }
+        $('#rc-nom').text(c.nom.toUpperCase());
+        $('#rc-cp').text(c.cp ? '(' + c.cp + ')' : '');
+        $('#rc-coords').text(c.lat && c.lon ? c.lat + ', ' + c.lon : '—');
+        $('#rc-insee-saisi').text(res.insee_saisi);
+        $('#rc-insee-attr').text(res.insee_attribue);
+        $('#add-step1').hide();
+        $('#add-step2').show();
+        $('#add-btn-next').hide();
+        $('#add-btn-back, #add-btn-ok').show();
+    }, 'json').fail(() => { spinner(false); $('#add-msg').html('<span class="text-danger">Erreur réseau.</span>'); });
+});
+
+$('#add-btn-back').on('click', addResetSteps);
+
+$('#add-btn-ok').on('click', function () {
+    $('#add-msg').text('');
+    const c = addLireChamps();
+    if (!c.insee || !c.nom || !c.cp) {
+        $('#add-msg').html('<span class="text-danger">N° INSEE, nom et code postal sont obligatoires.</span>');
+        return;
+    }
+    spinner(true);
+    $.post(COMMUNE_BASE, c, function (res) {
         spinner(false);
         if (res.ok) {
             toast(res.msg, true);
             bootstrap.Modal.getInstance(document.getElementById('modal-ajouter')).hide();
             $('#add-insee, #add-nom, #add-cp, #add-lat, #add-lon').val('');
-            $('#add-msg').text('');
+            addResetSteps();
             chargerListe(currentOffset);
         } else {
             $('#add-msg').html('<span class="text-danger">✖ ' + res.msg + '</span>');
@@ -823,7 +889,7 @@ $('#add-btn-ok').on('click', function () {
     }, 'json').fail(() => { spinner(false); $('#add-msg').html('<span class="text-danger">Erreur réseau.</span>'); });
 });
 
-$('#modal-ajouter').on('show.bs.modal', () => $('#add-msg').text(''));
+$('#modal-ajouter').on('show.bs.modal', addResetSteps);
 
 $('#mod-btn-ok').on('click', function () {
     $('#mod-msg').text('');
