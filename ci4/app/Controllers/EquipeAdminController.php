@@ -141,4 +141,32 @@ class EquipeAdminController extends BaseController
             return $this->response->setJSON(['ok' => true, 'msg' => 'Équipe mise à jour.']);
         });
     }
+
+    public function delete(int $idEquipe): ResponseInterface
+    {
+        return $this->tryJson(function () use ($idEquipe) {
+            $pdo = getPDO();
+
+            // FK rencontre.Id_EquipeDom / Id_EquipeExt en ON DELETE RESTRICT :
+            // message explicite plutôt qu'une PDOException brute.
+            $chk = $pdo->prepare('SELECT COUNT(*) FROM rencontre WHERE Id_EquipeDom = ? OR Id_EquipeExt = ?');
+            $chk->execute([$idEquipe, $idEquipe]);
+            $nbRenc = (int) $chk->fetchColumn();
+            if ($nbRenc > 0) {
+                return $this->response->setJSON([
+                    'ok'  => false,
+                    'msg' => "Suppression impossible : $nbRenc rencontre(s) référencent cette équipe. Supprimez-les d'abord (EA95).",
+                ]);
+            }
+
+            $stmt = $pdo->prepare('DELETE FROM equipe WHERE Id_Equipe = ?');
+            $stmt->execute([$idEquipe]);
+
+            if ($stmt->rowCount() === 0) {
+                return $this->response->setJSON(['ok' => false, 'msg' => "Équipe $idEquipe introuvable."]);
+            }
+
+            return $this->response->setJSON(['ok' => true, 'msg' => 'Équipe supprimée.']);
+        });
+    }
 }

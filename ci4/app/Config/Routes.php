@@ -312,6 +312,7 @@ $routes->delete('equipe-regionale/(:num)', 'EquipeRegionaleController::supprimer
 $routes->get('gestion-equipes', 'EquipeAdminController::index', ['filter' => 'adminauth']);
 $routes->get('gestion-equipes/data', 'EquipeAdminController::data', ['filter' => 'adminauth']);
 $routes->put('gestion-equipes/(:num)', 'EquipeAdminController::update/$1', ['filter' => 'adminauth']);
+$routes->delete('gestion-equipes/(:num)', 'EquipeAdminController::delete/$1', ['filter' => 'adminauth']);
 
 // ── EA95 Gestion des rencontres ──────────────────────────────────────────────
 $routes->get('gestion-rencontres', 'RencontreAdminController::index', ['filter' => 'adminauth']);

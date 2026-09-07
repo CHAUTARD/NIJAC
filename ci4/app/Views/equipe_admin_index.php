@@ -123,6 +123,7 @@
 
             <div id="panel-boutons">
                 <button class="btn btn-sm btn-enregistrer px-3" id="btn-enregistrer"><i class="bi bi-floppy me-1"></i>Enregistrer</button>
+                <button class="btn btn-sm btn-supprimer px-3" id="btn-supprimer"><i class="bi bi-trash me-1"></i>Supprimer</button>
             </div>
 
             <div id="form-status" class="mt-3 small fw-bold"></div>
@@ -289,6 +290,21 @@ $('#btn-enregistrer').on('click', function () {
         if (res.ok) { toast(res.msg); chargerListe(currentId); }
         else { toast(res.msg, false); setStatus(res.msg, false); }
     }).fail(() => toast('Erreur réseau.', false));
+});
+
+$('#btn-supprimer').on('click', function () {
+    if (!currentId) return;
+    const libelle = $('#txt-nom').val().trim() || `#${currentId}`;
+    nijacConfirm(`Supprimer l'équipe ${libelle} ?`, function () {
+        $.ajax({ url: `${EQUIPE_BASE}/${currentId}`, method: 'DELETE', dataType: 'json' }).done(function (res) {
+            if (!res.ok) { toast(res.msg, false); setStatus(res.msg, false); return; }
+            toast(res.msg);
+            currentId = null;
+            $('#form-equipe').hide();
+            $('#no-selection').show();
+            chargerListe();
+        }).fail(() => toast('Erreur réseau.', false));
+    }, null, { type: 'danger' });
 });
 
 $('#sel-club').on('change', function () { clubFiltre = $(this).val(); renderListe(); });
