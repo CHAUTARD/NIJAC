@@ -295,7 +295,13 @@
             </div>
 
             <div class="mb-1 d-flex flex-column flex-grow-1">
-                <label class="form-label" for="txt-message">Message :</label>
+                <label class="form-label d-flex align-items-center gap-2" for="txt-message">
+                    Message :
+                    <button type="button" id="btn-apercu-html" class="btn btn-sm btn-outline-primary py-0"
+                            style="display:none;font-size:.75rem;">
+                        <i class="bi bi-eye me-1"></i>Aperçu HTML
+                    </button>
+                </label>
                 <textarea id="txt-message" class="form-control form-control-sm flex-grow-1"></textarea>
             </div>
 
@@ -442,6 +448,27 @@
     </div>
 </div>
 
+<!-- Modal aperçu HTML du message (Liste nomination) -->
+<div class="modal fade" id="modal-apercu-html" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title"><i class="bi bi-filetype-html me-2"></i>Aperçu HTML du message</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="px-1 py-2 mb-2 border-bottom bg-light" style="font-size:.82rem;">
+                    <span class="text-muted me-1">Sujet :</span><strong id="apercu-html-sujet"></strong>
+                </div>
+                <div id="apercu-html-corps" style="font-size:.9rem;line-height:1.5;"></div>
+                <p class="text-muted mt-3 mb-0" style="font-size:.75rem;">
+                    <i class="bi bi-info-circle me-1"></i>Marqueurs et tableau des nominations remplacés par des exemples.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Pied de page : recopié de includes/footer.php -->
 <?= view('partials/page_footer', ['pfStatusAlign' => 'left']) ?>
 
@@ -507,6 +534,7 @@ function chargerModele(type) {
     $('#conv-copie-bar').toggle(type === 'Convocation');
     $('#cart-convocation').toggle(type === 'Convocation');
     $('#cart-liste-nom').toggle(type === 'Liste nomination');
+    $('#btn-apercu-html').toggle(type === 'Liste nomination');
     $('#cart-demande-adresse').toggle(type === 'Demande adresse');
     $('#ja-header-titre').text(TITRES_JA[type] || 'JA');
     $('#result-envoi').html('');
@@ -624,6 +652,32 @@ $(document).on('click', '#tbody-ja tr', function (e) {
         }
         new bootstrap.Modal(document.getElementById('modal-apercu')).show();
     }, 'json');
+});
+
+// ── Aperçu HTML du message (Liste nomination) ────────────────────────────────
+$('#btn-apercu-html').on('click', function () {
+    const sujet = $('#txt-sujet').val().trim();
+    let message = $('#txt-message').val();
+    if (!message.trim()) { toast('Saisissez un message avant de prévisualiser.', false); return; }
+
+    const tableExemple =
+        '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;">' +
+        '<tr style="background:#1a3a6b;color:#fff;"><th>Date</th><th>Heure</th><th>Division</th><th>Domicile</th><th>Extérieur</th></tr>' +
+        '<tr style="background:#f0f4fa"><td>13/09/2026</td><td>14:00</td><td>R2M</td><td>US EXEMPLE 1</td><td>AS EXEMPLE 2</td></tr>' +
+        '<tr style="background:#ffffff"><td>27/09/2026</td><td>16:00</td><td>R3F</td><td>TT EXEMPLE 3</td><td>CP EXEMPLE 4</td></tr>' +
+        '</table>';
+
+    const exemples = {
+        '{LISTE_NOMINATIONS}': tableExemple,
+        '{PRENOM}': 'Jean', '{NOM}': 'DUPONT', '{NOM_COMPLET}': 'Jean DUPONT',
+        '{UTI_PRENOM}': 'Le', '{UTI_NOM}': 'Nominateur',
+        '{YEAR_PHASE}': '2025/2026', '{PHASE}': '2',
+    };
+    message = message.replace(/\{[A-Z_]+\}/g, m => exemples[m] ?? m);
+
+    $('#apercu-html-sujet').text(sujet || '(sans sujet)');
+    $('#apercu-html-corps').html(message);
+    new bootstrap.Modal(document.getElementById('modal-apercu-html')).show();
 });
 
 // ── Clic sur un marqueur : insérer à la position du curseur ──────────────────
