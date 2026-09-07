@@ -431,6 +431,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0">
+                <div id="apercu-avert" class="alert alert-warning m-0 rounded-0 py-2 px-3" style="font-size:.82rem;display:none;"></div>
                 <div class="px-3 py-2 border-bottom bg-light" style="font-size:.82rem;">
                     <span class="text-muted me-1">Sujet :</span>
                     <strong id="apercu-sujet"></strong>
@@ -616,6 +617,11 @@ $(document).on('click', '#tbody-ja tr', function (e) {
         if (!r.ok) { toast(r.msg, false); return; }
         $('#apercu-sujet').text(r.sujet);
         $('#apercu-corps').text(r.corps);
+        if (r.non_dispo) {
+            $('#apercu-avert').html(`<i class="bi bi-exclamation-triangle-fill me-1"></i>${r.avertissement}`).show();
+        } else {
+            $('#apercu-avert').hide().text('');
+        }
         new bootstrap.Modal(document.getElementById('modal-apercu')).show();
     }, 'json');
 });
@@ -745,14 +751,28 @@ function demarrerEnvoi(sujet, message, ids) {
         toast(ok ? `${envoyes} email(s) envoyé(s).` : `${envoyes} envoyé(s), ${echecs} échec(s).`, ok);
     }
 
-    // Vérification initiale (rate limit global + comptage sans-email)
+    // Vérification initiale (rate limit global + comptage sans-email + non-dispo)
     $.post(`${CENTRENVOYE_BASE}/envoyer`, {
+        type: typeActif,
         sujet, message,
         ids: JSON.stringify(ids),
     }, function (res) {
         if (!res.ok) { toast(res.msg, false); return; }
         sansEmail = res.sans_email || 0;
 
+        const indispoNoms = res.indispo_noms || [];
+        if (indispoNoms.length) {
+            nijacConfirm(
+                `${indispoNoms.length} juge(s)-arbitre(s) se sont déclarés NON DISPONIBLES et ne recevront pas de convocation :\n\n${indispoNoms.join('\n')}\n\nCes nominations devront être supprimées puis réaffectées. Envoyer les convocations aux autres JA ?`,
+                lancerEnvoi,
+                null,
+                { type: 'warning', title: 'JA non disponibles', confirmLabel: 'Envoyer aux disponibles' }
+            );
+        } else {
+            lancerEnvoi();
+        }
+
+        function lancerEnvoi() {
         demarrerProgress();
 
         // Envoi séquentiel un par un
@@ -793,6 +813,7 @@ function demarrerEnvoi(sujet, message, ids) {
             });
         }
         envoyerSuivant();
+        } // lancerEnvoi
 
     }, 'json').fail(function () {
         toast('Erreur réseau lors de la vérification.', false);

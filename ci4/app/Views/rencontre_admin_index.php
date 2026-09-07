@@ -101,17 +101,18 @@
             <table id="tbl-rencontres">
                 <thead>
                     <tr>
-                        <th style="width:140px" data-col="0">Date<span class="sort-icon"></span></th>
-                        <th style="width:60px" data-col="1">Heure<span class="sort-icon"></span></th>
-                        <th style="width:55px" data-col="2">Poule<span class="sort-icon"></span></th>
-                        <th style="width:65px" data-col="3">Journée<span class="sort-icon"></span></th>
-                        <th style="width:70px" data-col="4">Division<span class="sort-icon"></span></th>
-                        <th data-col="5">Domicile<span class="sort-icon"></span></th>
-                        <th data-col="6">Extérieur<span class="sort-icon"></span></th>
+                        <th style="width:90px" data-col="0">Id_Rencontre<span class="sort-icon"></span></th>
+                        <th style="width:140px" data-col="1">Date<span class="sort-icon"></span></th>
+                        <th style="width:60px" data-col="2">Heure<span class="sort-icon"></span></th>
+                        <th style="width:55px" data-col="3">Poule<span class="sort-icon"></span></th>
+                        <th style="width:65px" data-col="4">Journée<span class="sort-icon"></span></th>
+                        <th style="width:70px" data-col="5">Division<span class="sort-icon"></span></th>
+                        <th data-col="6">Domicile<span class="sort-icon"></span></th>
+                        <th data-col="7">Extérieur<span class="sort-icon"></span></th>
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
-                    <tr><td colspan="7" class="text-center text-muted py-3">Chargement…</td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-3">Chargement…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -130,7 +131,7 @@
                 <div class="col-auto">
                     <span class="form-label d-block">Rencontre</span>
                     <div class="form-readonly">
-                        <span id="txt-dom"></span> / <span id="txt-ext"></span>
+                        <span id="txt-dom"></span> vs <span id="txt-ext"></span>
                     </div>
                 </div>
                 <div class="col-auto">
@@ -306,7 +307,7 @@ function renderListe() {
     $('#lbl-count').text(`${affichees.length} / ${rencontres.length}`);
 
     if (!affichees.length) {
-        $body.append('<tr><td colspan="7" class="text-center text-muted py-3">Aucune rencontre.</td></tr>');
+        $body.append('<tr><td colspan="8" class="text-center text-muted py-3">Aucune rencontre.</td></tr>');
         return;
     }
 
@@ -318,6 +319,7 @@ function renderListe() {
         const $tdExt = $('<td>').addClass('cell-equipe').text(r.NomExt ?? '—')
             .on('click', function (e) { e.stopPropagation(); filtrerParEquipe(r.NomExt, r.Id_Rencontre); });
         $('<tr>').attr('data-id', r.Id_Rencontre).append(
+            $('<td>').text(r.Id_Rencontre ?? ''),
             $('<td>').text(date),
             $('<td>').text(heure),
             $('<td>').text(r.Poule ?? ''),
@@ -386,22 +388,26 @@ $('#btn-annuler').on('click', function () {
     $('#no-selection').show();
 });
 
-$('#btn-supprimer').on('click', function () {
-    if (!currentId) return;
-    const libelle = `${$('#txt-dom').text()} / ${$('#txt-ext').text()}`;
+// Suppression d'une rencontre — depuis le bouton du panneau d'édition ou la
+// dernière colonne de la liste.
+function supprimerRencontre(id, libelle) {
     nijacConfirm(`Supprimer la rencontre ${libelle} ?`, function () {
-        $.ajax({ url: `${RENCONTRE_BASE}/${currentId}`, method: 'DELETE', dataType: 'json' }).done(function (res) {
-            if (res.ok) {
-                toast(res.msg);
+        $.ajax({ url: `${RENCONTRE_BASE}/${id}`, method: 'DELETE', dataType: 'json' }).done(function (res) {
+            if (!res.ok) { toast(res.msg, false); return; }
+            toast(res.msg);
+            if (currentId == id) {
                 currentId = null;
                 $('#form-rencontre').hide();
                 $('#no-selection').show();
-                chargerListe();
-            } else {
-                toast(res.msg, false);
             }
+            chargerListe();
         }).fail(() => toast('Erreur réseau.', false));
     }, null, { type: 'danger' });
+}
+
+$('#btn-supprimer').on('click', function () {
+    if (!currentId) return;
+    supprimerRencontre(currentId, `${$('#txt-dom').text()} vs ${$('#txt-ext').text()}`);
 });
 
 $('#search-equipe').on('input', function () { searchEquipe = $(this).val().trim(); renderListe(); });

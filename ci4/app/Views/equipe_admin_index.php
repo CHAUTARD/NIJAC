@@ -43,19 +43,20 @@
             <table id="tbl-equipes">
                 <thead>
                     <tr>
-                        <th data-col="0">Nom<span class="sort-icon"></span></th>
-                        <th style="width:80px" data-col="1">Division<span class="sort-icon"></span></th>
-                        <th data-col="2">Club<span class="sort-icon"></span></th>
-                        <th style="width:90px" data-col="3">Id_Club<span class="sort-icon"></span></th>
-                        <th style="width:75px" data-col="4">Dépt<span class="sort-icon"></span></th>
-                        <th style="width:85px" data-col="5">Réengag.<span class="sort-icon"></span></th>
-                        <th style="width:95px" data-col="6">Jour souh.<span class="sort-icon"></span></th>
-                        <th style="width:85px" data-col="7">Souhait JA<span class="sort-icon"></span></th>
-                        <th style="width:90px" data-col="8">Désid. saison<span class="sort-icon"></span></th>
+                        <th style="width:90px" data-col="0">Id_Equipe<span class="sort-icon"></span></th>
+                        <th data-col="1">Nom<span class="sort-icon"></span></th>
+                        <th style="width:80px" data-col="2">Division<span class="sort-icon"></span></th>
+                        <th data-col="3">Club<span class="sort-icon"></span></th>
+                        <th style="width:90px" data-col="4">Id_Club<span class="sort-icon"></span></th>
+                        <th style="width:75px" data-col="5">Dépt<span class="sort-icon"></span></th>
+                        <th style="width:85px" data-col="6">Réengag.<span class="sort-icon"></span></th>
+                        <th style="width:95px" data-col="7">Jour souh.<span class="sort-icon"></span></th>
+                        <th style="width:85px" data-col="8">Souhait JA<span class="sort-icon"></span></th>
+                        <th style="width:90px" data-col="9">Désid. saison<span class="sort-icon"></span></th>
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
-                    <tr><td colspan="9" class="text-center text-muted py-3">Chargement…</td></tr>
+                    <tr><td colspan="10" class="text-center text-muted py-3">Chargement…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -226,12 +227,13 @@ function renderListe() {
     $('#lbl-count').text(`${affichees.length} / ${equipes.length}`);
 
     if (!affichees.length) {
-        $body.append('<tr><td colspan="9" class="text-center text-muted py-3">Aucune équipe.</td></tr>');
+        $body.append('<tr><td colspan="10" class="text-center text-muted py-3">Aucune équipe.</td></tr>');
         return;
     }
 
     affichees.forEach(e => {
         $('<tr>').attr('data-id', e.Id_Equipe).append(
+            $('<td>').text(e.Id_Equipe ?? ''),
             $('<td>').text(e.Nom ?? ''),
             $('<td>').text(e.Division ?? ''),
             $('<td>').text(e.NomClub ?? ''),

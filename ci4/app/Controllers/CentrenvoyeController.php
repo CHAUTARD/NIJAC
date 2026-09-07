@@ -268,7 +268,20 @@ class CentrenvoyeController extends BaseController
         $marqueurs = construireMarqueursMessage($ja, $this->moi(), $this->ctxConvocation($ja));
         $rendu     = remplacerMarqueursMessage($sujet, $message, $marqueurs);
 
-        return $this->response->setJSON(['ok' => true, 'sujet' => $rendu['sujet'], 'corps' => $rendu['corps']]);
+        $nonDispo = $this->jaNonDisponible($pdo, (int) $ja['Id_JA'], (int) $ja['Id_Rencontre'], $ja['Date'] ?? null);
+        $dateFr   = !empty($ja['Date']) ? date('d/m/Y', strtotime($ja['Date'])) : '';
+
+        return $this->response->setJSON([
+            'ok'         => true,
+            'sujet'      => $rendu['sujet'],
+            'corps'      => $rendu['corps'],
+            'non_dispo'  => $nonDispo,
+            'avertissement' => $nonDispo
+                ? trim(($ja['Prenom'] ?? '') . ' ' . ($ja['Nom'] ?? '')) . " s'est déclaré(e) NON DISPONIBLE"
+                    . ($dateFr ? " pour le $dateFr" : '') . ". L'envoi de cette convocation sera bloqué : "
+                    . 'supprimez la nomination puis réaffectez la rencontre à un autre juge-arbitre.'
+                : '',
+        ]);
     }
 
     public function envoyer(): ResponseInterface
@@ -277,6 +290,7 @@ class CentrenvoyeController extends BaseController
         $ids     = json_decode($this->request->getPost('ids') ?? '[]', true);
         $sujet   = trim($this->request->getPost('sujet') ?? '');
         $message = trim($this->request->getPost('message') ?? '');
+        $type    = trim($this->request->getPost('type') ?? 'Disponibilites');
 
         if ($sujet === '' || $message === '') {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Sujet et message obligatoires.']);
@@ -291,9 +305,51 @@ class CentrenvoyeController extends BaseController
         }
 
         $pdo          = getPDO();
-        $placeholders = implode(',', array_fill(0, count($ids), '?'));
-        $stmt         = $pdo->prepare("SELECT COUNT(*) FROM ja WHERE Id_JA IN ($placeholders) AND (Email IS NULL OR Email = '')");
-        $stmt->execute(array_map('intval', $ids));
+        $intIds       = array_map('intval', $ids);
+        $placeholders = implode(',', array_fill(0, count($intIds), '?'));
+
+        // Convocation : les ids sont des Id_Nomination — comptage des JA sans
+        // email et des JA qui se sont déclarés NON DISPONIBLES (EN22).
+        if ($type === 'Convocation') {
+            $stmt = $pdo->prepare("
+                SELECT j.Prenom, j.Nom,
+                       (j.Email IS NULL OR j.Email = '') AS SansEmail,
+                       EXISTS (
+                           SELECT 1 FROM disponible dn
+                           WHERE dn.Id_JA = j.Id_JA AND dn.Reponse = 'N'
+                             AND (dn.Id_Rencontre = n.Id_Rencontre
+                                  OR (dn.Id_Rencontre IS NULL AND dn.DateCompetition = r.Date))
+                       ) AS NonDispo
+                FROM nomination n
+                JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                JOIN ja j         ON j.Id_JA = d.Id_JA
+                JOIN rencontre r  ON r.Id_Rencontre = n.Id_Rencontre
+                WHERE n.Id_Nomination IN ($placeholders)
+            ");
+            $stmt->execute($intIds);
+            $rows        = $stmt->fetchAll();
+            $sansEmail   = 0;
+            $indispoNoms = [];
+            foreach ($rows as $r) {
+                if ($r['SansEmail']) {
+                    $sansEmail++;
+                }
+                if ($r['NonDispo']) {
+                    $indispoNoms[] = trim($r['Prenom'] . ' ' . $r['Nom']);
+                }
+            }
+
+            return $this->response->setJSON([
+                'ok'          => true,
+                'sans_email'  => $sansEmail,
+                'indispo'     => count($indispoNoms),
+                'indispo_noms' => $indispoNoms,
+                'mode_dev'    => isModeDeveloppement(),
+            ]);
+        }
+
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM ja WHERE Id_JA IN ($placeholders) AND (Email IS NULL OR Email = '')");
+        $stmt->execute($intIds);
         $sansEmail = (int) $stmt->fetchColumn();
 
         return $this->response->setJSON(['ok' => true, 'sans_email' => $sansEmail, 'mode_dev' => isModeDeveloppement()]);
@@ -338,6 +394,21 @@ class CentrenvoyeController extends BaseController
 
         if (!$ja || empty($ja['Email'])) {
             return $this->response->setJSON(['ok' => false, 'skip' => true, 'msg' => "Pas d'email."]);
+        }
+
+        // Convocation : ne rien envoyer si le JA s'est déclaré NON DISPONIBLE
+        // pour cette rencontre ou pour la date (déclaration EN22, Reponse='N').
+        // Le nominateur doit supprimer la nomination et la réaffecter.
+        if ($type === 'Convocation'
+            && $this->jaNonDisponible($pdo, (int) $ja['Id_JA'], (int) $ja['Id_Rencontre'], $ja['Date'] ?? null)) {
+            $dateFr = !empty($ja['Date']) ? date('d/m/Y', strtotime($ja['Date'])) : '';
+
+            return $this->response->setJSON([
+                'ok'  => false,
+                'nom' => trim(($ja['Prenom'] ?? '') . ' ' . ($ja['Nom'] ?? '')),
+                'msg' => "s'est déclaré(e) NON DISPONIBLE" . ($dateFr ? " pour le $dateFr" : '')
+                       . " — aucune convocation envoyée. Supprimez la nomination puis réaffectez la rencontre à un autre juge-arbitre.",
+            ]);
         }
 
         // Générer la liste des nominations pour "Liste nomination"
@@ -557,5 +628,26 @@ class CentrenvoyeController extends BaseController
             'corr_email'    => $ja['CorrEmail']     ?? null,
             'corr_tel'      => $ja['CorrTel']       ?? null,
         ];
+    }
+
+    /**
+     * Le JA s'est-il déclaré NON DISPONIBLE (EN22, `disponible.Reponse = 'N'`)
+     * pour cette rencontre précise ou pour sa date de compétition ? Sert au
+     * blocage d'envoi (envoyerUn), à l'aperçu (apercu) et au comptage préalable
+     * de l'envoi groupé (envoyer), tous pour le type "Convocation".
+     */
+    private function jaNonDisponible(\PDO $pdo, int $idJa, ?int $idRencontre, ?string $date): bool
+    {
+        if ($idJa <= 0) {
+            return false;
+        }
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM disponible
+            WHERE Id_JA = ? AND Reponse = 'N'
+              AND (Id_Rencontre = ? OR (Id_Rencontre IS NULL AND DateCompetition = ?))
+        ");
+        $stmt->execute([$idJa, $idRencontre, $date]);
+
+        return (int) $stmt->fetchColumn() > 0;
     }
 }

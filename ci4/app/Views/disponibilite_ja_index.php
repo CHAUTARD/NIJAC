@@ -673,6 +673,7 @@ function sauvegarderDate(idComp, ouvrirPopupSiDispo) {
         departements: e.departement ? e.departement.split(',') : [],
     }, function (r) {
         if (!r.ok) { toast('Erreur : ' + r.err, false); return; }
+        if (r.attention) nijacToast(r.attention, 'warning', 15000);
         if (ouvrirPopupSiDispo) ouvrirPopupNote(idComp);
     }, 'json').fail(function () {
         toast('Erreur réseau.', false);

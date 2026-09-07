@@ -230,7 +230,42 @@ class DisponibiliteJaController extends BaseController
                     ->execute([$idJa, $date, $statut, $departement, $note]);
             }
 
-            return $this->response->setJSON(['ok' => true, 'statut' => $statut === 'VIDE' ? null : $statut]);
+            // Le JA se déclare non disponible : s'il est déjà désigné comme
+            // juge-arbitre sur une rencontre programmée ce jour-là, le prévenir
+            // qu'il doit alerter son nominateur pour actualiser la désignation.
+            $attention = null;
+            if ($statut === 'N') {
+                $stmt = $pdo->prepare('
+                    SELECT r.Journee, ed.Nom AS Dom, COALESCE(ee.Nom, "?") AS Ext,
+                           TIME_FORMAT(r.Heure, "%H:%i") AS Heure
+                    FROM nomination n
+                    JOIN disponible d   ON d.Id_Disponible = n.Id_Disponible
+                    JOIN rencontre r    ON r.Id_Rencontre  = n.Id_Rencontre
+                    JOIN equipe ed      ON ed.Id_Equipe    = r.Id_EquipeDom
+                    LEFT JOIN equipe ee ON ee.Id_Equipe    = r.Id_EquipeExt
+                    WHERE d.Id_JA = ? AND r.Date = ?
+                    ORDER BY r.Heure
+                ');
+                $stmt->execute([$idJa, $date]);
+                $noms = $stmt->fetchAll();
+                if ($noms) {
+                    $liste = implode(' ; ', array_map(
+                        static fn ($n) => 'J' . $n['Journee'] . ' ' . $n['Dom'] . ' / ' . $n['Ext']
+                            . ($n['Heure'] ? ' (' . $n['Heure'] . ')' : ''),
+                        $noms
+                    ));
+                    $attention = 'Attention : vous êtes actuellement désigné(e) comme juge-arbitre sur '
+                        . (count($noms) > 1 ? 'des rencontres' : 'une rencontre') . ' à cette date — '
+                        . $liste . '. En vous déclarant non disponible, merci de prévenir votre '
+                        . 'nominateur afin qu\'il actualise la désignation de cette rencontre.';
+                }
+            }
+
+            return $this->response->setJSON([
+                'ok'        => true,
+                'statut'    => $statut === 'VIDE' ? null : $statut,
+                'attention' => $attention,
+            ]);
         });
     }
 
