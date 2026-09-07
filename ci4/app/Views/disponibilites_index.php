@@ -33,6 +33,16 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 #barre-dept { --strip-bg:#fff; background:#fff; border-bottom:2px solid #dee2e6; padding:.6rem 1.25rem; display:flex; align-items:center; gap:.9rem; flex-wrap:wrap; }
 #barre-dept > .combo-field > select#sel-dept { min-width:260px; }
 
+/* Limitrophes : même habillage « label en encoche + bord arrondi » que la combobox Département */
+#wrap-limitrophes > .lim-box {
+    box-sizing:border-box; min-height:2.15rem;
+    display:inline-flex; align-items:center; gap:.55rem; flex-wrap:wrap;
+    border:1.5px solid #d3dae6; border-radius:12px; background:#fff;
+    padding:.28rem .8rem;
+}
+#wrap-limitrophes #limitrophes-checks { display:flex; gap:.55rem; flex-wrap:wrap; }
+#wrap-limitrophes .lim-chk-label { font-size:.82rem; display:inline-flex; align-items:center; gap:.25rem; cursor:pointer; color:var(--nijac-blue); font-weight:600; }
+
 /* ── Corps ── */
 #corps { flex:1; overflow-y:auto; padding:1.25rem clamp(1rem, 4vw, 4rem); width:100%; box-sizing:border-box; }
 
@@ -180,12 +190,14 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
     <div id="spinner-dept" class="spinner-border spinner-border-sm text-secondary" role="status">
         <span class="visually-hidden">Chargement…</span>
     </div>
-    <div id="wrap-limitrophes" style="display:none; align-items:center; gap:.5rem; flex-wrap:wrap;">
-        <span style="font-weight:700;color:#444;font-size:.82rem;white-space:nowrap;">Limitrophes</span>
-        <span id="limitrophes-checks" style="display:flex; gap:.55rem; flex-wrap:wrap;"></span>
-        <button type="button" class="btn btn-outline-secondary btn-sm py-0" id="btn-lim-tous">Tout cocher</button>
-        <button type="button" class="btn btn-outline-secondary btn-sm py-0" id="btn-lim-inverse">Inverser</button>
-    </div>
+    <span class="combo-field" id="wrap-limitrophes" style="display:none;">
+        <label>Limitrophes</label>
+        <span class="lim-box">
+            <span id="limitrophes-checks"></span>
+            <button type="button" class="btn btn-outline-secondary btn-sm py-0" id="btn-lim-tous">Tout cocher</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm py-0" id="btn-lim-inverse">Inverser</button>
+        </span>
+    </span>
     <div id="legende-dispo">
         <span class="leg-item"><span class="leg-dot leg-dot-ok"></span>Disponibilités saisies</span>
         <span class="leg-item"><span class="leg-dot leg-dot-ko"></span>Non renseigné</span>
@@ -279,7 +291,7 @@ function majLimitrophes(dept) {
     if (!dept || !liste.length) { $('#wrap-limitrophes').hide(); return; }
     liste.forEach(d => {
         $box.append(
-            `<label style="font-size:.82rem;display:inline-flex;align-items:center;gap:.25rem;cursor:pointer;">
+            `<label class="lim-chk-label">
                 <input type="checkbox" class="form-check-input lim-chk mt-0" value="${escHtml(d.CodeDept)}">
                 ${escHtml(d.CodeDept)} ${escHtml(d.nom)}
             </label>`

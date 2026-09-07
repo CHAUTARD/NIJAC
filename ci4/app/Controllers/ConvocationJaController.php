@@ -12,10 +12,14 @@ use CodeIgniter\HTTP\ResponseInterface;
  * EN21 attribué dans la bande nominateur/public (EN11-EN30), à la suite de
  * EN20 (JA/info_rencontre.php).
  *
- * Page PUBLIQUE (sans authentification, sans même de token obfusqué : l'URL
- * porte directement `?nomination=<Id_Nomination>` en clair) — comportement
- * identique au legacy, préservé tel quel. Générée depuis EN14 (NominationController,
- * envoi des convocations par email) et consultée/imprimée par le JA.
+ * Page PUBLIQUE (sans authentification). URL jetonnée par un token `cnv`
+ * (Obfuscator de l'Id_Nomination), servie en segments de chemin
+ * `convocation-ja/<Id_Nomination>/<tokenCnv>` — forme sans `?`/`=`/`&`, qui se
+ * faisaient tronquer dans les emails en texte brut (quoted-printable + auto-lien
+ * des webmails) : le lien arrivait alors sans le paramètre `nomination`.
+ * L'ancienne forme `?nomination=<id>&cnv=<token>` reste acceptée pour les
+ * convocations déjà envoyées. Générée depuis EN14 (NominationController) et EN15
+ * (CentrenvoyeController), consultée/imprimée par le JA.
  */
 class ConvocationJaController extends BaseController
 {
@@ -31,11 +35,16 @@ class ConvocationJaController extends BaseController
         $this->obf = new \Obfuscator(OBFUSCATOR_SEED);
     }
 
-    public function index()
+    /**
+     * @param string|null $nomSeg Id_Nomination passé en segment d'URL (forme chemin
+     *                            .../convocation-ja/<id>/<token>), sinon ?nomination=
+     * @param string|null $cnvSeg Token cnv passé en segment d'URL, sinon ?cnv=
+     */
+    public function index($nomSeg = null, $cnvSeg = null)
     {
         $pdo          = getPDO();
-        $idNomination = (int) ($this->request->getGet('nomination') ?? 0);
-        $tokenCnv     = trim($this->request->getGet('cnv') ?? '');
+        $idNomination = (int) ($nomSeg ?? $this->request->getGet('nomination') ?? 0);
+        $tokenCnv     = trim((string) ($cnvSeg ?? $this->request->getGet('cnv') ?? ''));
         $idJa         = 0;
         $idRencontre  = 0;
 
@@ -151,6 +160,15 @@ class ConvocationJaController extends BaseController
             $erreur = 'Paramètre nomination manquant.';
         } elseif (!$tokenValide) {
             $erreur = 'Lien de convocation invalide. Merci de redemander l\'envoi de votre convocation.';
+        } else {
+            // Jeton valide et nomination existante, mais la jointure vers
+            // `disponible` n'a rien renvoyé : la ligne `disponible` liée a
+            // disparu (nomination orpheline — restauration partielle de table,
+            // purge de saison…). Le JA n'est plus rattachable : il faut refaire
+            // la nomination dans EN14.
+            $erreur = "Convocation n° $idNomination incomplète : la disponibilité liée est "
+                    . "introuvable en base (nomination orpheline). Merci de refaire la "
+                    . "nomination puis de renvoyer la convocation.";
         }
 
         $indemniteForfait = (float) getConfig('indemnite_forfaitaire', '25.00');

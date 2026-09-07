@@ -515,7 +515,7 @@
 
             <hr style="margin:1.2rem 0;">
             <p style="font-size:.85rem;color:#374151;margin-bottom:1rem;">
-                <i class="bi bi-journal-text me-1"></i><strong>Paramètres comptables EBP</strong> — utilisés pour l'export du journal AC (EN16).
+                <i class="bi bi-journal-text me-1"></i><strong>Paramètres comptables EBP</strong> — utilisés pour l'export du journal AC (ED55).
             </p>
 
             <div class="email-dev-group mb-3">
@@ -565,7 +565,7 @@
 
             <hr style="margin:1.2rem 0;">
             <p style="font-size:.85rem;color:#374151;margin-bottom:1rem;">
-                <i class="bi bi-calendar2-range me-1"></i><strong>Phases de saison</strong> — bornes utilisées pour le filtre rapide dans EN16 (format MM/JJ).
+                <i class="bi bi-calendar2-range me-1"></i><strong>Phases de saison</strong> — bornes utilisées pour le filtre rapide dans ED55 (format MM/JJ).
             </p>
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">

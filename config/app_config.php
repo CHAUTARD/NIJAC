@@ -594,7 +594,9 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
         '{URL_ATTESTATION_JA}'   => $token !== '' ? (site_url('attestation-defisc') . '?ja=' . $token) : '',
         '{URL_DISPO_REGIONALE_JA}' => $token !== '' ? (site_url('dispo-regionale-ja') . '?ja=' . $token) : '',
         '{URL_INFO_RENCONTRE}'   => $token !== '' ? (site_url('info-rencontre') . '?ja=' . $token) : '',
-        '{URL_CONVOCATION_JA}'   => !empty($idNomination) ? (site_url('convocation-ja') . '?nomination=' . $idNomination . '&cnv=' . $tokenNomination) : '',
+        // Forme "chemin" (sans ?, = ni &) : robuste aux emails texte brut /
+        // quoted-printable où l'ancienne query string se faisait tronquer.
+        '{URL_CONVOCATION_JA}'   => !empty($idNomination) ? site_url('convocation-ja/' . (int) $idNomination . '/' . $tokenNomination) : '',
         '{URL_ARBITRE_CLUB}'     => $tokenRenc !== '' ? (site_url('arbitre-club') . '?renc=' . $tokenRenc) : '',
         '{YEAR_PHASE}'           => getAnneePhase(),
         '{PHASE}'                => getConfig('phase', '1'),

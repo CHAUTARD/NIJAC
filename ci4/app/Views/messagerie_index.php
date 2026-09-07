@@ -272,7 +272,7 @@ const MARQUEURS_EXEMPLE = {
     '{URL_ADRESSE_JA}':     <?= json_encode(site_url('adresse-ja') . '?ja=AbCd1234') ?>,
     '{URL_DISPONIBILITE_JA}': <?= json_encode(site_url('disponibilite-ja') . '?ja=AbCd1234') ?>,
     '{URL_INFO_RENCONTRE}': <?= json_encode(site_url('info-rencontre') . '?ja=AbCd1234') ?>,
-    '{URL_CONVOCATION_JA}': <?= json_encode(site_url('convocation-ja') . '?nomination=12345') ?>,
+    '{URL_CONVOCATION_JA}': <?= json_encode(site_url('convocation-ja/12345/AbCd1234')) ?>,
     '{YEAR_PHASE}':         <?= json_encode(getAnneePhase()) ?>,
     '{PHASE}':              <?= json_encode(getConfig('phase', '1')) ?>,
     '{DATE}':               '15/03/2026',

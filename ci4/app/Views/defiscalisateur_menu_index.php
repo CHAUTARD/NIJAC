@@ -176,6 +176,7 @@
         .btn-defiscalisation { background-color: #e8f5e9; }
         .btn-attestation     { background-color: #ffe0b2; }
         .btn-attestations    { background-color: #ffe9d1; }
+        .btn-compta          { background-color: #e3f2fd; }
 
         .btn-code {
             position: absolute;
@@ -236,6 +237,13 @@
         <div class="btn-icon"><img src="<?= base_url('img/DirDefiscalisation.png') ?>" alt="Attestations reçues"></div>
         <span>Attestations reçues</span>
         <span class="btn-desc">Liste des attestations signées déposées par les JA</span>
+    </a>
+
+    <a href="<?= site_url('compta') ?>" class="menu-btn btn-compta">
+        <span class="btn-code">ED55</span>
+        <div class="btn-icon"><img src="<?= base_url('img/Compta.png') ?>" alt="Comptabilite"></div>
+        <span>Comptes EBP des JA</span>
+        <span class="btn-desc">Import CSV et saisie du n° de compte EBP des JA</span>
     </a>
 
 </div>

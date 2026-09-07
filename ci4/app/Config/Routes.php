@@ -229,12 +229,12 @@ $routes->get('desiderata-clubs/ja-club', 'DesiderataClubsController::jaClub', ['
 $routes->get('desiderata-clubs/apercu', 'DesiderataClubsController::apercu', ['filter' => 'auth']);
 $routes->post('desiderata-clubs/envoyer', 'DesiderataClubsController::envoyer', ['filter' => 'auth']);
 
-// ── EN16 Comptes EBP des JA ──────────────────────────────────────────────────
-$routes->get('compta', 'ComptaController::index', ['filter' => 'auth']);
-$routes->get('compta/export-csv', 'ComptaController::exportCsv', ['filter' => 'auth']);
-$routes->get('compta/ja-sans-compte', 'ComptaController::jaSansCompte', ['filter' => 'auth']);
-$routes->post('compta/maj-compte', 'ComptaController::majCompte', ['filter' => 'auth']);
-$routes->post('compta/import-ebp', 'ComptaController::importEbp', ['filter' => 'auth']);
+// ── ED55 Comptes EBP des JA (menu E005 Défiscalisateur) ─────────────────────
+$routes->get('compta', 'ComptaController::index', ['filter' => 'defiscauth']);
+$routes->get('compta/export-csv', 'ComptaController::exportCsv', ['filter' => 'defiscauth']);
+$routes->get('compta/ja-sans-compte', 'ComptaController::jaSansCompte', ['filter' => 'defiscauth']);
+$routes->post('compta/maj-compte', 'ComptaController::majCompte', ['filter' => 'defiscauth']);
+$routes->post('compta/import-ebp', 'ComptaController::importEbp', ['filter' => 'defiscauth']);
 
 // ── EN17 Statistiques JA ─────────────────────────────────────────────────────
 $routes->get('stats-ja', 'StatsJaController::index', ['filter' => 'auth']);
@@ -371,6 +371,12 @@ $routes->post('laposte/lookup-laposte', 'LaposteController::lookupLaposte', ['fi
 // Page PUBLIQUE (sans authentification, ni même de token obfusqué — l'URL
 // porte l'Id_Nomination en clair, comme le legacy). Générée depuis EN14.
 $routes->get('convocation-ja', 'ConvocationJaController::index');
+// Forme "chemin" : .../convocation-ja/<Id_Nomination>/<tokenCnv> — sans '?', '='
+// ni '&', qui se font mutiler dans les emails en texte brut (encodage
+// quoted-printable + auto-lien des webmails) et cassaient le lien en prod
+// ("Paramètre nomination manquant"). L'ancienne forme ?nomination=&cnv= reste
+// acceptée pour les convocations déjà envoyées.
+$routes->get('convocation-ja/(:num)/(:alphanum)', 'ConvocationJaController::index/$1/$2');
 $routes->post('convocation-ja/sauvegarder-frais', 'ConvocationJaController::sauvegarderFrais');
 
 // ── EN22 Disponibilité JA ────────────────────────────────────────────────────

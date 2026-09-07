@@ -422,15 +422,6 @@
     <!-- Ligne 2 -->
 
     <div class="menu-btn-wrap">
-        <a href="<?= site_url('compta') ?>" class="menu-btn btn-envoi">
-            <span class="btn-code">EN16</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Compta.png') ?>" alt="Comptabilite"></div>
-            <span>Comptes EBP des JA</span>
-            <span class="btn-desc">Import CSV et saisie du n° de compte EBP des JA</span>
-        </a>
-    </div>
-
-    <div class="menu-btn-wrap">
         <a href="<?= site_url('stats-ja') ?>" class="menu-btn btn-ja">
             <span class="btn-code">EN17</span>
             <div class="btn-icon"><img src="<?= base_url('img/Stat_JA.png') ?>" alt="Statistiques JA"></div>

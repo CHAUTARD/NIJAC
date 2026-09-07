@@ -377,7 +377,7 @@
 
         <div id="ja-header">
             <span id="ja-header-titre">JA actifs</span>
-            <span class="badge-dept">Dép. <?= esc($dept) ?></span>
+            <span class="badge-dept">Dép. <?= esc($deptsAff) ?></span>
             <span id="nb-ja" class="ms-auto opacity-75" style="font-weight:400;font-size:.78rem;"></span>
         </div>
 

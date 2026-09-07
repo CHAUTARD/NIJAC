@@ -722,7 +722,7 @@
         </div>
         <div class="card-body-custom">
             <ol class="recap-list">
-                <li><strong>Comptabilité</strong> — générer le journal comptable de la phase (<code>EN16</code>) et transmettre les pièces ; les indemnités JA sont soldées en fin de phase.</li>
+                <li><strong>Comptabilité</strong> — générer le journal comptable de la phase (<code>ED55</code>) et transmettre les pièces ; les indemnités JA sont soldées en fin de phase.</li>
                 <li><strong>Sauvegarde totale</strong> — onglet « Sauvegarde » → « Sauvegarder toute la base de données » (fichier <code>Full_*.sql</code>, à conserver hors serveur).</li>
                 <li><strong>Vérifier la configuration</strong> (<code>EA91</code>) — bornes <code>phase2_debut</code> / <code>phase2_fin</code> et saison courante.</li>
                 <li><strong>Nettoyage de phase</strong> — onglet « Sauvegarde » → « Sauvegarder et démarrer nouvelle phase » : sauvegarde SQL puis vidage de <code>Disponible</code>, <code>Equipe</code>, <code>Equipe_Nationale</code>, <code>Rencontre</code>, <code>Nomination</code>, <code>Competition_Regionale</code> ; désactivation des JA (<code>Actif&nbsp;=&nbsp;0</code>, conservés) ; purge des <code>.xlsx</code> de <code>Importation/Rencontres</code>.</li>
@@ -747,7 +747,7 @@
         </div>
         <div class="card-body-custom">
             <ol class="recap-list">
-                <li><strong>Clôture comptable</strong> de la dernière phase (<code>EN16</code>) — toutes les pièces transmises, indemnités soldées.</li>
+                <li><strong>Clôture comptable</strong> de la dernière phase (<code>ED55</code>) — toutes les pièces transmises, indemnités soldées.</li>
                 <li><strong>Sauvegarde totale + archivage</strong> — onglet « Sauvegarde » → « Sauvegarder toute la base », puis récupérer le fichier <code>Full_*.sql</code> hors du serveur : c'est l'archive de la saison.</li>
                 <li><strong>Changer la saison courante</strong> dans <code>EA91</code> (clé <code>saison</code>, ex. <code>2026-2027</code>) et ajuster les bornes de phase.</li>
                 <li><strong>Ré-engagement des clubs</strong> — envoi du questionnaire de désidératas (menu CSR <code>ES31</code> / <code>ES32</code>, ou <code>EN12</code>) → saisie par les clubs via <code>EN18</code>.</li>

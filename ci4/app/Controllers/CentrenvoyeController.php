@@ -73,6 +73,7 @@ class CentrenvoyeController extends BaseController
             'departement' => $moi['id_departement'] ?? '',
             'changeLogin' => !empty($moi['change_login']),
             'dept'        => $this->dept(),
+            'deptsAff'    => implode('/', $this->deptsAutorises()), // ex. "76/27" (règle région) — utilisé pour l'onglet Convocation
             'modeles'     => $modeles,
             'monEmail'    => $moi['email'] ?? '',
         ];
@@ -122,8 +123,12 @@ class CentrenvoyeController extends BaseController
         $journee = (int) ($this->request->getGet('journee') ?? 0);
         $date    = trim((string) ($this->request->getGet('date') ?? ''));
 
+        // Toutes les listes de JA suivent la règle région (ex. 76 ⇒ 76 + 27).
+        $depts = $this->deptsAutorises();
+        $ph    = implode(',', array_fill(0, count($depts), '?'));
+
         switch ($type) {
-            // ── Disponibilités : tous JA1 actifs du dept ────────────────
+            // ── Disponibilités : tous JA1 actifs des départements autorisés ─
             case 'Disponibilites':
                 $stmt = $pdo->prepare("
                     SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
@@ -132,10 +137,10 @@ class CentrenvoyeController extends BaseController
                     LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
                     WHERE j.Actif = 1
                       AND j.Grade = 'JA1'
-                      AND j.CodeDept = ?
+                      AND j.CodeDept IN ($ph)
                     ORDER BY j.Nom, j.Prenom
                 ");
-                $stmt->execute([$dept]);
+                $stmt->execute($depts);
                 $rows = $stmt->fetchAll();
                 break;
 
@@ -148,14 +153,14 @@ class CentrenvoyeController extends BaseController
                     LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
                     WHERE j.Actif = 1
                       AND j.Grade = 'JA1'
-                      AND j.CodeDept = ?
+                      AND j.CodeDept IN ($ph)
                       AND NOT EXISTS (
                           SELECT 1 FROM disponible d
                           WHERE d.Id_JA = j.Id_JA
                       )
                     ORDER BY j.Nom, j.Prenom
                 ");
-                $stmt->execute([$dept]);
+                $stmt->execute($depts);
                 $rows = $stmt->fetchAll();
                 break;
 
@@ -165,8 +170,6 @@ class CentrenvoyeController extends BaseController
                     $rows = [];
                     break;
                 }
-                $depts = $this->deptsAutorises();
-                $ph    = implode(',', array_fill(0, count($depts), '?'));
                 $stmt = $pdo->prepare("
                     SELECT n.Id_Nomination, j.Id_JA, j.Nom, j.Prenom, j.Email,
                            r.Date, r.Heure, r.Journee, r.Poule,
@@ -208,11 +211,11 @@ class CentrenvoyeController extends BaseController
                     JOIN nomination n ON n.Id_Disponible = dn.Id_Disponible
                     WHERE j.Actif = 1
                       AND j.Grade = 'JA1'
-                      AND j.CodeDept = ?
+                      AND j.CodeDept IN ($ph)
                     GROUP BY j.Id_JA, j.Nom, j.Prenom, j.Email
                     ORDER BY j.Nom, j.Prenom
                 ");
-                $stmt->execute([$dept]);
+                $stmt->execute($depts);
                 $rows = $stmt->fetchAll();
                 break;
 

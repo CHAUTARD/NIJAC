@@ -18,7 +18,6 @@
 - [EN13 – Disponibilités JA](#en13--disponibilités-ja)
 - [EN14 – Nomination JA](#en14--nomination-ja)
 - [EN15 – Centre d'envoi](#en15--centre-denvoi)
-- [EN16 – Comptes EBP des JA](#en16--comptes-ebp-des-ja)
 - [EN17 – Statistiques JA](#en17--statistiques-ja)
 - [EN18 – Désidératas club](#en18--désidératas-club)
 - [EN19 – Adresse domicile JA](#en19--adresse-domicile-ja)
@@ -30,6 +29,7 @@
 - [ED52 – Barème kilométrique](#ed52--barème-kilométrique)
 - [ED53 – Attestation sur l'honneur](#ed53--attestation-sur-lhonneur)
 - [ED54 – Attestations reçues](#ed54--attestations-reçues)
+- [ED55 – Comptes EBP des JA](#ed55--comptes-ebp-des-ja)
 - [EA81 – Salles](#ea81--salles)
 - [EA82 – Import Rencontres](#ea82--import-rencontres)
 - [EA83 – Import Rencontres Nationales](#ea83--import-rencontres-nationales)
@@ -161,7 +161,7 @@ Les indicateurs affichent un **badge rouge** sur le bouton de menu correspondant
 | Nomination JA | EN14 | `nomination.php` |
 | Gestion des messages | EA93 | `messagerie.php` |
 | Centre d'envoi | EN15 | `centrenvoye.php` |
-| Comptes EBP des JA | EN16 | `compta.php` |
+| Comptes EBP des JA | ED55 | `compta.php` |
 | Désidératas clubs | EN12 | `JA_R3R4.php` |
 | Statistiques JA | EN17 | `stats_ja.php` |
 | Se déconnecter | — | `../logout.php` |
@@ -427,10 +427,10 @@ Envoyer les messages aux JA actifs du département (convocations, rappels, annul
 
 ---
 
-## EN16 – Comptes EBP des JA
+## ED55 – Comptes EBP des JA
 
 **Fichier :** `Nominateur/compta.php`  
-**Accès :** Administrateur et Nominateur
+**Accès :** Défiscalisateur et Administrateur (menu E005, filtre `defiscauth`)
 
 ### Objectif
 Renseigner le champ `ja.NumCompteEBP` (n° de compte fournisseur dans le logiciel comptable EBP) pour les JA du périmètre de l'utilisateur (`getDepartementsAutorises()` sur `ja.CodeDept`).
@@ -442,7 +442,7 @@ Motif partagé **liste + panneau d'édition** (`asset/css/nijac-liste-edit.css`)
   Colonnes : Nom, Prénom, **Actif** (Oui/Non), **Défisc.** (Oui/Non), puis — **uniquement pour les JA ayant demandé la défiscalisation** (`ja.Defiscalisation = 1`) — **Km total** (somme de `nomination.Kilometre` sur toutes les nominations du JA en base), **CV** (`ja.PuissanceFiscale`), **Énergie** (`ja.VehiculeElectrique` → `Therm.` / `Élec.`) — puis N° compte EBP. Lignes des JA inactifs grisées.
 - **Volet édition** (droite) : sur sélection d'une ligne, Nom / Prénom / Actif en lecture seule, rappel défiscalisation (`n CV · thermique|électrique · n km cumulés`) le cas échéant, champ **N° de compte EBP** (vide = efface) + bouton **Enregistrer**.
 - **Importer CSV** (bouton du bandeau liste) : fichier `.csv`, deux colonnes — « nom + prénom » et « n° de compte EBP » — dans un **ordre indifférent** (la colonne 100 % chiffres est prise pour le compte, l'autre pour le nom), séparateur `;` ou `,` ; lignes d'en-tête / sous-totaux (0 ou 2 colonnes numériques) ignorées. Compte-rendu dans un encart, **lignes sans correspondance en tête** : chaque nom sans correspondance (et chaque cas ambigu) est cliquable → filtre la liste sur le nom de famille pour retrouver et compléter le JA manuellement.
-- **Exporter CSV** (bouton du bandeau liste) : télécharge `comptes_ebp_ja.csv`.
+- **Exporter CSV** (bouton du bandeau liste) : télécharge `comptes_ebp_ja.csv` — uniquement les JA défiscalisés avec un kilométrage arbitré > 0.
 
 ### Actions AJAX
 | Action | Méthode | Description |
@@ -450,7 +450,7 @@ Motif partagé **liste + panneau d'édition** (`asset/css/nijac-liste-edit.css`)
 | `ja-sans-compte` | GET | Liste des JA du périmètre sans `NumCompteEBP` (ou tous avec `?tous=1`) ; inclut `Defiscalisation`, `PuissanceFiscale`, `VehiculeElectrique` et `KmTotal` (SUM des `nomination.Kilometre` du JA) |
 | `maj-compte` | POST | Mise à jour manuelle du `NumCompteEBP` d'un JA (`id_ja`, `num_compte` ; vide = efface) |
 | `import-ebp` | POST | Import CSV : rapproche chaque ligne avec un JA du périmètre sur le nom normalisé (sans accents, casse et espaces multiples ignorés, `NOM Prénom` et `Prénom NOM` testés) et renseigne le compte ; renvoie le détail ligne à ligne (`maj` / `inchange` / `introuvable` / `ambigu`) |
-| `export-csv` | GET | Renvoie le CSV `compte;nom` (en-tête `compte;nom`, `NOM` en majuscules + `Prénom`) des JA du périmètre ayant un `NumCompteEBP` — réimportable tel quel ; téléchargement déclenché côté client, fichier `comptes_ebp_ja.csv` |
+| `export-csv` | GET | Renvoie le CSV `compte;nom` (en-tête `compte;nom`, `NOM` en majuscules + `Prénom`) des JA du périmètre **défiscalisés** (`Defiscalisation = 1`) ayant un **kilométrage arbitré > 0** (SUM `nomination.Kilometre`) — `NumCompteEBP` éventuellement vide ; réimportable tel quel ; téléchargement déclenché côté client, fichier `comptes_ebp_ja.csv` |
 
 ### Rapprochement des noms (`import-ebp`)
 - Normalisation : accents retirés, majuscules, tout caractère non alphanumérique → espace simple.
@@ -582,7 +582,7 @@ Page d'accueil du Juge-Arbitre : consultation de sa fiche, de ses prochaines nom
 ## EN21 – Convocation et frais JA
 
 **Fichier :** `Nominateur/convocation_ja.php`  
-**Accès :** Page publique — aucune authentification, aucun token obfusqué : l'URL porte l'`Id_Nomination` en clair (`?nomination=<Id_Nomination>`), comportement identique au fichier legacy et volontairement préservé tel quel lors du portage CI4
+**Accès :** Page publique — aucune authentification. URL jetonnée par un token `cnv` (Obfuscator de l'`Id_Nomination`), servie en **segments de chemin** : `convocation-ja/<Id_Nomination>/<tokenCnv>`. Cette forme sans `?`/`=`/`&` évite la troncature du lien dans les emails en texte brut (encodage quoted-printable + auto-lien des webmails) qui, en prod, faisait arriver le lien sans le paramètre `nomination` (message « Paramètre nomination manquant »). L'ancienne forme `?nomination=<id>&cnv=<token>` reste acceptée pour les convocations déjà envoyées.
 
 ### Objectif
 Affiche la convocation officielle imprimable (format A4) d'un Juge-Arbitre pour une rencontre donnée, et permet la saisie de ses frais de déplacement. Générée depuis EN14 (`NominationController::envoyerConvocations()`), envoyée par email au JA nominé.

@@ -517,8 +517,9 @@ class NominationController extends BaseController
             $liens   = [];
 
             foreach ($nominations as $nom) {
-                $lien    = site_url('convocation-ja') . '?nomination=' . $nom['Id_Nomination']
-                    . '&cnv=' . $this->obf->obfuscate((int) $nom['Id_Nomination']);
+                // Forme "chemin" (sans ?, = ni &) — cf. {URL_CONVOCATION_JA} dans app_config.php.
+                $lien    = site_url('convocation-ja/' . (int) $nom['Id_Nomination']
+                    . '/' . $this->obf->obfuscate((int) $nom['Id_Nomination']));
                 $liens[] = [
                     'nom'       => "{$nom['Prenom']} {$nom['Nom']}",
                     'email'     => $nom['Email'] ?? '',

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Comptes EBP des JA (EN16)</title>
+    <title>NIJAC – Comptes EBP des JA (ED55)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
@@ -25,9 +25,15 @@
             flex-wrap: wrap;
             flex-shrink: 0;
         }
-        /* Badge de comptage « n / n » : centré horizontalement et verticalement,
-           largeur stable pour ne pas sauter quand les nombres changent. */
-        #lbl-count { justify-content: center; text-align: center; min-width: 5.5rem; }
+        /* Badge de comptage « n / n ». nijac-liste-edit.css force
+           #lbl-count{display:inline-block} (spécificité id > .count-badge) et
+           casse donc le align-items de .count-badge : on rétablit inline-flex +
+           align-items ici. + largeur mini et centrage horizontal du texte,
+           la pastille étant placée au centre du bandeau entre deux spacers. */
+        #lbl-count {
+            display: inline-flex; align-items: center;
+            justify-content: center; text-align: center; min-width: 5.5rem;
+        }
 
         #ja-list-wrapper { flex: 1; overflow-y: auto; }
         #tbl-ja { width: 100%; font-size: .82rem; border-collapse: collapse; }
@@ -42,6 +48,8 @@
         td.col-num { text-align: right; font-variant-numeric: tabular-nums; }
         td.col-center { text-align: center; }
         tr.ja-inactif td { color: #9aa5b8; }
+        /* JA défiscalisé ayant roulé mais CV = 0 ou énergie non renseignée → à relancer */
+        tr.ja-defisc-incomplet td { color: #c0392b; font-weight: 700; }
 
         #import-result {
             margin: .6rem .75rem 0;
@@ -71,8 +79,8 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'person-vcard', 'phTitle' => 'Comptes EBP des JA', 'phCode' => 'EN16',
-    'phCrumbLabel' => 'Nominateur', 'phCrumbUrl' => site_url('nominateur-menu'), 'phBackUrl' => site_url('nominateur-menu'),
+    'phIcon' => 'person-vcard', 'phTitle' => 'Comptes EBP des JA', 'phCode' => 'ED55',
+    'phCrumbLabel' => 'Défiscalisateur', 'phCrumbUrl' => site_url('defiscalisateur-menu'), 'phBackUrl' => site_url('defiscalisateur-menu'),
 ]) ?>
 
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
@@ -84,14 +92,10 @@
             <button type="button" class="btn btn-sm btn-light" id="btn-importer-csv" title="Importer une balance EBP (.csv)">
                 <i class="bi bi-upload me-1"></i>Importer CSV
             </button>
-            <button type="button" class="btn btn-sm btn-light" id="btn-exporter-csv" title="Exporter n° EBP ; Nom + Prénom">
+            <button type="button" class="btn btn-sm btn-light" id="btn-exporter-csv" title="Exporter « n° EBP ; NOM Prénom » — JA défiscalisés avec kilométrage > 0">
                 <i class="bi bi-download me-1"></i>Exporter CSV
             </button>
 
-            <span class="combo-field">
-                <label for="search-input">Recherche</label>
-                <input type="search" id="search-input" placeholder="Nom / prénom…" style="width:170px;">
-            </span>
             <span class="combo-field">
                 <label for="sel-compte">Compte EBP</label>
                 <select id="sel-compte">
@@ -122,6 +126,11 @@
 
             <span style="flex:1"></span>
             <span class="count-badge" id="lbl-count">0 / 0</span>
+            <span style="flex:1"></span>
+            <span class="combo-field">
+                <label for="search-input">Recherche</label>
+                <input type="search" id="search-input" placeholder="Nom / prénom…" style="width:340px;">
+            </span>
         </div>
         <input type="file" id="file-input-csv" accept=".csv" style="display:none">
         <div id="import-result" style="display:none;"></div>
@@ -129,6 +138,7 @@
             <table id="tbl-ja">
                 <thead>
                     <tr>
+                        <th class="col-sort" style="width:110px" data-col="8" title="Numéro de licence FFTT (= Id JA)">N° de licence <span class="sort-icon">↕</span></th>
                         <th class="col-sort" data-col="0">Nom <span class="sort-icon">↕</span></th>
                         <th class="col-sort" data-col="1">Prénom <span class="sort-icon">↕</span></th>
                         <th class="col-sort" style="width:55px" data-col="2">Actif <span class="sort-icon">↕</span></th>
@@ -140,7 +150,7 @@
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
-                    <tr><td colspan="8" class="text-center text-muted py-3">Chargement…</td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-3">Chargement…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -152,6 +162,10 @@
 
         <div id="form-ja" style="display:none;">
             <div class="row g-2 mb-2">
+                <div class="col-auto">
+                    <span class="form-label d-block">N° de licence</span>
+                    <div class="form-readonly" id="txt-licence"></div>
+                </div>
                 <div class="col-auto">
                     <span class="form-label d-block">Nom</span>
                     <div class="form-readonly" id="txt-nom"></div>
@@ -210,6 +224,7 @@ function fmtKm(v) {
     return (parseFloat(v) || 0).toLocaleString('fr-FR');
 }
 function energie(l) {
+    if (l.VehiculeElectrique == null || l.VehiculeElectrique === '') return '???';
     return +l.VehiculeElectrique ? 'Élec.' : 'Therm.';
 }
 
@@ -241,6 +256,7 @@ function valeurTri(l, col) {
         case 5:  return def ? (parseInt(l.PuissanceFiscale, 10) || 0) : -1;
         case 6:  return def ? energie(l) : '';
         case 7:  return String(l.NumCompteEBP ?? '');
+        case 8:  return parseInt(l.Id_JA, 10) || 0;
         default: return '';
     }
 }
@@ -277,13 +293,20 @@ function renderListe() {
     $('#lbl-count').text(`${affichees.length} / ${lignes.length}`);
 
     if (!affichees.length) {
-        $body.append('<tr><td colspan="8" class="text-center text-muted py-3">Aucun JA.</td></tr>');
+        $body.append('<tr><td colspan="9" class="text-center text-muted py-3">Aucun JA.</td></tr>');
         return;
     }
 
     affichees.forEach(l => {
         const def = +l.Defiscalisation === 1;
-        $('<tr>').attr('data-id', l.Id_JA).toggleClass('ja-inactif', !+l.Actif).append(
+        const cvManquant     = (parseInt(l.PuissanceFiscale, 10) || 0) === 0;
+        const energieManquante = l.VehiculeElectrique == null || l.VehiculeElectrique === '';
+        const aRelancer = def && (parseFloat(l.KmTotal) || 0) > 0 && (cvManquant || energieManquante);
+        $('<tr>').attr('data-id', l.Id_JA)
+            .toggleClass('ja-inactif', !+l.Actif)
+            .toggleClass('ja-defisc-incomplet', aRelancer)
+            .append(
+            $('<td>').addClass('col-num').text(l.Id_JA),
             $('<td>').text(l.Nom ?? ''),
             $('<td>').text(l.Prenom ?? ''),
             $('<td>').addClass('col-center').text(+l.Actif ? 'Oui' : 'Non'),
@@ -311,6 +334,7 @@ function selectionnerLigne($tr) {
     currentId = id;
     $('#no-selection').hide();
     $('#form-ja').show();
+    $('#txt-licence').text(l.Id_JA ?? '');
     $('#txt-nom').text(l.Nom ?? '');
     $('#txt-prenom').text(l.Prenom ?? '');
     $('#txt-actif').text(+l.Actif ? 'Oui' : 'Non');
@@ -359,7 +383,7 @@ $('#btn-exporter-csv').on('click', function () {
     $.get(`${COMPTA_BASE}/export-csv`)
         .done(function (res) {
             if (!res.ok) { toast(res.msg || 'Erreur.', false); return; }
-            if (!res.csv || res.csv.indexOf('\n') === -1) { toast('Aucun compte EBP renseigné à exporter.', false); return; }
+            if (!res.csv || res.csv.indexOf('\n') === -1) { toast('Aucun JA défiscalisé avec kilométrage à exporter.', false); return; }
             const blob = new Blob([res.csv], { type: 'text/csv;charset=utf-8;' });
             const url  = URL.createObjectURL(blob);
             const a    = document.createElement('a');

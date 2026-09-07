@@ -5,13 +5,13 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Comptes EBP des JA (EN16).
+ * NIJAC – Comptes EBP des JA (ED55).
  *
  * Renseignement du champ ja.NumCompteEBP : import d'un fichier CSV « balance
  * EBP » (rapprochement par nom), liste des JA sans compte, saisie manuelle, et
- * export CSV « n° EBP ; NOM Prénom ». Accessible Administrateur + Nominateur
- * (filtre "auth"). Pas de Model : requêtes ponctuelles en raw PDO comme le
- * reste de cette famille d'écrans.
+ * export CSV « n° EBP ; NOM Prénom ». Accessible Défiscalisateur + Administrateur
+ * (menu E005, filtre "defiscauth"). Pas de Model : requêtes ponctuelles en raw
+ * PDO comme le reste de cette famille d'écrans.
  */
 class ComptaController extends BaseController
 {
@@ -64,7 +64,7 @@ class ComptaController extends BaseController
     }
 
     /**
-     * EN16 – Liste des JA du périmètre sans NumCompteEBP (ou tous si ?tous=1).
+     * ED55 – Liste des JA du périmètre sans NumCompteEBP (ou tous si ?tous=1).
      * Pour les JA défiscalisés : total des kilomètres arbitrés (toutes
      * nominations en base), puissance fiscale et énergie du véhicule.
      */
@@ -102,7 +102,7 @@ class ComptaController extends BaseController
     }
 
     /**
-     * EN16 – Mise à jour manuelle du NumCompteEBP d'un JA du périmètre.
+     * ED55 – Mise à jour manuelle du NumCompteEBP d'un JA du périmètre.
      */
     public function majCompte(): ResponseInterface
     {
@@ -133,7 +133,7 @@ class ComptaController extends BaseController
     }
 
     /**
-     * EN16 – Import d'un fichier CSV « balance EBP » : rapproche chaque ligne
+     * ED55 – Import d'un fichier CSV « balance EBP » : rapproche chaque ligne
      * (nom + prénom / n° de compte, ordre des 2 colonnes indifférent) avec un JA
      * du périmètre et renseigne NumCompteEBP. Renvoie le détail ligne à ligne.
      */
@@ -241,9 +241,10 @@ class ComptaController extends BaseController
     }
 
     /**
-     * EN16 – Export CSV « compte;nom » des JA du périmètre ayant un
-     * NumCompteEBP renseigné (NOM en majuscules + Prénom). Réimportable tel
-     * quel par importEbp().
+     * ED55 – Export CSV « compte;nom » (NOM en majuscules + Prénom), réimportable
+     * tel quel par importEbp(). Restreint aux JA du périmètre défiscalisés
+     * (Defiscalisation = 1) ayant au moins un kilomètre arbitré (SUM > 0) ;
+     * NumCompteEBP éventuellement vide.
      */
     public function exportCsv(): ResponseInterface
     {
@@ -255,11 +256,15 @@ class ComptaController extends BaseController
             }
 
             $stmt = $pdo->prepare("
-                SELECT NumCompteEBP, Nom, Prenom
-                FROM ja
-                WHERE CodeDept IN ($ph)
-                  AND NumCompteEBP IS NOT NULL AND NumCompteEBP <> ''
-                ORDER BY Nom, Prenom
+                SELECT COALESCE(j.NumCompteEBP, '') AS NumCompteEBP, j.Nom, j.Prenom
+                FROM ja j
+                WHERE j.CodeDept IN ($ph)
+                  AND j.Defiscalisation = 1
+                  AND (SELECT COALESCE(SUM(n.Kilometre), 0)
+                         FROM nomination n
+                         JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                        WHERE d.Id_JA = j.Id_JA) > 0
+                ORDER BY j.Nom, j.Prenom
             ");
             $stmt->execute($params);
 
