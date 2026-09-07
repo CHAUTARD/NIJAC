@@ -2,14 +2,17 @@
 -- NIJAC — Ajout des clés étrangères implicites manquantes
 -- À exécuter UNE FOIS sur la base de PRODUCTION.
 --
--- Contexte : le schéma déclare déjà 20 FK ; 5 relations restaient implicites
+-- Contexte : le schéma déclare déjà 20 FK ; 3 relations restaient implicites
 -- (colonnes sans contrainte). Ce script les matérialise pour l'intégrité
 -- référentielle et pour que le MCD (phpMyAdmin Concepteur / Workbench) soit
 -- complet.
 --
 -- Équivalent code : config/app_config.php -> initTableConfiguration() ajoute
--- ces 5 FK de façon idempotente au chargement d'EA98. Ce fichier est la
+-- ces 3 FK de façon idempotente au chargement d'EA98. Ce fichier est la
 -- version manuelle (FTP / phpMyAdmin) pour la prod.
+--
+-- NB : deux FK supplémentaires (disponible_regionale) figuraient ici ; l'écran
+-- EN23 associé a été supprimé, voir SQL/2026-09_suppression_en23.sql.
 --
 -- Prérequis : toutes les tables sont en InnoDB (déjà le cas en prod).
 -- =============================================================================
@@ -17,7 +20,7 @@
 
 -- -----------------------------------------------------------------------------
 -- ÉTAPE 1 — CONTRÔLES DE PRÉ-VOL
--- Les 5 requêtes doivent renvoyer nb = 0. Si l'une renvoie > 0, corriger les
+-- Les 3 requêtes doivent renvoyer nb = 0. Si l'une renvoie > 0, corriger les
 -- lignes concernées (rattacher au bon parent ou passer la colonne à NULL)
 -- AVANT de lancer l'étape 3, sinon l'ALTER correspondant échoue.
 -- -----------------------------------------------------------------------------
@@ -38,18 +41,6 @@ SELECT 'ja.CodeDept -> departement'                    AS controle,
   FROM ja j
   LEFT JOIN departement d ON d.CodeDept = j.CodeDept
  WHERE j.CodeDept IS NOT NULL AND j.CodeDept <> '' AND d.CodeDept IS NULL;
-
-SELECT 'disponible_regionale.Id_JA -> ja'              AS controle,
-       COUNT(*) AS nb
-  FROM disponible_regionale r
-  LEFT JOIN ja j ON j.Id_JA = r.Id_JA
- WHERE j.Id_JA IS NULL;
-
-SELECT 'disponible_regionale.Id_CompetitionRegionale -> competition_regionale' AS controle,
-       COUNT(*) AS nb
-  FROM disponible_regionale r
-  LEFT JOIN competition_regionale k ON k.Id_CompetitionRegionale = r.Id_CompetitionRegionale
- WHERE k.Id_CompetitionRegionale IS NULL;
 
 
 -- -----------------------------------------------------------------------------
@@ -81,33 +72,20 @@ ALTER TABLE ja
   ADD CONSTRAINT fk_ja_departement FOREIGN KEY (CodeDept) REFERENCES departement (CodeDept)
   ON DELETE SET NULL ON UPDATE CASCADE;
 
--- Disponibilités championnat régional (EN23). CASCADE — même règle que
--- fk_disponible_ja, et la purge par date d'EA84 est déjà une cascade applicative.
-ALTER TABLE disponible_regionale
-  ADD CONSTRAINT fk_dispreg_ja FOREIGN KEY (Id_JA) REFERENCES ja (Id_JA)
-  ON DELETE CASCADE ON UPDATE CASCADE;
-
-ALTER TABLE disponible_regionale
-  ADD CONSTRAINT fk_dispreg_competition FOREIGN KEY (Id_CompetitionRegionale) REFERENCES competition_regionale (Id_CompetitionRegionale)
-  ON DELETE CASCADE ON UPDATE CASCADE;
-
 
 -- -----------------------------------------------------------------------------
--- ÉTAPE 4 — VÉRIFICATION (doit lister les 5 lignes)
+-- ÉTAPE 4 — VÉRIFICATION (doit lister les 3 lignes)
 -- -----------------------------------------------------------------------------
 SELECT TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
   FROM information_schema.KEY_COLUMN_USAGE
  WHERE TABLE_SCHEMA = DATABASE()
-   AND CONSTRAINT_NAME IN ('fk_equipe_club2','fk_equipe_club3','fk_ja_departement',
-                           'fk_dispreg_ja','fk_dispreg_competition')
+   AND CONSTRAINT_NAME IN ('fk_equipe_club2','fk_equipe_club3','fk_ja_departement')
  ORDER BY TABLE_NAME, CONSTRAINT_NAME;
 
 
 -- =============================================================================
 -- ROLLBACK (à décommenter uniquement en cas de besoin)
 -- =============================================================================
--- ALTER TABLE equipe               DROP FOREIGN KEY fk_equipe_club2;
--- ALTER TABLE equipe               DROP FOREIGN KEY fk_equipe_club3;
--- ALTER TABLE ja                   DROP FOREIGN KEY fk_ja_departement;
--- ALTER TABLE disponible_regionale DROP FOREIGN KEY fk_dispreg_ja;
--- ALTER TABLE disponible_regionale DROP FOREIGN KEY fk_dispreg_competition;
+-- ALTER TABLE equipe DROP FOREIGN KEY fk_equipe_club2;
+-- ALTER TABLE equipe DROP FOREIGN KEY fk_equipe_club3;
+-- ALTER TABLE ja     DROP FOREIGN KEY fk_ja_departement;

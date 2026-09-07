@@ -11,13 +11,35 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-liste-edit.css') ?>">
     <style>
         #panel-liste { width: 65%; }
+
+        /* Bandeau de filtres : comboboxes « label en encoche » (nijac.css .combo-field),
+           strip clair — même style qu'EA81 / EA92 / EA95. */
+        #menu-strip {
+            --strip-bg: #f8fafc;
+            background: #f8fafc;
+            border-bottom: 1px solid #dde5f0;
+            padding: .4rem .75rem;
+            flex-wrap: wrap;
+        }
+        #menu-strip > .strip-titre { font-weight: 700; color: var(--nijac-blue); margin-right: .25rem; }
+        #menu-strip .btn { margin-top: .6rem; border-radius: 999px; }
+        /* Badge « n / n » : pastille arrondie (.count-badge), en surchargeant
+           le #lbl-count de nijac-liste-edit.css (plus spécifique). */
+        #menu-strip #lbl-count {
+            margin-left: 0; margin-top: .6rem;
+            height: 2.15rem; padding: 0 .9rem;
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 5.5rem;
+            background: #eef2f9; border: 1.5px solid #d3dae6; border-radius: 999px;
+            font-size: .82rem; font-weight: 700; color: var(--nijac-blue);
+        }
     </style>
 </head>
 <body>
 
 <?= view('partials/page_header', [
     'phIcon' => 'people-fill', 'phTitle' => 'Gestion des équipes', 'phCode' => 'EA94',
-    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
+    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu') . '#tab-tables', 'phBackUrl' => site_url('admin-menu') . '#tab-tables',
 ]) ?>
 
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowPwdWarning' => false]) ?>
@@ -25,19 +47,32 @@
 <div id="split-container">
 
     <div id="panel-liste">
-        <div id="liste-header">
-            <span>Équipes</span>
-            <select id="sel-club" class="filter-ctl" style="width:auto;">
-                <option value="">— Tous clubs —</option>
-            </select>
-            <select id="sel-departement" class="filter-ctl" style="width:auto;">
-                <option value="">Tous</option>
-            </select>
-            <select id="sel-division" class="filter-ctl" style="width:180px;">
-                <option value="">— Toutes divisions —</option>
-            </select>
-            <input type="search" id="search-nom" class="filter-ctl" placeholder="Nom…" style="width:260px;">
-            <span id="lbl-count">0 / 0</span>
+        <div id="menu-strip">
+            <span class="count-badge" id="lbl-count">0 / 0</span>
+            <span style="flex:1"></span>
+            <span class="strip-titre">Équipes</span>
+            <span class="combo-field">
+                <label for="sel-club">Club</label>
+                <select id="sel-club" style="width:auto;">
+                    <option value="">— Tous clubs —</option>
+                </select>
+            </span>
+            <span class="combo-field">
+                <label for="sel-departement">Département</label>
+                <select id="sel-departement" style="width:auto;">
+                    <option value="">Tous</option>
+                </select>
+            </span>
+            <span class="combo-field">
+                <label for="sel-division">Division</label>
+                <select id="sel-division" style="width:180px;">
+                    <option value="">— Toutes divisions —</option>
+                </select>
+            </span>
+            <span class="combo-field">
+                <label for="search-nom">Recherche</label>
+                <input type="search" id="search-nom" placeholder="Nom…" style="width:260px;">
+            </span>
         </div>
         <div id="table-wrapper">
             <table id="tbl-equipes">

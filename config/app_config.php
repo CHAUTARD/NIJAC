@@ -75,20 +75,15 @@ function initTableConfiguration(\PDO $pdo): void
     }
 
     // FK implicites ajoutées (09/2026) : ententes de clubs (equipe.Id_Club2 /
-    // Id_Club3), département de rattachement du JA (ja.CodeDept) et
-    // disponibilités régionales (disponible_regionale). Idempotent (garde
-    // information_schema). Id_Club2/3 et CodeDept : ON DELETE SET NULL (un club
-    // ou un département qui disparaît ne doit pas effacer l'équipe / le JA).
-    // disponible_regionale : ON DELETE CASCADE (mêmes règles que fk_disponible_ja
-    // et que la purge en cascade d'EA84). Aucune valeur orpheline en base au
-    // moment de l'ajout — voir SQL/2026-09_fk_manquantes.sql pour le détail /
-    // les contrôles de pré-vol côté prod.
+    // Id_Club3) et département de rattachement du JA (ja.CodeDept). Idempotent
+    // (garde information_schema). ON DELETE SET NULL (un club ou un département
+    // qui disparaît ne doit pas effacer l'équipe / le JA). Aucune valeur
+    // orpheline en base au moment de l'ajout — voir SQL/2026-09_fk_manquantes.sql
+    // pour le détail / les contrôles de pré-vol côté prod.
     foreach ([
         ['equipe',              'fk_equipe_club2',       'Id_Club2',                'club',                  'Id_Club',                 'SET NULL'],
         ['equipe',              'fk_equipe_club3',       'Id_Club3',                'club',                  'Id_Club',                 'SET NULL'],
         ['ja',                  'fk_ja_departement',     'CodeDept',                'departement',           'CodeDept',                'SET NULL'],
-        ['disponible_regionale','fk_dispreg_ja',         'Id_JA',                   'ja',                    'Id_JA',                   'CASCADE'],
-        ['disponible_regionale','fk_dispreg_competition', 'Id_CompetitionRegionale', 'competition_regionale', 'Id_CompetitionRegionale', 'CASCADE'],
     ] as [$table, $contrainte, $col, $refTable, $refCol, $onDelete]) {
         try {
             $existe = $pdo->query(
@@ -315,13 +310,6 @@ function assurerTemplateExpirationFfttApi(\PDO $pdo): void
 }
 
 /**
- * Garantit l'existence du message système n°8 "Dispo régionale" (ENUM messagerie.Type +
- * une ligne de gabarit, marqueur {URL_DISPO_REGIONALE_JA}) — invite un JA à saisir ses
- * disponibilités pour le championnat régional (EN23, dispo-regionale-ja), éditable ensuite
- * comme les autres modèles système via EA93. Id_Messagerie fixé à 8 explicitement (demandé),
- * l'AUTO_INCREMENT de la table ayant déjà dépassé cette valeur. Idempotente.
- */
-/**
  * Modèle « JA Club » (Id_Messagerie = 7) : email envoyé au correspondant d'un
  * club recevant en arbitrage club (EN14), demandant le nom du JA qui arbitrera
  * la rencontre via la page publique {URL_ARBITRE_CLUB} (EN25). Remplit la ligne
@@ -459,26 +447,6 @@ function verifierJetonResetMdp(string $jeton, callable $lookupHash): ?int
     return hash_equals($attendu, $sig) ? (int) $id : null;
 }
 
-function assurerTemplateDispoRegionale(\PDO $pdo): void
-{
-    ajouterTypeMessagerie($pdo, 'Dispo régionale');
-
-    $existe = $pdo->query('SELECT 1 FROM messagerie WHERE Id_Messagerie = 8')->fetch();
-    if ($existe) {
-        return;
-    }
-
-    $pdo->prepare('INSERT INTO messagerie (Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, Cc) VALUES (8, ?, ?, ?, NULL, 0)')
-        ->execute([
-            'Dispo régionale',
-            'Championnat Régional {YEAR_PHASE} - Vos disponibilités',
-            "Bonjour {PRENOM} {NOM},\n\n"
-            . "Merci de bien vouloir renseigner vos disponibilités pour le Championnat Régional par équipes {YEAR_PHASE} "
-            . "en suivant ce lien :\n{URL_DISPO_REGIONALE_JA}\n\n"
-            . "Sportivement,\n{UTI_PRENOM} {UTI_NOM}",
-        ]);
-}
-
 /**
  * Envoie un rappel par email aux administrateurs actifs quand l'expiration des identifiants
  * API FFTT approche (2 mois, soit 60 jours) ou est dépassée — à demander à prolonger auprès de
@@ -592,7 +560,6 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
         '{URL_ADRESSE_JA}'       => $token !== '' ? (site_url('adresse-ja') . '?ja=' . $token) : '',
         '{URL_DISPONIBILITE_JA}' => $token !== '' ? (site_url('disponibilite-ja') . '?ja=' . $token) : '',
         '{URL_ATTESTATION_JA}'   => $token !== '' ? (site_url('attestation-defisc') . '?ja=' . $token) : '',
-        '{URL_DISPO_REGIONALE_JA}' => $token !== '' ? (site_url('dispo-regionale-ja') . '?ja=' . $token) : '',
         '{URL_INFO_RENCONTRE}'   => $token !== '' ? (site_url('info-rencontre') . '?ja=' . $token) : '',
         // Forme "chemin" (sans ?, = ni &) : robuste aux emails texte brut /
         // quoted-printable où l'ancienne query string se faisait tronquer.

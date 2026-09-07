@@ -451,5 +451,12 @@
     <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
     <script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
     <script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
+    <script>
+        // Onglet ciblé par le hash d'URL (ex. retour d'EA93 vers #tab-tables).
+        if (location.hash) {
+            const btn = document.querySelector('#menu-tabs [data-bs-target="' + location.hash + '"]');
+            if (btn) new bootstrap.Tab(btn).show();
+        }
+    </script>
 </body>
 </html>

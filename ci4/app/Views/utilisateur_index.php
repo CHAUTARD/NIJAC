@@ -32,7 +32,7 @@
 <!-- En-tête : recopié de includes/page_header.php -->
 <?= view('partials/page_header', [
     'phIcon' => 'people-fill', 'phTitle' => 'Gestion des utilisateurs', 'phCode' => 'EA86',
-    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
+    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu') . '#tab-tables', 'phBackUrl' => site_url('admin-menu') . '#tab-tables',
 ]) ?>
 
 <!-- Toolbar : recopié de includes/toolbar.php -->

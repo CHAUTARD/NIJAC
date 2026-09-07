@@ -11,20 +11,28 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-liste-edit.css') ?>">
     <style>
         #panel-liste { width: 65%; }
-        #liste-header { justify-content: space-between; }
-        #search-input {
-            font-size: .82rem;
-            padding: .32rem .7rem;
-            border: 1.5px solid #d3dae6;
-            border-radius: 12px;
-            width: 200px;
+
+        /* Bandeau de filtres : comboboxes « label en encoche » (nijac.css .combo-field),
+           strip clair — même style qu'EA81 / EA95. */
+        #menu-strip {
+            --strip-bg: #f8fafc;
+            background: #f8fafc;
+            border-bottom: 1px solid #dde5f0;
+            padding: .4rem .75rem;
+            flex-wrap: wrap;
         }
-        #search-input:focus { outline: none; border-color: var(--nijac-blue); }
-        #sel-division {
-            font-size: .82rem; font-weight: 600; color: var(--nijac-blue);
-            padding: .32rem .7rem; border: 1.5px solid #d3dae6; border-radius: 12px; background: #fff;
+        #menu-strip > .strip-titre { font-weight: 700; color: var(--nijac-blue); margin-right: .25rem; }
+        #menu-strip .btn { margin-top: .6rem; border-radius: 999px; }
+        /* Badge « n / n » : pastille arrondie (.count-badge), en surchargeant
+           le #lbl-count de nijac-liste-edit.css (plus spécifique). */
+        #menu-strip #lbl-count {
+            margin-left: 0; margin-top: .6rem;
+            height: 2.15rem; padding: 0 .9rem;
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 5.5rem;
+            background: #eef2f9; border: 1.5px solid #d3dae6; border-radius: 999px;
+            font-size: .82rem; font-weight: 700; color: var(--nijac-blue);
         }
-        #sel-division:focus { outline: none; border-color: var(--nijac-blue); }
 
         #import-result {
             margin: .6rem .75rem 0;
@@ -52,7 +60,7 @@
 
 <?= view('partials/page_header', [
     'phIcon' => 'people-fill', 'phTitle' => 'Équipes régionales', 'phCode' => 'EA92',
-    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
+    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu') . '#tab-tables', 'phBackUrl' => site_url('admin-menu') . '#tab-tables',
 ]) ?>
 
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowPwdWarning' => false]) ?>
@@ -60,17 +68,24 @@
 <div id="split-container">
 
     <div id="panel-liste">
-        <div id="liste-header">
-            <span>Équipes <span id="lbl-count">0 / 0</span></span>
-            <div style="display:flex;align-items:center;gap:.5rem;">
-                <button type="button" class="btn btn-sm btn-light" id="btn-importer-txt" title="Importer club_Reg_R4.PN.txt">
-                    <i class="bi bi-upload me-1"></i>Importer .txt
-                </button>
+        <div id="menu-strip">
+            <button type="button" class="btn btn-sm btn-light" id="btn-importer-txt" title="Importer club_Reg_R4.PN.txt">
+                <i class="bi bi-upload me-1"></i>Importer .txt
+            </button>
+            <span style="flex:1"></span>
+            <span class="count-badge" id="lbl-count">0 / 0</span>
+            <span style="flex:1"></span>
+            <span class="strip-titre">Équipes</span>
+            <span class="combo-field">
+                <label for="sel-division">Division</label>
                 <select id="sel-division" style="width:auto;min-width:250px;">
                     <option value="">Toutes les divisions</option>
                 </select>
-                <input type="search" id="search-input" placeholder="🔍 Rechercher…">
-            </div>
+            </span>
+            <span class="combo-field">
+                <label for="search-input">Recherche</label>
+                <input type="search" id="search-input" placeholder="Nom, club, division…" style="width:220px;">
+            </span>
         </div>
         <input type="file" id="file-input-txt" accept=".txt,.csv" style="display:none">
         <div id="import-result" style="display:none;"></div>

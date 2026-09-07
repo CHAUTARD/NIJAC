@@ -26,20 +26,24 @@
         #tbl-depts th.th-calc,
         #txt-limitrophe-region { color: #0b7285; font-style: italic; }
 
-        /* Barre de filtre : bords arrondis façon combobox (asset/css/nijac.css) */
-        #filtre-bar input, #filtre-bar select {
-            font-size: .82rem; padding: .3rem .6rem;
-            border: 1.5px solid #d3dae6; border-radius: 12px; background: #fff;
+        /* Bandeau de filtres : comboboxes « label en encoche » (nijac.css .combo-field),
+           strip clair — même style qu'EA92 / EA94 / EA95. */
+        #menu-strip {
+            --strip-bg: #f8fafc;
+            background: #f8fafc;
+            border-bottom: 1px solid #dde5f0;
+            padding: .4rem .75rem;
+            flex-wrap: wrap;
         }
-        #filtre-bar select { font-weight: 600; color: var(--nijac-blue); }
-        #filtre-bar input:focus, #filtre-bar select:focus { outline: none; border-color: var(--nijac-blue); }
+        #menu-strip > .strip-titre { font-weight: 700; color: var(--nijac-blue); margin-right: .25rem; }
+        #menu-strip .btn { margin-top: .6rem; border-radius: 999px; }
     </style>
 </head>
 <body>
 
 <?= view('partials/page_header', [
     'phIcon' => 'geo-alt-fill', 'phTitle' => 'Départements', 'phCode' => 'EA90',
-    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
+    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu') . '#tab-tables', 'phBackUrl' => site_url('admin-menu') . '#tab-tables',
 ]) ?>
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
@@ -50,13 +54,20 @@
 <div id="split-container">
 
     <div id="panel-liste">
-        <div id="liste-header">Départements</div>
-        <div id="filtre-bar" style="padding:.35rem .5rem; background:#f0f4fa; border-bottom:1px solid #c8d4e8; display:flex; gap:.4rem; align-items:center; flex-shrink:0;">
-            <input type="search" id="filtre-texte" placeholder="Code ou nom…" style="width:130px;">
-            <select id="filtre-region" style="flex:1; min-width:0;">
-                <option value="">Toutes les régions</option>
-            </select>
-            <button id="btn-filtre-reset" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Effacer les filtres"><i class="bi bi-x-lg"></i></button>
+        <div id="menu-strip">
+            <span class="strip-titre">Départements</span>
+            <span style="flex:1"></span>
+            <span class="combo-field">
+                <label for="filtre-region">Région</label>
+                <select id="filtre-region" style="width:auto;min-width:180px;">
+                    <option value="">Toutes les régions</option>
+                </select>
+            </span>
+            <span class="combo-field">
+                <label for="filtre-texte">Recherche</label>
+                <input type="search" id="filtre-texte" placeholder="Code ou nom…" style="width:150px;">
+            </span>
+            <button id="btn-filtre-reset" class="btn btn-sm btn-light" title="Effacer les filtres"><i class="bi bi-x-lg"></i></button>
         </div>
         <div id="table-wrapper">
             <table id="tbl-depts">

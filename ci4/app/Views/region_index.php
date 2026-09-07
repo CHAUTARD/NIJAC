@@ -11,13 +11,22 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-liste-edit.css') ?>">
     <style>
         #panel-liste { width: 60%; }
+
+        /* Bandeau de titre : strip clair — même style qu'EA92 / EA94 / EA95. */
+        #menu-strip {
+            --strip-bg: #f8fafc;
+            background: #f8fafc;
+            border-bottom: 1px solid #dde5f0;
+            padding: .4rem .75rem;
+        }
+        #menu-strip > .strip-titre { font-weight: 700; color: var(--nijac-blue); }
     </style>
 </head>
 <body>
 
 <?= view('partials/page_header', [
     'phIcon' => 'map-fill', 'phTitle' => 'Régions', 'phCode' => 'EA88',
-    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
+    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu') . '#tab-tables', 'phBackUrl' => site_url('admin-menu') . '#tab-tables',
 ]) ?>
 
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowPwdWarning' => false]) ?>
@@ -25,7 +34,7 @@
 <div id="split-container">
 
     <div id="panel-liste">
-        <div id="liste-header">Régions</div>
+        <div id="menu-strip"><span class="strip-titre">Régions</span></div>
         <div id="table-wrapper">
             <table id="tbl-regions">
                 <thead>

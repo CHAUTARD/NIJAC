@@ -54,7 +54,7 @@
 
 <?= view('partials/page_header', [
     'phIcon' => 'plug-fill', 'phTitle' => 'Test API FFTT', 'phCode' => 'EA96',
-    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
+    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu') . '#tab-dba', 'phBackUrl' => site_url('admin-menu') . '#tab-dba',
 ]) ?>
 
 <!-- Toolbar : recopié de includes/toolbar.php -->

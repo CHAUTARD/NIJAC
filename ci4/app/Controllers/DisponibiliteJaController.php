@@ -19,9 +19,8 @@ use CodeIgniter\HTTP\ResponseInterface;
  * date = bascule Disponible / Non disponible (et vice-versa) ; le passage en
  * Disponible ouvre une popup pour une Note facultative et, si le Commentaire
  * de la date en contient, le choix du/des département(s) concerné(s) parmi
- * 14/27/50/61/76 (stockés dans `disponible.Departement`/`disponible.Note`,
- * même convention que `disponible_regionale` utilisée par EN23). Accessible
- * via ?ja=TOKEN (Obfuscator) ou ?id_ja=N en clair. Lien généré depuis EN11
+ * 14/27/50/61/76 (stockés dans `disponible.Departement`/`disponible.Note`).
+ * Accessible via ?ja=TOKEN (Obfuscator) ou ?id_ja=N en clair. Lien généré depuis EN11
  * (Juge-Arbitre, action "token") ou utilisé directement depuis EN13
  * (Disponibilités, ?id_ja=N).
  */

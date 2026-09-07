@@ -47,6 +47,7 @@ class ConvocationJaController extends BaseController
         $tokenCnv     = trim((string) ($cnvSeg ?? $this->request->getGet('cnv') ?? ''));
         $idJa         = 0;
         $idRencontre  = 0;
+        $erreur       = '';
 
         // Le lien est jetonné (comme adresse-ja/disponibilite-ja) depuis l'ajout
         // du token ?cnv= : un ?nomination=N seul (anciens liens déjà envoyés par
@@ -55,20 +56,33 @@ class ConvocationJaController extends BaseController
         $tokenValide = $idNomination > 0 && $tokenCnv !== '' && $this->obf->deobfuscate($tokenCnv) === $idNomination;
 
         if ($tokenValide) {
-            $row = $pdo->prepare('
-                SELECT d.Id_JA, n.Id_Rencontre
-                FROM nomination n JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
-                WHERE n.Id_Nomination = ?
-            ');
-            $row->execute([$idNomination]);
-            $row = $row->fetch();
-            if ($row) {
-                $idJa        = (int) $row['Id_JA'];
-                $idRencontre = (int) $row['Id_Rencontre'];
+            // Résolution en étapes pour un diagnostic précis quand ça échoue :
+            // nomination absente / Id_Disponible cassé / rencontre absente.
+            $nom = $pdo->prepare('SELECT Id_Disponible, Id_Rencontre FROM nomination WHERE Id_Nomination = ?');
+            $nom->execute([$idNomination]);
+            $nom = $nom->fetch();
+
+            if (!$nom) {
+                $erreur = "Convocation n° $idNomination inconnue en base — le lien est probablement obsolète "
+                        . "(données de saison réinitialisées depuis l'envoi). Demandez au responsable des "
+                        . "désignations de vous renvoyer votre convocation.";
+            } else {
+                $idRencontre = (int) ($nom['Id_Rencontre'] ?? 0);
+                if (!empty($nom['Id_Disponible'])) {
+                    $d = $pdo->prepare('SELECT Id_JA FROM disponible WHERE Id_Disponible = ?');
+                    $d->execute([$nom['Id_Disponible']]);
+                    $idJa = (int) $d->fetchColumn();
+                }
+                if (!$idJa || !$idRencontre) {
+                    $erreur = "Convocation n° $idNomination incomplète en base : "
+                            . (!$idJa
+                                ? "le juge-arbitre rattaché n'est plus retrouvable (la disponibilité liée a été supprimée). "
+                                : "la rencontre associée est absente. ")
+                            . "Le responsable des désignations doit refaire la nomination puis renvoyer la convocation.";
+                }
             }
         }
 
-        $erreur        = '';
         $ja            = null;
         $rencontre     = null;
         $correspondant = null;
@@ -160,16 +174,9 @@ class ConvocationJaController extends BaseController
             $erreur = 'Paramètre nomination manquant.';
         } elseif (!$tokenValide) {
             $erreur = 'Lien de convocation invalide. Merci de redemander l\'envoi de votre convocation.';
-        } else {
-            // Jeton valide et nomination existante, mais la jointure vers
-            // `disponible` n'a rien renvoyé : la ligne `disponible` liée a
-            // disparu (nomination orpheline — restauration partielle de table,
-            // purge de saison…). Le JA n'est plus rattachable : il faut refaire
-            // la nomination dans EN14.
-            $erreur = "Convocation n° $idNomination incomplète : la disponibilité liée est "
-                    . "introuvable en base (nomination orpheline). Merci de refaire la "
-                    . "nomination puis de renvoyer la convocation.";
         }
+        // Jeton valide mais données incomplètes : $erreur a déjà été renseigné
+        // précisément dans le bloc de résolution ci-dessus.
 
         $indemniteForfait = (float) getConfig('indemnite_forfaitaire', '25.00');
         $tauxKm           = (float) getConfig('frais_kilometrique', '0.30');

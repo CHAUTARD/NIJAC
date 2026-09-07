@@ -60,11 +60,21 @@
 </head>
 <body>
 
+<?php
+// Retour : CSR -> menu CSR ; Admin -> menu admin, onglet « Gestion des tables » (#tab-tables) ; Nominateur -> menu nominateur.
+if ($isCsr) {
+    $backLabel = 'CSR';         $backUrl = site_url('csr-menu');
+} elseif ($isAdmin) {
+    $backLabel = 'Admin';       $backUrl = site_url('admin-menu') . '#tab-tables';
+} else {
+    $backLabel = 'Nominateur';  $backUrl = site_url('nominateur-menu');
+}
+?>
 <?= view('partials/page_header', [
     'phIcon' => 'envelope-fill', 'phTitle' => 'Gestion des messages', 'phCode' => 'EA93',
-    'phCrumbLabel' => $isCsr ? 'CSR' : 'Nominateur',
-    'phCrumbUrl'   => site_url($isCsr ? 'csr-menu' : 'nominateur-menu'),
-    'phBackUrl'    => site_url($isCsr ? 'csr-menu' : 'nominateur-menu'),
+    'phCrumbLabel' => $backLabel,
+    'phCrumbUrl'   => $backUrl,
+    'phBackUrl'    => $backUrl,
     'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
 ]) ?>
 

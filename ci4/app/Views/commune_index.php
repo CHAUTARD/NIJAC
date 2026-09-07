@@ -192,7 +192,7 @@
 
 <?= view('partials/page_header', [
     'phIcon' => 'mailbox2', 'phTitle' => 'Gestion des communes (La Poste)', 'phCode' => 'EA87',
-    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
+    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu') . '#tab-tables', 'phBackUrl' => site_url('admin-menu') . '#tab-tables',
 ]) ?>
 
 <!-- Toolbar : recopié de includes/toolbar.php -->

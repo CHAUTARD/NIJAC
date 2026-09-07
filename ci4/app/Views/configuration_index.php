@@ -36,14 +36,18 @@
         }
 
         /* ── Contenu ── */
-        #main-content {
-            flex: 1;
+        .params-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             align-items: start;
             padding: 2rem 1.5rem;
             gap: 1.25rem;
         }
+        /* Onglet Départements : une seule carte, pleine largeur. */
+        #sub-departements .params-grid { grid-template-columns: 1fr; }
+        /* Onglet Emails : Email dév compact à gauche, SMTP large à droite (même ligne). */
+        #sub-emails .params-grid { grid-template-columns: minmax(260px, 1fr) 2fr; }
+        #sub-emails .smtp-grid  { grid-template-columns: 1fr; }
 
         /* ── Carte paramètre ── */
         .param-card {
@@ -173,6 +177,20 @@
             color: var(--nijac-blue); border-bottom-color: var(--nijac-blue);
             background: transparent;
         }
+        /* Sous-onglets de « Paramètres » */
+        .params-subtabs {
+            background: #f8fafc; padding: 0 1.5rem;
+            border-bottom: 1px solid #dde5f0; flex-shrink: 0;
+        }
+        .params-subtabs .nav-link {
+            font-size: .82rem; font-weight: 600; color: #555;
+            border: none; border-bottom: 3px solid transparent;
+            padding: .5rem .95rem;
+        }
+        .params-subtabs .nav-link.active {
+            color: var(--nijac-blue); border-bottom-color: var(--nijac-blue);
+            background: transparent;
+        }
         .tab-content { display: flex; flex-direction: column; }
         #tab-table { flex: 1; display: flex; flex-direction: column; padding: 1.25rem 1.5rem; }
 
@@ -283,7 +301,7 @@
 
 <?= view('partials/page_header', [
     'phIcon' => 'gear-fill', 'phTitle' => 'Configuration générale', 'phCode' => 'EA91',
-    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
+    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu') . '#tab-tables', 'phBackUrl' => site_url('admin-menu') . '#tab-tables',
 ]) ?>
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
@@ -313,7 +331,17 @@
 
 <div class="tab-content" style="flex:1;overflow:auto;">
 <div class="tab-pane fade show active" id="tab-params" role="tabpanel">
-<div id="main-content">
+
+<ul class="nav nav-tabs params-subtabs" id="params-subtabs" role="tablist">
+    <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#sub-general" type="button" role="tab"><i class="bi bi-sliders me-1"></i>Général</button></li>
+    <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#sub-nominations" type="button" role="tab"><i class="bi bi-person-check me-1"></i>Nominations &amp; frais</button></li>
+    <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#sub-departements" type="button" role="tab"><i class="bi bi-map-fill me-1"></i>Départements</button></li>
+    <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#sub-emails" type="button" role="tab"><i class="bi bi-envelope-fill me-1"></i>Emails</button></li>
+</ul>
+
+<div class="tab-content params-subcontent">
+<div class="tab-pane fade show active" id="sub-general" role="tabpanel">
+<div class="params-grid">
 
     <!-- ── Paramètre : État du logiciel ── -->
     <div class="param-card">
@@ -371,44 +399,8 @@
         </div>
     </div>
 
-    <!-- ── Paramètre : Email de développement ── -->
-    <div class="param-card">
-        <div class="param-card-head">
-            <i class="bi bi-envelope-at-fill param-icon"></i>
-            <div>
-                <h2>Email de développement</h2>
-                <small>Destinataire de tous les emails en mode Développement</small>
-            </div>
-        </div>
-        <div class="param-card-body">
-
-            <p style="font-size:.85rem;color:#374151;margin-bottom:1.1rem;">
-                En mode <strong>Développement</strong>, chaque email envoyé par l'application
-                est redirigé vers cette adresse au lieu du destinataire réel.
-                Modifiez-la si vous souhaitez recevoir les emails de test sur une autre boîte.
-            </p>
-
-            <div class="email-dev-group">
-                <label for="input-email-dev">
-                    <i class="bi bi-envelope-fill me-1"></i>Adresse email de redirection
-                </label>
-                <div class="email-dev-row">
-                    <input type="email" id="input-email-dev"
-                           value="<?= esc($emailDev) ?>"
-                           placeholder="ex : dev@mondomaine.fr"
-                           autocomplete="off">
-                    <button id="btn-sauvegarder-email">
-                        <i class="bi bi-floppy-fill me-1"></i>Enregistrer
-                    </button>
-                </div>
-                <div id="msg-result-email"></div>
-            </div>
-
-        </div>
-    </div>
-
     <!-- ── Paramètre : Site de la ligue ── -->
-    <div class="param-card" style="grid-column:1 / -1">
+    <div class="param-card">
         <div class="param-card-head">
             <i class="bi bi-globe2 param-icon"></i>
             <div>
@@ -441,6 +433,41 @@
         </div>
     </div>
 
+    <!-- ── Paramètre : Sauvegardes ── -->
+    <div class="param-card">
+        <div class="param-card-head">
+            <i class="bi bi-archive-fill param-icon"></i>
+            <div>
+                <h2>Sauvegardes</h2>
+                <small>Sauvegarde totale de la base (EA85)</small>
+            </div>
+        </div>
+        <div class="param-card-body">
+
+            <div class="email-dev-group">
+                <label for="input-backup-full-garder">
+                    <i class="bi bi-clock-history me-1"></i>Nombre de sauvegardes totales à conserver
+                </label>
+                <div class="email-dev-row">
+                    <input type="number" id="input-backup-full-garder" step="1" min="1"
+                           value="<?= esc($backupFullGarder) ?>"
+                           autocomplete="off">
+                    <button id="btn-sauvegarder-backup-full-garder">
+                        <i class="bi bi-floppy-fill me-1"></i>Enregistrer
+                    </button>
+                </div>
+                <div id="msg-result-backup-full-garder"></div>
+            </div>
+
+        </div>
+    </div>
+
+</div><!-- /.params-grid (Général) -->
+</div><!-- /#sub-general -->
+
+<div class="tab-pane fade" id="sub-nominations" role="tabpanel">
+<div class="params-grid">
+
     <!-- ── Paramètre : Nomination JA ── -->
     <div class="param-card">
         <div class="param-card-head">
@@ -468,7 +495,7 @@
         </div>
     </div>
 
-    <!-- ── Paramètre : Frais JA ── -->
+    <!-- ── Paramètre : Indemnités et frais JA ── -->
     <div class="param-card">
         <div class="param-card-head">
             <i class="bi bi-cash-coin param-icon"></i>
@@ -513,10 +540,19 @@
                 <div id="msg-result-frais-km"></div>
             </div>
 
-            <hr style="margin:1.2rem 0;">
-            <p style="font-size:.85rem;color:#374151;margin-bottom:1rem;">
-                <i class="bi bi-journal-text me-1"></i><strong>Paramètres comptables EBP</strong> — utilisés pour l'export du journal AC (ED55).
-            </p>
+        </div>
+    </div>
+
+    <!-- ── Paramètre : Comptabilité EBP ── -->
+    <div class="param-card">
+        <div class="param-card-head">
+            <i class="bi bi-journal-text param-icon"></i>
+            <div>
+                <h2>Comptabilité EBP</h2>
+                <small>Comptes utilisés pour l'export du journal AC (ED55)</small>
+            </div>
+        </div>
+        <div class="param-card-body">
 
             <div class="email-dev-group mb-3">
                 <label for="input-cpte-frais-km">
@@ -563,10 +599,19 @@
                 <div id="msg-result-code-analytique"></div>
             </div>
 
-            <hr style="margin:1.2rem 0;">
-            <p style="font-size:.85rem;color:#374151;margin-bottom:1rem;">
-                <i class="bi bi-calendar2-range me-1"></i><strong>Phases de saison</strong> — bornes utilisées pour le filtre rapide dans ED55 (format MM/JJ).
-            </p>
+        </div>
+    </div>
+
+    <!-- ── Paramètre : Phases de saison ── -->
+    <div class="param-card">
+        <div class="param-card-head">
+            <i class="bi bi-calendar2-range param-icon"></i>
+            <div>
+                <h2>Phases de saison</h2>
+                <small>Bornes du filtre rapide dans ED55 (format MM/JJ)</small>
+            </div>
+        </div>
+        <div class="param-card-body">
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
                 <div class="email-dev-group">
@@ -609,6 +654,12 @@
 
         </div>
     </div>
+
+</div><!-- /.params-grid (Nominations & frais) -->
+</div><!-- /#sub-nominations -->
+
+<div class="tab-pane fade" id="sub-departements" role="tabpanel">
+<div class="params-grid">
 
     <!-- ── Paramètre : Départements & règles d'association ── -->
     <div class="param-card">
@@ -690,37 +741,50 @@
         </div>
     </div>
 
-    <!-- ── Paramètre : Sauvegardes ── -->
+</div><!-- /.params-grid (Départements) -->
+</div><!-- /#sub-departements -->
+
+<div class="tab-pane fade" id="sub-emails" role="tabpanel">
+<div class="params-grid">
+
+    <!-- ── Paramètre : Email de développement ── -->
     <div class="param-card">
         <div class="param-card-head">
-            <i class="bi bi-archive-fill param-icon"></i>
+            <i class="bi bi-envelope-at-fill param-icon"></i>
             <div>
-                <h2>Sauvegardes</h2>
-                <small>Sauvegarde totale de la base (EA85)</small>
+                <h2>Email de développement</h2>
+                <small>Destinataire de tous les emails en mode Développement</small>
             </div>
         </div>
         <div class="param-card-body">
 
+            <p style="font-size:.85rem;color:#374151;margin-bottom:1.1rem;">
+                En mode <strong>Développement</strong>, chaque email envoyé par l'application
+                est redirigé vers cette adresse au lieu du destinataire réel.
+                Modifiez-la si vous souhaitez recevoir les emails de test sur une autre boîte.
+            </p>
+
             <div class="email-dev-group">
-                <label for="input-backup-full-garder">
-                    <i class="bi bi-clock-history me-1"></i>Nombre de sauvegardes totales à conserver
+                <label for="input-email-dev">
+                    <i class="bi bi-envelope-fill me-1"></i>Adresse email de redirection
                 </label>
                 <div class="email-dev-row">
-                    <input type="number" id="input-backup-full-garder" step="1" min="1"
-                           value="<?= esc($backupFullGarder) ?>"
+                    <input type="email" id="input-email-dev"
+                           value="<?= esc($emailDev) ?>"
+                           placeholder="ex : dev@mondomaine.fr"
                            autocomplete="off">
-                    <button id="btn-sauvegarder-backup-full-garder">
+                    <button id="btn-sauvegarder-email">
                         <i class="bi bi-floppy-fill me-1"></i>Enregistrer
                     </button>
                 </div>
-                <div id="msg-result-backup-full-garder"></div>
+                <div id="msg-result-email"></div>
             </div>
 
         </div>
     </div>
 
     <!-- ── Paramètre : Configuration SMTP ── -->
-    <div class="param-card" style="grid-column:1 / -1">
+    <div class="param-card">
         <div class="param-card-head">
             <i class="bi bi-send-fill param-icon"></i>
             <div>
@@ -805,8 +869,10 @@
         </div>
     </div>
 
-</div>
-</div>
+</div><!-- /.params-grid (Emails) -->
+</div><!-- /#sub-emails -->
+</div><!-- /.params-subcontent -->
+</div><!-- /#tab-params -->
 
 <!-- ── Onglet : Gestion complète de la table configuration ── -->
 <div class="tab-pane fade" id="tab-table" role="tabpanel">

@@ -419,13 +419,6 @@ $routes->get('club-csr/liste', 'ClubCsrController::liste', ['filter' => 'csrauth
 $routes->put('club-csr/(:segment)', 'ClubCsrController::modifier/$1', ['filter' => 'csrauth']);
 $routes->post('club-csr/envoyer', 'ClubCsrController::envoyer', ['filter' => 'csrauth']);
 
-// ── EN23 Disponibilités JA Championnat Régional ─────────────────────────────
-// Page PUBLIQUE (sans authentification), tokenisée par ?ja=TOKEN — comme
-// EN19/EN20/EN21/EN22. Remplace le formulaire Excel envoyé par email (message
-// système n°8, voir assurerTemplateDispoRegionale()).
-$routes->get('dispo-regionale-ja', 'DispoRegionaleJaController::index');
-$routes->post('dispo-regionale-ja/sauvegarder', 'DispoRegionaleJaController::sauvegarder');
-
 // ── E005 Menu Défiscalisateur ────────────────────────────────────────────────
 // Rôle Defiscalisateur ou Administrateur — voir DefiscalisateurAuth.php.
 $routes->get('defiscalisateur-menu', 'DefiscalisateurMenuController::index', ['filter' => 'defiscauth']);

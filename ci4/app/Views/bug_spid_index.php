@@ -23,7 +23,7 @@
 
 <?= view('partials/page_header', [
     'phIcon' => 'wrench-adjustable-circle', 'phTitle' => 'BugSpid — corrections de clubs dupliqués', 'phCode' => 'EA97',
-    'phCrumbLabel' => 'Admin BDD', 'phCrumbUrl' => site_url('db-admin'), 'phBackUrl' => site_url('db-admin'),
+    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu') . '#tab-dba', 'phBackUrl' => site_url('admin-menu') . '#tab-dba',
 ]) ?>
 
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => '', 'tbShowPwdWarning' => false]) ?>

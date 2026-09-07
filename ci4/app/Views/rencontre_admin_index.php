@@ -41,7 +41,7 @@
 
 <?= view('partials/page_header', [
     'phIcon' => 'calendar3', 'phTitle' => 'Gestion des rencontres', 'phCode' => 'EA95',
-    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
+    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu') . '#tab-tables', 'phBackUrl' => site_url('admin-menu') . '#tab-tables',
 ]) ?>
 
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowPwdWarning' => false]) ?>
@@ -50,6 +50,12 @@
 
     <div id="panel-liste">
         <div id="menu-strip">
+            <button type="button" class="btn btn-sm btn-outline-warning" id="btn-doublons" title="N'afficher que les rencontres en doublon : même affiche (domicile / extérieur / phase), quelles que soient la date, l'heure ou la journée">
+                <i class="bi bi-files"></i> Doublons
+            </button>
+            <span style="flex:1"></span>
+            <span class="count-badge" id="lbl-count">0 / 0</span>
+            <span style="flex:1"></span>
             <span class="strip-titre">Rencontres</span>
             <span class="combo-field">
                 <label for="search-equipe">Équipe</label>
@@ -88,14 +94,9 @@
                     <option value="">Toutes</option>
                 </select>
             </span>
-            <button type="button" class="btn btn-sm btn-outline-warning" id="btn-doublons" title="N'afficher que les rencontres en doublon : même affiche (domicile / extérieur / phase), quelles que soient la date, l'heure ou la journée">
-                <i class="bi bi-files"></i> Doublons
-            </button>
             <button type="button" class="btn btn-sm btn-light" id="btn-reset-filtres" title="Réinitialiser les filtres">
                 <i class="bi bi-x-circle"></i>
             </button>
-            <span style="flex:1"></span>
-            <span class="count-badge" id="lbl-count">0 / 0</span>
         </div>
         <div id="table-wrapper">
             <table id="tbl-rencontres">

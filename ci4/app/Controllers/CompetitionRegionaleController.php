@@ -10,7 +10,7 @@ use CodeIgniter\HTTP\ResponseInterface;
  * CRUD admin du calendrier (date/heure) des rencontres régionales, table
  * `competition_regionale` — voir DisponibilitesController pour la création
  * de la table et le seed initial (fichier "Disponibilités JA 2ème phase",
- * Importation/), et DispoRegionaleJaController (EN23) qui l'exploite côté JA.
+ * Importation/).
  *
  * Pas de Model : table à 2 colonnes, reste au raw PDO comme le contrôleur qui
  * l'a introduite (DisponibilitesController) plutôt que de mélanger les deux
@@ -96,7 +96,6 @@ class CompetitionRegionaleController extends BaseController
         }
 
         getPDO()->prepare('DELETE FROM competition_regionale WHERE Id_CompetitionRegionale = ?')->execute([$id]);
-        getPDO()->prepare('DELETE FROM disponible_regionale WHERE Id_CompetitionRegionale = ?')->execute([$id]);
 
         return $this->response->setJSON(['ok' => true, 'msg' => 'Date supprimée.']);
     }

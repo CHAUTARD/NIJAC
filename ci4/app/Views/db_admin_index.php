@@ -176,7 +176,7 @@
 
 <?= view('partials/page_header', [
     'phIcon' => 'database-fill-gear', 'phTitle' => 'Administration base de données', 'phCode' => 'EA98',
-    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu'), 'phBackUrl' => site_url('admin-menu'),
+    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu') . '#tab-dba', 'phBackUrl' => site_url('admin-menu') . '#tab-dba',
 ]) ?>
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
