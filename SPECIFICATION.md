@@ -274,7 +274,7 @@ Gérer la liste complète des Juges-Arbitres : import depuis fichier FFTT, consu
 | `importer_excel` | POST | Import depuis fichier Excel FFTT (upsert par licence) |
 | `clubs_par_dept` | GET | Liste des clubs du département |
 | `maj_laposte` | POST | Met à jour `Id_LaPoste` d'un JA |
-| `maj_bdd` | POST | Créer ou modifier un JA |
+| `maj_bdd` | POST | Créer ou modifier un JA. En **UPDATE**, le `SET` est construit ligne par ligne : `DateValidationFFTT`, `Defiscalisation`, `Nationale`, `NumCompteEBP` ne sont réécrits **que si la ligne postée porte la clé correspondante**. Seul l'import CSV FFTT (`importer_excel`) fournit `date_validation_fftt` ; seule la modale Créer/Modifier fournit `defiscalisation` / `nationale` / `num_compte_ebp`. Un import FFTT (CSV ou API) ne transmet pas ces trois-là et **préserve donc la valeur en base**. |
 
 ### Affichage de la grille
 - Menu **Colonnes** (dropdown `<details>`, centré dans le bandeau entre le compteur « x/y JA » et le sélecteur Département) : une case par colonne pour l'afficher/masquer. Le sous-ensemble masqué est mémorisé dans `localStorage` (`nijac_en11_colonnes_cachees`), réappliqué à chaque rendu de la grille.
@@ -285,6 +285,7 @@ Gérer la liste complète des Juges-Arbitres : import depuis fichier FFTT, consu
 - Colonnes attendues : N° licence, Nom, Prénom, Grade, Club, Code postal, Ville
 - Comportement : upsert sur le N° licence
 - Normalisation automatique du nom de ville via la table `laposte`
+- L'import (CSV `102_*.csv` comme API FFTT) ne renseigne pas `Defiscalisation` / `Nationale` / `NumCompteEBP` : ces colonnes, gérées à la main dans la modale, ne sont jamais écrasées par un import (voir action `maj_bdd`).
 
 ### Règles
 - Seuls les JA avec `Actif = 1` sont proposés à la nomination (EN14)
@@ -589,7 +590,7 @@ Affiche la convocation officielle imprimable (format A4) d'un Juge-Arbitre pour 
 
 ### Interface
 - En-tête FFTT, identité du JA, détails de la rencontre (journée, division, poule, opposants, date, heure, salle)
-- Correspondant du club recevant (nom, téléphone)
+- Correspondant du club recevant : nom, **téléphone** et **courriel** (`Club.CorNom` / `CorTelephone` / `CorEmail`, tiret `–` si la donnée manque)
 - Tableau indemnités : indemnité forfaitaire (config `indemnite_forfaitaire`) + péages (saisis) + km (saisis) × tarif (config `frais_kilometrique`) = total, recalculé en JS à la saisie
 - Distance domicile JA ↔ salle pré-calculée par Haversine si aucun kilométrage n'a encore été saisi
 - Rapport JA (accueil/ambiance, équipements/salle) — zones de texte libres
@@ -685,31 +686,35 @@ Importer et gérer la liste des clubs affiliés à la ligue Normandie.
 **Accès :** rôle Defiscalisateur ou Administrateur (filtre `defiscauth`) — menu E005
 
 ### Objectif
-Récapituler, par JA ayant opté pour la défiscalisation, les frais de déplacement de l'**année civile en cours** (base des reçus fiscaux « abandon de frais »), et calculer le montant défiscalisable selon le **barème kilométrique fiscal** (table `ComptaDefiscalisation`, éditable en ED52).
+Récapituler, par JA ayant opté pour la défiscalisation, les frais de déplacement de l'**année fiscale** (base des reçus fiscaux « abandon de frais »), et calculer le montant défiscalisable selon le **barème kilométrique fiscal** (table `ComptaDefiscalisation`, éditable en ED52).
+
+### Année de référence
+- **Clé de configuration `annee_fiscale`** (éditable en EA91, champ « Année fiscale défiscalisation (ED51) », 4 chiffres 2000-2100, défaut = année système ; `getConfig('annee_fiscale', date('Y'))` — repli sur l'année système si vide/0).
+- La fenêtre est le **1ᵉʳ janvier → 31 décembre de cette année** (`anneeCivile()`), utilisée à la fois pour le cumul péages/km et pour le test d'inclusion `nomination.Defiscalisation = 1`.
+- Pas de sélecteur dans l'écran : un badge « Année fiscale AAAA » **centré** dans le bandeau. Chargement automatique au démarrage.
 
 ### Interface
-- Pas de sélecteur de période : année civile figée (1er janvier → 31 décembre), affichée dans un badge. Chargement automatique au démarrage.
 - 3 cartes résumé : *JA actifs défiscalisés*, *Total péages + km*, *Total défiscalisable (barème)*.
 - Tableau : JA, Adresse (CP Ville), Missions, Péages, Kilomètres, **Frais km + péages** (taux plat `frais_kilometrique`, inchangé), **CV** (menu déroulant `–` / `3` / `4` / `5` / `6` / `7 +`), **Élec.** (case à cocher), **Frais défiscalisables (barème)** ; ligne de totaux.
 - Saisie **inline** de CV / électrique : enregistrement AJAX immédiat puis rechargement de la liste (recalcul du barème côté serveur). Ligne sans CV → mention *« CV manquant »*.
 - Bouton **Gérer le barème** → ED52.
 - Colonne **case à cocher** en tête de ligne (+ case « tout cocher » dans l'en-tête, avec état indéterminé). À chaque (re)chargement, les lignes **sans CV renseigné** sont pré-cochées ; une ligne dont le JA n'a pas d'email (`HasEmail = 0` dans le payload `donnees`) a sa case désactivée.
-- Bouton **Relancer les JA cochés (N)** : email groupé aux JA cochés (confirmation `nijacConfirm`, `POST relancer-vehicule` avec `ids[]`) ; libellé et état actif/inactif suivent le nombre de cases cochées.
+- Bouton **Relancer les JA cochés (N)** (placé **à gauche** du bandeau) : email groupé aux JA cochés (confirmation `nijacConfirm`, `POST relancer-vehicule` avec `ids[]`) ; libellé et état actif/inactif suivent le nombre de cases cochées.
 - Bouton **Export CSV**.
 
 ### Population de la liste
-`LEFT JOIN` depuis `ja` (`WHERE ja.Actif = 1 AND ja.Defiscalisation = 1`) : les JA sans mission cette année apparaissent aussi, totaux à 0. Cumul via `nomination → disponible → ja`, rencontres dont `rencontre.Date` tombe dans l'année civile, nominations retenues si `Valide = 1 OR Peage IS NOT NULL OR Kilometre IS NOT NULL`.
+`LEFT JOIN` depuis `ja`, `WHERE ja.Actif = 1 AND ( ja.Defiscalisation = 1 OR EXISTS (nomination.Defiscalisation = 1 sur une rencontre de l'année fiscale pour ce JA) )` — un JA est donc retenu par son **choix global** (`ja.Defiscalisation`, fiche EN11 / écran EN22) **ou** par un **choix par mission** fait sur sa convocation EN21 (`nomination.Defiscalisation`), même sans avoir coché le drapeau global. Les JA sans mission cette année-là apparaissent aussi, totaux à 0. Cumul via `nomination → disponible → ja`, rencontres dont `rencontre.Date` tombe dans l'année fiscale, nominations retenues si `Valide = 1 OR Peage IS NOT NULL OR Kilometre IS NOT NULL OR Defiscalisation = 1`.
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
 | `donnees` | POST | Agrégat par JA : `NbMissions`, `Peage`, `Kilometre`, `PuissanceFiscale`, `VehiculeElectrique`, `FraisKmPeages` (taux plat), `MontantBareme` (ou `null`) |
 | `vehicule` | POST (`Id_JA`, `PuissanceFiscale`, `VehiculeElectrique`) | Enregistre `ja.PuissanceFiscale` (∈ {3,4,5,6,7}, ou `NULL` si vide) et `ja.VehiculeElectrique` (0/1) |
-| `relancer-vehicule` | POST (`ids[]`) | Envoie le modèle `messagerie` n°10 aux JA dont l'`Id_JA` est coché — nettoyage des ids (entiers > 0, dédup), filtre serveur `Actif = 1 AND Defiscalisation = 1` + email présent (les ids invalides sont comptés `ignores` dans le message). Un seul mailer (SMTP keep-alive), `Reply-To` selon le modèle, garde-fou `checkRateLimit()` / `enregistrerEnvois()`. Retour `{ok, envoyes, total, erreurs[], msg}` |
+| `relancer-vehicule` | POST (`ids[]`) | Envoie le modèle `messagerie` n°10 aux JA dont l'`Id_JA` est coché — nettoyage des ids (entiers > 0, dédup), filtre serveur `Actif = 1` + email présent + ( `Defiscalisation = 1` **ou** `nomination.Defiscalisation = 1` sur l'année fiscale ) — même critère d'inclusion que la liste (les ids invalides sont comptés `ignores` dans le message). Un seul mailer (SMTP keep-alive), `Reply-To` selon le modèle, garde-fou `checkRateLimit()` / `enregistrerEnvois()`. Retour `{ok, envoyes, total, erreurs[], msg}` |
 | `export-csv` | POST | Renvoie le CSV en JSON (téléchargement déclenché côté client) |
 
 ### Calcul du montant défiscalisable (colonne « Frais défiscalisables (barème) »)
-- `d` = `SUM(Kilometre)` du JA sur l'année civile.
+- `d` = `SUM(Kilometre)` du JA sur l'année fiscale.
 - Ligne de barème = celle de `ComptaDefiscalisation` où `PuissanceFiscale BETWEEN Cv_Min AND Cv_Max`.
 - Tranche selon `d` : `d ≤ 5 000` → `d × Coef_T1` ; `5 001 ≤ d ≤ 20 000` → `d × Coef_T2 + Fixe_T2` ; `d > 20 000` → `d × Coef_T3`.
 - Si `ja.VehiculeElectrique = 1` : `× (1 + comptadefisc_majoration_electrique / 100)` (config, défaut **+20 %**).
@@ -726,7 +731,7 @@ Modèle système `messagerie` **n°10** (`Type = 'Administratif'`, `Id_Utilisate
 `PuissanceFiscale` (`TINYINT UNSIGNED NULL`, `NULL` = non renseignée) et `VehiculeElectrique` (`TINYINT(1) NOT NULL DEFAULT 0`), après `Defiscalisation`. Déployées par `ALTER TABLE` explicite (déjà appliqué en dev et en prod) — pas de migration automatique.
 
 ### Règles
-- Période non paramétrable (toujours l'année civile en cours).
+- Période = année civile entière ; l'année est portée par la config `annee_fiscale` (EA91), pas de sélecteur dans l'écran.
 - Un seul barème actif : pas d'historique par millésime (le millésime en vigueur est indiqué dans le `TABLE_COMMENT` de `ComptaDefiscalisation`).
 
 ---
@@ -1279,6 +1284,8 @@ Gérer les paramètres applicatifs stockés dans la table `configuration` (clé 
 | `frais_max_peages` | Décimal | Plafond péages (€) |
 | `frais_max_km` | Décimal | Plafond kilomètres indemnisables |
 | `saison` | Ex : `2025-2026` | Saison en cours |
+| `annee_fiscale` | Année 4 chiffres (2000-2100), ex : `2026` | Année civile de référence de la défiscalisation JA (ED51) — fenêtre 1ᵉʳ janv → 31 déc. Défaut = année système. Auto-heal `INSERT IGNORE` au chargement de l'écran. |
+| `nomination_nb_candidats` | Entier ≥ 1, défaut `15` | Nombre de candidats JA listés par rencontre (EN14) |
 
 L'utilisateur et le mot de passe SMTP (`SMTP_USER` / `SMTP_PASSWORD`) ne sont pas stockés dans
 `configuration` : ils sont lus depuis `.env` (encodés ROT47, comme `DB_USER`/`DB_PASS`/`FFTT_APP_ID`/`FFTT_APP_KEY`),
@@ -1290,8 +1297,8 @@ pour éviter qu'ils apparaissent en clair dans un dump ou dans `db-admin.php` (E
 | `lire` | GET | Retourne tous les paramètres |
 | `enregistrer` | POST | Met à jour un ou plusieurs paramètres |
 | `smtp_test_prod` | POST | Envoie un email de test SMTP |
-| `table_creer` | POST | Ajoute un paramètre personnalisé |
-| `table_modifier` | POST | Modifie un paramètre existant |
+| `table_creer` | POST | Ajoute un paramètre personnalisé — **endpoint conservé mais plus déclenché par l'UI** (bouton « Ajouter une ligne » retiré de l'onglet « Gestion complète ») |
+| `table_modifier` | POST | Modifie un paramètre existant (onglet « Gestion complète », double-clic sur une ligne) |
 | `table_supprimer` | POST | Supprime un paramètre |
 
 ### Règle email
