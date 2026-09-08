@@ -540,6 +540,21 @@
                 <div id="msg-result-frais-km"></div>
             </div>
 
+            <div class="email-dev-group">
+                <label for="input-annee-fiscale">
+                    <i class="bi bi-calendar-event me-1"></i>Année fiscale défiscalisation (ED51)
+                </label>
+                <div class="email-dev-row">
+                    <input type="number" id="input-annee-fiscale" step="1" min="2000" max="2100"
+                           value="<?= esc($anneeFiscale) ?>"
+                           autocomplete="off">
+                    <button id="btn-sauvegarder-annee-fiscale">
+                        <i class="bi bi-floppy-fill me-1"></i>Enregistrer
+                    </button>
+                </div>
+                <div id="msg-result-annee-fiscale"></div>
+            </div>
+
         </div>
     </div>
 
@@ -877,9 +892,6 @@
 <!-- ── Onglet : Gestion complète de la table configuration ── -->
 <div class="tab-pane fade" id="tab-table" role="tabpanel">
     <div id="table-toolbar">
-        <button class="btn btn-sm btn-success" id="btn-table-ajouter">
-            <i class="bi bi-plus-circle me-1"></i>Ajouter une ligne
-        </button>
         <span style="flex:1"></span>
         <span id="table-msg" style="font-size:.82rem;margin-right:.75rem"></span>
         <input type="search" id="search-input-config" placeholder="🔍 Rechercher…">
@@ -1199,6 +1211,41 @@ $('#btn-sauvegarder-nb-candidats-ja').on('click', function () {
 $('#input-nb-candidats-ja').on('input', function () {
     $(this).removeClass('is-invalid');
     $('#msg-result-nb-candidats-ja').text('');
+});
+
+// ── Enregistrement année fiscale défiscalisation (ED51) ───────────────────
+$('#btn-sauvegarder-annee-fiscale').on('click', function () {
+    const $input = $('#input-annee-fiscale');
+    const $msg   = $('#msg-result-annee-fiscale');
+    const val    = $input.val().trim();
+    if (!/^\d{4}$/.test(val) || parseInt(val, 10) < 2000 || parseInt(val, 10) > 2100) {
+        $input.addClass('is-invalid');
+        $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Année sur 4 chiffres attendue (2000-2100).</span>');
+        return;
+    }
+    $input.removeClass('is-invalid');
+    spinner(true);
+    $(this).prop('disabled', true);
+    $msg.text('');
+    $.post(`${BASE}/enregistrer`, { cle: 'annee_fiscale', valeur: val }, function (res) {
+        spinner(false);
+        $('#btn-sauvegarder-annee-fiscale').prop('disabled', false);
+        if (res.ok) {
+            $msg.html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+            $input.val(res.valeur);
+        } else {
+            $input.addClass('is-invalid');
+            $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+        }
+    }, 'json').fail(() => {
+        spinner(false);
+        $('#btn-sauvegarder-annee-fiscale').prop('disabled', false);
+        $msg.html('<span class="text-danger">Erreur réseau.</span>');
+    });
+});
+$('#input-annee-fiscale').on('input', function () {
+    $(this).removeClass('is-invalid');
+    $('#msg-result-annee-fiscale').text('');
 });
 
 function sauvegarderTexte(cle, $input, $msg, $btn) {
@@ -1695,11 +1742,6 @@ function supprimerLigneConfig(idx) {
         if (res.ok) chargerTableConfig();
     }, 'json').fail(() => { spinner(false); tableMsg('Erreur réseau.', false); });
 }
-
-$('#btn-table-ajouter').on('click', function () {
-    configRows.push({ cle: '', valeur: '', description: '', _nouveau: true });
-    renderTableConfig();
-});
 
 // ── Modification par double-clic (modale) ─────────────────────────────────────
 $(document).on('dblclick', '#tbody-config tr[data-idx]', function () {

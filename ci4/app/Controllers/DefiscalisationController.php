@@ -7,10 +7,13 @@ use CodeIgniter\HTTP\ResponseInterface;
 /**
  * NIJAC – Défiscalisation JA (ED51), rôle Defiscalisateur.
  *
- * La défiscalisation s'applique sur l'année civile en cours (1er janvier -
- * 31 décembre), pas sur la saison/phase NIJAC — pas de sélecteur de période.
- * Liste tous les JA actifs ayant coché "Défiscalisation" (ja.Actif=1 AND
- * ja.Defiscalisation=1), y compris ceux sans mission cette année (LEFT JOIN
+ * La défiscalisation s'applique sur une année civile (1er janvier -
+ * 31 décembre) : l'année de référence est la clé de config `annee_fiscale`
+ * (EA91, défaut = année système), pas la saison/phase NIJAC — pas de
+ * sélecteur dans l'écran. Liste tous les JA actifs soit ayant coché
+ * "Défiscalisation" (ja.Defiscalisation=1), soit ayant au moins une mission de
+ * l'année fiscale marquée nomination.Defiscalisation=1 (choix fait sur la
+ * convocation EN21), y compris ceux sans mission cette année-là (LEFT JOIN
  * depuis `ja`), avec le cumul péages/kilomètres de leurs nominations de
  * l'année (nomination → disponible → ja). Export CSV pour la génération des
  * reçus. Accessible rôle Defiscalisateur + Administrateur (filtre
@@ -56,7 +59,7 @@ class DefiscalisationController extends BaseController
             'departement' => $u['id_departement'] ?? '',
             'changeLogin' => !empty($u['change_login']),
             'isAdmin'     => !empty($u['is_admin']),
-            'annee'       => (int) date('Y'),
+            'annee'       => (int) getConfig('annee_fiscale', date('Y')) ?: (int) date('Y'),
             'cvOptions'   => self::CV_AUTORISES,
         ];
 
@@ -79,6 +82,10 @@ class DefiscalisationController extends BaseController
      * avec le cumul péages/km de leurs nominations tombant dans l'année civile
      * [debut, fin] — LEFT JOIN depuis `ja` (pas depuis `nomination`) pour que
      * les JA sans mission cette année apparaissent aussi, avec des totaux à 0.
+     *
+     * « Défiscalisé » = drapeau global `ja.Defiscalisation = 1` OU au moins une
+     * mission de l'année civile marquée `nomination.Defiscalisation = 1` (choix
+     * fait sur la convocation EN21, sans forcément avoir coché le drapeau global).
      */
     private function requeteAgregee(\PDO $pdo, string $dateDebut, string $dateFin): array
     {
@@ -96,14 +103,26 @@ class DefiscalisationController extends BaseController
             FROM ja j
             LEFT JOIN disponible d ON d.Id_JA = j.Id_JA
             LEFT JOIN nomination n ON n.Id_Disponible = d.Id_Disponible
-                AND (n.Valide = 1 OR n.Peage IS NOT NULL OR n.Kilometre IS NOT NULL)
+                AND (n.Valide = 1 OR n.Peage IS NOT NULL OR n.Kilometre IS NOT NULL OR n.Defiscalisation = 1)
             LEFT JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
                 AND r.Date BETWEEN :debut AND :fin
-            WHERE j.Actif = 1 AND j.Defiscalisation = 1
+            WHERE j.Actif = 1 AND (
+                j.Defiscalisation = 1
+                OR EXISTS (
+                    SELECT 1
+                    FROM disponible d2
+                    JOIN nomination n2 ON n2.Id_Disponible = d2.Id_Disponible AND n2.Defiscalisation = 1
+                    JOIN rencontre  r2 ON r2.Id_Rencontre  = n2.Id_Rencontre  AND r2.Date BETWEEN :debut2 AND :fin2
+                    WHERE d2.Id_JA = j.Id_JA
+                )
+            )
             GROUP BY j.Id_JA, j.Nom, j.Prenom, j.Cp, j.Ville, j.PuissanceFiscale, j.VehiculeElectrique
             ORDER BY j.Nom, j.Prenom
         ');
-        $stmt->execute([':debut' => $dateDebut, ':fin' => $dateFin]);
+        $stmt->execute([
+            ':debut' => $dateDebut, ':fin' => $dateFin,
+            ':debut2' => $dateDebut, ':fin2' => $dateFin,
+        ]);
         $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
         foreach ($rows as &$r) {
@@ -122,7 +141,7 @@ class DefiscalisationController extends BaseController
 
     private function anneeCivile(): array
     {
-        $annee = date('Y');
+        $annee = (int) getConfig('annee_fiscale', date('Y')) ?: (int) date('Y');
 
         return ["$annee-01-01", "$annee-12-31"];
     }
@@ -195,16 +214,27 @@ class DefiscalisationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Aucun JA coché.']);
             }
 
+            [$debut, $fin] = $this->anneeCivile();
             $in   = implode(',', array_fill(0, count($ids), '?'));
             $stmt = $pdo->prepare("
-                SELECT Id_JA, Nom, Prenom, Email
-                FROM ja
-                WHERE Id_JA IN ($in)
-                  AND Actif = 1 AND Defiscalisation = 1
-                  AND Email IS NOT NULL AND TRIM(Email) <> ''
-                ORDER BY Nom, Prenom
+                SELECT j.Id_JA, j.Nom, j.Prenom, j.Email
+                FROM ja j
+                WHERE j.Id_JA IN ($in)
+                  AND j.Actif = 1
+                  AND (
+                      j.Defiscalisation = 1
+                      OR EXISTS (
+                          SELECT 1
+                          FROM disponible d2
+                          JOIN nomination n2 ON n2.Id_Disponible = d2.Id_Disponible AND n2.Defiscalisation = 1
+                          JOIN rencontre  r2 ON r2.Id_Rencontre  = n2.Id_Rencontre  AND r2.Date BETWEEN ? AND ?
+                          WHERE d2.Id_JA = j.Id_JA
+                      )
+                  )
+                  AND j.Email IS NOT NULL AND TRIM(j.Email) <> ''
+                ORDER BY j.Nom, j.Prenom
             ");
-            $stmt->execute($ids);
+            $stmt->execute([...$ids, $debut, $fin]);
             $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
             if ($rows === []) {

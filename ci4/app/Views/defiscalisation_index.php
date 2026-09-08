@@ -79,6 +79,7 @@
             font-size: .9rem;
             font-weight: 700;
             color: #1a3a6b;
+            margin: 0 auto;   /* centrée entre le bouton Relance (gauche) et les boutons de droite */
         }
 
         .btn-relance {
@@ -95,7 +96,6 @@
             cursor: pointer;
             box-shadow: 0 1px 2px rgba(16,24,40,.06);
             transition: background .15s;
-            margin-left: auto;
         }
         .btn-relance:hover { background: #92400e; }
         .btn-relance:disabled { opacity: .5; cursor: not-allowed; }
@@ -266,15 +266,15 @@
 
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 
-<!-- ── Toolbar : année civile en cours, pas de sélection de période ── -->
+<!-- ── Toolbar : année fiscale (config EA91 annee_fiscale), pas de sélection ici ── -->
 <div id="toolbar">
-    <span class="annee-badge"><i class="bi bi-calendar-event me-1"></i>Année civile <?= esc($annee) ?></span>
-
-    <span id="spinner" class="spinner-border spinner-border-sm text-secondary ms-1" role="status"></span>
-
     <button class="btn-relance" id="btn-relance" disabled>
         <i class="bi bi-envelope-paper"></i>Relancer les JA cochés
     </button>
+
+    <span class="annee-badge"><i class="bi bi-calendar-event me-1"></i>Année fiscale <?= esc($annee) ?></span>
+
+    <span id="spinner" class="spinner-border spinner-border-sm text-secondary ms-1" role="status"></span>
 
     <a href="<?= site_url('defiscalisation-bareme') ?>" class="btn-bareme">
         <i class="bi bi-table"></i>Gérer le barème

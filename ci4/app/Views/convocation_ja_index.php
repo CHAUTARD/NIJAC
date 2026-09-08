@@ -299,7 +299,7 @@
 
 <!--  Barre d'actions  -->
 <div id="action-bar">
-    <h1><i class="bi bi-file-earmark-text me-2"></i>Convocation Juge-Arbitre</h1>
+    <h1><i class="bi bi-file-earmark-text me-2"></i>CONVOCATION / NOTE DE FRAIS / RAPPORT du Juge-Arbitre</h1>
     <?php if ($ja && $rencontre): ?>
     <button class="btn btn-sm btn-light" onclick="window.print()">
         <i class="bi bi-printer me-1"></i>Imprimer / PDF
@@ -420,13 +420,19 @@
 
     <!-- Correspondant -->
     <div class="correspondant-bloc">
-        <span class="corr-lbl">NOM – PRÉNOM et ADRESSE du CORRESPONDANT du CLUB RECEVANT :</span><br>
+        <span class="corr-lbl">NOM – PRÉNOM et COURRIEL du CORRESPONDANT du CLUB RECEVANT :</span><br>
         <span class="corr-val"><?= esc($correspondant['Nom'] ?? '') ?></span>
         <?php if ($correspondant && $correspondant['Telephone']): ?>
         &nbsp;&nbsp;&nbsp;
         <span style="font-size:11px;">Tél : <strong><?= esc($correspondant['Telephone']) ?></strong></span>
         <?php else: ?>
         &nbsp;&nbsp;&nbsp;<span style="font-size:11px; color:#999">Tél : –</span>
+        <?php endif; ?>
+        <?php if ($correspondant && $correspondant['Email']): ?>
+        &nbsp;&nbsp;&nbsp;
+        <span style="font-size:11px;">Courriel : <strong><?= esc($correspondant['Email']) ?></strong></span>
+        <?php else: ?>
+        &nbsp;&nbsp;&nbsp;<span style="font-size:11px; color:#999">Courriel : –</span>
         <?php endif; ?>
     </div>
 

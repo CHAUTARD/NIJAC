@@ -265,30 +265,18 @@ class JugearbitreController extends BaseController
         // (importFfttClub()/importFfttSelected()) modifie aussi Actif, mais jamais
         // via majBdd() : il se contente de tout remettre à 0 pour le département
         // (reinitialiserActifDept()) sans jamais réactiver personne, quoi que le
-        // scan FFTT retrouve. DateValidationFFTT n'est mis à jour ici que si la
-        // ligne fournit explicitement date_validation_fftt (import CSV FFTT
-        // uniquement — la modale ne l'envoie pas, pour ne pas écraser une valeur
-        // déjà synchronisée par ailleurs).
+        // scan FFTT retrouve. En UPDATE, DateValidationFFTT / Defiscalisation /
+        // Nationale / NumCompteEBP ne sont réécrits que si la ligne fournit
+        // explicitement la clé (cf. SET construit ligne par ligne plus bas) :
+        // seul l'import CSV FFTT porte date_validation_fftt, seule la modale
+        // Créer/Modifier JA porte les trois autres — les imports ne doivent pas
+        // écraser une valeur saisie ou synchronisée ailleurs.
         $stmtCheck  = $pdo->prepare('SELECT COUNT(*) FROM ja WHERE Id_JA = ?');
         $stmtInsert = $pdo->prepare(
             'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Telephone, Grade, Actif,
                              Id_Club, Id_LaPoste, Defiscalisation, Nationale, NumCompteEBP,
                              Cp, Ville, DateValidationFFTT, CodeDept)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-        );
-        $stmtUpdateAvecDate = $pdo->prepare(
-            'UPDATE ja SET Nom=?, Prenom=?, Email=?, Telephone=?, Grade=?,
-                           Actif=?, Id_Club=?, Id_LaPoste=?,
-                           Defiscalisation=?, Nationale=?, NumCompteEBP=?,
-                           Cp=?, Ville=?, DateValidationFFTT=?, CodeDept=?
-             WHERE Id_JA=?'
-        );
-        $stmtUpdateSansDate = $pdo->prepare(
-            'UPDATE ja SET Nom=?, Prenom=?, Email=?, Telephone=?, Grade=?,
-                           Actif=?, Id_Club=?, Id_LaPoste=?,
-                           Defiscalisation=?, Nationale=?, NumCompteEBP=?,
-                           Cp=?, Ville=?, CodeDept=?
-             WHERE Id_JA=?'
         );
         $stmtInsertAuto = $pdo->prepare(
             'INSERT INTO ja (Nom, Prenom, Email, Telephone, Grade, Actif,
@@ -337,11 +325,38 @@ class JugearbitreController extends BaseController
                 if ($id > 0) {
                     $stmtCheck->execute([$id]);
                     if ((int) $stmtCheck->fetchColumn() > 0) {
+                        // SET construit ligne par ligne : DateValidationFFTT /
+                        // Defiscalisation / Nationale / NumCompteEBP ne sont écrits que
+                        // si la ligne les fournit explicitement (modale Créer/Modifier
+                        // JA). Les imports FFTT — API (importFfttClub/importFfttSelected)
+                        // et CSV 102_*.csv (importerExcel) — ne les envoient pas : la
+                        // valeur en base ne doit alors pas être écrasée.
+                        $setOpt    = '';
+                        $paramsOpt = [];
                         if ($dateFournie) {
-                            $stmtUpdateAvecDate->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid, $codeDept, $id]);
-                        } else {
-                            $stmtUpdateSansDate->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $codeDept, $id]);
+                            $setOpt .= 'DateValidationFFTT=?, ';
+                            $paramsOpt[] = $dateValid;
                         }
+                        if (array_key_exists('defiscalisation', $l)) {
+                            $setOpt .= 'Defiscalisation=?, ';
+                            $paramsOpt[] = $defisc;
+                        }
+                        if (array_key_exists('nationale', $l)) {
+                            $setOpt .= 'Nationale=?, ';
+                            $paramsOpt[] = $nationale;
+                        }
+                        if (array_key_exists('num_compte_ebp', $l)) {
+                            $setOpt .= 'NumCompteEBP=?, ';
+                            $paramsOpt[] = $cpteEbp;
+                        }
+                        $sql = "UPDATE ja SET {$setOpt}Nom=?, Prenom=?, Email=?, Telephone=?, Grade=?,
+                                       Actif=?, Id_Club=?, Id_LaPoste=?,
+                                       Cp=?, Ville=?, CodeDept=?
+                                WHERE Id_JA=?";
+                        $pdo->prepare($sql)->execute(array_merge(
+                            $paramsOpt,
+                            [$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $cp, $ville, $codeDept, $id]
+                        ));
                         $updates++;
                     } else {
                         $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid, $codeDept]);

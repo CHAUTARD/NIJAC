@@ -44,6 +44,7 @@ class ConfigurationController extends BaseController
         // totale (EA85) ou au premier enregistrement manuel de ce champ.
         $pdo->exec("INSERT IGNORE INTO configuration (cle, valeur) VALUES ('backup_full_garder', '5')");
         $pdo->exec("INSERT IGNORE INTO configuration (cle, valeur, description) VALUES ('nomination_nb_candidats', '15', 'EN14 — nombre de candidats JA affichés par rencontre')");
+        $pdo->exec("INSERT IGNORE INTO configuration (cle, valeur, description) VALUES ('annee_fiscale', '" . date('Y') . "', 'ED51 — année civile de référence pour la défiscalisation JA')");
         try {
             $etatCourant       = getConfig('etat_logiciel', 'Developpement');
             $emailDev          = getConfig('email_developpement', 'patrick.chautard@free.fr');
@@ -67,6 +68,7 @@ class ConfigurationController extends BaseController
             $smtpProdFromName  = getConfig('smtp_from_name', '');
             $backupFullGarder  = getConfig('backup_full_garder', '5');
             $nbCandidatsJa     = getConfig('nomination_nb_candidats', '15');
+            $anneeFiscale      = getConfig('annee_fiscale', date('Y'));
         } catch (\Throwable $e) {
             $etatCourant      = 'Developpement';
             $emailDev         = 'patrick.chautard@free.fr';
@@ -87,6 +89,7 @@ class ConfigurationController extends BaseController
             $smtpProdCredsOk = getSmtpUser() !== '' && getSmtpPassword() !== '';
             $backupFullGarder = '5';
             $nbCandidatsJa   = '15';
+            $anneeFiscale    = date('Y');
         }
         $deptsActifsArray = array_map('trim', explode(',', $deptsActifs));
 
@@ -118,6 +121,7 @@ class ConfigurationController extends BaseController
             'smtpProdFromName'  => $smtpProdFromName,
             'backupFullGarder'  => $backupFullGarder,
             'nbCandidatsJa'     => $nbCandidatsJa,
+            'anneeFiscale'      => $anneeFiscale,
         ];
 
         return view('configuration_index', $data);
@@ -192,6 +196,13 @@ class ConfigurationController extends BaseController
                     return $this->response->setJSON(['ok' => false, 'msg' => 'Nombre entier positif attendu.']);
                 }
                 $valeur = (string) (int) $valeur;
+            }
+
+            // Validation année fiscale (ED51) : 4 chiffres, plage raisonnable
+            if ($cle === 'annee_fiscale') {
+                if (!preg_match('/^\d{4}$/', $valeur) || (int) $valeur < 2000 || (int) $valeur > 2100) {
+                    return $this->response->setJSON(['ok' => false, 'msg' => 'Année sur 4 chiffres attendue (2000-2100).']);
+                }
             }
 
             // Validation départements_actifs : liste de numéros séparés par virgule
