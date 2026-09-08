@@ -24,6 +24,7 @@
 - [EN20 – Fiche personnelle JA](#en20--fiche-personnelle-ja)
 - [EN21 – Convocation et frais JA](#en21--convocation-et-frais-ja)
 - [EN22 – Disponibilité JA](#en22--disponibilité-ja)
+- [EN23 – Date des rencontres](#en23--date-des-rencontres)
 - [EN27 – Clubs / Associations](#en27--clubs--associations)
 - [ED51 – Défiscalisation JA](#ed51--défiscalisation-ja)
 - [ED52 – Barème kilométrique](#ed52--barème-kilométrique)
@@ -639,6 +640,25 @@ Permet à un Juge-Arbitre de déclarer ses disponibilités par journée de champ
 
 ### Bug corrigé lors du portage CI4 (contrairement à la politique habituelle de préservation)
 Les actions `rencontres_journee` et `sauvegarder_dispo_journee` du fichier legacy rejetaient la requête (`Paramètres manquants`/`Paramètres invalides`) dès que `journee = 0`, à cause d'un test PHP `!$journee` qui traite `0` comme une valeur absente — même bug que celui identifié et corrigé dans EN14 (Nomination). Sur la base de données actuelle, **toutes** les lignes de `rencontre` ont `Journee = 0` (numérotation de journée jamais renseignée), ce qui rendait ces deux actions non fonctionnelles en pratique. Corrigé dans `DisponibiliteJaController` (CI4) en distinguant "paramètre absent" (`null`/chaîne vide) de "paramètre valant 0" avant le cast en entier.
+
+---
+
+## EN23 – Date des rencontres
+
+`RencontreNominateurController` (CI4), routes `rencontres-date`, `rencontres-date/data`, `rencontres-date/(:num)` (PUT). Filtre `auth` (Nominateur ou Administrateur). Bouton en avant-dernière position du menu E003.
+
+### Objectif
+Version nominateur d'EA95 : permettre au nominateur de corriger uniquement la **date** et l'**heure** d'une rencontre déjà en base, sans passer par un import (EA82/EA83) ni ouvrir l'écran admin.
+
+### Différences avec EA95
+- Édition limitée à `rencontre.Date` et `rencontre.Heure` (pas de `Poule` / `Journee`).
+- Pas de suppression de rencontre, pas de bouton « Doublons ».
+- Table sans la colonne `Id_Rencontre`.
+- En-tête vert (couleurs du menu nominateur E003).
+- Contrôleur : `extends RencontreAdminController` — réutilise `data()` et `tryJson()` ; seul `update()` est redéfini (UPDATE `Date`, `Heure` uniquement).
+
+### Filtres (identiques à EA95)
+Département, Division, Poule, Journée, Date, recherche Équipe.
 
 ---
 

@@ -422,6 +422,15 @@
     <!-- Ligne 2 -->
 
     <div class="menu-btn-wrap">
+        <a href="<?= site_url('rencontres-date') ?>" class="menu-btn btn-r34">
+            <span class="btn-code">EN23</span>
+            <div class="btn-icon"><img src="<?= base_url('img/CalendarHour.png') ?>" alt="Date des rencontres"></div>
+            <span>Date des rencontres</span>
+            <span class="btn-desc">Modifier la date et l'heure d'une rencontre</span>
+        </a>
+    </div>
+
+    <div class="menu-btn-wrap">
         <a href="<?= site_url('stats-ja') ?>" class="menu-btn btn-ja">
             <span class="btn-code">EN17</span>
             <div class="btn-icon"><img src="<?= base_url('img/Stat_JA.png') ?>" alt="Statistiques JA"></div>

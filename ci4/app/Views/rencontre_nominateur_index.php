@@ -4,12 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Gestion des rencontres (EA95)</title>
+    <title>NIJAC – Date des rencontres (EN23)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-liste-edit.css') ?>">
     <style>
+        /* En-tête vert, comme les autres écrans nominateur (E003) */
+        #page-header { background: #2e7d32; }
+
         #panel-liste { width: 68%; }
         .cell-equipe:hover { text-decoration: underline; cursor: pointer; }
 
@@ -39,8 +42,9 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'calendar3', 'phTitle' => 'Gestion des rencontres', 'phCode' => 'EA95',
-    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu') . '#tab-tables', 'phBackUrl' => site_url('admin-menu') . '#tab-tables',
+    'phIcon' => 'calendar3', 'phTitle' => 'Date des rencontres', 'phCode' => 'EN23',
+    'phCrumbLabel' => 'Nominateur', 'phCrumbUrl' => site_url('nominateur-menu'), 'phBackUrl' => site_url('nominateur-menu'),
+    'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
 ]) ?>
 
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowPwdWarning' => false]) ?>
@@ -49,10 +53,6 @@
 
     <div id="panel-liste">
         <div id="menu-strip">
-            <button type="button" class="btn btn-sm btn-outline-warning" id="btn-doublons" title="N'afficher que les rencontres en doublon : même affiche (domicile / extérieur / phase), quelles que soient la date, l'heure ou la journée">
-                <i class="bi bi-files"></i> Doublons
-            </button>
-            <span style="flex:1"></span>
             <span class="count-badge" id="lbl-count">0 / 0</span>
             <span style="flex:1"></span>
             <span class="combo-field">
@@ -100,18 +100,17 @@
             <table id="tbl-rencontres">
                 <thead>
                     <tr>
-                        <th style="width:90px" data-col="0">Id_Rencontre<span class="sort-icon"></span></th>
-                        <th style="width:140px" data-col="1">Date<span class="sort-icon"></span></th>
-                        <th style="width:60px" data-col="2">Heure<span class="sort-icon"></span></th>
-                        <th style="width:55px" data-col="3">Poule<span class="sort-icon"></span></th>
-                        <th style="width:65px" data-col="4">Journée<span class="sort-icon"></span></th>
-                        <th style="width:70px" data-col="5">Division<span class="sort-icon"></span></th>
-                        <th data-col="6">Domicile<span class="sort-icon"></span></th>
-                        <th data-col="7">Extérieur<span class="sort-icon"></span></th>
+                        <th style="width:140px" data-col="0">Date<span class="sort-icon"></span></th>
+                        <th style="width:60px" data-col="1">Heure<span class="sort-icon"></span></th>
+                        <th style="width:55px" data-col="2">Poule<span class="sort-icon"></span></th>
+                        <th style="width:65px" data-col="3">Journée<span class="sort-icon"></span></th>
+                        <th style="width:70px" data-col="4">Division<span class="sort-icon"></span></th>
+                        <th data-col="5">Domicile<span class="sort-icon"></span></th>
+                        <th data-col="6">Extérieur<span class="sort-icon"></span></th>
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
-                    <tr><td colspan="8" class="text-center text-muted py-3">Chargement…</td></tr>
+                    <tr><td colspan="7" class="text-center text-muted py-3">Chargement…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -119,14 +118,10 @@
 
     <div id="panel-form">
 
-        <div id="no-selection">Sélectionnez une rencontre dans la liste pour la modifier.</div>
+        <div id="no-selection">Sélectionnez une rencontre dans la liste pour modifier sa date ou son heure.</div>
 
         <div id="form-rencontre" style="display:none;">
             <div class="row g-2 mb-2">
-                <div class="col-auto">
-                    <span class="form-label d-block">Id_Rencontre</span>
-                    <div class="form-readonly" id="txt-id"></div>
-                </div>
                 <div class="col-auto">
                     <span class="form-label d-block">Rencontre</span>
                     <div class="form-readonly">
@@ -163,20 +158,9 @@
                 </div>
             </div>
 
-            <div class="mb-2">
-                <label class="form-label" for="txt-poule">Poule</label>
-                <input type="number" id="txt-poule" class="form-control form-control-sm" min="0" step="1">
-            </div>
-
-            <div class="mb-2">
-                <label class="form-label" for="txt-journee">Journée</label>
-                <input type="number" id="txt-journee" class="form-control form-control-sm" min="0" step="1">
-            </div>
-
             <div id="panel-boutons">
                 <button class="btn btn-sm btn-enregistrer px-3" id="btn-enregistrer"><i class="bi bi-floppy me-1"></i>Enregistrer</button>
                 <button class="btn btn-sm btn-nouveau px-3" id="btn-annuler">Annuler</button>
-                <button class="btn btn-sm btn-supprimer px-3" id="btn-supprimer"><i class="bi bi-trash me-1"></i>Supprimer</button>
             </div>
 
             <div id="form-status" class="mt-3 small fw-bold"></div>
@@ -190,7 +174,7 @@
 <script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
 <script>
 'use strict';
-const RENCONTRE_BASE = '<?= site_url('gestion-rencontres') ?>';
+const RENCONTRE_BASE = '<?= site_url('rencontres-date') ?>';
 const DIVISION_NOMS = <?= json_encode($divisionNoms ?? [], JSON_UNESCAPED_UNICODE) ?>;
 function libDivision(code) {
     const n = DIVISION_NOMS[code];
@@ -204,7 +188,6 @@ let divisionFiltre = '';
 let pouleFiltre   = '';
 let journeeFiltre = '';
 let dateFiltre    = '';
-let doublonsIds   = null;   // null = filtre inactif ; sinon tableau d'Id_Rencontre (chaînes)
 const sortState = { col: null, asc: true };
 
 const JOURS_SEMAINE = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -252,7 +235,6 @@ function rencontresFiltrees() {
         if (pouleFiltre && String(r.Poule ?? '') !== pouleFiltre) return false;
         if (journeeFiltre && String(r.Journee ?? '') !== journeeFiltre) return false;
         if (dateFiltre && (r.Date ?? '').substring(0, 10) !== dateFiltre) return false;
-        if (doublonsIds && !doublonsIds.includes(String(r.Id_Rencontre))) return false;
         return true;
     });
 }
@@ -306,7 +288,7 @@ function renderListe() {
     $('#lbl-count').text(`${affichees.length} / ${rencontres.length}`);
 
     if (!affichees.length) {
-        $body.append('<tr><td colspan="8" class="text-center text-muted py-3">Aucune rencontre.</td></tr>');
+        $body.append('<tr><td colspan="7" class="text-center text-muted py-3">Aucune rencontre.</td></tr>');
         return;
     }
 
@@ -318,7 +300,6 @@ function renderListe() {
         const $tdExt = $('<td>').addClass('cell-equipe').text(r.NomExt ?? '—')
             .on('click', function (e) { e.stopPropagation(); filtrerParEquipe(r.NomExt, r.Id_Rencontre); });
         $('<tr>').attr('data-id', r.Id_Rencontre).append(
-            $('<td>').text(r.Id_Rencontre ?? ''),
             $('<td>').text(date),
             $('<td>').text(heure),
             $('<td>').text(r.Poule ?? ''),
@@ -354,24 +335,19 @@ function selectionnerLigne($tr) {
     currentId = id;
     $('#no-selection').hide();
     $('#form-rencontre').show();
-    $('#txt-id').text(r.Id_Rencontre ?? '');
     $('#txt-dom').text(r.NomDom ?? '');
     $('#txt-ext').text(r.NomExt ?? '—');
     $('#txt-division').empty().append(macaronDivision(r.Division, r.DivisionColor));
     $('#txt-date').val(r.Date ? r.Date.substring(0, 10) : '');
     $('#sel-heure').val((r.Heure ?? '').substring(0, 5));
-    $('#txt-poule').val(r.Poule ?? '');
-    $('#txt-journee').val(r.Journee ?? '');
     setStatus('');
 }
 
 $('#btn-enregistrer').on('click', function () {
     if (!currentId) return;
     const payload = {
-        date:    $('#txt-date').val(),
-        heure:   $('#sel-heure').val(),
-        poule:   $('#txt-poule').val(),
-        journee: $('#txt-journee').val(),
+        date:  $('#txt-date').val(),
+        heure: $('#sel-heure').val(),
     };
 
     $.ajax({ url: `${RENCONTRE_BASE}/${currentId}`, method: 'PUT', data: payload, dataType: 'json' }).done(function (res) {
@@ -385,28 +361,6 @@ $('#btn-annuler').on('click', function () {
     $('#tbody-liste tr').removeClass('selected');
     $('#form-rencontre').hide();
     $('#no-selection').show();
-});
-
-// Suppression d'une rencontre — depuis le bouton du panneau d'édition ou la
-// dernière colonne de la liste.
-function supprimerRencontre(id, libelle) {
-    nijacConfirm(`Supprimer la rencontre ${libelle} ?`, function () {
-        $.ajax({ url: `${RENCONTRE_BASE}/${id}`, method: 'DELETE', dataType: 'json' }).done(function (res) {
-            if (!res.ok) { toast(res.msg, false); return; }
-            toast(res.msg);
-            if (currentId == id) {
-                currentId = null;
-                $('#form-rencontre').hide();
-                $('#no-selection').show();
-            }
-            chargerListe();
-        }).fail(() => toast('Erreur réseau.', false));
-    }, null, { type: 'danger' });
-}
-
-$('#btn-supprimer').on('click', function () {
-    if (!currentId) return;
-    supprimerRencontre(currentId, `${$('#txt-dom').text()} vs ${$('#txt-ext').text()}`);
 });
 
 $('#search-equipe').on('input', function () { searchEquipe = $(this).val().trim(); renderListe(); });
@@ -439,28 +393,9 @@ $('#btn-date-plus').on('click', function () { decalerDateChamp(1); });
 
 $('#btn-reset-filtres').on('click', function () {
     searchEquipe = deptFiltre = divisionFiltre = pouleFiltre = journeeFiltre = dateFiltre = '';
-    doublonsIds = null;
-    $('#btn-doublons').removeClass('active btn-warning').addClass('btn-outline-warning');
     $('#search-equipe').val('');
     $('#sel-dept, #sel-division, #sel-poule, #sel-journee, #sel-date').val('');
     renderListe();
-});
-
-$('#btn-doublons').on('click', function () {
-    if (doublonsIds) {                    // désactivation
-        doublonsIds = null;
-        $(this).removeClass('active btn-warning').addClass('btn-outline-warning');
-        renderListe();
-        return;
-    }
-    $.get(`${RENCONTRE_BASE}/doublons`, function (res) {
-        if (!res.ok) { toast(res.msg, false); return; }
-        doublonsIds = (res.ids || []).map(String);
-        if (!doublonsIds.length) { toast('Aucune rencontre en doublon.'); return; }
-        $('#btn-doublons').addClass('active btn-warning').removeClass('btn-outline-warning');
-        renderListe();
-        toast(`${res.groupes} groupe(s) de doublons — ${doublonsIds.length} rencontre(s).`);
-    }, 'json').fail(() => toast('Erreur réseau.', false));
 });
 
 // ── Tri sur clic en-tête ──────────────────────────────────────────────────────

@@ -321,6 +321,14 @@ $routes->get('gestion-rencontres/doublons', 'RencontreAdminController::doublons'
 $routes->put('gestion-rencontres/(:num)', 'RencontreAdminController::update/$1', ['filter' => 'adminauth']);
 $routes->delete('gestion-rencontres/(:num)', 'RencontreAdminController::delete/$1', ['filter' => 'adminauth']);
 
+// ── EN23 Date des rencontres (nominateur) ────────────────────────────────────
+// Duplication d'EA95 pour le menu nominateur (E003) : seules Date et Heure sont
+// modifiables (ni poule/journée, ni suppression, ni doublons).
+// Nominateur ou Administrateur (filtre "auth"). data() est hérité d'EA95.
+$routes->get('rencontres-date', 'RencontreNominateurController::index', ['filter' => 'auth']);
+$routes->get('rencontres-date/data', 'RencontreNominateurController::data', ['filter' => 'auth']);
+$routes->put('rencontres-date/(:num)', 'RencontreNominateurController::update/$1', ['filter' => 'auth']);
+
 // ── EA98 Administration base de données ──────────────────────────────────────
 // Admin uniquement (filtre "adminauth"), + restriction supplémentaire
 // login === 'CHAUTARD' vérifiée manuellement dans le contrôleur (même règle

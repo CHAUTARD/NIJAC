@@ -14,11 +14,13 @@
         #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
 
         /* Bandeau de filtres : mêmes comboboxes « label en encoche » que EN11
-           (nijac.css .combo-field + habillage nijac-skin.css). Le fond exact du
-           bandeau vient de nijac-skin.css (var(--en-bg)) ; on aligne --strip-bg
-           dessus pour que l'encoche du label s'y fonde. */
+           (nijac.css .combo-field). Fond orange très clair (skin
+           nijac-skin-orange : var(--or-tint)), avec --strip-bg aligné dessus
+           pour que l'encoche du label s'y fonde. */
         #menu-strip {
-            --strip-bg: var(--en-bg, #f8fafc);
+            --strip-bg: var(--or-tint, #fff1e6);
+            background: var(--or-tint, #fff1e6);
+            border-bottom: 1px solid #f6d8c2;
             display: flex;
             align-items: center;
             gap: .5rem;
@@ -36,14 +38,22 @@
         }
 
         #ja-list-wrapper { flex: 1; overflow-y: auto; }
+        /* Tableau : mêmes couleurs de corps qu'ED51 (zébrage bleu-gris, survol,
+           filet de ligne) ; en-tête et pied en orange, comme le reste de l'écran
+           (skin nijac-skin-orange : var(--or-700)). */
         #tbl-ja { width: 100%; font-size: .82rem; border-collapse: collapse; }
         #tbl-ja thead th {
-            background: #e8eef7; border-bottom: 2px solid #c8d4e8;
-            padding: .3rem .4rem; position: sticky; top: 0; z-index: 1; white-space: nowrap;
+            background: var(--or-700, #c2410c); color: #fff; font-weight: 600;
+            padding: .35rem .5rem; position: sticky; top: 0; z-index: 2; white-space: nowrap;
         }
-        #tbl-ja tbody tr { border-bottom: 1px solid #e0e8f0; }
-        #tbl-ja tbody tr:hover { background: #f4f7fc; }
-        #tbl-ja tbody td { padding: .28rem .5rem; }
+        #tbl-ja tbody tr:hover { background: #f0f4fa; }
+        #tbl-ja tbody tr:nth-child(even) { background: #f8faff; }
+        #tbl-ja tbody tr:nth-child(even):hover { background: #e8edf8; }
+        #tbl-ja tbody tr.selected,
+        #tbl-ja tbody tr.selected:hover { background: var(--or-sel, #ffd7bd); }
+        #tbl-ja tbody td {
+            padding: .28rem .5rem; border-bottom: 1px solid #e8edf5; vertical-align: middle;
+        }
         .col-sort { cursor: pointer; user-select: none; }
         td.col-num { text-align: right; font-variant-numeric: tabular-nums; }
         td.col-center { text-align: center; }
@@ -74,13 +84,14 @@
         #import-result .ir-search { color: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
         #import-result .ir-search:hover { text-decoration: none; }
     </style>
-    <link rel="stylesheet" href="<?= base_url('asset/css/nijac-skin.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('asset/css/nijac-skin-orange.css') ?>">
 </head>
 <body>
 
 <?= view('partials/page_header', [
     'phIcon' => 'person-vcard', 'phTitle' => 'Comptes EBP des JA', 'phCode' => 'ED55',
     'phCrumbLabel' => 'Défiscalisateur', 'phCrumbUrl' => site_url('defiscalisateur-menu'), 'phBackUrl' => site_url('defiscalisateur-menu'),
+    'phCrumbColor' => '#ffe0c2', 'phBadgeColor' => '#ffe0c2',
 ]) ?>
 
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
