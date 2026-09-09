@@ -370,9 +370,15 @@ class ImportRencontresController extends BaseController
             // sous une autre date → on ne recrée pas (évite les doublons de
             // rencontre reprogrammée).
             $stmtRcChkPJ = $pdo->prepare('SELECT Id_Rencontre, Date FROM rencontre WHERE Id_EquipeDom=? AND Id_EquipeExt=? AND Poule=? AND Journee=? LIMIT 1');
+            // ON DUPLICATE KEY UPDATE : filet anti-course. La clé UNIQUE
+            // uq_rencontre_affiche (Id_EquipeDom, Id_EquipeExt, Phase) — posée par
+            // initTableConfiguration() — fait perdre proprement une exécution
+            // concurrente (mise à jour au lieu d'une 2e ligne identique). Les
+            // SELECT de dédup ci-dessus restent : ils alimentent stats/log.
             $stmtRcIns = $pdo->prepare(
                 'INSERT INTO rencontre (Date,Heure,Poule,Id_EquipeDom,Id_EquipeExt,Phase,Journee,ArbitrageObligatoire)
-                 VALUES (?,?,?,?,?,?,?,?)'
+                 VALUES (?,?,?,?,?,?,?,?)
+                 ON DUPLICATE KEY UPDATE Date=VALUES(Date), Heure=VALUES(Heure), Poule=VALUES(Poule), Journee=VALUES(Journee)'
             );
             $stmtRcMaj = $pdo->prepare('UPDATE rencontre SET Journee=?, Heure=? WHERE Id_Rencontre=?');
 

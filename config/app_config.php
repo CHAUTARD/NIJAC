@@ -108,6 +108,32 @@ function initTableConfiguration(\PDO $pdo): void
         }
     }
 
+    // Unicité d'une affiche : les imports de rencontres (EA82 FFTT direct + EA83
+    // national) dédupliquaient uniquement via un SELECT applicatif, sans verrou —
+    // deux exécutions concurrentes (double-clic, rejeu réseau, import FFTT +
+    // national sur la même division N*) inséraient deux lignes identiques à l'Id
+    // près. Même clé que RencontreAdminController::doublons() traite déjà comme
+    // l'unicité d'une affiche. Id_EquipeExt NULL (exempt / bye) : MySQL autorise
+    // plusieurs NULL dans un index UNIQUE, pas de collision. best-effort : si des
+    // doublons subsistent en base, l'ALTER échoue — les nettoyer via EA95 d'abord.
+    try {
+        $existe = $pdo->query(
+            "SELECT 1 FROM information_schema.STATISTICS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'rencontre'
+               AND INDEX_NAME = 'uq_rencontre_affiche'
+             LIMIT 1"
+        )->fetchColumn();
+        if (!$existe) {
+            $pdo->exec(
+                'ALTER TABLE rencontre
+                 ADD UNIQUE KEY uq_rencontre_affiche (Id_EquipeDom, Id_EquipeExt, Phase)'
+            );
+        }
+    } catch (\PDOException $e) {
+        // best-effort : doublons pré-existants (à purger via EA95) ou droits insuffisants.
+    }
+
     // Colonnes "référent" du club : 2e contact, mis en copie (Cc) des emails
     // envoyés au correspondant. Mêmes types que CorNom / CorEmail / CorTelephone.
     try {

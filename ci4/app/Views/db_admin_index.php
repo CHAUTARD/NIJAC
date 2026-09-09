@@ -93,7 +93,8 @@
         }
         #liste-tables .table-item:hover { background: #e8eef7; }
         #liste-tables .table-item .t-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        #liste-tables .table-item .t-count {
+        #liste-tables .table-item .t-count,
+        #liste-tables .table-item .t-idx {
             font-size: .72rem;
             color: #6b7280;
             background: #f0f4fa;
@@ -101,6 +102,8 @@
             padding: .05rem .5rem;
             flex-shrink: 0;
         }
+        #liste-tables .table-item .t-idx { color: #1a3a6b; }
+        #liste-tables .table-item .t-idx:hover { background: #dbe6f5; }
 
         #panel-query {
             flex: 1;
@@ -264,6 +267,10 @@ function chargerTables() {
             $(`<span class="t-nom">${escHtml(t.name)}</span>`)
                 .attr('title', 'Voir la structure')
                 .on('click', () => executerRequete(`DESCRIBE \`${t.name}\`;`))
+                .appendTo($item);
+            $('<span class="t-idx">idx</span>')
+                .attr('title', 'Voir les index')
+                .on('click', () => executerRequete(`SHOW INDEX FROM \`${t.name}\`;`))
                 .appendTo($item);
             $(`<span class="t-count">${t.rows.toLocaleString('fr-FR')}</span>`)
                 .attr('title', 'Voir les enregistrements')

@@ -800,7 +800,12 @@ class ImportRencontresNatController extends BaseController
             // Même affiche (mêmes équipes, même poule, même journée) déjà en base
             // sous une autre date → on ne recrée pas.
             $stmtRcChkPJ = $pdo->prepare('SELECT Id_Rencontre, Date FROM rencontre WHERE Id_EquipeDom=? AND Id_EquipeExt=? AND Poule=? AND Journee=? LIMIT 1');
-            $stmtRcIns = $pdo->prepare('INSERT INTO rencontre (Date,Heure,Poule,Id_EquipeDom,Id_EquipeExt,Phase,Journee,ArbitrageObligatoire) VALUES (?,?,?,?,?,?,?,?)');
+            // ON DUPLICATE KEY UPDATE : filet anti-course. Clé UNIQUE
+            // uq_rencontre_affiche (Id_EquipeDom, Id_EquipeExt, Phase) posée par
+            // initTableConfiguration() — une exécution concurrente (import national
+            // + import FFTT direct sur la même division N*) met à jour au lieu de
+            // créer une 2e ligne identique. Les SELECT de dédup ci-dessous restent.
+            $stmtRcIns = $pdo->prepare('INSERT INTO rencontre (Date,Heure,Poule,Id_EquipeDom,Id_EquipeExt,Phase,Journee,ArbitrageObligatoire) VALUES (?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE Date=VALUES(Date), Heure=VALUES(Heure), Poule=VALUES(Poule), Journee=VALUES(Journee)');
             $stmtRcMaj = $pdo->prepare('UPDATE rencontre SET Journee=?, Heure=? WHERE Id_Rencontre=?');
 
             $stats = ['equipes_creees' => 0, 'rencontres_creees' => 0, 'doublons' => 0, 'doublons_corriges' => 0, 'ignores' => 0, 'erreurs' => [], 'log' => []];
