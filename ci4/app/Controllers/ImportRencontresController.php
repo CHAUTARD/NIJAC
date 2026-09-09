@@ -590,12 +590,10 @@ class ImportRencontresController extends BaseController
 
     /**
      * Désigne un JA du club recevant sur une rencontre R3M/R4M sans arbitre
-     * nominé, et lui envoie immédiatement la convocation — même logique que
-     * InfoRencontreController::designerJaPourRencontre() (EN20, auto-désignation
-     * du JA connecté), adaptée ici au choix par l'admin d'un JA quelconque du
-     * club recevant. La disponibilité est générée automatiquement (Reponse='P',
-     * comme en EN20) : ces arbitres officient leur propre match, sans saisie
-     * préalable de disponibilité.
+     * nominé, et lui envoie immédiatement la convocation : choix par l'admin
+     * d'un JA quelconque du club recevant. La disponibilité est générée
+     * automatiquement (Reponse='P') : ces arbitres officient leur propre
+     * match, sans saisie préalable de disponibilité.
      */
     public function designerArbitre(): ResponseInterface
     {

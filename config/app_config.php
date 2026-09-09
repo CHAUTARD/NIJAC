@@ -513,8 +513,7 @@ function verifierRappelExpirationFfttApi(): void
  * message (table `messagerie`) — source unique remplaçant les listes de
  * marqueurs dupliquées et divergentes qui existaient dans
  * CentrenvoyeController::marqueurs() (EN15), NominationController::
- * envoyerConvocations() (EN14), InfoRencontreController::
- * designerJaPourRencontre() (EN20) et AdresseJaController::
+ * envoyerConvocations() (EN14) et AdresseJaController::
  * envoyerDemandeAdresse() (EN19). C'est cette divergence qui causait le bug
  * "{URL_CONVOCATION_JA} non remplacé" (EN14 ne connaissait que
  * {LIEN_CONVOCATION}).
@@ -560,7 +559,6 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
         '{URL_ADRESSE_JA}'       => $token !== '' ? (site_url('adresse-ja') . '?ja=' . $token) : '',
         '{URL_DISPONIBILITE_JA}' => $token !== '' ? (site_url('disponibilite-ja') . '?ja=' . $token) : '',
         '{URL_ATTESTATION_JA}'   => $token !== '' ? (site_url('attestation-defisc') . '?ja=' . $token) : '',
-        '{URL_INFO_RENCONTRE}'   => $token !== '' ? (site_url('info-rencontre') . '?ja=' . $token) : '',
         // Forme "chemin" (sans ?, = ni &) : robuste aux emails texte brut /
         // quoted-printable où l'ancienne query string se faisait tronquer.
         '{URL_CONVOCATION_JA}'   => !empty($idNomination) ? site_url('convocation-ja/' . (int) $idNomination . '/' . $tokenNomination) : '',

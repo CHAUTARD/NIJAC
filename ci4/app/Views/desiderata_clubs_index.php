@@ -351,7 +351,6 @@
                         <th>Nom</th>
                         <th>Grade</th>
                         <th>N° licence</th>
-                        <th id="th-ja-arbitrage" style="display:none;">Arbitrage club</th>
                     </tr>
                 </thead>
                 <tbody id="tbody-ja"></tbody>
@@ -366,7 +365,6 @@
 <script>
 const CSRF = <?= json_encode(csrf_hash()) ?>;
 const BASE = '<?= site_url('desiderata-clubs') ?>';
-const INFO_RENCONTRE_BASE = '<?= site_url('info-rencontre') ?>';
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
 function toast(msg, type = 'ok') {
@@ -689,25 +687,18 @@ async function ouvrirModalJa(idClub) {
     if (!res.ok) { toast(res.msg, 'err'); return; }
 
     document.getElementById('ja-sujet').textContent = 'JA du club — ' + res.club.Nom;
-    document.getElementById('th-ja-arbitrage').style.display = res.arbitrageClub ? '' : 'none';
 
     const tbody = document.getElementById('tbody-ja');
     tbody.innerHTML = '';
     if (!res.jas.length) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Aucun JA rattaché à ce club.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-3">Aucun JA rattaché à ce club.</td></tr>';
     } else {
         res.jas.forEach(j => {
             const tr = document.createElement('tr');
-            const colArbitrage = res.arbitrageClub
-                ? `<td><a href="${INFO_RENCONTRE_BASE}?ja=${escHtml(j.Token)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">
-                       <i class="bi bi-calendar2-check me-1"></i>Choisir les dates
-                   </a></td>`
-                : '';
             tr.innerHTML = `
                 <td>${escHtml(j.Nom)} ${escHtml(j.Prenom || '')}</td>
                 <td>${j.Grade ? `<span class="badge badge-grade">${escHtml(j.Grade)}</span>` : '<span class="text-muted">—</span>'}</td>
-                <td>${escHtml(j.Id_JA)}</td>
-                ${colArbitrage}`;
+                <td>${escHtml(j.Id_JA)}</td>`;
             tbody.appendChild(tr);
         });
     }

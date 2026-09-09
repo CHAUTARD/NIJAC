@@ -6,9 +6,8 @@ namespace App\Controllers;
  * NIJAC – Page de connexion (E001), portage CI4 de index.php.
  *
  * Recherche Utilisateur par Login/Password (Administrateur, Nominateur, CSR).
- * Le rôle JA n'a plus de login : ses écrans (EN19/EN20/EN21/EN22) sont tous
- * publics, identifiés par un lien tokenisé (Obfuscator) envoyé par email —
- * voir InfoRencontreController::resolveContext() pour EN20.
+ * Le rôle JA n'a plus de login : ses écrans (EN19/EN21/EN22) sont tous
+ * publics, identifiés par un lien tokenisé (Obfuscator) envoyé par email.
  * Session native (jamais le service Session de CI4) — voir AdminAuth.php
  * pour l'explication complète de l'incompatibilité des deux mécanismes.
  */

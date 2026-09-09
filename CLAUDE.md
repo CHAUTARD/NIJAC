@@ -135,7 +135,7 @@ $_SESSION['utilisateur'] = [
 ];
 ```
 
-There is no `JA` role/session: a JA never logs in. All JA-facing screens (EN19–EN22) are public routes, identified by an Obfuscator token (`?ja=TOKEN`) in a link emailed to them — see `construireMarqueursMessage()` in `config/app_config.php` for how those links are built, and `InfoRencontreController::resolveContext()` (EN20) for the reference implementation of "token, else Nominateur/Admin session, else redirect".
+There is no `JA` role/session: a JA never logs in. All JA-facing screens (EN19, EN21, EN22) are public routes, identified by an Obfuscator token (`?ja=TOKEN`) in a link emailed to them — see `construireMarqueursMessage()` in `config/app_config.php` for how those links are built.
 
 ### Access control convention
 
@@ -145,7 +145,7 @@ There is no `JA` role/session: a JA never logs in. All JA-facing screens (EN19�
 - Defiscalisateur-only routes (E005, ED51): `['filter' => 'defiscauth']` — role `Defiscalisateur` or `Administrateur` (see `DefiscalisateurAuth.php`), same pattern as `csrauth`.
 - Admin-only AJAX actions within a shared controller: checked individually inside the method, same idea as before (e.g. `SalleController`/`JugearbitreController`/`MessagerieController` use route filter `auth` but gate specific write actions to admin in code)
 - EA96 (FfttTestController) and EA98 (DbAdminController) extra restriction, checked manually in the controller: `$_SESSION['utilisateur']['login'] === 'CHAUTARD'`
-- Public (tokenized or fully open) routes have no filter at all in `Routes.php` — e.g. EN18 `desiderata-club`, EN19 `adresse-ja`, EN20 `info-rencontre`, EN21 `convocation-ja`, EN22 `disponibilite-ja` (all JA-facing screens; session checked manually in-controller only to let Nominateur/Admin reuse EN20 from their own menu)
+- Public (tokenized or fully open) routes have no filter at all in `Routes.php` — e.g. EN18 `desiderata-club`, EN19 `adresse-ja`, EN21 `convocation-ja`, EN22 `disponibilite-ja` (all JA-facing screens; session checked manually in-controller only to let Nominateur/Admin reuse them from their own menu)
 
 ### Database conventions
 

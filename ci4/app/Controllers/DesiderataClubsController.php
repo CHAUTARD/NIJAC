@@ -195,21 +195,7 @@ class DesiderataClubsController extends BaseController
             $stmtJ->execute([$idClub]);
             $jas = $stmtJ->fetchAll();
 
-            require_once __DIR__ . '/../../../Classes/Obfuscator.php';
-            $obf = new \Obfuscator(OBFUSCATOR_SEED);
-            foreach ($jas as &$j) {
-                $j['Token'] = $obf->obfuscate((int) $j['Id_JA']);
-            }
-            unset($j);
-
-            $stmtAC = $pdo->prepare(
-                "SELECT COUNT(*) FROM equipe e
-                 WHERE e.Id_Club = ? AND e.Division IN ('R3M','R4M') AND e.SouhaitJA = 'Club'"
-            );
-            $stmtAC->execute([$idClub]);
-            $arbitrageClub = (bool) $stmtAC->fetchColumn();
-
-            return $this->response->setJSON(['ok' => true, 'club' => $club, 'jas' => $jas, 'arbitrageClub' => $arbitrageClub]);
+            return $this->response->setJSON(['ok' => true, 'club' => $club, 'jas' => $jas]);
         });
     }
 

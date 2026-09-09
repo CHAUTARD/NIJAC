@@ -253,16 +253,6 @@ $routes->post('adresse-ja/envoyer-demande-adresse', 'AdresseJaController::envoye
 $routes->post('adresse-ja/recherche-laposte', 'AdresseJaController::rechercheLaposte');
 $routes->post('adresse-ja/sauvegarder', 'AdresseJaController::sauvegarder');
 
-// ── EN20 Fiche personnelle JA ────────────────────────────────────────────────
-// Page PUBLIQUE (sans authentification), tokenisée par ?ja=TOKEN — comme
-// EN19/EN21/EN22. Pas de rôle JA ni de login dédié (voir AuthController).
-// Pas de filtre de route : la résolution (token, ou session Nominateur/Admin)
-// est faite manuellement dans le contrôleur.
-$routes->get('info-rencontre', 'InfoRencontreController::index');
-$routes->post('info-rencontre/se-designer', 'InfoRencontreController::seDesigner');
-$routes->post('info-rencontre/recherche-laposte', 'InfoRencontreController::rechercheLaposte');
-$routes->post('info-rencontre/sauvegarder-adresse', 'InfoRencontreController::sauvegarderAdresse');
-
 // ── EA91 Configuration générale ──────────────────────────────────────────────
 $routes->get('configuration', 'ConfigurationController::index', ['filter' => 'adminauth']);
 $routes->post('configuration/lire', 'ConfigurationController::lire', ['filter' => 'adminauth']);

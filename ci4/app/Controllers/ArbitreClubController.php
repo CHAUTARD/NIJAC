@@ -15,7 +15,7 @@ use CodeIgniter\HTTP\ResponseInterface;
  * dirigera la rencontre — uniquement les JA actifs rattachés au club,
  * triés alphabétiquement. La réponse
  * crée une `nomination` (Peage/Kilometre/Defiscalisation = 0, Valide = 1,
- * EmailEnvoye = 0) comme le fait EN20 pour l'arbitrage club.
+ * EmailEnvoye = 0) pour l'arbitrage club.
  *
  * À renseigner dans les 5 jours qui suivent la rencontre : au-delà, simple
  * avertissement, la saisie reste possible.

@@ -7,7 +7,7 @@ use CodeIgniter\HTTP\ResponseInterface;
 /**
  * NIJAC – Attestation sur l'honneur défiscalisation (ED53).
  *
- * Deux modes (patron EN20) :
+ * Deux modes (token public, ou session Nominateur/Admin) :
  *  - **Public tokenisé** (`?ja=TOKEN`, Obfuscator) : lien envoyé au JA dans
  *    l'email de relance (marqueur {URL_ATTESTATION_JA}, message n°10). Champs
  *    pré-remplis depuis `ja` ; bouton « Valider » → écrit

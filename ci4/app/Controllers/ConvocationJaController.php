@@ -9,8 +9,7 @@ use CodeIgniter\HTTP\ResponseInterface;
  * Nominateur/convocation_ja.php.
  *
  * Écran non documenté dans ECRANS.md/SPECIFICATION.md avant ce portage — code
- * EN21 attribué dans la bande nominateur/public (EN11-EN30), à la suite de
- * EN20 (JA/info_rencontre.php).
+ * EN21 attribué dans la bande nominateur/public (EN11-EN30).
  *
  * Page PUBLIQUE (sans authentification). URL jetonnée par un token `cnv`
  * (Obfuscator de l'Id_Nomination), servie en segments de chemin

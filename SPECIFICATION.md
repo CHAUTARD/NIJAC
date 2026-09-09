@@ -21,7 +21,6 @@
 - [EN17 – Statistiques JA](#en17--statistiques-ja)
 - [EN18 – Désidératas club](#en18--désidératas-club)
 - [EN19 – Adresse domicile JA](#en19--adresse-domicile-ja)
-- [EN20 – Fiche personnelle JA](#en20--fiche-personnelle-ja)
 - [EN21 – Convocation et frais JA](#en21--convocation-et-frais-ja)
 - [EN22 – Disponibilité JA](#en22--disponibilité-ja)
 - [EN23 – Date des rencontres](#en23--date-des-rencontres)
@@ -175,7 +174,7 @@ Le département 76 inclut automatiquement l'Eure (27) dans tous les calculs, con
 ## E006 – Changement du mot de passe
 
 **Fichier :** `changer_mot_de_passe.php`  
-**Accès :** Tout utilisateur authentifié (Administrateur, Nominateur ou CSR) — sans objet pour un JA, qui n'a plus de login ni de mot de passe (voir E001/EN20)
+**Accès :** Tout utilisateur authentifié (Administrateur, Nominateur ou CSR) — sans objet pour un JA, qui n'a plus de login ni de mot de passe (voir E001)
 
 ### Objectif
 Permet à l'utilisateur connecté de changer son propre mot de passe : saisie du mot de passe actuel (vérifié contre le hash en base), du nouveau mot de passe et de sa confirmation. Réinitialise le flag `ChangeLogin` (forçage de changement à la première connexion) une fois le changement effectué.
@@ -552,32 +551,6 @@ Permettre à un Juge-Arbitre de renseigner ou corriger son code postal et sa vil
 - Token = `Obfuscator::obfuscate($idJa)` (seed `OBFUSCATOR_SEED`), lien généré depuis EN11 (fiche JA) ou par `envoyer_demande_adresse`
 - Le modèle « Demande adresse » (système, `messagerie.Type = 'Demande adresse'`) supporte les marqueurs `{NOM}`, `{PRENOM}`, `{NOM_COMPLET}`, `{URL_ADRESSE_JA}`, `{UTI_NOM}`, `{UTI_PRENOM}`, `{URL_LIGUE}`, `{YEAR_PHASE}`
 - Envoi via `getNijacMailer()`, destinataire résolu par `getEmailDestinataire()`, soumis au rate-limiting (`checkRateLimit()` / `enregistrerEnvois()`)
-
----
-
-## EN20 – Fiche personnelle JA
-
-**Fichier :** `JA/info_rencontre.php`  
-**Accès (CI4, à jour) :** Page publique, tokenisée (`?ja=TOKEN`, Obfuscator) — même mécanisme que EN19/EN21/EN22. Il n'y a plus de rôle `JA` ni de login dédié ; un Nominateur/Administrateur connecté peut aussi consulter la fiche d'un JA depuis son propre menu, via ce même token. Voir `InfoRencontreController::resolveContext()`.
-
-### Objectif
-Page d'accueil du Juge-Arbitre : consultation de sa fiche, de ses prochaines nominations, et auto-désignation en masse sur les rencontres R3M/R4M à domicile de son club lorsque celui-ci a choisi l'**arbitrage club** (EN18 : `equipe.SouhaitJA = 'Club'`).
-
-### Interface
-- Fiche identité : Prénom / Nom, licence (`Id_JA`), club, domicile (`Cp`/`Ville` ou commune liée), bouton pour modifier l'adresse (même mécanisme que EN19)
-- **Mes nominations à venir** (10 max, `Date >= CURDATE()`) : jointure `Nomination → disponible → Rencontre → Salle → laposte`, division, équipes domicile/visiteur
-- **Arbitrage club — Rencontres R3M/R4M à venir** : uniquement les rencontres à domicile des équipes R3M/R4M du club du JA ayant `SouhaitJA = 'Club'` (renseigné via le formulaire EN18). Une case à cocher par rencontre non pourvue, boutons **Tout sélectionner** (case d'en-tête) et **Valider ma sélection** pour s'auto-désigner sur plusieurs rencontres en une seule action ; ligne en vert si c'est le JA connecté
-
-### Actions AJAX
-| Action | Méthode | Description |
-|--------|---------|-------------|
-| `se_designer` | POST | Le JA se désigne lui-même sur une ou plusieurs rencontres (`ids` : tableau JSON d'`Id_Rencontre`) sans JA déjà nominé : crée la ligne `disponible` (Réponse = `P`) si absente, crée la `nomination` (`Valide = 1`) pour chacune, envoie l'email du modèle système `Convocation` ; retourne un résultat par rencontre |
-| `recherche_laposte` | POST | Identique à EN19 |
-| `sauvegarder_adresse` | POST | Met à jour `Cp`/`Ville`/`Id_LaPoste` du JA identifié par le token `?ja=TOKEN` |
-
-### Règles
-- Toutes les actions POST exigent `csrfVerify(true)`
-- `se_designer` traite chaque rencontre indépendamment (fonction `designerJaPourRencontre()`) et refuse celles ayant déjà une nomination ou n'appartenant pas au club du JA ciblé par le token ; les autres rencontres de la sélection restent traitées
 
 ---
 
@@ -1356,7 +1329,7 @@ Créer et gérer les modèles de messages utilisés pour les convocations, rappe
 ### Règles
 - Les messages système (`Id_Utilisateur IS NULL` ou `Id_Messagerie` entre 1 et 6) ne sont modifiables/supprimables que par un administrateur ; un nominateur peut les dupliquer pour créer sa propre variante
 - Un nominateur ne peut modifier/supprimer que ses propres messages personnels
-- Les modèles système sont référencés par type depuis d'autres écrans : `Convocation` (EN15, EN20 « se désigner »), `Demande adresse` (EN19)
+- Les modèles système sont référencés par type depuis d'autres écrans : `Convocation` (EN15), `Demande adresse` (EN19)
 
 ---
 

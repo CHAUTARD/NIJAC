@@ -121,7 +121,6 @@
                 <code data-marqueur="{URL_LIGUE}" class="me-2">{URL_LIGUE}</code>
                 <code data-marqueur="{YEAR_PHASE}" class="me-2">{YEAR_PHASE}</code>
                 <code data-marqueur="{PHASE}" class="me-2">{PHASE}</code>
-                <code data-marqueur="{URL_INFO_RENCONTRE}" class="me-2">{URL_INFO_RENCONTRE}</code>
             </div>
             <div>
                 <span class="badge me-1 fw-normal" style="background:#c2185b;">Désidératas club (EN12 / ES31 CSR)</span>
@@ -164,7 +163,6 @@ const MARQUEURS_EXEMPLE = {
     '{UTI_NOM}':            'Martin',
     '{UTI_PRENOM}':         'Sophie',
     '{URL_LIGUE}':          'https://www.ligue-normandie-tt.fr',
-    '{URL_INFO_RENCONTRE}': <?= json_encode(site_url('info-rencontre') . '?ja=AbCd1234') ?>,
     '{YEAR_PHASE}':         <?= json_encode(getAnneePhase()) ?>,
     '{PHASE}':              <?= json_encode(getConfig('phase', '1')) ?>,
     '{NOM_CLUB}':           'ASSUN TT',
