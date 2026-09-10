@@ -904,7 +904,8 @@ Importer les rencontres de la saison régionale directement depuis l'API FFTT (S
 | `import-rencontres/designer-arbitre` | POST | Désigne un JA du club recevant sur une rencontre R3M/R4M et envoie sa convocation |
 
 ### Règles
-- Les doublons (même Date + équipe domicile + équipe visiteur) sont ignorés silencieusement
+- Les doublons (même Date + équipe domicile + équipe visiteur) sont ignorés silencieusement ; un 2ᵉ test bloque aussi la recréation d'une affiche déjà présente pour la même poule/journée à une autre date (rencontre reprogrammée)
+- **Anti-doublon en base (anti-course)** : la table `rencontre` porte une clé `UNIQUE uq_rencontre_affiche (Id_EquipeDom, Id_EquipeExt, Phase)` posée par `initTableConfiguration()`, et l'`INSERT` est un `INSERT … ON DUPLICATE KEY UPDATE Date=VALUES(Date), Heure=VALUES(Heure), Poule=VALUES(Poule), Journee=VALUES(Journee)`. Sans elle, deux exécutions concurrentes de `importer-division` (double-clic, rejeu réseau, ou import EA83 sur la même division N*) passaient chacune le `SELECT` de dédup avant l'`INSERT` de l'autre et inséraient deux lignes identiques à l'`Id_Rencontre` près. Purge prod des doublons pré-existants + pose de la clé : `SQL/2026-09_uq_rencontre_affiche.sql`.
 - La désignation directe (`designer-arbitre`) est réservée aux divisions R3M/R4M, où c'est au club recevant de désigner l'un de ses JA (pas d'arbitrage fourni par la CRA)
 
 ---
@@ -1011,6 +1012,7 @@ POULE 1
 ### Règle spécifique
 Seules les rencontres où l'équipe à domicile est associée à un club de la région sont importées ; l'équipe
 adverse peut être normande ou hors région. Les rencontres déjà présentes (même date + mêmes équipes) sont ignorées.
+Même filet anti-course qu'EA82 : clé `UNIQUE uq_rencontre_affiche (Id_EquipeDom, Id_EquipeExt, Phase)` + `INSERT … ON DUPLICATE KEY UPDATE`.
 L'ordre des rencontres (ex. `1-8 / 2-7 / 3-6 / 4-5`) est un ordre générique de rang appliqué à chaque poule
 (division/poule/rang enregistrés dans `equipe_nationale`) — pas de date par rencontre individuelle dans le
 fichier, seulement une date par journée.
@@ -1214,6 +1216,7 @@ Définir les divisions sportives et leur niveau hiérarchique, utilisés pour cl
 - Conséquences : renommer un code division propage aux équipes ; supprimer une division encore référencée par une équipe est bloqué en base (le contrôle applicatif `$divsValides` des écrans d'import reste en place).
 - Les contraintes sont (re)créées de façon idempotente par `initTableConfiguration()` (config/app_config.php), appelée à l'ouverture d'EA98.
 - `rencontre` n'a pas de colonne `Division` : le lien passe par `rencontre.Id_EquipeDom → equipe.Division → division.Division`.
+- `rencontre` porte aussi une clé `UNIQUE uq_rencontre_affiche (Id_EquipeDom, Id_EquipeExt, Phase)` (posée par `initTableConfiguration()`) : anti-doublon d'affiche pour les imports EA82/EA83, c'est l'invariant qu'utilise déjà le bouton « Doublons » d'EA95. `Id_EquipeExt` NULL (exempt / bye) : MySQL autorise plusieurs NULL dans un index UNIQUE, aucune collision.
 
 ---
 
@@ -1372,8 +1375,24 @@ Interface de diagnostic/débogage de l'intégration API FFTT (Smartping v2) : v�
 
 ## EA98 – Administration base de données
 
-**Fichier :** `db-admin.php`  
+**Fichier :** `DbAdminController` (CI4)  
 **Accès :** Administrateur (uniquement utilisateur `CHAUTARD`)
+
+> **Portage CI4** — la section ci-dessous décrit l'ancien `db-admin.php` (3 onglets
+> Données/Structure/Requêteur, ~16 actions AJAX) et n'est plus à jour. La version CI4
+> est un **écran unique « bris de glace »**, sans onglets, avec 3 actions : `index`,
+> `tables`, `sql`.
+>
+> - **Barre latérale** : liste des tables + nombre de lignes (COUNT exact). Raccourcis
+>   par table : clic sur le nom → `DESCRIBE`, sur le badge **« idx »** → `SHOW INDEX FROM`,
+>   sur le compteur → `SELECT * … LIMIT 100`. Ces raccourcis passent par le requêteur
+>   libre (`SHOW`/`DESCRIBE` sont dans la liste blanche de `DbAdminController::sql()`).
+> - **Requêteur SQL libre** : textarea, exécution Ctrl+Entrée, plusieurs ordres séparés
+>   par « ; », aucune restriction. Grille de résultats triable du dernier SELECT.
+>   Double-clic sur une cellule → génère un `UPDATE` ciblé (SELECT mono-table, PK
+>   détectée via `SHOW KEYS`).
+> - `initTableConfiguration()` est rejoué à chaque ouverture de l'écran (best-effort).
+> - Bandeau avec lien vers EA97 (BugSpid).
 
 ### Objectif
 Interface d'administration directe de la base de données MySQL : consultation, édition, structure et requêtage libre.

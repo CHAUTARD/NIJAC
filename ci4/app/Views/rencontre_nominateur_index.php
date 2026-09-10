@@ -37,6 +37,18 @@
             background: #eef2f9; border: 1.5px solid #d3dae6; border-radius: 999px;
             font-size: .82rem; font-weight: 700; color: var(--nijac-blue);
         }
+
+        /* ── Menu « Colonnes » : ligne avec flèches de réordonnancement ── */
+        #menu-colonnes-list { min-width: 300px; }
+        #menu-colonnes-list .mc-row { display: flex; align-items: center; gap: .25rem; }
+        #menu-colonnes-list .mc-row > label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+        #menu-colonnes-list .mc-move {
+            border: 1px solid #c8d4e8; background: #fff; color: #1a3a6b;
+            width: 1.5rem; height: 1.5rem; line-height: 1; font-size: .7rem;
+            border-radius: 4px; cursor: pointer; padding: 0; flex-shrink: 0;
+        }
+        #menu-colonnes-list .mc-move:hover:not(:disabled) { background: #e8eef7; }
+        #menu-colonnes-list .mc-move:disabled { opacity: .3; cursor: default; }
     </style>
 </head>
 <body>
@@ -55,6 +67,12 @@
         <div id="menu-strip">
             <span class="count-badge" id="lbl-count">0 / 0</span>
             <span style="flex:1"></span>
+            <span class="combo-field">
+                <details id="menu-colonnes">
+                    <summary id="menu-colonnes-resume">Colonnes</summary>
+                    <div id="menu-colonnes-list"></div>
+                </details>
+            </span>
             <span class="combo-field">
                 <label for="sel-dept">Département</label>
                 <select id="sel-dept" style="width:170px;">
@@ -100,13 +118,13 @@
             <table id="tbl-rencontres">
                 <thead>
                     <tr>
-                        <th style="width:140px" data-col="0">Date<span class="sort-icon"></span></th>
-                        <th style="width:60px" data-col="1">Heure<span class="sort-icon"></span></th>
-                        <th style="width:55px" data-col="2">Poule<span class="sort-icon"></span></th>
-                        <th style="width:65px" data-col="3">Journée<span class="sort-icon"></span></th>
-                        <th style="width:70px" data-col="4">Division<span class="sort-icon"></span></th>
-                        <th data-col="5">Domicile<span class="sort-icon"></span></th>
-                        <th data-col="6">Extérieur<span class="sort-icon"></span></th>
+                        <th style="width:140px" data-field="date">Date<span class="sort-icon"></span></th>
+                        <th style="width:60px" data-field="heure">Heure<span class="sort-icon"></span></th>
+                        <th style="width:55px" data-field="poule">Poule<span class="sort-icon"></span></th>
+                        <th style="width:65px" data-field="journee">Journée<span class="sort-icon"></span></th>
+                        <th style="width:70px" data-field="division">Division<span class="sort-icon"></span></th>
+                        <th data-field="domicile">Domicile<span class="sort-icon"></span></th>
+                        <th data-field="exterieur">Extérieur<span class="sort-icon"></span></th>
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
@@ -295,20 +313,23 @@ function renderListe() {
     affichees.forEach(r => {
         const date = formatDateAvecJour(r.Date);
         const heure = (r.Heure ?? '').substring(0, 5);
-        const $tdDom = $('<td>').addClass('cell-equipe').text(r.NomDom ?? '')
+        const $tdDom = $('<td>').attr('data-field', 'domicile').addClass('cell-equipe').text(r.NomDom ?? '')
             .on('click', function (e) { e.stopPropagation(); filtrerParEquipe(r.NomDom, r.Id_Rencontre); });
-        const $tdExt = $('<td>').addClass('cell-equipe').text(r.NomExt ?? '—')
+        const $tdExt = $('<td>').attr('data-field', 'exterieur').addClass('cell-equipe').text(r.NomExt ?? '—')
             .on('click', function (e) { e.stopPropagation(); filtrerParEquipe(r.NomExt, r.Id_Rencontre); });
         $('<tr>').attr('data-id', r.Id_Rencontre).append(
-            $('<td>').text(date),
-            $('<td>').text(heure),
-            $('<td>').text(r.Poule ?? ''),
-            $('<td>').text(r.Journee ?? ''),
-            $('<td>').append(macaronDivision(r.Division, r.DivisionColor)),
+            $('<td>').attr('data-field', 'date').text(date),
+            $('<td>').attr('data-field', 'heure').text(heure),
+            $('<td>').attr('data-field', 'poule').text(r.Poule ?? ''),
+            $('<td>').attr('data-field', 'journee').text(r.Journee ?? ''),
+            $('<td>').attr('data-field', 'division').append(macaronDivision(r.Division, r.DivisionColor)),
             $tdDom,
             $tdExt
         ).on('click', function () { selectionnerLigne($(this)); }).appendTo($body);
     });
+
+    appliquerColonnesCachees();
+    appliquerOrdreColonnes();
 
     if (currentId) {
         const $tr = $(`#tbody-liste tr[data-id="${currentId}"]`);
@@ -398,12 +419,107 @@ $('#btn-reset-filtres').on('click', function () {
     renderListe();
 });
 
-// ── Tri sur clic en-tête ──────────────────────────────────────────────────────
+// ── Affichage / masquage / ordre des colonnes (mémorisé dans le navigateur) ──
+const LS_COLONNES = 'nijac_en23_colonnes_cachees';
+const LS_ORDRE    = 'nijac_en23_colonnes_ordre';
+// Ordre naturel du thead = source de vérité des champs existants.
+const CHAMPS_NATURELS = [...document.querySelectorAll('#tbl-rencontres thead th[data-field]')]
+    .map(th => th.getAttribute('data-field'));
+
+let colonnesCachees;
+try {
+    const brut = localStorage.getItem(LS_COLONNES);
+    colonnesCachees = new Set(brut !== null ? JSON.parse(brut) : []);
+} catch (e) { colonnesCachees = new Set(); }
+
+let ordreColonnes;
+try {
+    const brut = localStorage.getItem(LS_ORDRE);
+    ordreColonnes = brut !== null ? JSON.parse(brut) : [...CHAMPS_NATURELS];
+} catch (e) { ordreColonnes = [...CHAMPS_NATURELS]; }
+// Réconcilie avec le thead réel (champ ajouté / retiré depuis la dernière visite).
+ordreColonnes = ordreColonnes.filter(f => CHAMPS_NATURELS.includes(f));
+CHAMPS_NATURELS.forEach(f => { if (!ordreColonnes.includes(f)) ordreColonnes.push(f); });
+
+function persistOrdre() {
+    try { localStorage.setItem(LS_ORDRE, JSON.stringify(ordreColonnes)); } catch (e) {}
+}
+
+function appliquerColonnesCachees() {
+    document.querySelectorAll('#tbl-rencontres [data-field]').forEach(el => {
+        el.style.display = colonnesCachees.has(el.getAttribute('data-field')) ? 'none' : '';
+    });
+    const total = CHAMPS_NATURELS.length;
+    $('#menu-colonnes-resume').text(`Colonnes ${total - colonnesCachees.size}/${total}`);
+}
+
+// Réordonne physiquement les cellules [data-field] de chaque ligne (thead + tbody)
+// selon ordreColonnes. thead et tbody restent alignés → le tri par index marche.
+function appliquerOrdreColonnes() {
+    document.querySelectorAll('#tbl-rencontres tr').forEach(tr => {
+        const parCle = {}, reste = [];
+        [...tr.children].forEach(c => {
+            const f = c.getAttribute('data-field');
+            if (f) parCle[f] = c; else reste.push(c);
+        });
+        ordreColonnes.forEach(f => { if (parCle[f]) tr.appendChild(parCle[f]); });
+        reste.forEach(c => tr.appendChild(c));
+    });
+}
+
+function deplacerColonne(i, delta) {
+    const j = i + delta;
+    if (j < 0 || j >= ordreColonnes.length) return;
+    [ordreColonnes[i], ordreColonnes[j]] = [ordreColonnes[j], ordreColonnes[i]];
+    persistOrdre();
+    construireMenuColonnes();
+    appliquerOrdreColonnes();
+}
+
+function construireMenuColonnes() {
+    const $box = $('#menu-colonnes-list').empty();
+    const labels = {};
+    document.querySelectorAll('#tbl-rencontres thead th[data-field]').forEach(th => {
+        labels[th.getAttribute('data-field')] = (th.textContent || '').replace(/[⇅▲▼]/g, '').trim();
+    });
+    ordreColonnes.forEach((field, i) => {
+        const $chk = $('<input type="checkbox">').prop('checked', !colonnesCachees.has(field));
+        $chk.on('change', function () {
+            if (this.checked) colonnesCachees.delete(field);
+            else              colonnesCachees.add(field);
+            try { localStorage.setItem(LS_COLONNES, JSON.stringify([...colonnesCachees])); } catch (e) {}
+            appliquerColonnesCachees();
+        });
+        const $up   = $('<button type="button" class="mc-move" title="Monter">▲</button>').prop('disabled', i === 0);
+        const $down = $('<button type="button" class="mc-move" title="Descendre">▼</button>').prop('disabled', i === ordreColonnes.length - 1);
+        $up.on('click',   () => deplacerColonne(i, -1));
+        $down.on('click', () => deplacerColonne(i,  1));
+        $('<div class="mc-row">')
+            .append($('<label>').append($chk).append(document.createTextNode(' ' + (labels[field] || field))))
+            .append($up).append($down)
+            .appendTo($box);
+    });
+}
+construireMenuColonnes();
+appliquerColonnesCachees();
+appliquerOrdreColonnes();
+
+// Ferme le menu « Colonnes » au clic hors de celui-ci
+$(document).on('click', function (e) {
+    if (!$(e.target).closest('#menu-colonnes').length) $('#menu-colonnes').removeAttr('open');
+});
+
+// ── Tri sur clic en-tête (par champ : reste correct même colonnes réordonnées) ─
 // Différé : nijac-sortable-table.js est chargé après ce script (voir plus bas),
 // donc pas encore défini si on l'appelait ici de façon synchrone.
+function trierLignes() {
+    if (sortState.col == null) return;
+    const ths = [...document.querySelectorAll('#tbl-rencontres thead th[data-field]')];
+    const idx = ths.findIndex(th => th.getAttribute('data-field') === sortState.col);
+    if (idx >= 0) nijacSortRows('#tbody-liste', idx, sortState.asc);
+}
 $(function () {
-    nijacSortableTable('#tbl-rencontres thead th[data-col]', 'col', sortState,
-        () => nijacSortRows('#tbody-liste', parseInt(sortState.col, 10), sortState.asc));
+    nijacSortableTable('#tbl-rencontres thead th[data-field]', 'field', sortState, trierLignes);
     chargerListe();
 });
 </script>

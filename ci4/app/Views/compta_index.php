@@ -58,6 +58,16 @@
         td.col-num { text-align: right; font-variant-numeric: tabular-nums; }
         td.col-center { text-align: center; }
         tr.ja-inactif td { color: #9aa5b8; }
+        /* Pastille Actif — même rendu que EN11 */
+        .badge-actif   { background: #d1fae5; color: #065f46; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
+        .badge-inactif { background: #fee2e2; color: #991b1b; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
+
+        /* Comboboxes Défisc. / Actif : valeur « Oui » verte, « Non » rouge.
+           (le color sur <option> est ignoré par Chrome/Edge Windows → classe en JS) */
+        #menu-strip select.val-oui { color: #065f46; font-weight: 600; }
+        #menu-strip select.val-non { color: #991b1b; font-weight: 600; }
+        #sel-defisc option[value="1"], #sel-actif option[value="1"] { color: #065f46; }
+        #sel-defisc option[value="0"], #sel-actif option[value="0"] { color: #991b1b; }
         /* JA défiscalisé ayant roulé mais CV = 0 ou énergie non renseignée → à relancer */
         tr.ja-defisc-incomplet td { color: #c0392b; font-weight: 700; }
 
@@ -320,8 +330,12 @@ function renderListe() {
             $('<td>').addClass('col-num').text(l.Id_JA),
             $('<td>').text(l.Nom ?? ''),
             $('<td>').text(l.Prenom ?? ''),
-            $('<td>').addClass('col-center').text(+l.Actif ? 'Oui' : 'Non'),
-            $('<td>').addClass('col-center').text(def ? 'Oui' : 'Non'),
+            $('<td>').addClass('col-center').html(+l.Actif
+                ? '<span class="badge-actif">Oui</span>'
+                : '<span class="badge-inactif">Non</span>'),
+            $('<td>').addClass('col-center').html(def
+                ? '<span class="badge-actif">Oui</span>'
+                : '<span class="badge-inactif">Non</span>'),
             $('<td>').addClass('col-num').text(def ? fmtKm(l.KmTotal) : ''),
             $('<td>').addClass('col-center').text(def ? (l.PuissanceFiscale ?? '') : ''),
             $('<td>').addClass('col-center').text(def ? energie(l) : ''),
@@ -379,13 +393,23 @@ $('#search-input').on('input', function () {
     searchTerm = $(this).val().trim();
     renderListe();
 });
-$('#sel-compte, #sel-defisc, #sel-actif').on('change', renderListe);
+// Couleur de la valeur affichée des menus Défisc. / Actif (Oui vert / Non rouge)
+function colorerSelectOuiNon() {
+    $('#sel-defisc, #sel-actif').each(function () {
+        $(this).toggleClass('val-oui', this.value === '1')
+               .toggleClass('val-non', this.value === '0');
+    });
+}
+colorerSelectOuiNon();
+
+$('#sel-compte, #sel-defisc, #sel-actif').on('change', function () { colorerSelectOuiNon(); renderListe(); });
 $('#btn-reset-filtres').on('click', function () {
     searchTerm = '';
     $('#search-input').val('');
     $('#sel-compte').val('sans');
     $('#sel-defisc').val('');
     $('#sel-actif').val('');
+    colorerSelectOuiNon();
     renderListe();
 });
 
@@ -465,6 +489,7 @@ function afficherResultatImport(ok, res) {
         $('#search-input').val(motNom);
         $('#sel-compte').val('');
         $('#sel-actif').val('');
+        colorerSelectOuiNon();
         renderListe();
         $('#ja-list-wrapper').scrollTop(0);
     });

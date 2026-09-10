@@ -28,9 +28,6 @@ use CodeIgniter\HTTP\ResponseInterface;
  */
 class DefiscalisationController extends BaseController
 {
-    /** Valeurs de puissance fiscale proposées dans ED51 (7 = "7 CV et plus"). */
-    private const CV_AUTORISES = [3, 4, 5, 6, 7];
-
     /** Modèle messagerie « Administratif » n°10 : relance véhicule non renseigné. */
     private const ID_MESSAGE_RELANCE_VEHICULE = 10;
 
@@ -60,7 +57,6 @@ class DefiscalisationController extends BaseController
             'changeLogin' => !empty($u['change_login']),
             'isAdmin'     => !empty($u['is_admin']),
             'annee'       => (int) getConfig('annee_fiscale', date('Y')) ?: (int) date('Y'),
-            'cvOptions'   => self::CV_AUTORISES,
         ];
 
         return view('defiscalisation_index', $data);
@@ -78,7 +74,7 @@ class DefiscalisationController extends BaseController
     }
 
     /**
-     * Requête commune à donnees()/exportCsv() : tous les JA actifs défiscalisés,
+     * Requête commune à donnees()/exportCsv() : tous les JA défiscalisés,
      * avec le cumul péages/km de leurs nominations tombant dans l'année civile
      * [debut, fin] — LEFT JOIN depuis `ja` (pas depuis `nomination`) pour que
      * les JA sans mission cette année apparaissent aussi, avec des totaux à 0.
@@ -86,6 +82,8 @@ class DefiscalisationController extends BaseController
      * « Défiscalisé » = drapeau global `ja.Defiscalisation = 1` OU au moins une
      * mission de l'année civile marquée `nomination.Defiscalisation = 1` (choix
      * fait sur la convocation EN21, sans forcément avoir coché le drapeau global).
+     * Pas de filtre `Actif` : le reçu fiscal reste dû aux JA désactivés en fin de
+     * saison (EA85) pour leurs missions de l'année. `GROUP BY j.Id_JA` → 0 doublon.
      */
     private function requeteAgregee(\PDO $pdo, string $dateDebut, string $dateFin): array
     {
@@ -106,7 +104,7 @@ class DefiscalisationController extends BaseController
                 AND (n.Valide = 1 OR n.Peage IS NOT NULL OR n.Kilometre IS NOT NULL OR n.Defiscalisation = 1)
             LEFT JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
                 AND r.Date BETWEEN :debut AND :fin
-            WHERE j.Actif = 1 AND (
+            WHERE (
                 j.Defiscalisation = 1
                 OR EXISTS (
                     SELECT 1
@@ -153,34 +151,6 @@ class DefiscalisationController extends BaseController
             $rows = $this->requeteAgregee(getPDO(), $debut, $fin);
 
             return $this->response->setJSON(['ok' => true, 'data' => $rows]);
-        });
-    }
-
-    /**
-     * Enregistre la puissance fiscale / motorisation d'un JA (saisie inline dans
-     * le tableau ED51). PuissanceFiscale vide => NULL (barème non calculé).
-     */
-    public function vehicule(): ResponseInterface
-    {
-        return $this->tryJson(function () {
-            $idJa = (int) $this->request->getPost('Id_JA');
-            if ($idJa <= 0) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'JA inconnu.']);
-            }
-
-            $cvBrut = $this->request->getPost('PuissanceFiscale');
-            $cv     = ($cvBrut === null || $cvBrut === '') ? null : (int) $cvBrut;
-            if ($cv !== null && !in_array($cv, self::CV_AUTORISES, true)) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Puissance fiscale invalide.']);
-            }
-            $elec = $this->request->getPost('VehiculeElectrique') ? 1 : 0;
-
-            $stmt = getPDO()->prepare(
-                'UPDATE ja SET PuissanceFiscale = :cv, VehiculeElectrique = :elec WHERE Id_JA = :id'
-            );
-            $stmt->execute([':cv' => $cv, ':elec' => $elec, ':id' => $idJa]);
-
-            return $this->response->setJSON(['ok' => true]);
         });
     }
 

@@ -424,7 +424,6 @@ $routes->get('defiscalisateur-menu', 'DefiscalisateurMenuController::index', ['f
 // ── ED51 Défiscalisation JA ──────────────────────────────────────────────────
 $routes->get('defiscalisation', 'DefiscalisationController::index', ['filter' => 'defiscauth']);
 $routes->post('defiscalisation/donnees', 'DefiscalisationController::donnees', ['filter' => 'defiscauth']);
-$routes->post('defiscalisation/vehicule', 'DefiscalisationController::vehicule', ['filter' => 'defiscauth']);
 $routes->post('defiscalisation/relancer-vehicule', 'DefiscalisationController::relancerVehicule', ['filter' => 'defiscauth']);
 $routes->post('defiscalisation/export-csv', 'DefiscalisationController::exportCsv', ['filter' => 'defiscauth']);
 

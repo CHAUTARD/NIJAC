@@ -162,13 +162,6 @@
         .rc-green  { border-color: #00695c; }  .rc-green  .rc-value { color: #00695c; }
         .rc-orange { border-color: #e65100; }  .rc-orange .rc-value { color: #e65100; }
 
-        #tbl-defisc .sel-cv {
-            font-size: .8rem;
-            padding: .1rem .25rem;
-            border: 1px solid #cbd5e1;
-            border-radius: 4px;
-        }
-        #tbl-defisc .chk-elec,
         #tbl-defisc .chk-relance,
         #tbl-defisc #chk-relance-all { width: 1rem; height: 1rem; cursor: pointer; }
         #tbl-defisc .chk-relance:disabled { cursor: not-allowed; opacity: .4; }
@@ -303,7 +296,7 @@
             <div class="rc-value" id="rc-total">–</div>
         </div>
         <div class="resume-card rc-orange">
-            <div class="rc-label">Total défiscalisable (barème)</div>
+            <div class="rc-label">Total défiscalisable</div>
             <div class="rc-value" id="rc-bareme">–</div>
         </div>
     </div>
@@ -321,25 +314,27 @@
                     <th class="col-center" title="Relance"><input type="checkbox" id="chk-relance-all"></th>
                     <th class="col-center" data-col="Id_JA">N° JA</th>
                     <th data-col="Nom">JA</th>
-                    <th data-col="Ville">Adresse</th>
+                    <th class="col-center" data-col="Cp">CP</th>
+                    <th data-col="Ville">Ville</th>
                     <th class="col-center" data-col="NbMissions">Missions</th>
                     <th class="col-money" data-col="Peage">Péages</th>
                     <th class="col-money" data-col="Kilometre">Kilomètres</th>
                     <th class="col-money" data-col="FraisKmPeages">Frais km + péages</th>
                     <th class="col-center" data-col="PuissanceFiscale">CV</th>
                     <th class="col-center" data-col="VehiculeElectrique">Élec.</th>
-                    <th class="col-money" data-col="MontantBareme">Frais défiscalisables (barème)</th>
+                    <th class="col-money" data-col="MontantBareme">Frais défiscalisables</th>
                 </tr>
             </thead>
             <tbody id="tbody-defisc"></tbody>
             <tfoot>
                 <tr>
-                    <td colspan="4">Totaux</td>
+                    <td colspan="5">Totaux</td>
                     <td class="col-center" id="foot-missions">–</td>
                     <td class="col-money" id="foot-peages">–</td>
                     <td class="col-money" id="foot-km">–</td>
                     <td class="col-money" id="foot-total">–</td>
-                    <td colspan="2"></td>
+                    <td></td>
+                    <td class="col-center" id="foot-elec">–</td>
                     <td class="col-money" id="foot-bareme">–</td>
                 </tr>
             </tfoot>
@@ -358,17 +353,6 @@
 <script>
 const BASE = '<?= site_url('defiscalisation') ?>';
 const sortState = { col: null, asc: true };
-const CV_OPTIONS = <?= json_encode($cvOptions) ?>;
-
-function cvSelect(id, val) {
-    let opts = '<option value="">–</option>';
-    CV_OPTIONS.forEach(function (cv) {
-        const label = cv >= 7 ? cv + ' +' : cv;
-        const sel   = (val !== null && String(val) === String(cv)) ? ' selected' : '';
-        opts += `<option value="${cv}"${sel}>${label}</option>`;
-    });
-    return `<select class="sel-cv" data-id="${id}">${opts}</select>`;
-}
 
 function money(v) {
     return parseFloat(v).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
@@ -436,12 +420,12 @@ function afficherTableau(data) {
         $('#resume-totaux').hide();
         $('#empty-state').show().html(
             '<i class="bi bi-inbox" style="font-size:2rem;opacity:.3;display:block;margin-bottom:.5rem;"></i>' +
-            (($('#search-defisc').val() || '').trim() ? 'Aucun résultat.' : 'Aucun JA actif défiscalisé.')
+            (($('#search-defisc').val() || '').trim() ? 'Aucun résultat.' : 'Aucun JA défiscalisé.')
         );
         return;
     }
 
-    let totPeages = 0, totKm = 0, totFrais = 0, totMissions = 0, totBareme = 0;
+    let totPeages = 0, totKm = 0, totFrais = 0, totMissions = 0, totBareme = 0, totElec = 0;
 
     data.forEach(function (r) {
         const peage    = parseFloat(r.Peage);
@@ -454,9 +438,12 @@ function afficherTableau(data) {
         totFrais    += frais;
         totMissions += missions;
         if (bareme !== null) totBareme += bareme;
+        if (r.VehiculeElectrique) totElec++;
 
-        const adresse = [r.Cp, r.Ville].filter(Boolean).join(' ');
-        const elecChk = `<input type="checkbox" class="chk-elec" data-id="${r.Id_JA}"${r.VehiculeElectrique ? ' checked' : ''}>`;
+        const cvTxt   = r.PuissanceFiscale === null
+            ? '<span style="color:#aaa;">–</span>'
+            : (r.PuissanceFiscale >= 7 ? r.PuissanceFiscale + ' +' : r.PuissanceFiscale);
+        const elecTxt = r.VehiculeElectrique ? 'Oui' : 'Non';
         const cellBareme = bareme !== null
             ? money(bareme)
             : '<span class="bareme-manquant">CV manquant</span>';
@@ -470,13 +457,14 @@ function afficherTableau(data) {
             <td class="col-center">${relanceChk}</td>
             <td class="col-center">${r.Id_JA}</td>
             <td><strong>${r.Nom}</strong> ${r.Prenom}</td>
-            <td>${adresse || '<span style="color:#aaa;">–</span>'}</td>
+            <td class="col-center">${r.Cp || '<span style="color:#aaa;">–</span>'}</td>
+            <td>${r.Ville || '<span style="color:#aaa;">–</span>'}</td>
             <td class="col-center">${missions}</td>
             <td class="col-money">${peage > 0 ? money(peage) : '<span style="color:#aaa;">–</span>'}</td>
             <td class="col-money">${kilo > 0 ? km(kilo) : '<span style="color:#aaa;">–</span>'}</td>
             <td class="col-money">${money(frais)}</td>
-            <td class="col-center">${cvSelect(r.Id_JA, r.PuissanceFiscale)}</td>
-            <td class="col-center">${elecChk}</td>
+            <td class="col-center">${cvTxt}</td>
+            <td class="col-center">${elecTxt}</td>
             <td class="col-money">${cellBareme}</td>
         </tr>`);
     });
@@ -485,6 +473,7 @@ function afficherTableau(data) {
     $('#foot-peages').text(money(totPeages));
     $('#foot-km').text(km(totKm));
     $('#foot-total').text(money(totFrais));
+    $('#foot-elec').text(totElec + '/' + data.length);
     $('#foot-bareme').text(money(totBareme));
 
     $('#rc-nb-ja').text(data.length);
@@ -516,26 +505,8 @@ $('#chk-relance-all').on('change', function () {
     majBoutonRelance();
 });
 
-// ── Saisie puissance fiscale / électrique (inline) ───────────────────────────
-$('#tbody-defisc').on('change', '.sel-cv, .chk-elec', function () {
-    const id  = $(this).data('id');
-    const $tr = $(this).closest('tr');
-
-    spinner(true);
-    $.post(`${BASE}/vehicule`, {
-        Id_JA:              id,
-        PuissanceFiscale:   $tr.find('.sel-cv').val(),
-        VehiculeElectrique: $tr.find('.chk-elec').is(':checked') ? 1 : 0
-    })
-        .done(function (res) {
-            if (!res.ok) { spinner(false); toast(res.msg, false); return; }
-            chargerListe();   // recalcul du barème côté serveur
-        })
-        .fail(function () {
-            spinner(false);
-            toast('Erreur réseau.', false);
-        });
-});
+// CV / Élec : consultation seule dans ED51 (renseignés par le JA via l'attestation
+// signée ED53, ou par relance email ci-dessous). Plus de saisie inline ici.
 
 // ── Relance email : JA cochés dans le tableau ────────────────────────────────
 $('#btn-relance').on('click', function () {

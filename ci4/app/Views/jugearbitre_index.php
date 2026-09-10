@@ -201,6 +201,18 @@
         .win-menu-drop .drop-item.green { color: #1a6b2b; font-weight: 600; }
         .win-menu-drop .drop-item.green:hover { background: #d1fae5; }
 
+        /* ── Menu « Colonnes » : ligne avec flèches de réordonnancement ── */
+        #menu-colonnes-list { min-width: 300px; }
+        #menu-colonnes-list .mc-row { display: flex; align-items: center; gap: .25rem; }
+        #menu-colonnes-list .mc-row > label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+        #menu-colonnes-list .mc-move {
+            border: 1px solid #c8d4e8; background: #fff; color: #1a3a6b;
+            width: 1.5rem; height: 1.5rem; line-height: 1; font-size: .7rem;
+            border-radius: 4px; cursor: pointer; padding: 0; flex-shrink: 0;
+        }
+        #menu-colonnes-list .mc-move:hover:not(:disabled) { background: #e8eef7; }
+        #menu-colonnes-list .mc-move:disabled { opacity: .3; cursor: default; }
+
         /* ── Spinner ── */
 
         #page-footer {
@@ -836,6 +848,7 @@ function renderGrille() {
     $('#sc-anomalies').text(affichees.filter(l => l.id_laposte == null).length);
 
     appliquerColonnesCachees();
+    appliquerOrdreColonnes();
 }
 
 function makeTd(val, idx, field, readonly) {
@@ -1207,12 +1220,17 @@ $(function () {
     refreshTriEntetes = nijacSortableTable('#tbl-ja thead th[data-field]', 'field', sortState, renderGrille);
 });
 
-// ── Affichage / masquage des colonnes (mémorisé dans le navigateur) ──────────
+// ── Affichage / masquage / ordre des colonnes (mémorisé dans le navigateur) ──
 const LS_COLONNES = 'nijac_en11_colonnes_cachees';
+const LS_ORDRE    = 'nijac_en11_colonnes_ordre';
 // Colonnes masquées tant que l'utilisateur n'a rien choisi (toutes restent
 // activables depuis le menu « Colonnes »).
 const COLONNES_CACHEES_DEFAUT = ['grade', 'date_validation_fftt', 'defiscalisation',
     'nationale', 'num_compte_ebp', 'arbitre_autres_depts', 'depts_arbitrage'];
+// Ordre naturel du thead = source de vérité des champs existants.
+const CHAMPS_NATURELS = [...document.querySelectorAll('#tbl-ja thead th[data-field]')]
+    .map(th => th.getAttribute('data-field'));
+
 let colonnesCachees;
 try {
     const brut = localStorage.getItem(LS_COLONNES);
@@ -1221,31 +1239,77 @@ try {
     colonnesCachees = new Set(COLONNES_CACHEES_DEFAUT);
 }
 
+let ordreColonnes;
+try {
+    const brut = localStorage.getItem(LS_ORDRE);
+    ordreColonnes = brut !== null ? JSON.parse(brut) : [...CHAMPS_NATURELS];
+} catch (e) { ordreColonnes = [...CHAMPS_NATURELS]; }
+// Réconcilie avec le thead réel (champ ajouté / retiré depuis la dernière visite).
+ordreColonnes = ordreColonnes.filter(f => CHAMPS_NATURELS.includes(f));
+CHAMPS_NATURELS.forEach(f => { if (!ordreColonnes.includes(f)) ordreColonnes.push(f); });
+
+function persistOrdre() {
+    try { localStorage.setItem(LS_ORDRE, JSON.stringify(ordreColonnes)); } catch (e) {}
+}
+
 function appliquerColonnesCachees() {
     document.querySelectorAll('#tbl-ja [data-field]').forEach(el => {
         el.style.display = colonnesCachees.has(el.getAttribute('data-field')) ? 'none' : '';
     });
-    const total = document.querySelectorAll('#tbl-ja thead th[data-field]').length;
+    const total = CHAMPS_NATURELS.length;
     $('#menu-colonnes-resume').text(`Colonnes ${total - colonnesCachees.size}/${total}`);
+}
+
+// Réordonne physiquement les cellules [data-field] de chaque ligne (thead + tbody)
+// selon ordreColonnes. Les cellules sans data-field (« Lien dispo ») restent en fin.
+function appliquerOrdreColonnes() {
+    document.querySelectorAll('#tbl-ja tr').forEach(tr => {
+        const parCle = {}, reste = [];
+        [...tr.children].forEach(c => {
+            const f = c.getAttribute('data-field');
+            if (f) parCle[f] = c; else reste.push(c);
+        });
+        ordreColonnes.forEach(f => { if (parCle[f]) tr.appendChild(parCle[f]); });
+        reste.forEach(c => tr.appendChild(c));
+    });
+}
+
+function deplacerColonne(i, delta) {
+    const j = i + delta;
+    if (j < 0 || j >= ordreColonnes.length) return;
+    [ordreColonnes[i], ordreColonnes[j]] = [ordreColonnes[j], ordreColonnes[i]];
+    persistOrdre();
+    construireMenuColonnes();
+    appliquerOrdreColonnes();
 }
 
 function construireMenuColonnes() {
     const $box = $('#menu-colonnes-list').empty();
+    const labels = {};
     document.querySelectorAll('#tbl-ja thead th[data-field]').forEach(th => {
-        const field = th.getAttribute('data-field');
-        const label = (th.textContent || '').replace(/[⇅▲▼]/g, '').trim();
-        const $chk  = $('<input type="checkbox">').prop('checked', !colonnesCachees.has(field));
+        labels[th.getAttribute('data-field')] = (th.textContent || '').replace(/[⇅▲▼]/g, '').trim();
+    });
+    ordreColonnes.forEach((field, i) => {
+        const $chk = $('<input type="checkbox">').prop('checked', !colonnesCachees.has(field));
         $chk.on('change', function () {
             if (this.checked) colonnesCachees.delete(field);
             else              colonnesCachees.add(field);
             try { localStorage.setItem(LS_COLONNES, JSON.stringify([...colonnesCachees])); } catch (e) {}
             appliquerColonnesCachees();
         });
-        $('<label>').append($chk).append(document.createTextNode(' ' + label)).appendTo($box);
+        const $up   = $('<button type="button" class="mc-move" title="Monter">▲</button>').prop('disabled', i === 0);
+        const $down = $('<button type="button" class="mc-move" title="Descendre">▼</button>').prop('disabled', i === ordreColonnes.length - 1);
+        $up.on('click',   () => deplacerColonne(i, -1));
+        $down.on('click', () => deplacerColonne(i,  1));
+        $('<div class="mc-row">')
+            .append($('<label>').append($chk).append(document.createTextNode(' ' + (labels[field] || field))))
+            .append($up).append($down)
+            .appendTo($box);
     });
 }
 construireMenuColonnes();
 appliquerColonnesCachees();
+appliquerOrdreColonnes();
 
 // ── Filtre département ────────────────────────────────────────────────────────
 $('#sel-dept').on('change', function () {
