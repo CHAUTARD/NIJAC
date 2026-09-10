@@ -177,6 +177,15 @@
         .btn-attestation     { background-color: #ffe0b2; }
         .btn-attestations    { background-color: #ffe9d1; }
         .btn-compta          { background-color: #e3f2fd; }
+        /* Bouton documentation : fond hachuré pour le distinguer des écrans */
+        .btn-doc {
+            background-color: #eceff1;
+            background-image: repeating-linear-gradient(45deg,
+                rgba(0,0,0,.07) 0, rgba(0,0,0,.07) 7px,
+                transparent 7px, transparent 15px);
+        }
+        /* Bouton documentation : dernière colonne de la grille, sans code écran */
+        #menu-grid .btn-doc { grid-column: -2 / -1; }
 
         .btn-code {
             position: absolute;
@@ -244,6 +253,12 @@
         <div class="btn-icon"><img src="<?= base_url('img/Compta.png') ?>" alt="Comptabilite"></div>
         <span>Comptes EBP des JA</span>
         <span class="btn-desc">Import CSV et saisie du n° de compte EBP des JA</span>
+    </a>
+
+    <a href="<?= base_url('Documentation/guide-ecrans-defiscalisateur.html') ?>" target="_blank" rel="noopener" class="menu-btn btn-doc">
+        <div class="btn-icon"><img src="<?= base_url('img/Documentation.png') ?>" alt="Documentation"></div>
+        <span>Documentation</span>
+        <span class="btn-desc">Guide des écrans (nouvelle page)</span>
     </a>
 
 </div>

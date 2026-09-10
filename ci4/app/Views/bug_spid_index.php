@@ -11,8 +11,6 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-liste-edit.css') ?>">
     <style>
         #panel-liste { width: 62%; }
-        #tbl-bugspid td.col-statut .badge-traite  { background: #c6efce; color: #1a5c1a; }
-        #tbl-bugspid td.col-statut .badge-atraiter { background: #fff3cd; color: #7a5b00; }
         #tbody-liste tr.ligne-ok { background: #e8f5e9; }
         #tbody-liste tr.ligne-ok:nth-child(even) { background: #ddeedd; }
         #zone-import { padding: .5rem .75rem; background: #f4f7fb; border-bottom: 1px solid #c8d4e8; }
@@ -22,7 +20,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'wrench-adjustable-circle', 'phTitle' => 'BugSpid — corrections de clubs dupliqués', 'phCode' => 'EA97',
+    'phIcon' => 'wrench-adjustable-circle', 'phTitle' => 'BugSpid — Corrections de clubs dupliqués', 'phCode' => 'EA97',
     'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu') . '#tab-dba', 'phBackUrl' => site_url('admin-menu') . '#tab-dba',
 ]) ?>
 
@@ -59,11 +57,11 @@
                 <thead>
                     <tr>
                         <th style="width:30px"><input type="checkbox" id="chk-tout"></th>
-                        <th data-col="1">Description<span class="sort-icon"></span></th>
-                        <th style="width:110px" data-col="2">Ancien Id_Club<span class="sort-icon"></span></th>
-                        <th style="width:110px" data-col="3">Nouveau Id_Club<span class="sort-icon"></span></th>
-                        <th style="width:90px" data-col="4">Statut<span class="sort-icon"></span></th>
-                        <th style="width:140px" data-col="5">Date exécution<span class="sort-icon"></span></th>
+                        <th style="width:55px" data-col="1">N°<span class="sort-icon"></span></th>
+                        <th data-col="2">Description<span class="sort-icon"></span></th>
+                        <th style="width:110px" data-col="3">Ancien Id_Club<span class="sort-icon"></span></th>
+                        <th style="width:110px" data-col="4">Nouveau Id_Club<span class="sort-icon"></span></th>
+                        <th data-col="5">EquipeNom<span class="sort-icon"></span></th>
                         <th style="width:60px"></th>
                     </tr>
                 </thead>
@@ -99,8 +97,6 @@
                 <input type="text" id="txt-equipe-nom" class="form-control form-control-sm" maxlength="100"
                        placeholder="Laisser vide pour ne pas toucher au EquipeNom du club cible">
             </div>
-
-            <div class="form-readonly small text-muted mb-2" id="txt-resultat"></div>
 
             <div id="panel-boutons">
                 <button class="btn btn-sm btn-enregistrer px-3" id="btn-enregistrer"><i class="bi bi-floppy me-1"></i>Enregistrer</button>
@@ -195,9 +191,6 @@ function renderListe() {
     }
 
     lignes.forEach(l => {
-        const badge = l.Statut === 'Traite'
-            ? '<span class="badge badge-traite">Traité</span>'
-            : '<span class="badge badge-atraiter">À traiter</span>';
         const $tdFftt = $('<td>').append(
             $('<button type="button" class="btn btn-sm btn-outline-secondary btn-xml-club-b" title="Tester xml_club_b avec cet Id_Club">')
                 .html('<i class="bi bi-cloud-download"></i>')
@@ -212,12 +205,12 @@ function renderListe() {
                 .on('click', function (e) { e.stopPropagation(); afficherNomClub(l.NouveauIdClub); });
         }
         $('<tr>').attr('data-id', l.Id_BugSpid).toggleClass('ligne-ok', nouveauOk).append(
-            $('<td>').append($('<input type="checkbox" class="chk-ligne">').prop('disabled', l.Statut === 'Traite')),
+            $('<td>').append($('<input type="checkbox" class="chk-ligne">')),
+            $('<td>').text(l.Id_BugSpid ?? ''),
             $('<td>').text(l.Description ?? ''),
             $('<td>').text(l.AncienIdClub ?? ''),
             $tdNouveau,
-            $('<td>').addClass('col-statut').html(badge),
-            $('<td>').text(l.DateExecution ?? ''),
+            $('<td>').text(l.EquipeNom ?? ''),
             $tdFftt
         ).on('click', function (e) {
             if ($(e.target).is('input[type="checkbox"]')) return;
@@ -245,7 +238,6 @@ function selectionnerLigne($tr) {
     $('#txt-ancien').val(l.AncienIdClub ?? '');
     $('#txt-nouveau').val(l.NouveauIdClub ?? '');
     $('#txt-equipe-nom').val(l.EquipeNom ?? '');
-    $('#txt-resultat').text(l.Resultat ? `Résultat : ${l.Resultat}` : '');
     setStatus('');
 }
 
@@ -255,7 +247,6 @@ $('#btn-nouveau').on('click', function () {
     $('#no-selection').hide();
     $('#form-bugspid').show();
     $('#txt-description, #txt-ancien, #txt-nouveau, #txt-equipe-nom').val('');
-    $('#txt-resultat').text('');
     setStatus('');
 });
 
@@ -301,7 +292,7 @@ $('#btn-supprimer').on('click', function () {
 });
 
 $('#chk-tout').on('change', function () {
-    $('.chk-ligne:not(:disabled)').prop('checked', this.checked);
+    $('.chk-ligne').prop('checked', this.checked);
 });
 
 $('#btn-executer-selection').on('click', function () {

@@ -42,6 +42,9 @@
         }
         #toolbar .ts-pwd-warning:hover { color: #900; }
 
+        /* Cartouches statistiques : contenu centré (EN11 uniquement) */
+        #stat-cards .stat-card { text-align: center; }
+
         /* Recherche / comboboxes / badge : style partagé (asset/css/nijac.css) */
 
         /* ── En-tête ── */

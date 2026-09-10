@@ -118,6 +118,7 @@
             display: flex;
             flex-direction: column;
             gap: 2px;
+            text-align: center;
         }
         .dash-card .dc-label {
             font-size: .70rem;
@@ -257,6 +258,15 @@
         .btn-r34           { background-color: #fbe9e7; }
         .btn-correspondant { background-color: #fff8e1; }
         .btn-club          { background-color: #ede7f6; }
+        /* Bouton documentation : fond hachuré pour le distinguer des écrans */
+        .btn-doc {
+            background-color: #eceff1;
+            background-image: repeating-linear-gradient(45deg,
+                rgba(0,0,0,.07) 0, rgba(0,0,0,.07) 7px,
+                transparent 7px, transparent 15px);
+        }
+        /* Bouton documentation : dernière colonne de la grille, sans code écran */
+        #menu-grid .menu-btn-wrap.mbw-doc { grid-column: -2 / -1; }
 
         /* Code écran en haut à droite de chaque bouton */
         .menu-btn { position: relative; }
@@ -436,6 +446,14 @@
             <div class="btn-icon"><img src="<?= base_url('img/Stat_JA.png') ?>" alt="Statistiques JA"></div>
             <span>Statistiques JA</span>
             <span class="btn-desc">Arbitrages, kilomètres et frais par JA sur une période</span>
+        </a>
+    </div>
+
+    <div class="menu-btn-wrap mbw-doc">
+        <a href="<?= base_url('Documentation/guide-ecrans-ja.html') ?>" target="_blank" rel="noopener" class="menu-btn btn-doc">
+            <div class="btn-icon"><img src="<?= base_url('img/Documentation.png') ?>" alt="Documentation"></div>
+            <span>Documentation</span>
+            <span class="btn-desc">Guide des écrans (nouvelle page)</span>
         </a>
     </div>
 

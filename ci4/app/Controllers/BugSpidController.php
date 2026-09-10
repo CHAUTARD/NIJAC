@@ -47,14 +47,22 @@ class BugSpidController extends BaseController
                 Description VARCHAR(255) NOT NULL,
                 AncienIdClub VARCHAR(20) NOT NULL,
                 NouveauIdClub VARCHAR(20) NOT NULL,
-                EquipeNom VARCHAR(100) NULL,
-                Statut ENUM(\'A traiter\',\'Traite\') NOT NULL DEFAULT \'A traiter\',
-                DateAjout DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                DateExecution DATETIME NULL,
-                Resultat TEXT NULL
+                EquipeNom VARCHAR(100) NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
               COMMENT=\'File de corrections Id_Club dupliqué (alpha -> code FFTT réel), exécutable en lot depuis EA97\''
         );
+
+        // Colonnes de suivi retirées (Statut/DateAjout/DateExecution/Resultat) :
+        // l'ALTER ne s'exécute qu'au premier chargement après déploiement.
+        try {
+            $cols     = $pdo->query('SHOW COLUMNS FROM BugSpid')->fetchAll(\PDO::FETCH_COLUMN);
+            $aRetirer = array_intersect(['Statut', 'DateAjout', 'DateExecution', 'Resultat'], $cols);
+            if ($aRetirer) {
+                $pdo->exec('ALTER TABLE BugSpid DROP COLUMN ' . implode(', DROP COLUMN ', $aRetirer));
+            }
+        } catch (\PDOException $e) {
+            log_message('error', '[NIJAC] bug_spid ALTER : ' . $e->getMessage());
+        }
     }
 
     private function tryJson(\Closure $fn): ResponseInterface
@@ -533,7 +541,6 @@ class BugSpidController extends BaseController
         // ON DELETE CASCADE, ça supprimerait même les équipes).
         if ($nouveau === '' || $nouveau === $ancien || !preg_match('/^\d{8}$/', $nouveau)) {
             $msg = 'NouveauIdClub manquant ou invalide (code FFTT à 8 chiffres attendu, différent de AncienIdClub).';
-            $pdo->prepare('UPDATE BugSpid SET Resultat=? WHERE Id_BugSpid=?')->execute([$msg, $id]);
 
             return ['id' => $id, 'ok' => false, 'msg' => $msg];
         }
@@ -554,18 +561,14 @@ class BugSpidController extends BaseController
             $pdo->commit();
 
             $resultat = "$nbEquipes équipe(s) repointée(s) de $ancien vers $nouveau.";
-            $pdo->prepare('UPDATE BugSpid SET Statut=\'Traite\', DateExecution=NOW(), Resultat=? WHERE Id_BugSpid=?')
-                ->execute([$resultat, $id]);
 
             return ['id' => $id, 'ok' => true, 'msg' => $resultat];
         } catch (\Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            $msg = 'Erreur : ' . $e->getMessage();
-            $pdo->prepare('UPDATE BugSpid SET Resultat=? WHERE Id_BugSpid=?')->execute([$msg, $id]);
 
-            return ['id' => $id, 'ok' => false, 'msg' => $msg];
+            return ['id' => $id, 'ok' => false, 'msg' => 'Erreur : ' . $e->getMessage()];
         }
     }
 

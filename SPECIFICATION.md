@@ -687,26 +687,25 @@ Récapituler, par JA ayant opté pour la défiscalisation, les frais de déplace
 - Pas de sélecteur dans l'écran : un badge « Année fiscale AAAA » **centré** dans le bandeau. Chargement automatique au démarrage.
 
 ### Interface
-- 3 cartes résumé : *JA actifs défiscalisés*, *Total péages + km*, *Total défiscalisable (barème)*.
-- Tableau : JA, Adresse (CP Ville), Missions, Péages, Kilomètres, **Frais km + péages** (taux plat `frais_kilometrique`, inchangé), **CV** (menu déroulant `–` / `3` / `4` / `5` / `6` / `7 +`), **Élec.** (case à cocher), **Frais défiscalisables (barème)** ; ligne de totaux.
-- Saisie **inline** de CV / électrique : enregistrement AJAX immédiat puis rechargement de la liste (recalcul du barème côté serveur). Ligne sans CV → mention *« CV manquant »*.
+- 3 cartes résumé : *JA défiscalisés*, *Total péages + km*, *Total défiscalisable*.
+- Tableau : N° JA, JA, **CP**, **Ville** (colonnes distinctes), Missions, Péages, Kilomètres, **Frais km + péages** (taux plat `frais_kilometrique`, inchangé), **CV**, **Élec.**, **Frais défiscalisables** ; ligne de totaux (la colonne Élec. y affiche `n/x` = nb de véhicules électriques / nb de JA affichés).
+- **CV et Élec. sont en consultation seule** (`–` / `3` … `7 +` ; `Oui` / `Non`) : ces valeurs sont renseignées par le JA sur son attestation signée (ED53, `AttestationDefiscController`), ou après la relance email ci-dessous — plus de saisie inline dans ED51 (route `vehicule` supprimée). Ligne sans CV → mention *« CV manquant »* dans la colonne barème.
 - Bouton **Gérer le barème** → ED52.
 - Colonne **case à cocher** en tête de ligne (+ case « tout cocher » dans l'en-tête, avec état indéterminé). À chaque (re)chargement, les lignes **sans CV renseigné** sont pré-cochées ; une ligne dont le JA n'a pas d'email (`HasEmail = 0` dans le payload `donnees`) a sa case désactivée.
 - Bouton **Relancer les JA cochés (N)** (placé **à gauche** du bandeau) : email groupé aux JA cochés (confirmation `nijacConfirm`, `POST relancer-vehicule` avec `ids[]`) ; libellé et état actif/inactif suivent le nombre de cases cochées.
 - Bouton **Export CSV**.
 
 ### Population de la liste
-`LEFT JOIN` depuis `ja`, `WHERE ja.Actif = 1 AND ( ja.Defiscalisation = 1 OR EXISTS (nomination.Defiscalisation = 1 sur une rencontre de l'année fiscale pour ce JA) )` — un JA est donc retenu par son **choix global** (`ja.Defiscalisation`, fiche EN11 / écran EN22) **ou** par un **choix par mission** fait sur sa convocation EN21 (`nomination.Defiscalisation`), même sans avoir coché le drapeau global. Les JA sans mission cette année-là apparaissent aussi, totaux à 0. Cumul via `nomination → disponible → ja`, rencontres dont `rencontre.Date` tombe dans l'année fiscale, nominations retenues si `Valide = 1 OR Peage IS NOT NULL OR Kilometre IS NOT NULL OR Defiscalisation = 1`.
+`LEFT JOIN` depuis `ja`, `WHERE ( ja.Defiscalisation = 1 OR EXISTS (nomination.Defiscalisation = 1 sur une rencontre de l'année fiscale pour ce JA) )` — un JA est donc retenu par son **choix global** (`ja.Defiscalisation`, fiche EN11 / écran EN22) **ou** par un **choix par mission** fait sur sa convocation EN21 (`nomination.Defiscalisation`), même sans avoir coché le drapeau global. **Pas de filtre `Actif`** : le reçu fiscal de l'année reste dû aux JA désactivés en fin de saison (EA85). `GROUP BY j.Id_JA` → aucun doublon. Les JA sans mission cette année-là apparaissent aussi, totaux à 0. Cumul via `nomination → disponible → ja`, rencontres dont `rencontre.Date` tombe dans l'année fiscale, nominations retenues si `Valide = 1 OR Peage IS NOT NULL OR Kilometre IS NOT NULL OR Defiscalisation = 1`.
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
 | `donnees` | POST | Agrégat par JA : `NbMissions`, `Peage`, `Kilometre`, `PuissanceFiscale`, `VehiculeElectrique`, `FraisKmPeages` (taux plat), `MontantBareme` (ou `null`) |
-| `vehicule` | POST (`Id_JA`, `PuissanceFiscale`, `VehiculeElectrique`) | Enregistre `ja.PuissanceFiscale` (∈ {3,4,5,6,7}, ou `NULL` si vide) et `ja.VehiculeElectrique` (0/1) |
-| `relancer-vehicule` | POST (`ids[]`) | Envoie le modèle `messagerie` n°10 aux JA dont l'`Id_JA` est coché — nettoyage des ids (entiers > 0, dédup), filtre serveur `Actif = 1` + email présent + ( `Defiscalisation = 1` **ou** `nomination.Defiscalisation = 1` sur l'année fiscale ) — même critère d'inclusion que la liste (les ids invalides sont comptés `ignores` dans le message). Un seul mailer (SMTP keep-alive), `Reply-To` selon le modèle, garde-fou `checkRateLimit()` / `enregistrerEnvois()`. Retour `{ok, envoyes, total, erreurs[], msg}` |
+| `relancer-vehicule` | POST (`ids[]`) | Envoie le modèle `messagerie` n°10 aux JA dont l'`Id_JA` est coché — nettoyage des ids (entiers > 0, dédup), filtre serveur `Actif = 1` + email présent + ( `Defiscalisation = 1` **ou** `nomination.Defiscalisation = 1` sur l'année fiscale ). Un seul mailer (SMTP keep-alive), `Reply-To` selon le modèle, garde-fou `checkRateLimit()` / `enregistrerEnvois()`. Retour `{ok, envoyes, total, erreurs[], msg}` |
 | `export-csv` | POST | Renvoie le CSV en JSON (téléchargement déclenché côté client) |
 
-### Calcul du montant défiscalisable (colonne « Frais défiscalisables (barème) »)
+### Calcul du montant défiscalisable (colonne « Frais défiscalisables »)
 - `d` = `SUM(Kilometre)` du JA sur l'année fiscale.
 - Ligne de barème = celle de `ComptaDefiscalisation` où `PuissanceFiscale BETWEEN Cv_Min AND Cv_Max`.
 - Tranche selon `d` : `d ≤ 5 000` → `d × Coef_T1` ; `5 001 ≤ d ≤ 20 000` → `d × Coef_T2 + Fixe_T2` ; `d > 20 000` → `d × Coef_T3`.
