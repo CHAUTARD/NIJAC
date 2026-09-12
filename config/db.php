@@ -50,7 +50,7 @@ if (!$isProduction) {
 
 // ── Constantes communes ───────────────────────────────────────────────────────
 define('DB_CHARSET',   'utf8mb4');
-define('APP_VERSION', '1.2.114');
+define('APP_VERSION', '1.2.115');
 
 // Seed secret pour l'obfuscation des identifiants JA dans les URL publiques
 // (doit rester identique entre génération et décodage)
@@ -58,6 +58,11 @@ define('OBFUSCATOR_SEED', 167);
 
 function getFfttAppId(): string  { return rot47($_ENV['FFTT_APP_ID']  ?? ''); }
 function getFfttAppKey(): string { return rot47($_ENV['FFTT_APP_KEY'] ?? ''); }
+
+// Secret additionnel mélangé à OBFUSCATOR_SEED (voir Classes/Obfuscator.php) : OBFUSCATOR_SEED
+// est documenté en clair dans le dépôt, ce pepper doit rester UNIQUEMENT dans .env (non versionné).
+// Tant qu'il n'est pas renseigné dans .env, le comportement (et les tokens déjà émis) ne changent pas.
+function getObfuscatorPepper(): string { return rot47($_ENV['OBFUSCATOR_PEPPER'] ?? ''); }
 
 function getSmtpUser(): string     { return rot47($_ENV['SMTP_USER']     ?? ''); }
 function getSmtpPassword(): string { return rot47($_ENV['SMTP_PASSWORD'] ?? ''); }
@@ -104,7 +109,23 @@ function demarrerSessionNijac(): void
 
     $dureeSecondes = 6 * 3600; // 6 heures
     ini_set('session.gc_maxlifetime', (string) $dureeSecondes);
-    session_set_cookie_params(['lifetime' => $dureeSecondes]);
+
+    // Secure conditionné au HTTPS effectif de la requête (pas forcé à true) :
+    // en local WAMP l'accès se fait en http:// (voir CLAUDE.md), un cookie
+    // "Secure" y serait silencieusement refusé par le navigateur et personne
+    // ne resterait connecté. httponly + samesite=Lax n'ont pas cette
+    // contrainte et sont fixés dans tous les cas.
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || ($_SERVER['SERVER_PORT'] ?? null) == 443
+        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+
+    session_set_cookie_params([
+        'lifetime' => $dureeSecondes,
+        'path'     => '/',
+        'secure'   => $https,
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
     session_start();
 }
 

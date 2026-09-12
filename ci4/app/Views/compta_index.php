@@ -159,7 +159,7 @@
             <table id="tbl-ja">
                 <thead>
                     <tr>
-                        <th class="col-sort" style="width:110px" data-col="8" title="Numéro de licence FFTT (= Id JA)">N° de licence <span class="sort-icon">↕</span></th>
+                        <th class="col-sort th-pk" style="width:110px" data-col="8" title="Numéro de licence FFTT (= Id JA)">N° de licence <span class="sort-icon">↕</span></th>
                         <th class="col-sort" data-col="0">Nom <span class="sort-icon">↕</span></th>
                         <th class="col-sort" data-col="1">Prénom <span class="sort-icon">↕</span></th>
                         <th class="col-sort" style="width:55px" data-col="2">Actif <span class="sort-icon">↕</span></th>

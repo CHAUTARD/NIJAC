@@ -105,6 +105,10 @@
         #tbl-clubs thead th.sort-desc .sort-icon::after { content: '▼'; opacity: 1; }
         #tbl-clubs thead th:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
 
+        /* Mot du header de la colonne clé primaire (N° = id_club, code FFTT), pas
+           le fond — même orange que les autres écrans liste/édition. */
+        #tbl-clubs thead th.th-pk { color: #e65100; }
+
         /* ── Spinner ── */
 
         #page-footer {
@@ -221,7 +225,7 @@
     <table id="tbl-clubs">
         <thead>
             <tr>
-                <th style="width:5%"  data-field="id_club" title="N° FFTT">N°<span class="sort-icon"></span></th>
+                <th class="th-pk" style="width:5%"  data-field="id_club" title="N° FFTT">N°<span class="sort-icon"></span></th>
                 <th style="width:16%" data-field="nom">Nom club<span class="sort-icon"></span></th>
                 <th style="width:7%"  data-field="equipe_nom" title="Nom de base utilisé pour les équipes de ce club dans les imports FFTT (ex. « ROUEN SPO » pour « ROUEN SPO 2 »)">Nom équipe<span class="sort-icon"></span></th>
                 <th style="width:9%"  data-field="cor_nom">Correspondant<span class="sort-icon"></span></th>

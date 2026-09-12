@@ -42,6 +42,9 @@ class AuthController extends BaseController
             if ($login === '' || $password === '') {
                 $status      = 'Veuillez remplir tous les champs.';
                 $statutClass = 'text-warning';
+            } elseif ($limite = checkLoginRateLimit()) {
+                $status      = $limite;
+                $statutClass = 'text-danger';
             } else {
                 try {
                     $pdo = getPDO();
@@ -87,6 +90,7 @@ class AuthController extends BaseController
                         return redirect()->to($redirect);
                     }
 
+                    enregistrerEchecLogin();
                     $status      = 'Échec : Identifiants invalides.';
                     $statutClass = 'text-danger';
                 } catch (\PDOException $e) {

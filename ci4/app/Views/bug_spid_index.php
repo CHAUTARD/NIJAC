@@ -57,7 +57,7 @@
                 <thead>
                     <tr>
                         <th style="width:30px"><input type="checkbox" id="chk-tout"></th>
-                        <th style="width:55px" data-col="1">N°<span class="sort-icon"></span></th>
+                        <th class="th-pk" style="width:55px" data-col="1">N°<span class="sort-icon"></span></th>
                         <th data-col="2">Description<span class="sort-icon"></span></th>
                         <th style="width:110px" data-col="3">Ancien Id_Club<span class="sort-icon"></span></th>
                         <th style="width:110px" data-col="4">Nouveau Id_Club<span class="sort-icon"></span></th>
@@ -73,6 +73,21 @@
     </div>
 
     <div id="panel-form">
+
+        <div id="cartouche-role" class="mb-3 border rounded p-2" style="background:#f4f7fb;font-size:.78rem;">
+            <div class="fw-bold text-secondary mb-1" style="font-size:.75rem;letter-spacing:.04em;text-transform:uppercase;">
+                <i class="bi bi-info-circle me-1"></i>Rôle de cet écran
+            </div>
+            <div>
+                Un import de rencontres (EA82/EA83) crée parfois un club « fantôme » — un <code>Id_Club</code>
+                alphabétique — quand le nom du club dans la rencontre FFTT ne correspond à aucun club existant :
+                le même club se retrouve alors en double en base. Chaque ligne ci-contre décrit une fusion à
+                faire, <strong>Ancien Id_Club</strong> (le fantôme) → <strong>Nouveau Id_Club</strong> (le vrai
+                code FFTT à 8 chiffres). « Exécuter la sélection » rejoue alors, pour chaque ligne cochée :
+                bascule des équipes vers le club cible, suppression du club fantôme, puis report optionnel du
+                nom d'équipe.
+            </div>
+        </div>
 
         <div id="no-selection">Sélectionnez une ligne dans la liste pour la modifier, ou cliquez sur « Ajouter ».</div>
 

@@ -32,7 +32,7 @@ class AdresseJaController extends BaseController
         require_once __DIR__ . '/../../../config/helpers.php';
         require_once __DIR__ . '/../../../Classes/Obfuscator.php';
 
-        $this->obf = new \Obfuscator(OBFUSCATOR_SEED);
+        $this->obf = new \Obfuscator(OBFUSCATOR_SEED, getObfuscatorPepper());
     }
 
     private function startSession(): void

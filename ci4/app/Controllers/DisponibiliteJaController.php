@@ -34,7 +34,7 @@ class DisponibiliteJaController extends BaseController
         require_once __DIR__ . '/../../../config/app_config.php';
         require_once __DIR__ . '/../../../Classes/Obfuscator.php';
 
-        $this->obf = new \Obfuscator(OBFUSCATOR_SEED);
+        $this->obf = new \Obfuscator(OBFUSCATOR_SEED, getObfuscatorPepper());
 
         try {
             getPDO()->exec('ALTER TABLE disponible ADD UNIQUE KEY uq_dispo (Id_JA, Id_Rencontre)');

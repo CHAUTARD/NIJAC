@@ -33,7 +33,7 @@ class NominationController extends BaseController
         require_once __DIR__ . '/../../../config/app_config.php';
         require_once __DIR__ . '/../../../Classes/Obfuscator.php';
 
-        $this->obf = new \Obfuscator(OBFUSCATOR_SEED);
+        $this->obf = new \Obfuscator(OBFUSCATOR_SEED, getObfuscatorPepper());
     }
 
     /**

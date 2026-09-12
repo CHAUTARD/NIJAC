@@ -37,9 +37,6 @@ class MotDePasseOublieController extends BaseController
                 $statutClass = 'text-warning';
             } else {
                 try {
-                    // ponytail: pas de cooldown par compte — un tiers connaissant un login
-                    // valide peut redéclencher l'envoi. Ajouter un garde-fou (clé configuration
-                    // « mdp_reset_last_<id> », refus si < 2 min) si le mailbomb devient un souci.
                     $this->envoyerLien($ident);
                 } catch (\Throwable $e) {
                     error_log('[NIJAC] reset mdp : ' . $e->getMessage());
@@ -72,6 +69,17 @@ class MotDePasseOublieController extends BaseController
         if (!$u) {
             return;
         }
+
+        // Cooldown par compte (pas par IP : on veut protéger LE COMPTE ciblé, qui
+        // peut être mail-bombé par un tiers depuis des IP différentes) — un login
+        // valide connu de tous permettrait sinon de redéclencher l'envoi à volonté.
+        // Réponse déjà neutre côté demande() dans tous les cas, donc pas de fuite
+        // d'info en sautant silencieusement l'envoi ici.
+        $cle = 'mdpreset:' . $u['Id_Utilisateur'];
+        if (checkTentativesRateLimit($cle, 3, 15) !== null) {
+            return;
+        }
+        enregistrerTentative($cle, 15);
 
         assurerTemplateMotDePasseOublie($pdo);
         $tpl = $pdo->query("SELECT Sujet, Message FROM messagerie WHERE Type = 'Mot de passe oublié' LIMIT 1")->fetch();

@@ -31,11 +31,24 @@ class Obfuscator
     private string $ai;   // inverse mod 2^32 — string bcmath
 
     // ─────────────────────────────────────────────────────────────────────────
-    public function __construct(int $seed)
+    /**
+     * $pepper (optionnel) : secret additionnel non versionné (.env,
+     * getObfuscatorPepper()) mélangé au seed. $seed seul (167) est documenté
+     * en clair dans le dépôt (CLAUDE.md) — sans pepper, n'importe qui ayant lu
+     * le code peut recalculer obfuscate($id) pour n'importe quel ID et accéder
+     * aux pages JA publiques (adresse/convocation/disponibilité) de n'importe
+     * qui. Avec un pepper non vide, les tokens deviennent infalsifiables sans
+     * connaître ce secret — et ceux déjà émis (avant configuration du pepper)
+     * cessent d'être valides, ce qui est le but.
+     * $pepper vide (défaut) : comportement identique à avant, pour ne rien
+     * casser tant que .env n'a pas été mis à jour sur un environnement donné.
+     */
+    public function __construct(int $seed, string $pepper = '')
     {
         $this->seed = $seed;
-        [$this->enc, $this->dec] = $this->buildAlphabet($seed);
-        [$this->a,   $this->ai]  = $this->buildMultipliers($seed);
+        $effectif = $pepper === '' ? $seed : (int) hexdec(substr(hash('crc32b', $seed . '|' . $pepper), 0, 8));
+        [$this->enc, $this->dec] = $this->buildAlphabet($effectif);
+        [$this->a,   $this->ai]  = $this->buildMultipliers($effectif);
     }
 
     // ── Alphabet mélangé (Fisher-Yates + LCG) ────────────────────────────────

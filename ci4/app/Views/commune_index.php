@@ -93,6 +93,10 @@
         #tbl-communes thead th.sort-desc .sort-icon::after { content: '▼'; opacity: 1; }
         #tbl-communes thead th:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
 
+        /* Mot du header de la colonne clé primaire (N° = Id_LaPoste), pas le fond —
+           même orange que les autres écrans liste/édition. */
+        #tbl-communes thead th.th-pk { color: #e65100; }
+
         #tbl-communes tbody tr { border-bottom: 1px solid #e0e8f0; }
         #tbl-communes tbody tr:nth-child(even) { background: #f7faff; }
         #tbl-communes tbody tr:hover { background: #dce8f8; }
@@ -461,7 +465,7 @@
     <table id="tbl-communes">
         <thead>
             <tr>
-                <th style="width:70px"  data-field="Id_LaPoste">N°<span class="sort-icon"></span></th>
+                <th class="th-pk" style="width:70px"  data-field="Id_LaPoste">N°<span class="sort-icon"></span></th>
                 <th style="width:90px"  data-field="CodePostal">Code postal<span class="sort-icon"></span></th>
                 <th style="width:280px" data-field="Nom">Commune<span class="sort-icon"></span></th>
                 <th style="width:110px" data-field="Latitude">Latitude<span class="sort-icon"></span></th>

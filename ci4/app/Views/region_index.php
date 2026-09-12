@@ -39,7 +39,7 @@
             <table id="tbl-regions">
                 <thead>
                     <tr>
-                        <th style="width:55px;" data-col="0">Code<span class="sort-icon"></span></th>
+                        <th class="th-pk" style="width:55px;" data-col="0">Code<span class="sort-icon"></span></th>
                         <th data-col="1">Nom<span class="sort-icon"></span></th>
                         <th data-col="2">Gentilé<span class="sort-icon"></span></th>
                         <th data-col="3">Chef-lieu<span class="sort-icon"></span></th>

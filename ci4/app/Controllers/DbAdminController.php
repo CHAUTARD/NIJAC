@@ -9,7 +9,10 @@ use CodeIgniter\HTTP\ResponseInterface;
  *
  * Outil "bris de glace" réservé au seul utilisateur CHAUTARD (filtre
  * "adminauth" + vérification manuelle du login, même règle que EA96) :
- * accès SQL total, sans restriction, pour cet unique compte.
+ * accès SQL total, sans restriction, pour cet unique compte. Chaque appel à
+ * sql() revérifie en plus le mot de passe (verifierMdpRequete(), verrouillé
+ * après échecs répétés) : la session CHAUTARD seule ne suffit pas, pour
+ * limiter l'impact d'un vol de cookie de session.
  */
 class DbAdminController extends BaseController
 {
@@ -26,6 +29,50 @@ class DbAdminController extends BaseController
         }
 
         return null;
+    }
+
+    /**
+     * Revérification du mot de passe avant toute requête SQL (même garde-fou
+     * "sudo" que CleanController::verifierMdpRequete()) : le guard CHAUTARD
+     * n'est qu'un check de session — une session volée donnerait sinon un
+     * accès SQL total sans jamais redemander le mot de passe.
+     */
+    private function verifierMdpRequete(): ?ResponseInterface
+    {
+        $idUser  = $_SESSION['utilisateur']['id'] ?? 0;
+        $cle     = 'dbadmin-mdp:' . $idUser;
+        $fenetre = (int) getConfig('login_rate_limit_fenetre', '15');
+
+        if ($limite = checkTentativesRateLimit($cle, (int) getConfig('login_rate_limit_max', '5'), $fenetre)) {
+            return $this->response->setJSON(['ok' => false, 'msg' => $limite]);
+        }
+
+        $password = trim($this->request->getPost('password') ?? '');
+
+        if (!verifierMotDePasseUtilisateur((int) $idUser, $password)) {
+            enregistrerTentative($cle, $fenetre);
+
+            return $this->response->setJSON([
+                'ok'  => false,
+                'msg' => $password === '' ? 'Mot de passe requis.' : 'Mot de passe incorrect.',
+            ]);
+        }
+
+        return null;
+    }
+
+    /** Vérification en direct pour activer le champ mot de passe côté vue (comme CleanController::verifierMdp()). */
+    public function verifierMdp(): ResponseInterface
+    {
+        if ($guard = $this->guardChautard()) {
+            return $guard;
+        }
+
+        if ($err = $this->verifierMdpRequete()) {
+            return $err;
+        }
+
+        return $this->response->setJSON(['ok' => true]);
     }
 
     public function index()
@@ -45,6 +92,93 @@ class DbAdminController extends BaseController
             'nomComplet'  => trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? '')),
             'changeLogin' => !empty($u['change_login']),
         ]);
+    }
+
+    private function sqlDir(): string
+    {
+        return __DIR__ . '/../../../SQL';
+    }
+
+    /**
+     * Résout un nom de fichier vers un chemin réel dans SQL/, en bloquant toute
+     * tentative de traversée de répertoire — même principe que
+     * CleanController::resoudreFichierSauvegarde().
+     */
+    private function resoudreFichierSql(string $nomFichier): string|false
+    {
+        $nomFichier = basename($nomFichier);
+        if (!preg_match('/^[A-Za-z0-9_.\-]+\.sql$/', $nomFichier)) {
+            return false;
+        }
+        $dir      = $this->sqlDir();
+        $filepath = realpath($dir . '/' . $nomFichier);
+        if ($filepath === false || dirname($filepath) !== realpath($dir)) {
+            return false;
+        }
+
+        return $filepath;
+    }
+
+    /** Liste des fichiers .sql de SQL/ (sauvegardes + scripts ad-hoc déposés par FTP), plus récents d'abord. */
+    public function fichiersSql(): ResponseInterface
+    {
+        if ($guard = $this->guardChautard()) {
+            return $guard;
+        }
+
+        $fichiers = glob($this->sqlDir() . '/*.sql') ?: [];
+        usort($fichiers, static fn ($a, $b) => filemtime($b) <=> filemtime($a));
+
+        return $this->response->setJSON(['ok' => true, 'fichiers' => array_map('basename', $fichiers)]);
+    }
+
+    /**
+     * Contenu d'un fichier .sql de SQL/ pour le charger dans l'éditeur (pas
+     * d'exécution automatique). Revérifie le mot de passe comme sql() : ces
+     * fichiers peuvent être des sauvegardes complètes de la base.
+     */
+    public function chargerFichierSql(): ResponseInterface
+    {
+        if ($guard = $this->guardChautard()) {
+            return $guard;
+        }
+        if ($err = $this->verifierMdpRequete()) {
+            return $err;
+        }
+
+        $chemin = $this->resoudreFichierSql((string) ($this->request->getPost('fichier') ?? ''));
+        if ($chemin === false) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Nom de fichier invalide.']);
+        }
+
+        $contenu = file_get_contents($chemin);
+        if ($contenu === false) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Impossible de lire le fichier.']);
+        }
+
+        return $this->response->setJSON(['ok' => true, 'contenu' => $contenu]);
+    }
+
+    /** Supprime un fichier .sql de SQL/ — même garde-fou mot de passe que sql()/chargerFichierSql(), irréversible. */
+    public function supprimerFichierSql(): ResponseInterface
+    {
+        if ($guard = $this->guardChautard()) {
+            return $guard;
+        }
+        if ($err = $this->verifierMdpRequete()) {
+            return $err;
+        }
+
+        $chemin = $this->resoudreFichierSql((string) ($this->request->getPost('fichier') ?? ''));
+        if ($chemin === false) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Nom de fichier invalide.']);
+        }
+
+        if (!unlink($chemin)) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Impossible de supprimer le fichier.']);
+        }
+
+        return $this->response->setJSON(['ok' => true, 'msg' => 'Fichier supprimé.']);
     }
 
     public function tables(): ResponseInterface
@@ -75,6 +209,9 @@ class DbAdminController extends BaseController
     {
         if ($guard = $this->guardChautard()) {
             return $guard;
+        }
+        if ($err = $this->verifierMdpRequete()) {
+            return $err;
         }
 
         $sqlInput   = trim($this->request->getPost('sql') ?? '');

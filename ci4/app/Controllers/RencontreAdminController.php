@@ -23,7 +23,7 @@ class RencontreAdminController extends BaseController
         require_once __DIR__ . '/../../../config/app_config.php';
     }
 
-    private function tryJson(\Closure $fn): ResponseInterface
+    protected function tryJson(\Closure $fn): ResponseInterface
     {
         try {
             return $fn();

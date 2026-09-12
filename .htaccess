@@ -4,13 +4,32 @@ php_value post_max_size 12M
 php_value max_execution_time 300
 php_value max_input_time 300
 
+# ── Fichiers/dossiers sensibles jamais servis en direct ──────────────────────
+# Le passthrough plus bas sert tel quel tout fichier/dossier réel du docroot
+# (asset/, img/...) — sans cette exclusion, .env (secrets ROT47, triviaux à
+# décoder : identifiants BDD/SMTP/FFTT, pepper Obfuscator) et SQL/ (sauvegardes
+# complètes de la base — mots de passe hashés, données perso des JA — créées
+# par CleanController/EA85, jamais servies via un lien de l'appli elle-même)
+# seraient directement téléchargeables par n'importe qui connaissant/devinant
+# l'URL.
+<FilesMatch "^\.env">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
 # ── Front controller CI4 exposé à la racine de ce dossier ────────────────────
 # Ce dossier peut être le docroot du vhost (WAMP local, "nijac") ou un
 # sous-dossier du site (production, ".../nijac/") : pas de RewriteBase codée
 # en dur, Apache déduit la base du chemin physique du présent .htaccess, donc
 # les deux cas fonctionnent sans modification. Les fichiers/dossiers réels
-# (asset/, img/, SQL/, Importation/, logs/, ci4/ lui-même, etc.) sont servis
-# tels quels, tout le reste est transmis au front controller CodeIgniter 4
+# (asset/, img/, logs/, ci4/ lui-même, etc.) sont servis tels quels — sauf
+# .env, SQL/ et Importation/, bloqués ci-dessus/ci-dessous — tout le reste est
+# transmis au front controller CodeIgniter 4
 # (ci4/public/index.php) — même logique que ci4/public/.htaccess, appliquée
 # un niveau au-dessus.
 <IfModule mod_rewrite.c>
@@ -19,6 +38,18 @@ php_value max_input_time 300
     # Racine du dossier (lui-même existe -> ne pas la confondre avec un
     # passthrough de fichier/dossier réel ci-dessous)
     RewriteRule ^$ ci4/public/index.php [L]
+
+    # SQL/ : sauvegardes de base créées par CleanController (EA85), lues/écrites
+    # uniquement côté serveur (jamais de lien de téléchargement direct dans l'appli).
+    RewriteRule ^SQL/ - [F,L]
+
+    # Importation/ : dépôt de fichiers d'import (FTP ou écriture serveur), lus/écrits
+    # uniquement côté serveur (glob(), file_put_contents()...) — aucun lien de
+    # téléchargement direct dans l'appli (vérifié : les mentions dans les vues sont du
+    # texte, et l'unique export qui s'en approche renvoie le contenu inline en JSON,
+    # téléchargé côté client via un Blob JS). Contient des données sensibles (fichiers
+    # comptables JA, disponibilités, documents nominatifs).
+    RewriteRule ^Importation/ - [F,L]
 
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d

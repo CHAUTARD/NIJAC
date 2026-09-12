@@ -30,7 +30,7 @@ class AttestationDefiscController extends BaseController
         require_once __DIR__ . '/../../../config/db.php';
         require_once __DIR__ . '/../../../config/app_config.php';
         require_once __DIR__ . '/../../../Classes/Obfuscator.php';
-        $this->obf = new \Obfuscator(OBFUSCATOR_SEED);
+        $this->obf = new \Obfuscator(OBFUSCATOR_SEED, getObfuscatorPepper());
     }
 
     /** Id_JA depuis ?ja=TOKEN (obfusqué) ; 0 si absent ou invalide. */

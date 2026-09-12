@@ -24,6 +24,18 @@
             padding: .4rem .75rem;
         }
         #menu-strip > .strip-titre { font-weight: 700; color: var(--nijac-blue); }
+
+        /* Bulle de couleur sur le code division, pour un repérage visuel rapide
+           dans la liste — même couleur que celle utilisée ailleurs (EA95...). */
+        .badge-division {
+            display: inline-block;
+            padding: .15rem .55rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: .78rem;
+            border: 1px solid rgba(0,0,0,.15);
+        }
+
     </style>
 </head>
 <body>
@@ -47,7 +59,7 @@
             <table id="tbl-divisions">
                 <thead>
                     <tr>
-                        <th style="width:80px" data-col="0">Division<span class="sort-icon"></span></th>
+                        <th class="th-pk" style="width:80px" data-col="0">Division<span class="sort-icon"></span></th>
                         <th data-col="1">Nom<span class="sort-icon"></span></th>
                         <th style="width:50px" data-col="2">Ord<span class="sort-icon"></span></th>
                         <th style="width:50px;text-align:center">Couleur</th>
@@ -133,6 +145,18 @@ const DIVISION_BASE = '<?= site_url('division') ?>';
 let currentId = null;
 const sortState = { col: '2', asc: true }; // 2 = colonne Ord, tri par défaut (voir DivisionController::data())
 
+function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Texte noir ou blanc selon la luminance de la couleur de fond, pour rester lisible
+// quelle que soit la couleur de division choisie.
+function texteContrastant(hex) {
+    const c = (hex || '#1565c0').replace('#', '');
+    const r = parseInt(c.substr(0, 2), 16), g = parseInt(c.substr(2, 2), 16), b = parseInt(c.substr(4, 2), 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#000' : '#fff';
+}
+
 function setStatus(msg, ok = true) {
     $('#form-status').text(msg)
         .removeClass('text-danger text-success')
@@ -150,11 +174,13 @@ function chargerListe(selectId = null) {
             const arb = +d.ArbitrageCRA === 1
                 ? '<span class="badge" style="background:#1565c0;font-size:.75rem">Obligatoire</span>'
                 : '<span class="badge" style="background:#e65100;font-size:.75rem">Sur demande</span>';
-            const couleur = `<span style="display:inline-block;width:16px;height:16px;border-radius:3px;border:1px solid #999;background:${d.Color || '#1565c0'}"></span>`;
+            const coul = d.Color || '#1565c0';
+            const couleur = `<span style="display:inline-block;width:16px;height:16px;border-radius:3px;border:1px solid #999;background:${coul}"></span>`;
+            const division = `<span class="badge-division" style="background:${coul};color:${texteContrastant(coul)}">${escHtml(d.Division)}</span>`;
             const $tr = $('<tr>')
                 .attr('data-id', d.Division)
                 .append(
-                    $('<td>').text(d.Division),
+                    $('<td>').html(division),
                     $('<td>').text(d.Nom),
                     $('<td class="text-center">').text(d.Ord),
                     $('<td class="text-center">').html(couleur),

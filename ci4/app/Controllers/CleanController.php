@@ -59,18 +59,6 @@ class CleanController extends BaseController
         return __DIR__ . '/../../../SQL';
     }
 
-    private function verifierMotDePasse(\PDO $pdo, array $moi, string $password): bool
-    {
-        if ($password === '') {
-            return false;
-        }
-        $stmt = $pdo->prepare('SELECT Password FROM Utilisateur WHERE Id_Utilisateur = ? LIMIT 1');
-        $stmt->execute([$moi['id']]);
-        $row = $stmt->fetch();
-
-        return $row && \SecurePasswordHasher::verify($password, $row['Password']);
-    }
-
     /**
      * Revérifie le mot de passe admin pour la requête POST courante. Retourne
      * une réponse d'erreur JSON à renvoyer immédiatement si invalide, ou null
@@ -79,12 +67,27 @@ class CleanController extends BaseController
      * même l'exécution de la méthode), comme le fait clean.php pour tout ce
      * qui n'est pas liste_sauvegardes/liste_sauvegardes_total.
      */
+    /**
+     * Anti brute-force sur cette revérification : verrou par Id_Utilisateur
+     * (pas par IP — la session admin est déjà ouverte, seul le mot de passe
+     * manque, donc c'est le compte qui est ciblé, quelle que soit l'IP de
+     * l'attaquant avec une session volée).
+     */
     private function verifierMdpRequete(): ?ResponseInterface
     {
-        $pdo      = getPDO();
+        $moi     = $this->moi();
+        $cle     = 'clean-mdp:' . ($moi['id'] ?? '0');
+        $fenetre = (int) getConfig('login_rate_limit_fenetre', '15');
+
+        if ($limite = checkTentativesRateLimit($cle, (int) getConfig('login_rate_limit_max', '5'), $fenetre)) {
+            return $this->response->setJSON(['ok' => false, 'msg' => $limite]);
+        }
+
         $password = trim($this->request->getPost('password') ?? '');
 
-        if (!$this->verifierMotDePasse($pdo, $this->moi(), $password)) {
+        if (!verifierMotDePasseUtilisateur((int) ($moi['id'] ?? 0), $password)) {
+            enregistrerTentative($cle, $fenetre);
+
             return $this->response->setJSON([
                 'ok'  => false,
                 'msg' => $password === '' ? 'Mot de passe requis.' : 'Mot de passe incorrect.',

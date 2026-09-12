@@ -325,6 +325,10 @@ $routes->put('rencontres-date/(:num)', 'RencontreNominateurController::update/$1
 // que EA96). Outil "bris de glace" : requêteur SQL libre, sans restriction.
 $routes->get('db-admin', 'DbAdminController::index', ['filter' => 'adminauth']);
 $routes->get('db-admin/tables', 'DbAdminController::tables', ['filter' => 'adminauth']);
+$routes->get('db-admin/fichiers-sql', 'DbAdminController::fichiersSql', ['filter' => 'adminauth']);
+$routes->post('db-admin/verifier-mdp', 'DbAdminController::verifierMdp', ['filter' => 'adminauth']);
+$routes->post('db-admin/charger-fichier-sql', 'DbAdminController::chargerFichierSql', ['filter' => 'adminauth']);
+$routes->post('db-admin/supprimer-fichier-sql', 'DbAdminController::supprimerFichierSql', ['filter' => 'adminauth']);
 $routes->post('db-admin/sql', 'DbAdminController::sql', ['filter' => 'adminauth']);
 
 // ── EA97 BugSpid (file de corrections Id_Club dupliqué) ─────────────────────

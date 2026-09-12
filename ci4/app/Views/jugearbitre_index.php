@@ -98,6 +98,10 @@
         #tbl-ja thead th.sort-desc .sort-icon::after { content: '▼'; opacity: 1; }
         #tbl-ja thead th:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
 
+        /* Mot du header de la colonne clé primaire (N° JA = Id_JA), pas le fond —
+           même orange que les autres écrans liste/édition. */
+        #tbl-ja thead th.th-pk { color: #e65100; }
+
 
         #tbl-ja tbody tr { border-bottom: 1px solid #e0e8f0; }
         #tbl-ja tbody tr:hover   { background: #dce8f8; }
@@ -371,7 +375,7 @@
     <table id="tbl-ja">
         <thead>
             <tr>
-                <th style="width:70px"  data-field="id">N° JA<span class="sort-icon"></span></th>
+                <th class="th-pk" style="width:70px"  data-field="id">N° JA<span class="sort-icon"></span></th>
                 <th style="width:55px;display:none"  data-field="grade">Grade<span class="sort-icon"></span></th>
                 <th style="width:160px" data-field="nom">Nom<span class="sort-icon"></span></th>
                 <th style="width:140px" data-field="prenom">Prénom<span class="sort-icon"></span></th>

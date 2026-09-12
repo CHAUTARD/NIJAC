@@ -51,6 +51,47 @@
         }
         #toolbar .ts-pwd-warning:hover { color: #900; }
 
+        /* ── Bandeau mot de passe (revérification avant exécution SQL) ── */
+        #pwd-banner {
+            background: #f0f4fa;
+            border-bottom: 2px solid #c8d4e8;
+            padding: .45rem 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+            flex-shrink: 0;
+            font-size: .88rem;
+        }
+        #pwd-banner label { font-weight: 600; color: #1a3a6b; white-space: nowrap; margin: 0; }
+        #pwd-banner .pwd-wrap { display: flex; align-items: center; gap: 0; }
+        #pwd-global {
+            border: 2px solid #c8d4e8;
+            border-right: none;
+            border-radius: 6px 0 0 6px;
+            padding: .3rem .7rem;
+            font-size: .88rem;
+            width: 220px;
+            transition: border-color .2s;
+        }
+        #pwd-global:focus { outline: none; border-color: #1a3a6b; }
+        #pwd-global.is-invalid { border-color: #dc2626; }
+        #pwd-global.is-valid   { border-color: #16a34a; }
+        #pwd-toggle-btn {
+            border: 2px solid #c8d4e8;
+            border-left: none;
+            border-radius: 0 6px 6px 0;
+            background: #fff;
+            padding: 0 .6rem;
+            cursor: pointer;
+            transition: border-color .2s;
+            display: flex;
+            align-items: center;
+            align-self: stretch;
+        }
+        #pwd-global.is-invalid ~ #pwd-toggle-btn { border-color: #dc2626; }
+        #pwd-global.is-valid   ~ #pwd-toggle-btn { border-color: #16a34a; }
+        #pwd-msg-global { font-size: .82rem; min-width: 180px; }
+
         #main-area {
             flex: 1;
             display: flex;
@@ -112,6 +153,9 @@
             gap: .75rem;
             min-width: 0;
         }
+
+        #fichier-sql-bar { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+        #sql-fichiers { max-width: 320px; font-size: .82rem; }
 
         #sql-input {
             width: 100%;
@@ -187,14 +231,21 @@
 
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 
+<!-- Bandeau mot de passe : revérifié avant toute requête SQL (une session volée
+     ne suffit plus à exécuter du SQL sans connaître le mot de passe) -->
+<div id="pwd-banner">
+    <label for="pwd-global"><i class="bi bi-key-fill me-1"></i>Mot de passe administrateur :</label>
+    <div class="pwd-wrap">
+        <input type="password" id="pwd-global" data-pwd-toggle="1" autocomplete="current-password" placeholder="Entrez votre mot de passe…">
+        <button type="button" id="pwd-toggle-btn" tabindex="-1" title="Afficher / masquer le mot de passe">
+            <span id="pwd-eye">👁️</span>
+        </button>
+    </div>
+    <div id="pwd-msg-global"></div>
+</div>
+
 <!-- Spinner -->
 <?= view('partials/spinner_overlay') ?>
-
-<div id="menu-strip">
-    <a class="menu-item" href="<?= site_url('bug-spid') ?>">
-        <i class="bi bi-wrench-adjustable-circle"></i>BugSpid — corrections de clubs dupliqués
-    </a>
-</div>
 
 <div id="main-area">
     <div id="panel-tables">
@@ -208,10 +259,20 @@
     </div>
 
     <div id="panel-query">
+        <div id="fichier-sql-bar">
+            <select id="sql-fichiers" class="form-select form-select-sm"><option value="">Charger un fichier .sql de /SQL/…</option></select>
+            <button class="btn btn-outline-secondary btn-sm" id="btn-charger-fichier" disabled>
+                <i class="bi bi-folder2-open me-1"></i>Charger
+            </button>
+            <button class="btn btn-outline-danger btn-sm" id="btn-supprimer-fichier" disabled>
+                <i class="bi bi-trash me-1"></i>Supprimer
+            </button>
+        </div>
+
         <textarea id="sql-input" placeholder="SELECT * FROM ja LIMIT 50;&#10;UPDATE ja SET ... WHERE ...;" spellcheck="false"></textarea>
 
         <div id="action-bar">
-            <button class="btn btn-primary btn-sm" id="btn-executer">
+            <button class="btn btn-primary btn-sm" id="btn-executer" disabled>
                 <i class="bi bi-play-fill me-1"></i>Exécuter (Ctrl+Entrée)
             </button>
             <span class="text-muted" style="font-size:.78rem;">Plusieurs requêtes séparées par « ; » sont exécutées à la suite.</span>
@@ -249,6 +310,47 @@ function escHtml(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ── Mot de passe (revérifié avant toute requête SQL) ─────────────────────────
+let pwdOk    = false;
+let pwdTimer = null;
+
+function majBoutonSupprimer() {
+    $('#btn-supprimer-fichier').prop('disabled', !pwdOk || !$('#sql-fichiers').val());
+}
+
+$('#sql-fichiers').on('change', majBoutonSupprimer);
+
+$('#pwd-global').on('input', function () {
+    const val = $(this).val();
+    pwdOk = false;
+    $('#btn-executer, #btn-charger-fichier').prop('disabled', true);
+    majBoutonSupprimer();
+    $('#pwd-msg-global').text('').removeClass('text-danger text-success');
+    $(this).removeClass('is-invalid is-valid');
+
+    clearTimeout(pwdTimer);
+    if (val.length < 3) return;
+
+    pwdTimer = setTimeout(() => {
+        $.post(`${DB_ADMIN_BASE}/verifier-mdp`, { password: val }, res => {
+            pwdOk = !!res.ok;
+            $('#btn-executer, #btn-charger-fichier').prop('disabled', !pwdOk);
+            majBoutonSupprimer();
+            $('#pwd-global').toggleClass('is-valid', pwdOk).toggleClass('is-invalid', !pwdOk);
+            $('#pwd-msg-global').html(pwdOk
+                ? '<span class="text-success"><i class="bi bi-check-circle me-1"></i>Mot de passe correct.</span>'
+                : `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${escHtml(res.msg)}</span>`);
+        }, 'json');
+    }, 600);
+});
+
+$('#pwd-toggle-btn').on('click', function () {
+    const $i = $('#pwd-global');
+    const isHidden = $i.attr('type') === 'password';
+    $i.attr('type', isHidden ? 'text' : 'password');
+    $('#pwd-eye').text(isHidden ? '🙈' : '👁️');
+});
+
 // ── Liste des tables ──────────────────────────────────────────────────────────
 function chargerTables() {
     $.get(`${DB_ADMIN_BASE}/tables`, function (res) {
@@ -283,6 +385,51 @@ function chargerTables() {
     });
 }
 
+// ── Fichiers .sql de /SQL/ (sauvegardes + scripts ad-hoc déposés par FTP) ────
+function chargerFichiersSql() {
+    $.get(`${DB_ADMIN_BASE}/fichiers-sql`, function (res) {
+        const $sel = $('#sql-fichiers');
+        $sel.find('option:not(:first)').remove();
+        if (res.ok) res.fichiers.forEach(nom => $sel.append(`<option value="${escHtml(nom)}">${escHtml(nom)}</option>`));
+        majBoutonSupprimer();
+    }, 'json');
+}
+
+$('#btn-charger-fichier').on('click', function () {
+    const fichier = $('#sql-fichiers').val();
+    if (!fichier) { toast('Choisissez un fichier .sql.', false); return; }
+    if (!pwdOk) { toast('Saisissez votre mot de passe administrateur avant de charger un fichier.', false); return; }
+
+    spinner(true);
+    $.post(`${DB_ADMIN_BASE}/charger-fichier-sql`, { fichier, password: $('#pwd-global').val() }, function (res) {
+        spinner(false);
+        if (!res.ok) { toast(res.msg, false); return; }
+        $('#sql-input').val(res.contenu).trigger('focus');
+        toast(`« ${fichier} » chargé — vérifiez le contenu avant d'exécuter.`);
+    }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
+});
+
+$('#btn-supprimer-fichier').on('click', function () {
+    const fichier = $('#sql-fichiers').val();
+    if (!fichier) { toast('Choisissez un fichier .sql.', false); return; }
+    if (!pwdOk) { toast('Saisissez votre mot de passe administrateur avant de supprimer un fichier.', false); return; }
+
+    nijacConfirm(
+        `Supprimer définitivement « ${fichier} » du dossier /SQL/ ?\n\nCette opération est IRRÉVERSIBLE.`,
+        function () {
+            spinner(true);
+            $.post(`${DB_ADMIN_BASE}/supprimer-fichier-sql`, { fichier, password: $('#pwd-global').val() }, function (res) {
+                spinner(false);
+                if (!res.ok) { toast(res.msg, false); return; }
+                toast(res.msg);
+                chargerFichiersSql();
+            }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
+        },
+        null,
+        { type: 'danger', title: 'Supprimer le fichier', confirmLabel: 'Supprimer' }
+    );
+});
+
 // ── État de la dernière recherche SELECT (pour générer l'UPDATE au double-clic) ──
 let currentTable  = null; // nom de table si la requête est un simple "SELECT ... FROM `table`", sinon null
 let currentRows   = [];
@@ -291,11 +438,12 @@ let currentPkCols = []; // colonne(s) de la clé primaire de currentTable
 function executerRequete(sqlOverride) {
     const sql = (sqlOverride !== undefined ? sqlOverride : $('#sql-input').val()).trim();
     if (!sql) { toast('Saisissez une requête SQL.', false); return; }
+    if (!pwdOk) { toast('Saisissez votre mot de passe administrateur avant d\'exécuter du SQL.', false); return; }
     if (sqlOverride !== undefined) $('#sql-input').val(sqlOverride);
 
     spinner(true);
     setStatus('Exécution en cours…');
-    $.post(`${DB_ADMIN_BASE}/sql`, { sql }, function (res) {
+    $.post(`${DB_ADMIN_BASE}/sql`, { sql, password: $('#pwd-global').val() }, function (res) {
         spinner(false);
         if (!res.ok) {
             const succes = (res.results || []).filter(r => r.ok);
@@ -354,7 +502,7 @@ function afficherResultatsMultiples(results) {
 // Récupère la/les colonne(s) de la clé primaire d'une table (pour cibler l'UPDATE généré au double-clic).
 function chargerClePrimaire(table) {
     return new Promise(resolve => {
-        $.post(`${DB_ADMIN_BASE}/sql`, { sql: `SHOW KEYS FROM \`${table}\` WHERE Key_name = 'PRIMARY'` }, function (res) {
+        $.post(`${DB_ADMIN_BASE}/sql`, { sql: `SHOW KEYS FROM \`${table}\` WHERE Key_name = 'PRIMARY'`, password: $('#pwd-global').val() }, function (res) {
             const r = res.ok && res.results && res.results[0];
             resolve(r && r.type === 'select' ? r.rows.map(x => x.Column_name) : []);
         }, 'json').fail(() => resolve([]));
@@ -461,7 +609,7 @@ $('#sql-input').on('keydown', function (e) {
     }
 });
 
-$(function () { chargerTables(); });
+$(function () { chargerTables(); chargerFichiersSql(); });
 </script>
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>

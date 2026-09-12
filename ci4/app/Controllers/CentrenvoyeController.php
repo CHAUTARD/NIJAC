@@ -52,7 +52,7 @@ class CentrenvoyeController extends BaseController
 
     private function obfuscator(): \Obfuscator
     {
-        return new \Obfuscator(OBFUSCATOR_SEED);
+        return new \Obfuscator(OBFUSCATOR_SEED, getObfuscatorPepper());
     }
 
     public function index()

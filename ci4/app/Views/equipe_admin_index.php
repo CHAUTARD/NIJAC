@@ -78,7 +78,7 @@
             <table id="tbl-equipes">
                 <thead>
                     <tr>
-                        <th style="width:90px" data-col="0">Id_Equipe<span class="sort-icon"></span></th>
+                        <th class="th-pk" style="width:90px" data-col="0">Id_Equipe<span class="sort-icon"></span></th>
                         <th data-col="1">Nom<span class="sort-icon"></span></th>
                         <th style="width:80px" data-col="2">Division<span class="sort-icon"></span></th>
                         <th data-col="3">Club<span class="sort-icon"></span></th>

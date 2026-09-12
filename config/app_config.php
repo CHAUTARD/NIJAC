@@ -560,11 +560,11 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
     require_once __DIR__ . '/../Classes/Obfuscator.php';
 
     $idJa         = (int)($ja['Id_JA'] ?? 0);
-    $token        = $idJa > 0 ? (new \Obfuscator(OBFUSCATOR_SEED))->obfuscate($idJa) : '';
+    $token        = $idJa > 0 ? (new Obfuscator(OBFUSCATOR_SEED, getObfuscatorPepper()))->obfuscate($idJa) : '';
     $idNomination = $ctx['id_nomination'] ?? null;
-    $tokenNomination = !empty($idNomination) ? (new \Obfuscator(OBFUSCATOR_SEED))->obfuscate((int) $idNomination) : '';
+    $tokenNomination = !empty($idNomination) ? (new Obfuscator(OBFUSCATOR_SEED, getObfuscatorPepper()))->obfuscate((int) $idNomination) : '';
     $idRencontre  = $ctx['id_rencontre'] ?? null;
-    $tokenRenc    = !empty($idRencontre) ? (new \Obfuscator(OBFUSCATOR_SEED))->obfuscate((int) $idRencontre) : '';
+    $tokenRenc    = !empty($idRencontre) ? (new Obfuscator(OBFUSCATOR_SEED, getObfuscatorPepper()))->obfuscate((int) $idRencontre) : '';
 
     $sexe = match ($ctx['sexe_code'] ?? '') {
         'F'     => 'Féminin',
@@ -691,6 +691,120 @@ function enregistrerEnvois(int $nb): void
     for ($i = 0; $i < $nb; $i++) {
         $_SESSION['nijac_rate_limit'][] = $now;
     }
+}
+
+/**
+ * Anti brute-force générique : verrou par clé arbitraire (IP, Id_Utilisateur...)
+ * dans un fichier JSON — pas $_SESSION comme checkRateLimit() : un tiers qui
+ * tente de deviner un mot de passe peut simplement ignorer le cookie de
+ * session à chaque essai et repartir avec un compteur à zéro.
+ *
+ * Retourne null si la tentative est autorisée, ou un message d'erreur sinon.
+ * Appeler enregistrerTentative() après chaque tentative à comptabiliser
+ * (échec de mot de passe, ou envoi d'email pour un cooldown type mail-bombing).
+ */
+function checkTentativesRateLimit(string $cle, int $max, int $fenetreMinutes): ?string
+{
+    $now   = time();
+    $debut = $now - $fenetreMinutes * 60;
+
+    $tentatives = array_filter(tentativesLire()[$cle] ?? [], fn (int $ts) => $ts > $debut);
+    if (count($tentatives) >= $max) {
+        $attente = (int) ceil((min($tentatives) + $fenetreMinutes * 60 - $now) / 60);
+        return "Trop de tentatives. Réessayez dans environ {$attente} minute(s).";
+    }
+    return null;
+}
+
+/** Enregistre une tentative pour la clé donnée. */
+function enregistrerTentative(string $cle, int $fenetreMinutes): void
+{
+    $now   = time();
+    $debut = $now - $fenetreMinutes * 60;
+
+    $fp = fopen(__DIR__ . '/../logs/login_attempts.json', 'c+');
+    if (!$fp) return;
+
+    flock($fp, LOCK_EX);
+    $data = json_decode(stream_get_contents($fp) ?: '', true) ?: [];
+
+    // Purge des horodatages expirés (toutes clés) pour éviter que le fichier ne grossisse indéfiniment.
+    foreach ($data as $k => $timestamps) {
+        $data[$k] = array_values(array_filter($timestamps, fn (int $ts) => $ts > $debut));
+        if (!$data[$k]) unset($data[$k]);
+    }
+    $data[$cle][] = $now;
+
+    rewind($fp);
+    ftruncate($fp, 0);
+    fwrite($fp, json_encode($data));
+    flock($fp, LOCK_UN);
+    fclose($fp);
+}
+
+/** Lecture brute du fichier de tentatives (séparée pour rester appelable sans écrire). */
+function tentativesLire(): array
+{
+    $fichier = __DIR__ . '/../logs/login_attempts.json';
+    if (!is_file($fichier)) return [];
+    return json_decode(file_get_contents($fichier) ?: '', true) ?: [];
+}
+
+/**
+ * Anti brute-force sur la connexion (E001). Verrou par IP.
+ *
+ * ponytail: verrou par IP seule (pas IP+login) — un attaquant derrière un
+ * NAT/proxy partagé peut bloquer d'autres utilisateurs légitimes du même
+ * point de sortie ; passer à IP+login si ça devient un souci réel.
+ */
+function checkLoginRateLimit(): ?string
+{
+    $max     = (int) getConfig('login_rate_limit_max',     '5');
+    $fenetre = (int) getConfig('login_rate_limit_fenetre', '15'); // minutes
+
+    return checkTentativesRateLimit('login:' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'), $max, $fenetre);
+}
+
+/** Enregistre un échec de connexion pour l'IP courante. */
+function enregistrerEchecLogin(): void
+{
+    $fenetre = (int) getConfig('login_rate_limit_fenetre', '15');
+
+    enregistrerTentative('login:' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'), $fenetre);
+}
+
+/**
+ * Neutralise l'injection de formule dans un export CSV/Excel (recommandation
+ * OWASP) : un champ texte dont la valeur commence par =, +, -, @, tab ou CR
+ * est interprété comme une formule par Excel/LibreOffice à l'ouverture du
+ * fichier — un club ou un JA dont le nom serait ainsi préfixé (import FFTT,
+ * saisie admin) exécuterait ou exfiltrerait des données chez qui l'ouvre.
+ * À utiliser sur les colonnes texte uniquement (pas sur des nombres calculés,
+ * où un "-" est un simple signe négatif légitime).
+ */
+function csvSafe($valeur): string
+{
+    $valeur = (string) $valeur;
+
+    return preg_match('/^[=+@\t\r-]/', $valeur) ? "'" . $valeur : $valeur;
+}
+
+/**
+ * Revérifie le mot de passe d'un utilisateur déjà authentifié (garde-fou
+ * "sudo" des écrans admin destructeurs : CleanController, DbAdminController).
+ */
+function verifierMotDePasseUtilisateur(int $idUtilisateur, string $password): bool
+{
+    if ($password === '' || $idUtilisateur <= 0) {
+        return false;
+    }
+    require_once __DIR__ . '/../Classes/SecurePasswordHasher.php';
+
+    $stmt = getPDO()->prepare('SELECT Password FROM Utilisateur WHERE Id_Utilisateur = ? LIMIT 1');
+    $stmt->execute([$idUtilisateur]);
+    $row = $stmt->fetch();
+
+    return $row && \SecurePasswordHasher::verify($password, $row['Password']);
 }
 
 /**

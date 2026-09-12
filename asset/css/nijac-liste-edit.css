@@ -111,6 +111,13 @@ body {
 #table-wrapper table thead th.sort-asc  .sort-icon::after { content: '▲'; opacity: 1; }
 #table-wrapper table thead th.sort-desc .sort-icon::after { content: '▼'; opacity: 1; }
 #table-wrapper table thead th[data-col]:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
+
+/* Mot du header de la colonne clé primaire (pas le fond), pour la repérer d'un
+   coup d'œil dans les écrans liste/édition — même orange que les badges "sur
+   demande"/avertissement du projet. Pas de préfixe #table-wrapper : certains
+   écrans (compta_index...) nomment leur conteneur de table différemment, et
+   .background n'est pas touché ici donc pas de conflit de spécificité à gérer. */
+.th-pk { color: #e65100; font-weight: 700; }
 #table-wrapper table tbody tr { cursor: pointer; border-bottom: 1px solid #e0e8f0; }
 #table-wrapper table tbody tr:nth-child(even) { background: #f4f7fc; }
 #table-wrapper table tbody tr:hover { background: #dce8f8; }

@@ -32,7 +32,7 @@ class ArbitreClubController extends BaseController
         require_once __DIR__ . '/../../../config/app_config.php';
         require_once __DIR__ . '/../../../Classes/Obfuscator.php';
 
-        $this->obf = new \Obfuscator(OBFUSCATOR_SEED);
+        $this->obf = new \Obfuscator(OBFUSCATOR_SEED, getObfuscatorPepper());
     }
 
     private function tryJson(\Closure $fn): ResponseInterface

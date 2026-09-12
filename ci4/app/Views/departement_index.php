@@ -73,7 +73,7 @@
             <table id="tbl-depts">
                 <thead>
                     <tr>
-                        <th style="width:55px;" data-col="CodeDept">Code<span class="sort-icon"></span></th>
+                        <th class="th-pk" style="width:55px;" data-col="CodeDept">Code<span class="sort-icon"></span></th>
                         <th data-col="nom">Nom<span class="sort-icon"></span></th>
                         <th data-col="nom_region">Région<span class="sort-icon"></span></th>
                         <th data-col="Limitrophe">Limitrophes<span class="sort-icon"></span></th>

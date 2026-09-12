@@ -310,7 +310,7 @@ class StatsJaController extends BaseController
         fputcsv($out, ['Nom', 'Prénom', 'Grade', 'Club', 'Arbitrages', 'Km', 'Péages (€)', 'Indemnité (€)', 'Total (€)'], ';');
         foreach ($rows as $r) {
             fputcsv($out, [
-                $r['Nom'], $r['Prenom'], $r['Grade'], $r['Club'],
+                csvSafe($r['Nom']), csvSafe($r['Prenom']), csvSafe($r['Grade']), csvSafe($r['Club']),
                 $r['Arbitrages'],
                 $r['Km'],
                 number_format((float) $r['Peages'], 2, ',', ''),

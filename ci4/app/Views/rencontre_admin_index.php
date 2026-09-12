@@ -100,7 +100,7 @@
             <table id="tbl-rencontres">
                 <thead>
                     <tr>
-                        <th style="width:90px" data-col="0">Id_Rencontre<span class="sort-icon"></span></th>
+                        <th class="th-pk" style="width:90px" data-col="0">Id_Rencontre<span class="sort-icon"></span></th>
                         <th style="width:140px" data-col="1">Date<span class="sort-icon"></span></th>
                         <th style="width:60px" data-col="2">Heure<span class="sort-icon"></span></th>
                         <th style="width:55px" data-col="3">Poule<span class="sort-icon"></span></th>
@@ -154,11 +154,7 @@
                 <label class="form-label" for="sel-heure">Heure</label>
                 <div class="input-group input-group-sm">
                     <button type="button" class="btn btn-outline-secondary" id="btn-heure-moins"><i class="bi bi-dash-lg"></i></button>
-                    <select id="sel-heure" class="form-select form-select-sm">
-                        <option value="09:00">9h00</option>
-                        <option value="14:00">14h00</option>
-                        <option value="16:00">16h00</option>
-                    </select>
+                    <input type="time" id="sel-heure" class="form-control form-control-sm" step="60">
                     <button type="button" class="btn btn-outline-secondary" id="btn-heure-plus"><i class="bi bi-plus-lg"></i></button>
                 </div>
             </div>
@@ -416,12 +412,14 @@ $('#sel-poule').on('change', function () { pouleFiltre = $(this).val(); renderLi
 $('#sel-journee').on('change', function () { journeeFiltre = $(this).val(); renderListe(); });
 $('#sel-date').on('change', function () { dateFiltre = $(this).val(); renderListe(); });
 
+// Champ <input type="time"> : saisie libre 00:00–23:59 ; les boutons -/+ décalent
+// de 15 min, bornés (pas de bascule minuit).
 function decalerHeure(delta) {
-    const $sel = $('#sel-heure');
-    const idx = $sel.prop('selectedIndex') + delta;
-    if (idx >= 0 && idx < $sel.find('option').length) {
-        $sel.prop('selectedIndex', idx);
-    }
+    const $inp = $('#sel-heure');
+    const [h, m] = ($inp.val() || '09:00').split(':').map(Number);
+    const tot = Math.max(0, Math.min(1439, h * 60 + m + delta * 15));
+    const pad = n => String(n).padStart(2, '0');
+    $inp.val(`${pad(Math.floor(tot / 60))}:${pad(tot % 60)}`);
 }
 $('#btn-heure-moins').on('click', function () { decalerHeure(-1); });
 $('#btn-heure-plus').on('click', function () { decalerHeure(1); });

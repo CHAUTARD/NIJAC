@@ -633,6 +633,9 @@ Version nominateur d'EA95 : permettre au nominateur de corriger uniquement la **
 ### Filtres (identiques à EA95)
 Département, Division, Poule, Journée, Date, recherche Équipe.
 
+### Saisie de l'heure (panneau d'édition — identique EN23 / EA95)
+`<input type="time" step="60">` : n'importe quelle heure de **00:00 à 23:59** (au clavier ou via le sélecteur natif du navigateur). Les boutons **–** / **+** encadrant le champ décalent de **15 minutes**, bornés à `[00:00, 23:59]` (pas de bascule à minuit). Le contrôleur accepte tout `HH:MM` (regex `^\d{2}:\d{2}(:\d{2})?$`, complété en `:00`). *(Auparavant : `<select>` à 3 créneaux 09:00 / 14:00 / 16:00.)*
+
 ---
 
 ## EN27 – Clubs / Associations

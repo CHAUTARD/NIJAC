@@ -1,0 +1,13 @@
+# ci4/.env : mêmes secrets ROT47 que le .env racine, jamais servi en direct
+# (voir le .htaccess racine pour le détail — ci4/ est un dossier réel passé
+# tel quel par ce .htaccess-là, ci4/public/.htaccess ne protège que ce qui
+# est sous ci4/public/).
+<FilesMatch "^\.env">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
