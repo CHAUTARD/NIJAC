@@ -24,6 +24,7 @@
 - [EN21 – Convocation et frais JA](#en21--convocation-et-frais-ja)
 - [EN22 – Disponibilité JA](#en22--disponibilité-ja)
 - [EN23 – Date des rencontres](#en23--date-des-rencontres)
+- [EN24 – Remplacement équipe](#en24--remplacement-équipe)
 - [EN27 – Clubs / Associations](#en27--clubs--associations)
 - [ED51 – Défiscalisation JA](#ed51--défiscalisation-ja)
 - [ED52 – Barème kilométrique](#ed52--barème-kilométrique)
@@ -635,6 +636,28 @@ Département, Division, Poule, Journée, Date, recherche Équipe.
 
 ### Saisie de l'heure (panneau d'édition — identique EN23 / EA95)
 `<input type="time" step="60">` : n'importe quelle heure de **00:00 à 23:59** (au clavier ou via le sélecteur natif du navigateur). Les boutons **–** / **+** encadrant le champ décalent de **15 minutes**, bornés à `[00:00, 23:59]` (pas de bascule à minuit). Le contrôleur accepte tout `HH:MM` (regex `^\d{2}:\d{2}(:\d{2})?$`, complété en `:00`). *(Auparavant : `<select>` à 3 créneaux 09:00 / 14:00 / 16:00.)*
+
+---
+
+## EN24 – Remplacement équipe
+
+`RemplacementEquipeController` (CI4), routes `remplacement-equipe`, `remplacement-equipe/equipes`, `remplacement-equipe/rencontres/(:num)`, `remplacement-equipe/remplacer` (POST). Filtre `auth` (Nominateur ou Administrateur). Bouton du menu E003, juste après EN23.
+
+### Objectif
+Une équipe forfait ou désistée pour le reste de la saison est remplacée par une autre équipe sur toutes ses rencontres restantes, sans repasser par un ré-import (EA82/EA83) et sans éditer manuellement chaque rencontre en EA95.
+
+### Écran
+- **Gauche** : mêmes informations et filtres que EN23 — tableau de **toutes** les rencontres (Date, Heure, Poule, Journée, Division, Domicile, Extérieur), filtres Département/Division/Poule/Journée/Date + recherche libre Équipe, plus une colonne **JA** (« Oui »/« Non ») indiquant si une nomination existe déjà sur la rencontre. Cliquer sur le nom d'une équipe (Domicile ou Extérieur) la désigne comme **équipe à remplacer** (et filtre au passage le tableau sur son nom, comme le clic sur une équipe en EN23).
+- **Droite** : une fois une équipe désignée à gauche, un champ de recherche libre (nom d'équipe ou de club) permet de choisir l'**équipe de remplacement** parmi toutes les équipes de la base (résultats limités à 15, pas de restriction de division — le nominateur reste libre du choix). Un bouton **Confirmer le remplacement** déclenche l'opération sur les rencontres **affichées** dans le tableau au moment du clic (celles de l'équipe désignée, réduites par les filtres Département/Division/Poule/Journée/Date/Équipe éventuellement actifs) — pas forcément toute la saison de l'équipe : le nominateur peut ainsi ne remplacer qu'une partie des rencontres (ex. une seule journée) en filtrant avant de confirmer.
+
+### Séquence de confirmation (aucune écriture en base avant la dernière étape)
+1. Vérification, dès le clic sur **Confirmer le remplacement**, du nombre de nominations déjà faites sur les rencontres actuellement affichées. S'il y en a : une première confirmation (`nijacConfirm`, type danger) annonce leur suppression prochaine.
+2. Une seconde confirmation récapitule le remplacement (nom des deux équipes, nombre de rencontres affichées concernées).
+3. Ce n'est qu'après validation de cette dernière étape qu'une unique requête `POST remplacement-equipe/remplacer` est envoyée, avec la liste des `Id_Rencontre` affichés (`ids`) : le contrôleur restreint le traitement à ceux qui impliquent réellement l'équipe à remplacer (Domicile ou Extérieur), supprime leurs nominations puis bascule `Id_EquipeDom`/`Id_EquipeExt`, dans une seule transaction PDO (`beginTransaction`/`commit`/`rollBack`) — tout ou rien.
+4. Le message de succès retourné par le serveur rappelle, si des nominations ont été supprimées, qu'elles doivent être refaites (EN14).
+
+### Contrôleur
+Pas de Model, `getPDO()` direct comme le reste de cette famille d'écrans. Aucune restriction de département (comme `RencontreAdminController::data()`, dont EN23 hérite déjà sans filtrage dept).
 
 ---
 

@@ -258,6 +258,7 @@
         .btn-r34           { background-color: #fbe9e7; }
         .btn-correspondant { background-color: #fff8e1; }
         .btn-club          { background-color: #ede7f6; }
+        .btn-remplacement  { background-color: #fff3e0; }
         /* Bouton documentation : fond hachuré pour le distinguer des écrans */
         .btn-doc {
             background-color: #eceff1;
@@ -437,6 +438,15 @@
             <div class="btn-icon"><img src="<?= base_url('img/CalendarHour.png') ?>" alt="Date des rencontres"></div>
             <span>Date des rencontres</span>
             <span class="btn-desc">Modifier la date et l'heure d'une rencontre</span>
+        </a>
+    </div>
+
+    <div class="menu-btn-wrap">
+        <a href="<?= site_url('remplacement-equipe') ?>" class="menu-btn btn-remplacement">
+            <span class="btn-code">EN24</span>
+            <div class="btn-icon"><img src="<?= base_url('img/Changement_Equipe.png') ?>" alt="Remplacement équipe"></div>
+            <span>Remplacement équipe</span>
+            <span class="btn-desc">Remplacer une équipe forfait sur ses rencontres restantes</span>
         </a>
     </div>
 

@@ -301,6 +301,7 @@ $routes->delete('equipe-regionale/(:num)', 'EquipeRegionaleController::supprimer
 // ── EA94 Gestion des équipes ─────────────────────────────────────────────────
 $routes->get('gestion-equipes', 'EquipeAdminController::index', ['filter' => 'adminauth']);
 $routes->get('gestion-equipes/data', 'EquipeAdminController::data', ['filter' => 'adminauth']);
+$routes->post('gestion-equipes', 'EquipeAdminController::store', ['filter' => 'adminauth']);
 $routes->put('gestion-equipes/(:num)', 'EquipeAdminController::update/$1', ['filter' => 'adminauth']);
 $routes->delete('gestion-equipes/(:num)', 'EquipeAdminController::delete/$1', ['filter' => 'adminauth']);
 
@@ -318,6 +319,16 @@ $routes->delete('gestion-rencontres/(:num)', 'RencontreAdminController::delete/$
 $routes->get('rencontres-date', 'RencontreNominateurController::index', ['filter' => 'auth']);
 $routes->get('rencontres-date/data', 'RencontreNominateurController::data', ['filter' => 'auth']);
 $routes->put('rencontres-date/(:num)', 'RencontreNominateurController::update/$1', ['filter' => 'auth']);
+
+// ── EN24 Remplacement équipe (nominateur) ────────────────────────────────────
+// Une équipe forfait/désistée est remplacée par une autre sur toutes ses
+// rencontres restantes (Id_EquipeDom/Id_EquipeExt) ; les nominations déjà
+// faites sur ces rencontres sont supprimées (à refaire par le nominateur).
+// Nominateur ou Administrateur (filtre "auth").
+$routes->get('remplacement-equipe', 'RemplacementEquipeController::index', ['filter' => 'auth']);
+$routes->get('remplacement-equipe/data', 'RemplacementEquipeController::data', ['filter' => 'auth']);
+$routes->get('remplacement-equipe/equipes', 'RemplacementEquipeController::equipes', ['filter' => 'auth']);
+$routes->post('remplacement-equipe/remplacer', 'RemplacementEquipeController::remplacer', ['filter' => 'auth']);
 
 // ── EA98 Administration base de données ──────────────────────────────────────
 // Admin uniquement (filtre "adminauth"), + restriction supplémentaire

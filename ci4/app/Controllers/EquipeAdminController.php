@@ -43,10 +43,11 @@ class EquipeAdminController extends BaseController
         $moi = $_SESSION['utilisateur'] ?? [];
 
         $data = [
-            'nomComplet'   => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
-            'departement'  => $moi['id_departement'] ?? '',
-            'changeLogin'  => !empty($moi['change_login']),
-            'divisionNoms' => getDivisionNoms(),
+            'nomComplet'    => trim(($moi['nom'] ?? '') . ' ' . ($moi['prenom'] ?? '')),
+            'departement'   => $moi['id_departement'] ?? '',
+            'changeLogin'   => !empty($moi['change_login']),
+            'divisionNoms'  => getDivisionNoms(),
+            'saisonCourante' => getConfig('saison', date('Y') . '-' . (date('Y') + 1)),
         ];
 
         return view('equipe_admin_index', $data);
@@ -63,12 +64,13 @@ class EquipeAdminController extends BaseController
             // ImportRencontresNatController::filtrerCodeDept() (un club "entente" fictif, sans
             // vrai numéro FFTT, produit un code garbage à ignorer plutôt qu'un faux département).
             $equipes = $pdo->query(
-                "SELECT e.Id_Equipe, e.Nom, e.Division, e.Id_Club, c.Nom AS NomClub,
+                "SELECT e.Id_Equipe, e.Nom, e.Division, dv.Color AS DivisionColor, e.Id_Club, c.Nom AS NomClub,
                         d.CodeDept AS Departement,
                         e.ReEngagement, e.JourSouhaite, e.SouhaitJA, e.DesiderataSaison
                  FROM equipe e
                  JOIN club c ON c.Id_Club = e.Id_Club
                  LEFT JOIN departement d ON d.CodeDept = SUBSTRING(e.Id_Club, 3, 2)
+                 LEFT JOIN division dv ON dv.Division = e.Division
                  ORDER BY e.Nom"
             )->fetchAll();
 
@@ -81,6 +83,56 @@ class EquipeAdminController extends BaseController
             $departements = getDeptActifs();
 
             return $this->response->setJSON(['ok' => true, 'equipes' => $equipes, 'clubs' => $clubs, 'divisions' => $divisions, 'departements' => $departements]);
+        });
+    }
+
+    public function store(): ResponseInterface
+    {
+        return $this->tryJson(function () {
+            $pdo   = getPDO();
+            $input = $this->request->getPost();
+
+            $nom       = trim($input['nom'] ?? '');
+            $division  = trim($input['division'] ?? '');
+            $idClub    = trim($input['id_club'] ?? '');
+            $reeng     = trim($input['re_engagement'] ?? '') ?: null;
+            $jourSouh  = trim($input['jour_souhaite'] ?? '') ?: null;
+            $souhaitJa = trim($input['souhait_ja'] ?? '') ?: null;
+            $desider   = trim($input['desiderata_saison'] ?? '') ?: null;
+
+            if ($nom === '') {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Le nom ne peut pas être vide.']);
+            }
+
+            $chkDiv = $pdo->prepare('SELECT 1 FROM division WHERE Division = ?');
+            $chkDiv->execute([$division]);
+            if (!$chkDiv->fetchColumn()) {
+                return $this->response->setJSON(['ok' => false, 'msg' => "Division « $division » inconnue."]);
+            }
+
+            $chkClub = $pdo->prepare('SELECT 1 FROM club WHERE Id_Club = ?');
+            $chkClub->execute([$idClub]);
+            if (!$chkClub->fetchColumn()) {
+                return $this->response->setJSON(['ok' => false, 'msg' => "Club « $idClub » inconnu."]);
+            }
+
+            if ($reeng !== null && !in_array($reeng, ['O', 'N'], true)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Réengagement invalide.']);
+            }
+            if ($jourSouh !== null && !in_array($jourSouh, ['Samedi', 'Dimanche'], true)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Jour souhaité invalide.']);
+            }
+            if ($souhaitJa !== null && !in_array($souhaitJa, ['CRA', 'Club'], true)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Souhait JA invalide.']);
+            }
+
+            $stmt = $pdo->prepare(
+                'INSERT INTO equipe (Nom, Division, Id_Club, ReEngagement, JourSouhaite, SouhaitJA, DesiderataSaison)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)'
+            );
+            $stmt->execute([$nom, $division, $idClub, $reeng, $jourSouh, $souhaitJa, $desider]);
+
+            return $this->response->setJSON(['ok' => true, 'msg' => 'Équipe créée.', 'id' => (int) $pdo->lastInsertId()]);
         });
     }
 

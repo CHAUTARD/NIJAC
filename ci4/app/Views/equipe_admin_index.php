@@ -99,7 +99,9 @@
 
     <div id="panel-form">
 
-        <div id="no-selection">Sélectionnez une équipe dans la liste pour la modifier.</div>
+        <button class="btn btn-sm btn-nouveau px-3 mb-3" id="btn-nouveau"><i class="bi bi-plus-circle me-1"></i>Nouveau</button>
+
+        <div id="no-selection">Sélectionnez une équipe dans la liste pour la modifier, ou cliquez sur « Nouveau » pour en créer une.</div>
 
         <div id="form-equipe" style="display:none;">
             <div class="mb-2">
@@ -118,8 +120,9 @@
             </div>
 
             <div class="mb-2">
-                <label class="form-label" for="edit-sel-club">Club</label>
-                <select id="edit-sel-club" class="form-select form-select-sm"></select>
+                <label class="form-label" for="edit-club-nom">Club</label>
+                <input type="text" id="edit-club-nom" class="form-control form-control-sm" list="dl-clubs" placeholder="Rechercher un club…" autocomplete="off">
+                <datalist id="dl-clubs"></datalist>
             </div>
 
             <hr>
@@ -174,6 +177,7 @@
 'use strict';
 const EQUIPE_BASE = '<?= site_url('gestion-equipes') ?>';
 const DIVISION_NOMS = <?= json_encode($divisionNoms ?? [], JSON_UNESCAPED_UNICODE) ?>;
+const SAISON_COURANTE = <?= json_encode($saisonCourante ?? '', JSON_UNESCAPED_UNICODE) ?>;
 function libDivision(code) {
     const n = DIVISION_NOMS[code];
     return n ? code + ' — ' + n : code;
@@ -191,6 +195,21 @@ const sortState = { col: null, asc: true };
 
 function esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* Calcule la luminosité d'une couleur hex et retourne '#fff' ou '#111' selon le contraste */
+function textColorFor(hex) {
+    const c = hex.replace('#', '');
+    const r = parseInt(c.substring(0,2), 16);
+    const g = parseInt(c.substring(2,4), 16);
+    const b = parseInt(c.substring(4,6), 16);
+    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return lum > 0.55 ? '#111' : '#fff';
+}
+
+function macaronDivision(division, color) {
+    const bg = color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#1a3a6b';
+    return $('<span class="badge">').text(division ?? '').css({ background: bg, color: textColorFor(bg) });
 }
 
 function setStatus(msg, ok = true) {
@@ -253,8 +272,22 @@ function peuplerSelectsFormulaire() {
     const $selDiv = $('#edit-sel-division').empty();
     divisions.forEach(d => $selDiv.append(new Option(libDivision(d), d)));
 
-    const $selClub = $('#edit-sel-club').empty();
-    clubs.forEach(c => $selClub.append(new Option(c.Nom, c.Id_Club)));
+    const $dl = $('#dl-clubs').empty();
+    clubs.forEach(c => $dl.append(new Option(`${c.Nom} (${c.Id_Club})`)));
+}
+
+function libClub(idClub) {
+    const c = clubs.find(x => x.Id_Club === idClub);
+    return c ? `${c.Nom} (${c.Id_Club})` : '';
+}
+
+/** Résout le texte saisi dans le champ Club (avec datalist) vers un Id_Club, ou '' si aucune correspondance. */
+function idClubDepuisSaisie(texte) {
+    const t = texte.trim();
+    const m = /\(([^()]+)\)\s*$/.exec(t);
+    if (m && clubs.some(c => c.Id_Club === m[1])) return m[1];
+    const c = clubs.find(x => x.Nom === t);
+    return c ? c.Id_Club : '';
 }
 
 function renderListe() {
@@ -271,7 +304,7 @@ function renderListe() {
         $('<tr>').attr('data-id', e.Id_Equipe).append(
             $('<td>').text(e.Id_Equipe ?? ''),
             $('<td>').text(e.Nom ?? ''),
-            $('<td>').text(e.Division ?? ''),
+            $('<td>').append(macaronDivision(e.Division, e.DivisionColor)),
             $('<td>').text(e.NomClub ?? ''),
             $('<td>').text(e.Id_Club ?? ''),
             $('<td>').text(e.Departement ?? ''),
@@ -301,7 +334,7 @@ function selectionnerLigne($tr) {
     $('#txt-id').text(e.Id_Equipe ?? '');
     $('#txt-nom').val(e.Nom ?? '');
     $('#edit-sel-division').val(e.Division ?? '');
-    $('#edit-sel-club').val(e.Id_Club ?? '');
+    $('#edit-club-nom').val(libClub(e.Id_Club ?? ''));
     $('#sel-reengagement').val(e.ReEngagement ?? '');
     $('#sel-jour-souhaite').val(e.JourSouhaite ?? '');
     $('#sel-souhait-ja').val(e.SouhaitJA ?? '');
@@ -309,20 +342,41 @@ function selectionnerLigne($tr) {
     setStatus('');
 }
 
+$('#btn-nouveau').on('click', function () {
+    currentId = null;
+    $('#tbody-liste tr').removeClass('selected');
+    $('#no-selection').hide();
+    $('#form-equipe').show();
+    $('#txt-id').text('(nouvelle équipe)');
+    $('#txt-nom').val('').trigger('focus');
+    $('#edit-sel-division').val('');
+    $('#edit-club-nom').val('');
+    $('#sel-reengagement').val('');
+    $('#sel-jour-souhaite').val('');
+    $('#sel-souhait-ja').val('');
+    $('#txt-desiderata-saison').val(SAISON_COURANTE);
+    setStatus('');
+});
+
 $('#btn-enregistrer').on('click', function () {
-    if (!currentId) return;
+    const isNew  = currentId === null;
+    const idClub = idClubDepuisSaisie($('#edit-club-nom').val());
+    if (!idClub) { setStatus('Club introuvable : choisissez-le dans la liste proposée.', false); return; }
+
     const payload = {
         nom:               $('#txt-nom').val().trim(),
         division:          $('#edit-sel-division').val(),
-        id_club:           $('#edit-sel-club').val(),
+        id_club:           idClub,
         re_engagement:     $('#sel-reengagement').val(),
         jour_souhaite:     $('#sel-jour-souhaite').val(),
         souhait_ja:        $('#sel-souhait-ja').val(),
         desiderata_saison: $('#txt-desiderata-saison').val().trim(),
     };
+    const url    = isNew ? EQUIPE_BASE : `${EQUIPE_BASE}/${currentId}`;
+    const method = isNew ? 'POST' : 'PUT';
 
-    $.ajax({ url: `${EQUIPE_BASE}/${currentId}`, method: 'PUT', data: payload, dataType: 'json' }).done(function (res) {
-        if (res.ok) { toast(res.msg); chargerListe(currentId); }
+    $.ajax({ url, method, data: payload, dataType: 'json' }).done(function (res) {
+        if (res.ok) { toast(res.msg); chargerListe(isNew ? res.id : currentId); }
         else { toast(res.msg, false); setStatus(res.msg, false); }
     }).fail(() => toast('Erreur réseau.', false));
 });
