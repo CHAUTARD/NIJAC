@@ -72,12 +72,9 @@
                     <?php endforeach; ?>
                 </select>
             </span>
-            <span class="combo-field" style="display:flex;align-items:center;gap:.35rem;">
-                <label for="sel-division">Division</label>
-                <select id="sel-division" style="width:130px;">
-                    <option value="">Toutes</option>
-                </select>
-                <span id="badge-division" class="badge" style="visibility:hidden;"></span>
+            <span class="combo-field">
+                <label>Division</label>
+                <div id="panel-division"></div>
             </span>
             <span class="combo-field">
                 <label for="sel-poule">Poule</label>
@@ -225,39 +222,18 @@ function chargerEquipes() {
     }, 'json').fail(() => toast('Erreur réseau.', false));
 }
 
-let couleurParDivision = {};
-
-/**
- * Certains navigateurs (rendu natif Windows) n'appliquent pas la couleur de
- * fond des <option> sur le <select> fermé — la couleur ne se voit alors que
- * la liste déroulée ouverte. On affiche donc en plus un badge à côté, mis à
- * jour à chaque changement de sélection, pour rester visible en permanence.
- */
-function majBadgeDivision() {
-    const $badge = $('#badge-division');
-    if (!divisionFiltre) { $badge.css('visibility', 'hidden'); return; }
-    const bg = couleurParDivision[divisionFiltre] && /^#[0-9a-fA-F]{6}$/.test(couleurParDivision[divisionFiltre])
-        ? couleurParDivision[divisionFiltre] : '#1a3a6b';
-    $badge.text(libDivision(divisionFiltre)).css({ visibility: 'visible', background: bg, color: textColorFor(bg) });
+function majPanelDivision() {
+    const divisions = [...new Set(rencontres.map(r => r.Division).filter(Boolean))].sort();
+    nijacDivisionFilter('#panel-division', divisions, {
+        libDivision,
+        colorFor: code => rencontres.find(r => r.Division === code)?.DivisionColor,
+        getFiltre: () => divisionFiltre,
+        onSelect: code => { divisionFiltre = code; majPanelDivision(); renderListe(); },
+    });
 }
 
 function peuplerFiltres() {
-    const divisions = [...new Set(rencontres.map(r => r.Division).filter(Boolean))].sort();
-    couleurParDivision = {};
-    rencontres.forEach(r => { if (r.Division && !couleurParDivision[r.Division]) couleurParDivision[r.Division] = r.DivisionColor; });
-
-    const $selDivision = $('#sel-division');
-    const valDivision   = $selDivision.val();
-    $selDivision.find('option:not(:first)').remove();
-    divisions.forEach(d => {
-        const bg = couleurParDivision[d] && /^#[0-9a-fA-F]{6}$/.test(couleurParDivision[d]) ? couleurParDivision[d] : '#1a3a6b';
-        const opt = new Option(libDivision(d), d);
-        opt.style.background = bg;
-        opt.style.color = textColorFor(bg);
-        $selDivision.append(opt);
-    });
-    $selDivision.val(valDivision);
-    majBadgeDivision();
+    majPanelDivision();
 
     const poules = [...new Set(rencontres.map(r => r.Poule).filter(p => p !== null))].sort((a, b) => a - b);
     const $selPoule = $('#sel-poule');
@@ -331,15 +307,14 @@ function renderListe() {
 
 $('#search-equipe').on('input', function () { searchEquipe = $(this).val().trim(); renderListe(); });
 $('#sel-dept').on('change', function () { deptFiltre = $(this).val(); renderListe(); });
-$('#sel-division').on('change', function () { divisionFiltre = $(this).val(); majBadgeDivision(); renderListe(); });
 $('#sel-poule').on('change', function () { pouleFiltre = $(this).val(); renderListe(); });
 $('#sel-journee').on('change', function () { journeeFiltre = $(this).val(); renderListe(); });
 $('#sel-date').on('change', function () { dateFiltre = $(this).val(); renderListe(); });
 $('#btn-reset-filtres').on('click', function () {
     deptFiltre = divisionFiltre = pouleFiltre = journeeFiltre = dateFiltre = searchEquipe = '';
-    $('#sel-dept, #sel-division, #sel-poule, #sel-journee, #sel-date').val('');
+    $('#sel-dept, #sel-poule, #sel-journee, #sel-date').val('');
     $('#search-equipe').val('');
-    majBadgeDivision();
+    majPanelDivision();
     renderListe();
 });
 
@@ -468,11 +443,16 @@ $('#btn-annuler').on('click', function () {
     $('#form-remplacement').hide();
 });
 
-chargerListe();
-chargerEquipes();
+// Différé : nijac-division-filter.js est chargé après ce script (voir plus bas),
+// donc pas encore défini si peuplerFiltres() (appelé par chargerListe) l'invoquait ici de façon synchrone.
+$(function () {
+    chargerListe();
+    chargerEquipes();
+});
 </script>
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-sortable-table.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-division-filter.js') ?>"></script>
 </body>
 </html>

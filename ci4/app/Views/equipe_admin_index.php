@@ -33,6 +33,7 @@
             background: #eef2f9; border: 1.5px solid #d3dae6; border-radius: 999px;
             font-size: .82rem; font-weight: 700; color: var(--nijac-blue);
         }
+        #panel-division { margin-top: .3rem; }
     </style>
 </head>
 <body>
@@ -48,9 +49,10 @@
 
     <div id="panel-liste">
         <div id="menu-strip">
-            <span class="count-badge" id="lbl-count">0 / 0</span>
             <span style="flex:1"></span>
             <span class="strip-titre">Équipes</span>
+            <span class="count-badge" id="lbl-count">0 / 0</span>
+            <span style="flex:1"></span>
             <span class="combo-field">
                 <label for="sel-club">Club</label>
                 <select id="sel-club" style="width:auto;">
@@ -64,10 +66,8 @@
                 </select>
             </span>
             <span class="combo-field">
-                <label for="sel-division">Division</label>
-                <select id="sel-division" style="width:180px;">
-                    <option value="">— Toutes divisions —</option>
-                </select>
+                <label>Division</label>
+                <div id="panel-division"></div>
             </span>
             <span class="combo-field">
                 <label for="search-nom">Recherche</label>
@@ -87,11 +87,10 @@
                         <th style="width:85px" data-col="6">Réengag.<span class="sort-icon"></span></th>
                         <th style="width:95px" data-col="7">Jour souh.<span class="sort-icon"></span></th>
                         <th style="width:85px" data-col="8">Souhait JA<span class="sort-icon"></span></th>
-                        <th style="width:90px" data-col="9">Désid. saison<span class="sort-icon"></span></th>
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
-                    <tr><td colspan="10" class="text-center text-muted py-3">Chargement…</td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-3">Chargement…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -168,6 +167,7 @@
         </div>
     </div>
 </div>
+
 
 <?= view('partials/page_footer', ['pfStatusAlign' => 'left']) ?>
 
@@ -261,16 +261,17 @@ function peuplerFiltres() {
     departements.forEach(d => $selDept.append(new Option(`${d.CodeDept} - ${d.nom}`, d.CodeDept)));
     $selDept.val(valDept);
 
-    const $selDiv = $('#sel-division');
-    const valDiv   = $selDiv.val();
-    $selDiv.find('option:not(:first)').remove();
-    divisions.forEach(d => $selDiv.append(new Option(libDivision(d), d)));
-    $selDiv.val(valDiv);
+    nijacDivisionFilter('#panel-division', divisions.map(d => d.Division), {
+        libDivision,
+        colorFor: code => divisions.find(d => d.Division === code)?.Color,
+        getFiltre: () => divisionFiltre,
+        onSelect: code => { divisionFiltre = code; peuplerFiltres(); renderListe(); },
+    });
 }
 
 function peuplerSelectsFormulaire() {
     const $selDiv = $('#edit-sel-division').empty();
-    divisions.forEach(d => $selDiv.append(new Option(libDivision(d), d)));
+    divisions.forEach(d => $selDiv.append(new Option(libDivision(d.Division), d.Division)));
 
     const $dl = $('#dl-clubs').empty();
     clubs.forEach(c => $dl.append(new Option(`${c.Nom} (${c.Id_Club})`)));
@@ -296,7 +297,7 @@ function renderListe() {
     $('#lbl-count').text(`${affichees.length} / ${equipes.length}`);
 
     if (!affichees.length) {
-        $body.append('<tr><td colspan="10" class="text-center text-muted py-3">Aucune équipe.</td></tr>');
+        $body.append('<tr><td colspan="9" class="text-center text-muted py-3">Aucune équipe.</td></tr>');
         return;
     }
 
@@ -310,8 +311,7 @@ function renderListe() {
             $('<td>').text(e.Departement ?? ''),
             $('<td>').text(e.ReEngagement ?? ''),
             $('<td>').text(e.JourSouhaite ?? ''),
-            $('<td>').text(e.SouhaitJA ?? ''),
-            $('<td>').text(e.DesiderataSaison ?? '')
+            $('<td>').text(e.SouhaitJA ?? '')
         ).on('click', function () { selectionnerLigne($(this)); }).appendTo($body);
     });
 
@@ -398,7 +398,6 @@ $('#btn-supprimer').on('click', function () {
 
 $('#sel-club').on('change', function () { clubFiltre = $(this).val(); renderListe(); });
 $('#sel-departement').on('change', function () { departementFiltre = $(this).val(); renderListe(); });
-$('#sel-division').on('change', function () { divisionFiltre = $(this).val(); renderListe(); });
 $('#search-nom').on('input', function () { searchTerm = $(this).val().trim(); renderListe(); });
 
 // ── Tri sur clic en-tête ──────────────────────────────────────────────────────
@@ -413,5 +412,6 @@ $(function () {
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-sortable-table.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-division-filter.js') ?>"></script>
 </body>
 </html>

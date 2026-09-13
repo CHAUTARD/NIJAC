@@ -134,4 +134,12 @@
 input.filter-ctl { font-weight: 400; color: inherit; }
 .filter-ctl:hover  { border-color: #b9c3d6; }
 .filter-ctl:focus  { outline: none; border-color: var(--nijac-blue); }
+
+/* Panneau de badges « Division » (filtre EA94/EA95/EN27/EN29...) : un badge dans
+   la barre de filtre ouvrant une popup Bootstrap listant toutes les divisions,
+   colonnes Messieurs/Dames. Voir asset/js/nijac-division-filter.js. */
+.division-badges { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.division-badges .badge { cursor: pointer; border: 2px solid transparent; font-size: .8rem; padding: .45em .8em; }
+.division-badges .badge.active { border-color: var(--nijac-blue); }
+.division-badges .badge.badge-toutes { background: #eef2f9 !important; color: var(--nijac-blue) !important; border-color: #d3dae6 !important; }
 .filter-ctl:disabled { opacity: .55; }

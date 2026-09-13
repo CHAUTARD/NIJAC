@@ -225,11 +225,11 @@
             data-bs-toggle="modal" data-bs-target="#modal-ajouter">
         <i class="bi bi-plus-circle-fill me-1" style="font-size:1rem;"></i>Nouvelle commune
     </button>
-    <button class="menu-item" id="btn-importer">
-        <i class="bi bi-file-earmark-arrow-up"></i>Importation CSV
+    <button class="btn btn-sm btn-outline-success" id="btn-importer">
+        <i class="bi bi-file-earmark-arrow-up me-1"></i>Importation CSV
     </button>
-    <button class="menu-item" id="btn-exporter">
-        <i class="bi bi-file-earmark-arrow-down"></i>Exportation CSV
+    <button class="btn btn-sm btn-outline-secondary" id="btn-exporter">
+        <i class="bi bi-file-earmark-arrow-down me-1"></i>Exportation CSV
     </button>
     <div id="import-options">
         <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer;">
@@ -243,8 +243,8 @@
         </button>
     </div>
     <input type="file" id="file-input" accept=".csv,.001,.002,.003,.004,.005" multiple style="display:none">
-    <button class="menu-item" id="btn-aide-coords" style="color:#1a3a6b;" data-bs-toggle="modal" data-bs-target="#modal-aide-coords">
-        <i class="bi bi-question-circle-fill" style="font-size:1.1rem;margin-right:.35rem;color:#2557a7;"></i>Comment obtenir les coordonnées GPS ?
+    <button class="btn btn-sm btn-outline-info" id="btn-aide-coords" data-bs-toggle="modal" data-bs-target="#modal-aide-coords">
+        <i class="bi bi-question-circle-fill me-1"></i>Comment obtenir les coordonnées GPS ?
     </button>
     <span style="flex:1"></span>
     <span class="combo-field">

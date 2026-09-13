@@ -111,6 +111,41 @@ class ArbitreClubController extends BaseController
         return strtotime($dateRencontre . ' +' . self::DELAI_JOURS . ' days') < strtotime(date('Y-m-d'));
     }
 
+    private function estJaActif(\PDO $pdo, int $idJa): bool
+    {
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM ja WHERE Id_JA = ? AND COALESCE(Actif, 1) = 1');
+        $stmt->execute([$idJa]);
+
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    /**
+     * Recherche de JA « hors club » (option de #sel-ja) : n'importe quel JA
+     * actif de la base, par nom/prénom — pas seulement ceux du club recevant.
+     */
+    public function rechercherJa(): ResponseInterface
+    {
+        return $this->tryJson(function () {
+            $nom = trim((string) $this->request->getGet('nom'));
+            if ($nom === '') {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Nom manquant.']);
+            }
+
+            $stmt = getPDO()->prepare(
+                "SELECT Id_JA, Nom, Prenom
+                 FROM ja
+                 WHERE COALESCE(Actif, 1) = 1
+                   AND (CONCAT(Nom, ' ', Prenom) LIKE ? OR CONCAT(Prenom, ' ', Nom) LIKE ?)
+                 ORDER BY Nom, Prenom
+                 LIMIT 10"
+            );
+            $like = '%' . $nom . '%';
+            $stmt->execute([$like, $like]);
+
+            return $this->response->setJSON(['ok' => true, 'jas' => $stmt->fetchAll()]);
+        });
+    }
+
     public function index()
     {
         demarrerSessionNijac();
@@ -159,10 +194,10 @@ class ArbitreClubController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Rencontre introuvable.']);
             }
 
-            // Le JA choisi doit appartenir à la liste proposée pour ce club.
-            $autorises = array_column($this->listeJa($pdo, $ctx['Id_Club']), 'Id_JA');
-            if (!in_array($idJa, array_map('intval', $autorises), true)) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Juge-arbitre non valide pour ce club.']);
+            // Le JA choisi doit être un JA actif — du club (liste proposée) ou « hors
+            // club » (recherché par nom via rechercherJa(), voir #sel-ja côté vue).
+            if (!$idJa || !$this->estJaActif($pdo, $idJa)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Juge-arbitre invalide ou inactif.']);
             }
 
             // Nomination existante : refus si la convocation est déjà partie.

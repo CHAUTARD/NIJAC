@@ -83,10 +83,8 @@
                 </select>
             </span>
             <span class="combo-field">
-                <label for="sel-division">Division</label>
-                <select id="sel-division" style="width:130px;">
-                    <option value="">Toutes</option>
-                </select>
+                <label>Division</label>
+                <div id="panel-division"></div>
             </span>
             <span class="combo-field">
                 <label for="sel-poule">Poule</label>
@@ -266,13 +264,18 @@ function chargerListe(selectId = null) {
     }, 'json').fail(() => toast('Erreur réseau.', false));
 }
 
-function peuplerFiltres() {
+function majPanelDivision() {
     const divisions = [...new Set(rencontres.map(r => r.Division).filter(Boolean))].sort();
-    const $selDivision = $('#sel-division');
-    const valDivision   = $selDivision.val();
-    $selDivision.find('option:not(:first)').remove();
-    divisions.forEach(d => $selDivision.append(new Option(libDivision(d), d)));
-    $selDivision.val(valDivision);
+    nijacDivisionFilter('#panel-division', divisions, {
+        libDivision,
+        colorFor: code => rencontres.find(r => r.Division === code)?.DivisionColor,
+        getFiltre: () => divisionFiltre,
+        onSelect: code => { divisionFiltre = code; majPanelDivision(); renderListe(); },
+    });
+}
+
+function peuplerFiltres() {
+    majPanelDivision();
 
     const poules = [...new Set(rencontres.map(r => r.Poule).filter(p => p !== null))].sort((a, b) => a - b);
     const $selPoule = $('#sel-poule');
@@ -382,7 +385,6 @@ $('#btn-annuler').on('click', function () {
 
 $('#search-equipe').on('input', function () { searchEquipe = $(this).val().trim(); renderListe(); });
 $('#sel-dept').on('change', function () { deptFiltre = $(this).val(); renderListe(); });
-$('#sel-division').on('change', function () { divisionFiltre = $(this).val(); renderListe(); });
 $('#sel-poule').on('change', function () { pouleFiltre = $(this).val(); renderListe(); });
 $('#sel-journee').on('change', function () { journeeFiltre = $(this).val(); renderListe(); });
 $('#sel-date').on('change', function () { dateFiltre = $(this).val(); renderListe(); });
@@ -413,7 +415,8 @@ $('#btn-date-plus').on('click', function () { decalerDateChamp(1); });
 $('#btn-reset-filtres').on('click', function () {
     searchEquipe = deptFiltre = divisionFiltre = pouleFiltre = journeeFiltre = dateFiltre = '';
     $('#search-equipe').val('');
-    $('#sel-dept, #sel-division, #sel-poule, #sel-journee, #sel-date').val('');
+    $('#sel-dept, #sel-poule, #sel-journee, #sel-date').val('');
+    majPanelDivision();
     renderListe();
 });
 
@@ -524,5 +527,6 @@ $(function () {
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-sortable-table.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-division-filter.js') ?>"></script>
 </body>
 </html>

@@ -148,11 +148,11 @@
 <!-- MenuStrip -->
 <div id="menu-strip">
 <?php if ($isAdmin): ?>
-    <button class="menu-item" id="btn-sync-fftt" data-bs-toggle="modal" data-bs-target="#modal-sync-fftt">
-        <i class="bi bi-cloud-arrow-down-fill"></i>Synchroniser depuis FFTT
+    <button class="btn btn-sm btn-outline-primary" id="btn-sync-fftt" data-bs-toggle="modal" data-bs-target="#modal-sync-fftt">
+        <i class="bi bi-cloud-arrow-down-fill me-1"></i>Synchroniser depuis FFTT
     </button>
-    <button class="menu-item" id="btn-ajouter">
-        <i class="bi bi-plus-circle"></i>Ajouter
+    <button class="btn btn-sm btn-outline-success" id="btn-ajouter">
+        <i class="bi bi-plus-circle me-1"></i>Ajouter
     </button>
     <span class="count-badge" id="lbl-count">0 salle(s)</span>
     <span style="flex:1"></span>

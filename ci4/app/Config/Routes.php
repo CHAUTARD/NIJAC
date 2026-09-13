@@ -215,6 +215,7 @@ $routes->post('desiderata-club/enregistrer', 'DesiderataClubController::enregist
 // Page PUBLIQUE, tokenisée par ?renc=TOKEN (Obfuscator Id_Rencontre) — lien
 // envoyé au correspondant du club recevant depuis EN14 (message n°7).
 $routes->get('arbitre-club', 'ArbitreClubController::index');
+$routes->get('arbitre-club/rechercher-ja', 'ArbitreClubController::rechercherJa');
 $routes->post('arbitre-club/enregistrer', 'ArbitreClubController::enregistrer');
 
 // ── EN12 Désidératas clubs ───────────────────────────────────────────────────

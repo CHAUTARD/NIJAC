@@ -73,6 +73,7 @@
                     <?php foreach ($jas as $j): ?>
                     <option value="<?= (int) $j['Id_JA'] ?>"><?= esc(strtoupper((string) $j['Nom']) . ' ' . $j['Prenom']) ?> (n°<?= (int) $j['Id_JA'] ?>)</option>
                     <?php endforeach; ?>
+                    <option value="hors-club">— Juge-arbitre hors club —</option>
                 </select>
             </div>
             <button type="submit" class="btn btn-primary w-100"><i class="bi bi-send me-1"></i>Envoyer</button>
@@ -90,10 +91,91 @@
     </div>
 </div>
 
+<div class="modal fade" id="modal-hors-club" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title mb-0"><i class="bi bi-search me-1"></i>Juge-arbitre hors club</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label" for="txt-nom-hors-club">Nom du juge-arbitre</label>
+                <input type="text" id="txt-nom-hors-club" class="form-control" placeholder="Nom, prénom…" autocomplete="off">
+                <div id="hors-club-resultats" class="mt-2"></div>
+                <div id="hors-club-err" class="text-danger small mt-2"></div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-sm btn-primary" id="btn-hors-club-chercher"><i class="bi bi-search me-1"></i>Rechercher</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
+<script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script>
 'use strict';
+const $selJa = $('#sel-ja');
+let modalHorsClub;
+$(function () {
+    const elModal = document.getElementById('modal-hors-club');
+    if (elModal) modalHorsClub = new bootstrap.Modal(elModal);
+});
+
+$selJa.on('change', function () {
+    if ($(this).val() !== 'hors-club') return;
+    $('#txt-nom-hors-club').val('');
+    $('#hors-club-resultats').empty();
+    $('#hors-club-err').text('');
+    modalHorsClub.show();
+    setTimeout(() => $('#txt-nom-hors-club').trigger('focus'), 300);
+});
+
+/** Ajoute (si besoin) l'option du JA trouvé dans #sel-ja et la sélectionne. */
+function retenirJaHorsClub(j) {
+    const label = `${String(j.Nom).toUpperCase()} ${j.Prenom} (n°${j.Id_JA}) — hors club`;
+    let $opt = $selJa.find(`option[value="${j.Id_JA}"]`);
+    if (!$opt.length) {
+        $opt = $('<option>').val(j.Id_JA).text(label);
+        $selJa.find('option[value="hors-club"]').before($opt);
+    }
+    $selJa.val(String(j.Id_JA));
+    modalHorsClub.hide();
+}
+
+function chercherJaHorsClub() {
+    const nom = $('#txt-nom-hors-club').val().trim();
+    $('#hors-club-err').text('');
+    const $resultats = $('#hors-club-resultats').empty().removeClass('list-group');
+    if (!nom) { $('#hors-club-err').text('Saisissez un nom.'); return; }
+
+    $.get('<?= site_url('arbitre-club/rechercher-ja') ?>', { nom }, function (res) {
+        if (!res.ok) { $('#hors-club-err').text(res.msg || 'Erreur.'); return; }
+        if (!res.jas.length) { $('#hors-club-err').text('Aucun juge-arbitre actif trouvé avec ce nom.'); return; }
+        if (res.jas.length === 1) { retenirJaHorsClub(res.jas[0]); return; }
+
+        // Plusieurs correspondances : laisser choisir.
+        $resultats.addClass('list-group');
+        res.jas.forEach(j => {
+            $('<button type="button" class="list-group-item list-group-item-action">')
+                .text(`${String(j.Nom).toUpperCase()} ${j.Prenom} (n°${j.Id_JA})`)
+                .on('click', () => retenirJaHorsClub(j))
+                .appendTo($resultats);
+        });
+    }, 'json').fail(() => $('#hors-club-err').text('Erreur réseau.'));
+}
+$('#btn-hors-club-chercher').on('click', chercherJaHorsClub);
+$('#txt-nom-hors-club').on('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); chercherJaHorsClub(); }
+});
+
+// Fermeture sans résultat retenu (Annuler, Échap, clic hors modale) : revenir au placeholder.
+$('#modal-hors-club').on('hidden.bs.modal', function () {
+    if ($selJa.val() === 'hors-club') $selJa.val('');
+});
+
 $('#form-ac').on('submit', function (e) {
     e.preventDefault();
     $('#form-err').text('');

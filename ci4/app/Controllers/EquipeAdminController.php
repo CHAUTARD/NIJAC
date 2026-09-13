@@ -76,7 +76,7 @@ class EquipeAdminController extends BaseController
 
             $clubs = $pdo->query('SELECT Id_Club, Nom FROM club ORDER BY Nom')->fetchAll();
 
-            $divisions = $pdo->query('SELECT Division FROM division ORDER BY Division')->fetchAll(\PDO::FETCH_COLUMN);
+            $divisions = $pdo->query('SELECT Division, Color FROM division ORDER BY Division')->fetchAll();
 
             // Départements de Normandie (clé config "departements_actifs"), pas la liste dérivée
             // des équipes affichées — un club "adversaire" national (N1-N3) est hors Normandie.

@@ -69,18 +69,16 @@
 
     <div id="panel-liste">
         <div id="menu-strip">
-            <button type="button" class="btn btn-sm btn-light" id="btn-importer-txt" title="Importer club_Reg_R4.PN.txt">
+            <button type="button" class="btn btn-sm btn-outline-success" id="btn-importer-txt" title="Importer club_Reg_R4.PN.txt">
                 <i class="bi bi-upload me-1"></i>Importer .txt
             </button>
             <span style="flex:1"></span>
+            <span class="strip-titre">Équipes</span>
             <span class="count-badge" id="lbl-count">0 / 0</span>
             <span style="flex:1"></span>
-            <span class="strip-titre">Équipes</span>
             <span class="combo-field">
-                <label for="sel-division">Division</label>
-                <select id="sel-division" style="width:auto;min-width:250px;">
-                    <option value="">Toutes les divisions</option>
-                </select>
+                <label>Division</label>
+                <div id="panel-division"></div>
             </span>
             <span class="combo-field">
                 <label for="search-input">Recherche</label>
@@ -198,6 +196,21 @@ function libDivision(code) {
     const n = DIVISION_NOMS[code];
     return n ? code + ' — ' + n : code;
 }
+
+function textColorFor(hex) {
+    const c = hex.replace('#', '');
+    const r = parseInt(c.substring(0,2), 16);
+    const g = parseInt(c.substring(2,4), 16);
+    const b = parseInt(c.substring(4,6), 16);
+    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return lum > 0.55 ? '#111' : '#fff';
+}
+
+function macaronDivision(division, color) {
+    const bg = color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#1a3a6b';
+    return $('<span class="badge">').text(division ?? '').css({ background: bg, color: textColorFor(bg) });
+}
+
 let lignes         = [];
 let currentId       = null;
 let searchTerm      = '';
@@ -221,12 +234,13 @@ function lignesFiltrees() {
 
 function majComboDivisions() {
     const divisions = [...new Set(lignes.map(l => l.Division).filter(Boolean))].sort();
-    const $sel = $('#sel-division');
-    const val  = $sel.val();
-    $sel.find('option:not(:first)').remove();
-    divisions.forEach(d => $sel.append(new Option(libDivision(d), d)));
-    if (divisions.includes(val)) $sel.val(val);
-    else { divisionFiltre = ''; $sel.val(''); }
+    if (divisionFiltre && !divisions.includes(divisionFiltre)) divisionFiltre = '';
+    nijacDivisionFilter('#panel-division', divisions, {
+        libDivision,
+        colorFor: code => lignes.find(l => l.Division === code)?.DivisionColor,
+        getFiltre: () => divisionFiltre,
+        onSelect: code => { divisionFiltre = code; majComboDivisions(); renderListe(); },
+    });
 }
 
 function chargerListe(selectId = null) {
@@ -255,7 +269,7 @@ function renderListe() {
     affichees.forEach(l => {
         $('<tr>').attr('data-id', l.Id_Equipe).append(
             $('<td>').text(l.Nom ?? ''),
-            $('<td>').text(l.Division ?? ''),
+            $('<td>').append(macaronDivision(l.Division, l.DivisionColor)),
             $('<td>').text(l.NomClub ?? ''),
             $('<td>').text(l.NomClub2 ?? ''),
             $('<td>').text(l.NomClub3 ?? ''),
@@ -282,7 +296,7 @@ function selectionnerLigne($tr) {
     $('#no-selection').hide();
     $('#form-equipe').show();
     $('#txt-nom').text(l.Nom ?? '');
-    $('#txt-division').text(l.Division ?? '');
+    $('#txt-division').empty().append(macaronDivision(l.Division, l.DivisionColor));
     $('#txt-club').text(l.NomClub ?? '');
     if (l.NomClub2) { $('#grp-club2').show(); $('#txt-club2').text(l.NomClub2); }
     else { $('#grp-club2').hide(); $('#txt-club2').text(''); }
@@ -331,11 +345,6 @@ $('#btn-supprimer').on('click', function () {
 
 $('#search-input').on('input', function () {
     searchTerm = $(this).val().trim();
-    renderListe();
-});
-
-$('#sel-division').on('change', function () {
-    divisionFiltre = $(this).val();
     renderListe();
 });
 
@@ -389,5 +398,6 @@ $(function () {
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-sortable-table.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-division-filter.js') ?>"></script>
 </body>
 </html>

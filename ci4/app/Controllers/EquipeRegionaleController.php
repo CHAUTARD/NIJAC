@@ -78,7 +78,7 @@ class EquipeRegionaleController extends BaseController
             $pdo = getPDO();
 
             $rows = $pdo->query(
-                'SELECT e.Id_Equipe, e.Nom, e.Division, e.Id_Club, c.Nom AS NomClub,
+                'SELECT e.Id_Equipe, e.Nom, e.Division, dv.Color AS DivisionColor, e.Id_Club, c.Nom AS NomClub,
                         e.Id_Club2, c2.Nom AS NomClub2,
                         e.Id_Club3, c3.Nom AS NomClub3,
                         e.JAdemande, e.ReEngagement, e.JourSouhaite, e.SouhaitJA, e.DesiderataSaison
@@ -86,6 +86,7 @@ class EquipeRegionaleController extends BaseController
                  JOIN Club c ON c.Id_Club = e.Id_Club
                  LEFT JOIN Club c2 ON c2.Id_Club = e.Id_Club2
                  LEFT JOIN Club c3 ON c3.Id_Club = e.Id_Club3
+                 LEFT JOIN division dv ON dv.Division = e.Division
                  ORDER BY e.Nom, e.Division'
             )->fetchAll();
 
