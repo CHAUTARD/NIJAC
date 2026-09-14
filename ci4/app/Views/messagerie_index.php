@@ -196,6 +196,7 @@ if ($isCsr) {
                 <code data-marqueur="{DIVISION}" class="me-2">{DIVISION}</code>
                 <code data-marqueur="{DOM}" class="me-2">{DOM}</code>
                 <code data-marqueur="{EXT}" class="me-2">{EXT}</code>
+                <code data-marqueur="{NOM_CLUB}" class="me-2">{NOM_CLUB}</code>
                 <code data-marqueur="{SALLE_NOM}" class="me-2">{SALLE_NOM}</code>
                 <code data-marqueur="{SALLE_ADRESSE}" class="me-2">{SALLE_ADRESSE}</code>
                 <code data-marqueur="{SALLE_CP}" class="me-2">{SALLE_CP}</code>

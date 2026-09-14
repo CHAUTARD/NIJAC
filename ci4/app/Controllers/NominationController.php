@@ -495,7 +495,7 @@ class NominationController extends BaseController
             $placeholders = implode(',', array_fill(0, count($idsRencontre), '?'));
             $stmt = $pdo->prepare("
                 SELECT n.Id_Nomination, n.Id_Rencontre, ja.Id_JA, ja.Nom, ja.Prenom, ja.Email,
-                       ed.Nom AS NomDom, ee.Nom AS NomExt,
+                       ed.Nom AS NomDom, ee.Nom AS NomExt, cl.Nom AS NomClub,
                        r.Date, r.Heure, r.Journee, r.Poule, ed.Division, RIGHT(ed.Division, 1) AS SexeCode
                 FROM nomination n
                 JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
@@ -503,6 +503,7 @@ class NominationController extends BaseController
                 JOIN ja           ON ja.Id_JA         = d.Id_JA
                 JOIN equipe  ed   ON ed.Id_Equipe     = r.Id_EquipeDom
                 LEFT JOIN equipe ee ON ee.Id_Equipe   = r.Id_EquipeExt
+                LEFT JOIN Club cl ON cl.Id_Club       = ed.Id_Club
                 WHERE r.Journee = ? AND r.Date = ?
                   AND n.Valide = 1
                   AND r.Id_Rencontre IN ($placeholders)
@@ -547,6 +548,7 @@ class NominationController extends BaseController
                         'division'      => $nom['Division'] ?? null,
                         'dom'           => $nom['NomDom']   ?? null,
                         'ext'           => $nom['NomExt']   ?? null,
+                        'nom_club'      => $nom['NomClub']  ?? null,
                     ]);
                     $rendu = remplacerMarqueursMessage($tplConv['Sujet'], $tplConv['Message'], $marqueurs);
                     // Alias historique : les modèles écrits avant l'ajout de {URL_CONVOCATION_JA} utilisent {LIEN_CONVOCATION}/{LIEN_LIGUE}.

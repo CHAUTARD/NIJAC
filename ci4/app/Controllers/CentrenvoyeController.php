@@ -180,6 +180,7 @@ class CentrenvoyeController extends BaseController
                            s.Adresse      AS SalleAdresse,
                            lps.CodePostal AS SalleCP,
                            lps.Nom        AS SalleVille,
+                           co.Nom         AS NomClub,
                            co.CorNom      AS CorrNom,
                            co.CorEmail    AS CorrEmail,
                            co.CorTelephone AS CorrTel
@@ -584,6 +585,7 @@ class CentrenvoyeController extends BaseController
                    ed.Nom AS NomDom, ee.Nom AS NomExt,
                    s.Nom AS SalleNom, s.Adresse AS SalleAdresse,
                    lps.CodePostal AS SalleCP, lps.Nom AS SalleVille,
+                   co.Nom AS NomClub,
                    co.CorNom AS CorrNom, co.CorEmail AS CorrEmail, co.CorTelephone AS CorrTel,
                    co.RefNom AS RefNom, co.RefMail AS RefMail
             FROM nomination n
@@ -620,6 +622,7 @@ class CentrenvoyeController extends BaseController
             'division'      => $ja['Division']      ?? null,
             'dom'           => $ja['NomDom']        ?? null,
             'ext'           => $ja['NomExt']        ?? null,
+            'nom_club'      => $ja['NomClub']       ?? null,
             'salle_nom'     => $ja['SalleNom']      ?? null,
             'salle_adresse' => $ja['SalleAdresse']  ?? null,
             'salle_cp'      => $ja['SalleCP']       ?? null,

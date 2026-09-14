@@ -551,7 +551,7 @@ function verifierRappelExpirationFfttApi(): void
  *                    {PHASE} : numéro de phase (config `phase`, saisi manuellement — distinct de {YEAR_PHASE}
  *                    qui est calculé à partir de la date du jour, voir getAnneePhase()).
  *                    id_nomination, id_rencontre (pour {URL_ARBITRE_CLUB}), sexe_code ('F'|'M'), date, heure, journee, poule, division, dom, ext,
- *                    salle_nom, salle_adresse, salle_cp, salle_ville,
+ *                    nom_club, salle_nom, salle_adresse, salle_cp, salle_ville,
  *                    corr_nom, corr_email, corr_tel, liste_nominations (HTML de {LISTE_NOMINATIONS}).
  * @return array<string,string> Table marqueur => valeur, prête pour remplacerMarqueursMessage().
  */
@@ -598,6 +598,7 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
         '{DIVISION}'             => $ctx['division'] ?? '',
         '{DOM}'                  => $ctx['dom']       ?? '',
         '{EXT}'                  => $ctx['ext']       ?? '',
+        '{NOM_CLUB}'             => $ctx['nom_club']  ?? '',
         '{SALLE_NOM}'            => $ctx['salle_nom']     ?? '',
         '{SALLE_ADRESSE}'        => $ctx['salle_adresse'] ?? '',
         '{SALLE_CP}'             => $ctx['salle_cp']      ?? '',
