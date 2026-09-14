@@ -17,6 +17,9 @@ use CodeIgniter\HTTP\ResponseInterface;
  */
 class EquipeAdminController extends BaseController
 {
+    /** Divisions pour lesquelles le souhait d'arbitrage « Club » est possible (voir ES33). */
+    private const DIVISIONS_ARBITRAGE_CLUB = ['R3M', 'R4M'];
+
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
@@ -97,7 +100,7 @@ class EquipeAdminController extends BaseController
             $idClub    = trim($input['id_club'] ?? '');
             $reeng     = trim($input['re_engagement'] ?? '') ?: null;
             $jourSouh  = trim($input['jour_souhaite'] ?? '') ?: null;
-            $souhaitJa = trim($input['souhait_ja'] ?? '') ?: null;
+            $souhaitJa = trim($input['souhait_ja'] ?? '') ?: 'CRA';
             $desider   = trim($input['desiderata_saison'] ?? '') ?: null;
 
             if ($nom === '') {
@@ -122,8 +125,15 @@ class EquipeAdminController extends BaseController
             if ($jourSouh !== null && !in_array($jourSouh, ['Samedi', 'Dimanche'], true)) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Jour souhaité invalide.']);
             }
-            if ($souhaitJa !== null && !in_array($souhaitJa, ['CRA', 'Club'], true)) {
+            if (!in_array($souhaitJa, ['CRA', 'Club'], true)) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Souhait JA invalide.']);
+            }
+            if ($souhaitJa === 'Club' && !in_array($division, self::DIVISIONS_ARBITRAGE_CLUB, true)) {
+                return $this->response->setJSON([
+                    'ok'  => false,
+                    'msg' => 'Le souhait JA « Club » n\'est possible que pour les divisions '
+                             . implode(' et ', self::DIVISIONS_ARBITRAGE_CLUB) . '.',
+                ]);
             }
 
             $stmt = $pdo->prepare(
@@ -147,7 +157,7 @@ class EquipeAdminController extends BaseController
             $idClub    = trim($input['id_club'] ?? '');
             $reeng     = trim($input['re_engagement'] ?? '') ?: null;
             $jourSouh  = trim($input['jour_souhaite'] ?? '') ?: null;
-            $souhaitJa = trim($input['souhait_ja'] ?? '') ?: null;
+            $souhaitJa = trim($input['souhait_ja'] ?? '') ?: 'CRA';
             $desider   = trim($input['desiderata_saison'] ?? '') ?: null;
 
             if ($nom === '') {
@@ -172,8 +182,15 @@ class EquipeAdminController extends BaseController
             if ($jourSouh !== null && !in_array($jourSouh, ['Samedi', 'Dimanche'], true)) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Jour souhaité invalide.']);
             }
-            if ($souhaitJa !== null && !in_array($souhaitJa, ['CRA', 'Club'], true)) {
+            if (!in_array($souhaitJa, ['CRA', 'Club'], true)) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Souhait JA invalide.']);
+            }
+            if ($souhaitJa === 'Club' && !in_array($division, self::DIVISIONS_ARBITRAGE_CLUB, true)) {
+                return $this->response->setJSON([
+                    'ok'  => false,
+                    'msg' => 'Le souhait JA « Club » n\'est possible que pour les divisions '
+                             . implode(' et ', self::DIVISIONS_ARBITRAGE_CLUB) . '.',
+                ]);
             }
 
             $stmt = $pdo->prepare(

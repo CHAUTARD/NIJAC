@@ -147,10 +147,10 @@
             <div class="mb-2">
                 <label class="form-label" for="sel-souhait-ja">Souhait JA</label>
                 <select id="sel-souhait-ja" class="form-select form-select-sm">
-                    <option value="">—</option>
                     <option value="CRA">CRA</option>
                     <option value="Club">Club</option>
                 </select>
+                <div class="form-text" id="txt-souhait-ja-aide">« Club » réservé aux divisions R3M et R4M.</div>
             </div>
 
             <div class="mb-2">
@@ -270,6 +270,15 @@ function peuplerFiltres() {
     });
 }
 
+const DIVISIONS_ARBITRAGE_CLUB = ['R3M', 'R4M'];
+
+function majSouhaitJaEtat() {
+    const autorise = DIVISIONS_ARBITRAGE_CLUB.includes(editDivision);
+    const $sel = $('#sel-souhait-ja');
+    if (!autorise) $sel.val('CRA');
+    $sel.prop('disabled', !autorise);
+}
+
 function majEditPanelDivision() {
     nijacDivisionFilter('#edit-panel-division', divisions.map(d => d.Division), {
         libDivision,
@@ -278,6 +287,7 @@ function majEditPanelDivision() {
         onSelect: code => { editDivision = code; majEditPanelDivision(); },
         showToutes: false,
     });
+    majSouhaitJaEtat();
 }
 
 function peuplerSelectsFormulaire() {
@@ -348,8 +358,9 @@ function selectionnerLigne($tr) {
     $('#edit-club-nom').val(libClub(e.Id_Club ?? ''));
     $('#sel-reengagement').val(e.ReEngagement ?? '');
     $('#sel-jour-souhaite').val(e.JourSouhaite ?? '');
-    $('#sel-souhait-ja').val(e.SouhaitJA ?? '');
-    $('#txt-desiderata-saison').val(e.DesiderataSaison ?? '');
+    $('#sel-souhait-ja').val(e.SouhaitJA || 'CRA');
+    majSouhaitJaEtat();
+    $('#txt-desiderata-saison').val(e.DesiderataSaison || SAISON_COURANTE);
     setStatus('');
 }
 
@@ -365,7 +376,8 @@ $('#btn-nouveau').on('click', function () {
     $('#edit-club-nom').val('');
     $('#sel-reengagement').val('');
     $('#sel-jour-souhaite').val('');
-    $('#sel-souhait-ja').val('');
+    $('#sel-souhait-ja').val('CRA');
+    majSouhaitJaEtat();
     $('#txt-desiderata-saison').val(SAISON_COURANTE);
     setStatus('');
 });
