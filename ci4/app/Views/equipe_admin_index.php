@@ -103,8 +103,8 @@
         <div id="no-selection">Sélectionnez une équipe dans la liste pour la modifier, ou cliquez sur « Nouveau » pour en créer une.</div>
 
         <div id="form-equipe" style="display:none;">
-            <div class="mb-2">
-                <span class="form-label d-block">Id_Equipe</span>
+            <div class="mb-2 d-flex align-items-center gap-2">
+                <span class="form-label mb-0" id="lbl-id">Id_Equipe :</span>
                 <div class="form-readonly" id="txt-id"></div>
             </div>
 
@@ -124,38 +124,48 @@
                 <datalist id="dl-clubs"></datalist>
             </div>
 
+            <div class="mb-2">
+                <label class="form-label" for="edit-club2-nom">Club 2 (entente)</label>
+                <input type="text" id="edit-club2-nom" class="form-control form-control-sm" list="dl-clubs" placeholder="Optionnel…" autocomplete="off">
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label" for="edit-club3-nom">Club 3 (entente)</label>
+                <input type="text" id="edit-club3-nom" class="form-control form-control-sm" list="dl-clubs" placeholder="Optionnel…" autocomplete="off">
+            </div>
+
             <hr>
 
-            <div class="mb-2">
-                <label class="form-label" for="sel-reengagement">Réengagement</label>
-                <select id="sel-reengagement" class="form-select form-select-sm">
-                    <option value="">—</option>
-                    <option value="O">Oui</option>
-                    <option value="N">Non</option>
-                </select>
+            <div class="row g-2 mb-2">
+                <div class="col">
+                    <label class="form-label" for="sel-reengagement">Réengagement</label>
+                    <select id="sel-reengagement" class="form-select form-select-sm">
+                        <option value="">—</option>
+                        <option value="O">Oui</option>
+                        <option value="N">Non</option>
+                    </select>
+                </div>
+                <div class="col">
+                    <label class="form-label" for="sel-jour-souhaite">Jour souhaité</label>
+                    <select id="sel-jour-souhaite" class="form-select form-select-sm">
+                        <option value="">—</option>
+                        <option value="Samedi">Samedi</option>
+                        <option value="Dimanche">Dimanche</option>
+                    </select>
+                </div>
+                <div class="col">
+                    <label class="form-label" for="sel-souhait-ja">Souhait JA</label>
+                    <select id="sel-souhait-ja" class="form-select form-select-sm">
+                        <option value="CRA">CRA</option>
+                        <option value="Club">Club</option>
+                    </select>
+                    <div class="form-text" id="txt-souhait-ja-aide">« Club » réservé aux divisions R3M et R4M.</div>
+                </div>
             </div>
 
-            <div class="mb-2">
-                <label class="form-label" for="sel-jour-souhaite">Jour souhaité</label>
-                <select id="sel-jour-souhaite" class="form-select form-select-sm">
-                    <option value="">—</option>
-                    <option value="Samedi">Samedi</option>
-                    <option value="Dimanche">Dimanche</option>
-                </select>
-            </div>
-
-            <div class="mb-2">
-                <label class="form-label" for="sel-souhait-ja">Souhait JA</label>
-                <select id="sel-souhait-ja" class="form-select form-select-sm">
-                    <option value="CRA">CRA</option>
-                    <option value="Club">Club</option>
-                </select>
-                <div class="form-text" id="txt-souhait-ja-aide">« Club » réservé aux divisions R3M et R4M.</div>
-            </div>
-
-            <div class="mb-2">
-                <label class="form-label" for="txt-desiderata-saison">Saison désidérata</label>
-                <input type="text" id="txt-desiderata-saison" class="form-control form-control-sm" maxlength="9" placeholder="2025-2026">
+            <div class="mb-2 d-flex align-items-center gap-2">
+                <label class="form-label mb-0" for="txt-desiderata-saison">Saison :</label>
+                <input type="text" id="txt-desiderata-saison" class="form-control form-control-sm" maxlength="9" placeholder="2025-2026" style="width:120px;">
             </div>
 
             <div id="panel-boutons">
@@ -356,6 +366,8 @@ function selectionnerLigne($tr) {
     editDivision = e.Division ?? '';
     majEditPanelDivision();
     $('#edit-club-nom').val(libClub(e.Id_Club ?? ''));
+    $('#edit-club2-nom').val(e.Id_Club2 ? libClub(e.Id_Club2) : '');
+    $('#edit-club3-nom').val(e.Id_Club3 ? libClub(e.Id_Club3) : '');
     $('#sel-reengagement').val(e.ReEngagement ?? '');
     $('#sel-jour-souhaite').val(e.JourSouhaite ?? '');
     $('#sel-souhait-ja').val(e.SouhaitJA || 'CRA');
@@ -374,6 +386,8 @@ $('#btn-nouveau').on('click', function () {
     editDivision = '';
     majEditPanelDivision();
     $('#edit-club-nom').val('');
+    $('#edit-club2-nom').val('');
+    $('#edit-club3-nom').val('');
     $('#sel-reengagement').val('');
     $('#sel-jour-souhaite').val('');
     $('#sel-souhait-ja').val('CRA');
@@ -387,10 +401,19 @@ $('#btn-enregistrer').on('click', function () {
     const idClub = idClubDepuisSaisie($('#edit-club-nom').val());
     if (!idClub) { setStatus('Club introuvable : choisissez-le dans la liste proposée.', false); return; }
 
+    const texteClub2 = $('#edit-club2-nom').val().trim();
+    const idClub2 = texteClub2 === '' ? '' : idClubDepuisSaisie(texteClub2);
+    if (texteClub2 !== '' && !idClub2) { setStatus('Club 2 introuvable : choisissez-le dans la liste proposée, ou laissez vide.', false); return; }
+    const texteClub3 = $('#edit-club3-nom').val().trim();
+    const idClub3 = texteClub3 === '' ? '' : idClubDepuisSaisie(texteClub3);
+    if (texteClub3 !== '' && !idClub3) { setStatus('Club 3 introuvable : choisissez-le dans la liste proposée, ou laissez vide.', false); return; }
+
     const payload = {
         nom:               $('#txt-nom').val().trim(),
         division:          editDivision,
         id_club:           idClub,
+        id_club2:          idClub2,
+        id_club3:          idClub3,
         re_engagement:     $('#sel-reengagement').val(),
         jour_souhaite:     $('#sel-jour-souhaite').val(),
         souhait_ja:        $('#sel-souhait-ja').val(),

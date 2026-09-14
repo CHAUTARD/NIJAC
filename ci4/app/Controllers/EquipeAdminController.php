@@ -68,10 +68,13 @@ class EquipeAdminController extends BaseController
             // vrai numéro FFTT, produit un code garbage à ignorer plutôt qu'un faux département).
             $equipes = $pdo->query(
                 "SELECT e.Id_Equipe, e.Nom, e.Division, dv.Color AS DivisionColor, e.Id_Club, c.Nom AS NomClub,
+                        e.Id_Club2, c2.Nom AS NomClub2, e.Id_Club3, c3.Nom AS NomClub3,
                         d.CodeDept AS Departement,
                         e.ReEngagement, e.JourSouhaite, e.SouhaitJA, e.DesiderataSaison
                  FROM equipe e
                  JOIN club c ON c.Id_Club = e.Id_Club
+                 LEFT JOIN club c2 ON c2.Id_Club = e.Id_Club2
+                 LEFT JOIN club c3 ON c3.Id_Club = e.Id_Club3
                  LEFT JOIN departement d ON d.CodeDept = SUBSTRING(e.Id_Club, 3, 2)
                  LEFT JOIN division dv ON dv.Division = e.Division
                  ORDER BY e.Nom"
@@ -98,6 +101,8 @@ class EquipeAdminController extends BaseController
             $nom       = trim($input['nom'] ?? '');
             $division  = trim($input['division'] ?? '');
             $idClub    = trim($input['id_club'] ?? '');
+            $idClub2   = trim($input['id_club2'] ?? '') ?: null;
+            $idClub3   = trim($input['id_club3'] ?? '') ?: null;
             $reeng     = trim($input['re_engagement'] ?? '') ?: null;
             $jourSouh  = trim($input['jour_souhaite'] ?? '') ?: null;
             $souhaitJa = trim($input['souhait_ja'] ?? '') ?: 'CRA';
@@ -118,6 +123,15 @@ class EquipeAdminController extends BaseController
             if (!$chkClub->fetchColumn()) {
                 return $this->response->setJSON(['ok' => false, 'msg' => "Club « $idClub » inconnu."]);
             }
+            foreach (['Club 2' => $idClub2, 'Club 3' => $idClub3] as $libelle => $idClubN) {
+                if ($idClubN === null) {
+                    continue;
+                }
+                $chkClub->execute([$idClubN]);
+                if (!$chkClub->fetchColumn()) {
+                    return $this->response->setJSON(['ok' => false, 'msg' => "$libelle « $idClubN » inconnu."]);
+                }
+            }
 
             if ($reeng !== null && !in_array($reeng, ['O', 'N'], true)) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Réengagement invalide.']);
@@ -137,10 +151,10 @@ class EquipeAdminController extends BaseController
             }
 
             $stmt = $pdo->prepare(
-                'INSERT INTO equipe (Nom, Division, Id_Club, ReEngagement, JourSouhaite, SouhaitJA, DesiderataSaison)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)'
+                'INSERT INTO equipe (Nom, Division, Id_Club, Id_Club2, Id_Club3, ReEngagement, JourSouhaite, SouhaitJA, DesiderataSaison)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
-            $stmt->execute([$nom, $division, $idClub, $reeng, $jourSouh, $souhaitJa, $desider]);
+            $stmt->execute([$nom, $division, $idClub, $idClub2, $idClub3, $reeng, $jourSouh, $souhaitJa, $desider]);
 
             return $this->response->setJSON(['ok' => true, 'msg' => 'Équipe créée.', 'id' => (int) $pdo->lastInsertId()]);
         });
@@ -155,6 +169,8 @@ class EquipeAdminController extends BaseController
             $nom       = trim($input['nom'] ?? '');
             $division  = trim($input['division'] ?? '');
             $idClub    = trim($input['id_club'] ?? '');
+            $idClub2   = trim($input['id_club2'] ?? '') ?: null;
+            $idClub3   = trim($input['id_club3'] ?? '') ?: null;
             $reeng     = trim($input['re_engagement'] ?? '') ?: null;
             $jourSouh  = trim($input['jour_souhaite'] ?? '') ?: null;
             $souhaitJa = trim($input['souhait_ja'] ?? '') ?: 'CRA';
@@ -175,6 +191,15 @@ class EquipeAdminController extends BaseController
             if (!$chkClub->fetchColumn()) {
                 return $this->response->setJSON(['ok' => false, 'msg' => "Club « $idClub » inconnu."]);
             }
+            foreach (['Club 2' => $idClub2, 'Club 3' => $idClub3] as $libelle => $idClubN) {
+                if ($idClubN === null) {
+                    continue;
+                }
+                $chkClub->execute([$idClubN]);
+                if (!$chkClub->fetchColumn()) {
+                    return $this->response->setJSON(['ok' => false, 'msg' => "$libelle « $idClubN » inconnu."]);
+                }
+            }
 
             if ($reeng !== null && !in_array($reeng, ['O', 'N'], true)) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Réengagement invalide.']);
@@ -194,10 +219,10 @@ class EquipeAdminController extends BaseController
             }
 
             $stmt = $pdo->prepare(
-                'UPDATE equipe SET Nom=?, Division=?, Id_Club=?, ReEngagement=?, JourSouhaite=?, SouhaitJA=?, DesiderataSaison=?
+                'UPDATE equipe SET Nom=?, Division=?, Id_Club=?, Id_Club2=?, Id_Club3=?, ReEngagement=?, JourSouhaite=?, SouhaitJA=?, DesiderataSaison=?
                  WHERE Id_Equipe=?'
             );
-            $stmt->execute([$nom, $division, $idClub, $reeng, $jourSouh, $souhaitJa, $desider, $idEquipe]);
+            $stmt->execute([$nom, $division, $idClub, $idClub2, $idClub3, $reeng, $jourSouh, $souhaitJa, $desider, $idEquipe]);
 
             if ($stmt->rowCount() === 0) {
                 $chk = $pdo->prepare('SELECT COUNT(*) FROM equipe WHERE Id_Equipe = ?');

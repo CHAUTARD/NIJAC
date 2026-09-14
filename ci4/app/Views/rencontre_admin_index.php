@@ -12,6 +12,9 @@
     <style>
         #panel-liste { width: 68%; }
         .cell-equipe:hover { text-decoration: underline; cursor: pointer; }
+        /* Beaucoup de colonnes (toutes les colonnes de `rencontre`) : défilement
+           horizontal plutôt que de casser la mise en page du panneau. */
+        #table-wrapper { overflow-x: auto; }
 
         /* Bandeau de filtres : comboboxes « label en encoche » comme EN11
            (nijac.css .combo-field). Strip clair, l'encoche du label reprend
@@ -103,13 +106,17 @@
                         <th style="width:60px" data-col="2">Heure<span class="sort-icon"></span></th>
                         <th style="width:55px" data-col="3">Poule<span class="sort-icon"></span></th>
                         <th style="width:65px" data-col="4">Journée<span class="sort-icon"></span></th>
-                        <th style="width:70px" data-col="5">Division<span class="sort-icon"></span></th>
-                        <th data-col="6">Domicile<span class="sort-icon"></span></th>
-                        <th data-col="7">Extérieur<span class="sort-icon"></span></th>
+                        <th style="width:55px" data-col="5">Phase<span class="sort-icon"></span></th>
+                        <th style="width:70px" data-col="6">Division<span class="sort-icon"></span></th>
+                        <th data-col="7">Domicile<span class="sort-icon"></span></th>
+                        <th data-col="8">Extérieur<span class="sort-icon"></span></th>
+                        <th style="width:75px" data-col="9">Id_Salle<span class="sort-icon"></span></th>
+                        <th style="width:110px" data-col="10">Arbitrage obl.<span class="sort-icon"></span></th>
+                        <th data-col="11">Commentaire<span class="sort-icon"></span></th>
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
-                    <tr><td colspan="8" class="text-center text-muted py-3">Chargement…</td></tr>
+                    <tr><td colspan="12" class="text-center text-muted py-3">Chargement…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -126,12 +133,6 @@
                     <div class="form-readonly" id="txt-id"></div>
                 </div>
                 <div class="col-auto">
-                    <span class="form-label d-block">Rencontre</span>
-                    <div class="form-readonly">
-                        <span id="txt-dom"></span> vs <span id="txt-ext"></span>
-                    </div>
-                </div>
-                <div class="col-auto">
                     <span class="form-label d-block">Division</span>
                     <div class="form-readonly" id="txt-division"></div>
                 </div>
@@ -140,31 +141,68 @@
             <hr>
 
             <div class="mb-2">
-                <label class="form-label" for="txt-date">Date</label>
-                <div class="input-group input-group-sm">
-                    <button type="button" class="btn btn-outline-secondary" id="btn-date-moins"><i class="bi bi-dash-lg"></i></button>
-                    <input type="date" id="txt-date" class="form-control form-control-sm">
-                    <button type="button" class="btn btn-outline-secondary" id="btn-date-plus"><i class="bi bi-plus-lg"></i></button>
+                <label class="form-label" for="edit-equipe-dom">Équipe domicile</label>
+                <input type="text" id="edit-equipe-dom" class="form-control form-control-sm" list="dl-equipes" placeholder="Rechercher une équipe…" autocomplete="off">
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label" for="edit-equipe-ext">Équipe extérieure</label>
+                <input type="text" id="edit-equipe-ext" class="form-control form-control-sm" list="dl-equipes" placeholder="Rechercher une équipe… (vide = exempt)" autocomplete="off">
+                <datalist id="dl-equipes"></datalist>
+            </div>
+
+            <div class="row g-2 mb-2">
+                <div class="col">
+                    <label class="form-label" for="txt-date">Date</label>
+                    <div class="input-group input-group-sm">
+                        <button type="button" class="btn btn-outline-secondary" id="btn-date-moins"><i class="bi bi-dash-lg"></i></button>
+                        <input type="date" id="txt-date" class="form-control form-control-sm">
+                        <button type="button" class="btn btn-outline-secondary" id="btn-date-plus"><i class="bi bi-plus-lg"></i></button>
+                    </div>
+                </div>
+                <div class="col">
+                    <label class="form-label" for="sel-heure">Heure</label>
+                    <div class="input-group input-group-sm">
+                        <button type="button" class="btn btn-outline-secondary" id="btn-heure-moins"><i class="bi bi-dash-lg"></i></button>
+                        <input type="time" id="sel-heure" class="form-control form-control-sm" step="60">
+                        <button type="button" class="btn btn-outline-secondary" id="btn-heure-plus"><i class="bi bi-plus-lg"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-2 mb-2">
+                <div class="col-auto">
+                    <label class="form-label" for="txt-poule">Poule</label>
+                    <input type="number" id="txt-poule" class="form-control form-control-sm" min="0" step="1" style="width:90px;">
+                </div>
+                <div class="col-auto">
+                    <label class="form-label" for="txt-journee">Journée</label>
+                    <input type="number" id="txt-journee" class="form-control form-control-sm" min="0" step="1" style="width:90px;">
+                </div>
+                <div class="col-auto">
+                    <label class="form-label" for="txt-phase">Phase</label>
+                    <input type="number" id="txt-phase" class="form-control form-control-sm" min="1" max="2" step="1" style="width:90px;">
                 </div>
             </div>
 
             <div class="mb-2">
-                <label class="form-label" for="sel-heure">Heure</label>
-                <div class="input-group input-group-sm">
-                    <button type="button" class="btn btn-outline-secondary" id="btn-heure-moins"><i class="bi bi-dash-lg"></i></button>
-                    <input type="time" id="sel-heure" class="form-control form-control-sm" step="60">
-                    <button type="button" class="btn btn-outline-secondary" id="btn-heure-plus"><i class="bi bi-plus-lg"></i></button>
-                </div>
+                <label class="form-label" for="sel-salle">Salle</label>
+                <select id="sel-salle" class="form-select form-select-sm">
+                    <option value="">—</option>
+                </select>
             </div>
 
             <div class="mb-2">
-                <label class="form-label" for="txt-poule">Poule</label>
-                <input type="number" id="txt-poule" class="form-control form-control-sm" min="0" step="1">
+                <label class="form-label" for="sel-arbitrage-obligatoire">Arbitrage obligatoire</label>
+                <select id="sel-arbitrage-obligatoire" class="form-select form-select-sm">
+                    <option value="1">Oui</option>
+                    <option value="0">Non</option>
+                </select>
             </div>
 
             <div class="mb-2">
-                <label class="form-label" for="txt-journee">Journée</label>
-                <input type="number" id="txt-journee" class="form-control form-control-sm" min="0" step="1">
+                <label class="form-label" for="txt-commentaire">Commentaire</label>
+                <textarea id="txt-commentaire" class="form-control form-control-sm" rows="2"></textarea>
             </div>
 
             <div id="panel-boutons">
@@ -191,6 +229,8 @@ function libDivision(code) {
     return n ? code + ' — ' + n : code;
 }
 let rencontres = [];
+let equipes    = [];
+let salles     = [];
 let currentId  = null;
 let searchEquipe  = '';
 let deptFiltre = '';
@@ -231,6 +271,24 @@ function macaronDivision(division, color) {
     return $('<span class="badge">').text(division ?? '').css({ background: bg, color: textColorFor(bg) });
 }
 
+/** Texte de l'info-bulle (survol) de la cellule Extérieur : club + correspondant. */
+function infosExterieur(r) {
+    if (!r.NomExt) return '';
+    const lignes = [r.NomExt];
+    if (r.NomClubExt) lignes.push(r.NomClubExt + (r.IdClubExt ? ' (' + r.IdClubExt + ')' : ''));
+    if (r.CorrNomExt) lignes.push('Correspondant : ' + r.CorrNomExt);
+    if (r.CorrEmailExt) lignes.push(r.CorrEmailExt);
+    if (r.CorrTelExt) lignes.push(r.CorrTelExt);
+    return lignes.join('\n');
+}
+
+/** Texte de l'info-bulle (survol) de la cellule Salle : nom + adresse complète. */
+function infosSalle(r) {
+    if (!r.NomSalle) return '';
+    const adresse = [r.AdresseSalle, [r.CpSalle, r.VilleSalle].filter(Boolean).join(' ')].filter(Boolean).join('\n');
+    return adresse ? r.NomSalle + '\n' + adresse : r.NomSalle;
+}
+
 function setStatus(msg, ok = true) {
     $('#form-status').text(msg).removeClass('text-danger text-success').addClass(ok ? 'text-success' : 'text-danger');
 }
@@ -255,13 +313,54 @@ function chargerListe(selectId = null) {
     $.get(`${RENCONTRE_BASE}/data`, function (res) {
         if (!res.ok) { toast(res.msg, false); return; }
         rencontres = res.rencontres;
+        equipes    = res.equipes || [];
+        salles     = res.salles || [];
         peuplerFiltres();
+        peuplerDatalistEquipes();
         renderListe();
         if (selectId) {
             const $tr = $(`#tbody-liste tr[data-id="${selectId}"]`);
             if ($tr.length) selectionnerLigne($tr);
         }
     }, 'json').fail(() => toast('Erreur réseau.', false));
+}
+
+function libEquipe(idEquipe) {
+    const e = equipes.find(x => x.Id_Equipe == idEquipe);
+    return e ? `${e.Nom} (${e.Id_Equipe})` : '';
+}
+
+/** Résout le texte saisi dans un champ Équipe (avec datalist) vers un Id_Equipe, ou '' si aucune correspondance. */
+function idEquipeDepuisSaisie(texte) {
+    const t = (texte ?? '').trim();
+    if (t === '') return '';
+    const m = /\((\d+)\)\s*$/.exec(t);
+    if (m && equipes.some(e => e.Id_Equipe == m[1])) return m[1];
+    const e = equipes.find(x => x.Nom === t);
+    return e ? String(e.Id_Equipe) : '';
+}
+
+function peuplerDatalistEquipes() {
+    const $dl = $('#dl-equipes').empty();
+    equipes.forEach(e => $dl.append(new Option(`${e.Nom} (${e.Id_Equipe})`)));
+}
+
+/** Peuple #sel-salle avec la ou les salles du club passé, en conservant idSalleActuelle si elle en fait partie. */
+function majSelectSalle(idClub, idSalleActuelle) {
+    const $sel = $('#sel-salle').empty().append('<option value="">—</option>');
+    salles.filter(s => s.Id_Club === idClub)
+        .sort((a, b) => (b.EstPrincipale - a.EstPrincipale) || a.Nom.localeCompare(b.Nom))
+        .forEach(s => $sel.append(new Option(s.Nom + (s.EstPrincipale == 1 ? ' (principale)' : ''), s.Id_Salle)));
+    $sel.val(idSalleActuelle ?? '');
+}
+
+/** Division + salles proposées suivent l'équipe domicile actuellement saisie. */
+function majApresChangementDomicile() {
+    const idEquipeDom = idEquipeDepuisSaisie($('#edit-equipe-dom').val());
+    const e = equipes.find(x => x.Id_Equipe == idEquipeDom);
+    const color = e ? rencontres.find(r => r.Division === e.Division)?.DivisionColor : null;
+    $('#txt-division').empty().append(e ? macaronDivision(e.Division, color) : '');
+    majSelectSalle(e ? e.Id_Club : null, $('#sel-salle').val());
 }
 
 function majPanelDivision() {
@@ -305,7 +404,7 @@ function renderListe() {
     $('#lbl-count').text(`${affichees.length} / ${rencontres.length}`);
 
     if (!affichees.length) {
-        $body.append('<tr><td colspan="8" class="text-center text-muted py-3">Aucune rencontre.</td></tr>');
+        $body.append('<tr><td colspan="12" class="text-center text-muted py-3">Aucune rencontre.</td></tr>');
         return;
     }
 
@@ -314,17 +413,22 @@ function renderListe() {
         const heure = (r.Heure ?? '').substring(0, 5);
         const $tdDom = $('<td>').addClass('cell-equipe').text(r.NomDom ?? '')
             .on('click', function (e) { e.stopPropagation(); filtrerParEquipe(r.NomDom, r.Id_Rencontre); });
-        const $tdExt = $('<td>').addClass('cell-equipe').text(r.NomExt ?? '—')
+        const $tdExt = $('<td>').addClass('cell-equipe').attr('title', infosExterieur(r)).text(r.NomExt ?? '—')
             .on('click', function (e) { e.stopPropagation(); filtrerParEquipe(r.NomExt, r.Id_Rencontre); });
+        const $tdIdSalle = $('<td>').attr('title', infosSalle(r)).text(r.id_Salle ?? '');
         $('<tr>').attr('data-id', r.Id_Rencontre).append(
             $('<td>').text(r.Id_Rencontre ?? ''),
             $('<td>').text(date),
             $('<td>').text(heure),
             $('<td>').text(r.Poule ?? ''),
             $('<td>').text(r.Journee ?? ''),
+            $('<td>').text(r.Phase ?? ''),
             $('<td>').append(macaronDivision(r.Division, r.DivisionColor)),
             $tdDom,
-            $tdExt
+            $tdExt,
+            $tdIdSalle,
+            $('<td>').text(r.ArbitrageObligatoire == 1 ? 'Oui' : 'Non'),
+            $('<td>').text(r.Commentaire ?? '')
         ).on('click', function () { selectionnerLigne($(this)); }).appendTo($body);
     });
 
@@ -354,23 +458,42 @@ function selectionnerLigne($tr) {
     $('#no-selection').hide();
     $('#form-rencontre').show();
     $('#txt-id').text(r.Id_Rencontre ?? '');
-    $('#txt-dom').text(r.NomDom ?? '');
-    $('#txt-ext').text(r.NomExt ?? '—');
+    $('#edit-equipe-dom').val(libEquipe(r.Id_EquipeDom));
+    $('#edit-equipe-ext').val(r.Id_EquipeExt ? libEquipe(r.Id_EquipeExt) : '');
     $('#txt-division').empty().append(macaronDivision(r.Division, r.DivisionColor));
     $('#txt-date').val(r.Date ? r.Date.substring(0, 10) : '');
     $('#sel-heure').val((r.Heure ?? '').substring(0, 5));
     $('#txt-poule').val(r.Poule ?? '');
     $('#txt-journee').val(r.Journee ?? '');
+    $('#txt-phase').val(r.Phase ?? '');
+    majSelectSalle(r.IdClubDom, r.id_Salle);
+    $('#sel-arbitrage-obligatoire').val(r.ArbitrageObligatoire == 1 ? '1' : '0');
+    $('#txt-commentaire').val(r.Commentaire ?? '');
     setStatus('');
 }
 
+$('#edit-equipe-dom').on('change', majApresChangementDomicile);
+
 $('#btn-enregistrer').on('click', function () {
     if (!currentId) return;
+
+    const idEquipeDom = idEquipeDepuisSaisie($('#edit-equipe-dom').val());
+    if (!idEquipeDom) { setStatus('Équipe domicile introuvable : choisissez-la dans la liste proposée.', false); return; }
+    const texteExt = $('#edit-equipe-ext').val().trim();
+    const idEquipeExt = texteExt === '' ? '' : idEquipeDepuisSaisie(texteExt);
+    if (texteExt !== '' && !idEquipeExt) { setStatus('Équipe extérieure introuvable : choisissez-la dans la liste proposée, ou laissez vide (exempt).', false); return; }
+
     const payload = {
-        date:    $('#txt-date').val(),
-        heure:   $('#sel-heure').val(),
-        poule:   $('#txt-poule').val(),
-        journee: $('#txt-journee').val(),
+        date:                   $('#txt-date').val(),
+        heure:                  $('#sel-heure').val(),
+        poule:                  $('#txt-poule').val(),
+        journee:                $('#txt-journee').val(),
+        phase:                  $('#txt-phase').val(),
+        id_equipe_dom:          idEquipeDom,
+        id_equipe_ext:          idEquipeExt,
+        id_salle:               $('#sel-salle').val(),
+        arbitrage_obligatoire:  $('#sel-arbitrage-obligatoire').val(),
+        commentaire:            $('#txt-commentaire').val().trim(),
     };
 
     $.ajax({ url: `${RENCONTRE_BASE}/${currentId}`, method: 'PUT', data: payload, dataType: 'json' }).done(function (res) {
@@ -405,7 +528,7 @@ function supprimerRencontre(id, libelle) {
 
 $('#btn-supprimer').on('click', function () {
     if (!currentId) return;
-    supprimerRencontre(currentId, `${$('#txt-dom').text()} vs ${$('#txt-ext').text()}`);
+    supprimerRencontre(currentId, `${$('#edit-equipe-dom').val()} vs ${$('#edit-equipe-ext').val() || 'exempt'}`);
 });
 
 $('#search-equipe').on('input', function () { searchEquipe = $(this).val().trim(); renderListe(); });
