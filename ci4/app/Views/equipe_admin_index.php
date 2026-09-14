@@ -114,8 +114,8 @@
             </div>
 
             <div class="mb-2">
-                <label class="form-label" for="edit-sel-division">Division</label>
-                <select id="edit-sel-division" class="form-select form-select-sm"></select>
+                <label class="form-label">Division</label>
+                <div id="edit-panel-division"></div>
             </div>
 
             <div class="mb-2">
@@ -187,6 +187,7 @@ let clubs       = [];
 let divisions   = [];
 let departements = [];
 let currentId   = null;
+let editDivision = '';
 let clubFiltre       = '';
 let departementFiltre = '';
 let divisionFiltre   = '';
@@ -269,9 +270,18 @@ function peuplerFiltres() {
     });
 }
 
+function majEditPanelDivision() {
+    nijacDivisionFilter('#edit-panel-division', divisions.map(d => d.Division), {
+        libDivision,
+        colorFor: code => divisions.find(d => d.Division === code)?.Color,
+        getFiltre: () => editDivision,
+        onSelect: code => { editDivision = code; majEditPanelDivision(); },
+        showToutes: false,
+    });
+}
+
 function peuplerSelectsFormulaire() {
-    const $selDiv = $('#edit-sel-division').empty();
-    divisions.forEach(d => $selDiv.append(new Option(libDivision(d.Division), d.Division)));
+    majEditPanelDivision();
 
     const $dl = $('#dl-clubs').empty();
     clubs.forEach(c => $dl.append(new Option(`${c.Nom} (${c.Id_Club})`)));
@@ -333,7 +343,8 @@ function selectionnerLigne($tr) {
     $('#form-equipe').show();
     $('#txt-id').text(e.Id_Equipe ?? '');
     $('#txt-nom').val(e.Nom ?? '');
-    $('#edit-sel-division').val(e.Division ?? '');
+    editDivision = e.Division ?? '';
+    majEditPanelDivision();
     $('#edit-club-nom').val(libClub(e.Id_Club ?? ''));
     $('#sel-reengagement').val(e.ReEngagement ?? '');
     $('#sel-jour-souhaite').val(e.JourSouhaite ?? '');
@@ -349,7 +360,8 @@ $('#btn-nouveau').on('click', function () {
     $('#form-equipe').show();
     $('#txt-id').text('(nouvelle équipe)');
     $('#txt-nom').val('').trigger('focus');
-    $('#edit-sel-division').val('');
+    editDivision = '';
+    majEditPanelDivision();
     $('#edit-club-nom').val('');
     $('#sel-reengagement').val('');
     $('#sel-jour-souhaite').val('');
@@ -365,7 +377,7 @@ $('#btn-enregistrer').on('click', function () {
 
     const payload = {
         nom:               $('#txt-nom').val().trim(),
-        division:          $('#edit-sel-division').val(),
+        division:          editDivision,
         id_club:           idClub,
         re_engagement:     $('#sel-reengagement').val(),
         jour_souhaite:     $('#sel-jour-souhaite').val(),

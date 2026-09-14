@@ -1,24 +1,33 @@
 'use strict';
 
 /**
- * Filtre « Division » générique : un badge dans la barre de filtres (division
- * sélectionnée, ou « Toutes les divisions ») qui ouvre une popup Bootstrap
- * listant toutes les divisions en deux colonnes Messieurs/Dames (suffixe M/F
- * du code, convention utilisée dans tout le projet — voir
- * ImportRencontresNatController::detecterDivisionNationale()). La popup est
- * injectée une seule fois dans <body> et partagée par tous les écrans qui
- * appellent nijacDivisionFilter() sur une même page.
+ * Popup « Division » générique : un badge (division sélectionnée, ou une
+ * valeur par défaut) qui ouvre une popup Bootstrap listant toutes les
+ * divisions en deux colonnes Messieurs/Dames (suffixe M/F du code,
+ * convention utilisée dans tout le projet — voir
+ * ImportRencontresNatController::detecterDivisionNationale()). Utilisée à la
+ * fois pour filtrer une liste (comportement par défaut, avec une entrée
+ * « Toutes les divisions ») et pour saisir la division d'un formulaire
+ * (opts.showToutes: false). La popup est injectée une seule fois dans <body>
+ * et partagée par tous les écrans/panneaux qui appellent
+ * nijacDivisionFilter() sur une même page ; son contenu est reconstruit à
+ * l'ouverture (show.bs.modal) pour le panneau qui l'a déclenchée, ce qui
+ * permet à plusieurs panneaux (ex: filtre + saisie) de coexister sur le
+ * même écran sans se marcher dessus.
  *
- * @param {string}   panelSelector  sélecteur du conteneur du badge dans la barre de filtres
+ * @param {string}   panelSelector  sélecteur du conteneur du badge
  * @param {string[]} codes          codes de division à proposer (ex: ['N1M','N1F','R1M',...])
  * @param {object}   opts
  * @param {function(string): string}         opts.libDivision  code -> libellé affiché ("N1M — Nationale 1 Messieurs")
  * @param {function(string): (string|null)}   opts.colorFor     code -> couleur hex du badge, ou falsy pour la couleur par défaut
- * @param {function(): string}               opts.getFiltre    code actuellement sélectionné, '' si aucun filtre
- * @param {function(string): void}           opts.onSelect     appelé avec le nouveau code ('' = toutes) au clic
+ * @param {function(): string}               opts.getFiltre    code actuellement sélectionné, '' si aucun
+ * @param {function(string): void}           opts.onSelect     appelé avec le nouveau code ('' = toutes, filtre uniquement) au clic
+ * @param {boolean}  [opts.showToutes=true]  false pour une saisie obligatoire (pas d'entrée « Toutes »)
+ * @param {string}   [opts.placeholder]      libellé du badge quand rien n'est sélectionné (défaut : « Toutes les divisions » / « Choisir une division » selon showToutes)
  */
 function nijacDivisionFilter(panelSelector, codes, opts) {
-    const { libDivision, colorFor, getFiltre, onSelect } = opts;
+    const { libDivision, colorFor, getFiltre, onSelect, showToutes = true } = opts;
+    const placeholder = opts.placeholder || (showToutes ? 'Toutes les divisions' : 'Choisir une division');
 
     if (!$('#modal-divisions-global').length) {
         $('body').append(`
@@ -26,7 +35,7 @@ function nijacDivisionFilter(panelSelector, codes, opts) {
   <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content">
       <div class="modal-header py-2" style="background:#1a3a6b;color:#fff;">
-        <h6 class="modal-title mb-0">Filtrer par division</h6>
+        <h6 class="modal-title mb-0">Division</h6>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
@@ -45,6 +54,10 @@ function nijacDivisionFilter(panelSelector, codes, opts) {
     </div>
   </div>
 </div>`);
+        $('#modal-divisions-global').on('show.bs.modal', function (e) {
+            const populate = $(e.relatedTarget).data('nijacPopulateDivisionModal');
+            if (populate) populate();
+        });
     }
 
     function textColorFor(hex) {
@@ -59,29 +72,37 @@ function nijacDivisionFilter(panelSelector, codes, opts) {
         return $('<span class="badge">').text(libDivision(code)).css({ background: bg, color: textColorFor(bg) });
     }
 
-    const filtre = getFiltre();
-
-    const $panel = $(panelSelector).empty().addClass('division-badges');
-    (filtre ? badge(filtre) : $('<span class="badge badge-toutes">').text('Toutes les divisions'))
-        .attr('data-bs-toggle', 'modal').attr('data-bs-target', '#modal-divisions-global')
-        .appendTo($panel);
-
     const fermerEtFiltrer = code => {
         onSelect(code);
         bootstrap.Modal.getOrCreateInstance($('#modal-divisions-global')[0]).hide();
     };
 
-    $('#modal-division-toutes').empty().append(
-        $('<span class="badge badge-toutes">').text('Toutes les divisions')
-            .toggleClass('active', !filtre)
-            .on('click', () => fermerEtFiltrer(''))
-    );
-    const $colM = $('#modal-division-m').empty();
-    const $colF = $('#modal-division-f').empty();
-    codes.forEach(code => {
-        badge(code)
-            .toggleClass('active', filtre === code)
-            .on('click', () => fermerEtFiltrer(code))
-            .appendTo(code.endsWith('F') ? $colF : $colM);
-    });
+    function populate() {
+        const filtre = getFiltre();
+        $('#modal-divisions-global .modal-title').text(showToutes ? 'Filtrer par division' : 'Choisir une division');
+
+        const $toutes = $('#modal-division-toutes').empty();
+        if (showToutes) {
+            $toutes.append(
+                $('<span class="badge badge-toutes">').text('Toutes les divisions')
+                    .toggleClass('active', !filtre)
+                    .on('click', () => fermerEtFiltrer(''))
+            );
+        }
+        const $colM = $('#modal-division-m').empty();
+        const $colF = $('#modal-division-f').empty();
+        codes.forEach(code => {
+            badge(code)
+                .toggleClass('active', filtre === code)
+                .on('click', () => fermerEtFiltrer(code))
+                .appendTo(code.endsWith('F') ? $colF : $colM);
+        });
+    }
+
+    const filtre = getFiltre();
+    const $panel = $(panelSelector).empty().addClass('division-badges');
+    (filtre ? badge(filtre) : $('<span class="badge badge-toutes">').text(placeholder))
+        .attr('data-bs-toggle', 'modal').attr('data-bs-target', '#modal-divisions-global')
+        .data('nijacPopulateDivisionModal', populate)
+        .appendTo($panel);
 }
