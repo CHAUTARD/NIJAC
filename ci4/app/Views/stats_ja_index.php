@@ -52,17 +52,15 @@
         .grade-other     { background: #f1f5f9; color: #475569; }
 
         /* Graphes JA + rencontres par département (petits multiples, 2 par ligne) */
-        .chart-section-title { font-weight: 700; color: var(--nijac-blue); font-size: .95rem; }
-        .chart-section-subtitle { font-size: .75rem; color: #6b7280; margin-bottom: .6rem; }
+        .chart-section-title { font-weight: 700; color: var(--nijac-blue); font-size: .95rem; margin-bottom: .5rem; }
         .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
         @media (max-width: 700px) { .chart-grid { grid-template-columns: 1fr; } }
         .chart-card { background: #fff; border: 1px solid #e0e8f0; border-radius: 6px; padding: .6rem .8rem; }
         .chart-card-wide { grid-column: 1 / -1; }
         .chart-card-title { font-weight: 600; color: #374151; font-size: .8rem; margin-bottom: .3rem; }
-        .chart-legend-row { display: flex; flex-wrap: wrap; gap: .3rem 1rem; margin-bottom: .35rem; }
-        .chart-legend-item { display: inline-flex; align-items: center; gap: .3rem; font-size: .78rem; color: #374151; cursor: pointer; }
-        .chart-legend-item input[type="checkbox"] { margin: 0; cursor: pointer; }
-        .chart-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+        .chart-canvas-wrap { position: relative; height: 260px; }
+        .chart-canvas-wrap-lg { height: 320px; }
+        .chart-canvas-wrap-pie { height: 300px; max-width: 420px; margin: 0 auto; }
 
         @media print {
             #toolbar, #toolbar-user, #page-footer, .no-print { display: none !important; }
@@ -144,15 +142,35 @@
         <i class="bi bi-inbox" style="font-size:2rem;"></i><br>Aucun arbitrage sur cette période.
     </div>
     <div id="dept-charts" class="mb-3" style="display:none;">
-        <div class="d-flex align-items-center flex-wrap gap-2">
-            <div id="chart-section-title" class="chart-section-title"></div>
-            <span class="combo-field ms-auto">
-                <label for="sel-journee-surbrillance">Mettre en évidence</label>
-                <select id="sel-journee-surbrillance"><option value="">Aucune mise en évidence</option></select>
-            </span>
+        <div id="chart-section-title" class="chart-section-title"></div>
+        <div class="chart-grid">
+            <div class="chart-card chart-card-wide">
+                <div class="chart-card-title">Rencontres par département (total saison)</div>
+                <div class="chart-canvas-wrap chart-canvas-wrap-pie"><canvas id="chart-camembert"></canvas></div>
+            </div>
+            <div class="chart-card chart-card-wide">
+                <div class="chart-card-title">JA actifs et rencontres par journée, par département</div>
+                <div class="chart-canvas-wrap chart-canvas-wrap-lg"><canvas id="chart-combine"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-card-title">Taux de couverture (arbitre nommé ou JA du club recevant)</div>
+                <div class="chart-canvas-wrap"><canvas id="chart-couverture"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-card-title">Charge par JA (rencontres / JA actif)</div>
+                <div class="chart-canvas-wrap"><canvas id="chart-charge"></canvas></div>
+            </div>
+            <div class="chart-card chart-card-wide">
+                <div class="d-flex align-items-center flex-wrap gap-2 mb-1">
+                    <div class="chart-card-title mb-0">Rencontres / JA nommé / JA du club par journée</div>
+                    <span class="combo-field ms-auto">
+                        <label for="sel-dept-barres">Département</label>
+                        <select id="sel-dept-barres"></select>
+                    </span>
+                </div>
+                <div class="chart-canvas-wrap"><canvas id="chart-barres"></canvas></div>
+            </div>
         </div>
-        <div class="chart-section-subtitle">Axe horizontal : département · Axe vertical : nombre</div>
-        <div id="chart-dept-grid" class="chart-grid"></div>
     </div>
     <div id="table-wrap" style="display:none;">
         <table class="stats-table" id="stats-table">
@@ -180,10 +198,12 @@
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
+<script src="<?= base_url('asset/js/chart.umd.min.js') ?>"></script>
 <script>
 'use strict';
 
 const BASE = '<?= site_url('stats-ja') ?>';
+const DEPT_USER = <?= json_encode($departement) ?>;
 
 let _rows   = [];
 const sortState = { col: 'nb_arbitrages', asc: false };
@@ -243,185 +263,216 @@ const COULEUR_JA    = '#1a3a6b'; // bleu — fixe, distinct des couleurs de jour
 const COULEUR_TOTAL = '#e11d1d'; // rouge — fixe, idem
 // Une couleur par journée, choisies pour rester visuellement distinctes entre elles et du bleu/rouge fixes ci-dessus.
 const PALETTE_JOURNEES = ['#2e7d32', '#f59e0b', '#7c3aed', '#0d9488', '#db2777', '#65a30d', '#ea580c', '#9333ea', '#0891b2', '#78350f'];
-
-/** Camembert du total de rencontres par département, avec légende (valeur + %). */
-function svgCamembert(rows, valeurs) {
-    const total = valeurs.reduce((a, b) => a + b, 0) || 1;
-    const cx = 140, cy = 140, r = 125;
-    let angle = -90;
-    const toXY = a => [cx + r * Math.cos(a * Math.PI / 180), cy + r * Math.sin(a * Math.PI / 180)];
-
-    const slices = valeurs.map((v, i) => {
-        const a0 = angle, a1 = angle + (v / total) * 360;
-        angle = a1;
-        const large = (a1 - a0) > 180 ? 1 : 0;
-        const [x0, y0] = toXY(a0), [x1, y1] = toXY(a1);
-        const color = PALETTE_DEPTS[i % PALETTE_DEPTS.length];
-        const pct = Math.round(v / total * 1000) / 10;
-        return `<path d="M${cx},${cy} L${x0.toFixed(1)},${y0.toFixed(1)} A${r},${r} 0 ${large} 1 ${x1.toFixed(1)},${y1.toFixed(1)} Z" fill="${color}">
-            <title>${esc(rows[i].nom)} : ${v} rencontre(s) (${pct}%)</title>
-        </path>`;
-    }).join('');
-
-    const legende = valeurs.map((v, i) => {
-        const color = PALETTE_DEPTS[i % PALETTE_DEPTS.length];
-        const pct = Math.round(v / total * 1000) / 10;
-        return `<div style="display:flex;align-items:center;gap:.5rem;font-size:.95rem;margin-bottom:.5rem;">
-            <span style="width:14px;height:14px;border-radius:3px;background:${color};flex-shrink:0;"></span>
-            <span>${esc(rows[i].dept)} — ${esc(rows[i].nom)} : <strong>${v}</strong> (${pct}%)</span>
-        </div>`;
-    }).join('');
-
-    return `<div style="display:flex;gap:2rem;align-items:center;flex-wrap:wrap;">
-        <svg viewBox="0 0 280 280" style="width:280px;height:280px;flex-shrink:0;">${slices}</svg>
-        <div style="flex:1;min-width:220px;">${legende}</div>
-    </div>`;
-}
-
 const couleurJournee = idx => PALETTE_JOURNEES[idx % PALETTE_JOURNEES.length];
 
-/** Légende HTML (checkboxes réelles, donc hors SVG) sur 2 lignes : JA/Total, puis une par date de journée. */
-function htmlLegendeCombinee(journees, journeesDates, lignesVisibles) {
-    const item = (key, color, label) => {
-        const checked = lignesVisibles[key] !== false;
-        return `<label class="chart-legend-item">
-            <input type="checkbox" class="chk-ligne-visible" data-key="${key}" ${checked ? 'checked' : ''}>
-            <span class="chart-swatch" style="background:${color}"></span>${esc(label)}
-        </label>`;
-    };
-    const ligne1 = item('ja', COULEUR_JA, 'JA actifs') + item('total', COULEUR_TOTAL, 'Total rencontres');
-    const ligne2 = journees.map((j, i) => item('j' + j, couleurJournee(i), journeesDates[j] || `Journée ${j}`)).join('');
-    return `<div class="chart-legend-row">${ligne1}</div><div class="chart-legend-row">${ligne2}</div>`;
+const SERIES_BARRES_JOURNEE = [
+    { cle: 'nb_rencontres',   label: 'Rencontres',      color: COULEUR_TOTAL },
+    { cle: 'nb_avec_arbitre', label: 'JA nommé',        color: COULEUR_JA },
+    { cle: 'nb_arbitre_club', label: 'JA du club',      color: '#0d9488' },
+    { cle: 'nb_sans_arbitre', label: 'Sans nomination', color: '#f59e0b' },
+];
+
+// Dernières données du graphe départements chargées (pour le sélecteur département du graphe en barres).
+let _deptRows = [], _deptJournees = [], _deptJourneesDates = {};
+let deptBarresSelection = DEPT_USER || ''; // par défaut, le département du nominateur connecté
+
+let chartCamembert = null, chartCombine = null, chartCouverture = null, chartCharge = null, chartBarres = null;
+
+// Petit plugin maison pour afficher le pourcentage au centre de chaque portion :
+// pas besoin de vendorer chartjs-plugin-datalabels pour ce seul besoin.
+const pluginPourcentages = {
+    id: 'pourcentages',
+    afterDraw(chart) {
+        const meta = chart.getDatasetMeta(0);
+        const data = chart.data.datasets[0].data;
+        const total = data.reduce((a, b) => a + b, 0) || 1;
+        const ctx = chart.ctx;
+        ctx.save();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        meta.data.forEach((arc, i) => {
+            if (!data[i]) return;
+            const pct = Math.round(data[i] / total * 1000) / 10;
+            const pos = arc.tooltipPosition();
+            ctx.fillText(pct + ' %', pos.x, pos.y);
+        });
+        ctx.restore();
+    },
+};
+
+// Plugin maison affichant la valeur au-dessus de chaque point (ligne) ou de chaque barre.
+// opts.format : mise en forme optionnelle de la valeur affichée (défaut : valeur brute).
+const pluginValeurs = {
+    id: 'valeurs',
+    afterDatasetsDraw(chart, args, opts) {
+        const ctx = chart.ctx;
+        const format = (opts && opts.format) || (v => v);
+        chart.data.datasets.forEach((dataset, di) => {
+            const meta = chart.getDatasetMeta(di);
+            if (meta.hidden || dataset.hidden) return;
+            meta.data.forEach((el, i) => {
+                const val = dataset.data[i];
+                if (val === null || val === undefined) return;
+                const { x, y } = el.getProps(['x', 'y'], true);
+                ctx.save();
+                ctx.font = 'bold 9px sans-serif';
+                ctx.fillStyle = dataset.borderColor || dataset.backgroundColor || '#111827';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+                ctx.fillText(String(format(val)), x, y - 4);
+                ctx.restore();
+            });
+        });
+    },
+};
+
+/** Camembert du total de rencontres par département, pourcentage affiché dans chaque portion. */
+function majChartCamembert(rows, totalParDept) {
+    if (chartCamembert) chartCamembert.destroy();
+    chartCamembert = new Chart(document.getElementById('chart-camembert'), {
+        type: 'pie',
+        data: {
+            labels: rows.map(r => `${r.dept} — ${r.nom}`),
+            datasets: [{ data: totalParDept, backgroundColor: rows.map((r, i) => PALETTE_DEPTS[i % PALETTE_DEPTS.length]) }],
+        },
+        options: {
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' },
+                tooltip: { callbacks: { label: ctx => {
+                    const total = ctx.dataset.data.reduce((a, b) => a + b, 0) || 1;
+                    const pct = Math.round(ctx.parsed / total * 1000) / 10;
+                    return `${ctx.label} : ${ctx.parsed} rencontre(s) (${pct} %)`;
+                } } },
+            },
+        },
+        plugins: [pluginPourcentages],
+    });
 }
 
-/** Un seul graphe combiné : JA actifs, total rencontres, et une ligne par journée, toutes avec bulles de valeur.
- *  journeeSurbrillance : numéro de journée (string) à mettre en avant — les autres lignes sont atténuées. '' = aucune.
- *  lignesVisibles : { ja, total, j<numéro>: bool } — une ligne décochée n'est pas tracée. */
-function svgLignesCombinees(rows, journees, journeesDates, journeeSurbrillance, lignesVisibles) {
+/** Graphe combiné : JA actifs, total rencontres, et une ligne par journée. */
+function majChartCombine(rows, journees, journeesDates) {
     const totalParDept = rows.map(r => journees.reduce((s, j) => s + +r.par_journee[j].nb_rencontres, 0));
-    const dateJournee  = j => journeesDates[j] || `Journée ${j}`;
-    const visible = key => lignesVisibles[key] !== false;
 
-    const W = 760, padL = 44, padR = 16, padT = 16, padB = 30;
-    const plotW = W - padL - padR;
-    const plotH = 280;
-    const H     = padT + plotH + padB;
-    const n     = rows.length;
-    const maxVal = Math.max(1, ...rows.map(r => +r.nb_ja), ...totalParDept, ...journees.flatMap(j => rows.map(r => +r.par_journee[j].nb_rencontres)));
-    const xFor   = i => n > 1 ? padL + i * plotW / (n - 1) : padL + plotW / 2;
-    const yFor   = v => padT + plotH - (v / maxVal) * plotH;
+    const datasets = [
+        { label: 'JA actifs', data: rows.map(r => +r.nb_ja), borderColor: COULEUR_JA, backgroundColor: COULEUR_JA, borderWidth: 2, tension: .15, pointRadius: 3 },
+        { label: 'Total rencontres', data: totalParDept, borderColor: COULEUR_TOTAL, backgroundColor: COULEUR_TOTAL, borderWidth: 2.5, tension: .15, pointRadius: 3 },
+        ...journees.map((j, i) => ({
+            label: journeesDates[j] || `Journée ${j}`,
+            data: rows.map(r => +r.par_journee[j].nb_rencontres),
+            borderColor: couleurJournee(i), backgroundColor: couleurJournee(i), borderWidth: 1.5, tension: .15, pointRadius: 2.5,
+            _journee: j,
+        })),
+    ];
 
-    function traceLigne(valeurs) {
-        const pts = valeurs.map((v, i) => [xFor(i), yFor(v)]);
-        return pts.map((p, i) => (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
-    }
-
-    function ligneAvecBulles(valeurs, color, strokeWidth, titreFn, attenuee) {
-        const dots = valeurs.map((v, i) => {
-            const x = xFor(i), y = yFor(v);
-            const titreTag = titreFn ? `<title>${esc(titreFn(i))}</title>` : '';
-            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${color}">${titreTag}</circle>`;
-        }).join('');
-        const bulles = valeurs.map((v, i) => {
-            const x = xFor(i), y = yFor(v);
-            const val = String(v);
-            const bw = Math.max(18, val.length * 7 + 10);
-            const bx = Math.min(Math.max(x - bw - 4, padL), W - padR - bw);
-            const by = Math.min(Math.max(y - 7, padT), padT + plotH - 14);
-            return `<g><rect x="${bx.toFixed(1)}" y="${by}" width="${bw}" height="14" rx="3" fill="${color}"></rect>
-                <text x="${(bx + bw / 2).toFixed(1)}" y="${by + 10}" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">${esc(val)}</text></g>`;
-        }).join('');
-        return `<g opacity="${attenuee ? 0.15 : 1}"><path d="${traceLigne(valeurs)}" fill="none" stroke="${color}" stroke-width="${strokeWidth}"></path>${dots}${bulles}</g>`;
-    }
-
-    const surbrillanceActive = journeeSurbrillance !== '' && journeeSurbrillance != null;
-    const ligneJa    = visible('ja')    ? ligneAvecBulles(rows.map(r => +r.nb_ja), COULEUR_JA, 2, null, surbrillanceActive) : '';
-    const ligneTotal = visible('total') ? ligneAvecBulles(totalParDept, COULEUR_TOTAL, 2.5,
-        i => `${rows[i].nom} — Total : ${totalParDept[i]} rencontre(s) sur ${journees.length} journée(s)`, surbrillanceActive) : '';
-    const lignesJournees = journees.map((j, idx) => {
-        if (!visible('j' + j)) return '';
-        const color   = couleurJournee(idx);
-        const valeurs = rows.map(r => +r.par_journee[j].nb_rencontres);
-        const estSelection = String(j) === String(journeeSurbrillance);
-        return ligneAvecBulles(valeurs, color, estSelection ? 3.2 : 1.6, i => {
-            const c = rows[i].par_journee[j];
-            return `${rows[i].nom} — ${dateJournee(j)} : ${c.nb_rencontres} rencontre(s) (avec arbitre : ${c.nb_avec_arbitre}, sans : ${c.nb_sans_arbitre})`;
-        }, surbrillanceActive && !estSelection);
-    }).join('');
-
-    const xLabels = rows.map((r, i) => `<text x="${xFor(i).toFixed(1)}" y="${padT + plotH + 16}" text-anchor="middle" font-size="10" fill="#6b7280">${esc(r.dept)}</text>`).join('');
-    const xAxisMid = padL + plotW / 2;
-    const yAxisMid = padT + plotH / 2;
-
-    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">
-        <line x1="${padL}" y1="${padT + plotH}" x2="${W - padR}" y2="${padT + plotH}" stroke="#e5e7eb"></line>
-        ${lignesJournees}
-        ${ligneTotal}
-        ${ligneJa}
-        ${xLabels}
-        <text x="${xAxisMid.toFixed(1)}" y="${H - 6}" text-anchor="middle" font-size="10" font-weight="600" fill="#374151">Département</text>
-        <text x="12" y="${yAxisMid.toFixed(1)}" text-anchor="middle" font-size="10" font-weight="600" fill="#374151" transform="rotate(-90 12 ${yAxisMid.toFixed(1)})">Nombre</text>
-    </svg>`;
+    if (chartCombine) chartCombine.destroy();
+    chartCombine = new Chart(document.getElementById('chart-combine'), {
+        type: 'line',
+        data: { labels: rows.map(r => [String(r.dept), r.nom]), datasets },
+        options: {
+            maintainAspectRatio: false,
+            scales: {
+                x: { title: { display: true, text: 'Départements' } },
+                y: { beginAtZero: true, title: { display: true, text: 'Nombres' } },
+            },
+            plugins: {
+                legend: { position: 'bottom' },
+                tooltip: { callbacks: { label: ctx => {
+                    const ds = ctx.dataset;
+                    if (ds._journee != null) {
+                        const c = rows[ctx.dataIndex].par_journee[ds._journee];
+                        return `${ds.label} : ${c.nb_rencontres} (nommé : ${c.nb_avec_arbitre}, JA club : ${c.nb_arbitre_club}, sans : ${c.nb_sans_arbitre})`;
+                    }
+                    return `${ds.label} : ${ctx.formattedValue}`;
+                } } },
+                valeurs: {},
+            },
+        },
+        plugins: [pluginValeurs],
+    });
 }
 
-function carte(titre, contenuHtml) {
-    return `<div class="chart-card chart-card-wide"><div class="chart-card-title">${esc(titre)}</div>${contenuHtml}</div>`;
+/** Petit graphe à une seule courbe (une valeur par département). */
+function majChartLigneUnique(chartRef, canvasId, rows, valeurs, color, formatY, titreFn) {
+    if (chartRef) chartRef.destroy();
+    return new Chart(document.getElementById(canvasId), {
+        type: 'line',
+        data: {
+            labels: rows.map(r => [String(r.dept), r.nom]),
+            datasets: [{ data: valeurs, borderColor: color, backgroundColor: color, tension: .15 }],
+        },
+        options: {
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => titreFn(ctx.dataIndex) } }, valeurs: { format: formatY } },
+            scales: { y: { beginAtZero: true, ticks: { callback: formatY } } },
+        },
+        plugins: [pluginValeurs],
+    });
 }
 
-// Dernières données du graphe départements chargées, pour redessiner sans requête serveur
-// quand l'utilisateur change juste la mise en évidence ou la visibilité d'une ligne.
-let _deptRows = [], _deptJournees = [], _deptJourneesDates = {}, _deptPhase = null, _deptAnnee = null;
-let journeeSurbrillance = '';
-let lignesVisibles = { ja: true, total: true }; // clé 'j<numéro>' ajoutée dynamiquement par journée
+function construireDatasetsBarres(row, journees) {
+    return SERIES_BARRES_JOURNEE.map(s => ({ label: s.label, backgroundColor: s.color, data: journees.map(j => +row.par_journee[j][s.cle]) }));
+}
 
-/** Camembert agrandi des rencontres par département, et un seul graphe combiné pour JA actifs + rencontres par journée. */
+/** Barres groupées (rencontres / JA nommé / JA du club) par date de journée, pour le département choisi. */
+function majChartBarres(rows, journees, journeesDates) {
+    if (!rows.map(r => String(r.dept)).includes(deptBarresSelection)) deptBarresSelection = String(rows[0].dept);
+    const row = rows.find(r => String(r.dept) === deptBarresSelection);
+
+    const $sel = $('#sel-dept-barres').empty();
+    rows.forEach(r => $sel.append(new Option(`${r.dept} — ${r.nom}`, r.dept, false, String(r.dept) === deptBarresSelection)));
+
+    if (chartBarres) chartBarres.destroy();
+    chartBarres = new Chart(document.getElementById('chart-barres'), {
+        type: 'bar',
+        data: { labels: journees.map(j => journeesDates[j] || `Journée ${j}`), datasets: construireDatasetsBarres(row, journees) },
+        options: {
+            maintainAspectRatio: false,
+            scales: { y: { beginAtZero: true, title: { display: true, text: 'Nombres' } } },
+            plugins: { legend: { position: 'bottom' }, valeurs: {} },
+        },
+        plugins: [pluginValeurs],
+    });
+}
+
+/** (Re)dessine les 5 graphes départements à partir des données chargées. */
 function renderDeptChart(rows, journees, journeesDates, phase, annee) {
-    if (!rows.length) { $('#chart-dept-grid').html('<div class="text-muted small">Aucune donnée.</div>'); return; }
+    if (!rows.length) return;
 
-    const totalParDept = rows.map(r => journees.reduce((s, j) => s + +r.par_journee[j].nb_rencontres, 0));
+    const totalParDept       = rows.map(r => journees.reduce((s, j) => s + +r.par_journee[j].nb_rencontres, 0));
+    const avecArbitreParDept = rows.map(r => journees.reduce((s, j) => s + +r.par_journee[j].nb_avec_arbitre, 0));
+    const arbitreClubParDept = rows.map(r => journees.reduce((s, j) => s + +r.par_journee[j].nb_arbitre_club, 0));
+    // Couvert = arbitre nommé par NIJAC OU JA du club recevant (R3M/R4M, pas de manque réel dans ce cas).
+    const couvertParDept = rows.map((r, i) => avecArbitreParDept[i] + arbitreClubParDept[i]);
+    const tauxCouverture = rows.map((r, i) => totalParDept[i] > 0 ? Math.round((couvertParDept[i] / totalParDept[i]) * 1000) / 10 : 0);
+    const chargeParJa    = rows.map((r, i) => +r.nb_ja > 0 ? Math.round((totalParDept[i] / +r.nb_ja) * 10) / 10 : 0);
 
     $('#chart-section-title').text(`JA actifs et rencontres par département — Phase ${phase}, saison ${annee}‑${+annee + 1}`);
 
-    const cartes = [
-        carte('Rencontres par département (total saison)', svgCamembert(rows, totalParDept)),
-        carte('JA actifs et rencontres par journée, par département',
-            htmlLegendeCombinee(journees, journeesDates, lignesVisibles) +
-            svgLignesCombinees(rows, journees, journeesDates, journeeSurbrillance, lignesVisibles)),
-    ];
-
-    $('#chart-dept-grid').html(cartes.join(''));
-}
-
-function peuplerSelectSurbrillance(journees, journeesDates) {
-    const $sel = $('#sel-journee-surbrillance');
-    const valPrecedente = journeeSurbrillance;
-    $sel.empty().append('<option value="">Aucune mise en évidence</option>');
-    journees.forEach(j => $sel.append(new Option(journeesDates[j] || `Journée ${j}`, j)));
-    journeeSurbrillance = journees.map(String).includes(valPrecedente) ? valPrecedente : '';
-    $sel.val(journeeSurbrillance);
+    majChartCamembert(rows, totalParDept);
+    majChartCombine(rows, journees, journeesDates);
+    chartCouverture = majChartLigneUnique(chartCouverture, 'chart-couverture', rows, tauxCouverture, '#0d9488', v => v + ' %',
+        i => `${rows[i].nom} : ${couvertParDept[i]}/${totalParDept[i]} rencontres couvertes (dont ${arbitreClubParDept[i]} par un JA du club) — ${tauxCouverture[i]} %`);
+    chartCharge = majChartLigneUnique(chartCharge, 'chart-charge', rows, chargeParJa, '#7c3aed', v => v,
+        i => `${rows[i].nom} : ${totalParDept[i]} rencontre(s) pour ${rows[i].nb_ja} JA actif(s)`);
+    majChartBarres(rows, journees, journeesDates);
 }
 
 function chargerGraphesDept(phase, annee) {
     $.getJSON(`${BASE}/par-departement`, { phase, annee }).done(r => {
         if (!r.ok || !r.rows.length) { $('#dept-charts').hide(); return; }
         _deptRows = r.rows; _deptJournees = r.journees || []; _deptJourneesDates = r.journees_dates || {};
-        _deptPhase = phase; _deptAnnee = annee;
-        // Une nouvelle journée (nouvelle saison/phase) démarre visible par défaut.
-        _deptJournees.forEach(j => { if (!('j' + j in lignesVisibles)) lignesVisibles['j' + j] = true; });
-        peuplerSelectSurbrillance(_deptJournees, _deptJourneesDates);
         renderDeptChart(_deptRows, _deptJournees, _deptJourneesDates, phase, annee);
         $('#dept-charts').show();
     }).fail(() => $('#dept-charts').hide());
 }
 
-$('#chart-dept-grid').on('change', '.chk-ligne-visible', function () {
-    lignesVisibles[this.dataset.key] = this.checked;
-    renderDeptChart(_deptRows, _deptJournees, _deptJourneesDates, _deptPhase, _deptAnnee);
-});
-
-$('#sel-journee-surbrillance').on('change', function () {
-    journeeSurbrillance = this.value;
-    if (_deptRows.length) renderDeptChart(_deptRows, _deptJournees, _deptJourneesDates, _deptPhase, _deptAnnee);
+$('#sel-dept-barres').on('change', function () {
+    deptBarresSelection = this.value;
+    const row = _deptRows.find(r => String(r.dept) === deptBarresSelection);
+    if (row && chartBarres) { chartBarres.data.datasets = construireDatasetsBarres(row, _deptJournees); chartBarres.update(); }
 });
 
 function charger() {

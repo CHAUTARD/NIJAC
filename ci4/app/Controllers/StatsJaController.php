@@ -280,6 +280,10 @@ class StatsJaController extends BaseController
      * `rencontre.Id_EquipeDom → equipe.Id_Club`), mêmes règles de repli
      * CodePostal/Cp que le reste de l'appli. `journees` liste les numéros de
      * journée trouvés (triés), une ligne (courbe) par journée côté graphe.
+     * `nb_sans_arbitre` distingue le vrai manque (`ArbitrageObligatoire=1` sans
+     * nomination Valide) de `nb_arbitre_club` (`ArbitrageObligatoire=0`, ex.
+     * R3M/R4M — le club recevant fournit son propre JA sans passer par une
+     * nomination NIJAC, ce n'est pas un manque).
      * Porte sur tous les départements actifs de la ligue (getDeptActifs),
      * pas seulement ceux autorisés à l'utilisateur : simple comptage, pas de
      * donnée nominative.
@@ -321,13 +325,19 @@ class StatsJaController extends BaseController
             $paramsR           = $params;
             $paramsR[':debut'] = $dateDebut;
             $paramsR[':fin']   = $dateFin;
+            // Sans nomination "Valide" ne veut pas toujours dire sans arbitre : sur les divisions où
+            // la CRA ne fournit pas l'arbitrage (R3M/R4M, ArbitrageObligatoire=0 — voir EA82), c'est
+            // au club recevant de désigner l'un de ses JA, sans passer par une nomination NIJAC.
             $stmtR = $pdo->prepare("
                 SELECT LEFT(COALESCE(lp.CodePostal, s.Cp), 2) AS Dept,
                        r.Journee AS Journee,
                        COUNT(*) AS nb,
                        SUM(CASE WHEN EXISTS (
                            SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
-                       ) THEN 1 ELSE 0 END) AS nb_avec_arbitre
+                       ) THEN 1 ELSE 0 END) AS nb_avec_arbitre,
+                       SUM(CASE WHEN r.ArbitrageObligatoire = 0 AND NOT EXISTS (
+                           SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
+                       ) THEN 1 ELSE 0 END) AS nb_arbitre_club
                 FROM rencontre r
                 JOIN equipe        ed ON ed.Id_Equipe   = r.Id_EquipeDom
                 LEFT JOIN Club     cl ON cl.Id_Club      = ed.Id_Club
@@ -339,15 +349,16 @@ class StatsJaController extends BaseController
             ");
             $stmtR->execute($paramsR);
 
-            // Par (département, journée) : nb rencontres + nb avec arbitre nommé.
+            // Par (département, journée) : nb rencontres, nb avec arbitre nommé, nb arbitré par un JA du club.
             $rencParDeptJournee = [];
             $journees           = [];
             foreach ($stmtR->fetchAll() as $r) {
                 $j = (int) $r['Journee'];
                 $journees[$j] = true;
                 $rencParDeptJournee[$r['Dept']][$j] = [
-                    'nb'   => (int) $r['nb'],
-                    'avec' => (int) $r['nb_avec_arbitre'],
+                    'nb'    => (int) $r['nb'],
+                    'avec'  => (int) $r['nb_avec_arbitre'],
+                    'club'  => (int) $r['nb_arbitre_club'],
                 ];
             }
             ksort($journees);
@@ -374,11 +385,12 @@ class StatsJaController extends BaseController
                 $code       = str_pad((string) $d['CodeDept'], 2, '0', STR_PAD_LEFT);
                 $parJournee = [];
                 foreach ($journees as $j) {
-                    $cell = $rencParDeptJournee[$code][$j] ?? ['nb' => 0, 'avec' => 0];
+                    $cell = $rencParDeptJournee[$code][$j] ?? ['nb' => 0, 'avec' => 0, 'club' => 0];
                     $parJournee[$j] = [
-                        'nb_rencontres'   => $cell['nb'],
-                        'nb_avec_arbitre' => $cell['avec'],
-                        'nb_sans_arbitre' => $cell['nb'] - $cell['avec'],
+                        'nb_rencontres'    => $cell['nb'],
+                        'nb_avec_arbitre'  => $cell['avec'],
+                        'nb_arbitre_club'  => $cell['club'],
+                        'nb_sans_arbitre'  => $cell['nb'] - $cell['avec'] - $cell['club'],
                     ];
                 }
                 $rows[] = [

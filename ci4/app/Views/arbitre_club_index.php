@@ -67,7 +67,7 @@
         <form id="form-ac" <?= (int) ($dejaFait['EmailEnvoye'] ?? 0) === 1 ? 'style="display:none"' : '' ?>>
             <input type="hidden" name="renc" value="<?= esc($token) ?>">
             <div class="mb-3">
-                <label class="form-label" for="sel-ja">Juge-arbitre du club qui dirigera la rencontre</label>
+                <label class="form-label" for="sel-ja">Juge-arbitre qui a dirigé la rencontre</label>
                 <select id="sel-ja" name="id_ja" class="form-select" required>
                     <option value="">— Choisir un juge-arbitre —</option>
                     <?php foreach ($jas as $j): ?>
