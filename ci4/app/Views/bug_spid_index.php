@@ -57,7 +57,7 @@
                 <thead>
                     <tr>
                         <th style="width:30px"><input type="checkbox" id="chk-tout"></th>
-                        <th class="th-pk" style="width:55px" data-col="1">N°<span class="sort-icon"></span></th>
+                        <th class="th-pk" style="width:55px" data-col="1">Id_BugSpid<span class="sort-icon"></span></th>
                         <th data-col="2">Description<span class="sort-icon"></span></th>
                         <th style="width:110px" data-col="3">Ancien Id_Club<span class="sort-icon"></span></th>
                         <th style="width:110px" data-col="4">Nouveau Id_Club<span class="sort-icon"></span></th>
@@ -216,8 +216,8 @@ function renderListe() {
         const nouveauOk = /^\d{8}$/.test(l.NouveauIdClub ?? '') && l.NouveauIdClub !== l.AncienIdClub;
         const $tdNouveau = $('<td>').text(l.NouveauIdClub ?? '');
         if (/^\d{8}$/.test(l.NouveauIdClub ?? '')) {
-            $tdNouveau.css('cursor', 'pointer').attr('title', 'Cliquer pour afficher le nom du club')
-                .on('click', function (e) { e.stopPropagation(); afficherNomClub(l.NouveauIdClub); });
+            $tdNouveau.attr('title', 'Chargement du nom du club…')
+                .on('mouseenter', function () { afficherNomClub(l.NouveauIdClub, $tdNouveau); });
         }
         $('<tr>').attr('data-id', l.Id_BugSpid).toggleClass('ligne-ok', nouveauOk).append(
             $('<td>').append($('<input type="checkbox" class="chk-ligne">')),
@@ -374,10 +374,23 @@ $('#file-csv').on('change', function () {
     }).fail(() => toast('Erreur réseau.', false));
 });
 
-function afficherNomClub(num) {
+// Cache par numéro FFTT : au survol d'une cellule, on ne rappelle l'API (locale
+// puis FFTT en repli) qu'une seule fois — sinon chaque passage de souris relancerait
+// un appel FFTT (service externe, potentiellement rate-limité).
+const cacheNomClub    = {};
+const enCoursNomClub  = new Set();
+function afficherNomClub(num, $td) {
+    if (num in cacheNomClub) {
+        $td.attr('title', cacheNomClub[num] ?? 'Club introuvable.');
+        return;
+    }
+    if (enCoursNomClub.has(num)) return; // déjà en cours, la réponse mettra à jour le title
+    enCoursNomClub.add(num);
     $.get(`${BUGSPID_BASE}/nom-club/${num}`, function (res) {
-        toast(res.ok ? `${num} — ${res.nom}` : (res.msg || 'Club introuvable.'), res.ok);
-    }, 'json').fail(() => toast('Erreur réseau.', false));
+        cacheNomClub[num] = res.ok ? res.nom : null;
+        $td.attr('title', res.ok ? res.nom : (res.msg || 'Club introuvable.'));
+    }, 'json').fail(() => $td.attr('title', 'Erreur réseau.'))
+        .always(() => enCoursNomClub.delete(num));
 }
 
 function appelerXmlClubB(id) {

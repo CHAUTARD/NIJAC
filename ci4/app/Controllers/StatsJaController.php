@@ -364,19 +364,34 @@ class StatsJaController extends BaseController
             ksort($journees);
             $journees = array_keys($journees);
 
-            // Date représentative de chaque journée (premier match du week-end concerné) : les
-            // numéros de journée seuls ne parlent pas à l'utilisateur, la date si.
+            // Plage de dates de chaque journée (une journée couvre généralement un week-end
+            // samedi+dimanche, cf. rencontre.Journee) : le seul numéro ne parle pas à
+            // l'utilisateur, et n'afficher que la 1re date masquerait les matchs du dimanche.
             $journeesDates = [];
             if ($journees) {
                 $stmtDates = $pdo->prepare('
-                    SELECT Journee, MIN(Date) AS d FROM rencontre
+                    SELECT Journee, MIN(Date) AS dmin, MAX(Date) AS dmax FROM rencontre
                     WHERE Date BETWEEN :debut AND :fin AND Journee IS NOT NULL
                     GROUP BY Journee
                 ');
                 $stmtDates->execute([':debut' => $dateDebut, ':fin' => $dateFin]);
-                $dateBrute = array_column($stmtDates->fetchAll(), 'd', 'Journee');
+                $plages = [];
+                foreach ($stmtDates->fetchAll() as $r) {
+                    $plages[$r['Journee']] = [$r['dmin'], $r['dmax']];
+                }
                 foreach ($journees as $j) {
-                    $journeesDates[$j] = isset($dateBrute[$j]) ? date('d/m/Y', strtotime($dateBrute[$j])) : (string) $j;
+                    if (!isset($plages[$j])) {
+                        $journeesDates[$j] = (string) $j;
+                        continue;
+                    }
+                    [$dmin, $dmax] = $plages[$j];
+                    if ($dmin === $dmax) {
+                        $journeesDates[$j] = date('d/m/Y', strtotime($dmin));
+                    } elseif (date('m/Y', strtotime($dmin)) === date('m/Y', strtotime($dmax))) {
+                        $journeesDates[$j] = date('d', strtotime($dmin)) . '-' . date('d/m/Y', strtotime($dmax));
+                    } else {
+                        $journeesDates[$j] = date('d/m', strtotime($dmin)) . '-' . date('d/m/Y', strtotime($dmax));
+                    }
                 }
             }
 
