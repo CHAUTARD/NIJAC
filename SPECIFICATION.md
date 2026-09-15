@@ -1221,7 +1221,7 @@ Définir les divisions sportives et leur niveau hiérarchique, utilisés pour cl
 ### Champs d'une division
 | Champ | Type | Obligatoire |
 |-------|------|-------------|
-| Id_Division | Texte (ex : `N1M`, `R1M`) | Oui |
+| Division | Texte (ex : `N1M`, `R1M`) | Oui |
 | Libellé | Texte | Oui |
 | Niveau | Entier (ordre hiérarchique) | Non |
 

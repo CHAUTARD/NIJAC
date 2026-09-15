@@ -238,14 +238,12 @@
         </div>
 
         <div class="d-flex gap-2 mb-2 flex-wrap align-items-center">
-            <input type="search" id="filtre-renc" class="filter-ctl"
-                   placeholder="Filtrer…" style="max-width:240px;">
-            <select id="filtre-div" class="filter-ctl" style="max-width:280px;">
-                <option value="">Toutes les divisions</option>
-            </select>
-            <button id="btn-refresh-renc" class="btn btn-sm btn-outline-secondary ms-auto">
+            <button id="btn-refresh-renc" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-arrow-clockwise me-1"></i>Actualiser
             </button>
+            <div id="panel-division-renc" class="ms-auto"></div>
+            <input type="search" id="filtre-renc" class="filter-ctl"
+                   placeholder="Filtrer…" style="max-width:240px;">
         </div>
 
         <div style="max-height:65vh;overflow-y:auto;border:1px solid #e0e8f0;border-radius:6px;">
@@ -253,10 +251,10 @@
                 <thead class="table-dark sticky-top" style="top:0;z-index:1;">
                     <tr>
                         <th class="sort-col" data-col="Date" style="cursor:pointer;white-space:nowrap;">Date <i class="bi bi-arrow-down-up sort-icon"></i></th>
-                        <th class="sort-col" data-col="Heure" style="cursor:pointer;">H <i class="bi bi-arrow-down-up sort-icon"></i></th>
-                        <th class="sort-col" data-col="Journee" style="cursor:pointer;">J <i class="bi bi-arrow-down-up sort-icon"></i></th>
-                        <th class="sort-col" data-col="Poule" style="cursor:pointer;">P <i class="bi bi-arrow-down-up sort-icon"></i></th>
-                        <th class="sort-col" data-col="Phase" style="cursor:pointer;">Ph <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th class="sort-col" data-col="Heure" style="cursor:pointer;">Heure <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th class="sort-col" data-col="Journee" style="cursor:pointer;">Journée <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th class="sort-col" data-col="Poule" style="cursor:pointer;">Poule <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                        <th class="sort-col" data-col="Phase" style="cursor:pointer;">Phase <i class="bi bi-arrow-down-up sort-icon"></i></th>
                         <th class="sort-col" data-col="DivisionCode" style="cursor:pointer;">Division <i class="bi bi-arrow-down-up sort-icon"></i></th>
                         <th class="sort-col" data-col="NomDom" style="cursor:pointer;">Domicile <i class="bi bi-arrow-down-up sort-icon"></i></th>
                         <th class="sort-col" data-col="NomExt" style="cursor:pointer;">Extérieur <i class="bi bi-arrow-down-up sort-icon"></i></th>
@@ -275,7 +273,7 @@
 
 </div><!-- #content -->
 
-<!-- ── Popup désignation d'un arbitre (R3M/R4M, club recevant) ── -->
+<!-- ── Popup désignation d'un arbitre (toutes divisions, club recevant) ── -->
 <div class="modal fade" id="modal-designer-arbitre" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -742,11 +740,7 @@ function chargerListeRencontres() {
         toutesRencontres = r.rencontres ?? [];
         $('#lbl-nb-renc').text(`(${r.total} rencontre(s))`);
 
-        // Alimenter le filtre division
-        const divs = [...new Set(toutesRencontres.map(rc => rc.DivisionCode))].sort();
-        const $sel = $('#filtre-div').empty().append('<option value="">Toutes les divisions</option>');
-        divs.forEach(d => $sel.append(`<option value="${esc(d)}">${esc(libDivision(d))}</option>`));
-
+        majPanelDivisionRenc();
         renderListeRencontres();
     }, 'json').fail(function () {
         $('#tbody-renc').html('<tr><td colspan="10" class="text-danger p-2">Erreur réseau.</td></tr>');
@@ -773,10 +767,21 @@ function textColorFor(hex) {
 }
 
 const sortState = { col: 'Date', asc: true };
+let divisionFiltreRenc = '';
+
+function majPanelDivisionRenc() {
+    const divs = [...new Set(toutesRencontres.map(rc => rc.DivisionCode))].sort();
+    nijacDivisionFilter('#panel-division-renc', divs, {
+        libDivision,
+        colorFor: code => toutesRencontres.find(rc => rc.DivisionCode === code)?.DivisionColor,
+        getFiltre: () => divisionFiltreRenc,
+        onSelect: code => { divisionFiltreRenc = code; majPanelDivisionRenc(); renderListeRencontres(); },
+    });
+}
 
 function renderListeRencontres() {
     const filtre  = $('#filtre-renc').val().trim().toLowerCase();
-    const filtDiv = $('#filtre-div').val();
+    const filtDiv = divisionFiltreRenc;
 
     let lignes = toutesRencontres.filter(rc => {
         if (filtDiv && rc.DivisionCode !== filtDiv) return false;
@@ -808,8 +813,7 @@ function renderListeRencontres() {
         const bg    = rc.DivisionColor && /^#[0-9a-fA-F]{6}$/.test(rc.DivisionColor)
                       ? rc.DivisionColor : '#1a3a6b';
         const fg    = textColorFor(bg);
-        const eligibleDesignation = (rc.DivisionCode === 'R3M' || rc.DivisionCode === 'R4M')
-            && +rc.NbNominations === 0 && dateEstDepassee(rc.Date);
+        const eligibleDesignation = +rc.NbNominations === 0 && dateEstDepassee(rc.Date);
         const arb   = eligibleDesignation
             ? `<button type="button" class="btn btn-sm btn-outline-primary py-0 px-1 btn-designer-arbitre"
                        data-id="${rc.Id_Rencontre}" title="Désigner un arbitre du club recevant">
@@ -842,13 +846,13 @@ function renderListeRencontres() {
 // défini si on l'appelait ici de façon synchrone.
 $(function () { nijacSortableTable('.sort-col', 'col', sortState, renderListeRencontres); });
 
-$('#filtre-renc, #filtre-div').on('input change', renderListeRencontres);
+$('#filtre-renc').on('input change', renderListeRencontres);
 $('#btn-refresh-renc').on('click', chargerListeRencontres);
 
 // Chargement initial
 chargerListeRencontres();
 
-/* ── Désignation directe d'un arbitre (R3M/R4M, club recevant) ────────────── */
+/* ── Désignation directe d'un arbitre (toutes divisions, club recevant) ───── */
 let daIdRencontre = null;
 
 function chargerCandidatsArbitre() {
@@ -909,5 +913,6 @@ $(document).on('click', '.btn-choisir-arbitre', function () {
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-sortable-table.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-division-filter.js') ?>"></script>
 </body>
 </html>

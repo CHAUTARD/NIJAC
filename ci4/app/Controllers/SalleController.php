@@ -185,7 +185,7 @@ class SalleController extends BaseController
         $estPrincipale = $this->request->getPost('est_principale') ? 1 : 0;
 
         if ($idClub === '') {
-            return $this->response->setJSON(['ok' => false, 'msg' => 'Le N° de club est obligatoire.']);
+            return $this->response->setJSON(['ok' => false, 'msg' => "L'Id_Club est obligatoire."]);
         }
 
         $pdo  = getPDO();

@@ -56,12 +56,14 @@ class StatsJaController extends BaseController
      * la saison démarrant l'année civile $annee, d'après les bornes MM/JJ
      * configurées en EA91. Règle d'année : un mois >= juillet appartient à la
      * 1re année civile de la saison, sinon à la suivante (ex. phase 1 09/01 →
-     * $annee-09-01, 01/31 → ($annee+1)-01-31). La fin est bornée à aujourd'hui
-     * pour une phase encore en cours.
+     * $annee-09-01, 01/31 → ($annee+1)-01-31). Par défaut la fin est bornée à
+     * aujourd'hui (phase encore en cours) — utilisé pour les stats d'arbitrages
+     * déjà réalisés. Passer $bornerAujourdhui=false pour la période complète de
+     * la phase (rencontres *prévues*, y compris futures — ex. graphe EN17).
      *
      * @return array{0: string, 1: string}
      */
-    private function datesPhaseAnnee(int $phase, int $annee): array
+    private function datesPhaseAnnee(int $phase, int $annee, bool $bornerAujourdhui = true): array
     {
         $debutMmdd = $this->phaseCfg($phase === 2 ? 'phase2_debut' : 'phase1_debut', $phase === 2 ? '02/01' : '09/01');
         $finMmdd   = $this->phaseCfg($phase === 2 ? 'phase2_fin'   : 'phase1_fin',   $phase === 2 ? '06/30' : '01/31');
@@ -71,9 +73,11 @@ class StatsJaController extends BaseController
         $debut = $anneeDe($debutMmdd) . '-' . $debutMmdd;
         $fin   = $anneeDe($finMmdd)   . '-' . $finMmdd;
 
-        $today = date('Y-m-d');
+        if (!$bornerAujourdhui) {
+            return [$debut, $fin];
+        }
 
-        return [$debut, min($fin, $today)];
+        return [$debut, min($fin, date('Y-m-d'))];
     }
 
     /**
@@ -265,6 +269,127 @@ class StatsJaController extends BaseController
                 'totaux' => $totaux,
                 'cfg'    => ['indem' => (float) getConfig('indemnite_forfaitaire', '25.00'), 'taux_km' => (float) getConfig('frais_kilometrique', '0.30')],
             ]);
+        });
+    }
+
+    /**
+     * Agrégats par département pour le graphe EN17 : nombre de JA actifs
+     * (département du JA, `ja.Id_LaPoste`) et, pour chaque département, le
+     * nombre de rencontres par journée (`rencontre.Journee`) sur la période
+     * choisie — département du club recevant (salle principale de
+     * `rencontre.Id_EquipeDom → equipe.Id_Club`), mêmes règles de repli
+     * CodePostal/Cp que le reste de l'appli. `journees` liste les numéros de
+     * journée trouvés (triés), une ligne (courbe) par journée côté graphe.
+     * Porte sur tous les départements actifs de la ligue (getDeptActifs),
+     * pas seulement ceux autorisés à l'utilisateur : simple comptage, pas de
+     * donnée nominative.
+     */
+    public function parDepartement(): ResponseInterface
+    {
+        return $this->tryJson(function () {
+            $pdo        = getPDO();
+            $deptActifs = getDeptActifs();
+
+            [$phase, $annee] = $this->phaseAnneeRequete();
+            // Période complète de la phase (non bornée à aujourd'hui) : on compte les
+            // rencontres prévues, y compris celles pas encore jouées.
+            [$dateDebut, $dateFin] = $this->datesPhaseAnnee($phase, $annee, false);
+
+            if (!$deptActifs) {
+                return $this->response->setJSON(['ok' => true, 'rows' => [], 'journees' => [], 'journees_dates' => []]);
+            }
+
+            $params = [];
+            $deptNamed = [];
+            foreach ($deptActifs as $i => $d) {
+                $key          = ':d' . $i;
+                $deptNamed[]  = $key;
+                $params[$key] = str_pad((string) $d['CodeDept'], 2, '0', STR_PAD_LEFT);
+            }
+            $inClause = implode(',', $deptNamed);
+
+            $stmtJa = $pdo->prepare("
+                SELECT LEFT(COALESCE(lp.CodePostal, ja.Cp), 2) AS Dept, COUNT(*) AS nb
+                FROM ja
+                LEFT JOIN laposte lp ON lp.Id_LaPoste = ja.Id_LaPoste
+                WHERE ja.Actif = 1 AND LEFT(COALESCE(lp.CodePostal, ja.Cp), 2) IN ($inClause)
+                GROUP BY Dept
+            ");
+            $stmtJa->execute($params);
+            $jaParDept = array_column($stmtJa->fetchAll(), 'nb', 'Dept');
+
+            $paramsR           = $params;
+            $paramsR[':debut'] = $dateDebut;
+            $paramsR[':fin']   = $dateFin;
+            $stmtR = $pdo->prepare("
+                SELECT LEFT(COALESCE(lp.CodePostal, s.Cp), 2) AS Dept,
+                       r.Journee AS Journee,
+                       COUNT(*) AS nb,
+                       SUM(CASE WHEN EXISTS (
+                           SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
+                       ) THEN 1 ELSE 0 END) AS nb_avec_arbitre
+                FROM rencontre r
+                JOIN equipe        ed ON ed.Id_Equipe   = r.Id_EquipeDom
+                LEFT JOIN Club     cl ON cl.Id_Club      = ed.Id_Club
+                LEFT JOIN salle    s  ON s.Id_Club       = cl.Id_Club AND s.EstPrincipale = 1
+                LEFT JOIN laposte  lp ON lp.Id_LaPoste   = s.Id_Laposte
+                WHERE r.Date BETWEEN :debut AND :fin AND r.Journee IS NOT NULL
+                      AND LEFT(COALESCE(lp.CodePostal, s.Cp), 2) IN ($inClause)
+                GROUP BY Dept, Journee
+            ");
+            $stmtR->execute($paramsR);
+
+            // Par (département, journée) : nb rencontres + nb avec arbitre nommé.
+            $rencParDeptJournee = [];
+            $journees           = [];
+            foreach ($stmtR->fetchAll() as $r) {
+                $j = (int) $r['Journee'];
+                $journees[$j] = true;
+                $rencParDeptJournee[$r['Dept']][$j] = [
+                    'nb'   => (int) $r['nb'],
+                    'avec' => (int) $r['nb_avec_arbitre'],
+                ];
+            }
+            ksort($journees);
+            $journees = array_keys($journees);
+
+            // Date représentative de chaque journée (premier match du week-end concerné) : les
+            // numéros de journée seuls ne parlent pas à l'utilisateur, la date si.
+            $journeesDates = [];
+            if ($journees) {
+                $stmtDates = $pdo->prepare('
+                    SELECT Journee, MIN(Date) AS d FROM rencontre
+                    WHERE Date BETWEEN :debut AND :fin AND Journee IS NOT NULL
+                    GROUP BY Journee
+                ');
+                $stmtDates->execute([':debut' => $dateDebut, ':fin' => $dateFin]);
+                $dateBrute = array_column($stmtDates->fetchAll(), 'd', 'Journee');
+                foreach ($journees as $j) {
+                    $journeesDates[$j] = isset($dateBrute[$j]) ? date('d/m/Y', strtotime($dateBrute[$j])) : (string) $j;
+                }
+            }
+
+            $rows = [];
+            foreach ($deptActifs as $d) {
+                $code       = str_pad((string) $d['CodeDept'], 2, '0', STR_PAD_LEFT);
+                $parJournee = [];
+                foreach ($journees as $j) {
+                    $cell = $rencParDeptJournee[$code][$j] ?? ['nb' => 0, 'avec' => 0];
+                    $parJournee[$j] = [
+                        'nb_rencontres'   => $cell['nb'],
+                        'nb_avec_arbitre' => $cell['avec'],
+                        'nb_sans_arbitre' => $cell['nb'] - $cell['avec'],
+                    ];
+                }
+                $rows[] = [
+                    'dept'        => $d['CodeDept'],
+                    'nom'         => $d['nom'],
+                    'nb_ja'       => (int) ($jaParDept[$code] ?? 0),
+                    'par_journee' => $parJournee,
+                ];
+            }
+
+            return $this->response->setJSON(['ok' => true, 'rows' => $rows, 'journees' => $journees, 'journees_dates' => $journeesDates]);
         });
     }
 

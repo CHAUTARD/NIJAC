@@ -211,8 +211,8 @@
     <table id="tbl-salles">
         <thead>
             <tr>
-                <th style="width:70px"  data-field="id_salle">N°<span class="sort-icon"></span></th>
-                <th style="width:80px"  data-field="id_club">N° Club<span class="sort-icon"></span></th>
+                <th style="width:70px"  data-field="id_salle">Id_Salle<span class="sort-icon"></span></th>
+                <th style="width:80px"  data-field="id_club">Id_Club<span class="sort-icon"></span></th>
                 <th style="width:210px" data-field="nom_club">Nom du club<span class="sort-icon"></span></th>
                 <th style="width:200px" data-field="nom">Nom<span class="sort-icon"></span></th>
                 <th style="width:230px" data-field="adresse">Adresse<span class="sort-icon"></span></th>
@@ -242,9 +242,13 @@
       </div>
       <div class="modal-body" style="font-size:.88rem;">
         <input type="hidden" id="mms-idx">
+        <div class="mb-2" id="mms-numero-wrap" style="display:none;">
+          <label class="form-label fw-semibold" style="font-size:.82rem;">Id_Salle</label>
+          <input type="text" id="mms-numero" class="form-control form-control-sm" readonly>
+        </div>
         <div class="mb-2">
-          <label class="form-label fw-semibold" style="font-size:.82rem;">N° Club <span class="text-danger">*</span></label>
-          <input type="text" id="mms-club" class="form-control form-control-sm" list="mms-club-list" placeholder="ex. 07640001" autocomplete="off">
+          <label class="form-label fw-semibold" style="font-size:.82rem;">Id_Club <span class="text-danger">*</span></label>
+          <input type="text" id="mms-club" class="form-control form-control-sm" list="mms-club-list" placeholder="identifiant, ex. 07640001" autocomplete="off">
           <datalist id="mms-club-list"></datalist>
           <div id="mms-club-nom" class="form-text" style="min-height:1.1em;"></div>
         </div>
@@ -540,7 +544,7 @@ function majClubNom() {
     if (!v) { $('#mms-club-nom').text('').css('color', ''); return; }
     const c = clubs.find(c => String(c.id_club) === v);
     $('#mms-club-nom')
-        .text(c ? `✓ ${c.nom}` : 'N° de club inconnu')
+        .text(c ? `✓ ${c.nom}` : 'Id_Club inconnu')
         .css('color', c ? '#065f46' : '#c00');
 }
 $('#mms-club').on('input', majClubNom);
@@ -588,6 +592,8 @@ function ouvrirModalModifierSalle(idx) {
     $('#modal-modifier-salle-titre').html(l
         ? '<i class="bi bi-building me-2"></i>Modifier la salle'
         : '<i class="bi bi-building me-2"></i>Ajouter une salle');
+    $('#mms-numero-wrap').toggle(!!l);
+    $('#mms-numero').val(l ? l.id_salle : '');
     $('#mms-nom').val(l ? (l.nom ?? '') : '');
     $('#mms-club').val(l ? (l.id_club ?? '') : '');
     majClubNom();
@@ -694,11 +700,11 @@ $('#mms-btn-ok').on('click', function () {
         return;
     }
     if (!idClub) {
-        $('#mms-msg').html('<span class="text-danger">Le N° de club est obligatoire.</span>');
+        $('#mms-msg').html('<span class="text-danger">L\'Id_Club est obligatoire.</span>');
         return;
     }
     if (!clubs.some(c => String(c.id_club) === idClub)) {
-        $('#mms-msg').html('<span class="text-danger">N° de club inconnu.</span>');
+        $('#mms-msg').html('<span class="text-danger">Id_Club inconnu.</span>');
         return;
     }
 

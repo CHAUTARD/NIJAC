@@ -240,6 +240,7 @@ $routes->post('compta/import-ebp', 'ComptaController::importEbp', ['filter' => '
 // ── EN17 Statistiques JA ─────────────────────────────────────────────────────
 $routes->get('stats-ja', 'StatsJaController::index', ['filter' => 'auth']);
 $routes->get('stats-ja/donnees', 'StatsJaController::donnees', ['filter' => 'auth']);
+$routes->get('stats-ja/par-departement', 'StatsJaController::parDepartement', ['filter' => 'auth']);
 $routes->get('stats-ja/export-csv', 'StatsJaController::exportCsv', ['filter' => 'auth']);
 
 // ── EN19 Adresse domicile JA ─────────────────────────────────────────────────

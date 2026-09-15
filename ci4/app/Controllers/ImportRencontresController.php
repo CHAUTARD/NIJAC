@@ -560,8 +560,8 @@ class ImportRencontresController extends BaseController
 
     /**
      * Liste les JA actifs du club recevant d'une rencontre, pour la popup de
-     * désignation directe (R3M/R4M — arbitrage non fourni par la CRA, c'est
-     * au club recevant de désigner l'un de ses arbitres).
+     * désignation directe (toutes divisions — rencontre passée sans nomination,
+     * c'est au club recevant de désigner l'un de ses arbitres).
      */
     public function candidatsArbitre(): ResponseInterface
     {
@@ -583,9 +583,6 @@ class ImportRencontresController extends BaseController
             if (!$renc) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Rencontre introuvable']);
             }
-            if (!in_array($renc['Division'], ['R3M', 'R4M'], true)) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Désignation directe réservée aux R3M/R4M']);
-            }
 
             $stmtJa = $pdo->prepare('SELECT Id_JA, Nom, Prenom, Grade FROM ja WHERE Id_Club = ? AND Actif = 1 ORDER BY Nom, Prenom');
             $stmtJa->execute([$renc['Id_Club']]);
@@ -595,8 +592,8 @@ class ImportRencontresController extends BaseController
     }
 
     /**
-     * Désigne un JA du club recevant sur une rencontre R3M/R4M sans arbitre
-     * nominé, et lui envoie immédiatement la convocation : choix par l'admin
+     * Désigne un JA du club recevant sur une rencontre passée sans arbitre
+     * nominé (toutes divisions), et lui envoie immédiatement la convocation : choix par l'admin
      * d'un JA quelconque du club recevant. La disponibilité est générée
      * automatiquement (Reponse='P') : ces arbitres officient leur propre
      * match, sans saisie préalable de disponibilité.
@@ -637,9 +634,6 @@ class ImportRencontresController extends BaseController
             $renc = $stmtR->fetch();
             if (!$renc) {
                 return $this->response->setJSON(['ok' => false, 'msg' => "Cet arbitre n'appartient pas au club recevant de cette rencontre"]);
-            }
-            if (!in_array($renc['Division'], ['R3M', 'R4M'], true)) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Désignation directe réservée aux R3M/R4M']);
             }
 
             $already = $pdo->prepare('SELECT Id_Nomination FROM nomination WHERE Id_Rencontre = ?');

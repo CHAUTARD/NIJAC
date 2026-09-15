@@ -73,7 +73,7 @@
             <table id="tbl-depts">
                 <thead>
                     <tr>
-                        <th class="th-pk" style="width:55px;" data-col="CodeDept">Code<span class="sort-icon"></span></th>
+                        <th class="th-pk" style="width:55px;" data-col="CodeDept">CodeDept<span class="sort-icon"></span></th>
                         <th data-col="nom">Nom<span class="sort-icon"></span></th>
                         <th data-col="nom_region">Région<span class="sort-icon"></span></th>
                         <th data-col="Limitrophe">Limitrophes<span class="sort-icon"></span></th>
@@ -91,7 +91,7 @@
 
         <div class="row g-2 mb-2">
             <div class="col-auto">
-                <label class="form-label">Code :</label>
+                <label class="form-label">CodeDept :</label>
                 <input type="text" id="txt-code" class="form-control form-control-sm" maxlength="3" style="width:70px;" placeholder="76">
             </div>
         </div>

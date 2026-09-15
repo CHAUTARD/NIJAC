@@ -465,7 +465,7 @@
     <table id="tbl-communes">
         <thead>
             <tr>
-                <th class="th-pk" style="width:70px"  data-field="Id_LaPoste">N°<span class="sort-icon"></span></th>
+                <th class="th-pk" style="width:70px"  data-field="Id_LaPoste">Id_LaPoste<span class="sort-icon"></span></th>
                 <th style="width:90px"  data-field="CodePostal">Code postal<span class="sort-icon"></span></th>
                 <th style="width:280px" data-field="Nom">Commune<span class="sort-icon"></span></th>
                 <th style="width:110px" data-field="Latitude">Latitude<span class="sort-icon"></span></th>

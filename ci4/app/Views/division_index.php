@@ -14,7 +14,6 @@
     <style>
         #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
         #panel-liste { width: 55%; }
-        #txt-id { background: #f0f4fa; width: 100px; }
 
         /* Bandeau de titre : strip clair — même style qu'EA92 / EA94 / EA95. */
         #menu-strip {
@@ -74,11 +73,6 @@
     </div>
 
     <div id="panel-form">
-
-        <div class="mb-2">
-            <label class="form-label">Id Division :</label>
-            <input type="text" id="txt-id" class="form-control form-control-sm" readonly tabindex="-1">
-        </div>
 
         <div class="mb-2">
             <label class="form-label" for="txt-nom">Division :</label>
@@ -205,7 +199,6 @@ function selectionnerLigne($tr) {
         if (!res.ok) return;
         const d = res.data;
         currentId = d.Division;
-        $('#txt-id').val(currentId);
         $('#txt-nom').val(d.Division);
         $('#num-ord').val(d.Ord);
         $('#txt-nom-long').val(d.Nom);
@@ -219,7 +212,6 @@ function selectionnerLigne($tr) {
 $('#btn-nouveau').on('click', function () {
     currentId = null;
     $('#tbody-liste tr').removeClass('selected');
-    $('#txt-id').val('');
     $('#txt-nom').val('').trigger('focus');
     $('#num-ord').val(1);
     $('#txt-nom-long').val('');
