@@ -253,6 +253,15 @@
         .conv-title { font-size: 15px; letter-spacing: 1px; }
         .salle-bloc { flex-wrap: wrap; }
         #btn-save-frais { bottom: 1rem; right: 1rem; }
+
+        /* Le tableau d'indemnités déborde légèrement du viewport (8 colonnes) :
+           resserrer padding/police pour que le TOTAL reste visible sans scroll. */
+        table.tbl-indem th, table.tbl-indem td { padding: 4px 3px; font-size: 10px; }
+        table.tbl-indem .total-cell { font-size: 12px; }
+        table.tbl-indem .val-money, table.tbl-indem .val-bold { font-size: 11px; }
+        table.tbl-indem .input-group { width: 62px !important; }
+        table.tbl-indem .input-group input { width: 34px !important; }
+        #inp-km { width: 32px; }
     }
 
     /*  Impression / Export PDF  */

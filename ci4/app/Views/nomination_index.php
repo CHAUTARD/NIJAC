@@ -159,8 +159,9 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
     <span id="info-nb-renc"></span>
     <span class="text-muted">|</span>
     <span id="info-nb-attribues"></span>
-    <button id="btn-recap" class="btn btn-outline-secondary btn-sm ms-auto" style="display:none">
-        <i class="bi bi-list-check me-1"></i>Récapitulatif
+    <button type="button" id="btn-tri-priorite" class="btn btn-sm btn-outline-secondary" style="display:none"
+            title="Afficher en premier les rencontres non attribuées, puis les non envoyées">
+        <i class="bi bi-sort-down me-1"></i>Non attribuées d'abord
     </button>
 </div>
 
@@ -170,7 +171,10 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
     <!-- Colonne gauche : rencontres -->
     <div id="col-rencontres">
         <div class="col-titre">
-            <span><i class="bi bi-list-ul me-1"></i>Rencontres</span>
+            <button type="button" id="btn-titre-rencontres" class="btn btn-sm btn-outline-secondary py-0 px-2 fw-bold"
+                    style="font-size:.78rem" title="Cliquer pour tout sélectionner / tout désélectionner">
+                <i class="bi bi-list-ul me-1"></i><span id="titre-rencontres-label">Rencontres</span>
+            </button>
             <span id="renc-sel-titre" class="fw-normal text-muted flex-grow-1 text-center" style="font-size:.78rem"></span>
             <span id="compteur-renc" class="text-muted fw-normal" style="font-size:.75rem"></span>
         </div>
@@ -319,6 +323,7 @@ let rencontres      = [];    // tableau rencontres de la journée (avec VenueLat
 let jaList          = [];    // tous les JA disponibles pour la journée (chargé une fois)
 let nominations     = {};    // {Id_Rencontre: {Id_JA, Nom, Prenom}} — état local
 let selectionEnvoi  = new Set(); // Id_Rencontre cochés pour l'envoi de convocation
+let selectionEnvoiInitiale = new Set(); // présélection au chargement, restaurée par le bouton 3 états
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function ajax(action, params) {
@@ -350,7 +355,6 @@ $(function () {
         chargerRencontres();
     });
 
-    $('#btn-recap').on('click', afficherRecap);
     $('#btn-valider').on('click', afficherRecap);
     $('#btn-valider-modal').on('click', validerNominations);
     $('#btn-envoyer').on('click', envoyerConvocations);
@@ -384,9 +388,43 @@ function chargerJournees() {
         .always(() => spin(false));
 }
 
+// ── Bouton 3 états "Rencontres" / "Tout sélectionner" / "Tout désélectionner" ──
+// Agit sur les cases de sélection pour l'envoi des convocations (.renc-check).
+let etatTitreRenc = 0;
+const LIBELLES_TITRE_RENC = ['Rencontres', 'Tout sélectionner', 'Tout désélectionner'];
+
+function majTitreRencontres() {
+    $('#titre-rencontres-label').text(LIBELLES_TITRE_RENC[etatTitreRenc]);
+}
+
+$('#btn-titre-rencontres').on('click', function () {
+    etatTitreRenc = (etatTitreRenc + 1) % 3;
+    majTitreRencontres();
+    if (etatTitreRenc === 1) {
+        $('#liste-rencontres .renc-check').each(function () {
+            selectionEnvoi.add(parseInt($(this).data('id')));
+        }).prop('checked', true);
+        mettreAJourBoutons();
+    } else if (etatTitreRenc === 2) {
+        $('#liste-rencontres .renc-check').prop('checked', false);
+        selectionEnvoi.clear();
+        mettreAJourBoutons();
+    } else {
+        // Retour à l'état "Rencontres" : restaure la présélection initiale
+        // (convocations déjà validées et pas encore envoyées), pas une case vide.
+        selectionEnvoi = new Set(selectionEnvoiInitiale);
+        $('#liste-rencontres .renc-check').each(function () {
+            $(this).prop('checked', selectionEnvoi.has(parseInt($(this).data('id'))));
+        });
+        mettreAJourBoutons();
+    }
+});
+
 // ── Rencontres + JA chargés en parallèle ─────────────────────────────────────
 function chargerRencontres() {
     if (!journeeCourante) return;
+    etatTitreRenc = 0;
+    majTitreRencontres();
     spin(true);
     nominations = {};
     jaList      = [];
@@ -420,6 +458,7 @@ function chargerRencontres() {
             selectionEnvoi = new Set(
                 rencontres.filter(rc => rc.Valide == 1 && rc.EmailEnvoye != 1).map(rc => rc.Id_Rencontre)
             );
+            selectionEnvoiInitiale = new Set(selectionEnvoi);
             if (j.ok) jaList = j.data;
             majFiltreHorsDept();
             renderRencontres();
@@ -432,13 +471,32 @@ function chargerRencontres() {
         .always(() => spin(false));
 }
 
+// Tri "priorité" : non attribuées d'abord, puis attribuées non envoyées, puis envoyées.
+// Ordre naturel (division/poule) conservé au sein de chaque groupe (tri stable).
+let triPriorite = false;
+
+function rangPriorite(rc) {
+    if (!nominations[rc.Id_Rencontre]) return 0;
+    if (rc.Valide == 1 && rc.EmailEnvoye == 1) return 2;
+    return 1;
+}
+
+$('#btn-tri-priorite').on('click', function () {
+    triPriorite = !triPriorite;
+    $(this).toggleClass('btn-outline-secondary', !triPriorite).toggleClass('btn-success', triPriorite);
+    renderRencontres();
+});
+
 function renderRencontres() {
     const $liste = $('#liste-rencontres').empty();
     if (!rencontres.length) {
         $liste.html('<div class="text-center text-muted py-4" style="font-size:.85rem">Aucune rencontre</div>');
         return;
     }
-    rencontres.forEach(rc => {
+    const listeAffichee = triPriorite
+        ? [...rencontres].sort((a, b) => rangPriorite(a) - rangPriorite(b))
+        : rencontres;
+    listeAffichee.forEach(rc => {
         const attr     = !!nominations[rc.Id_Rencontre];
         const nomJa    = attr ? (nominations[rc.Id_Rencontre].Prenom + ' ' + nominations[rc.Id_Rencontre].Nom).trim() : '';
         const divColor = rc.DivisionColor || '#1a3a6b';
@@ -843,8 +901,6 @@ function mettreAJourBoutons() {
 
     // Valider visible quand tout est attribué (y compris pour re-valider après une modification)
     $('#btn-valider').toggle(toutFait);
-    // Récap visible dès qu'il y a au moins une attribution
-    $('#btn-recap').toggle(attrib > 0);
     // Envoyer visible dès qu'au moins une nomination est validée — persiste au
     // rechargement de la page, pas seulement juste après avoir cliqué Valider
     $('#btn-envoyer').toggle(validees > 0).prop('disabled', selectionEnvoi.size === 0);
@@ -864,6 +920,8 @@ function mettreAJourInfoJournee() {
     const attrib = Object.keys(nominations).length;
     $('#info-nb-renc').html(`<strong>${total}</strong> rencontre${total > 1 ? 's' : ''}`);
     $('#info-nb-attribues').html(`<strong>${attrib}/${total}</strong> attribué${attrib > 1 ? 's' : ''}`);
+    // Le tri n'a d'intérêt que s'il reste des rencontres non attribuées sur la journée.
+    $('#btn-tri-priorite').toggle(attrib < total);
     $('#info-journee').css('display', 'flex');
 }
 

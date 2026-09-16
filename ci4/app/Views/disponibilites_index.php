@@ -106,7 +106,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 /* ── JA avec disponibilité saisie ── */
 .ja-dispo-badge {
     width:18px; height:18px; border-radius:50%;
-    background:#2e7d32; color:#fff;
+    background:var(--nijac-blue); color:#fff;
     display:flex; align-items:center; justify-content:center;
     font-size:.65rem; flex-shrink:0;
 }
@@ -118,7 +118,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 }
 .leg-item { display:flex; align-items:center; gap:.35rem; }
 .leg-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
-.leg-dot-ok  { background:#2e7d32; }
+.leg-dot-ok  { background:var(--nijac-blue); }
 .leg-dot-ko  { background:#c62828; }
 
 /* ── Placeholder ── */
