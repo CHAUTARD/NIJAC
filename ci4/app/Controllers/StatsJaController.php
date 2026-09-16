@@ -280,10 +280,13 @@ class StatsJaController extends BaseController
      * `rencontre.Id_EquipeDom → equipe.Id_Club`), mêmes règles de repli
      * CodePostal/Cp que le reste de l'appli. `journees` liste les numéros de
      * journée trouvés (triés), une ligne (courbe) par journée côté graphe.
-     * `nb_sans_arbitre` distingue le vrai manque (`ArbitrageObligatoire=1` sans
-     * nomination Valide) de `nb_arbitre_club` (`ArbitrageObligatoire=0`, ex.
-     * R3M/R4M — le club recevant fournit son propre JA sans passer par une
-     * nomination NIJAC, ce n'est pas un manque).
+     * `ArbitrageObligatoire=0` (R3M/R4M en arbitrage club, cf. EA82) est compté
+     * directement dans `nb_avec_arbitre` : le club recevant fournit son propre
+     * JA, que la nomination NIJAC existe ou non, ce n'est pas un manque et ça
+     * compte comme nommé. `nb_arbitre_club` reste à 0 (conservé pour ne pas
+     * casser le format de réponse / les séries du graphe côté vue).
+     * `nb_sans_arbitre` ne reflète donc que le vrai manque : `ArbitrageObligatoire=1`
+     * sans nomination Valide.
      * Porte sur tous les départements actifs de la ligue (getDeptActifs),
      * pas seulement ceux autorisés à l'utilisateur : simple comptage, pas de
      * donnée nominative.
@@ -332,12 +335,10 @@ class StatsJaController extends BaseController
                 SELECT LEFT(COALESCE(lp.CodePostal, s.Cp), 2) AS Dept,
                        r.Journee AS Journee,
                        COUNT(*) AS nb,
-                       SUM(CASE WHEN EXISTS (
+                       SUM(CASE WHEN r.ArbitrageObligatoire = 0 OR EXISTS (
                            SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
                        ) THEN 1 ELSE 0 END) AS nb_avec_arbitre,
-                       SUM(CASE WHEN r.ArbitrageObligatoire = 0 AND NOT EXISTS (
-                           SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
-                       ) THEN 1 ELSE 0 END) AS nb_arbitre_club
+                       0 AS nb_arbitre_club
                 FROM rencontre r
                 JOIN equipe        ed ON ed.Id_Equipe   = r.Id_EquipeDom
                 LEFT JOIN Club     cl ON cl.Id_Club      = ed.Id_Club

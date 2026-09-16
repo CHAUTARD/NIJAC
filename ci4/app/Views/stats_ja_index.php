@@ -145,24 +145,24 @@
         <div id="chart-section-title" class="chart-section-title"></div>
         <div class="chart-grid">
             <div class="chart-card chart-card-wide">
-                <div class="chart-card-title">Rencontres par département (total saison)</div>
+                <div class="chart-card-title">1. Rencontres par département (total saison)</div>
                 <div class="chart-canvas-wrap chart-canvas-wrap-pie"><canvas id="chart-camembert"></canvas></div>
             </div>
             <div class="chart-card chart-card-wide">
-                <div class="chart-card-title">JA actifs et rencontres par journée, par département</div>
+                <div class="chart-card-title">2. JA actifs et rencontres par journée, par département</div>
                 <div class="chart-canvas-wrap chart-canvas-wrap-lg"><canvas id="chart-combine"></canvas></div>
             </div>
             <div class="chart-card">
-                <div class="chart-card-title">Taux de couverture (arbitre nommé ou JA du club recevant)</div>
+                <div class="chart-card-title">3. Taux de couverture (arbitre nommé ou JA du club recevant)</div>
                 <div class="chart-canvas-wrap"><canvas id="chart-couverture"></canvas></div>
             </div>
             <div class="chart-card">
-                <div class="chart-card-title">Charge par JA (rencontres / JA actif)</div>
+                <div class="chart-card-title">4. Charge par JA (rencontres / JA actif)</div>
                 <div class="chart-canvas-wrap"><canvas id="chart-charge"></canvas></div>
             </div>
             <div class="chart-card chart-card-wide">
                 <div class="d-flex align-items-center flex-wrap gap-2 mb-1">
-                    <div class="chart-card-title mb-0">Rencontres / JA nommé / JA du club par journée</div>
+                    <div class="chart-card-title mb-0">5. Rencontres / JA nommé / JA du club par journée</div>
                     <span class="combo-field ms-auto">
                         <label for="sel-dept-barres">Département</label>
                         <select id="sel-dept-barres"></select>
