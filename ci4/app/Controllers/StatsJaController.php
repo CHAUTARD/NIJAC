@@ -280,13 +280,14 @@ class StatsJaController extends BaseController
      * `rencontre.Id_EquipeDom → equipe.Id_Club`), mêmes règles de repli
      * CodePostal/Cp que le reste de l'appli. `journees` liste les numéros de
      * journée trouvés (triés), une ligne (courbe) par journée côté graphe.
-     * `ArbitrageObligatoire=0` (R3M/R4M en arbitrage club, cf. EA82) est compté
-     * directement dans `nb_avec_arbitre` : le club recevant fournit son propre
-     * JA, que la nomination NIJAC existe ou non, ce n'est pas un manque et ça
-     * compte comme nommé. `nb_arbitre_club` reste à 0 (conservé pour ne pas
-     * casser le format de réponse / les séries du graphe côté vue).
-     * `nb_sans_arbitre` ne reflète donc que le vrai manque : `ArbitrageObligatoire=1`
-     * sans nomination Valide.
+     * `nb_sans_arbitre` distingue le vrai manque (`ArbitrageObligatoire=1` sans
+     * nomination Valide) de `nb_arbitre_club` (`ArbitrageObligatoire=0`, R3M/R4M —
+     * la CRA ne fournit pas de JA sur ces rencontres ; le club recevant n'en a
+     * lui-même que s'il en a fait la demande via EN25, ce qui crée alors une
+     * nomination Valide, comptée dans `nb_avec_arbitre`). Sans demande du club,
+     * ces rencontres n'ont donc réellement aucun JA, mais ce n'est pas un manque
+     * imputable à la CRA : elles restent dans `nb_arbitre_club`, pas dans
+     * `nb_sans_arbitre`.
      * Porte sur tous les départements actifs de la ligue (getDeptActifs),
      * pas seulement ceux autorisés à l'utilisateur : simple comptage, pas de
      * donnée nominative.
@@ -335,10 +336,14 @@ class StatsJaController extends BaseController
                 SELECT LEFT(COALESCE(lp.CodePostal, s.Cp), 2) AS Dept,
                        r.Journee AS Journee,
                        COUNT(*) AS nb,
-                       SUM(CASE WHEN r.ArbitrageObligatoire = 0 OR EXISTS (
+                       SUM(CASE WHEN EXISTS (
                            SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
                        ) THEN 1 ELSE 0 END) AS nb_avec_arbitre,
-                       0 AS nb_arbitre_club
+                       SUM(CASE WHEN r.ArbitrageObligatoire = 0 AND NOT EXISTS (
+                           SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
+                       ) THEN 1 ELSE 0 END) AS nb_arbitre_club,
+                       SUM(CASE WHEN r.ArbitrageObligatoire = 1 THEN 1 ELSE 0 END) AS nb_besoin_ja,
+                       SUM(CASE WHEN r.ArbitrageObligatoire = 0 THEN 1 ELSE 0 END) AS nb_sans_besoin_ja
                 FROM rencontre r
                 JOIN equipe        ed ON ed.Id_Equipe   = r.Id_EquipeDom
                 LEFT JOIN Club     cl ON cl.Id_Club      = ed.Id_Club
@@ -357,9 +362,11 @@ class StatsJaController extends BaseController
                 $j = (int) $r['Journee'];
                 $journees[$j] = true;
                 $rencParDeptJournee[$r['Dept']][$j] = [
-                    'nb'    => (int) $r['nb'],
-                    'avec'  => (int) $r['nb_avec_arbitre'],
-                    'club'  => (int) $r['nb_arbitre_club'],
+                    'nb'          => (int) $r['nb'],
+                    'avec'        => (int) $r['nb_avec_arbitre'],
+                    'club'        => (int) $r['nb_arbitre_club'],
+                    'besoinJa'    => (int) $r['nb_besoin_ja'],
+                    'sansBesoinJa' => (int) $r['nb_sans_besoin_ja'],
                 ];
             }
             ksort($journees);
@@ -401,12 +408,14 @@ class StatsJaController extends BaseController
                 $code       = str_pad((string) $d['CodeDept'], 2, '0', STR_PAD_LEFT);
                 $parJournee = [];
                 foreach ($journees as $j) {
-                    $cell = $rencParDeptJournee[$code][$j] ?? ['nb' => 0, 'avec' => 0, 'club' => 0];
+                    $cell = $rencParDeptJournee[$code][$j] ?? ['nb' => 0, 'avec' => 0, 'club' => 0, 'besoinJa' => 0, 'sansBesoinJa' => 0];
                     $parJournee[$j] = [
-                        'nb_rencontres'    => $cell['nb'],
-                        'nb_avec_arbitre'  => $cell['avec'],
-                        'nb_arbitre_club'  => $cell['club'],
-                        'nb_sans_arbitre'  => $cell['nb'] - $cell['avec'] - $cell['club'],
+                        'nb_rencontres'      => $cell['nb'],
+                        'nb_avec_arbitre'    => $cell['avec'],
+                        'nb_arbitre_club'    => $cell['club'],
+                        'nb_sans_arbitre'    => $cell['nb'] - $cell['avec'] - $cell['club'],
+                        'nb_besoin_ja'       => $cell['besoinJa'],
+                        'nb_sans_besoin_ja'  => $cell['sansBesoinJa'],
                     ];
                 }
                 $rows[] = [
