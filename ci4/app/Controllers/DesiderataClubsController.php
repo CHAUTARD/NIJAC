@@ -156,7 +156,8 @@ class DesiderataClubsController extends BaseController
             }
 
             $stmtE = $pdo->prepare(
-                "SELECT e.Id_Equipe, e.Nom AS NomEquipe, e.ReEngagement, e.JourSouhaite, e.SouhaitJA,
+                "SELECT e.Id_Equipe, e.Nom AS NomEquipe, e.ReEngagement, e.JourSouhaite,
+                        CASE WHEN e.ArbitrageCRA = 1 THEN 'CRA' ELSE 'Club' END AS SouhaitJA,
                         d.Division, d.Nom AS NomDivision
                  FROM equipe e
                  JOIN division d ON d.Division = e.Division

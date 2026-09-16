@@ -308,12 +308,18 @@ class ImportRencontresController extends BaseController
             }
 
             // Toutes les divisions sont importables, qu'elles soient déjà configurées dans la
-            // table NIJAC "division" (avec un ArbitrageCRA connu) ou non — pas de blocage ici.
+            // table NIJAC "division" ou non — pas de blocage ici.
+            $isNationale = str_starts_with($divCode, 'N');
+
+            // Valeur initiale de equipe.ArbitrageCRA pour une équipe nouvellement créée (NOT NULL) :
+            // reprend division.ArbitrageCRA (1 partout sauf R3M/R4M = 0), avec repli sur le code
+            // division si la ligne "division" n'existe pas encore.
             $stmtDiv = $pdo->prepare('SELECT ArbitrageCRA FROM division WHERE Division=?');
             $stmtDiv->execute([$divCode]);
-            $divInfo     = $stmtDiv->fetch();
-            $arbitrage   = $divInfo ? (int) $divInfo['ArbitrageCRA'] : 0;
-            $isNationale = str_starts_with($divCode, 'N');
+            $arbitrageCra    = $stmtDiv->fetchColumn();
+            $souhaitJaDefaut = $arbitrageCra !== false
+                ? (int) $arbitrageCra
+                : (in_array($divCode, ['R3M', 'R4M'], true) ? 0 : 1);
 
             $api = getFfttRawClient();
 
@@ -364,7 +370,7 @@ class ImportRencontresController extends BaseController
                 'INSERT INTO equipe_nationale (Nom, Division, Poule, Rang, Id_Club, Id_Equipe) VALUES (?,?,?,0,?,?)'
             );
             $stmtEqChk = $pdo->prepare('SELECT Id_Equipe FROM equipe WHERE Nom=? AND Division=? LIMIT 1');
-            $stmtEqIns = $pdo->prepare('INSERT INTO equipe (Nom, Division, Id_Club, JAdemande) VALUES (?,?,?,0)');
+            $stmtEqIns = $pdo->prepare('INSERT INTO equipe (Nom, Division, Id_Club, JAdemande, ArbitrageCRA) VALUES (?,?,?,0,?)');
             $stmtRcChk = $pdo->prepare('SELECT Id_Rencontre, Journee, Heure FROM rencontre WHERE Date=? AND Id_EquipeDom=? AND Id_EquipeExt=? LIMIT 1');
             // Même affiche (mêmes équipes, même poule, même journée) déjà en base
             // sous une autre date → on ne recrée pas (évite les doublons de
@@ -375,9 +381,14 @@ class ImportRencontresController extends BaseController
             // initTableConfiguration() — fait perdre proprement une exécution
             // concurrente (mise à jour au lieu d'une 2e ligne identique). Les
             // SELECT de dédup ci-dessus restent : ils alimentent stats/log.
+            // ArbitrageCRA de la rencontre : photo de equipe.ArbitrageCRA de l'équipe domicile au
+            // moment de la création (le souhait club se fait avant le début de phase). Un
+            // changement de souhait après coup ne doit s'appliquer qu'aux rencontres à venir,
+            // pas rejouer celles déjà passées — voir la resynchronisation dans
+            // DesiderataClubController/SouhaitEquipeController/EquipeRegionaleController/EquipeAdminController.
             $stmtRcIns = $pdo->prepare(
-                'INSERT INTO rencontre (Date,Heure,Poule,Id_EquipeDom,Id_EquipeExt,Phase,Journee,ArbitrageObligatoire)
-                 VALUES (?,?,?,?,?,?,?,?)
+                'INSERT INTO rencontre (Date,Heure,Poule,Id_EquipeDom,Id_EquipeExt,Phase,Journee,ArbitrageCRA)
+                 SELECT ?,?,?,?,?,?,?, ArbitrageCRA FROM equipe WHERE Id_Equipe = ?
                  ON DUPLICATE KEY UPDATE Date=VALUES(Date), Heure=VALUES(Heure), Poule=VALUES(Poule), Journee=VALUES(Journee)'
             );
             $stmtRcMaj = $pdo->prepare('UPDATE rencontre SET Journee=?, Heure=? WHERE Id_Rencontre=?');
@@ -471,7 +482,7 @@ class ImportRencontresController extends BaseController
                     $stmtEqChk->execute([$lib, $divCode]);
                     $$var = $stmtEqChk->fetchColumn();
                     if (!$$var) {
-                        $stmtEqIns->execute([$lib, $divCode, $club]);
+                        $stmtEqIns->execute([$lib, $divCode, $club, $souhaitJaDefaut]);
                         $$var = (int) $pdo->lastInsertId();
                         if ($$var) {
                             $stats['equipes_creees']++;
@@ -527,7 +538,7 @@ class ImportRencontresController extends BaseController
                     continue;
                 }
 
-                $stmtRcIns->execute([$date, $heure, $pouleNum, $idDom, $idExt, $phase, $journee, $arbitrage]);
+                $stmtRcIns->execute([$date, $heure, $pouleNum, $idDom, $idExt, $phase, $journee, $idDom]);
                 $stats['rencontres_creees']++;
                 $stats['log'][] = ['type' => 'rencontre', 'op' => 'créée', 'val' => "P$pouleNum J$journee — $libDom vs $libExt ($date)"];
             }
@@ -545,7 +556,9 @@ class ImportRencontresController extends BaseController
                 'SELECT r.Id_Rencontre, r.Date, r.Heure, r.Journee, r.Poule, r.Phase,
                         dv.Division AS DivisionCode, dv.Nom AS DivisionNom, dv.Color AS DivisionColor,
                         ed.Nom AS NomDom, ev.Nom AS NomExt,
-                        r.ArbitrageObligatoire,
+                        CASE WHEN r.ArbitrageCRA = 1 THEN 1
+                             WHEN EXISTS (SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1) THEN 1
+                             ELSE 0 END AS ArbitrageObligatoire,
                         (SELECT COUNT(*) FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre) AS NbNominations
                  FROM rencontre r
                  JOIN equipe   ed ON ed.Id_Equipe   = r.Id_EquipeDom

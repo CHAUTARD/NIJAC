@@ -280,8 +280,14 @@ class StatsJaController extends BaseController
      * `rencontre.Id_EquipeDom → equipe.Id_Club`), mêmes règles de repli
      * CodePostal/Cp que le reste de l'appli. `journees` liste les numéros de
      * journée trouvés (triés), une ligne (courbe) par journée côté graphe.
-     * `nb_sans_arbitre` distingue le vrai manque (`ArbitrageObligatoire=1` sans
-     * nomination Valide) de `nb_arbitre_club` (`ArbitrageObligatoire=0`, R3M/R4M —
+     * "Obligatoire" effectif calculé à la volée : `rencontre.ArbitrageCRAForce=1`
+     * fait foi en premier (forçage ponctuel manuel, EA95), sinon `equipe.ArbitrageCRA=1`
+     * (pertinent seulement pour R3M/R4M — NOT NULL, initialisé depuis
+     * `division.ArbitrageCRA` à la création de l'équipe), sinon une nomination Valide
+     * déjà posée sur cette rencontre précise (JA nommé par le nominateur ou via EN25,
+     * même sans demande CRA du club), sinon 0.
+     * `nb_sans_arbitre` distingue le vrai manque (obligatoire sans nomination
+     * Valide) de `nb_arbitre_club` (non obligatoire, R3M/R4M sans demande CRA —
      * la CRA ne fournit pas de JA sur ces rencontres ; le club recevant n'en a
      * lui-même que s'il en a fait la demande via EN25, ce qui crée alors une
      * nomination Valide, comptée dans `nb_avec_arbitre`). Sans demande du club,
@@ -330,8 +336,15 @@ class StatsJaController extends BaseController
             $paramsR[':debut'] = $dateDebut;
             $paramsR[':fin']   = $dateFin;
             // Sans nomination "Valide" ne veut pas toujours dire sans arbitre : sur les divisions où
-            // la CRA ne fournit pas l'arbitrage (R3M/R4M, ArbitrageObligatoire=0 — voir EA82), c'est
-            // au club recevant de désigner l'un de ses JA, sans passer par une nomination NIJAC.
+            // la CRA ne fournit pas l'arbitrage (R3M/R4M sans demande CRA), c'est au club recevant
+            // de désigner l'un de ses JA, sans passer par une nomination NIJAC.
+            // "Obligatoire" effectif : rencontre.ArbitrageCRA fait foi directement — photo de
+            // equipe.ArbitrageCRA prise à la création (import) et resynchronisée uniquement sur
+            // les rencontres à venir à chaque changement de souhait (EN18/ES33/EA92/EA94), pour
+            // ne jamais réécrire l'historique d'une rencontre déjà jouée ; un forçage ponctuel
+            // EA95 (ArbitrageCRAForce=1) fige la valeur et la protège de ces resynchronisations.
+            // Seule exception vivante : une nomination Valide déjà posée compte toujours comme
+            // obligatoire, même sur une rencontre restée à 0 (JA nommé malgré tout).
             $stmtR = $pdo->prepare("
                 SELECT LEFT(COALESCE(lp.CodePostal, s.Cp), 2) AS Dept,
                        r.Journee AS Journee,
@@ -339,11 +352,16 @@ class StatsJaController extends BaseController
                        SUM(CASE WHEN EXISTS (
                            SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
                        ) THEN 1 ELSE 0 END) AS nb_avec_arbitre,
-                       SUM(CASE WHEN r.ArbitrageObligatoire = 0 AND NOT EXISTS (
+                       SUM(CASE WHEN r.ArbitrageCRA = 0
+                                AND NOT EXISTS (
                            SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
                        ) THEN 1 ELSE 0 END) AS nb_arbitre_club,
-                       SUM(CASE WHEN r.ArbitrageObligatoire = 1 THEN 1 ELSE 0 END) AS nb_besoin_ja,
-                       SUM(CASE WHEN r.ArbitrageObligatoire = 0 THEN 1 ELSE 0 END) AS nb_sans_besoin_ja
+                       SUM(CASE WHEN r.ArbitrageCRA = 1
+                                OR EXISTS (SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1)
+                                THEN 1 ELSE 0 END) AS nb_besoin_ja,
+                       SUM(CASE WHEN r.ArbitrageCRA = 0
+                                AND NOT EXISTS (SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1)
+                                THEN 1 ELSE 0 END) AS nb_sans_besoin_ja
                 FROM rencontre r
                 JOIN equipe        ed ON ed.Id_Equipe   = r.Id_EquipeDom
                 LEFT JOIN Club     cl ON cl.Id_Club      = ed.Id_Club

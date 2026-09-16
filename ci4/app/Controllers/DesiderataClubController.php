@@ -104,7 +104,8 @@ class DesiderataClubController extends BaseController
             $salle = $stmtS->fetch() ?: ['Nom' => '', 'Adresse' => '', 'Cp' => '', 'Ville' => '', 'Telephone' => ''];
 
             $stmtE = $pdo->prepare(
-                "SELECT e.Id_Equipe, e.Nom AS NomEquipe, e.ReEngagement, e.JourSouhaite, e.SouhaitJA,
+                "SELECT e.Id_Equipe, e.Nom AS NomEquipe, e.ReEngagement, e.JourSouhaite,
+                        CASE WHEN e.ArbitrageCRA = 1 THEN 'CRA' ELSE 'Club' END AS SouhaitJA,
                         d.Division, d.Nom AS NomDivision
                  FROM equipe e
                  JOIN division d ON d.Division = e.Division
@@ -176,11 +177,20 @@ class DesiderataClubController extends BaseController
 
             $equipes = json_decode($this->request->getPost('equipes') ?? '[]', true);
             if (is_array($equipes)) {
+                // ArbitrageCRA est NOT NULL (booléen) : COALESCE(?, ArbitrageCRA) laisse la valeur
+                // en base inchangée quand le formulaire n'envoie rien (équipes hors R3M/R4M, champ
+                // absent du formulaire).
                 $stmtEq = $pdo->prepare(
-                    'UPDATE equipe SET ReEngagement=?, JourSouhaite=?, SouhaitJA=?, DesiderataSaison=?
+                    'UPDATE equipe SET ReEngagement=?, JourSouhaite=?, ArbitrageCRA=COALESCE(?, ArbitrageCRA), DesiderataSaison=?
                      WHERE Id_Equipe=? AND Id_Club=?'
                 );
                 $stmtDivOf = $pdo->prepare('SELECT Division FROM equipe WHERE Id_Equipe=? AND Id_Club=?');
+                // Le souhait se fait normalement avant le début de phase ; un changement fait
+                // après ne doit s'appliquer qu'aux rencontres pas encore jouées, pas réécrire
+                // celles déjà passées.
+                $stmtRcResync = $pdo->prepare(
+                    'UPDATE rencontre SET ArbitrageCRA=? WHERE Id_EquipeDom=? AND Date >= CURDATE()'
+                );
 
                 foreach ($equipes as $eq) {
                     $idEquipe = (int) ($eq['id_equipe'] ?? 0);
@@ -190,29 +200,19 @@ class DesiderataClubController extends BaseController
 
                     $re  = in_array($eq['reengagement'] ?? '', ['O', 'N'], true) ? $eq['reengagement'] : null;
                     $jr  = in_array($eq['jour'] ?? '', ['Samedi', 'Dimanche'], true) ? $eq['jour'] : null;
-                    $sja = in_array($eq['souhait_ja'] ?? '', ['CRA', 'Club'], true) ? $eq['souhait_ja'] : null;
+                    $sja    = in_array($eq['souhait_ja'] ?? '', ['CRA', 'Club'], true) ? $eq['souhait_ja'] : null;
+                    $sjaInt = $sja === null ? null : ($sja === 'CRA' ? 1 : 0);
 
-                    $stmtEq->execute([$re, $jr, $sja, $saison, $idEquipe, $club]);
+                    $stmtEq->execute([$re, $jr, $sjaInt, $saison, $idEquipe, $club]);
 
-                    // Synchronise JAdemande + ArbitrageObligatoire pour les équipes R3M/R4M
+                    // Synchronise JAdemande et les rencontres à venir pour les équipes R3M/R4M.
                     if ($sja !== null) {
                         $stmtDivOf->execute([$idEquipe, $club]);
                         $divCode = (string) $stmtDivOf->fetchColumn();
                         if (in_array($divCode, ['R3M', 'R4M'], true)) {
                             $jademande = $sja === 'CRA' ? 1 : 0;
                             $pdo->prepare('UPDATE equipe SET JAdemande=? WHERE Id_Equipe=?')->execute([$jademande, $idEquipe]);
-                            if ($jademande === 1) {
-                                $pdo->prepare('UPDATE rencontre SET ArbitrageObligatoire=1 WHERE Id_EquipeDom=?')
-                                    ->execute([$idEquipe]);
-                            } else {
-                                $pdo->prepare(
-                                    'UPDATE rencontre r
-                                     JOIN equipe e   ON e.Id_Equipe   = r.Id_EquipeDom
-                                     JOIN division d ON d.Division   = e.Division
-                                     SET r.ArbitrageObligatoire = d.ArbitrageCRA
-                                     WHERE r.Id_EquipeDom = ?'
-                                )->execute([$idEquipe]);
-                            }
+                            $stmtRcResync->execute([$sjaInt, $idEquipe]);
                         }
                     }
                 }

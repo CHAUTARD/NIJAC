@@ -78,16 +78,17 @@ class EquipeRegionaleController extends BaseController
             $pdo = getPDO();
 
             $rows = $pdo->query(
-                'SELECT e.Id_Equipe, e.Nom, e.Division, dv.Color AS DivisionColor, e.Id_Club, c.Nom AS NomClub,
+                "SELECT e.Id_Equipe, e.Nom, e.Division, dv.Color AS DivisionColor, e.Id_Club, c.Nom AS NomClub,
                         e.Id_Club2, c2.Nom AS NomClub2,
                         e.Id_Club3, c3.Nom AS NomClub3,
-                        e.JAdemande, e.ReEngagement, e.JourSouhaite, e.SouhaitJA, e.DesiderataSaison
+                        e.JAdemande, e.ReEngagement, e.JourSouhaite,
+                        CASE WHEN e.ArbitrageCRA = 1 THEN 'CRA' ELSE 'Club' END AS SouhaitJA, e.DesiderataSaison
                  FROM equipe e
                  JOIN Club c ON c.Id_Club = e.Id_Club
                  LEFT JOIN Club c2 ON c2.Id_Club = e.Id_Club2
                  LEFT JOIN Club c3 ON c3.Id_Club = e.Id_Club3
                  LEFT JOIN division dv ON dv.Division = e.Division
-                 ORDER BY e.Nom, e.Division'
+                 ORDER BY e.Nom, e.Division"
             )->fetchAll();
 
             return $this->response->setJSON(['ok' => true, 'data' => $rows]);
@@ -125,10 +126,10 @@ class EquipeRegionaleController extends BaseController
             $divsValides  = array_flip(array_column($pdo->query('SELECT Division FROM division')->fetchAll(), 'Division'));
 
             $stmtUpsert = $pdo->prepare(
-                "INSERT INTO equipe (Nom, Division, Id_Club, Id_Club2, Id_Club3, ReEngagement, JourSouhaite, SouhaitJA)
-                 VALUES (?, ?, ?, ?, ?, 'O', 'Samedi', 'CRA')
+                "INSERT INTO equipe (Nom, Division, Id_Club, Id_Club2, Id_Club3, ReEngagement, JourSouhaite, ArbitrageCRA)
+                 VALUES (?, ?, ?, ?, ?, 'O', 'Samedi', 1)
                  ON DUPLICATE KEY UPDATE Id_Club = VALUES(Id_Club), Id_Club2 = VALUES(Id_Club2), Id_Club3 = VALUES(Id_Club3),
-                                          ReEngagement = 'O', JourSouhaite = 'Samedi', SouhaitJA = 'CRA'"
+                                          ReEngagement = 'O', JourSouhaite = 'Samedi', ArbitrageCRA = 1"
             );
 
             $divisionCourante = null;
@@ -219,10 +220,21 @@ class EquipeRegionaleController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Souhait JA invalide.']);
             }
 
+            // ArbitrageCRA NOT NULL (booléen) : COALESCE(?, ArbitrageCRA) laisse la valeur
+            // inchangée si $souhaitJa est null (aucun choix envoyé).
+            $souhaitJaInt = $souhaitJa === null ? null : ($souhaitJa === 'CRA' ? 1 : 0);
             $stmt = $pdo->prepare(
-                'UPDATE equipe SET ReEngagement=?, JourSouhaite=?, SouhaitJA=?, DesiderataSaison=? WHERE Id_Equipe=?'
+                'UPDATE equipe SET ReEngagement=?, JourSouhaite=?, ArbitrageCRA=COALESCE(?, ArbitrageCRA), DesiderataSaison=? WHERE Id_Equipe=?'
             );
-            $stmt->execute([$reEngagement, $jourSouhaite, $souhaitJa, $desiderata, $idEquipe]);
+            $stmt->execute([$reEngagement, $jourSouhaite, $souhaitJaInt, $desiderata, $idEquipe]);
+
+            // Le souhait se fait avant le début de phase ; un changement fait après ne
+            // s'applique qu'aux rencontres pas encore jouées.
+            if ($souhaitJaInt !== null) {
+                $pdo->prepare(
+                    'UPDATE rencontre SET ArbitrageCRA=? WHERE Id_EquipeDom=? AND Date >= CURDATE()'
+                )->execute([$souhaitJaInt, $idEquipe]);
+            }
 
             if ($stmt->rowCount() === 0) {
                 $chk = $pdo->prepare('SELECT COUNT(*) FROM equipe WHERE Id_Equipe = ?');

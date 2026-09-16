@@ -58,7 +58,11 @@ class RencontreAdminController extends BaseController
         return $this->tryJson(function () {
             $rows = getPDO()->query(
                 'SELECT r.Id_Rencontre, r.Date, r.Heure, r.Poule, r.Journee, r.Phase,
-                        r.Id_EquipeDom, r.Id_EquipeExt, r.id_Salle, r.ArbitrageObligatoire, r.Commentaire,
+                        r.Id_EquipeDom, r.Id_EquipeExt, r.id_Salle, r.Commentaire,
+                        r.ArbitrageCRA,
+                        CASE WHEN r.ArbitrageCRA = 1 THEN 1
+                             WHEN EXISTS (SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1) THEN 1
+                             ELSE 0 END AS ArbitrageObligatoire,
                         ed.Division, dv.Color AS DivisionColor, ed.Nom AS NomDom, ed.Id_Club AS IdClubDom,
                         ev.Nom AS NomExt, ev.Id_Club AS IdClubExt,
                         ce.Nom AS NomClubExt, ce.CorNom AS CorrNomExt, ce.CorEmail AS CorrEmailExt, ce.CorTelephone AS CorrTelExt,
@@ -126,7 +130,7 @@ class RencontreAdminController extends BaseController
             $idEquipeExt = $idEquipeExtRaw === '' ? null : (int) $idEquipeExtRaw;
             $idSalleRaw  = trim((string) ($input['id_salle'] ?? ''));
             $idSalle     = $idSalleRaw === '' ? null : (int) $idSalleRaw;
-            $arbitrageObligatoire = !empty($input['arbitrage_obligatoire']) ? 1 : 0;
+            $arbitrageCra = !empty($input['arbitrage_obligatoire']) ? 1 : 0;
             $commentaire = trim($input['commentaire'] ?? '') ?: null;
 
             if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
@@ -163,10 +167,10 @@ class RencontreAdminController extends BaseController
             }
 
             $stmt = $pdo->prepare(
-                'UPDATE rencontre SET Date=?, Heure=?, Poule=?, Journee=?, Phase=?, Id_EquipeDom=?, Id_EquipeExt=?, id_Salle=?, ArbitrageObligatoire=?, Commentaire=?
+                'UPDATE rencontre SET Date=?, Heure=?, Poule=?, Journee=?, Phase=?, Id_EquipeDom=?, Id_EquipeExt=?, id_Salle=?, ArbitrageCRA=?, Commentaire=?
                  WHERE Id_Rencontre=?'
             );
-            $stmt->execute([$date, $heure, $poule, $journee, $phase, $idEquipeDom, $idEquipeExt, $idSalle, $arbitrageObligatoire, $commentaire, $idRencontre]);
+            $stmt->execute([$date, $heure, $poule, $journee, $phase, $idEquipeDom, $idEquipeExt, $idSalle, $arbitrageCra, $commentaire, $idRencontre]);
 
             if ($stmt->rowCount() === 0) {
                 $chk = $pdo->prepare('SELECT COUNT(*) FROM rencontre WHERE Id_Rencontre = ?');

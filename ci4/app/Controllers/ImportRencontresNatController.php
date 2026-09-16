@@ -789,11 +789,6 @@ class ImportRencontresNatController extends BaseController
                 $byPos[$r['Division']][(int) $r['Poule']][(int) $r['Rang']] = $r;
             }
 
-            $arbitrageMap = [];
-            foreach ($pdo->query('SELECT Division, ArbitrageCRA FROM division')->fetchAll() as $r) {
-                $arbitrageMap[$r['Division']] = (int) $r['ArbitrageCRA'];
-            }
-
             $stmtEqChk = $pdo->prepare('SELECT Id_Equipe FROM equipe WHERE Nom=? AND Division=? LIMIT 1');
             $stmtEqIns = $pdo->prepare('INSERT INTO equipe (Nom, Division, Id_Club, JAdemande) VALUES (?,?,?,0)');
             $stmtRcChk = $pdo->prepare('SELECT Id_Rencontre, Journee, Heure FROM rencontre WHERE Date=? AND Id_EquipeDom=? AND Id_EquipeExt=? LIMIT 1');
@@ -805,7 +800,7 @@ class ImportRencontresNatController extends BaseController
             // initTableConfiguration() — une exécution concurrente (import national
             // + import FFTT direct sur la même division N*) met à jour au lieu de
             // créer une 2e ligne identique. Les SELECT de dédup ci-dessous restent.
-            $stmtRcIns = $pdo->prepare('INSERT INTO rencontre (Date,Heure,Poule,Id_EquipeDom,Id_EquipeExt,Phase,Journee,ArbitrageObligatoire) VALUES (?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE Date=VALUES(Date), Heure=VALUES(Heure), Poule=VALUES(Poule), Journee=VALUES(Journee)');
+            $stmtRcIns = $pdo->prepare('INSERT INTO rencontre (Date,Heure,Poule,Id_EquipeDom,Id_EquipeExt,Phase,Journee) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE Date=VALUES(Date), Heure=VALUES(Heure), Poule=VALUES(Poule), Journee=VALUES(Journee)');
             $stmtRcMaj = $pdo->prepare('UPDATE rencontre SET Journee=?, Heure=? WHERE Id_Rencontre=?');
 
             $stats = ['equipes_creees' => 0, 'rencontres_creees' => 0, 'doublons' => 0, 'doublons_corriges' => 0, 'ignores' => 0, 'erreurs' => [], 'log' => []];
@@ -830,7 +825,6 @@ class ImportRencontresNatController extends BaseController
             };
 
             foreach ($byPos as $divCode => $poules) {
-                $arbitrage = $arbitrageMap[$divCode] ?? 0;
                 foreach ($poules as $poule => $equipesParRang) {
                     foreach ($data['journees'] as $j) {
                         foreach ($j['matchs'] as [$rangDom, $rangExt]) {
@@ -888,7 +882,7 @@ class ImportRencontresNatController extends BaseController
 
                             // Le calendrier Excel ne fournit pas d'heure par rencontre : 16h00 est
                             // l'horaire standard des championnats nationaux par équipes.
-                            $stmtRcIns->execute([$j['date'], '16:00:00', $poule, $idDom, $idExt, 1, $j['journee'], $arbitrage]);
+                            $stmtRcIns->execute([$j['date'], '16:00:00', $poule, $idDom, $idExt, 1, $j['journee']]);
                             $stats['rencontres_creees']++;
                             $stats['log'][] = ['type' => 'rencontre', 'val' => "P{$poule} J{$j['journee']} — {$dom['Nom']} vs {$ext['Nom']} ({$j['date']})"];
                         }

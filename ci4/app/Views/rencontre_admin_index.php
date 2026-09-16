@@ -467,7 +467,7 @@ function selectionnerLigne($tr) {
     $('#txt-journee').val(r.Journee ?? '');
     $('#txt-phase').val(r.Phase ?? '');
     majSelectSalle(r.IdClubDom, r.id_Salle);
-    $('#sel-arbitrage-obligatoire').val(r.ArbitrageObligatoire == 1 ? '1' : '0');
+    $('#sel-arbitrage-obligatoire').val(r.ArbitrageCRA == 1 ? '1' : '0');
     $('#txt-commentaire').val(r.Commentaire ?? '');
     setStatus('');
 }

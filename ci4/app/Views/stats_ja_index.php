@@ -266,8 +266,8 @@ const PALETTE_JOURNEES = ['#2e7d32', '#f59e0b', '#7c3aed', '#0d9488', '#db2777',
 const couleurJournee = idx => PALETTE_JOURNEES[idx % PALETTE_JOURNEES.length];
 
 const SERIES_BARRES_JOURNEE = [
-    { cle: 'nb_besoin_ja',      label: 'Rencontres avec JA requis (hors R3M/R4M)', color: '#475569' },
-    { cle: 'nb_sans_besoin_ja', label: 'R3M/R4M (pas de JA officiel requis)',      color: '#94a3b8' },
+    { cle: 'nb_besoin_ja',      label: 'Rencontres avec JA requis (dont R3M/R4M en demande CRA)', color: '#475569' },
+    { cle: 'nb_sans_besoin_ja', label: 'R3M/R4M en arbitrage club (pas de JA officiel requis)',    color: '#94a3b8' },
     { cle: 'nb_avec_arbitre',   label: 'JA nommé',        color: COULEUR_JA },
     { cle: 'nb_arbitre_club',   label: 'JA du club',      color: '#0d9488' },
     { cle: 'nb_sans_arbitre',   label: 'Sans nomination', color: COULEUR_TOTAL },

@@ -30,7 +30,7 @@ Le détail complet de chaque écran (fonctionnalités, fichier source) est dispo
 | EN15 | Centre d'envoi | Envoi des 4 types de messages aux JA actifs du département |
 | EN16 | Comptabilité | Récapitulatif des frais JA, export CSV format EBP (journal AC) |
 | EA93 | Gestion des messages | Création et gestion des modèles de messages (convocation, rappel, annulation…) |
-| EN12 | JA R3 / R4 | Signalement des équipes R3/R4 demandant un JA → `ArbitrageObligatoire = 1` |
+| EN12 | JA R3 / R4 | Signalement des équipes R3/R4 demandant un JA → `equipe.ArbitrageCRA = 1` (arbitrage requis calculé à la volée sur les rencontres, pas de recopie) |
 | EA98 | Administration BDD | Browse/CRUD, structure, requêteur SQL, export CSV, gestion des index |
 
 ---

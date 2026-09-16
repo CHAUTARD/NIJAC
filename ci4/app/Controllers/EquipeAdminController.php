@@ -8,7 +8,7 @@ use CodeIgniter\HTTP\ResponseInterface;
  * NIJAC – Gestion des équipes (EA94) : édition directe de la table `equipe`
  * (Nom, Division, Club) avec filtres Club/Division/Nom, sans passer par les
  * écrans d'import. Distinct d'EA92 (Équipes régionales), qui édite les champs
- * de désidératas (ReEngagement, JourSouhaite, SouhaitJA...) d'équipes déjà
+ * de désidératas (ReEngagement, JourSouhaite, ArbitrageCRA...) d'équipes déjà
  * importées mais laisse Nom/Division/Club en lecture seule.
  *
  * Admin uniquement (filtre "adminauth"). Pas de Model : jointure club pour
@@ -70,7 +70,8 @@ class EquipeAdminController extends BaseController
                 "SELECT e.Id_Equipe, e.Nom, e.Division, dv.Color AS DivisionColor, e.Id_Club, c.Nom AS NomClub,
                         e.Id_Club2, c2.Nom AS NomClub2, e.Id_Club3, c3.Nom AS NomClub3,
                         d.CodeDept AS Departement,
-                        e.ReEngagement, e.JourSouhaite, e.SouhaitJA, e.DesiderataSaison
+                        e.ReEngagement, e.JourSouhaite,
+                        CASE WHEN e.ArbitrageCRA = 1 THEN 'CRA' ELSE 'Club' END AS SouhaitJA, e.DesiderataSaison
                  FROM equipe e
                  JOIN club c ON c.Id_Club = e.Id_Club
                  LEFT JOIN club c2 ON c2.Id_Club = e.Id_Club2
@@ -151,10 +152,10 @@ class EquipeAdminController extends BaseController
             }
 
             $stmt = $pdo->prepare(
-                'INSERT INTO equipe (Nom, Division, Id_Club, Id_Club2, Id_Club3, ReEngagement, JourSouhaite, SouhaitJA, DesiderataSaison)
+                'INSERT INTO equipe (Nom, Division, Id_Club, Id_Club2, Id_Club3, ReEngagement, JourSouhaite, ArbitrageCRA, DesiderataSaison)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
-            $stmt->execute([$nom, $division, $idClub, $idClub2, $idClub3, $reeng, $jourSouh, $souhaitJa, $desider]);
+            $stmt->execute([$nom, $division, $idClub, $idClub2, $idClub3, $reeng, $jourSouh, $souhaitJa === 'CRA' ? 1 : 0, $desider]);
 
             return $this->response->setJSON(['ok' => true, 'msg' => 'Équipe créée.', 'id' => (int) $pdo->lastInsertId()]);
         });
@@ -219,10 +220,17 @@ class EquipeAdminController extends BaseController
             }
 
             $stmt = $pdo->prepare(
-                'UPDATE equipe SET Nom=?, Division=?, Id_Club=?, Id_Club2=?, Id_Club3=?, ReEngagement=?, JourSouhaite=?, SouhaitJA=?, DesiderataSaison=?
+                'UPDATE equipe SET Nom=?, Division=?, Id_Club=?, Id_Club2=?, Id_Club3=?, ReEngagement=?, JourSouhaite=?, ArbitrageCRA=?, DesiderataSaison=?
                  WHERE Id_Equipe=?'
             );
-            $stmt->execute([$nom, $division, $idClub, $idClub2, $idClub3, $reeng, $jourSouh, $souhaitJa, $desider, $idEquipe]);
+            $souhaitJaInt = $souhaitJa === 'CRA' ? 1 : 0;
+            $stmt->execute([$nom, $division, $idClub, $idClub2, $idClub3, $reeng, $jourSouh, $souhaitJaInt, $desider, $idEquipe]);
+
+            // Le souhait se fait avant le début de phase ; un changement fait après ne
+            // s'applique qu'aux rencontres pas encore jouées.
+            $pdo->prepare(
+                'UPDATE rencontre SET ArbitrageCRA=? WHERE Id_EquipeDom=? AND Date >= CURDATE()'
+            )->execute([$souhaitJaInt, $idEquipe]);
 
             if ($stmt->rowCount() === 0) {
                 $chk = $pdo->prepare('SELECT COUNT(*) FROM equipe WHERE Id_Equipe = ?');

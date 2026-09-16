@@ -8,7 +8,7 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 /**
  * NIJAC – Souhaits des équipes (ES33) : saisie par la CSR (Commission Sportive
  * Régionale) du jour souhaité et du souhait d'arbitrage (`equipe.JourSouhaite`,
- * `equipe.SouhaitJA`) des équipes régionales.
+ * `equipe.ArbitrageCRA`) des équipes régionales.
  *
  * Ces deux champs ne se saisissent que pour les divisions R3M et R4M — la règle
  * est appliquée aussi côté serveur dans modifier(). Les autres colonnes
@@ -95,11 +95,11 @@ class SouhaitEquipeController extends BaseController
     {
         return $this->tryJson(function () {
             $rows = getPDO()->query(
-                'SELECT e.Id_Equipe, e.Nom, e.Division, e.Id_Club, c.Nom AS NomClub,
-                        e.JourSouhaite, e.SouhaitJA
+                "SELECT e.Id_Equipe, e.Nom, e.Division, e.Id_Club, c.Nom AS NomClub,
+                        e.JourSouhaite, CASE WHEN e.ArbitrageCRA = 1 THEN 'CRA' ELSE 'Club' END AS SouhaitJA
                  FROM equipe e
                  JOIN Club c ON c.Id_Club = e.Id_Club
-                 ORDER BY e.Division, e.Nom'
+                 ORDER BY e.Division, e.Nom"
             )->fetchAll();
 
             return $this->response->setJSON([
@@ -140,8 +140,20 @@ class SouhaitEquipeController extends BaseController
                 ]);
             }
 
-            $pdo->prepare('UPDATE equipe SET JourSouhaite = ?, SouhaitJA = ? WHERE Id_Equipe = ?')
-                ->execute([$jourSouhaite, $souhaitJa, $idEquipe]);
+            // ArbitrageCRA NOT NULL (booléen) : COALESCE(?, ArbitrageCRA) laisse la valeur
+            // inchangée si $souhaitJa est null (aucun choix envoyé).
+            $souhaitJaInt = $souhaitJa === null ? null : ($souhaitJa === 'CRA' ? 1 : 0);
+            $pdo->prepare('UPDATE equipe SET JourSouhaite = ?, ArbitrageCRA = COALESCE(?, ArbitrageCRA) WHERE Id_Equipe = ?')
+                ->execute([$jourSouhaite, $souhaitJaInt, $idEquipe]);
+
+            // Le souhait se fait avant le début de phase ; un changement fait après ne
+            // s'applique qu'aux rencontres pas encore jouées (division déjà vérifiée R3M/R4M
+            // ci-dessus).
+            if ($souhaitJaInt !== null) {
+                $pdo->prepare(
+                    'UPDATE rencontre SET ArbitrageCRA=? WHERE Id_EquipeDom=? AND Date >= CURDATE()'
+                )->execute([$souhaitJaInt, $idEquipe]);
+            }
 
             return $this->response->setJSON(['ok' => true, 'msg' => 'Souhaits enregistrés.']);
         });
@@ -272,7 +284,7 @@ class SouhaitEquipeController extends BaseController
 
     /**
      * « Exécuter le CSV » : lit un CSV et met à jour equipe.JourSouhaite pour
-     * toute division, equipe.SouhaitJA uniquement pour R3M/R4M. Rapprochement
+     * toute division, equipe.ArbitrageCRA uniquement pour R3M/R4M. Rapprochement
      * sur Id_Club + n° d'équipe final (+ Division quand la colonne est présente,
      * les noms d'équipe FFTT et ceux du fichier CRA diffèrent).
      *
@@ -314,7 +326,12 @@ class SouhaitEquipeController extends BaseController
             $selR3R4    = $pdo->prepare("SELECT Id_Equipe, Nom, Division FROM equipe WHERE Id_Club = ? AND Division IN ('R3M','R4M')");
             $selClub    = $pdo->prepare('SELECT Nom, Division FROM equipe WHERE Id_Club = ? ORDER BY Division, Nom');
             $majJour    = $pdo->prepare('UPDATE equipe SET JourSouhaite = ? WHERE Id_Equipe = ?');
-            $majJourArb = $pdo->prepare('UPDATE equipe SET JourSouhaite = ?, SouhaitJA = ? WHERE Id_Equipe = ?');
+            $majJourArb = $pdo->prepare('UPDATE equipe SET JourSouhaite = ?, ArbitrageCRA = ? WHERE Id_Equipe = ?');
+            // Le souhait se fait avant le début de phase ; un changement fait après ne
+            // s'applique qu'aux rencontres pas encore jouées.
+            $majRcResync = $pdo->prepare(
+                'UPDATE rencontre SET ArbitrageCRA=? WHERE Id_EquipeDom=? AND Date >= CURDATE()'
+            );
 
             $nbMaj = 0;
             $problemes = [];
@@ -379,7 +396,9 @@ class SouhaitEquipeController extends BaseController
                 $e = $candidats[0];
                 // JourSouhaite pour toutes les divisions ; SouhaitJA seulement R3M/R4M.
                 if (in_array($e['Division'], self::DIVISIONS_SAISIE, true) && in_array($arbCel, ['CRA', 'Club'], true)) {
-                    $majJourArb->execute([$jour, $arbCel, $e['Id_Equipe']]);
+                    $arbInt = $arbCel === 'CRA' ? 1 : 0;
+                    $majJourArb->execute([$jour, $arbInt, $e['Id_Equipe']]);
+                    $majRcResync->execute([$arbInt, $e['Id_Equipe']]);
                 } else {
                     $majJour->execute([$jour, $e['Id_Equipe']]);
                 }

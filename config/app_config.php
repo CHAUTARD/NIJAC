@@ -157,6 +157,86 @@ function initTableConfiguration(\PDO $pdo): void
     // comptadefisc_majoration_electrique) et les colonnes ja.PuissanceFiscale /
     // ja.VehiculeElectrique (ED51/ED52) sont déjà déployés en dev et en prod par
     // ALTER manuel — pas de bloc de migration ici (voir SPECIFICATION.md ED51/ED52).
+
+    // equipe.SouhaitJA : enum('CRA','Club') NULLABLE -> TINYINT(1) NOT NULL (1=CRA, 0=Club).
+    // Valeur redondante avec division.ArbitrageCRA pour tout ce qui n'est pas R3M/R4M —
+    // désormais un booléen toujours renseigné, initialisé à la création de l'équipe
+    // depuis division.ArbitrageCRA (même règle : 1 partout sauf R3M/R4M) et modifiable
+    // ensuite par le club (EN18) ou l'admin, en pratique seulement pour R3M/R4M.
+    // Les lignes NULL existantes (équipes hors R3M/R4M jamais concernées par le choix)
+    // sont backfillées avec le défaut de leur division avant de poser NOT NULL.
+    try {
+        $type = $pdo->query(
+            "SELECT DATA_TYPE FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'equipe' AND COLUMN_NAME = 'SouhaitJA'"
+        )->fetchColumn();
+        if ($type === 'enum') {
+            $pdo->exec(
+                "ALTER TABLE equipe ADD COLUMN SouhaitJaTmp TINYINT(1) NULL DEFAULT NULL AFTER SouhaitJA"
+            );
+            $pdo->exec("UPDATE equipe SET SouhaitJaTmp = CASE SouhaitJA WHEN 'CRA' THEN 1 WHEN 'Club' THEN 0 END");
+            $pdo->exec(
+                "UPDATE equipe e
+                 LEFT JOIN division d ON d.Division = e.Division
+                 SET e.SouhaitJaTmp = COALESCE(d.ArbitrageCRA, CASE WHEN e.Division IN ('R3M', 'R4M') THEN 0 ELSE 1 END)
+                 WHERE e.SouhaitJaTmp IS NULL"
+            );
+            $pdo->exec('ALTER TABLE equipe DROP COLUMN SouhaitJA');
+            $pdo->exec('ALTER TABLE equipe CHANGE SouhaitJaTmp SouhaitJA TINYINT(1) NOT NULL DEFAULT 1');
+        }
+    } catch (\PDOException $e) {
+        // best-effort — droits insuffisants ou colonne déjà migrée.
+    }
+
+    // Renommage/consolidation en ArbitrageCRA : equipe.SouhaitJA (enum 'CRA'/'Club' nullable)
+    // et rencontre.ArbitrageObligatoire représentent tous deux la même notion que
+    // division.ArbitrageCRA (1 = arbitrage fourni par la CRA, 0 = à la charge du club,
+    // R3M/R4M uniquement) — un seul nom, un seul type booléen NOT NULL, partout.
+    try {
+        $type = $pdo->query(
+            "SELECT DATA_TYPE FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'equipe' AND COLUMN_NAME = 'SouhaitJA'"
+        )->fetchColumn();
+        if ($type === 'enum') {
+            $pdo->exec('ALTER TABLE equipe ADD COLUMN ArbitrageCRA TINYINT(1) NULL DEFAULT NULL AFTER SouhaitJA');
+            $pdo->exec("UPDATE equipe SET ArbitrageCRA = CASE SouhaitJA WHEN 'CRA' THEN 1 WHEN 'Club' THEN 0 END");
+            // NULL restant = équipes hors R3M/R4M jamais concernées par le choix : backfill
+            // depuis division.ArbitrageCRA (repli sur le code division si la ligne division
+            // est absente).
+            $pdo->exec(
+                "UPDATE equipe e
+                 LEFT JOIN division d ON d.Division = e.Division
+                 SET e.ArbitrageCRA = COALESCE(d.ArbitrageCRA, CASE WHEN e.Division IN ('R3M', 'R4M') THEN 0 ELSE 1 END)
+                 WHERE e.ArbitrageCRA IS NULL"
+            );
+            $pdo->exec('ALTER TABLE equipe DROP COLUMN SouhaitJA');
+            $pdo->exec('ALTER TABLE equipe MODIFY ArbitrageCRA TINYINT(1) NOT NULL DEFAULT 1');
+        }
+    } catch (\PDOException $e) {
+        // best-effort — droits insuffisants ou colonne déjà migrée.
+    }
+    try {
+        $existe = $pdo->query(
+            "SELECT 1 FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rencontre' AND COLUMN_NAME = 'ArbitrageObligatoire'"
+        )->fetchColumn();
+        if ($existe) {
+            $pdo->exec('ALTER TABLE rencontre CHANGE ArbitrageObligatoire ArbitrageCRA TINYINT(1) NOT NULL DEFAULT 1');
+            // Corrige la désynchronisation historique : l'ancien mécanisme ne recopiait pas
+            // toujours le souhait CRA/Club de l'équipe sur ses rencontres (voir commit de
+            // suppression du bloc de sync dans DesiderataClubController, 09/2026). Photo unique
+            // au moment de ce renommage — au-delà, chaque écran qui modifie
+            // equipe.ArbitrageCRA resynchronise lui-même les rencontres à venir de l'équipe
+            // (EN18, ES33, EA92, EA94), jamais l'historique déjà joué.
+            $pdo->exec(
+                'UPDATE rencontre r
+                 JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
+                 SET r.ArbitrageCRA = ed.ArbitrageCRA'
+            );
+        }
+    } catch (\PDOException $e) {
+        // best-effort — droits insuffisants.
+    }
 }
 
 /**

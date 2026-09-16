@@ -508,18 +508,34 @@ Remplace le questionnaire Excel envoyé par mail aux clubs en début de saison. 
 - **Équipes** : une ligne par équipe du club dans une division dont `division.Ord` est compris entre 70 (PNM) et 150 (R4M), soit PNM, PNF, R1M, R1F, R2M, R3M, R4M. Pour chaque équipe :
   - Réengagement (Oui/Non) → `equipe.ReEngagement`
   - Jour de rencontre souhaité (Samedi/Dimanche) → `equipe.JourSouhaite`
-  - Souhait de désignation JA (CRA ou Club) → `equipe.SouhaitJA`, uniquement affiché pour les équipes **R3M/R4M** (`Id_Division` 1 ou 10)
+  - Souhait de désignation JA (CRA ou Club) → `equipe.ArbitrageCRA`, uniquement affiché pour les équipes **R3M/R4M** (`Id_Division` 1 ou 10)
 - **Note libre** (`club.DesiderataNote`) pour signaler toute modification (nouvelle équipe, correction…) sans avoir à gérer un formulaire d'ajout d'équipe
 
 ### Règles
 - À l'enregistrement, `club.DesiderataSaison` et `club.DesiderataDate` sont mis à jour (saison courante, horodatage) — utilisés par EN12 pour afficher le statut « Soumis / En attente »
-- Pour les équipes R3M/R4M, le souhait JA pilote automatiquement `equipe.JAdemande` (`CRA` → 1, `Club` → 0) et `rencontre.ArbitrageObligatoire` sur les rencontres à domicile de l'équipe, avec la même logique que l'ancien bouton de bascule de EN12 : `CRA` force `ArbitrageObligatoire = 1`, `Club` restaure la valeur par défaut de la division (`division.ArbitrageCRA`)
+- Pour les équipes R3M/R4M, le souhait JA écrit `equipe.ArbitrageCRA` (1 = CRA, 0 = Club), `equipe.JAdemande` (miroir 0/1 du même choix, lu par EA92/l'écran équipes régionales), **et resynchronise `rencontre.ArbitrageCRA` sur les rencontres à venir de cette équipe** (`Date >= CURDATE()`) — voir la règle unifiée **« Arbitrage requis (ArbitrageCRA) »** ci-dessous, commune à EN14, EN17, EN18, EN25, EA82/EA83, EA92, EA94, EA95 et ES33
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
 | `charger` | GET | Retourne le club, sa salle principale et ses équipes (PN à R4M) avec leurs désidératas actuels |
-| `enregistrer` | POST | Enregistre correspondant, salle, note et désidératas par équipe ; synchronise `JAdemande`/`ArbitrageObligatoire` pour R3M/R4M |
+| `enregistrer` | POST | Enregistre correspondant, salle, note et désidératas par équipe ; synchronise `JAdemande` et les rencontres à venir pour R3M/R4M |
+
+### Règle unifiée « Arbitrage requis (ArbitrageCRA) »
+Un seul nom, `ArbitrageCRA`, porté par 3 tables — toutes booléennes (`TINYINT(1) NOT NULL`, 1 = CRA fournit le JA, 0 = à la charge du club) :
+- **`division.ArbitrageCRA`** — défaut structurel : `1` pour toutes les divisions, `0` uniquement pour `R3M`/`R4M` (voir EA89).
+- **`equipe.ArbitrageCRA`** — valeur par équipe, initialisée depuis `division.ArbitrageCRA` à la création (import EA82/EA83, saisie EA92/EA94), modifiable ensuite via EN18 (le club) ou ES33 (la CSR) — en pratique uniquement pour R3M/R4M (seules divisions où le formulaire propose le choix).
+- **`rencontre.ArbitrageCRA`** — valeur **par rencontre**, qui fait foi directement (pas un recalcul en direct depuis `equipe`) :
+  - à la création (import EA82), photo de `equipe.ArbitrageCRA` de l'équipe domicile à cet instant ;
+  - **le souhait se fait normalement avant le début de la phase** ; s'il change en cours de phase (EN18, ES33, EA92, EA94), seules les rencontres **à venir** de cette équipe (`Date >= CURDATE()`) sont mises à jour — les rencontres déjà passées gardent la valeur qu'elles avaient à l'époque, jamais réécrites rétroactivement ;
+  - EA95 (`RencontreAdminController`) permet aussi de modifier `ArbitrageCRA` à la main sur une rencontre précise (édition directe Oui/Non, comme les autres champs de cet écran) — cette valeur sera cependant écrasée par la prochaine resynchronisation si le souhait de l'équipe change avant la date de la rencontre.
+
+Valeur effective utilisée par EN14 (candidats/nomination), EN17 (statistiques) et l'écran de liste d'EA82 — lecture directe de `rencontre.ArbitrageCRA`, sans recalcul depuis `equipe` :
+1. Si `rencontre.ArbitrageCRA = 1` → obligatoire.
+2. Sinon si une nomination Valide existe déjà sur cette rencontre (désignée par le nominateur ou via EN25, même sans demande CRA de l'équipe) → obligatoire.
+3. Sinon → non obligatoire (arbitrage club, R3M/R4M uniquement — c'est le club recevant qui désigne son propre JA via EN25, sans passer par une nomination NIJAC tant qu'il ne l'a pas fait).
+
+La recopie `equipe.ArbitrageCRA` → `rencontre.ArbitrageCRA` (à la création, puis resynchronisation « rencontres à venir » sur chaque changement de souhait) corrige un bug historique de l'ancien fonctionnement (avant 09/2026) où cette recopie n'était pas fiable — `equipe.JAdemande` restait parfois à 0 malgré un souhait CRA enregistré, désynchronisant plusieurs centaines de rencontres R3M/R4M.
 
 ---
 
@@ -925,13 +941,13 @@ Importer les rencontres de la saison régionale directement depuis l'API FFTT (S
 | `import-rencontres/charger-divisions` | POST | Liste les divisions FFTT d'une épreuve, avec suggestion de correspondance vers une division NIJAC |
 | `import-rencontres/importer-division` | POST | Importe poules/rencontres d'une division FFTT vers la BDD (upsert) |
 | `import-rencontres/liste-rencontres` | GET | Liste les rencontres déjà importées |
-| `import-rencontres/candidats-arbitre` | GET | JA actifs du club recevant, pour désignation directe R3M/R4M |
-| `import-rencontres/designer-arbitre` | POST | Désigne un JA du club recevant sur une rencontre R3M/R4M et envoie sa convocation |
+| `import-rencontres/candidats-arbitre` | GET | JA actifs du club recevant, pour désignation directe |
+| `import-rencontres/designer-arbitre` | POST | Désigne un JA du club recevant sur une rencontre passée sans nomination et envoie sa convocation |
 
 ### Règles
 - Les doublons (même Date + équipe domicile + équipe visiteur) sont ignorés silencieusement ; un 2ᵉ test bloque aussi la recréation d'une affiche déjà présente pour la même poule/journée à une autre date (rencontre reprogrammée)
 - **Anti-doublon en base (anti-course)** : la table `rencontre` porte une clé `UNIQUE uq_rencontre_affiche (Id_EquipeDom, Id_EquipeExt, Phase)` posée par `initTableConfiguration()`, et l'`INSERT` est un `INSERT … ON DUPLICATE KEY UPDATE Date=VALUES(Date), Heure=VALUES(Heure), Poule=VALUES(Poule), Journee=VALUES(Journee)`. Sans elle, deux exécutions concurrentes de `importer-division` (double-clic, rejeu réseau, ou import EA83 sur la même division N*) passaient chacune le `SELECT` de dédup avant l'`INSERT` de l'autre et inséraient deux lignes identiques à l'`Id_Rencontre` près. Purge prod des doublons pré-existants + pose de la clé : `SQL/2026-09_uq_rencontre_affiche.sql`.
-- La désignation directe (`designer-arbitre`) est réservée aux divisions R3M/R4M, où c'est au club recevant de désigner l'un de ses JA (pas d'arbitrage fourni par la CRA)
+- La désignation directe (`designer-arbitre`) n'est pas restreinte aux divisions R3M/R4M : elle apparaît sur **toute** rencontre passée (`dateEstDepassee`) sans nomination (`NbNominations = 0`), quelle que soit la division — l'admin choisit alors un JA actif du club recevant (`candidats-arbitre`), qui reçoit sa convocation immédiatement. Elle ne dépend pas de `ArbitrageCRA`/`ArbitrageObligatoire` : c'est un rattrapage manuel de rencontre oubliée, distinct du circuit normal EN14/EN25
 
 ---
 
@@ -1224,6 +1240,7 @@ Définir les divisions sportives et leur niveau hiérarchique, utilisés pour cl
 | Division | Texte (ex : `N1M`, `R1M`) | Oui |
 | Libellé | Texte | Oui |
 | Niveau | Entier (ordre hiérarchique) | Non |
+| Arbitrage CRA | Booléen (`ArbitrageCRA`, `TINYINT(1) NOT NULL DEFAULT 1`) | Oui — défaut structurel de la division : 1 = la CRA fournit le JA, 0 = à la charge du club. Seules `R3M` et `R4M` valent 0 ; toutes les autres divisions valent 1. Sert de valeur initiale à `equipe.ArbitrageCRA` (voir la règle unifiée dans EN18) |
 
 ### Actions AJAX
 | Action | Méthode | Description |
