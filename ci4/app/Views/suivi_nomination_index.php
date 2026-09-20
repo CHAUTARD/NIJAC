@@ -51,6 +51,10 @@
 <div id="split-container">
     <div id="panel-liste">
         <div id="menu-strip">
+            <button type="button" class="btn btn-sm btn-light" id="btn-export" title="Exporter le tableau affiché en CSV">
+                <i class="bi bi-download"></i> CSV
+            </button>
+            <span style="flex:1"></span>
             <span class="count-badge" id="lbl-count">0 / 0</span>
             <span style="flex:1"></span>
             <span class="combo-field">
@@ -68,10 +72,11 @@
                 <input type="search" id="search-ja" placeholder="Nom du JA…" style="width:200px;">
             </span>
             <span class="combo-field">
-                <label for="sel-km">Kilométrage</label>
-                <select id="sel-km" style="width:150px;">
-                    <option value="">Tous</option>
-                    <option value="sans">Sans kilométrage</option>
+                <label for="sel-saisie">Date saisie</label>
+                <select id="sel-saisie" style="width:150px;">
+                    <option value="">Toutes</option>
+                    <option value="oui">Renseignée</option>
+                    <option value="non">Non renseignée</option>
                 </select>
             </span>
             <button type="button" class="btn btn-sm btn-light" id="btn-reset-filtres" title="Réinitialiser les filtres">
@@ -83,9 +88,13 @@
                 <thead>
                     <tr>
                         <th style="width:130px" data-field="date">Date<span class="sort-icon"></span></th>
+                        <th class="centre" style="width:80px" data-field="division">Division<span class="sort-icon"></span></th>
+                        <th class="centre" style="width:80px" data-field="arbitrage">Arbitrage<span class="sort-icon"></span></th>
                         <th data-field="domicile">Domicile<span class="sort-icon"></span></th>
                         <th data-field="exterieur">Extérieur<span class="sort-icon"></span></th>
+                        <th class="centre" style="width:90px" data-field="licence">N° licence<span class="sort-icon"></span></th>
                         <th data-field="ja">JA<span class="sort-icon"></span></th>
+                        <th style="width:110px" data-field="ebp">Compte EBP<span class="sort-icon"></span></th>
                         <th class="num" style="width:90px" data-field="peage">Péage<span class="sort-icon"></span></th>
                         <th class="num" style="width:90px" data-field="km">Km<span class="sort-icon"></span></th>
                         <th class="centre" style="width:110px" data-field="defisc">Défisc.<span class="sort-icon"></span></th>
@@ -94,9 +103,31 @@
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
-                    <tr><td colspan="9" class="text-center text-muted py-3">Chargement…</td></tr>
+                    <tr><td colspan="13" class="text-center text-muted py-3">Chargement…</td></tr>
                 </tbody>
             </table>
+        </div>
+    </div>
+</div>
+
+<!-- Popup export CSV : période de rencontres -->
+<div class="modal fade" id="modal-export" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="bi bi-download me-2"></i>Export CSV</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label small mb-1" for="exp-debut">Date de début</label>
+                <input type="date" id="exp-debut" class="form-control form-control-sm mb-2">
+                <label class="form-label small mb-1" for="exp-fin">Date de fin</label>
+                <input type="date" id="exp-fin" class="form-control form-control-sm">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-sm btn-success" id="btn-exporter"><i class="bi bi-download me-1"></i>Exporter</button>
+            </div>
         </div>
     </div>
 </div>
@@ -109,7 +140,7 @@
 'use strict';
 const SUIVI_BASE = '<?= site_url('suivi-nomination') ?>';
 let nominations = [];
-const filtres   = { date: '', equipe: '', ja: '', km: '' };
+const filtres   = { date: '', equipe: '', ja: '', saisie: '' };
 const sortState = { col: null, asc: true };
 
 const JOURS_SEMAINE = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -122,6 +153,21 @@ function formatDateAvecJour(dateStr, abrege = false) {
     return `${jour} ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
 }
 
+/* Couleur de texte (blanc/noir) selon la luminosité du fond — identique à EN23 */
+function textColorFor(hex) {
+    const c = hex.replace('#', '');
+    const r = parseInt(c.substring(0,2), 16);
+    const g = parseInt(c.substring(2,4), 16);
+    const b = parseInt(c.substring(4,6), 16);
+    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return lum > 0.55 ? '#111' : '#fff';
+}
+
+function macaronDivision(division, color) {
+    const bg = color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#1a3a6b';
+    return $('<span class="badge">').text(division ?? '').css({ background: bg, color: textColorFor(bg) });
+}
+
 function nominationsFiltrees() {
     const equipe = filtres.equipe.toLowerCase();
     const ja     = filtres.ja.toLowerCase();
@@ -131,27 +177,34 @@ function nominationsFiltrees() {
             && !String(n.NomDom ?? '').toLowerCase().includes(equipe)
             && !String(n.NomExt ?? '').toLowerCase().includes(equipe)) return false;
         if (ja && !String(n.NomJa ?? '').toLowerCase().includes(ja)) return false;
-        // « Sans kilométrage » : frais non saisis (DateSaisie NULL). 0 km = départ du domicile, valeur valide.
-        if (filtres.km === 'sans' && n.DateSaisie) return false;
+        if (filtres.saisie === 'oui' && !n.DateSaisie) return false;
+        if (filtres.saisie === 'non' && n.DateSaisie) return false;
         return true;
     });
 }
+
+/** rencontre.ArbitrageCRA : 1 = arbitrage fourni par la CRA, 0 = à la charge du club */
+const libArbitrage = n => n.ArbitrageCRA === null ? '' : (+n.ArbitrageCRA ? 'CRA' : 'Club');
 
 // Clé de tri par colonne — sur les données (pas sur le texte des cellules : la date
 // affichée « Samedi 19/09/2026 » ne se trierait pas chronologiquement).
 const CLES_TRI = {
     date:      n => (n.Date ?? '') + (n.Heure ?? ''),
+    division:  n => n.Division ?? '',
+    arbitrage: n => libArbitrage(n),
     domicile:  n => n.NomDom ?? '',
     exterieur: n => n.NomExt ?? '',
+    licence:   n => +n.Id_JA,
     ja:        n => n.NomJa ?? '',
+    ebp:       n => n.NumCompteEBP ?? '',
     peage:     n => n.DateSaisie ? +n.Peage : -1,
     km:        n => n.DateSaisie ? +n.Kilometre : -1,
     defisc:    n => n.DateSaisie ? +n.Defiscalisation : -1,
     saisie:    n => n.DateSaisie ?? '',
 };
 
-function renderListe() {
-    const $body = $('#tbody-liste').empty();
+/** Lignes du tableau : filtrées puis triées (une ligne par nomination). */
+function lignesAffichees() {
     const affichees = nominationsFiltrees();
     const cle = CLES_TRI[sortState.col];
     if (cle) {
@@ -161,10 +214,16 @@ function renderListe() {
             return sortState.asc ? cmp : -cmp;
         });
     }
+    return affichees;
+}
+
+function renderListe() {
+    const $body = $('#tbody-liste').empty();
+    const affichees = lignesAffichees();
     $('#lbl-count').text(`${affichees.length} / ${nominations.length}`);
 
     if (!affichees.length) {
-        $body.append('<tr><td colspan="9" class="text-center text-muted py-3">Aucune nomination.</td></tr>');
+        $body.append('<tr><td colspan="13" class="text-center text-muted py-3">Aucune nomination.</td></tr>');
         return;
     }
 
@@ -178,9 +237,13 @@ function renderListe() {
             .on('click', function () { envoyerRappel(n, $(this)); });
         $('<tr>').append(
             $('<td>').attr('data-field', 'date').text(formatDateAvecJour(n.Date, true)),
+            $('<td class="centre">').attr('data-field', 'division').append(macaronDivision(n.Division, n.DivisionColor)),
+            $('<td class="centre">').attr('data-field', 'arbitrage').text(libArbitrage(n)),
             $('<td>').attr('data-field', 'domicile').text(n.NomDom ?? ''),
             $('<td>').attr('data-field', 'exterieur').text(n.NomExt ?? '—'),
+            $('<td class="centre">').attr('data-field', 'licence').text(n.Id_JA),
             $('<td>').attr('data-field', 'ja').text(n.NomJa ?? ''),
+            $('<td>').attr('data-field', 'ebp').text(n.NumCompteEBP ?? ''),
             $('<td class="num">').attr('data-field', 'peage').toggleClass('non-saisi', !saisi)
                 .text(saisi ? Number(n.Peage ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) + ' €' : '—'),
             $('<td class="num">').attr('data-field', 'km').toggleClass('non-saisi', !saisi)
@@ -189,7 +252,7 @@ function renderListe() {
                 .text(saisi ? (+n.Defiscalisation ? 'Oui' : 'Non') : '—'),
             $('<td class="centre">').attr('data-field', 'saisie').toggleClass('non-saisi', !saisi)
                 .text(saisi ? n.DateSaisie.substring(0, 10).split('-').reverse().join('/') : '—'),
-            $('<td class="centre">').append($rappel)
+            $('<td class="centre">').append(saisi ? '' : $rappel) // frais déjà saisis : plus de rappel
         ).appendTo($body);
     });
 }
@@ -207,6 +270,68 @@ function envoyerRappel(n, $btn) {
     });
 }
 
+// ── Export CSV du tableau affiché ────────────────────────────────────────────
+// Une ligne par nomination, sans regroupement : un JA qui arbitre deux rencontres
+// le même jour apparaît sur deux lignes, mais son trajet n'est compté qu'une fois :
+// péage et km ne sont conservés que sur la 1re rencontre du jour (heure la plus
+// précoce parmi celles dont les frais sont saisis), les suivantes sont exportées à 0.
+function idsSecondaires() {
+    const vus = new Set(), sec = new Set();
+    nominations.filter(n => n.DateSaisie)
+        .sort((a, b) => ((a.Date ?? '') + (a.Heure ?? '')).localeCompare((b.Date ?? '') + (b.Heure ?? '')) || a.Id_Nomination - b.Id_Nomination)
+        .forEach(n => {
+            const cle = `${n.Id_JA}|${(n.Date ?? '').substring(0, 10)}`;
+            if (vus.has(cle)) sec.add(n.Id_Nomination); else vus.add(cle);
+        });
+    return sec;
+}
+const jjmmaaaa = d => d ? d.substring(0, 10).split('-').reverse().join('/') : '';
+const champCsv = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+
+// Lignes exportables : affichées (filtres) et avec frais saisis
+const lignesExportables = () => lignesAffichees().filter(n => n.DateSaisie);
+const dateRencontre = n => (n.Date ?? '').substring(0, 10);
+
+// Le bouton ouvre la popup de période : début = 1re rencontre exportable,
+// fin = plus grande date de saisie renseignée parmi les lignes exportables
+$('#btn-export').on('click', function () {
+    const lignes = lignesExportables();
+    if (!lignes.length) { toast('Aucune ligne avec date de saisie à exporter.', false); return; }
+    $('#exp-debut').val(lignes.map(dateRencontre).sort()[0]);
+    $('#exp-fin').val(lignes.map(n => n.DateSaisie.substring(0, 10)).sort().pop());
+    bootstrap.Modal.getOrCreateInstance('#modal-export').show();
+});
+
+$('#btn-exporter').on('click', function () {
+    const debut = $('#exp-debut').val(), fin = $('#exp-fin').val();
+    if (!debut || !fin) { toast('Renseignez la date de début et la date de fin.', false); return; }
+    if (debut > fin)    { toast('La date de début doit précéder la date de fin.', false); return; }
+    const lignes = lignesExportables().filter(n => dateRencontre(n) >= debut && dateRencontre(n) <= fin);
+    if (!lignes.length) { toast('Aucune ligne à exporter sur cette période.', false); return; }
+    bootstrap.Modal.getInstance('#modal-export').hide();
+
+    const secondaires = idsSecondaires();
+    const csv = [['Date', 'Division', 'Arbitrage', 'Domicile', 'Extérieur', 'N° licence', 'JA', 'Compte EBP', 'Péage', 'Km', 'Défiscalisation', 'Date saisie']]
+        .concat(lignes.map(n => [
+            jjmmaaaa(n.Date), n.Division, libArbitrage(n), n.NomDom, n.NomExt, n.Id_JA, n.NomJa, n.NumCompteEBP,
+            secondaires.has(n.Id_Nomination) ? '0' : String(n.Peage).replace('.', ','),
+            secondaires.has(n.Id_Nomination) ? 0 : n.Kilometre,
+            +n.Defiscalisation ? 'Oui' : 'Non',
+            jjmmaaaa(n.DateSaisie),
+        ]))
+        .map(l => l.map(champCsv).join(';'))
+        .join('\r\n');
+
+    // BOM UTF-8 : Excel affiche correctement les accents
+    const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }));
+    const a   = document.createElement('a');
+    a.href     = url;
+    a.download = `suivi_nominations_${new Date().toISOString().substring(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast(`${lignes.length} ligne(s) exportée(s).`);
+});
+
 function chargerListe() {
     $.get(`${SUIVI_BASE}/data`, function (res) {
         if (!res.ok) { toast(res.msg, false); return; }
@@ -221,12 +346,12 @@ function chargerListe() {
 }
 
 $('#sel-date').on('change', function () { filtres.date = $(this).val(); renderListe(); });
-$('#sel-km').on('change', function () { filtres.km = $(this).val(); renderListe(); });
+$('#sel-saisie').on('change', function () { filtres.saisie = $(this).val(); renderListe(); });
 $('#search-equipe').on('input', function () { filtres.equipe = $(this).val().trim(); renderListe(); });
 $('#search-ja').on('input', function () { filtres.ja = $(this).val().trim(); renderListe(); });
 $('#btn-reset-filtres').on('click', function () {
-    filtres.date = filtres.equipe = filtres.ja = filtres.km = '';
-    $('#sel-date, #sel-km, #search-equipe, #search-ja').val('');
+    filtres.date = filtres.equipe = filtres.ja = filtres.saisie = '';
+    $('#sel-date, #sel-saisie, #search-equipe, #search-ja').val('');
     renderListe();
 });
 

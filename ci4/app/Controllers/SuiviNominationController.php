@@ -9,7 +9,7 @@ use CodeIgniter\HTTP\ResponseInterface;
  *
  * Liste des nominations validées du périmètre du nominateur avec les frais saisis
  * par le JA (péage, kilomètres, défiscalisation — renseignés depuis EN21) et un
- * bouton de rappel par ligne : renvoie au JA le modèle « Convocation » de la table
+ * bouton de rappel par ligne (masqué une fois les frais saisis) : renvoie au JA le modèle « Convocation » de la table
  * messagerie (lien EN21 vers sa convocation / note de frais).
  *
  * Accès Nominateur ou Administrateur (filtre "auth").
@@ -49,15 +49,16 @@ class SuiviNominationController extends BaseController
 
             $pdo  = getPDO();
             $stmt = $pdo->prepare('
-                SELECT n.Id_Nomination, r.Date, r.Heure,
-                       ed.Nom AS NomDom, ee.Nom AS NomExt,
-                       CONCAT(ja.Prenom, \' \', ja.Nom) AS NomJa, ja.Email AS EmailJa,
+                SELECT n.Id_Nomination, ja.Id_JA, r.Date, r.Heure, r.ArbitrageCRA,
+                       ed.Division, dv.Color AS DivisionColor, ed.Nom AS NomDom, ee.Nom AS NomExt,
+                       CONCAT(ja.Prenom, \' \', ja.Nom) AS NomJa, ja.Email AS EmailJa, ja.NumCompteEBP,
                        n.Peage, n.Kilometre, n.Defiscalisation, n.DateSaisie
                 FROM nomination n
                 JOIN disponible d  ON d.Id_Disponible = n.Id_Disponible
                 JOIN ja            ON ja.Id_JA        = d.Id_JA
                 JOIN rencontre r   ON r.Id_Rencontre  = n.Id_Rencontre
                 JOIN equipe ed     ON ed.Id_Equipe    = r.Id_EquipeDom
+                JOIN division dv   ON dv.Division     = ed.Division
                 LEFT JOIN equipe ee ON ee.Id_Equipe   = r.Id_EquipeExt
                 WHERE n.Valide = 1
                   AND SUBSTRING(ed.Id_Club, 3, 2) IN (' . implode(',', array_fill(0, count($depts), '?')) . ')
@@ -93,13 +94,13 @@ class SuiviNominationController extends BaseController
                 JOIN equipe ed     ON ed.Id_Equipe    = r.Id_EquipeDom
                 LEFT JOIN equipe ee ON ee.Id_Equipe   = r.Id_EquipeExt
                 LEFT JOIN Club cl  ON cl.Id_Club      = ed.Id_Club
-                WHERE n.Id_Nomination = ? AND n.Valide = 1
+                WHERE n.Id_Nomination = ? AND n.Valide = 1 AND n.DateSaisie IS NULL
                   AND SUBSTRING(ed.Id_Club, 3, 2) IN (' . implode(',', array_fill(0, count($depts), '?')) . ')
             ');
             $stmt->execute([$idNom, ...$depts]);
             $nom = $stmt->fetch();
             if (!$nom) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Nomination introuvable.']);
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Nomination introuvable ou frais déjà saisis.']);
             }
             if (empty($nom['Email'])) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Ce JA n\'a pas d\'adresse email.']);

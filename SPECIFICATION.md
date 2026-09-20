@@ -687,16 +687,19 @@ Pas de Model, `getPDO()` direct comme le reste de cette famille d'écrans. Aucun
 Suivre, pour les nominations validées du périmètre du nominateur, les frais saisis par le JA dans EN21 et relancer les JA.
 
 ### Colonnes
-Date de la rencontre (jour abrégé) · Domicile · Extérieur · JA · Péage · Km · Défisc. (Oui/Non) · Date saisie · Rappel (bouton). Les trois colonnes de frais affichent « — » tant que `nomination.DateSaisie` est NULL (le JA n'a pas encore enregistré ses frais).
+Date de la rencontre (jour abrégé) · Division (macaron coloré comme EN23, `division.Color`) · Arbitrage (CRA ou Club, `rencontre.ArbitrageCRA`) · Domicile · Extérieur · N° licence (`Id_JA`) · JA · Compte EBP (`NumCompteEBP`) · Péage · Km · Défisc. (Oui/Non) · Date saisie · Rappel (bouton). Les trois colonnes de frais affichent « — » tant que `nomination.DateSaisie` est NULL (le JA n'a pas encore enregistré ses frais).
 
 ### Filtres (client)
-Date (combo des dates de rencontre existantes, ordre croissant), équipe (domicile ou extérieur, sous-chaîne), nom du JA (sous-chaîne), « Sans kilométrage » (frais non encore saisis : `DateSaisie` NULL ; 0 km = départ du domicile, valeur valide). Tri par clic sur les en-têtes (sur les données, la date est triée chronologiquement). Tri initial : date décroissante.
+Date (combo des dates de rencontre existantes, ordre croissant), équipe (domicile ou extérieur, sous-chaîne), nom du JA (sous-chaîne), Date saisie (Toutes / Renseignée / Non renseignée). Tri par clic sur les en-têtes (sur les données, la date est triée chronologiquement). Tri initial : date décroissante.
+
+### Export CSV
+Bouton « CSV » (côté client) : ouvre une popup avec date de début et date de fin (pré-remplies : début = 1re rencontre exportable, fin = plus grande `DateSaisie` renseignée ; modifiables ; la période filtre la date de rencontre ; début ≤ fin exigé), puis exporte les lignes affichées (filtres et tri courants) ayant une date de saisie (`DateSaisie` renseignée), une ligne par nomination sans cumul — un JA nommé sur deux rencontres le même jour donne deux lignes, mais son trajet n’est compté qu’une fois : péage et km sont conservés sur la 1re rencontre du jour (heure la plus précoce parmi celles ayant une date de saisie) et exportés à 0 sur les suivantes ; colonnes Date, Division, Arbitrage, Domicile, Extérieur, N° licence, JA, Compte EBP, Péage, Km, Défiscalisation, Date saisie ; `;`, BOM UTF-8.
 
 ### Actions AJAX
 | Route | Méthode | Description |
 |-------|---------|-------------|
 | `suivi-nomination/data` | GET | Nominations `Valide = 1` dont le club domicile est dans les départements autorisés |
-| `suivi-nomination/rappel` | POST | `id_nomination` → envoie au JA le modèle messagerie n°3 (Convocation, `resoudreModeleMessagerie()` : modèle personnalisé du nominateur si présent), marqueurs de `construireMarqueursMessage()` ; Cc/Reply-To selon le modèle ; passe par `getEmailDestinataire()` (mode Développement). Refus si nomination hors périmètre, non validée, ou JA sans email |
+| `suivi-nomination/rappel` | POST | `id_nomination` → envoie au JA le modèle messagerie n°3 (Convocation, `resoudreModeleMessagerie()` : modèle personnalisé du nominateur si présent), marqueurs de `construireMarqueursMessage()` ; Cc/Reply-To selon le modèle ; passe par `getEmailDestinataire()` (mode Développement). Refus si nomination hors périmètre, non validée, frais déjà saisis (`DateSaisie` renseignée), ou JA sans email |
 
 ---
 
