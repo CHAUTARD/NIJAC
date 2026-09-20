@@ -235,7 +235,11 @@
         z-index: 999;
         box-shadow: 0 4px 12px rgba(0,0,0,.3);
     }
-    #save-status { display: none; font-size: .8rem; color: #155724; margin-left: .5rem; }
+    #save-status {
+        display: none; position: fixed; bottom: 5.5rem; right: 1.5rem; left: 1.5rem;
+        max-width: 480px; margin-left: auto; z-index: 1000;
+        box-shadow: 0 4px 12px rgba(0,0,0,.3);
+    }
 
     /*  Adaptation smartphone (écran uniquement — l'impression garde le A4 ci-dessous)  */
     @media screen and (max-width: 820px) {
@@ -277,7 +281,7 @@
         }
 
         #action-bar,
-        #btn-save-frais,
+        #btn-save-frais, #save-status,
         .btn, .alert-info,
         .modal, .modal-backdrop,
         script, style { display: none !important; }
@@ -540,7 +544,10 @@
     <button id="btn-save-frais" class="btn btn-success btn-lg">
         <i class="bi bi-floppy me-1"></i>Enregistrer les frais
     </button>
-    <span id="save-status"><i class="bi bi-check-circle-fill me-1"></i>Enregistré !</span>
+    <div id="save-status" class="alert alert-success mb-0" role="status">
+        <i class="bi bi-check-circle-fill me-1"></i><strong>Vos informations ont bien été enregistrées.</strong><br>
+        Merci pour votre participation et pour votre disponibilité !
+    </div>
 </div>
 
 <?php endif; ?>
@@ -594,7 +601,7 @@ $('#btn-save-frais').on('click', function () {
     }, function (r) {
         $btn.prop('disabled', false);
         if (r.ok) {
-            $('#save-status').fadeIn().delay(2500).fadeOut();
+            $('#save-status').stop(true, true).fadeIn().delay(8000).fadeOut();
         } else {
             alert('Erreur : ' + (r.err || 'inconnue'));
         }
