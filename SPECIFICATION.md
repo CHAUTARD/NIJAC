@@ -473,13 +473,13 @@ Rapport agrégé, en lecture seule, des arbitrages et frais par JA pour une phas
 
 ### Interface
 - Filtres **Phase** (`1` / `2`) et **Saison** (liste des 7 dernières années, libellé `AAAA‑AAAA+1`), bouton **Afficher** ; défaut = phase en cours (ou phase 2 de la saison écoulée pendant la coupure estivale)
-- Tableau triable (clic sur en-tête) : JA (avec mini barre proportionnelle au nombre d'arbitrages), Grade, Club, Arbitrages, Km, Péages, Indemnité, Total frais — avec ligne de totaux
+- Graphes par département (rencontres, JA actifs, couverture, charge, barres par journée). Le tableau « Juge-Arbitre » (par JA) n'est plus affiché ; le détail par JA reste disponible via l'**Export CSV**
 - Boutons **Export CSV** et **Imprimer** (vue imprimable via CSS `@media print`)
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `donnees` | GET (`phase`, `annee`) | Retourne, par JA, le nombre d'arbitrages et les totaux km / péages / indemnité / frais sur la phase choisie |
+| `donnees` | GET (`phase`, `annee`) | Retourne, par JA, le nombre d'arbitrages et les totaux km / péages / indemnité / frais sur la phase choisie — **plus appelé par l'écran** depuis la suppression du tableau |
 | `export_csv` | GET (`phase`, `annee`) | Télécharge un CSV (BOM UTF-8, séparateur `;`) `stats_ja_saison{annee}_phase{phase}.csv` |
 
 ### Résolution (phase, saison) → bornes de dates
