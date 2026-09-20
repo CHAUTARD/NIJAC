@@ -204,6 +204,13 @@ $routes->post('nomination/demander-ja-club', 'NominationController::demanderJaCl
 $routes->get('stats-nomination', 'StatsNominationController::index', ['filter' => 'auth']);
 $routes->get('stats-nomination/data', 'StatsNominationController::data', ['filter' => 'auth']);
 
+// ── EN28 Suivi des nominations ───────────────────────────────────────────────
+// Menu nominateur (E003), avant EN17. Nominations validées du périmètre + frais saisis
+// par le JA (EN21) ; « rappel » renvoie le modèle messagerie n°3 (Convocation) au JA.
+$routes->get('suivi-nomination', 'SuiviNominationController::index', ['filter' => 'auth']);
+$routes->get('suivi-nomination/data', 'SuiviNominationController::data', ['filter' => 'auth']);
+$routes->post('suivi-nomination/rappel', 'SuiviNominationController::rappel', ['filter' => 'auth']);
+
 // ── EN18 Désidératas club ────────────────────────────────────────────────────
 // Page PUBLIQUE (sans authentification), tokenisée par ?club=<Id_Club> — lien
 // envoyé par email depuis EN12. Pas de filtre "auth"/"adminauth" ici.

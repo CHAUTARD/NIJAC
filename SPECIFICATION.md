@@ -26,6 +26,7 @@
 - [EN23 – Date des rencontres](#en23--date-des-rencontres)
 - [EN24 – Remplacement équipe](#en24--remplacement-équipe)
 - [EN27 – Clubs / Associations](#en27--clubs--associations)
+- [EN28 – Suivi des nominations](#en28--suivi-des-nominations)
 - [ED51 – Défiscalisation JA](#ed51--défiscalisation-ja)
 - [ED52 – Barème kilométrique](#ed52--barème-kilométrique)
 - [ED53 – Attestation sur l'honneur](#ed53--attestation-sur-lhonneur)
@@ -674,6 +675,28 @@ Une équipe forfait ou désistée pour le reste de la saison est remplacée par 
 
 ### Contrôleur
 Pas de Model, `getPDO()` direct comme le reste de cette famille d'écrans. Aucune restriction de département (comme `RencontreAdminController::data()`, dont EN23 hérite déjà sans filtrage dept).
+
+---
+
+## EN28 – Suivi des nominations
+
+**Fichier :** `SuiviNominationController` (CI4) — vue `suivi_nomination_index.php`
+**Accès :** Nominateur ou Administrateur (filtre "auth") — bouton du menu nominateur (E003), avant EN17
+
+### Objectif
+Suivre, pour les nominations validées du périmètre du nominateur, les frais saisis par le JA dans EN21 et relancer les JA.
+
+### Colonnes
+Date de la rencontre (jour abrégé) · Domicile · Extérieur · JA · Péage · Km · Défisc. (Oui/Non) · Date saisie · Rappel (bouton). Les trois colonnes de frais affichent « — » tant que `nomination.DateSaisie` est NULL (le JA n'a pas encore enregistré ses frais).
+
+### Filtres (client)
+Date (combo des dates de rencontre existantes, ordre croissant), équipe (domicile ou extérieur, sous-chaîne), nom du JA (sous-chaîne), « Sans kilométrage » (frais non encore saisis : `DateSaisie` NULL ; 0 km = départ du domicile, valeur valide). Tri par clic sur les en-têtes (sur les données, la date est triée chronologiquement). Tri initial : date décroissante.
+
+### Actions AJAX
+| Route | Méthode | Description |
+|-------|---------|-------------|
+| `suivi-nomination/data` | GET | Nominations `Valide = 1` dont le club domicile est dans les départements autorisés |
+| `suivi-nomination/rappel` | POST | `id_nomination` → envoie au JA le modèle messagerie n°3 (Convocation, `resoudreModeleMessagerie()` : modèle personnalisé du nominateur si présent), marqueurs de `construireMarqueursMessage()` ; Cc/Reply-To selon le modèle ; passe par `getEmailDestinataire()` (mode Développement). Refus si nomination hors périmètre, non validée, ou JA sans email |
 
 ---
 

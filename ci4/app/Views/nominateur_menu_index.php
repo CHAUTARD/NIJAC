@@ -451,6 +451,15 @@
     </div>
 
     <div class="menu-btn-wrap">
+        <a href="<?= site_url('suivi-nomination') ?>" class="menu-btn btn-nomination">
+            <span class="btn-code">EN28</span>
+            <div class="btn-icon"><img src="<?= base_url('img/Gestion_Nomination.png') ?>" alt="Suivi des nominations"></div>
+            <span>Suivi des nominations</span>
+            <span class="btn-desc">Frais saisis par les JA et rappel par message</span>
+        </a>
+    </div>
+
+    <div class="menu-btn-wrap">
         <a href="<?= site_url('stats-ja') ?>" class="menu-btn btn-ja">
             <span class="btn-code">EN17</span>
             <div class="btn-icon"><img src="<?= base_url('img/Stat_JA.png') ?>" alt="Statistiques JA"></div>

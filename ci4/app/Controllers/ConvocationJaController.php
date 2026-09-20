@@ -41,6 +41,13 @@ class ConvocationJaController extends BaseController
      */
     public function index($nomSeg = null, $cnvSeg = null)
     {
+        // Page publique (JA via lien email) mais aussi ouverte depuis la session
+        // d'un nominateur/admin : le bouton Retour n'est utile qu'à ces derniers.
+        demarrerSessionNijac();
+        $estConnecte = !empty($_SESSION['utilisateur']['role'] ?? null);
+        session_write_close();
+        unset($_SESSION); // évite que CI4 redémarre son service Session (cf. DisponibiliteJaController)
+
         $pdo          = getPDO();
         $idNomination = (int) ($nomSeg ?? $this->request->getGet('nomination') ?? 0);
         $tokenCnv     = trim((string) ($cnvSeg ?? $this->request->getGet('cnv') ?? ''));
@@ -86,7 +93,6 @@ class ConvocationJaController extends BaseController
         $rencontre     = null;
         $correspondant = null;
         $frais         = null;
-        $kmCalc        = null;
 
         if ($idJa && $idRencontre) {
             try {
@@ -154,18 +160,6 @@ class ConvocationJaController extends BaseController
                     $frais = $stmtF->fetch();
                 } catch (\PDOException $ignored) {
                 }
-
-                if ($ja && $rencontre
-                    && $ja['JaLat'] && $ja['JaLon']
-                    && $rencontre['VenueLat'] && $rencontre['VenueLon']) {
-                    $lat1 = deg2rad($ja['JaLat']);
-                    $lon1 = deg2rad($ja['JaLon']);
-                    $lat2 = deg2rad($rencontre['VenueLat']);
-                    $lon2 = deg2rad($rencontre['VenueLon']);
-                    $kmCalc = (int) round(6371 * acos(max(-1, min(1,
-                        cos($lat1) * cos($lat2) * cos($lon2 - $lon1) + sin($lat1) * sin($lat2)
-                    ))));
-                }
             } catch (\PDOException $e) {
                 $erreur = 'Erreur BDD : ' . $e->getMessage();
             }
@@ -180,7 +174,7 @@ class ConvocationJaController extends BaseController
         $indemniteForfait = (float) getConfig('indemnite_forfaitaire', '25.00');
         $tauxKm           = (float) getConfig('frais_kilometrique', '0.30');
         $peages           = $frais['Peage'] ?? 0;
-        $km               = $frais['Kilometre'] ?? $kmCalc ?? 0;
+        $km               = $frais['Kilometre'] ?? 0; // 0 par défaut (départ du domicile)
         $total            = $indemniteForfait + $peages + ($km * $tauxKm);
 
         // Tarif défiscalisation en €/km pour ce JA (barème fiscal selon sa
@@ -218,6 +212,7 @@ class ConvocationJaController extends BaseController
             'correspondant'    => $correspondant,
             'frais'            => $frais,
             'erreur'           => $erreur,
+            'estConnecte'      => $estConnecte,
             'indemniteForfait' => $indemniteForfait,
             'tauxKm'           => $tauxKm,
             'peages'           => $peages,

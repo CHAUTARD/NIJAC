@@ -318,9 +318,11 @@
         <i class="bi bi-printer me-1"></i>Imprimer / PDF
     </button>
     <?php endif; ?>
+    <?php if ($estConnecte): ?>
     <a href="javascript:history.back()" class="btn btn-sm btn-outline-light ms-auto">
         <i class="bi bi-arrow-left me-1"></i>Retour
     </a>
+    <?php endif; ?>
 </div>
 
 <?php if ($erreur): ?>
