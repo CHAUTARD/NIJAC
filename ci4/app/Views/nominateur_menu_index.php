@@ -422,6 +422,17 @@
     </div>
 
     <div class="menu-btn-wrap">
+        <a href="<?= site_url('suivi-nomination') ?>" class="menu-btn btn-nomination">
+            <span class="btn-code">EN28</span>
+            <div class="btn-icon"><img src="<?= base_url('img/Gestion_Nomination.png') ?>" alt="Suivi des nominations"></div>
+            <span>Suivi des nominations</span>
+            <span class="btn-desc">Frais saisis par les JA et rappel par message</span>
+        </a>
+    </div>
+
+    <!-- Ligne 2 -->
+
+    <div class="menu-btn-wrap">
         <a href="<?= site_url('centrenvoye') ?>" class="menu-btn btn-envoi">
             <span class="btn-code">EN15</span>
             <div class="btn-icon"><img src="<?= base_url('img/Centrenvoye.png') ?>" alt="Centre d'envoi"></div>
@@ -429,8 +440,6 @@
             <span class="btn-desc">Envoyer les messages aux JA et correspondants</span>
         </a>
     </div>
-
-    <!-- Ligne 2 -->
 
     <div class="menu-btn-wrap">
         <a href="<?= site_url('rencontres-date') ?>" class="menu-btn btn-r34">
@@ -447,15 +456,6 @@
             <div class="btn-icon"><img src="<?= base_url('img/Changement_Equipe.png') ?>" alt="Remplacement équipe"></div>
             <span>Remplacement équipe</span>
             <span class="btn-desc">Remplacer une équipe forfait sur ses rencontres restantes</span>
-        </a>
-    </div>
-
-    <div class="menu-btn-wrap">
-        <a href="<?= site_url('suivi-nomination') ?>" class="menu-btn btn-nomination">
-            <span class="btn-code">EN28</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Gestion_Nomination.png') ?>" alt="Suivi des nominations"></div>
-            <span>Suivi des nominations</span>
-            <span class="btn-desc">Frais saisis par les JA et rappel par message</span>
         </a>
     </div>
 

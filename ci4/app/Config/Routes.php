@@ -205,7 +205,7 @@ $routes->get('stats-nomination', 'StatsNominationController::index', ['filter' =
 $routes->get('stats-nomination/data', 'StatsNominationController::data', ['filter' => 'auth']);
 
 // ── EN28 Suivi des nominations ───────────────────────────────────────────────
-// Menu nominateur (E003), avant EN17. Nominations validées du périmètre + frais saisis
+// Menu nominateur (E003), après EN14. Nominations validées du périmètre + frais saisis
 // par le JA (EN21) ; « rappel » renvoie le modèle messagerie n°3 (Convocation) au JA.
 $routes->get('suivi-nomination', 'SuiviNominationController::index', ['filter' => 'auth']);
 $routes->get('suivi-nomination/data', 'SuiviNominationController::data', ['filter' => 'auth']);

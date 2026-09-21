@@ -51,8 +51,8 @@
 <div id="split-container">
     <div id="panel-liste">
         <div id="menu-strip">
-            <button type="button" class="btn btn-sm btn-light" id="btn-export" title="Exporter le tableau affiché en CSV">
-                <i class="bi bi-download"></i> CSV
+            <button type="button" class="btn btn-sm btn-light" id="btn-export" title="Exporter en CSV">
+                <i class="bi bi-download"></i> Exporter en CSV
             </button>
             <span style="flex:1"></span>
             <span class="count-badge" id="lbl-count">0 / 0</span>

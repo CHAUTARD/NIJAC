@@ -111,7 +111,7 @@
                         <th data-col="7">Domicile<span class="sort-icon"></span></th>
                         <th data-col="8">Extérieur<span class="sort-icon"></span></th>
                         <th style="width:75px" data-col="9">Id_Salle<span class="sort-icon"></span></th>
-                        <th style="width:110px" data-col="10">Arbitrage obl.<span class="sort-icon"></span></th>
+                        <th style="width:110px" data-col="10">Arbitrage<span class="sort-icon"></span></th>
                         <th data-col="11">Commentaire<span class="sort-icon"></span></th>
                     </tr>
                 </thead>
@@ -193,10 +193,10 @@
             </div>
 
             <div class="mb-2">
-                <label class="form-label" for="sel-arbitrage-obligatoire">Arbitrage obligatoire</label>
+                <label class="form-label" for="sel-arbitrage-obligatoire">Arbitrage</label>
                 <select id="sel-arbitrage-obligatoire" class="form-select form-select-sm">
-                    <option value="1">Oui</option>
-                    <option value="0">Non</option>
+                    <option value="1">CRA</option>
+                    <option value="0">Club</option>
                 </select>
             </div>
 
@@ -427,7 +427,7 @@ function renderListe() {
             $tdDom,
             $tdExt,
             $tdIdSalle,
-            $('<td>').text(r.ArbitrageObligatoire == 1 ? 'Oui' : 'Non'),
+            $('<td>').text(r.ArbitrageCRA == 1 ? 'CRA' : 'Club'),
             $('<td>').text(r.Commentaire ?? '')
         ).on('click', function () { selectionnerLigne($(this)); }).appendTo($body);
     });

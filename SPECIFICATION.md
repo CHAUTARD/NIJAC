@@ -681,7 +681,7 @@ Pas de Model, `getPDO()` direct comme le reste de cette famille d'écrans. Aucun
 ## EN28 – Suivi des nominations
 
 **Fichier :** `SuiviNominationController` (CI4) — vue `suivi_nomination_index.php`
-**Accès :** Nominateur ou Administrateur (filtre "auth") — bouton du menu nominateur (E003), avant EN17
+**Accès :** Nominateur ou Administrateur (filtre "auth") — bouton du menu nominateur (E003), après EN14
 
 ### Objectif
 Suivre, pour les nominations validées du périmètre du nominateur, les frais saisis par le JA dans EN21 et relancer les JA.
