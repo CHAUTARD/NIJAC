@@ -24,6 +24,26 @@ class ArbitreClubController extends BaseController
 {
     private const DELAI_JOURS = 5;
 
+    /**
+     * Condition SQL (table `ja` non aliasée) excluant les JA déjà nommés ce jour-là sur 2 autres
+     * rencontres, ou sur une rencontre d'un autre club recevant. Paramètres : voir paramsJaLibre().
+     */
+    private const SQL_JA_LIBRE = "AND NOT EXISTS (
+        SELECT 1 FROM nomination nj
+        JOIN disponible dj ON dj.Id_Disponible = nj.Id_Disponible
+        JOIN rencontre  rj ON rj.Id_Rencontre  = nj.Id_Rencontre
+        JOIN equipe     ej ON ej.Id_Equipe     = rj.Id_EquipeDom
+        WHERE dj.Id_JA = ja.Id_JA AND nj.Id_Rencontre <> ? AND rj.Date = ?
+        GROUP BY dj.Id_JA
+        HAVING COUNT(*) >= 2 OR SUM(ej.Id_Club <> ?) > 0
+    )";
+
+    /** Paramètres de SQL_JA_LIBRE pour la rencontre $ctx (contexteRencontre()). */
+    private function paramsJaLibre(array $ctx): array
+    {
+        return [$ctx['Id_Rencontre'], $ctx['Date'], $ctx['Id_Club']];
+    }
+
     private \Obfuscator $obf;
 
     public function __construct()
@@ -90,18 +110,19 @@ class ArbitreClubController extends BaseController
 
     /**
      * JA proposables : uniquement les JA actifs rattachés au club recevant,
-     * triés Nom/Prénom.
+     * triés Nom/Prénom, hors JA que la règle « 2 nominations max par jour, sur le même
+     * club recevant » (cf. EN14) interdit de nommer sur cette rencontre.
      * @return array<int,array{Id_JA:int,Nom:string,Prenom:string,EstClub:int}>
      */
-    private function listeJa(\PDO $pdo, string $idClub): array
+    private function listeJa(\PDO $pdo, array $ctx): array
     {
         $stmt = $pdo->prepare(
             "SELECT Id_JA, Nom, Prenom, 1 AS EstClub
              FROM ja
-             WHERE COALESCE(Actif, 1) = 1 AND Id_Club = ?
+             WHERE COALESCE(Actif, 1) = 1 AND Id_Club = ? " . self::SQL_JA_LIBRE . "
              ORDER BY Nom, Prenom"
         );
-        $stmt->execute([$idClub]);
+        $stmt->execute([$ctx['Id_Club'], ...$this->paramsJaLibre($ctx)]);
 
         return $stmt->fetchAll();
     }
@@ -131,16 +152,21 @@ class ArbitreClubController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Nom manquant.']);
             }
 
-            $stmt = getPDO()->prepare(
+            $pdo = getPDO();
+            $id  = $this->idRencontre((string) $this->request->getGet('renc'));
+            $ctx = $id ? $this->contexteRencontre($pdo, $id) : null;
+
+            $stmt = $pdo->prepare(
                 "SELECT Id_JA, Nom, Prenom
                  FROM ja
                  WHERE COALESCE(Actif, 1) = 1
                    AND (CONCAT(Nom, ' ', Prenom) LIKE ? OR CONCAT(Prenom, ' ', Nom) LIKE ?)
+                   " . ($ctx ? self::SQL_JA_LIBRE : '') . "
                  ORDER BY Nom, Prenom
                  LIMIT 10"
             );
             $like = '%' . $nom . '%';
-            $stmt->execute([$like, $like]);
+            $stmt->execute([$like, $like, ...($ctx ? $this->paramsJaLibre($ctx) : [])]);
 
             return $this->response->setJSON(['ok' => true, 'jas' => $stmt->fetchAll()]);
         });
@@ -169,7 +195,7 @@ class ArbitreClubController extends BaseController
             $dispo->execute([$id]);
             $data['dejaFait']  = $dispo->fetch() ?: null;
             $data['ctx']       = $ctx;
-            $data['jas']       = $this->listeJa($pdo, $ctx['Id_Club']);
+            $data['jas']       = $this->listeJa($pdo, $ctx);
             $data['enRetard']  = $this->enRetard($ctx['Date']);
         }
 
@@ -198,6 +224,25 @@ class ArbitreClubController extends BaseController
             // club » (recherché par nom via rechercherJa(), voir #sel-ja côté vue).
             if (!$idJa || !$this->estJaActif($pdo, $idJa)) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Juge-arbitre invalide ou inactif.']);
+            }
+
+            // Même règle qu'EN14 : 2 nominations max par JA et par date, et uniquement sur le
+            // même club recevant (un JA déjà nommé ce jour-là ailleurs ne peut pas être désigné).
+            $jour = $pdo->prepare('
+                SELECT COUNT(*) AS nb, COALESCE(SUM(ed2.Id_Club <> ?), 0) AS autres_clubs
+                FROM nomination n
+                JOIN disponible d  ON d.Id_Disponible = n.Id_Disponible
+                JOIN rencontre  r2 ON r2.Id_Rencontre = n.Id_Rencontre
+                JOIN equipe    ed2 ON ed2.Id_Equipe   = r2.Id_EquipeDom
+                WHERE d.Id_JA = ? AND n.Id_Rencontre != ? AND r2.Date = ?
+            ');
+            $jour->execute([$ctx['Id_Club'], $idJa, $id, $ctx['Date']]);
+            $deja = $jour->fetch();
+            if ((int) $deja['nb'] >= 2) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Ce juge-arbitre a déjà 2 nominations ce jour-là. Merci d\'en choisir un autre.']);
+            }
+            if ((int) $deja['autres_clubs'] > 0) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Ce juge-arbitre est déjà nommé ce jour-là sur une rencontre d\'un autre club. Merci d\'en choisir un autre.']);
             }
 
             // Nomination existante : refus si la convocation est déjà partie.
@@ -231,8 +276,8 @@ class ArbitreClubController extends BaseController
                 }
 
                 $pdo->prepare(
-                    'INSERT INTO nomination (Id_Rencontre, Id_Disponible, Peage, Kilometre, Defiscalisation, DateNomination, Valide, EmailEnvoye)
-                     VALUES (?, ?, 0, 0, 0, CURDATE(), 1, 0)'
+                    'INSERT INTO nomination (Id_Rencontre, Id_Disponible, Peage, Kilometre, Defiscalisation, DateSaisie, Valide, EmailEnvoye)
+                     VALUES (?, ?, 0, 0, 0, CURDATE(), 0, 0)'
                 )->execute([$id, $idDispo]);
 
                 $pdo->commit();

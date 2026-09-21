@@ -99,13 +99,61 @@
                         <th class="num" style="width:90px" data-field="km">Km<span class="sort-icon"></span></th>
                         <th class="centre" style="width:110px" data-field="defisc">Défisc.<span class="sort-icon"></span></th>
                         <th class="centre" style="width:110px" data-field="saisie">Date saisie<span class="sort-icon"></span></th>
+                        <th class="centre" style="width:80px">Modifier</th>
                         <th class="centre" style="width:80px">Rappel</th>
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
-                    <tr><td colspan="13" class="text-center text-muted py-3">Chargement…</td></tr>
+                    <tr><td colspan="14" class="text-center text-muted py-3">Chargement…</td></tr>
                 </tbody>
             </table>
+        </div>
+    </div>
+</div>
+
+<!-- Popup modification d'une nomination -->
+<div class="modal fade" id="modal-modif" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="bi bi-pencil me-2"></i>Modifier la nomination</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modif-rencontre" class="small text-muted mb-3"></div>
+                <div class="row g-2">
+                    <div class="col-5">
+                        <label class="form-label small mb-1" for="modif-arbitrage">Arbitrage</label>
+                        <select id="modif-arbitrage" class="form-select form-select-sm">
+                            <option value="1">CRA</option>
+                            <option value="0">Club</option>
+                        </select>
+                    </div>
+                    <div class="col-7">
+                        <label class="form-label small mb-1" for="modif-ja">Juge-arbitre</label>
+                        <select id="modif-ja" class="form-select form-select-sm"></select>
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label small mb-1" for="modif-peage">Péage (€)</label>
+                        <input type="number" id="modif-peage" class="form-control form-control-sm" min="0" step="0.01">
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label small mb-1" for="modif-km">Kilomètres</label>
+                        <input type="number" id="modif-km" class="form-control form-control-sm" min="0" step="1">
+                    </div>
+                    <div class="col-4 d-flex align-items-end">
+                        <div class="form-check mb-1">
+                            <input type="checkbox" id="modif-defisc" class="form-check-input">
+                            <label class="form-check-label small" for="modif-defisc">Défiscalisation</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="small text-muted mt-3"><i class="bi bi-info-circle me-1"></i>La date de saisie sera mise à la date du jour.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-sm btn-success" id="btn-modif-enregistrer"><i class="bi bi-floppy me-1"></i>Enregistrer</button>
+            </div>
         </div>
     </div>
 </div>
@@ -223,13 +271,16 @@ function renderListe() {
     $('#lbl-count').text(`${affichees.length} / ${nominations.length}`);
 
     if (!affichees.length) {
-        $body.append('<tr><td colspan="13" class="text-center text-muted py-3">Aucune nomination.</td></tr>');
+        $body.append('<tr><td colspan="14" class="text-center text-muted py-3">Aucune nomination.</td></tr>');
         return;
     }
 
     affichees.forEach(n => {
         // DateSaisie NULL = le JA n'a encore rien saisi dans EN21 : pas de valeurs à afficher
         const saisi = !!n.DateSaisie;
+        const $modifier = $('<button type="button" class="btn btn-sm btn-outline-secondary" title="Modifier cette nomination">')
+            .html('<i class="bi bi-pencil"></i>')
+            .on('click', function () { ouvrirModification(n); });
         const $rappel = $('<button type="button" class="btn btn-sm btn-outline-primary btn-rappel">')
             .attr('title', n.EmailJa ? 'Envoyer un message de rappel au JA' : 'JA sans adresse email')
             .prop('disabled', !n.EmailJa)
@@ -252,8 +303,9 @@ function renderListe() {
                 .text(saisi ? (+n.Defiscalisation ? 'Oui' : 'Non') : '—'),
             $('<td class="centre">').attr('data-field', 'saisie').toggleClass('non-saisi', !saisi)
                 .text(saisi ? n.DateSaisie.substring(0, 10).split('-').reverse().join('/') : '—'),
+            $('<td class="centre">').append($modifier),
             $('<td class="centre">').append(saisi ? '' : $rappel) // frais déjà saisis : plus de rappel
-        ).appendTo($body);
+        ).on('dblclick', function () { ouvrirModification(n); }).appendTo($body);
     });
 }
 
@@ -269,6 +321,63 @@ function envoyerRappel(n, $btn) {
         });
     });
 }
+
+// ── Modification d'une nomination (popup) ────────────────────────────────────
+let jaListe = null;      // JA actifs du périmètre, chargés à la première ouverture
+let modifNom = null;     // nomination en cours de modification
+
+function remplirListeJa(n) {
+    const $sel = $('#modif-ja').empty();
+    let liste = jaListe;
+    // le JA actuel reste sélectionnable même s'il n'est pas dans la liste (inactif, autre département)
+    if (!liste.some(j => +j.Id_JA === +n.Id_JA)) {
+        const [prenom, ...nom] = String(n.NomJa ?? '').split(' ');
+        liste = [{ Id_JA: n.Id_JA, Nom: nom.join(' '), Prenom: prenom }, ...liste];
+    }
+    liste.forEach(j => $sel.append($('<option>').val(j.Id_JA).text(`${j.Nom} ${j.Prenom} (${j.Id_JA})`)));
+    $sel.val(n.Id_JA);
+}
+
+function ouvrirModification(n) {
+    modifNom = n;
+    const ouvrir = () => {
+        remplirListeJa(n);
+        $('#modif-rencontre').text(`${formatDateAvecJour(n.Date, true)} — ${n.NomDom} / ${n.NomExt ?? '?'}`);
+        $('#modif-arbitrage').val(+n.ArbitrageCRA ? '1' : '0');
+        $('#modif-peage').val(n.Peage ?? 0);
+        $('#modif-km').val(n.Kilometre ?? 0);
+        $('#modif-defisc').prop('checked', !!+n.Defiscalisation);
+        bootstrap.Modal.getOrCreateInstance('#modal-modif').show();
+    };
+    if (jaListe) { ouvrir(); return; }
+    $.get(`${SUIVI_BASE}/ja-liste`, function (res) {
+        if (!res.ok) { toast(res.msg, false); return; }
+        jaListe = res.ja;
+        ouvrir();
+    }, 'json').fail(() => toast('Erreur réseau.', false));
+}
+
+$('#btn-modif-enregistrer').on('click', function () {
+    if (!modifNom) return;
+    const $btn = $(this).prop('disabled', true);
+    $.post(`${SUIVI_BASE}/modifier`, {
+        id_nomination: modifNom.Id_Nomination,
+        id_ja:         $('#modif-ja').val(),
+        arbitrage:     $('#modif-arbitrage').val(),
+        peage:         $('#modif-peage').val(),
+        km:            $('#modif-km').val(),
+        defisc:        $('#modif-defisc').is(':checked') ? 1 : 0,
+    }, function (r) {
+        $btn.prop('disabled', false);
+        toast(r.msg, !!r.ok);
+        if (!r.ok) return;
+        bootstrap.Modal.getInstance('#modal-modif').hide();
+        chargerListe();
+    }, 'json').fail(function () {
+        $btn.prop('disabled', false);
+        toast('Erreur réseau.', false);
+    });
+});
 
 // ── Export CSV du tableau affiché ────────────────────────────────────────────
 // Une ligne par nomination, sans regroupement : un JA qui arbitre deux rencontres

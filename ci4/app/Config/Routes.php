@@ -209,6 +209,8 @@ $routes->get('stats-nomination/data', 'StatsNominationController::data', ['filte
 // par le JA (EN21) ; « rappel » renvoie le modèle messagerie n°3 (Convocation) au JA.
 $routes->get('suivi-nomination', 'SuiviNominationController::index', ['filter' => 'auth']);
 $routes->get('suivi-nomination/data', 'SuiviNominationController::data', ['filter' => 'auth']);
+$routes->get('suivi-nomination/ja-liste', 'SuiviNominationController::jaListe', ['filter' => 'auth']);
+$routes->post('suivi-nomination/modifier', 'SuiviNominationController::modifier', ['filter' => 'auth']);
 $routes->post('suivi-nomination/rappel', 'SuiviNominationController::rappel', ['filter' => 'auth']);
 
 // ── EN18 Désidératas club ────────────────────────────────────────────────────

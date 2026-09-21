@@ -364,6 +364,7 @@ Affecter les JA disponibles aux rencontres de la saison en appliquant les règle
 ### Interface
 - Sélecteur de journée
 - Liste des rencontres de la journée avec statut de nomination
+- Bouton **Tri** : ordre de la liste des rencontres, basculable entre **club recevant** (défaut : ordre alphabétique du nom du club recevant, toutes ses rencontres à la suite sous un en-tête de groupe « nom du club — n rencontres », puis division au sein du club ; pas d'en-têtes avec « Non attribuées d'abord ») et **division** (ordre historique : `division.Ord`, poule). Tri fait côté client sur `NomClubDom` / `IdClubDom` / `DivisionOrd` renvoyés par `rencontres_journee` ; choix mémorisé dans le navigateur (`localStorage`) ; le bouton « Non attribuées d'abord » se superpose à cet ordre (tri stable)
 - Pour chaque rencontre : liste des JA candidats triés par priorité
 - Boutons : Affecter, Retirer, Valider, Envoyer convocations
 
@@ -388,7 +389,7 @@ Deux fonctions internes portent cette logique dans `nomination.php` :
 ### Règles métier de nomination (état CI4 — `NominationController` + `nomination_index.php`)
 1. **Exclusion club** : un JA est exclu si son club est le **club recevant** de la rencontre — **sauf en R3M/R4M**, où il peut arbitrer une rencontre de son propre club (badge « Son club »). Aucun contrôle sur le club visiteur.
 2. **Aucune limite par club / par phase** : le nombre d'arbitrages d'un JA pour un même club n'est pas plafonné.
-3. **Max 2 nominations par JA et par date** : refus au-delà de 2 (`affecterJa`, revérifié serveur) ; la 2ᵉ est décidée manuellement par le nominateur.
+3. **Max 2 nominations par JA et par date, sur le même club recevant** : refus au-delà de 2 (`affecterJa`, revérifié serveur) et refus d'une nomination si le JA est déjà nommé ce jour-là sur une rencontre d'un **autre** club recevant (`equipe.Id_Club` de l'équipe domicile) ; le JA n'est alors plus proposé dans la liste des candidats. La 2ᵉ nomination (même club) est décidée manuellement par le nominateur. Même règle appliquée au changement de JA depuis EN28.
 4. **Unicité par rencontre** : une rencontre ne peut avoir qu'un seul JA nominé (contrainte `uq_nomination_rencontre`)
 5. **Priorité disponibilité déclarée** : les rencontres choisies par le JA dans ses disponibilités sont prioritaires
 6. **Proximité géographique** : en cas d'égalité, la rencontre la plus proche du domicile du JA est privilégiée
@@ -699,6 +700,8 @@ Bouton « CSV » (côté client) : ouvre une popup avec date de début et date d
 | Route | Méthode | Description |
 |-------|---------|-------------|
 | `suivi-nomination/data` | GET | Nominations `Valide = 1` dont le club domicile est dans les départements autorisés |
+| `suivi-nomination/ja-liste` | GET | JA actifs (`Actif = 1`) des départements autorisés (`Id_JA`, `Nom`, `Prenom`), pour la liste déroulante de la popup de modification |
+| `suivi-nomination/modifier` | POST | `id_nomination`, `id_ja`, `arbitrage` (1 = CRA, 0 = Club), `peage`, `km`, `defisc` → en transaction : met à jour `rencontre.ArbitrageCRA` et `nomination` (`Peage`, `Kilometre`, `Defiscalisation`, `DateSaisie = CURDATE()`). Si le JA change : JA actif exigé, 2 nominations max par JA et par date, `disponible` (JA, rencontre) réutilisée (rouverte en `P` si `N`) ou créée en `P` avec la note « Juge-arbitre modifié depuis EN28 » ; `Valide`, `EmailEnvoye`, `DateNomination` inchangés. Refus hors périmètre du nominateur |
 | `suivi-nomination/rappel` | POST | `id_nomination` → envoie au JA le modèle messagerie n°3 (Convocation, `resoudreModeleMessagerie()` : modèle personnalisé du nominateur si présent), marqueurs de `construireMarqueursMessage()` ; Cc/Reply-To selon le modèle ; passe par `getEmailDestinataire()` (mode Développement). Refus si nomination hors périmètre, non validée, frais déjà saisis (`DateSaisie` renseignée), ou JA sans email |
 
 ---

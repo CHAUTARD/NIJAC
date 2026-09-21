@@ -153,13 +153,12 @@
                         <option value="Dimanche">Dimanche</option>
                     </select>
                 </div>
-                <div class="col">
+                <div class="col" id="col-souhait-ja">
                     <label class="form-label" for="sel-souhait-ja">Souhait JA</label>
                     <select id="sel-souhait-ja" class="form-select form-select-sm">
                         <option value="CRA">CRA</option>
                         <option value="Club">Club</option>
                     </select>
-                    <div class="form-text" id="txt-souhait-ja-aide">« Club » réservé aux divisions R3M et R4M.</div>
                 </div>
             </div>
 
@@ -287,6 +286,7 @@ function majSouhaitJaEtat() {
     const $sel = $('#sel-souhait-ja');
     if (!autorise) $sel.val('CRA');
     $sel.prop('disabled', !autorise);
+    $('#col-souhait-ja').toggle(autorise); // champ visible uniquement en R3M / R4M
 }
 
 function majEditPanelDivision() {
@@ -341,7 +341,7 @@ function renderListe() {
             $('<td>').text(e.Departement ?? ''),
             $('<td>').text(e.ReEngagement ?? ''),
             $('<td>').text(e.JourSouhaite ?? ''),
-            $('<td>').text(e.SouhaitJA ?? '')
+            $('<td>').text(DIVISIONS_ARBITRAGE_CLUB.includes(e.Division) ? (e.SouhaitJA ?? '') : '')
         ).on('click', function () { selectionnerLigne($(this)); }).appendTo($body);
     });
 

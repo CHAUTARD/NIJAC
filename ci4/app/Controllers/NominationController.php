@@ -231,8 +231,10 @@ class NominationController extends BaseController
                     dv.Division AS DivisionCode,
                     dv.Nom      AS DivisionNom,
                     dv.Color    AS DivisionColor,
+                    dv.Ord      AS DivisionOrd,
                     ed.Nom       AS NomDom,
                     ed.Id_Club   AS IdClubDom,
+                    cl.Nom       AS NomClubDom,
                     CASE WHEN ed.ArbitrageCRA = 1 THEN 'CRA' ELSE 'Club' END AS SouhaitJADom,
                     cl.CorEmail  AS CorEmailDom,
                     ee.Nom       AS NomExt,
@@ -385,17 +387,24 @@ class NominationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => 'Rencontre introuvable']);
             }
 
-            // Règle : au maximum 2 nominations par JA sur une même journée. Le
-            // nominateur décide lui-même de la 2ᵉ (aucune affectation automatique).
+            // Règle : au maximum 2 nominations par JA sur une même journée, et uniquement sur
+            // des rencontres du même club recevant (même lieu). Le nominateur décide lui-même
+            // de la 2ᵉ (aucune affectation automatique).
             $checkDate = $pdo->prepare('
-                SELECT COUNT(*) FROM nomination n
-                JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                SELECT COUNT(*) AS nb, COALESCE(SUM(ed2.Id_Club <> ?), 0) AS autres_clubs
+                FROM nomination n
+                JOIN disponible d  ON d.Id_Disponible = n.Id_Disponible
                 JOIN rencontre  r2 ON r2.Id_Rencontre = n.Id_Rencontre
+                JOIN equipe    ed2 ON ed2.Id_Equipe   = r2.Id_EquipeDom
                 WHERE d.Id_JA = ? AND n.Id_Rencontre != ? AND r2.Date = ?
             ');
-            $checkDate->execute([$idJa, $idRenc, $ri['Date']]);
-            if ((int) $checkDate->fetchColumn() >= 2) {
+            $checkDate->execute([$ri['Id_Club'], $idJa, $idRenc, $ri['Date']]);
+            $deja = $checkDate->fetch();
+            if ((int) $deja['nb'] >= 2) {
                 return $this->response->setJSON(['ok' => false, 'err' => 'Ce JA a déjà 2 nominations ce jour-là (maximum).']);
+            }
+            if ((int) $deja['autres_clubs'] > 0) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Ce JA est déjà nommé ce jour-là sur une rencontre d\'un autre club.']);
             }
 
             // Règle : pour être nominé, un JA doit être disponible

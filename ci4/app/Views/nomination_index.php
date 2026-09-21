@@ -36,7 +36,10 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 #col-rencontres .col-titre { background:#f8f9fa; border-bottom:1px solid #dee2e6; padding:.55rem .85rem; font-size:.82rem; font-weight:700; color:#444; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:5; }
 
 .renc-item { padding:.55rem .85rem; border-bottom:1px solid #f0f0f0; cursor:pointer; transition:background .12s; display:flex; align-items:center; gap:.5rem; }
-.renc-item:nth-child(odd) { background:#e3f4e9; }
+.renc-item:nth-of-type(odd) { background:#e3f4e9; }
+/* En-tête de groupe (tri par club recevant) : <header> pour ne pas décaler l'alternance des lignes (nth-of-type div) */
+.renc-groupe { padding:.3rem .85rem; background:#dee2e6; border-bottom:1px solid #ced4da; font-size:.74rem; font-weight:700; color:#1a3a6b; text-transform:uppercase; letter-spacing:.02em; }
+.renc-groupe .nb { font-weight:400; color:#6c757d; text-transform:none; margin-left:.4rem; }
 /* Survol : s'applique à toutes les lignes, y compris attribuée / sélectionnée */
 #liste-rencontres .renc-item:hover { background:#d3ecdd; }
 .renc-item.selected { background:#c8e6c9; border-left:3px solid var(--nom-green); }
@@ -159,6 +162,10 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
     <span id="info-nb-renc"></span>
     <span class="text-muted">|</span>
     <span id="info-nb-attribues"></span>
+    <button type="button" id="btn-tri-ordre" class="btn btn-sm btn-outline-secondary"
+            title="Basculer l'ordre des rencontres : club recevant (puis division) ou division">
+        <i class="bi bi-arrow-down-up me-1"></i><span id="lbl-tri-ordre"></span>
+    </button>
     <button type="button" id="btn-tri-priorite" class="btn btn-sm btn-outline-secondary" style="display:none"
             title="Afficher en premier les rencontres non attribuées, puis les non envoyées">
         <i class="bi bi-sort-down me-1"></i>Non attribuées d'abord
@@ -449,6 +456,7 @@ function chargerRencontres() {
                 return;
             }
             rencontres = r.data;
+            trierRencontres();
             rencontres.forEach(rc => {
                 if (rc.IdJaAffecte) {
                     nominations[rc.Id_Rencontre] = { Id_JA: rc.IdJaAffecte, Nom: rc.NomJaAffecte || '', Prenom: '' };
@@ -470,6 +478,29 @@ function chargerRencontres() {
         })
         .always(() => spin(false));
 }
+
+// Ordre de base des rencontres : 'club' (défaut) = nom du club recevant puis division au sein
+// du club ; 'division' = ordre historique (division, poule). Mémorisé dans le navigateur.
+let triOrdre = 'club';
+try { if (localStorage.getItem('nijac_en14_tri_ordre') === 'division') triOrdre = 'division'; } catch (e) {}
+
+function trierRencontres() {
+    const parDivision = (a, b) => (+a.DivisionOrd - +b.DivisionOrd) || ((+a.Poule || 0) - (+b.Poule || 0)) || (a.Id_Rencontre - b.Id_Rencontre);
+    // Alphabétique sur le nom du club recevant : toutes les rencontres d'un même club se suivent
+    // (IdClubDom départage deux clubs homonymes), puis division / poule au sein du club.
+    const club = rc => String(rc.NomClubDom ?? rc.NomDom ?? '');
+    rencontres.sort(triOrdre === 'club'
+        ? (a, b) => club(a).localeCompare(club(b), 'fr', { sensitivity: 'base' }) || String(a.IdClubDom).localeCompare(String(b.IdClubDom)) || parDivision(a, b)
+        : parDivision);
+    $('#lbl-tri-ordre').text(triOrdre === 'club' ? 'Tri : club recevant' : 'Tri : division');
+}
+
+$('#btn-tri-ordre').on('click', function () {
+    triOrdre = triOrdre === 'club' ? 'division' : 'club';
+    try { localStorage.setItem('nijac_en14_tri_ordre', triOrdre); } catch (e) {}
+    trierRencontres();
+    renderRencontres();
+});
 
 // Tri "priorité" : non attribuées d'abord, puis attribuées non envoyées, puis envoyées.
 // Ordre naturel (division/poule) conservé au sein de chaque groupe (tri stable).
@@ -496,7 +527,16 @@ function renderRencontres() {
     const listeAffichee = triPriorite
         ? [...rencontres].sort((a, b) => rangPriorite(a) - rangPriorite(b))
         : rencontres;
+    // En-têtes de groupe : seulement en tri « club recevant » sans tri priorité (qui disperse les clubs)
+    const groupes = triOrdre === 'club' && !triPriorite;
+    const nbParClub = {};
+    if (groupes) listeAffichee.forEach(rc => { nbParClub[rc.IdClubDom] = (nbParClub[rc.IdClubDom] || 0) + 1; });
+    let clubPrecedent = null;
     listeAffichee.forEach(rc => {
+        if (groupes && rc.IdClubDom !== clubPrecedent) {
+            clubPrecedent = rc.IdClubDom;
+            $liste.append(`<header class="renc-groupe">${escHtml(rc.NomClubDom || rc.NomDom || '')}<span class="nb">${nbParClub[rc.IdClubDom]} rencontre${nbParClub[rc.IdClubDom] > 1 ? 's' : ''}</span></header>`);
+        }
         const attr     = !!nominations[rc.Id_Rencontre];
         const nomJa    = attr ? (nominations[rc.Id_Rencontre].Prenom + ' ' + nominations[rc.Id_Rencontre].Nom).trim() : '';
         const divColor = rc.DivisionColor || '#1a3a6b';
@@ -659,10 +699,13 @@ function afficherCandidatsPourRencontre(idRenc) {
 
         // Max 2 nominations par JA sur la journée : on masque le JA seulement
         // s'il est déjà nominé sur 2 autres rencontres du jour.
-        const nbCeJour = Object.entries(nominations).filter(
+        const autresNoms = Object.entries(nominations).filter(
             ([rid, nom]) => parseInt(rid) !== idRenc && nom.Id_JA == ja.Id_JA
-        ).length;
-        if (nbCeJour >= 2) return;
+        );
+        if (autresNoms.length >= 2) return;
+        // Une 2ᵉ nomination le même jour n'est possible que sur le même club recevant :
+        // on masque le JA déjà nommé sur une rencontre d'un autre club.
+        if (autresNoms.some(([rid]) => rencontres.find(r => r.Id_Rencontre == rid)?.IdClubDom !== clubDom)) return;
 
         const dist  = haversineKm(ja.JaLat, ja.JaLon, venueLat, venueLon);
         const score = (prefereRenc ? 300 : 0)

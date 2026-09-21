@@ -151,7 +151,7 @@ function chercherJaHorsClub() {
     const $resultats = $('#hors-club-resultats').empty().removeClass('list-group');
     if (!nom) { $('#hors-club-err').text('Saisissez un nom.'); return; }
 
-    $.get('<?= site_url('arbitre-club/rechercher-ja') ?>', { nom }, function (res) {
+    $.get('<?= site_url('arbitre-club/rechercher-ja') ?>', { nom, renc: $('input[name=renc]').val() }, function (res) {
         if (!res.ok) { $('#hors-club-err').text(res.msg || 'Erreur.'); return; }
         if (!res.jas.length) { $('#hors-club-err').text('Aucun juge-arbitre actif trouvé avec ce nom.'); return; }
         if (res.jas.length === 1) { retenirJaHorsClub(res.jas[0]); return; }
