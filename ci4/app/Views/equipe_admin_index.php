@@ -149,10 +149,16 @@
                 </div>
                 <div class="col" id="col-souhait-ja">
                     <label class="form-label" for="sel-souhait-ja">Souhait JA</label>
-                    <select id="sel-souhait-ja" class="form-select form-select-sm">
-                        <option value="CRA">CRA</option>
-                        <option value="Club">Club</option>
-                    </select>
+                    <div class="d-flex gap-1">
+                        <select id="sel-souhait-ja" class="form-select form-select-sm">
+                            <option value="CRA">CRA</option>
+                            <option value="Club">Club</option>
+                        </select>
+                        <button type="button" class="btn btn-sm btn-outline-secondary flex-shrink-0" id="btn-appliquer-arbitrage"
+                                title="Réappliquer le souhait CRA/Club actuel à toutes les rencontres de cette équipe (y compris déjà jouées)">
+                            <i class="bi bi-arrow-repeat"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -357,6 +363,7 @@ function selectionnerLigne($tr) {
     $('#sel-jour-souhaite').val(e.JourSouhaite ?? '');
     $('#sel-souhait-ja').val(e.SouhaitJA || 'CRA');
     majSouhaitJaEtat();
+    $('#btn-appliquer-arbitrage').show();
     $('#txt-desiderata-saison').val(e.DesiderataSaison || SAISON_COURANTE);
     setStatus('');
 }
@@ -377,8 +384,23 @@ $('#btn-nouveau').on('click', function () {
     $('#sel-jour-souhaite').val('');
     $('#sel-souhait-ja').val('CRA');
     majSouhaitJaEtat();
+    $('#btn-appliquer-arbitrage').hide(); // équipe pas encore créée : aucune rencontre à mettre à jour
     $('#txt-desiderata-saison').val(SAISON_COURANTE);
     setStatus('');
+});
+
+$('#btn-appliquer-arbitrage').on('click', function () {
+    if (!currentId) return;
+    nijacConfirm(
+        'Réappliquer le souhait JA (CRA/Club) actuel de cette équipe à TOUTES ses rencontres, y compris déjà jouées ?',
+        function () {
+            $.post(`${EQUIPE_BASE}/${currentId}/appliquer-arbitrage`, {}, function (r) {
+                toast(r.msg, !!r.ok);
+            }, 'json').fail(() => toast('Erreur réseau.', false));
+        },
+        null,
+        { type: 'question' }
+    );
 });
 
 $('#btn-enregistrer').on('click', function () {
@@ -410,22 +432,11 @@ $('#btn-enregistrer').on('click', function () {
     $.ajax({ url, method, data: payload, dataType: 'json' }).done(function (res) {
         if (!res.ok) { toast(res.msg, false); setStatus(res.msg, false); return; }
         toast(res.msg);
-        const idMaj = isNew ? res.id : currentId;
-        if (res.arbitrageChange) {
-            nijacConfirm(
-                `Le souhait JA (CRA/Club) a changé. Mettre à jour l'arbitrage sur les ${res.nbRencontresFutures} rencontre(s) à venir de cette équipe ?`,
-                function () {
-                    $.post(`${EQUIPE_BASE}/${idMaj}/appliquer-arbitrage`, {}, function (r) {
-                        toast(r.msg, !!r.ok);
-                        chargerListe(idMaj);
-                    }, 'json').fail(() => toast('Erreur réseau.', false));
-                },
-                () => chargerListe(idMaj),
-                { type: 'question' }
-            );
-        } else {
-            chargerListe(idMaj);
-        }
+        // Le souhait JA (CRA/Club), s'il a changé, est resynchronisé automatiquement sur les
+        // rencontres (y compris déjà jouées) côté serveur (voir EquipeAdminController::update()) — plus de
+        // confirmation intermédiaire ici. Le bouton ↻ reste disponible pour une resynchronisation
+        // manuelle à tout moment.
+        chargerListe(isNew ? res.id : currentId);
     }).fail(() => toast('Erreur réseau.', false));
 });
 

@@ -240,20 +240,15 @@ class EquipeAdminController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => "Équipe $idEquipe introuvable."]);
             }
 
-            // Souhait JA (CRA/Club) modifié : ne pas resynchroniser les rencontres à venir
-            // silencieusement (le souhait se fait avant le début de phase ; un changement
-            // fait après ne devrait s'appliquer qu'aux rencontres pas encore jouées, mais
-            // pas forcément à toutes — on laisse le nominateur/admin le confirmer). On ne
-            // fait que signaler le changement et compter les rencontres concernées ; la
-            // mise à jour effective se fait via appliquerArbitrageRencontres() si confirmé.
+            // Souhait JA (CRA/Club) modifié : resynchronise automatiquement TOUTES les
+            // rencontres de l'équipe, y compris celles déjà jouées — sur demande explicite,
+            // contrairement à la règle "jamais l'historique" suivie par EN18/ES33/EA92.
             $reponse = ['ok' => true, 'msg' => 'Équipe mise à jour.'];
             if ($ancienArbitrage !== null && $ancienArbitrage !== $souhaitJaInt) {
-                $nb = $pdo->prepare('SELECT COUNT(*) FROM rencontre WHERE Id_EquipeDom = ? AND Date >= CURDATE()');
-                $nb->execute([$idEquipe]);
-                $nbRencontres = (int) $nb->fetchColumn();
-                if ($nbRencontres > 0) {
-                    $reponse['arbitrageChange']    = true;
-                    $reponse['nbRencontresFutures'] = $nbRencontres;
+                $maj = $pdo->prepare('UPDATE rencontre SET ArbitrageCRA=? WHERE Id_EquipeDom=?');
+                $maj->execute([$souhaitJaInt, $idEquipe]);
+                if ($maj->rowCount() > 0) {
+                    $reponse['msg'] .= ' ' . $maj->rowCount() . ' rencontre(s) resynchronisée(s).';
                 }
             }
 
@@ -262,10 +257,10 @@ class EquipeAdminController extends BaseController
     }
 
     /**
-     * Applique le souhait JA (CRA/Club) courant de l'équipe aux rencontres à venir
-     * (Date >= aujourd'hui) dont elle reçoit — appelé après confirmation de l'admin
-     * suite au signal `arbitrageChange` de update(). Relit ArbitrageCRA en base plutôt
-     * que de faire confiance à une valeur transmise par le client.
+     * Applique le souhait JA (CRA/Club) courant de l'équipe à TOUTES ses rencontres
+     * (y compris déjà jouées) dont elle reçoit — bouton ↻ manuel du panneau d'édition.
+     * Relit ArbitrageCRA en base plutôt que de faire confiance à une valeur transmise
+     * par le client.
      */
     public function appliquerArbitrageRencontres(int $idEquipe): ResponseInterface
     {
@@ -279,7 +274,7 @@ class EquipeAdminController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => "Équipe $idEquipe introuvable."]);
             }
 
-            $stmt = $pdo->prepare('UPDATE rencontre SET ArbitrageCRA=? WHERE Id_EquipeDom=? AND Date >= CURDATE()');
+            $stmt = $pdo->prepare('UPDATE rencontre SET ArbitrageCRA=? WHERE Id_EquipeDom=?');
             $stmt->execute([(int) $arbitrage, $idEquipe]);
 
             return $this->response->setJSON(['ok' => true, 'msg' => $stmt->rowCount() . ' rencontre(s) mise(s) à jour.']);
