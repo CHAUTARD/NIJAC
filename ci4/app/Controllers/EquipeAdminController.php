@@ -172,6 +172,11 @@ class EquipeAdminController extends BaseController
             $pdo   = getPDO();
             $input = $this->request->getRawInput();
 
+            $ancien = $pdo->prepare('SELECT ArbitrageCRA FROM equipe WHERE Id_Equipe = ?');
+            $ancien->execute([$idEquipe]);
+            $ancienArbitrage = $ancien->fetchColumn();
+            $ancienArbitrage = $ancienArbitrage === false ? null : (int) $ancienArbitrage;
+
             $nom       = trim($input['nom'] ?? '');
             $division  = trim($input['division'] ?? '');
             $idClub    = trim($input['id_club'] ?? '');
@@ -231,21 +236,53 @@ class EquipeAdminController extends BaseController
             $souhaitJaInt = $souhaitJa === 'CRA' ? 1 : 0;
             $stmt->execute([$nom, $division, $idClub, $idClub2, $idClub3, $reeng, $jourSouh, $souhaitJaInt, $desider, $idEquipe]);
 
-            // Le souhait se fait avant le début de phase ; un changement fait après ne
-            // s'applique qu'aux rencontres pas encore jouées.
-            $pdo->prepare(
-                'UPDATE rencontre SET ArbitrageCRA=? WHERE Id_EquipeDom=? AND Date >= CURDATE()'
-            )->execute([$souhaitJaInt, $idEquipe]);
+            if ($stmt->rowCount() === 0 && $ancienArbitrage === null) {
+                return $this->response->setJSON(['ok' => false, 'msg' => "Équipe $idEquipe introuvable."]);
+            }
 
-            if ($stmt->rowCount() === 0) {
-                $chk = $pdo->prepare('SELECT COUNT(*) FROM equipe WHERE Id_Equipe = ?');
-                $chk->execute([$idEquipe]);
-                if ((int) $chk->fetchColumn() === 0) {
-                    return $this->response->setJSON(['ok' => false, 'msg' => "Équipe $idEquipe introuvable."]);
+            // Souhait JA (CRA/Club) modifié : ne pas resynchroniser les rencontres à venir
+            // silencieusement (le souhait se fait avant le début de phase ; un changement
+            // fait après ne devrait s'appliquer qu'aux rencontres pas encore jouées, mais
+            // pas forcément à toutes — on laisse le nominateur/admin le confirmer). On ne
+            // fait que signaler le changement et compter les rencontres concernées ; la
+            // mise à jour effective se fait via appliquerArbitrageRencontres() si confirmé.
+            $reponse = ['ok' => true, 'msg' => 'Équipe mise à jour.'];
+            if ($ancienArbitrage !== null && $ancienArbitrage !== $souhaitJaInt) {
+                $nb = $pdo->prepare('SELECT COUNT(*) FROM rencontre WHERE Id_EquipeDom = ? AND Date >= CURDATE()');
+                $nb->execute([$idEquipe]);
+                $nbRencontres = (int) $nb->fetchColumn();
+                if ($nbRencontres > 0) {
+                    $reponse['arbitrageChange']    = true;
+                    $reponse['nbRencontresFutures'] = $nbRencontres;
                 }
             }
 
-            return $this->response->setJSON(['ok' => true, 'msg' => 'Équipe mise à jour.']);
+            return $this->response->setJSON($reponse);
+        });
+    }
+
+    /**
+     * Applique le souhait JA (CRA/Club) courant de l'équipe aux rencontres à venir
+     * (Date >= aujourd'hui) dont elle reçoit — appelé après confirmation de l'admin
+     * suite au signal `arbitrageChange` de update(). Relit ArbitrageCRA en base plutôt
+     * que de faire confiance à une valeur transmise par le client.
+     */
+    public function appliquerArbitrageRencontres(int $idEquipe): ResponseInterface
+    {
+        return $this->tryJson(function () use ($idEquipe) {
+            $pdo = getPDO();
+
+            $eq = $pdo->prepare('SELECT ArbitrageCRA FROM equipe WHERE Id_Equipe = ?');
+            $eq->execute([$idEquipe]);
+            $arbitrage = $eq->fetchColumn();
+            if ($arbitrage === false) {
+                return $this->response->setJSON(['ok' => false, 'msg' => "Équipe $idEquipe introuvable."]);
+            }
+
+            $stmt = $pdo->prepare('UPDATE rencontre SET ArbitrageCRA=? WHERE Id_EquipeDom=? AND Date >= CURDATE()');
+            $stmt->execute([(int) $arbitrage, $idEquipe]);
+
+            return $this->response->setJSON(['ok' => true, 'msg' => $stmt->rowCount() . ' rencontre(s) mise(s) à jour.']);
         });
     }
 

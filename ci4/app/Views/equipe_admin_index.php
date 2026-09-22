@@ -408,8 +408,24 @@ $('#btn-enregistrer').on('click', function () {
     const method = isNew ? 'POST' : 'PUT';
 
     $.ajax({ url, method, data: payload, dataType: 'json' }).done(function (res) {
-        if (res.ok) { toast(res.msg); chargerListe(isNew ? res.id : currentId); }
-        else { toast(res.msg, false); setStatus(res.msg, false); }
+        if (!res.ok) { toast(res.msg, false); setStatus(res.msg, false); return; }
+        toast(res.msg);
+        const idMaj = isNew ? res.id : currentId;
+        if (res.arbitrageChange) {
+            nijacConfirm(
+                `Le souhait JA (CRA/Club) a changé. Mettre à jour l'arbitrage sur les ${res.nbRencontresFutures} rencontre(s) à venir de cette équipe ?`,
+                function () {
+                    $.post(`${EQUIPE_BASE}/${idMaj}/appliquer-arbitrage`, {}, function (r) {
+                        toast(r.msg, !!r.ok);
+                        chargerListe(idMaj);
+                    }, 'json').fail(() => toast('Erreur réseau.', false));
+                },
+                () => chargerListe(idMaj),
+                { type: 'question' }
+            );
+        } else {
+            chargerListe(idMaj);
+        }
     }).fail(() => toast('Erreur réseau.', false));
 });
 

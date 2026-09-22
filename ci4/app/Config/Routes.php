@@ -315,6 +315,7 @@ $routes->get('gestion-equipes/data', 'EquipeAdminController::data', ['filter' =>
 $routes->post('gestion-equipes', 'EquipeAdminController::store', ['filter' => 'adminauth']);
 $routes->put('gestion-equipes/(:num)', 'EquipeAdminController::update/$1', ['filter' => 'adminauth']);
 $routes->delete('gestion-equipes/(:num)', 'EquipeAdminController::delete/$1', ['filter' => 'adminauth']);
+$routes->post('gestion-equipes/(:num)/appliquer-arbitrage', 'EquipeAdminController::appliquerArbitrageRencontres/$1', ['filter' => 'adminauth']);
 
 // ── EA95 Gestion des rencontres ──────────────────────────────────────────────
 $routes->get('gestion-rencontres', 'RencontreAdminController::index', ['filter' => 'adminauth']);
