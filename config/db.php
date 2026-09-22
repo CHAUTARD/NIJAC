@@ -50,7 +50,7 @@ if (!$isProduction) {
 
 // ── Constantes communes ───────────────────────────────────────────────────────
 define('DB_CHARSET',   'utf8mb4');
-define('APP_VERSION', '1.2.139');
+define('APP_VERSION', '1.2.140');
 
 // Seed secret pour l'obfuscation des identifiants JA dans les URL publiques
 // (doit rester identique entre génération et décodage)
@@ -144,7 +144,16 @@ function getPDO(): PDO
         $pdo = new PDO($dsn, DB_USER, DB_PASS, [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES   => false,
+            // true (émulées côté PHP) : avec les vraies requêtes préparées MySQL
+            // (false), l'hébergement mutualisé de production a renvoyé "SQLSTATE[HY000]:
+            // General error: 1615 Prepared statement needs to be re-prepared" — le serveur
+            // purge le cache de définition des tables sous charge (table_definition_cache
+            // trop bas, hors de notre contrôle sur du mutualisé) et invalide le statement
+            // préparé côté serveur. Les requêtes restent paramétrées (protection injection
+            // SQL inchangée), seul le typage strict des paramètres au niveau du driver est
+            // perdu — sans incidence ici (toutes les valeurs passent déjà par des cast PHP
+            // explicites avant binding).
+            PDO::ATTR_EMULATE_PREPARES   => true,
         ]);
     }
 

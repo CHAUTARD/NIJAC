@@ -14,6 +14,12 @@ use CodeIgniter\HTTP\ResponseInterface;
  */
 class RencontreNominateurController extends RencontreAdminController
 {
+    /** EN23 garde son tri historique (Date/Heure), contrairement au tri Phase/Journée/Poule d'EA95. */
+    protected function ordreListe(): string
+    {
+        return 'r.Date, r.Heure';
+    }
+
     public function index()
     {
         $moi = $_SESSION['utilisateur'] ?? [];

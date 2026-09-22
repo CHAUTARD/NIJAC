@@ -54,12 +54,6 @@
             <span class="count-badge" id="lbl-count">0 / 0</span>
             <span style="flex:1"></span>
             <span class="combo-field">
-                <label for="sel-club">Club</label>
-                <select id="sel-club" style="width:auto;">
-                    <option value="">— Tous clubs —</option>
-                </select>
-            </span>
-            <span class="combo-field">
                 <label for="sel-departement">Département</label>
                 <select id="sel-departement" style="width:auto;">
                     <option value="">Tous</option>
@@ -71,7 +65,7 @@
             </span>
             <span class="combo-field">
                 <label for="search-nom">Recherche</label>
-                <input type="search" id="search-nom" placeholder="Nom…" style="width:260px;">
+                <input type="search" id="search-nom" placeholder="Nom, N° club ou nom du club…" style="width:280px;">
             </span>
         </div>
         <div id="table-wrapper">
@@ -197,7 +191,6 @@ let divisions   = [];
 let departements = [];
 let currentId   = null;
 let editDivision = '';
-let clubFiltre       = '';
 let departementFiltre = '';
 let divisionFiltre   = '';
 let searchTerm        = '';
@@ -229,10 +222,12 @@ function setStatus(msg, ok = true) {
 function equipesFiltrees() {
     const term = searchTerm.toLowerCase();
     return equipes.filter(e => {
-        if (clubFiltre && e.Id_Club !== clubFiltre) return false;
         if (departementFiltre && e.Departement !== departementFiltre) return false;
         if (divisionFiltre && e.Division !== divisionFiltre) return false;
-        if (term && !String(e.Nom ?? '').toLowerCase().includes(term)) return false;
+        if (term
+            && !String(e.Nom ?? '').toLowerCase().includes(term)
+            && !String(e.Id_Club ?? '').toLowerCase().includes(term)
+            && !String(e.NomClub ?? '').toLowerCase().includes(term)) return false;
         return true;
     });
 }
@@ -255,16 +250,6 @@ function chargerListe(selectId = null) {
 }
 
 function peuplerFiltres() {
-    const clubsUtilises = new Map();
-    equipes.forEach(e => clubsUtilises.set(e.Id_Club, e.NomClub));
-
-    const $selClub = $('#sel-club');
-    const valClub   = $selClub.val();
-    $selClub.find('option:not(:first)').remove();
-    [...clubsUtilises.entries()].sort((a, b) => a[1].localeCompare(b[1]))
-        .forEach(([id, nom]) => $selClub.append(new Option(nom, id)));
-    $selClub.val(valClub);
-
     const $selDept = $('#sel-departement');
     const valDept   = $selDept.val();
     $selDept.find('option:not(:first)').remove();
@@ -443,7 +428,6 @@ $('#btn-supprimer').on('click', function () {
     }, null, { type: 'danger' });
 });
 
-$('#sel-club').on('change', function () { clubFiltre = $(this).val(); renderListe(); });
 $('#sel-departement').on('change', function () { departementFiltre = $(this).val(); renderListe(); });
 $('#search-nom').on('input', function () { searchTerm = $(this).val().trim(); renderListe(); });
 

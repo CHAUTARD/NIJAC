@@ -53,6 +53,12 @@ class RencontreAdminController extends BaseController
         return view('rencontre_admin_index', $data);
     }
 
+    /** Tri de la liste — EA95 (défaut) : Phase/Journée/Poule ; surchargé par EN23 (Date/Heure). */
+    protected function ordreListe(): string
+    {
+        return 'r.Phase, r.Journee, r.Poule';
+    }
+
     public function data(): ResponseInterface
     {
         return $this->tryJson(function () {
@@ -73,7 +79,7 @@ class RencontreAdminController extends BaseController
                  LEFT JOIN Club ce ON ce.Id_Club = ev.Id_Club
                  LEFT JOIN division dv ON dv.Division = ed.Division
                  LEFT JOIN salle s ON s.Id_Salle = r.id_Salle
-                 ORDER BY r.Date, r.Heure'
+                 ORDER BY ' . $this->ordreListe()
             )->fetchAll();
 
             // Catalogues pour le formulaire d'édition : équipe domicile/extérieure
