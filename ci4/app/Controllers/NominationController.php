@@ -235,7 +235,7 @@ class NominationController extends BaseController
                     ed.Nom       AS NomDom,
                     ed.Id_Club   AS IdClubDom,
                     cl.Nom       AS NomClubDom,
-                    CASE WHEN ed.ArbitrageCRA = 1 THEN 'CRA' ELSE 'Club' END AS SouhaitJADom,
+                    CASE WHEN r.ArbitrageCRA = 1 THEN 'CRA' ELSE 'Club' END AS SouhaitJADom,
                     cl.CorEmail  AS CorEmailDom,
                     ee.Nom       AS NomExt,
                     s_c.Cp    AS CpSalle,
@@ -661,7 +661,7 @@ class NominationController extends BaseController
 
             $stmt = $pdo->prepare(
                 "SELECT r.Id_Rencontre, r.Date, r.Heure, r.Journee, r.Poule,
-                        ed.Division, CASE WHEN ed.ArbitrageCRA = 1 THEN 'CRA' ELSE 'Club' END AS SouhaitJA,
+                        ed.Division, CASE WHEN r.ArbitrageCRA = 1 THEN 'CRA' ELSE 'Club' END AS SouhaitJA,
                         ed.Nom AS NomDom, ev.Nom AS NomExt,
                         cl.CorNom, cl.CorEmail, cl.RefNom, cl.RefMail,
                         COALESCE(sr.Nom, sc.Nom) AS SalleNom, COALESCE(sr.Adresse, sc.Adresse) AS SalleAdresse,

@@ -961,8 +961,17 @@ function mettreAJourInfoJournee() {
     if (!journeeCourante) { $('#info-journee').hide(); return; }
     const total  = rencontres.length;
     const attrib = Object.keys(nominations).length;
+    const arbClub = rencontres.filter(rc => !nominations[rc.Id_Rencontre]
+        && rc.SouhaitJADom === 'Club' && ['R3M', 'R4M'].includes(rc.DivisionCode || '')).length;
+    const reste = total - attrib - arbClub;
     $('#info-nb-renc').html(`<strong>${total}</strong> rencontre${total > 1 ? 's' : ''}`);
-    $('#info-nb-attribues').html(`<strong>${attrib}/${total}</strong> attribué${attrib > 1 ? 's' : ''}`);
+    $('#info-nb-attribues').html(
+        `<strong>${attrib}</strong> attribué${attrib > 1 ? 's' : ''} CRA`
+        + ` <span class="text-muted">|</span> <strong>${arbClub}</strong> arbitrage${arbClub > 1 ? 's' : ''} club`
+        + ` <span class="text-muted">|</span> ` + (reste > 0
+            ? `<span class="text-danger"><strong>${reste}</strong> reste${reste > 1 ? 'nt' : ''} à attribuer</span>`
+            : `<span class="text-success">tout attribué</span>`)
+    );
     // Le tri n'a d'intérêt que s'il reste des rencontres non attribuées sur la journée.
     $('#btn-tri-priorite').toggle(attrib < total);
     $('#info-journee').css('display', 'flex');
