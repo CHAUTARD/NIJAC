@@ -25,6 +25,28 @@
 
         #stats-wrap { padding: 1.25rem; flex: 1; }
 
+        /* Tableau par JA */
+        .stats-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+        .stats-table thead th {
+            background: var(--nijac-blue); color: #fff; text-align: center;
+            padding: .45rem .6rem; white-space: nowrap;
+            cursor: pointer; user-select: none;
+        }
+        .stats-table thead th:hover { background: #2a4a8b; }
+        .stats-table thead th.sort-asc::after  { content: ' ▲'; }
+        .stats-table thead th.sort-desc::after { content: ' ▼'; }
+        .stats-table tbody tr:hover { background: #eef4ff; }
+        .stats-table td { padding: .35rem .6rem; border-bottom: 1px solid #e5e7eb; }
+        .stats-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+        .stats-table tfoot td { font-weight: 700; background: #e8eef7; padding: .4rem .6rem; border-top: 2px solid var(--nijac-blue); }
+        .stats-table tfoot td.num { text-align: right; }
+
+        /* Badges grade */
+        .grade-badge { font-size: .68rem; padding: .15rem .4rem; border-radius: 20px; font-weight: 600; white-space: nowrap; }
+        .grade-national { background: #fef3c7; color: #92400e; }
+        .grade-regional  { background: #dcfce7; color: #14532d; }
+        .grade-other     { background: #f1f5f9; color: #475569; }
+
         /* Graphes JA + rencontres par département (petits multiples, 2 par ligne) */
         .chart-section-title { font-weight: 700; color: var(--nijac-blue); font-size: .95rem; margin-bottom: .5rem; }
         .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
@@ -39,6 +61,7 @@
         @media print {
             #toolbar, #toolbar-user, #page-footer, .no-print { display: none !important; }
             body { background: #fff; }
+            .stats-table thead th { background: #1a3a6b !important; -webkit-print-color-adjust: exact; }
             .chart-card { border-color: #999; -webkit-print-color-adjust: exact; }
         }
 
@@ -98,10 +121,7 @@
     <button class="btn btn-sm btn-primary" id="btn-charger">
         <i class="bi bi-search me-1"></i>Afficher
     </button>
-    <button class="btn btn-sm btn-outline-success ms-auto no-print" id="btn-export-csv">
-        <i class="bi bi-filetype-csv me-1"></i>Export CSV
-    </button>
-    <button class="btn btn-sm btn-outline-secondary no-print" onclick="window.print()">
+    <button class="btn btn-sm btn-outline-secondary ms-auto no-print" onclick="window.print()">
         <i class="bi bi-printer me-1"></i>Imprimer
     </button>
 </div>
@@ -145,6 +165,32 @@
             </div>
         </div>
     </div>
+    <div id="table-wrap" style="display:none;">
+        <div id="table-section-title" class="chart-section-title"></div>
+        <div class="mb-2 no-print">
+            <button class="btn btn-sm btn-outline-success" id="btn-export-csv">
+                <i class="bi bi-filetype-csv me-1"></i>Export CSV
+            </button>
+        </div>
+        <table class="stats-table" id="stats-table">
+            <thead>
+                <tr>
+                    <th data-col="Nom">Juge-Arbitre</th>
+                    <th data-col="Grade">Grade</th>
+                    <th data-col="Club">Club</th>
+                    <th data-col="nb_arbitrages" class="sort-desc">Arbitrages</th>
+                    <th data-col="nb_arbitrages_club">Arbitrages Club</th>
+                    <th data-col="total_km">Km</th>
+                    <th data-col="montant_km">Montant km (€)</th>
+                    <th data-col="total_peages">Péages (€)</th>
+                    <th data-col="total_indemnite">Indemnité (€)</th>
+                    <th data-col="total_frais">Total frais (€)</th>
+                </tr>
+            </thead>
+            <tbody id="stats-tbody"></tbody>
+            <tfoot id="stats-tfoot"></tfoot>
+        </table>
+    </div>
 </div>
 
 <!-- Pied de page : recopié de includes/footer.php -->
@@ -159,6 +205,76 @@
 
 const BASE = '<?= site_url('stats-ja') ?>';
 const DEPT_USER = <?= json_encode($departement) ?>;
+
+let _rows = [];
+const sortState = { col: 'nb_arbitrages', asc: false };
+
+function fmt2(v) { return parseFloat(v || 0).toFixed(2).replace('.', ','); }
+function esc(s)  { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function gradeBadge(g) {
+    g = g || '';
+    const low = g.toLowerCase();
+    let cls = 'grade-other';
+    if (low.includes('national')) cls = 'grade-national';
+    else if (low.includes('régional') || low.includes('regional')) cls = 'grade-regional';
+    return g ? `<span class="grade-badge ${cls}">${esc(g)}</span>` : '<span class="text-muted">–</span>';
+}
+
+function renderTable() {
+    const sorted = [..._rows].sort((a, b) => {
+        let va = a[sortState.col], vb = b[sortState.col];
+        if (!isNaN(va) && !isNaN(vb)) { va = parseFloat(va); vb = parseFloat(vb); }
+        else { va = String(va || '').toLowerCase(); vb = String(vb || '').toLowerCase(); }
+        if (va < vb) return sortState.asc ? -1 :  1;
+        if (va > vb) return sortState.asc ?  1 : -1;
+        return 0;
+    });
+
+    $('#stats-tbody').html(sorted.map(r => `<tr>
+        <td><strong>${esc(r.Nom)}</strong>&nbsp;${esc(r.Prenom)}</td>
+        <td>${gradeBadge(r.Grade)}</td>
+        <td>${esc(r.Club || '–')}</td>
+        <td class="num"><strong>${r.nb_arbitrages}</strong></td>
+        <td class="num">${r.nb_arbitrages_club}</td>
+        <td class="num">${parseInt(r.total_km)}</td>
+        <td class="num">${fmt2(r.montant_km)}</td>
+        <td class="num">${fmt2(r.total_peages)}</td>
+        <td class="num">${fmt2(r.total_indemnite)}</td>
+        <td class="num"><strong>${fmt2(r.total_frais)}</strong></td>
+    </tr>`).join(''));
+
+    refreshTriEntetes();
+}
+
+function chargerTableau(phase, annee) {
+    $.getJSON(`${BASE}/donnees`, { phase, annee }).done(r => {
+        if (!r.ok) { nijacToast(r.msg || 'Erreur serveur.', 'danger'); return; }
+        _rows = r.rows;
+        if (!_rows.length) return;
+
+        $('#table-section-title').text(`Arbitrages et frais par Juge-Arbitre — Phase ${phase}, saison ${annee}‑${+annee + 1}`);
+        renderTable();
+        const t = r.totaux;
+        $('#stats-tfoot').html(`<tr>
+            <td colspan="3">Total (${_rows.length} JA)</td>
+            <td class="num">${t.nb_arbitrages}</td>
+            <td class="num">${t.nb_arbitrages_club}</td>
+            <td class="num">${parseInt(t.total_km)}</td>
+            <td class="num">${fmt2(t.montant_km)}</td>
+            <td class="num">${fmt2(t.total_peages)}</td>
+            <td class="num">${fmt2(t.total_indemnite)}</td>
+            <td class="num">${fmt2(t.total_frais)}</td>
+        </tr>`);
+        $('#table-wrap').show();
+    }).fail(() => nijacToast('Erreur de communication.', 'danger'));
+}
+
+// Tri par colonne
+let refreshTriEntetes = () => {};
+$(function () {
+    refreshTriEntetes = nijacSortableTable('#stats-table thead th[data-col]', 'col', sortState, renderTable, false);
+});
 
 const PALETTE_DEPTS = ['#1a3a6b', '#2e7d32', '#f59e0b', '#db2777', '#7c3aed', '#0d9488', '#dc2626', '#65a30d'];
 
@@ -384,10 +500,11 @@ function charger() {
     const phase = $('#filtre-phase').val();
     const annee = $('#filtre-annee').val();
 
-    $('#empty-msg, #dept-charts').hide();
+    $('#table-wrap, #empty-msg, #dept-charts').hide();
     $('#loading').show();
 
     chargerGraphesDept(phase, annee);
+    chargerTableau(phase, annee);
 }
 
 $('#btn-charger').on('click', charger);
@@ -404,5 +521,6 @@ $('#btn-export-csv').on('click', function () {
 charger();
 </script>
 <script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-sortable-table.js') ?>"></script>
 </body>
 </html>

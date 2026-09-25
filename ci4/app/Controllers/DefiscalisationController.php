@@ -96,8 +96,8 @@ class DefiscalisationController extends BaseController
                 j.PuissanceFiscale, j.VehiculeElectrique,
                 MAX(CASE WHEN j.Email IS NOT NULL AND LENGTH(TRIM(j.Email)) > 0 THEN 1 ELSE 0 END) AS HasEmail,
                 COUNT(CASE WHEN r.Id_Rencontre IS NOT NULL THEN n.Id_Nomination END) AS NbMissions,
-                COALESCE(SUM(CASE WHEN r.Id_Rencontre IS NOT NULL THEN n.Peage     END), 0) AS Peage,
-                COALESCE(SUM(CASE WHEN r.Id_Rencontre IS NOT NULL THEN n.Kilometre END), 0) AS Kilometre
+                COALESCE(SUM(CASE WHEN r.ArbitrageCRA = 1 THEN n.Peage     END), 0) AS Peage,
+                COALESCE(SUM(CASE WHEN r.ArbitrageCRA = 1 THEN n.Kilometre END), 0) AS Kilometre
             FROM ja j
             LEFT JOIN disponible d ON d.Id_JA = j.Id_JA
             LEFT JOIN nomination n ON n.Id_Disponible = d.Id_Disponible

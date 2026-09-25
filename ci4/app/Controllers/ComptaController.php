@@ -90,6 +90,7 @@ class ComptaController extends BaseController
                     (SELECT COALESCE(SUM(n.Kilometre), 0)
                        FROM nomination n
                        JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                       JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre AND r.ArbitrageCRA = 1
                       WHERE d.Id_JA = j.Id_JA) AS KmTotal
                 FROM ja j
                 WHERE $where
@@ -263,6 +264,7 @@ class ComptaController extends BaseController
                   AND (SELECT COALESCE(SUM(n.Kilometre), 0)
                          FROM nomination n
                          JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                         JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre AND r.ArbitrageCRA = 1
                         WHERE d.Id_JA = j.Id_JA) > 0
                 ORDER BY j.Nom, j.Prenom
             ");

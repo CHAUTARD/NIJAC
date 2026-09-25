@@ -452,6 +452,12 @@
     </div>
 
     <!--  Tableau indemnités / frais  -->
+    <?php if (!empty($arbitrageClub)): ?>
+    <!-- Arbitrage Club : pas d'indemnité, de péage ni de km — champs conservés (valeurs 0) mais masqués -->
+    <input type="hidden" id="inp-peages" value="0"><input type="hidden" id="inp-km" value="0">
+    <input type="checkbox" id="chk-defisc" hidden>
+    <span id="td-total" hidden></span><span id="defisc-montant" hidden></span>
+    <?php else: ?>
     <table class="tbl-indem" id="tbl-frais">
         <thead>
             <tr>
@@ -506,6 +512,7 @@
             <i class="bi bi-file-earmark-pdf-fill me-1"></i>En savoir plus
         </a>
     </div>
+    <?php endif; ?>
 
     <!--  Rapport JA  -->
     <table class="tbl-rapport">
@@ -531,10 +538,12 @@
     </div>
 
     <!-- Bande basse -->
+    <?php if (empty($arbitrageClub)): ?>
     <div class="conv-bas">
         Vos indemnités de juge-arbitrage vous seront payées en fin de phase directement par la ligue.<br>
         Pensez à transmettre un RIB à la ligue.
     </div>
+    <?php endif; ?>
 
     <!-- Date émission -->
     <div class="conv-date-emission"><?= date('d/m/Y') ?></div>

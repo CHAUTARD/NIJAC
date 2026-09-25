@@ -115,7 +115,7 @@ class ConvocationJaController extends BaseController
 
                 $stmtR = $pdo->prepare("
                     SELECT r.Id_Rencontre, r.Journee, r.Date, r.Heure, r.Poule,
-                           r.Phase,
+                           r.Phase, r.ArbitrageCRA,
                            d.Division AS DivisionCode, d.Nom AS DivisionNom,
                            ed.Nom     AS NomDom,  ed.Id_Club AS IdClubDom,
                            ee.Nom     AS NomExt,
@@ -171,10 +171,12 @@ class ConvocationJaController extends BaseController
         // Jeton valide mais données incomplètes : $erreur a déjà été renseigné
         // précisément dans le bloc de résolution ci-dessus.
 
-        $indemniteForfait = (float) getConfig('indemnite_forfaitaire', '25.00');
+        // Arbitrage Club : ni indemnité, ni péage, ni km (seul le rapport JA reste à saisir).
+        $arbitrageClub    = $rencontre && !(int) $rencontre['ArbitrageCRA'];
+        $indemniteForfait = $arbitrageClub ? 0.0 : (float) getConfig('indemnite_forfaitaire', '25.00');
         $tauxKm           = (float) getConfig('frais_kilometrique', '0.30');
-        $peages           = $frais['Peage'] ?? 0;
-        $km               = $frais['Kilometre'] ?? 0; // 0 par défaut (départ du domicile)
+        $peages           = $arbitrageClub ? 0 : ($frais['Peage'] ?? 0);
+        $km               = $arbitrageClub ? 0 : ($frais['Kilometre'] ?? 0); // 0 par défaut (départ du domicile)
         $total            = $indemniteForfait + $peages + ($km * $tauxKm);
 
         // Tarif défiscalisation en €/km pour ce JA (barème fiscal selon sa
@@ -218,6 +220,7 @@ class ConvocationJaController extends BaseController
             'peages'           => $peages,
             'km'               => $km,
             'total'            => $total,
+            'arbitrageClub'    => $arbitrageClub,
             'defiscEuroParKm'  => $defiscEuroParKm,
             'dateFormatee'     => $dateFormatee,
             'heure'            => $heure,
@@ -237,8 +240,10 @@ class ConvocationJaController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => "Lien de convocation invalide. Merci de redemander l'envoi de votre convocation."]);
             }
             $rowNom = $pdo->prepare('
-                SELECT d.Id_JA, n.Id_Rencontre
-                FROM nomination n JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                SELECT d.Id_JA, n.Id_Rencontre, r.ArbitrageCRA
+                FROM nomination n
+                JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                JOIN rencontre  r ON r.Id_Rencontre  = n.Id_Rencontre
                 WHERE n.Id_Nomination = ?
             ');
             $rowNom->execute([$idNomP]);
@@ -255,6 +260,14 @@ class ConvocationJaController extends BaseController
 
             $peages = $peagesRaw !== '' ? (float) str_replace(',', '.', $peagesRaw) : null;
             $km     = $kmRaw !== '' ? (int) $kmRaw : null;
+
+            // Arbitrage Club : aucun frais remboursable, on force 0 quoi que le client envoie.
+            if (!(int) $rowNom['ArbitrageCRA']) {
+                $peages = 0.0;
+                $km     = 0;
+                $peagesRaw = $kmRaw = '0';
+                $defisc = 0;
+            }
 
             $maxPeage = (float) getConfig('frais_max_peages', '80');
             $maxKm    = (int) getConfig('frais_max_km', '200');

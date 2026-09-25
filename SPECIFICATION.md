@@ -474,13 +474,14 @@ Rapport agrégé, en lecture seule, des arbitrages et frais par JA pour une phas
 
 ### Interface
 - Filtres **Phase** (`1` / `2`) et **Saison** (liste des 7 dernières années, libellé `AAAA‑AAAA+1`), bouton **Afficher** ; défaut = phase en cours (ou phase 2 de la saison écoulée pendant la coupure estivale)
-- Graphes par département (rencontres, JA actifs, couverture, charge, barres par journée). Le tableau « Juge-Arbitre » (par JA) n'est plus affiché ; le détail par JA reste disponible via l'**Export CSV**
-- Boutons **Export CSV** et **Imprimer** (vue imprimable via CSS `@media print`)
+- Graphes par département (rencontres, JA actifs, couverture, charge, barres par journée)
+- Tableau « Juge-Arbitre » (par JA : grade, club, arbitrages, arbitrages Club, km, montant km, péages, indemnité, total frais), en-têtes centrés, triable par colonne, avec ligne de totaux ; mêmes données que l'**Export CSV**
+- Bouton **Export CSV** placé juste avant le tableau (visible avec lui) ; bouton **Imprimer** dans la barre de filtres (vue imprimable via CSS `@media print`)
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `donnees` | GET (`phase`, `annee`) | Retourne, par JA, le nombre d'arbitrages et les totaux km / péages / indemnité / frais sur la phase choisie — **plus appelé par l'écran** depuis la suppression du tableau |
+| `donnees` | GET (`phase`, `annee`) | Retourne, par JA, le nombre d'arbitrages et les totaux km / péages / indemnité / frais sur la phase choisie — alimente le tableau par JA |
 | `export_csv` | GET (`phase`, `annee`) | Télécharge un CSV (BOM UTF-8, séparateur `;`) `stats_ja_saison{annee}_phase{phase}.csv` |
 
 ### Résolution (phase, saison) → bornes de dates
@@ -489,8 +490,11 @@ Rapport agrégé, en lecture seule, des arbitrages et frais par JA pour une phas
 - La date de fin est bornée à aujourd'hui ; si la date de début est future, la phase « n'a pas encore commencé » (message d'erreur, aucune ligne)
 
 ### Calcul (par JA, sur les nominations `Valide = 1` de la période)
-- `total_km` = `SUM(Kilometre)`, `total_peages` = `SUM(Peage)`
-- `total_indemnite` = `COUNT(nominations) × indemnite_forfaitaire`
+- **Arbitrages Club exclus des frais** : les nominations sur une rencontre `ArbitrageCRA = 0` comptent dans `nb_arbitrages` mais ne donnent ni indemnité, ni péage, ni remboursement kilométrique (seules les rencontres `ArbitrageCRA = 1` sont valorisées ci-dessous)
+- `nb_arbitrages_club` = nombre de nominations sur des rencontres `ArbitrageCRA = 0` (colonne « Arbitrages Club », incluse dans `nb_arbitrages`)
+- `total_km` = `SUM(Kilometre)`, `total_peages` = `SUM(Peage)` (rencontres `ArbitrageCRA = 1` uniquement)
+- `montant_km` = `total_km × frais_kilometrique` (colonne « Montant km (€) »)
+- `total_indemnite` = `COUNT(nominations ArbitrageCRA = 1) × indemnite_forfaitaire`
 - `total_frais` = `total_km × frais_kilometrique + total_peages + total_indemnite`
 - Utilise les clés de configuration `indemnite_forfaitaire` et `frais_kilometrique` (EA91) pour valoriser les frais, en rapport de synthèse par JA
 

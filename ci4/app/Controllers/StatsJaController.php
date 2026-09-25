@@ -16,6 +16,13 @@ use CodeIgniter\HTTP\ResponseInterface;
  */
 class StatsJaController extends BaseController
 {
+    // Arbitrage Club (rencontre.ArbitrageCRA = 0) : ni indemnité, ni péage, ni km remboursés —
+    // seules les rencontres à arbitrage CRA (ArbitrageCRA = 1) sont valorisées.
+    private const SQL_KM      = 'COALESCE(SUM(CASE WHEN r.ArbitrageCRA = 1 THEN n.Kilometre END), 0)';
+    private const SQL_PEAGE   = 'COALESCE(SUM(CASE WHEN r.ArbitrageCRA = 1 THEN n.Peage END), 0)';
+    private const SQL_NB_CRA  = 'SUM(r.ArbitrageCRA = 1)';
+    private const SQL_NB_CLUB = 'SUM(r.ArbitrageCRA = 0)';
+
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
@@ -234,12 +241,13 @@ class StatsJaController extends BaseController
                     'ja.Grade',
                     'cl.Nom                             AS Club',
                     'COUNT(n.Id_Nomination)             AS nb_arbitrages',
-                    'COALESCE(SUM(n.Kilometre), 0)      AS total_km',
-                    'COALESCE(SUM(n.Peage), 0)          AS total_peages',
-                    'COUNT(n.Id_Nomination) * :indem    AS total_indemnite',
-                    'COALESCE(SUM(n.Kilometre), 0) * :taux
-                        + COALESCE(SUM(n.Peage), 0)
-                        + COUNT(n.Id_Nomination) * :indem2 AS total_frais',
+                    self::SQL_NB_CLUB . '               AS nb_arbitrages_club',
+                    self::SQL_KM . '                    AS total_km',
+                    self::SQL_PEAGE . '                 AS total_peages',
+                    self::SQL_NB_CRA . ' * :indem       AS total_indemnite',
+                    self::SQL_KM . ' * :taux
+                        + ' . self::SQL_PEAGE . '
+                        + ' . self::SQL_NB_CRA . ' * :indem2 AS total_frais',
                 ],
                 '
                 GROUP BY ja.Id_JA, ja.Nom, ja.Prenom, ja.Grade, cl.Nom
@@ -255,9 +263,17 @@ class StatsJaController extends BaseController
             $stmt->execute($params);
             $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
+            $tauxKm = (float) getConfig('frais_kilometrique', '0.30');
+            foreach ($rows as &$r) {
+                $r['montant_km'] = (float) $r['total_km'] * $tauxKm;
+            }
+            unset($r);
+
             $totaux = [
                 'nb_arbitrages'   => array_sum(array_column($rows, 'nb_arbitrages')),
+                'nb_arbitrages_club' => array_sum(array_column($rows, 'nb_arbitrages_club')),
                 'total_km'        => array_sum(array_column($rows, 'total_km')),
+                'montant_km'      => array_sum(array_column($rows, 'montant_km')),
                 'total_peages'    => array_sum(array_column($rows, 'total_peages')),
                 'total_indemnite' => array_sum(array_column($rows, 'total_indemnite')),
                 'total_frais'     => array_sum(array_column($rows, 'total_frais')),
@@ -468,12 +484,13 @@ class StatsJaController extends BaseController
                 'ja.Grade',
                 'cl.Nom AS Club',
                 'COUNT(n.Id_Nomination)             AS Arbitrages',
-                'COALESCE(SUM(n.Kilometre), 0)      AS Km',
-                'COALESCE(SUM(n.Peage), 0)          AS Peages',
-                'COUNT(n.Id_Nomination) * :indem    AS Indemnite',
-                'COALESCE(SUM(n.Kilometre), 0) * :taux
-                    + COALESCE(SUM(n.Peage), 0)
-                    + COUNT(n.Id_Nomination) * :indem2 AS Total',
+                self::SQL_NB_CLUB . '               AS ArbitragesClub',
+                self::SQL_KM . '                    AS Km',
+                self::SQL_PEAGE . '                 AS Peages',
+                self::SQL_NB_CRA . ' * :indem       AS Indemnite',
+                self::SQL_KM . ' * :taux
+                    + ' . self::SQL_PEAGE . '
+                    + ' . self::SQL_NB_CRA . ' * :indem2 AS Total',
             ],
             ' GROUP BY ja.Id_JA, ja.Nom, ja.Prenom, ja.Grade, cl.Nom HAVING Arbitrages > 0 ORDER BY Arbitrages DESC, ja.Nom',
             $dateDebut,
@@ -487,12 +504,15 @@ class StatsJaController extends BaseController
 
         $out = fopen('php://temp', 'r+');
         fwrite($out, "\xEF\xBB\xBF");
-        fputcsv($out, ['Nom', 'Prénom', 'Grade', 'Club', 'Arbitrages', 'Km', 'Péages (€)', 'Indemnité (€)', 'Total (€)'], ';');
+        fputcsv($out, ['Nom', 'Prénom', 'Grade', 'Club', 'Arbitrages', 'Arbitrages Club', 'Km', 'Montant km (€)', 'Péages (€)', 'Indemnité (€)', 'Total (€)'], ';');
+        $tauxKm = (float) getConfig('frais_kilometrique', '0.30');
         foreach ($rows as $r) {
             fputcsv($out, [
                 csvSafe($r['Nom']), csvSafe($r['Prenom']), csvSafe($r['Grade']), csvSafe($r['Club']),
                 $r['Arbitrages'],
+                $r['ArbitragesClub'],
                 $r['Km'],
+                number_format((float) $r['Km'] * $tauxKm, 2, ',', ''),
                 number_format((float) $r['Peages'], 2, ',', ''),
                 number_format((float) $r['Indemnite'], 2, ',', ''),
                 number_format((float) $r['Total'], 2, ',', ''),
