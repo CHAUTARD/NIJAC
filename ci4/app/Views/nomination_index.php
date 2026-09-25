@@ -936,10 +936,14 @@ $(document).on('click', '.recap-btn-retirer', function (e) {
 });
 
 // ── Mise à jour UI ────────────────────────────────────────────────────────────
+// R3M/R4M en arbitrage club sans nomination : pas de JA CRA à attribuer, ne bloque ni la validation ni l'envoi.
+const estArbClubSansJa = rc => !nominations[rc.Id_Rencontre]
+    && rc.SouhaitJADom === 'Club' && ['R3M', 'R4M'].includes(rc.DivisionCode || '');
+
 function mettreAJourBoutons() {
     const total    = rencontres.length;
     const attrib   = Object.keys(nominations).length;
-    const toutFait = (total > 0 && attrib === total);
+    const toutFait = (attrib > 0 && attrib + rencontres.filter(estArbClubSansJa).length === total);
     const validees = rencontres.filter(rc => rc.Valide == 1).length;
 
     // Valider visible quand tout est attribué (y compris pour re-valider après une modification)
@@ -989,7 +993,9 @@ function afficherRecap() {
                 ${nom
                     ? `<span class="recap-ja"><i class="bi bi-person-check me-1"></i>${escHtml((nom.Prenom + ' ' + nom.Nom).trim())}</span>
                        <button class="btn btn-sm btn-outline-danger recap-btn-retirer ms-auto" data-renc="${rc.Id_Rencontre}" title="Retirer cette nomination"><i class="bi bi-trash"></i></button>`
-                    : `<span class="text-danger ms-auto"><i class="bi bi-x-circle me-1"></i>Non attribué</span>`
+                    : estArbClubSansJa(rc)
+                        ? `<span class="text-muted ms-auto">Arbitrage club</span>`
+                        : `<span class="text-danger ms-auto"><i class="bi bi-x-circle me-1"></i>Non attribué</span>`
                 }
             </div>
         `);

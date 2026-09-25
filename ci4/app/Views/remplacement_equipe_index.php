@@ -65,8 +65,9 @@
             <span style="flex:1"></span>
             <span class="combo-field">
                 <label for="sel-dept">Département</label>
-                <select id="sel-dept" style="width:170px;">
+                <select id="sel-dept" style="width:190px;">
                     <option value="">Tous</option>
+                    <option value="76+27">76 + 27 — Seine-Maritime + Eure</option>
                     <?php foreach ($deptActifs as $d): ?>
                     <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
                     <?php endforeach; ?>
@@ -263,7 +264,7 @@ function rencontresFiltrees() {
         if (equipe
             && !String(r.NomDom ?? '').toLowerCase().includes(equipe)
             && !String(r.NomExt ?? '').toLowerCase().includes(equipe)) return false;
-        if (deptFiltre && deptDeClub(r.IdClubDom) !== deptFiltre) return false;
+        if (deptFiltre && !deptFiltre.split('+').includes(deptDeClub(r.IdClubDom))) return false;
         if (divisionFiltre && String(r.Division ?? '') !== divisionFiltre) return false;
         if (pouleFiltre && String(r.Poule ?? '') !== pouleFiltre) return false;
         if (journeeFiltre && String(r.Journee ?? '') !== journeeFiltre) return false;

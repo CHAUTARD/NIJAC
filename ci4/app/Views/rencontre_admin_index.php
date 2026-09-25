@@ -60,10 +60,11 @@
             <span style="flex:1"></span>
             <span class="combo-field">
                 <label for="sel-dept">Département</label>
-                <select id="sel-dept" style="width:190px;">
+                <select id="sel-dept" style="width:260px;">
                     <option value="">Tous</option>
                     <option value="76+27">76 + 27 — Seine-Maritime + Eure</option>
                     <?php foreach ($deptActifs as $d): ?>
+                    <?php if (in_array((string) $d['CodeDept'], ['76', '27'], true)) continue; // fusionnés dans « 76 + 27 » ?>
                     <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
                     <?php endforeach; ?>
                 </select>
