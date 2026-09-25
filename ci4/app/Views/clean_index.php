@@ -374,6 +374,8 @@
         }
         #select-table-fichier:focus, #select-table-nom:focus { outline: none; border-color: #7c3aed; }
 
+        .btn-suppr-un { background: none; border: 0; padding: 0; margin-top: .3rem; color: #dc2626; font-size: .78rem; cursor: pointer; }
+        .btn-suppr-un:hover { text-decoration: underline; }
         /* ── Aucune sauvegarde ── */
         .no-backup {
             text-align: center;
@@ -462,34 +464,6 @@
     <div class="tab-content">
 
     <div class="tab-pane fade show active cards-row" id="pane-sauvegarde">
-
-    <!-- ── CARTE 1 : Nettoyage ── -->
-    <div class="op-card card-clean">
-        <div class="card-head">
-            <h2>
-                <i class="bi bi-exclamation-triangle-fill warn-icon"></i>
-                Nettoyage — Nouvelle phase
-            </h2>
-            <ul class="warn-list">
-                <li>Supprime <strong>définitivement</strong> les données de la phase en cours.</li>
-                <li>Un fichier SQL est créé dans <code>/SQL/</code> avant toute suppression.</li>
-                <li>Si la sauvegarde échoue, <strong>aucune suppression</strong> n'est effectuée.</li>
-            </ul>
-            <div class="tables-badge">
-                <span>Competition_Regionale</span><span>Disponible</span><span>Equipe</span>
-                <span>Equipe_Nationale</span><span>JA</span><span>Nomination</span><span>Rencontre</span>
-            </div>
-        </div>
-
-        <div class="card-body-custom" id="section-clean">
-
-            <button id="btn-executer" class="btn-action btn-clean" disabled>
-                <i class="bi bi-calendar2-plus-fill me-2"></i>Sauvegarder et démarrer nouvelle phase
-            </button>
-        </div>
-
-        <div id="clean-result" class="result-zone"></div>
-    </div>
 
     <!-- ── CARTE 3 : Sauvegarde totale ── -->
     <div class="op-card card-full">
@@ -597,6 +571,7 @@
                     </label>
                     <select id="select-fichier"></select>
                     <div id="fichier-meta" class="fichier-meta"></div>
+                    <button type="button" class="btn-suppr-un" data-select="#select-fichier"><i class="bi bi-trash me-1"></i>Supprimer ce fichier</button>
                 </div>
 
                 <button id="btn-restaurer" class="btn-action btn-restore" disabled>
@@ -643,6 +618,7 @@
                     </label>
                     <select id="select-full-fichier" style="width:100%;border:2px solid #c8d4e8;border-radius:6px;padding:.4rem .7rem;font-size:.85rem;margin-bottom:1rem;background:#fff;"></select>
                     <div id="full-fichier-meta" class="fichier-meta"></div>
+                    <button type="button" class="btn-suppr-un" data-select="#select-full-fichier"><i class="bi bi-trash me-1"></i>Supprimer ce fichier</button>
                 </div>
 
                 <button id="btn-restaurer-total" class="btn-action" style="background:#dc2626;color:#fff;" disabled>
@@ -650,6 +626,15 @@
                 </button>
             </div>
         </div>
+
+        <?php if (!empty($isDev)): ?>
+        <!-- DEV uniquement : hors #section-full-restore, masqué après une restauration réussie -->
+        <div class="card-body-custom" style="padding-top:0;">
+            <button id="btn-params-dev" class="btn-action" style="background:#d97706;color:#fff;" disabled>
+                <i class="bi bi-arrow-counterclockwise me-2"></i>Restaurer les paramètres dev (état du logiciel, email développement)
+            </button>
+        </div>
+        <?php endif; ?>
 
         <div id="full-restore-result" class="result-zone"></div>
     </div>
@@ -682,6 +667,7 @@
                         <i class="bi bi-file-earmark-code me-1"></i>Fichier de sauvegarde totale
                     </label>
                     <select id="select-table-fichier"></select>
+                    <button type="button" class="btn-suppr-un" data-select="#select-table-fichier"><i class="bi bi-trash me-1"></i>Supprimer ce fichier</button>
                 </div>
 
                 <div id="table-select-zone">
@@ -725,13 +711,41 @@
                 <li><strong>Comptabilité</strong> — générer le journal comptable de la phase (<code>ED55</code>) et transmettre les pièces ; les indemnités JA sont soldées en fin de phase.</li>
                 <li><strong>Sauvegarde totale</strong> — onglet « Sauvegarde » → « Sauvegarder toute la base de données » (fichier <code>Full_*.sql</code>, à conserver hors serveur).</li>
                 <li><strong>Vérifier la configuration</strong> (<code>EA91</code>) — bornes <code>phase2_debut</code> / <code>phase2_fin</code> et saison courante.</li>
-                <li><strong>Nettoyage de phase</strong> — onglet « Sauvegarde » → « Sauvegarder et démarrer nouvelle phase » : sauvegarde SQL puis vidage de <code>Disponible</code>, <code>Equipe</code>, <code>Equipe_Nationale</code>, <code>Rencontre</code>, <code>Nomination</code>, <code>Competition_Regionale</code> ; désactivation des JA (<code>Actif&nbsp;=&nbsp;0</code>, conservés) ; purge des <code>.xlsx</code> de <code>Importation/Rencontres</code>.</li>
+                <li><strong>Nettoyage de phase</strong> — carte « Nettoyage — Nouvelle phase » ci-dessous → « Sauvegarder et démarrer nouvelle phase » : sauvegarde SQL puis vidage de <code>Disponible</code>, <code>Equipe</code>, <code>Equipe_Nationale</code>, <code>Rencontre</code>, <code>Nomination</code>, <code>Competition_Regionale</code> ; désactivation des JA (<code>Actif&nbsp;=&nbsp;0</code>, conservés) ; purge des <code>.xlsx</code> de <code>Importation/Rencontres</code>.</li>
                 <li><strong>Ré-importer les équipes régionales</strong> (<code>EA92</code>) si la composition change pour la nouvelle phase.</li>
                 <li><strong>Ré-importer les rencontres</strong> — régionales (<code>EA82</code>) puis nationales (<code>EA83</code>) ; recharger le calendrier régional (<code>EA84</code>) si nécessaire.</li>
                 <li><strong>Réactiver les JA</strong> concernés (<code>EN11</code>) et vérifier grades / dates de validation FFTT.</li>
                 <li><strong>Relancer le recueil des disponibilités</strong> (<code>EN13</code>) et l'envoi aux JA (<code>EN15</code>).</li>
             </ol>
         </div>
+    </div>
+
+    <!-- ── CARTE 1 : Nettoyage ── -->
+    <div class="op-card card-clean">
+        <div class="card-head">
+            <h2>
+                <i class="bi bi-exclamation-triangle-fill warn-icon"></i>
+                Nettoyage — Nouvelle phase
+            </h2>
+            <ul class="warn-list">
+                <li>Supprime <strong>définitivement</strong> les données de la phase en cours.</li>
+                <li>Un fichier SQL est créé dans <code>/SQL/</code> avant toute suppression.</li>
+                <li>Si la sauvegarde échoue, <strong>aucune suppression</strong> n'est effectuée.</li>
+            </ul>
+            <div class="tables-badge">
+                <span>Competition_Regionale</span><span>Disponible</span><span>Equipe</span>
+                <span>Equipe_Nationale</span><span>JA</span><span>Nomination</span><span>Rencontre</span>
+            </div>
+        </div>
+
+        <div class="card-body-custom" id="section-clean">
+
+            <button id="btn-executer" class="btn-action btn-clean" disabled>
+                <i class="bi bi-calendar2-plus-fill me-2"></i>Sauvegarder et démarrer nouvelle phase
+            </button>
+        </div>
+
+        <div id="clean-result" class="result-zone"></div>
     </div>
     </div><!-- /#pane-fin-phase -->
 
@@ -793,6 +807,7 @@ function majBoutonsAvecPwd() {
     if ($('#full-restore-form').is(':visible'))  $('#btn-restaurer-total').prop('disabled', !pwdOk);
     if ($('#select-table-nom').val())            $('#btn-restaurer-table').prop('disabled', !pwdOk);
     if ($('#select-save-table').val())           $('#btn-save-table').prop('disabled', !pwdOk);
+    $('#btn-params-dev').prop('disabled', !pwdOk);
 }
 
 $('#pwd-global').on('input', function () {
@@ -1344,6 +1359,43 @@ $(document).on('click', '#btn-suppr-full', function () {
         null,
         { type: 'danger', confirmLabel: 'Supprimer' }
     );
+});
+
+// Suppression d'UN fichier (bouton sous chaque liste de la carte Restauration)
+$(document).on('click', '.btn-suppr-un', function () {
+    if (!pwdOk) { nijacToast('Mot de passe requis.', 'danger'); return; }
+    const fichier = $($(this).data('select')).val();
+    if (!fichier) return;
+    nijacConfirm(
+        'Supprimer la sauvegarde « ' + fichier + ' » ?\n\nCette opération est irréversible.',
+        function () {
+            spinner(true);
+            $.post(`${CLEAN_BASE}/supprimer`, { fichier: fichier, password: $('#pwd-global').val() }, res => {
+                spinner(false);
+                if (res.ok) {
+                    setStatus(res.msg);
+                    chargerListeSauvegardes();
+                    chargerListeSauvegardesTotal();
+                    chargerListeSauvegardesTotal2();
+                    chargerFichiersTableRestore();
+                } else {
+                    nijacToast('Erreur : ' + res.msg, 'danger');
+                }
+            }, 'json').fail(() => { spinner(false); nijacToast('Erreur réseau.', 'danger'); });
+        },
+        null,
+        { type: 'danger', confirmLabel: 'Supprimer' }
+    );
+});
+
+$('#btn-params-dev').on('click', function () {
+    if (!pwdOk) return;
+    spinner(true);
+    $.post(`${CLEAN_BASE}/restaurer-params-dev`, { password: $('#pwd-global').val() }, res => {
+        spinner(false);
+        nijacToast(res.msg, res.ok ? 'success' : 'danger');
+        if (res.ok) setStatus(res.msg);
+    }, 'json').fail(() => { spinner(false); nijacToast('Erreur réseau.', 'danger'); });
 });
 
 // Réévalue l'état des boutons du panneau qui devient visible (un mdp saisi

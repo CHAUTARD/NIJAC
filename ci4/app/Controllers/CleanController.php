@@ -205,6 +205,7 @@ class CleanController extends BaseController
             'departement' => $moi['id_departement'] ?? '',
             'changeLogin' => !empty($moi['change_login']),
             'tablesBdd'   => $tablesBdd,
+            'isDev'       => !IS_PRODUCTION,
         ];
 
         return view('clean_index', $data);
@@ -308,6 +309,27 @@ class CleanController extends BaseController
             }
 
             return $this->response->setJSON(['ok' => true, 'msg' => "$supprimes ancienne(s) sauvegarde(s) supprimée(s).", 'supprimes' => $supprimes]);
+        });
+    }
+
+    /** Supprime UN fichier de sauvegarde (Sauve_/Full_/Table_*.sql) choisi dans une liste. */
+    public function supprimer(): ResponseInterface
+    {
+        return $this->tryJson(function () {
+            if ($err = $this->verifierMdpRequete()) {
+                return $err;
+            }
+
+            $nom      = (string) $this->request->getPost('fichier');
+            $filepath = $this->resoudreFichierSauvegarde($nom, '/^(Sauve_\d{12}|Full_\d{12}|Table_[A-Za-z0-9_]+_\d{12})\.sql$/');
+            if ($filepath === false) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Fichier de sauvegarde invalide ou introuvable.']);
+            }
+            if (!unlink($filepath)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Suppression impossible.']);
+            }
+
+            return $this->response->setJSON(['ok' => true, 'msg' => basename($filepath) . ' supprimé.']);
         });
     }
 
@@ -648,6 +670,14 @@ class CleanController extends BaseController
             }
 
             $pdo = getPDO();
+            // Dev : mémorise les paramètres locaux avant qu'un dump de prod ne les écrase
+            // (réappliqués par restaurerParamsDev). Pas d'écrasement d'un instantané non consommé,
+            // sinon une 2e restauration mémoriserait les valeurs de la prod.
+            $fichierParams = $this->sqlDir() . '/dev_params.json';
+            if (!IS_PRODUCTION && !file_exists($fichierParams)) {
+                $st = $pdo->query("SELECT cle, valeur FROM configuration WHERE cle IN ('etat_logiciel', 'email_developpement')");
+                file_put_contents($fichierParams, json_encode($st->fetchAll(\PDO::FETCH_KEY_PAIR)));
+            }
             $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
             $executed = 0;
             foreach ($this->decouperInstructions($sql) as $stmt) {
@@ -662,6 +692,42 @@ class CleanController extends BaseController
                 'fichier'  => basename($filepath),
                 'executed' => $executed,
             ]);
+        });
+    }
+
+    /**
+     * DEV UNIQUEMENT : réapplique etat_logiciel et email_developpement tels qu'ils étaient
+     * avant la dernière restauration totale (instantané SQL/dev_params.json), pour qu'un
+     * dump de production ne laisse pas le dev en « Operationnel » avec les mails réels.
+     */
+    public function restaurerParamsDev(): ResponseInterface
+    {
+        return $this->tryJson(function () {
+            if (IS_PRODUCTION) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Action interdite en production.']);
+            }
+            if ($err = $this->verifierMdpRequete()) {
+                return $err;
+            }
+
+            $fichier = $this->sqlDir() . '/dev_params.json';
+            $params  = is_file($fichier) ? json_decode((string) file_get_contents($fichier), true) : null;
+            if (!is_array($params) || !$params) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Aucun paramètre dev mémorisé (aucune restauration totale faite depuis ce poste).']);
+            }
+
+            $stmt = getPDO()->prepare('INSERT INTO configuration (cle, valeur) VALUES (?, ?) ON DUPLICATE KEY UPDATE valeur = VALUES(valeur)');
+            foreach (['etat_logiciel', 'email_developpement'] as $cle) {
+                if (isset($params[$cle])) {
+                    $stmt->execute([$cle, $params[$cle]]);
+                }
+            }
+            unlink($fichier);
+
+            return $this->response->setJSON(['ok' => true, 'msg' => 'Paramètres dev restaurés : ' . implode(', ', array_map(
+                fn ($c) => "$c = " . $params[$c],
+                array_values(array_intersect(['etat_logiciel', 'email_developpement'], array_keys($params)))
+            ))]);
         });
     }
 

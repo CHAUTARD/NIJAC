@@ -176,10 +176,10 @@ class CentrenvoyeController extends BaseController
                            ed.Division, RIGHT(ed.Division, 1) AS SexeCode,
                            ed.Nom AS NomDom, ee.Nom AS NomExt,
                            n.Id_Rencontre,
-                           s.Nom          AS SalleNom,
-                           s.Adresse      AS SalleAdresse,
-                           lps.CodePostal AS SalleCP,
-                           lps.Nom        AS SalleVille,
+                           COALESCE(s.Nom, s_c.Nom)                 AS SalleNom,
+                           COALESCE(s.Adresse, s_c.Adresse)         AS SalleAdresse,
+                           COALESCE(lps.CodePostal, lp_c.CodePostal) AS SalleCP,
+                           COALESCE(lps.Nom, lp_c.Nom)              AS SalleVille,
                            co.Nom         AS NomClub,
                            co.CorNom      AS CorrNom,
                            co.CorEmail    AS CorrEmail,
@@ -192,6 +192,9 @@ class CentrenvoyeController extends BaseController
                     LEFT JOIN equipe ee     ON ee.Id_Equipe   = r.Id_EquipeExt
                     LEFT JOIN salle s       ON s.Id_Salle     = r.id_Salle
                     LEFT JOIN laposte lps   ON lps.Id_LaPoste = s.Id_Laposte
+                    -- Repli : salle principale du club recevant (r.id_Salle est NULL pour la majorité des rencontres)
+                    LEFT JOIN salle   s_c   ON s_c.Id_Club    = ed.Id_Club AND s_c.EstPrincipale = 1
+                    LEFT JOIN laposte lp_c  ON lp_c.Id_LaPoste = s_c.Id_Laposte
                     LEFT JOIN Club co ON co.Id_Club = ed.Id_Club
                     WHERE r.Journee = ? AND r.Date = ? AND j.Actif = 1
                       AND j.Grade = 'JA1'
@@ -583,8 +586,8 @@ class CentrenvoyeController extends BaseController
                    r.Date, r.Heure, r.Journee, r.Poule,
                    ed.Division, RIGHT(ed.Division, 1) AS SexeCode,
                    ed.Nom AS NomDom, ee.Nom AS NomExt,
-                   s.Nom AS SalleNom, s.Adresse AS SalleAdresse,
-                   lps.CodePostal AS SalleCP, lps.Nom AS SalleVille,
+                   COALESCE(s.Nom, s_c.Nom) AS SalleNom, COALESCE(s.Adresse, s_c.Adresse) AS SalleAdresse,
+                   COALESCE(lps.CodePostal, lp_c.CodePostal) AS SalleCP, COALESCE(lps.Nom, lp_c.Nom) AS SalleVille,
                    co.Nom AS NomClub,
                    co.CorNom AS CorrNom, co.CorEmail AS CorrEmail, co.CorTelephone AS CorrTel,
                    co.RefNom AS RefNom, co.RefMail AS RefMail
@@ -596,6 +599,8 @@ class CentrenvoyeController extends BaseController
             LEFT JOIN equipe ee     ON ee.Id_Equipe   = r.Id_EquipeExt
             LEFT JOIN salle s       ON s.Id_Salle     = r.id_Salle
             LEFT JOIN laposte lps   ON lps.Id_LaPoste = s.Id_Laposte
+            LEFT JOIN salle   s_c   ON s_c.Id_Club    = ed.Id_Club AND s_c.EstPrincipale = 1
+            LEFT JOIN laposte lp_c  ON lp_c.Id_LaPoste = s_c.Id_Laposte
             LEFT JOIN Club co       ON co.Id_Club     = ed.Id_Club
             WHERE n.Id_Nomination = ?
         ');

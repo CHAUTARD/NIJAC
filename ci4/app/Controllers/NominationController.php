@@ -505,7 +505,14 @@ class NominationController extends BaseController
             $stmt = $pdo->prepare("
                 SELECT n.Id_Nomination, n.Id_Rencontre, ja.Id_JA, ja.Nom, ja.Prenom, ja.Email,
                        ed.Nom AS NomDom, ee.Nom AS NomExt, cl.Nom AS NomClub,
-                       r.Date, r.Heure, r.Journee, r.Poule, ed.Division, RIGHT(ed.Division, 1) AS SexeCode
+                       r.Date, r.Heure, r.Journee, r.Poule, ed.Division, RIGHT(ed.Division, 1) AS SexeCode,
+                       -- Salle propre à la rencontre si renseignée, sinon salle principale du club recevant
+                       -- (r.id_Salle est NULL pour la majorité des rencontres).
+                       COALESCE(s_r.Nom, s_c.Nom)                 AS SalleNom,
+                       COALESCE(s_r.Adresse, s_c.Adresse)         AS SalleAdresse,
+                       COALESCE(lp_r.CodePostal, lp_c.CodePostal) AS SalleCP,
+                       COALESCE(lp_r.Nom, lp_c.Nom)               AS SalleVille,
+                       cl.CorNom AS CorrNom, cl.CorEmail AS CorrEmail, cl.CorTelephone AS CorrTel
                 FROM nomination n
                 JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
                 JOIN rencontre r  ON r.Id_Rencontre  = n.Id_Rencontre
@@ -513,6 +520,10 @@ class NominationController extends BaseController
                 JOIN equipe  ed   ON ed.Id_Equipe     = r.Id_EquipeDom
                 LEFT JOIN equipe ee ON ee.Id_Equipe   = r.Id_EquipeExt
                 LEFT JOIN Club cl ON cl.Id_Club       = ed.Id_Club
+                LEFT JOIN salle   s_r  ON s_r.Id_Salle    = r.id_Salle
+                LEFT JOIN laposte lp_r ON lp_r.Id_LaPoste = s_r.Id_Laposte
+                LEFT JOIN salle   s_c  ON s_c.Id_Club     = ed.Id_Club AND s_c.EstPrincipale = 1
+                LEFT JOIN laposte lp_c ON lp_c.Id_LaPoste = s_c.Id_Laposte
                 WHERE r.Journee = ? AND r.Date = ?
                   AND n.Valide = 1
                   AND r.Id_Rencontre IN ($placeholders)
@@ -558,6 +569,13 @@ class NominationController extends BaseController
                         'dom'           => $nom['NomDom']   ?? null,
                         'ext'           => $nom['NomExt']   ?? null,
                         'nom_club'      => $nom['NomClub']  ?? null,
+                        'salle_nom'     => $nom['SalleNom']     ?? null,
+                        'salle_adresse' => $nom['SalleAdresse'] ?? null,
+                        'salle_cp'      => $nom['SalleCP']      ?? null,
+                        'salle_ville'   => $nom['SalleVille']   ?? null,
+                        'corr_nom'      => $nom['CorrNom']      ?? null,
+                        'corr_email'    => $nom['CorrEmail']    ?? null,
+                        'corr_tel'      => $nom['CorrTel']      ?? null,
                     ]);
                     $rendu = remplacerMarqueursMessage($tplConv['Sujet'], $tplConv['Message'], $marqueurs);
                     // Alias historique : les modèles écrits avant l'ajout de {URL_CONVOCATION_JA} utilisent {LIEN_CONVOCATION}/{LIEN_LIGUE}.

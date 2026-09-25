@@ -1146,6 +1146,8 @@ Préparer l'application pour une nouvelle saison : sauvegarde SQL puis vidage de
 | `liste_sauvegardes` | GET | Liste les fichiers de sauvegarde phase dans `/SQL/` |
 | `liste_sauvegardes_total` | GET | Liste les sauvegardes totales |
 | `supprimer_anciennes` | POST | Supprime les sauvegardes antérieures à une date |
+| `restaurer_params_dev` | POST (`password`) | **Dev uniquement** : réapplique `etat_logiciel` et `email_developpement` mémorisés (`SQL/dev_params.json`) au début de la dernière restauration totale — instantané pris seulement s'il n'existe pas déjà, supprimé après application. Bouton sous « Restaurer toute la base de données » |
+| `supprimer` | POST (`fichier`, `password`) | Supprime **un seul** fichier `Sauve_*`, `Full_*` ou `Table_*` (bouton « Supprimer ce fichier » sous chaque liste de l'onglet Restauration) ; mot de passe admin revérifié, nom validé par motif strict |
 | `verifier_mdp` | POST | Vérifie le mot de passe avant restauration |
 | `executer` | POST | Lance le nettoyage + sauvegarde phase |
 | `sauvegarde_totale` | POST | Lance la sauvegarde complète |

@@ -111,12 +111,14 @@ $routes->get('clean/sauvegardes-table', 'CleanController::sauvegardesTable', ['f
 $routes->post('clean/verifier-mdp', 'CleanController::verifierMdp', ['filter' => 'adminauth']);
 $routes->post('clean/tables', 'CleanController::tables', ['filter' => 'adminauth']);
 $routes->post('clean/supprimer-anciennes', 'CleanController::supprimerAnciennes', ['filter' => 'adminauth']);
+$routes->post('clean/supprimer', 'CleanController::supprimer', ['filter' => 'adminauth']);
 $routes->post('clean/executer', 'CleanController::executer', ['filter' => 'adminauth']);
 $routes->post('clean/sauvegarde-totale', 'CleanController::sauvegardeTotale', ['filter' => 'adminauth']);
 $routes->post('clean/sauvegarde-table', 'CleanController::sauvegardeTable', ['filter' => 'adminauth']);
 $routes->post('clean/restaurer', 'CleanController::restaurer', ['filter' => 'adminauth']);
 $routes->post('clean/restaurer-total', 'CleanController::restaurerTotal', ['filter' => 'adminauth']);
-$routes->post('clean/restaurer-table', 'CleanController::restaurerTableFull', ['filter' => 'adminauth']);
+$routes->post('clean/restaurer-params-dev', 'CleanController::restaurerParamsDev', ['filter' => 'adminauth']);
+$routes->post('clean/restaurer-table','CleanController::restaurerTableFull', ['filter' => 'adminauth']);
 
 // ── EN11 Juges-Arbitres ──────────────────────────────────────────────────────
 // Filtre "auth" (pas "adminauth") : accessible aux Nominateurs (grille +
