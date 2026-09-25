@@ -648,7 +648,7 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
 
     $sexe = match ($ctx['sexe_code'] ?? '') {
         'F'     => 'Féminin',
-        'M'     => 'Mixte',
+        'M'     => 'Masculin',
         default => '',
     };
 

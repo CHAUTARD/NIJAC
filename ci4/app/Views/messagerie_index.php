@@ -299,7 +299,7 @@ const MARQUEURS_EXEMPLE = {
     '{CORR_EMAIL}':         'correspondant@club.fr',
     '{CORR_TEL}':           '06 12 34 56 78',
     '{ID_CONVOCATION}':     'AB12CD34',
-    '{SEXE}':               'M',
+    '{SEXE}':               'Messieurs',
     '{LISTE_NOMINATIONS}':  '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;">'
         + '<tr style="background:#1a3a6b;color:#fff;"><th>Date</th><th>Heure</th><th>Division</th><th>Domicile</th><th>Extérieur</th></tr>'
         + '<tr style="background:#f0f4fa"><td>13/09/2026</td><td>14:00</td><td>R2M</td><td>US EXEMPLE 1</td><td>AS EXEMPLE 2</td></tr>'
