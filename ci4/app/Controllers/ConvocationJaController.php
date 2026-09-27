@@ -23,6 +23,7 @@ use CodeIgniter\HTTP\ResponseInterface;
 class ConvocationJaController extends BaseController
 {
     private \Obfuscator $obf;
+    private \Obfuscator $obfSansPepper;
 
     public function __construct()
     {
@@ -32,6 +33,9 @@ class ConvocationJaController extends BaseController
         require_once __DIR__ . '/../../../Classes/Obfuscator.php';
 
         $this->obf = new \Obfuscator(OBFUSCATOR_SEED, getObfuscatorPepper());
+        // ponytail: repli temporaire pour les jetons envoyés avant l'activation
+        // d'OBFUSCATOR_PEPPER en prod — à retirer une fois ces convocations renvoyées/expirées.
+        $this->obfSansPepper = new \Obfuscator(OBFUSCATOR_SEED);
     }
 
     /**
@@ -59,7 +63,10 @@ class ConvocationJaController extends BaseController
         // du token ?cnv= : un ?nomination=N seul (anciens liens déjà envoyés par
         // email avant ce changement) n'est plus suffisant pour consulter/saisir
         // les frais d'une convocation.
-        $tokenValide = $idNomination > 0 && $tokenCnv !== '' && $this->obf->deobfuscate($tokenCnv) === $idNomination;
+        $tokenValide = $idNomination > 0 && $tokenCnv !== '' && (
+            $this->obf->deobfuscate($tokenCnv) === $idNomination
+            || $this->obfSansPepper->deobfuscate($tokenCnv) === $idNomination
+        );
 
         if ($tokenValide) {
             // Résolution en étapes pour un diagnostic précis quand ça échoue :
@@ -237,7 +244,11 @@ class ConvocationJaController extends BaseController
             if (!$idNomP) {
                 return $this->response->setJSON(['ok' => false, 'err' => 'Paramètre id_nomination manquant.']);
             }
-            if ($tokenCnv === '' || $this->obf->deobfuscate($tokenCnv) !== $idNomP) {
+            $tokenValide = $tokenCnv !== '' && (
+                $this->obf->deobfuscate($tokenCnv) === $idNomP
+                || $this->obfSansPepper->deobfuscate($tokenCnv) === $idNomP
+            );
+            if (!$tokenValide) {
                 return $this->response->setJSON(['ok' => false, 'err' => "Lien de convocation invalide. Merci de redemander l'envoi de votre convocation."]);
             }
             $rowNom = $pdo->prepare('
