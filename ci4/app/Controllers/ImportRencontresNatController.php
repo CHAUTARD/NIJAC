@@ -59,16 +59,7 @@ class ImportRencontresNatController extends BaseController
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             ');
 
-            // Un nom d'équipe ne doit désigner qu'un seul club. Try/catch isolé : si des doublons
-            // existent déjà en base, on laisse la contrainte non posée plutôt que de faire échouer
-            // toute la migration (calendrier, dédoublonnage equipe_nationale...) qui suit.
-            $hasUqEquipeNom = (bool) $pdo0->query("SHOW INDEX FROM club WHERE Key_name = 'uq_club_equipenom'")->fetch();
-            if (!$hasUqEquipeNom) {
-                try {
-                    $pdo0->exec('ALTER TABLE club ADD UNIQUE KEY uq_club_equipenom (EquipeNom)');
-                } catch (\PDOException $e) {
-                }
-            }
+            // L'unicité de club.EquipeNom (uq_club_equipenom) est posée par initTableConfiguration() (EA98).
 
             // Table déjà existante avant l'ajout de la contrainte unique (versions antérieures
             // du code) : chaque rechargement (API ou Excel) accumulait alors un doublon par

@@ -137,7 +137,9 @@ class StatsNominationController extends BaseController
                 'coefNat'    => $coefNat,
             ]);
         } catch (\Throwable $e) {
-            return $this->response->setJSON(['ok' => false, 'err' => $e->getMessage()]);
+            error_log('[NIJAC] EN26 : ' . $e->getMessage());
+
+            return $this->response->setJSON(['ok' => false, 'err' => messageErreur($e, 'Erreur technique : statistiques indisponibles.')]);
         }
     }
 }

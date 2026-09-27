@@ -341,7 +341,10 @@ function rendu(res) {
     $('#contenu').show();
 }
 
+let dernierChargement = 0;
+
 function charger() {
+    dernierChargement = Date.now();
     $.get(DATA_URL, function (res) {
         if (!res.ok) { nijacToast(res.err || 'Erreur de chargement', 'danger'); return; }
         rendu(res);
@@ -349,6 +352,12 @@ function charger() {
 }
 
 $(charger);
+
+// Fenêtre ouverte à côté d'EN14 : les nominations y changent pendant qu'elle reste ouverte. On rafraîchit
+// au retour sur l'onglet (au plus toutes les 15 s) ; les mois / journées ouverts sont conservés par rendu().
+document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && Date.now() - dernierChargement > 15000) charger();
+});
 </script>
 <script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
 </body>

@@ -14,8 +14,9 @@ use CodeIgniter\HTTP\ResponseInterface;
  * Le correspondant choisit dans une liste déroulante le juge-arbitre qui
  * dirigera la rencontre — uniquement les JA actifs rattachés au club,
  * triés alphabétiquement. La réponse
- * crée une `nomination` (Peage/Kilometre/Defiscalisation = 0, Valide = 1,
- * EmailEnvoye = 0) pour l'arbitrage club.
+ * crée une `nomination` (Peage/Kilometre/Defiscalisation = 0, Valide = 0,
+ * EmailEnvoye = 0) pour l'arbitrage club : elle reste « à valider » côté
+ * nominateur (EN14) et n'est comptée comme arbitrée (EN17) qu'une fois validée.
  *
  * À renseigner dans les 5 jours qui suivent la rencontre : au-delà, simple
  * avertissement, la saisie reste possible.
@@ -62,19 +63,20 @@ class ArbitreClubController extends BaseController
         } catch (\PDOException $e) {
             log_message('error', '[NIJAC] arbitre_club PDO : ' . $e->getMessage());
 
-            return $this->response->setJSON(['ok' => false, 'msg' => 'Erreur base de données.']);
+            return $this->response->setJSON(['ok' => false, 'msg' => messageErreur($e, 'Erreur base de données.')]);
         }
     }
 
-    /** Id_Rencontre depuis le token `?renc=` (ou `renc` en POST), ou 0. */
+    /**
+     * Id_Rencontre depuis le token `?renc=` (ou `renc` en POST), ou 0. Le token est le seul
+     * secret de cette page publique : un Id_Rencontre en clair n'est PAS accepté (il permettait de
+     * consulter et de désigner un JA sur n'importe quelle rencontre en devinant un entier).
+     */
     private function idRencontre(string $raw): int
     {
         $raw = trim($raw);
         if ($raw === '') {
             return 0;
-        }
-        if (ctype_digit($raw)) {
-            return (int) $raw;
         }
         $id = $this->obf->deobfuscate($raw);
 
@@ -148,25 +150,29 @@ class ArbitreClubController extends BaseController
     {
         return $this->tryJson(function () {
             $nom = trim((string) $this->request->getGet('nom'));
-            if ($nom === '') {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Nom manquant.']);
+            if (mb_strlen($nom) < 2) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Saisissez au moins 2 caractères.']);
             }
 
+            // Sans token de rencontre valide, cette recherche publique permettait de lister les JA de toute la base.
             $pdo = getPDO();
             $id  = $this->idRencontre((string) $this->request->getGet('renc'));
             $ctx = $id ? $this->contexteRencontre($pdo, $id) : null;
+            if (!$ctx) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Lien invalide ou rencontre introuvable.']);
+            }
 
             $stmt = $pdo->prepare(
                 "SELECT Id_JA, Nom, Prenom
                  FROM ja
                  WHERE COALESCE(Actif, 1) = 1
                    AND (CONCAT(Nom, ' ', Prenom) LIKE ? OR CONCAT(Prenom, ' ', Nom) LIKE ?)
-                   " . ($ctx ? self::SQL_JA_LIBRE : '') . "
+                   " . self::SQL_JA_LIBRE . "
                  ORDER BY Nom, Prenom
                  LIMIT 10"
             );
-            $like = '%' . $nom . '%';
-            $stmt->execute([$like, $like, ...($ctx ? $this->paramsJaLibre($ctx) : [])]);
+            $like = '%' . addcslashes($nom, '%_\\') . '%';   // % et _ saisis sont littéraux, pas des jokers
+            $stmt->execute([$like, $like, ...$this->paramsJaLibre($ctx)]);
 
             return $this->response->setJSON(['ok' => true, 'jas' => $stmt->fetchAll()]);
         });

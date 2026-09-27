@@ -20,6 +20,12 @@ class RencontreNominateurController extends RencontreAdminController
         return 'r.Date, r.Heure';
     }
 
+    /** EN23 ne modifie que date/heure : les catalogues équipes/salles (toutes les équipes de la base) ne lui servent à rien. */
+    protected function avecCatalogues(): bool
+    {
+        return false;
+    }
+
     public function index()
     {
         $moi = $_SESSION['utilisateur'] ?? [];
@@ -52,18 +58,40 @@ class RencontreNominateurController extends RencontreAdminController
                 $heure .= ':00';
             }
 
-            $stmt = $pdo->prepare('UPDATE rencontre SET Date=?, Heure=? WHERE Id_Rencontre=?');
-            $stmt->execute([$date, $heure, $idRencontre]);
-
-            if ($stmt->rowCount() === 0) {
-                $chk = $pdo->prepare('SELECT COUNT(*) FROM rencontre WHERE Id_Rencontre = ?');
-                $chk->execute([$idRencontre]);
-                if ((int) $chk->fetchColumn() === 0) {
-                    return $this->response->setJSON(['ok' => false, 'msg' => "Rencontre $idRencontre introuvable."]);
-                }
+            // État actuel + éventuelle nomination : sert à la fois au « introuvable » et à l'avertissement.
+            $stmt = $pdo->prepare('
+                SELECT r.Date, r.Heure, n.Id_Nomination, n.EmailEnvoye,
+                       CONCAT(ja.Prenom, " ", ja.Nom) AS NomJa
+                FROM rencontre r
+                LEFT JOIN nomination n ON n.Id_Rencontre  = r.Id_Rencontre
+                LEFT JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                LEFT JOIN ja           ON ja.Id_JA        = d.Id_JA
+                WHERE r.Id_Rencontre = ?
+            ');
+            $stmt->execute([$idRencontre]);
+            $avant = $stmt->fetch();
+            if (!$avant) {
+                return $this->response->setJSON(['ok' => false, 'msg' => "Rencontre $idRencontre introuvable."]);
             }
 
-            return $this->response->setJSON(['ok' => true, 'msg' => 'Rencontre mise à jour.']);
+            $change = substr((string) $avant['Date'], 0, 10) !== $date || substr((string) $avant['Heure'], 0, 8) !== $heure;
+            if ($change) {
+                $pdo->prepare('UPDATE rencontre SET Date=?, Heure=? WHERE Id_Rencontre=?')->execute([$date, $heure, $idRencontre]);
+            }
+
+            // Un JA déjà nommé n'est pas prévenu automatiquement du changement : le nominateur doit le savoir.
+            $avertissement = '';
+            if ($change && $avant['Id_Nomination']) {
+                $avertissement = 'Un JA est déjà nommé sur cette rencontre (' . htmlspecialchars($avant['NomJa'] ?? '') . ')'
+                    . ($avant['EmailEnvoye'] ? ' et sa convocation a déjà été envoyée' : '')
+                    . ' : vérifiez sa disponibilité à la nouvelle date/heure et prévenez-le (ou refaites la nomination dans EN14).';
+            }
+
+            return $this->response->setJSON([
+                'ok'            => true,
+                'msg'           => $change ? 'Rencontre mise à jour.' : 'Aucune modification.',
+                'avertissement' => $avertissement,
+            ]);
         });
     }
 }

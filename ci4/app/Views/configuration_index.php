@@ -959,6 +959,10 @@
 <script>
 'use strict';
 
+function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 const BASE = '<?= site_url('configuration') ?>';
 let etatSelectionne = '<?= $etatCourant ?>';
 
@@ -1005,11 +1009,11 @@ $('#btn-sauvegarder').on('click', function () {
         spinner(false);
         $('#btn-sauvegarder').prop('disabled', false);
         if (res.ok) {
-            $('#msg-result').html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+            $('#msg-result').html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + escHtml(res.msg) + '</span>');
             const label = etatSelectionne === 'Developpement' ? 'Développement — emails redirigés' : 'Opérationnel — emails réels';
             $('#etat-status').text('État actuel : ' + label);
         } else {
-            $('#msg-result').html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+            $('#msg-result').html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + escHtml(res.msg) + '</span>');
         }
     }, 'json').fail(() => {
         spinner(false);
@@ -1041,12 +1045,12 @@ $('#btn-sauvegarder-email').on('click', function () {
         spinner(false);
         $('#btn-sauvegarder-email').prop('disabled', false);
         if (res.ok) {
-            $('#msg-result-email').html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+            $('#msg-result-email').html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + escHtml(res.msg) + '</span>');
             $('#desc-email-dev').text(val);
             $('#bandeau-email-dev').text(val);
         } else {
             $('#input-email-dev').addClass('is-invalid');
-            $('#msg-result-email').html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+            $('#msg-result-email').html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + escHtml(res.msg) + '</span>');
         }
     }, 'json').fail(() => {
         spinner(false);
@@ -1082,10 +1086,10 @@ $('#btn-sauvegarder-url-ligue').on('click', function () {
         spinner(false);
         $('#btn-sauvegarder-url-ligue').prop('disabled', false);
         if (res.ok) {
-            $('#msg-result-url-ligue').html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+            $('#msg-result-url-ligue').html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + escHtml(res.msg) + '</span>');
         } else {
             $('#input-url-ligue').addClass('is-invalid');
-            $('#msg-result-url-ligue').html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+            $('#msg-result-url-ligue').html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + escHtml(res.msg) + '</span>');
         }
     }, 'json').fail(() => {
         spinner(false);
@@ -1117,11 +1121,11 @@ function sauvegarderMontant(cle, $input, $msg, $btn) {
         spinner(false);
         $btn.prop('disabled', false);
         if (res.ok) {
-            $msg.html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+            $msg.html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + escHtml(res.msg) + '</span>');
             $input.val(res.valeur);
         } else {
             $input.addClass('is-invalid');
-            $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+            $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + escHtml(res.msg) + '</span>');
         }
     }, 'json').fail(() => {
         spinner(false);
@@ -1161,11 +1165,11 @@ $('#btn-sauvegarder-backup-full-garder').on('click', function () {
         spinner(false);
         $('#btn-sauvegarder-backup-full-garder').prop('disabled', false);
         if (res.ok) {
-            $msg.html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+            $msg.html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + escHtml(res.msg) + '</span>');
             $input.val(res.valeur);
         } else {
             $input.addClass('is-invalid');
-            $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+            $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + escHtml(res.msg) + '</span>');
         }
     }, 'json').fail(() => {
         spinner(false);
@@ -1196,11 +1200,11 @@ $('#btn-sauvegarder-nb-candidats-ja').on('click', function () {
         spinner(false);
         $('#btn-sauvegarder-nb-candidats-ja').prop('disabled', false);
         if (res.ok) {
-            $msg.html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+            $msg.html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + escHtml(res.msg) + '</span>');
             $input.val(res.valeur);
         } else {
             $input.addClass('is-invalid');
-            $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+            $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + escHtml(res.msg) + '</span>');
         }
     }, 'json').fail(() => {
         spinner(false);
@@ -1231,11 +1235,11 @@ $('#btn-sauvegarder-annee-fiscale').on('click', function () {
         spinner(false);
         $('#btn-sauvegarder-annee-fiscale').prop('disabled', false);
         if (res.ok) {
-            $msg.html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+            $msg.html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + escHtml(res.msg) + '</span>');
             $input.val(res.valeur);
         } else {
             $input.addClass('is-invalid');
-            $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+            $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + escHtml(res.msg) + '</span>');
         }
     }, 'json').fail(() => {
         spinner(false);
@@ -1263,11 +1267,11 @@ function sauvegarderTexte(cle, $input, $msg, $btn) {
         spinner(false);
         $btn.prop('disabled', false);
         if (res.ok) {
-            $msg.html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+            $msg.html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + escHtml(res.msg) + '</span>');
             $input.val(res.valeur);
         } else {
             $input.addClass('is-invalid');
-            $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+            $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + escHtml(res.msg) + '</span>');
         }
     }, 'json').fail(() => {
         spinner(false);
@@ -1498,9 +1502,9 @@ $('#btn-sauvegarder-depts').on('click', function () {
         spinner(false);
         $('#btn-sauvegarder-depts').prop('disabled', false);
         if (res.ok) {
-            $('#msg-result-depts').html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+            $('#msg-result-depts').html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + escHtml(res.msg) + '</span>');
         } else {
-            $('#msg-result-depts').html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+            $('#msg-result-depts').html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + escHtml(res.msg) + '</span>');
         }
     }, 'json').fail(() => {
         spinner(false);
@@ -1530,9 +1534,9 @@ $('#btn-sauvegarder-regles').on('click', function () {
         spinner(false);
         $('#btn-sauvegarder-regles').prop('disabled', false);
         if (res.ok) {
-            $('#msg-result-regles').html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+            $('#msg-result-regles').html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + escHtml(res.msg) + '</span>');
         } else {
-            $('#msg-result-regles').html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+            $('#msg-result-regles').html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + escHtml(res.msg) + '</span>');
         }
     }, 'json').fail(() => {
         spinner(false);
@@ -1888,9 +1892,9 @@ $('#btn-smtp-test-prod').on('click', function () {
         spinner(false);
         $('#btn-smtp-test-prod').prop('disabled', false);
         if (res.ok) {
-            $msg.html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + res.msg + '</span>');
+            $msg.html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + escHtml(res.msg) + '</span>');
         } else {
-            $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+            $msg.html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + escHtml(res.msg) + '</span>');
         }
     }, 'json').fail(() => {
         spinner(false);

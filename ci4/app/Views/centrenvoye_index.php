@@ -601,7 +601,7 @@ function chargerJA() {
         res.data.forEach(ja => {
             const aEmail = ja.Email && ja.Email.trim() !== '';
             if (aEmail) nbEmail++;
-            const emailCell = aEmail ? `<span>${ja.Email}</span>`
+            const emailCell = aEmail ? `<span>${escHtml(ja.Email)}</span>`
                 : `<span class="no-email"><i class="bi bi-exclamation-triangle me-1"></i>Pas d'email</span>`;
 
             const rowId = (typeActif === 'Convocation') ? ja.Id_Nomination : ja.Id_JA;
@@ -645,7 +645,7 @@ $(document).on('click', '#tbody-ja tr', function (e) {
         $('#apercu-sujet').text(r.sujet);
         $('#apercu-corps').text(r.corps);
         if (r.non_dispo) {
-            $('#apercu-avert').html(`<i class="bi bi-exclamation-triangle-fill me-1"></i>${r.avertissement}`).show();
+            $('#apercu-avert').html(`<i class="bi bi-exclamation-triangle-fill me-1"></i>${escHtml(r.avertissement)}`).show();
         } else {
             $('#apercu-avert').hide().text('');
         }
@@ -757,6 +757,10 @@ $('#btn-envoyer').on('click', function () {
     });
 });
 
+function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function demarrerEnvoi(sujet, message, ids) {
     const total   = ids.length;
     let envoyes   = 0, echecs = 0, sansEmail = 0;
@@ -798,7 +802,7 @@ function demarrerEnvoi(sujet, message, ids) {
             (sansEmail > 0 ? ` &nbsp;<span class="text-muted">${sansEmail} sans email</span>` : '')
         );
         if (erreursDetail.length) {
-            $('#progress-erreurs').html(erreursDetail.map(e => `<i class="bi bi-x-circle me-1"></i>${e.nom} — ${e.msg}`).join('<br>'));
+            $('#progress-erreurs').html(erreursDetail.map(e => `<i class="bi bi-x-circle me-1"></i>${escHtml(e.nom)} — ${escHtml(e.msg)}`).join('<br>'));
         }
         $('#btn-envoyer').prop('disabled', false).html('<i class="bi bi-send me-1"></i>Envoyer');
         toast(ok ? `${envoyes} email(s) envoyé(s).` : `${envoyes} envoyé(s), ${echecs} échec(s).`, ok);

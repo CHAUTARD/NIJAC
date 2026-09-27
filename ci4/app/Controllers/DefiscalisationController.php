@@ -43,7 +43,9 @@ class DefiscalisationController extends BaseController
         try {
             return $fn();
         } catch (\Throwable $e) {
-            return $this->response->setJSON(['ok' => false, 'msg' => $e->getMessage()]);
+            error_log('[NIJAC] ED51 : ' . $e->getMessage());
+
+            return $this->response->setJSON(['ok' => false, 'msg' => messageErreur($e, 'Erreur technique, voir le journal.')]);
         }
     }
 
@@ -250,7 +252,8 @@ class DefiscalisationController extends BaseController
                     $mail->send();
                     $envoyes++;
                 } catch (\Throwable $e) {
-                    $erreurs[] = trim($ja['Prenom'] . ' ' . $ja['Nom']) . ' : ' . $e->getMessage();
+                    error_log('[NIJAC] ED51 relance JA ' . $ja['Id_JA'] . ' : ' . $e->getMessage());
+                    $erreurs[] = trim($ja['Prenom'] . ' ' . $ja['Nom']) . ' : ' . messageErreur($e, "échec d'envoi");
                 }
             }
             try {
@@ -281,13 +284,15 @@ class DefiscalisationController extends BaseController
             [$debut, $fin] = $this->anneeCivile();
             $rows = $this->requeteAgregee(getPDO(), $debut, $fin);
 
+            // Champs texte : ni séparateur ni saut de ligne (colonnes décalées), ni formule Excel (=, +, -, @).
+            $txt    = static fn ($v): string => csvSafe(str_replace([';', "\r", "\n"], [',', ' ', ' '], (string) $v));
             $lignes = [];
             foreach ($rows as $r) {
                 $lignes[] = implode(';', [
-                    $r['Nom'],
-                    $r['Prenom'],
-                    $r['Cp'] ?? '',
-                    $r['Ville'] ?? '',
+                    $txt($r['Nom']),
+                    $txt($r['Prenom']),
+                    $txt($r['Cp'] ?? ''),
+                    $txt($r['Ville'] ?? ''),
                     $r['NbMissions'],
                     number_format((float) $r['Peage'], 2, ',', ''),
                     number_format((float) $r['Kilometre'], 2, ',', ''),

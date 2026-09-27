@@ -281,7 +281,11 @@ $(function () {
         rechargerAvecLimitrophes();
     });
 
-    $('#filtre-ja').on('input', filtrerJA);
+    let filtreTimer;
+    $('#filtre-ja').on('input', function () {
+        clearTimeout(filtreTimer);
+        filtreTimer = setTimeout(filtrerJA, 200);
+    });
     $('#sel-filtre-dispo').on('change', filtrerJA);
 });
 
@@ -361,7 +365,7 @@ function chargerJA(dept) {
                 <div class="ja-grid" id="grid-${escHtml(d)}"></div>
             `);
 
-            const $grid = $liste.find(`#grid-${d}`);
+            const $grid = $liste.find('.ja-grid').last();   // la grille qui vient d'être ajoutée (pas de sélecteur bâti sur le code dept)
             jas.forEach(ja => {
                 const initiales = ((ja.Prenom || '').charAt(0) + (ja.Nom || '').charAt(0)).toUpperCase();
                 const meta = [

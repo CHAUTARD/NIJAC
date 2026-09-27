@@ -102,7 +102,9 @@ class DefiscalisationBaremeController extends BaseController
             if ($pdo instanceof \PDO && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            return $this->response->setJSON(['ok' => false, 'msg' => $e->getMessage()]);
+            error_log('[NIJAC] ED52 : ' . $e->getMessage());
+
+            return $this->response->setJSON(['ok' => false, 'msg' => messageErreur($e, 'Erreur technique : le barème n\'a pas été enregistré.')]);
         }
     }
 }

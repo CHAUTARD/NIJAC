@@ -72,11 +72,11 @@ class SouhaitEquipeController extends BaseController
         } catch (\PDOException $e) {
             log_message('error', '[NIJAC] souhait_equipe PDO : ' . $e->getMessage());
 
-            return $this->response->setJSON(['ok' => false, 'msg' => 'Erreur BDD : ' . $e->getMessage()]);
+            return $this->response->setJSON(['ok' => false, 'msg' => messageErreur($e, 'Erreur base de données.')]);
         } catch (\Throwable $e) {
             log_message('error', '[NIJAC] souhait_equipe : ' . $e->getMessage());
 
-            return $this->response->setJSON(['ok' => false, 'msg' => 'Erreur : ' . $e->getMessage()]);
+            return $this->response->setJSON(['ok' => false, 'msg' => messageErreur($e, 'Erreur technique, voir le journal.')]);
         }
     }
 
@@ -182,7 +182,9 @@ class SouhaitEquipeController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Seul le format .xlsx est accepté.']);
             }
 
-            $classeur = IOFactory::load($_FILES['xlsx']['tmp_name']);
+            $lecteur = IOFactory::createReader('Xlsx');   // format imposé (pas de détection) : seul .xlsx est accepté
+            $lecteur->setReadDataOnly(true);
+            $classeur = $lecteur->load($_FILES['xlsx']['tmp_name']);
             $feuille  = null;
             foreach ($classeur->getSheetNames() as $nom) {
                 if (stripos($nom, 'secteur') === 0) {
@@ -212,6 +214,9 @@ class SouhaitEquipeController extends BaseController
                     'nomCra' => preg_replace('/\s+/', ' ', $equipe),
                 ];
             }
+
+            $classeur->disconnectWorksheets();
+            unset($classeur, $feuille);
 
             // 2. Roster NIJAC : les équipes régionales (tout sauf les nationales
             // N1/N2/N3 qui n'ont pas de jour/arbitrage à saisir ici).
@@ -300,6 +305,9 @@ class SouhaitEquipeController extends BaseController
             if (!$file || !$file->isValid()) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Fichier CSV manquant ou invalide.']);
             }
+            if (!in_array(strtolower($file->getClientExtension()), ['csv', 'txt'], true)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Seul le format .csv est accepté.']);
+            }
 
             $lignes = file($file->getRealPath(), FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
             if ($lignes === []) {
@@ -335,74 +343,85 @@ class SouhaitEquipeController extends BaseController
 
             $nbMaj = 0;
             $problemes = [];
-            foreach ($lignes as $l) {
-                $c = str_getcsv($l, $sep);
-                $num    = preg_replace('/\D/', '', trim($c[0] ?? ''));
-                $equipe = trim($c[1] ?? '');
-                if (!preg_match('/^\d{8}$/', $num) || $equipe === '') {
-                    continue; // en-tête ou ligne incomplète
-                }
-                $jour      = stripos($c[$colJour] ?? '', 'dimanche') !== false ? 'Dimanche' : 'Samedi';
-                $arbCel    = $colArb !== null ? trim($c[$colArb] ?? '') : '';
-                $divCsv    = $colDiv !== null ? trim($c[$colDiv] ?? '') : '';
-
-                // Préfixe commun à tous les messages du rapport pour cette ligne.
-                $ref  = "Ligne CSV « $equipe » (N° club $num" . ($divCsv !== '' ? ", division $divCsv" : '') . ')';
-                $rien = $jour === 'Dimanche' ? " — jour « Dimanche » NON enregistré." : ' — non enregistrée.';
-
-                if (!preg_match('/(\d+)\s*$/', $equipe, $m)) {
-                    $problemes[] = "$ref : le nom d'équipe ne se termine pas par un numéro, impossible de le rapprocher d'une équipe NIJAC$rien";
-                    continue;
-                }
-                $noEquipe = (int) $m[1];
-
-                if ($divCsv !== '') {
-                    $selAvecDiv->execute([$num, $divCsv]);
-                    $rows = $selAvecDiv->fetchAll();
-                } else {
-                    $selR3R4->execute([$num]);
-                    $rows = $selR3R4->fetchAll();
-                }
-                $candidats = [];
-                foreach ($rows as $e) {
-                    if (preg_match('/(\d+)\s*$/', $e['Nom'], $mm) && (int) $mm[1] === $noEquipe) {
-                        $candidats[] = $e;
+            // Transaction : un CSV appliqué à moitié (erreur en cours de fichier) laissait des souhaits
+            // à moitié mis à jour. Validée AVANT la création de la table de rapport (DDL = commit implicite).
+            $pdo->beginTransaction();
+            try {
+                foreach ($lignes as $l) {
+                    $c = str_getcsv($l, $sep);
+                    $num    = preg_replace('/\D/', '', trim($c[0] ?? ''));
+                    $equipe = trim($c[1] ?? '');
+                    if (!preg_match('/^\d{8}$/', $num) || $equipe === '') {
+                        continue; // en-tête ou ligne incomplète
                     }
-                }
+                    $jour      = stripos($c[$colJour] ?? '', 'dimanche') !== false ? 'Dimanche' : 'Samedi';
+                    $arbCel    = $colArb !== null ? trim($c[$colArb] ?? '') : '';
+                    $divCsv    = $colDiv !== null ? trim($c[$colDiv] ?? '') : '';
 
-                if (count($candidats) > 1) {
-                    $noms = implode(', ', array_column($candidats, 'Nom'));
-                    $problemes[] = "$ref : rapprochement ambigu, plusieurs équipes NIJAC portent le numéro $noEquipe ($noms). Précisez la division dans le CSV$rien";
-                    continue;
-                }
+                    // Préfixe commun à tous les messages du rapport pour cette ligne.
+                    $ref  = "Ligne CSV « $equipe » (N° club $num" . ($divCsv !== '' ? ", division $divCsv" : '') . ')';
+                    $rien = $jour === 'Dimanche' ? " — jour « Dimanche » NON enregistré." : ' — non enregistrée.';
 
-                if (count($candidats) === 0) {
-                    $selClub->execute([$num]);
-                    $enBase = $selClub->fetchAll();
-                    if (!$enBase) {
-                        $detail = "le N° de club $num n'existe pas dans NIJAC (aucune équipe). Vérifiez ce numéro dans le fichier CRA (colonne C).";
-                    } elseif ($divCsv !== '' && !in_array($divCsv, array_column($enBase, 'Division'), true)) {
-                        $divs = implode(', ', array_values(array_unique(array_column($enBase, 'Division'))));
-                        $detail = "ce club n'a aucune équipe en division $divCsv dans NIJAC (divisions présentes : $divs). Vérifiez la division dans le fichier CRA (colonne B).";
+                    if (!preg_match('/(\d+)\s*$/', $equipe, $m)) {
+                        $problemes[] = "$ref : le nom d'équipe ne se termine pas par un numéro, impossible de le rapprocher d'une équipe NIJAC$rien";
+                        continue;
+                    }
+                    $noEquipe = (int) $m[1];
+
+                    if ($divCsv !== '') {
+                        $selAvecDiv->execute([$num, $divCsv]);
+                        $rows = $selAvecDiv->fetchAll();
                     } else {
-                        $pertinent = array_filter($enBase, static fn ($e) => $divCsv === '' || $e['Division'] === $divCsv);
-                        $noms = implode(', ', array_map(static fn ($e) => $e['Nom'] . " ({$e['Division']})", $pertinent));
-                        $detail = "aucune équipe NIJAC de ce club ne porte le numéro $noEquipe. Équipes connues : $noms. Vérifiez le n° d'équipe dans le fichier CRA (colonne D).";
+                        $selR3R4->execute([$num]);
+                        $rows = $selR3R4->fetchAll();
                     }
-                    $problemes[] = "$ref : $detail$rien";
-                    continue;
-                }
+                    $candidats = [];
+                    foreach ($rows as $e) {
+                        if (preg_match('/(\d+)\s*$/', $e['Nom'], $mm) && (int) $mm[1] === $noEquipe) {
+                            $candidats[] = $e;
+                        }
+                    }
 
-                $e = $candidats[0];
-                // JourSouhaite pour toutes les divisions ; SouhaitJA seulement R3M/R4M.
-                if (in_array($e['Division'], self::DIVISIONS_SAISIE, true) && in_array($arbCel, ['CRA', 'Club'], true)) {
-                    $arbInt = $arbCel === 'CRA' ? 1 : 0;
-                    $majJourArb->execute([$jour, $arbInt, $e['Id_Equipe']]);
-                    $majRcResync->execute([$arbInt, $e['Id_Equipe']]);
-                } else {
-                    $majJour->execute([$jour, $e['Id_Equipe']]);
+                    if (count($candidats) > 1) {
+                        $noms = implode(', ', array_column($candidats, 'Nom'));
+                        $problemes[] = "$ref : rapprochement ambigu, plusieurs équipes NIJAC portent le numéro $noEquipe ($noms). Précisez la division dans le CSV$rien";
+                        continue;
+                    }
+
+                    if (count($candidats) === 0) {
+                        $selClub->execute([$num]);
+                        $enBase = $selClub->fetchAll();
+                        if (!$enBase) {
+                            $detail = "le N° de club $num n'existe pas dans NIJAC (aucune équipe). Vérifiez ce numéro dans le fichier CRA (colonne C).";
+                        } elseif ($divCsv !== '' && !in_array($divCsv, array_column($enBase, 'Division'), true)) {
+                            $divs = implode(', ', array_values(array_unique(array_column($enBase, 'Division'))));
+                            $detail = "ce club n'a aucune équipe en division $divCsv dans NIJAC (divisions présentes : $divs). Vérifiez la division dans le fichier CRA (colonne B).";
+                        } else {
+                            $pertinent = array_filter($enBase, static fn ($e) => $divCsv === '' || $e['Division'] === $divCsv);
+                            $noms = implode(', ', array_map(static fn ($e) => $e['Nom'] . " ({$e['Division']})", $pertinent));
+                            $detail = "aucune équipe NIJAC de ce club ne porte le numéro $noEquipe. Équipes connues : $noms. Vérifiez le n° d'équipe dans le fichier CRA (colonne D).";
+                        }
+                        $problemes[] = "$ref : $detail$rien";
+                        continue;
+                    }
+
+                    $e = $candidats[0];
+                    // JourSouhaite pour toutes les divisions ; SouhaitJA seulement R3M/R4M.
+                    if (in_array($e['Division'], self::DIVISIONS_SAISIE, true) && in_array($arbCel, ['CRA', 'Club'], true)) {
+                        $arbInt = $arbCel === 'CRA' ? 1 : 0;
+                        $majJourArb->execute([$jour, $arbInt, $e['Id_Equipe']]);
+                        $majRcResync->execute([$arbInt, $e['Id_Equipe']]);
+                    } else {
+                        $majJour->execute([$jour, $e['Id_Equipe']]);
+                    }
+                    $nbMaj++;
                 }
-                $nbMaj++;
+                $pdo->commit();
+            } catch (\Throwable $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                throw $e;
             }
 
             // Sauvegarde du rapport pour consultation ultérieure (voir rapports()).

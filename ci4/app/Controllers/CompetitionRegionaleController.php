@@ -79,10 +79,27 @@ class CompetitionRegionaleController extends BaseController
         }
 
         try {
-            getPDO()->prepare('UPDATE competition_regionale SET Date = ?, Heure = ?, Commentaire = ? WHERE Id_CompetitionRegionale = ?')
+            $pdo = getPDO();
+            $ancienne = $pdo->prepare('SELECT Date FROM competition_regionale WHERE Id_CompetitionRegionale = ?');
+            $ancienne->execute([$id]);
+            $ancienneDate = $ancienne->fetchColumn();
+
+            $pdo->prepare('UPDATE competition_regionale SET Date = ?, Heure = ?, Commentaire = ? WHERE Id_CompetitionRegionale = ?')
                 ->execute([$date, $heure, $commentaire, $id]);
 
-            return $this->response->setJSON(['ok' => true, 'msg' => 'Date mise à jour.', 'id' => $id]);
+            // Les réponses des JA (EN22) sont rattachées à la DATE : changer la date ne les déplace pas.
+            $msg = 'Date mise à jour.';
+            if ($ancienneDate !== false && substr((string) $ancienneDate, 0, 10) !== $date) {
+                $orphelines = $pdo->prepare('SELECT COUNT(*) FROM disponible WHERE Id_Rencontre IS NULL AND DateCompetition = ?');
+                $orphelines->execute([$ancienneDate]);
+                $nb = (int) $orphelines->fetchColumn();
+                if ($nb > 0) {
+                    $msg .= " Attention : $nb réponse(s) de JA restent rattachées à l'ancienne date (" . substr((string) $ancienneDate, 0, 10)
+                          . ') et ne sont pas reportées — les JA devront répondre à nouveau.';
+                }
+            }
+
+            return $this->response->setJSON(['ok' => true, 'msg' => $msg, 'id' => $id]);
         } catch (\PDOException $e) {
             return $this->response->setJSON(['ok' => false, 'msg' => $this->messageErreur($e)]);
         }
@@ -112,11 +129,11 @@ class CompetitionRegionaleController extends BaseController
         $heure       = trim($input['heure'] ?? '');
         $commentaire = trim($input['commentaire'] ?? '') ?: null;
 
-        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date, $d) || !checkdate((int) $d[2], (int) $d[3], (int) $d[1])) {
             return [null, null, null, 'Date invalide.'];
         }
-        if (!preg_match('/^\d{2}:\d{2}$/', $heure)) {
-            return [null, null, null, 'Horaire invalide.'];
+        if (!preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $heure)) {
+            return [null, null, null, 'Horaire invalide (HH:MM).'];
         }
 
         return [$date, $heure, $commentaire, null];

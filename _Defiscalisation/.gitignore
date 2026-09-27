@@ -1,2 +1,4 @@
 # Attestations signées (ED53) : données personnelles, jamais versionnées.
 *.pdf
+# Cartes grises déposées par les JA (ED53) : pièces d'identité du véhicule, jamais versionnées
+*_cg.*

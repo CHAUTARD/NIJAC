@@ -28,7 +28,7 @@ php_value max_input_time 300
 # en dur, Apache déduit la base du chemin physique du présent .htaccess, donc
 # les deux cas fonctionnent sans modification. Les fichiers/dossiers réels
 # (asset/, img/, logs/, ci4/ lui-même, etc.) sont servis tels quels — sauf
-# .env, SQL/ et Importation/, bloqués ci-dessus/ci-dessous — tout le reste est
+# .env, SQL/, logs/ et Importation/, bloqués ci-dessus/ci-dessous — tout le reste est
 # transmis au front controller CodeIgniter 4
 # (ci4/public/index.php) — même logique que ci4/public/.htaccess, appliquée
 # un niveau au-dessus.
@@ -42,6 +42,14 @@ php_value max_input_time 300
     # SQL/ : sauvegardes de base créées par CleanController (EA85), lues/écrites
     # uniquement côté serveur (jamais de lien de téléchargement direct dans l'appli).
     RewriteRule ^SQL/ - [F,L]
+
+    # logs/ : journaux applicatifs (tentatives de connexion/IP, traces SMTP avec extraits de
+    # messages), lus/écrits uniquement côté serveur — aucun lien direct dans l'appli.
+    RewriteRule ^logs/ - [F,L]
+
+    # _Defiscalisation/ : attestations signées et cartes grises des JA (ED53) — lues uniquement côté serveur
+    # (ED54, derrière defiscauth). Déjà bloqué par son .htaccess ; doublé ici au cas où celui-ci ne serait pas déployé.
+    RewriteRule ^_Defiscalisation/ - [F,L]
 
     # Importation/ : dépôt de fichiers d'import (FTP ou écriture serveur), lus/écrits
     # uniquement côté serveur (glob(), file_put_contents()...) — aucun lien de

@@ -369,6 +369,10 @@
 <script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
 <script>
 'use strict';
+
+function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 const SALLE_BASE = '<?= site_url('salle') ?>';
 const LAPOSTE_BASE = '<?= site_url('laposte') ?>';
 
@@ -722,7 +726,7 @@ $('#mms-btn-ok').on('click', function () {
                 bootstrap.Modal.getInstance(document.getElementById('modal-modifier-salle')).hide();
                 chargerListe();
             } else {
-                $('#mms-msg').html('<span class="text-danger">✖ ' + res.msg + '</span>');
+                $('#mms-msg').html('<span class="text-danger">✖ ' + escHtml(res.msg) + '</span>');
             }
         }, 'json').fail(() => { spinner(false); $('#mms-msg').html('<span class="text-danger">Erreur réseau.</span>'); });
         return;
@@ -736,7 +740,7 @@ $('#mms-btn-ok').on('click', function () {
             renderGrille();
             toast(res.msg, true);
         },
-        (res) => $('#mms-msg').html('<span class="text-danger">✖ ' + (res.msg ?? 'Erreur réseau.') + '</span>'));
+        (res) => $('#mms-msg').html('<span class="text-danger">✖ ' + escHtml(res.msg ?? 'Erreur réseau.') + '</span>'));
 });
 
 $('#tbody-grille').on('click', '.btn-supprimer-salle', function (e) {

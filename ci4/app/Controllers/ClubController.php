@@ -64,20 +64,9 @@ class ClubController extends BaseController
     public function liste(): ResponseInterface
     {
         return $this->tryJson(function () {
-            $pdo = getPDO();
-
-           // Un nom d'équipe ne doit désigner qu'un seul club (utilisé pour l'affectation
-            // automatique en EA82/EA83). Posée séparément avec son propre try/catch : si des
-            // doublons existent déjà en base, on ne veut pas faire planter le chargement de
-            // l'écran, juste laisser la contrainte non posée jusqu'à correction manuelle.
-            $hasUqEquipeNom = (bool) $pdo->query("SHOW INDEX FROM Club WHERE Key_name = 'uq_club_equipenom'")->fetch();
-            if (!$hasUqEquipeNom) {
-                try {
-                    $pdo->exec('ALTER TABLE Club ADD UNIQUE KEY uq_club_equipenom (EquipeNom)');
-                } catch (\PDOException $e) {
-                }
-            }
-            $rows = $pdo->query(
+            // L'unicité de Club.EquipeNom (uq_club_equipenom) est posée par
+            // initTableConfiguration() (EA98), plus à chaque chargement de la liste.
+            $rows = getPDO()->query(
                 'SELECT c.Id_Club, c.Nom, c.EquipeNom,
                         c.CorNom, c.CorEmail, c.CorTelephone,
                         c.RefNom, c.RefMail, c.RefTelephone,

@@ -275,7 +275,6 @@ Gérer la liste complète des Juges-Arbitres : import depuis fichier FFTT, consu
 | `recherche_laposte` | GET | Recherche de commune pour le sélecteur |
 | `importer_excel` | POST | Import depuis fichier Excel FFTT (upsert par licence) |
 | `clubs_par_dept` | GET | Liste des clubs du département |
-| `maj_laposte` | POST | Met à jour `Id_LaPoste` d'un JA |
 | `maj_bdd` | POST | Créer ou modifier un JA. En **UPDATE**, le `SET` est construit ligne par ligne : `DateValidationFFTT`, `Defiscalisation`, `Nationale`, `NumCompteEBP` ne sont réécrits **que si la ligne postée porte la clé correspondante**. Seul l'import CSV FFTT (`importer_excel`) fournit `date_validation_fftt` ; seule la modale Créer/Modifier fournit `defiscalisation` / `nationale` / `num_compte_ebp`. Un import FFTT (CSV ou API) ne transmet pas ces trois-là et **préserve donc la valeur en base**. |
 
 ### Affichage de la grille
@@ -311,7 +310,7 @@ Sélectionner les clubs ayant des équipes de la **Pré-Nationale à la R4M** et
 - Lignes en couleurs alternées (une sur deux) pour la lisibilité
 - Case à cocher par club, boutons **Tout sélectionner** / **Tout désélectionner**, filtres département / statut / recherche par nom de club
 - Bouton **Visualiser le message** : ouvre une modale d'aperçu du modèle n°6 avec ses marqueurs résolus (données du premier club sélectionné, ou valeurs génériques si aucune sélection)
-- Bouton **Envoyer le questionnaire** : envoie le modèle système `Id_Messagerie = 6` (créé/édité dans EA93) aux correspondants des clubs cochés ayant un email, avec un lien `desiderata_club.php?club=<Id_Club>` généré pour chacun
+- Bouton **Envoyer le questionnaire** : envoie le modèle système `Id_Messagerie = 6` (créé/édité dans EA93) aux correspondants des clubs cochés ayant un email, avec un lien `desiderata-club?club=<Id_Club>-<MAC>` (jeton signé, `tokenDesiderataClub()`) généré pour chacun
 
 ### Marqueurs disponibles dans le message n°6
 `{NOM_CLUB}`, `{CORR_NOM}`, `{URL_DESIDERATA}`, `{URL_LIGUE}`, `{YEAR_PHASE}`, `{UTI_NOM}`, `{UTI_PRENOM}`
@@ -503,7 +502,7 @@ Rapport agrégé, en lecture seule, des arbitrages et frais par JA pour une phas
 ## EN18 – Désidératas club
 
 **Fichier :** `Nominateur/desiderata_club.php`  
-**Accès :** Public, sans authentification — page tokenisée par le paramètre `?club=<Id_Club>`
+**Accès :** Public, sans authentification — page protégée par un jeton signé `?club=<Id_Club>-<MAC>` (`tokenDesiderataClub()`, HMAC-SHA256 — le numéro de club seul est refusé)
 
 ### Objectif
 Remplace le questionnaire Excel envoyé par mail aux clubs en début de saison. Permet à un club (via le lien envoyé depuis EN12) de renseigner en ligne, pour la saison en cours, les coordonnées de son correspondant, sa salle et les désidératas de ses équipes de la **Pré-Nationale à la R4M**.
@@ -599,7 +598,6 @@ Affiche la convocation officielle imprimable (format A4) d'un Juge-Arbitre pour 
 | `sauvegarder_frais` (`sauvegarderFrais`) | POST | Valide et enregistre péages/km (plafonds `frais_max_peages`/`frais_max_km`), les deux rapports texte et la case défiscalisation (`nomination.Defiscalisation`, 0/1) dans `nomination` |
 
 ### Règles
-- Un journal de debug (`logs/convocation_debug.log`) trace chaque enregistrement — résidu de débogage du fichier legacy, conservé à l'identique
 - Aucune vérification de session ni de rôle : accessible à quiconque connaît ou devine un `Id_Nomination`
 
 ---
@@ -623,12 +621,11 @@ Permet à un Juge-Arbitre de déclarer ses disponibilités par journée de champ
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `liste_ja` (`listeJa`) | GET | Liste des JA actifs (non utilisée par l'interface actuelle) |
-| `ja` | GET | Fiche résumée d'un JA (nom, grade, CP/ville, défiscalisation) |
+| `ja` | GET | Fiche résumée d'un JA (nom, grade, CP/ville, défiscalisation) — token JA ou session (`resolveIdJaAutorise()`) |
 | `journees` | GET | Cartouches Journée × Date avec statut actuel et distances Haversine min/max |
 | `rencontres_journee` (`rencontresJournee`) | GET | Rencontres d'une journée filtrées par département du JA, avec distance et réponse existante |
 | `sauvegarder_dispo_journee` (`sauvegarderDispoJournee`) | POST | Enregistre le statut d'une journée (O/P/N) et, en mode P, la liste des rencontres sélectionnées |
-| `token` | GET/POST | Génère le lien tokenisé (`?ja=TOKEN`) pour un `Id_JA` — **action publique**, contrairement à EN19 où l'action équivalente exige une session Nominateur/Admin |
+| `token` | GET/POST | Génère le lien tokenisé (`?ja=TOKEN`) pour un `Id_JA` — exige une session Nominateur/Admin (filtre `auth`), comme EN19 ; publique, elle permettait de fabriquer le token de n'importe quel JA |
 | `lire_note` (`lireNote`) | GET | Lit `ja.Note` |
 | `sauvegarder_note` (`sauvegarderNote`) | POST | Met à jour `ja.Note` |
 | `sauvegarder_defiscalisation` (`sauvegarderDefiscalisation`) | POST | Met à jour `ja.Defiscalisation` |
@@ -697,8 +694,8 @@ Date de la rencontre (jour abrégé) · Division (macaron coloré comme EN23, `d
 ### Filtres (client)
 Date (combo des dates de rencontre existantes, ordre croissant), équipe (domicile ou extérieur, sous-chaîne), nom du JA (sous-chaîne), Date saisie (Toutes / Renseignée / Non renseignée). Tri par clic sur les en-têtes (sur les données, la date est triée chronologiquement). Tri initial : date décroissante.
 
-### Export CSV
-Bouton « CSV » (côté client) : ouvre une popup avec date de début et date de fin (pré-remplies : début = 1re rencontre exportable, fin = plus grande `DateSaisie` renseignée ; modifiables ; la période filtre la date de rencontre ; début ≤ fin exigé), puis exporte les lignes affichées (filtres et tri courants) ayant une date de saisie (`DateSaisie` renseignée), une ligne par nomination sans cumul — un JA nommé sur deux rencontres le même jour donne deux lignes, mais son trajet n’est compté qu’une fois : péage et km sont conservés sur la 1re rencontre du jour (heure la plus précoce parmi celles ayant une date de saisie) et exportés à 0 sur les suivantes ; colonnes Date, Division, Arbitrage, Domicile, Extérieur, N° licence, JA, Compte EBP, Péage, Km, Défiscalisation, Date saisie ; `;`, BOM UTF-8.
+### Frais non comptés
+Les valeurs de péage et de kilomètres saisies mais **non comptées** sont grisées et barrées dans le tableau (info-bulle), avec les mêmes règles qu'EN17 : seuls les arbitrages CRA valent des frais (Club : 0), et un JA qui arbitre plusieurs rencontres CRA le même jour ne fait qu'un déplacement — km et péage ne sont conservés que sur la 1re rencontre du jour qui en porte (heure la plus précoce, puis n° de nomination).
 
 ### Actions AJAX
 | Route | Méthode | Description |

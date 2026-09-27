@@ -30,23 +30,11 @@ class ClubCsrController extends BaseController
         } catch (\PDOException $e) {
             log_message('error', '[NIJAC] club_csr PDO : ' . $e->getMessage());
 
-            return $this->response->setJSON(['ok' => false, 'msg' => 'Erreur BDD : ' . $e->getMessage()]);
+            return $this->response->setJSON(['ok' => false, 'msg' => messageErreur($e, 'Erreur base de données.')]);
         } catch (\Throwable $e) {
             log_message('error', '[NIJAC] club_csr : ' . $e->getMessage());
 
-            return $this->response->setJSON(['ok' => false, 'msg' => 'Erreur : ' . $e->getMessage()]);
-        }
-    }
-
-    /** Pose la clé unique Club.EquipeNom si absente — même garde que ClubController::liste(). */
-    private function assurerColonnesClub(\PDO $pdo): void
-    {
-        $hasUqEquipeNom = (bool) $pdo->query("SHOW INDEX FROM Club WHERE Key_name = 'uq_club_equipenom'")->fetch();
-        if (!$hasUqEquipeNom) {
-            try {
-                $pdo->exec('ALTER TABLE Club ADD UNIQUE KEY uq_club_equipenom (EquipeNom)');
-            } catch (\PDOException $e) {
-            }
+            return $this->response->setJSON(['ok' => false, 'msg' => messageErreur($e, 'Erreur technique, voir le journal.')]);
         }
     }
 
@@ -73,7 +61,7 @@ class ClubCsrController extends BaseController
     {
         return $this->tryJson(function () {
             $pdo = getPDO();
-            $this->assurerColonnesClub($pdo);
+            // L'unicité de Club.EquipeNom (uq_club_equipenom) est posée par initTableConfiguration() (EA98).
 
             // Tous les clubs par défaut (filtre "Club Régional" appliqué côté vue) — EstRegional
             // signale un club ayant au moins une équipe en Régionale (code Division commençant
@@ -147,7 +135,8 @@ class ClubCsrController extends BaseController
             $moi = $_SESSION['utilisateur'] ?? [];
 
             $ids = json_decode($this->request->getPost('ids') ?? '[]', true);
-            if (!is_array($ids) || !$ids) {
+            $ids = is_array($ids) ? array_values(array_unique(array_filter($ids, 'is_string'))) : [];
+            if (!$ids) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Aucun club sélectionné.']);
             }
 
@@ -184,7 +173,7 @@ class ClubCsrController extends BaseController
                 $vars = [
                     '{NOM_CLUB}'       => $c['Nom'],
                     '{CORR_NOM}'       => $c['CorNom'] ?? '',
-                    '{URL_DESIDERATA}' => $base . '?club=' . urlencode($c['Id_Club']),
+                    '{URL_DESIDERATA}' => $base . '?club=' . urlencode(tokenDesiderataClub($c['Id_Club'])),
                     '{URL_LIGUE}'      => getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),
                     '{YEAR_PHASE}'     => getAnneePhase(),
                     '{UTI_NOM}'        => $moi['nom'] ?? '',
@@ -207,8 +196,12 @@ class ClubCsrController extends BaseController
                     $mail->send();
                     enregistrerEnvois(1);
                     $envoyes++;
+
+                    // Même message n°6 et même lien EN18 qu'EN12 : sans cette date, EN12 afficherait le club « jamais relancé ».
+                    $pdo->prepare('UPDATE club SET DesiderataEmailDate = NOW() WHERE Id_Club = ?')->execute([$c['Id_Club']]);
                 } catch (\Exception $e) {
-                    $erreurs[] = $c['Nom'] . ' : ' . $e->getMessage();
+                    error_log('[NIJAC] ES31 envoi ' . $c['Id_Club'] . ' : ' . $e->getMessage());
+                    $erreurs[] = $c['Nom'] . ' : ' . messageErreur($e, "échec d'envoi");
                 }
             }
 

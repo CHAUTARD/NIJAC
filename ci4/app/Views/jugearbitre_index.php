@@ -1330,9 +1330,15 @@ $('#sel-perimetre').on('change', function () {
 });
 
 // ── Recherche ─────────────────────────────────────────────────────────────────
+// Debounce : renderGrille() reconstruit toute la grille, inutile à chaque frappe
+let searchTimer;
 $('#search-input').on('input', function () {
-    searchTerm = $(this).val().trim();
-    renderGrille();
+    const val = $(this).val().trim();
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () {
+        searchTerm = val;
+        renderGrille();
+    }, 200);
 });
 
 // ── Toggles filtres ───────────────────────────────────────────────────────────

@@ -93,15 +93,6 @@
             padding: 16px 24px 0;
         }
 
-        .dash-title {
-            font-size: .78rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: .08em;
-            color: #5a6a82;
-            margin-bottom: 10px;
-        }
-
         .dash-cards {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
@@ -308,6 +299,25 @@
             max-width: 260px;
             width: 100%;
         }
+
+        .dc-clickable:focus-visible { outline: 3px solid #6a1b9a; outline-offset: 2px; }
+
+        /* Écrans moyens / petits : la grille passe de 5 à 3, 2 puis 1 colonne */
+        @media (max-width: 1199.98px) {
+            .dash-cards, #menu-grid { grid-template-columns: repeat(3, 1fr); }
+            #menu-grid .menu-btn-wrap.mbw-doc { grid-column: auto; }
+        }
+        @media (max-width: 767.98px) {
+            .dash-cards, #menu-grid { grid-template-columns: repeat(2, 1fr); }
+            #dashboard { padding: 12px 12px 0; }
+            #menu-grid { padding: 12px 12px 16px; gap: 12px; }
+            .menu-btn .btn-icon { width: 100px; height: 100px; }
+            .menu-btn img { width: 100px; height: 100px; max-width: 100px; max-height: 100px; }
+            .menu-btn { min-height: 0; }
+        }
+        @media (max-width: 479.98px) {
+            .dash-cards { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -327,7 +337,6 @@
 
 <!-- ── Tableau de bord ── -->
 <div id="dashboard">
-    <div class="dash-title"></div>
     <div class="dash-cards">
 
         <!-- Prochaine journée -->
@@ -360,7 +369,7 @@
         </div>
 
         <!-- Convocations à envoyer -->
-        <div class="dash-card dc-purple dc-clickable<?= $stats['convocations_envoyer'] > 0 ? ' dc-alert' : '' ?>" id="card-convocations-envoyer">
+        <div class="dash-card dc-purple dc-clickable<?= $stats['convocations_envoyer'] > 0 ? ' dc-alert' : '' ?>" id="card-convocations-envoyer" role="button" tabindex="0">
             <div class="dc-icon"><i class="bi bi-envelope-exclamation"></i></div>
             <div class="dc-label">Convocations à envoyer</div>
             <div class="dc-value"><?= (int) $stats['convocations_envoyer'] ?></div>
@@ -368,7 +377,7 @@
         </div>
 
         <!-- Rencontres sans JA -->
-        <div class="dash-card dc-red dc-clickable<?= $stats['rencontres_sans_ja'] > 0 ? ' dc-alert' : '' ?>" id="card-rencontres-sans-ja">
+        <div class="dash-card dc-red dc-clickable<?= $stats['rencontres_sans_ja'] > 0 ? ' dc-alert' : '' ?>" id="card-rencontres-sans-ja" role="button" tabindex="0">
             <div class="dc-icon"><i class="bi bi-exclamation-triangle-fill"></i></div>
             <div class="dc-label">Rencontres sans JA</div>
             <div class="dc-value"><?= (int) $stats['rencontres_sans_ja'] ?></div>
@@ -385,7 +394,7 @@
     <div class="menu-btn-wrap">
         <a href="<?= site_url('jugearbitre') ?>" class="menu-btn btn-ja">
             <span class="btn-code">EN11</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Arbitre_filet.png') ?>" alt="Juge-Arbitre"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Arbitre_filet.webp') ?>" alt="Juge-Arbitre"></div>
             <span>Juge-Arbitre</span>
             <span class="btn-desc">Gérer la liste des juges-arbitres, grades et coordonnées</span>
         </a>
@@ -394,7 +403,7 @@
     <div class="menu-btn-wrap">
         <a href="<?= site_url('club') ?>" class="menu-btn btn-club">
             <span class="btn-code">EN27</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Association.png') ?>" alt="Club / Association"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Association.webp') ?>" alt="Club / Association"></div>
             <span>Club / Association</span>
             <span class="btn-desc">Gérer les clubs affiliés, correspondant et référent</span>
         </a>
@@ -403,7 +412,7 @@
     <div class="menu-btn-wrap">
         <a href="<?= site_url('disponibilites') ?>" class="menu-btn btn-correspondant">
             <span class="btn-code">EN13</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Dispo.png') ?>" alt="Disponibilités JA"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Dispo.webp') ?>" alt="Disponibilités JA"></div>
             <span>Disponibilités JA</span>
             <span class="btn-desc">Saisir ou modifier les disponibilités d'un JA par département</span>
         </a>
@@ -412,7 +421,7 @@
     <div class="menu-btn-wrap">
         <a href="<?= site_url('nomination') ?>" class="menu-btn btn-nomination">
             <span class="btn-code">EN14</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Nomination.png') ?>" alt="Nomination JA" style="max-width:220px;max-height:220px;width:220px;height:220px;"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Nomination.webp') ?>" alt="Nomination JA" style="max-width:220px;max-height:220px;width:220px;height:220px;"></div>
             <span>Nomination JA</span>
             <span class="btn-desc">Affecter les JA aux rencontres et valider les nominations</span>
         </a>
@@ -424,7 +433,7 @@
     <div class="menu-btn-wrap">
         <a href="<?= site_url('suivi-nomination') ?>" class="menu-btn btn-nomination">
             <span class="btn-code">EN28</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Gestion_Nomination.png') ?>" alt="Suivi des nominations"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Gestion_Nomination.webp') ?>" alt="Suivi des nominations"></div>
             <span>Suivi des nominations</span>
             <span class="btn-desc">Frais saisis par les JA et rappel par message</span>
         </a>
@@ -435,7 +444,7 @@
     <div class="menu-btn-wrap">
         <a href="<?= site_url('centrenvoye') ?>" class="menu-btn btn-envoi">
             <span class="btn-code">EN15</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Centrenvoye.png') ?>" alt="Centre d'envoi"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Centrenvoye.webp') ?>" alt="Centre d'envoi"></div>
             <span>Centre d'envoi</span>
             <span class="btn-desc">Envoyer les messages aux JA et correspondants</span>
         </a>
@@ -444,7 +453,7 @@
     <div class="menu-btn-wrap">
         <a href="<?= site_url('rencontres-date') ?>" class="menu-btn btn-r34">
             <span class="btn-code">EN23</span>
-            <div class="btn-icon"><img src="<?= base_url('img/CalendarHour.png') ?>" alt="Date des rencontres"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/CalendarHour.webp') ?>" alt="Date des rencontres"></div>
             <span>Date des rencontres</span>
             <span class="btn-desc">Modifier la date et l'heure d'une rencontre</span>
         </a>
@@ -453,7 +462,7 @@
     <div class="menu-btn-wrap">
         <a href="<?= site_url('remplacement-equipe') ?>" class="menu-btn btn-remplacement">
             <span class="btn-code">EN24</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Changement_Equipe.png') ?>" alt="Remplacement équipe"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Changement_Equipe.webp') ?>" alt="Remplacement équipe"></div>
             <span>Remplacement équipe</span>
             <span class="btn-desc">Remplacer une équipe forfait sur ses rencontres restantes</span>
         </a>
@@ -482,7 +491,7 @@
 <!-- Déconnexion : ligne à part, centrée -->
 <div id="zone-deconnexion">
     <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;">
-        <div class="btn-icon"><img src="<?= base_url('img/Quitter.png') ?>" alt="Se déconnecter"></div>
+        <div class="btn-icon"><img src="<?= base_url('img/Quitter.webp') ?>" alt="Se déconnecter"></div>
         <span style="color:#842029;">Se déconnecter</span>
         <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
     </a>
@@ -550,47 +559,40 @@ function formatDateFr(s) {
     return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-$('#card-convocations-envoyer').on('click', function () {
-    const $body = $('#modal-convocations-body').html('<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div></div>');
-    new bootstrap.Modal('#modal-convocations').show();
+// Carte cliquable (souris ou clavier) → modale de détail chargée en AJAX
+function brancherDetail(carte, modale, url, messageVide, ligne) {
+    $(carte).on('click keydown', function (e) {
+        if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
 
-    $.getJSON('<?= site_url('nominateur-menu/convocations-a-envoyer') ?>', function (r) {
-        if (!r.ok || !r.data.length) {
-            $body.html('<div class="text-center text-muted py-4"><i class="bi bi-check-circle fs-2 d-block mb-2"></i>Aucune convocation en attente d\'envoi.</div>');
-            return;
-        }
-        $body.html(r.data.map(c => `
-            <div class="conv-row">
-                <span class="conv-date"><i class="bi bi-calendar3 me-1"></i>${escHtml(formatDateFr(c.Date))}</span>
-                <span class="conv-ja"><i class="bi bi-person-fill me-1"></i>${escHtml(c.Prenom)} ${escHtml(c.Nom)}</span>
-                <span class="conv-renc">J${escHtml(c.Journee)} — ${escHtml(c.Division)} — ${escHtml(c.NomDom)} vs ${escHtml(c.NomExt || '?')}</span>
-            </div>
-        `).join(''));
-    }).fail(function () {
-        $body.html('<div class="text-center text-danger py-4">Erreur de communication.</div>');
+        const $body = $(modale + '-body').html('<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div></div>');
+        new bootstrap.Modal(modale).show();
+
+        $.getJSON(url, function (r) {
+            if (!r.ok || !r.data.length) {
+                $body.html('<div class="text-center text-muted py-4"><i class="bi bi-check-circle fs-2 d-block mb-2"></i>' + messageVide + '</div>');
+                return;
+            }
+            $body.html(r.data.map(c => '<div class="conv-row">'
+                + '<span class="conv-date"><i class="bi bi-calendar3 me-1"></i>' + escHtml(formatDateFr(c.Date)) + '</span>'
+                + ligne(c) + '</div>').join(''));
+        }).fail(function () {
+            $body.html('<div class="text-center text-danger py-4">Erreur de communication.</div>');
+        });
     });
-});
+}
 
-$('#card-rencontres-sans-ja').on('click', function () {
-    const $body = $('#modal-rencontres-sans-ja-body').html('<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div></div>');
-    new bootstrap.Modal('#modal-rencontres-sans-ja').show();
+brancherDetail('#card-convocations-envoyer', '#modal-convocations',
+    '<?= site_url('nominateur-menu/convocations-a-envoyer') ?>',
+    'Aucune convocation en attente d\'envoi.',
+    c => `<span class="conv-ja"><i class="bi bi-person-fill me-1"></i>${escHtml(c.Prenom)} ${escHtml(c.Nom)}</span>
+          <span class="conv-renc">J${escHtml(c.Journee)} — ${escHtml(c.Division)} — ${escHtml(c.NomDom)} vs ${escHtml(c.NomExt || '?')}</span>`);
 
-    $.getJSON('<?= site_url('nominateur-menu/rencontres-sans-ja') ?>', function (r) {
-        if (!r.ok || !r.data.length) {
-            $body.html('<div class="text-center text-muted py-4"><i class="bi bi-check-circle fs-2 d-block mb-2"></i>Toutes les rencontres à venir ont un JA nominé.</div>');
-            return;
-        }
-        $body.html(r.data.map(c => `
-            <div class="conv-row">
-                <span class="conv-date"><i class="bi bi-calendar3 me-1"></i>${escHtml(formatDateFr(c.Date))}</span>
-                <span class="conv-equipes">${escHtml(c.NomDom)} vs ${escHtml(c.NomExt || '?')}</span>
-                <span class="conv-renc">J${escHtml(c.Journee)} — ${escHtml(c.Division)}</span>
-            </div>
-        `).join(''));
-    }).fail(function () {
-        $body.html('<div class="text-center text-danger py-4">Erreur de communication.</div>');
-    });
-});
+brancherDetail('#card-rencontres-sans-ja', '#modal-rencontres-sans-ja',
+    '<?= site_url('nominateur-menu/rencontres-sans-ja') ?>',
+    'Toutes les rencontres à venir ont un JA nominé.',
+    c => `<span class="conv-equipes">${escHtml(c.NomDom)} vs ${escHtml(c.NomExt || '?')}</span>
+          <span class="conv-renc">J${escHtml(c.Journee)} — ${escHtml(c.Division)}</span>`);
 </script>
 </body>
 </html>

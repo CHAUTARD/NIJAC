@@ -29,7 +29,7 @@ Quelques écrans marquants :
 | EN14 | Nomination | Affectation JA ↔ rencontres selon les règles métier, validation, envoi des convocations |
 | EN21 | Convocation et frais JA | Page publique tokenisée : consultation de la convocation, saisie des frais (péage, km, défiscalisation) par le JA |
 | EN27 | Clubs / Associations | Import et gestion des clubs affiliés (upsert depuis l'API FFTT) |
-| EN28 | Suivi des nominations | Suivi des frais saisis par les JA, correction, relance et export CSV |
+| EN28 | Suivi des nominations | Suivi des frais saisis par les JA, correction et relance |
 | EA91 | Configuration | Paramètres applicatifs (état logiciel, SMTP, phases, frais kilométriques…) |
 | EA98 | Administration BDD | Requêteur SQL libre, structure des tables, accès restreint (compte CHAUTARD) |
 

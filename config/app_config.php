@@ -74,6 +74,56 @@ function initTableConfiguration(\PDO $pdo): void
         }
     }
 
+    // Un nom d'équipe ne doit désigner qu'un seul club (affectation automatique
+    // EA82/EA83). Best-effort : si des doublons existent déjà en base, la
+    // contrainte reste non posée jusqu'à correction manuelle (écran EN27).
+    try {
+        if (!$pdo->query("SHOW INDEX FROM Club WHERE Key_name = 'uq_club_equipenom'")->fetch()) {
+            $pdo->exec('ALTER TABLE Club ADD UNIQUE KEY uq_club_equipenom (EquipeNom)');
+        }
+    } catch (\PDOException $e) {
+        // doublons existants — voir ci-dessus
+    }
+
+    // Calendrier régional (EA84 / EN13 / EN22) : créé avec un seed initial (Régionale 3/4, non couvertes
+    // par un import FFTT) UNIQUEMENT si la table n'existe pas encore — jamais re-seedé ensuite.
+    try {
+        if (!$pdo->query("SHOW TABLES LIKE 'competition_regionale'")->fetchColumn()) {
+            $pdo->exec('
+                CREATE TABLE competition_regionale (
+                    Id_CompetitionRegionale INT AUTO_INCREMENT PRIMARY KEY,
+                    Date                    DATE NOT NULL,
+                    Heure                   TIME NOT NULL,
+                    Commentaire             VARCHAR(255) NULL,
+                    UNIQUE KEY uq_date_heure (Date, Heure)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ');
+            $stmtCr = $pdo->prepare('INSERT INTO competition_regionale (Date, Heure) VALUES (?, ?)');
+            foreach ([
+                ['2026-09-19', '16:00'], ['2026-09-20', '14:00'],
+                ['2026-10-03', '16:00'], ['2026-10-04', '14:00'],
+                ['2026-10-17', '16:00'], ['2026-10-18', '14:00'],
+                ['2026-11-07', '16:00'], ['2026-11-08', '14:00'],
+                ['2026-11-21', '16:00'], ['2026-11-22', '14:00'],
+                ['2026-12-05', '16:00'], ['2026-12-06', '14:00'],
+                ['2026-12-12', '16:00'], ['2026-12-13', '14:00'],
+            ] as [$dateCr, $heureCr]) {
+                $stmtCr->execute([$dateCr, $heureCr]);
+            }
+        }
+    } catch (\PDOException $e) {
+        // best-effort
+    }
+
+    // Une seule réponse par (JA, rencontre) — EN22 / EN14. Best-effort : doublons existants => reste non posée.
+    try {
+        if (!$pdo->query("SHOW INDEX FROM disponible WHERE Key_name = 'uq_dispo'")->fetch()) {
+            $pdo->exec('ALTER TABLE disponible ADD UNIQUE KEY uq_dispo (Id_JA, Id_Rencontre)');
+        }
+    } catch (\PDOException $e) {
+        // doublons existants
+    }
+
     // FK implicites ajoutées (09/2026) : ententes de clubs (equipe.Id_Club2 /
     // Id_Club3) et département de rattachement du JA (ja.CodeDept). Idempotent
     // (garde information_schema). ON DELETE SET NULL (un club ou un département
@@ -615,6 +665,28 @@ function verifierRappelExpirationFfttApi(): void
 }
 
 /**
+ * Jeton du lien public EN18 (désidératas club) : "<Id_Club>-<MAC>". Le numéro FFTT du club est public et
+ * devinable : il ne protège rien à lui seul ; le MAC (HMAC-SHA256 tronqué, clé = seed + pepper Obfuscator)
+ * rend le lien infalsifiable. Sans pepper configuré (.env), même limite que l'Obfuscator (voir CLAUDE.md).
+ */
+function tokenDesiderataClub(string $idClub): string
+{
+    return $idClub . '-' . substr(hash_hmac('sha256', 'desiderata-club|' . $idClub, OBFUSCATOR_SEED . '|' . getObfuscatorPepper()), 0, 16);
+}
+
+/** Id_Club contenu dans un jeton EN18, ou null si le jeton est absent / falsifié. */
+function idClubDepuisTokenDesiderata(string $token): ?string
+{
+    $pos = strrpos($token, '-');
+    if ($pos === false || $pos === 0) {
+        return null;
+    }
+    $idClub = substr($token, 0, $pos);
+
+    return hash_equals(tokenDesiderataClub($idClub), $token) ? $idClub : null;
+}
+
+/**
  * Construit la table de correspondance des marqueurs {XXX} des modèles de
  * message (table `messagerie`) — source unique remplaçant les listes de
  * marqueurs dupliquées et divergentes qui existaient dans
@@ -852,6 +924,23 @@ function enregistrerEchecLogin(): void
     $fenetre = (int) getConfig('login_rate_limit_fenetre', '15');
 
     enregistrerTentative('login:' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'), $fenetre);
+}
+
+/**
+ * Message d'erreur à afficher à l'écran pour une exception : le détail réel (SQL, SMTP, PHP…) en mode
+ * Développement (etat_logiciel) ou pour un administrateur connecté — pour pouvoir corriger — sinon le message
+ * générique, afin qu'un visiteur (page publique JA / club) ne voie jamais de détail technique. Le détail est de
+ * toute façon écrit dans le journal d'erreurs par l'appelant.
+ */
+function messageErreur(\Throwable $e, string $generique): string
+{
+    try {
+        $detail = isModeDeveloppement() || !empty($_SESSION['utilisateur']['is_admin']);
+    } catch (\Throwable) {
+        $detail = false;   // configuration illisible (base injoignable, par ex.) : par prudence, message générique
+    }
+
+    return $detail ? $generique . ' — ' . $e->getMessage() : $generique;
 }
 
 /**

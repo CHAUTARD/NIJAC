@@ -30,7 +30,7 @@ class RemplacementEquipeController extends BaseController
         } catch (\PDOException $e) {
             log_message('error', '[NIJAC] remplacement_equipe PDO : ' . $e->getMessage());
 
-            return $this->response->setJSON(['ok' => false, 'msg' => 'Erreur BDD : ' . $e->getMessage()]);
+            return $this->response->setJSON(['ok' => false, 'msg' => messageErreur($e, "Erreur technique : le remplacement n'a pas été effectué.")]);
         } catch (\Throwable $e) {
             log_message('error', '[NIJAC] remplacement_equipe : ' . $e->getMessage());
 
@@ -130,22 +130,47 @@ class RemplacementEquipeController extends BaseController
             // réellement l'équipe à remplacer (Domicile ou Extérieur) — jamais au-delà,
             // même si la liste envoyée par le client était erronée.
             $ph       = implode(',', array_fill(0, count($ids), '?'));
-            $stmtRenc = $pdo->prepare("SELECT Id_Rencontre FROM rencontre WHERE Id_Rencontre IN ($ph) AND (Id_EquipeDom = ? OR Id_EquipeExt = ?)");
+            $stmtRenc = $pdo->prepare("SELECT Id_Rencontre, Id_EquipeDom, Id_EquipeExt FROM rencontre WHERE Id_Rencontre IN ($ph) AND (Id_EquipeDom = ? OR Id_EquipeExt = ?)");
             $stmtRenc->execute([...$ids, $idEquipe, $idEquipe]);
-            $idsRencontre = $stmtRenc->fetchAll(\PDO::FETCH_COLUMN);
+            $concernees = $stmtRenc->fetchAll();
+
+            // Si la remplaçante joue déjà contre l'équipe remplacée sur une rencontre, la remplacer
+            // donnerait « B contre B » : ces rencontres sont écartées et signalées.
+            $idsRencontre = [];
+            foreach ($concernees as $r) {
+                $adverse = (int) $r['Id_EquipeDom'] === $idEquipe ? (int) $r['Id_EquipeExt'] : (int) $r['Id_EquipeDom'];
+                if ($adverse !== $idRemplacement) {
+                    $idsRencontre[] = (int) $r['Id_Rencontre'];
+                }
+            }
+            $nbIgnorees = count($concernees) - count($idsRencontre);
 
             if (!$idsRencontre) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Aucune rencontre à remplacer parmi la sélection.']);
+                return $this->response->setJSON(['ok' => false, 'msg' => $nbIgnorees
+                    ? "Aucune rencontre remplaçable : l'équipe de remplacement joue déjà contre l'équipe remplacée sur les $nbIgnorees rencontre(s) sélectionnée(s)."
+                    : 'Aucune rencontre à remplacer parmi la sélection.']);
             }
 
             $pdo->beginTransaction();
             try {
                 $ph2 = implode(',', array_fill(0, count($idsRencontre), '?'));
 
-                // 1. Vérifie/compte les nominations déjà faites sur ces rencontres.
-                $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM nomination WHERE Id_Rencontre IN ($ph2)");
-                $stmtCount->execute($idsRencontre);
-                $nbNominations = (int) $stmtCount->fetchColumn();
+                // 1. Nominations déjà faites sur ces rencontres (JA nommé, convocation envoyée ou non) :
+                //    les JA dont la convocation est partie doivent être prévenus par le nominateur.
+                $stmtNoms = $pdo->prepare("
+                    SELECT n.EmailEnvoye, CONCAT(ja.Prenom, ' ', ja.Nom) AS NomJa
+                    FROM nomination n
+                    LEFT JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                    LEFT JOIN ja           ON ja.Id_JA        = d.Id_JA
+                    WHERE n.Id_Rencontre IN ($ph2)
+                ");
+                $stmtNoms->execute($idsRencontre);
+                $noms          = $stmtNoms->fetchAll();
+                $nbNominations = count($noms);
+                $aPrevenir     = array_values(array_unique(array_map(
+                    static fn ($n) => htmlspecialchars((string) $n['NomJa']),   // affiché dans un toast HTML
+                    array_filter($noms, static fn ($n) => (int) $n['EmailEnvoye'] === 1 && $n['NomJa'] !== null)
+                )));
 
                 // 2. Supprime ces nominations (la confirmation utilisateur a déjà eu lieu).
                 $pdo->prepare("DELETE FROM nomination WHERE Id_Rencontre IN ($ph2)")->execute($idsRencontre);
@@ -163,8 +188,14 @@ class RemplacementEquipeController extends BaseController
             }
 
             $msg = count($idsRencontre) . ' rencontre(s) mise(s) à jour.';
+            if ($nbIgnorees > 0) {
+                $msg .= " $nbIgnorees rencontre(s) ignorée(s) : l'équipe de remplacement y joue déjà contre l'équipe remplacée.";
+            }
             if ($nbNominations > 0) {
                 $msg .= ' ' . $nbNominations . ' nomination(s) supprimée(s) : à refaire (EN14).';
+            }
+            if ($aPrevenir) {
+                $msg .= ' JA déjà convoqué(s) à prévenir : ' . implode(', ', $aPrevenir) . '.';
             }
 
             return $this->response->setJSON(['ok' => true, 'msg' => $msg]);

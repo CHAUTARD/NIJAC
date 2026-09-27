@@ -9,8 +9,8 @@ use CodeIgniter\HTTP\ResponseInterface;
  *
  * Accessible à tout utilisateur authentifié (filtre "auth", pas "adminauth") :
  * un Nominateur consulte/modifie la grille et importe des comptes EBP ; import
- * Excel FFTT, import/scan API FFTT par département et mise à jour ponctuelle
- * de Id_LaPoste sont restreints à l'admin — vérifié individuellement dans
+ * Excel FFTT et import/scan API FFTT par département sont restreints à
+ * l'admin — vérifié individuellement dans
  * chaque méthode, comme le fait jugearbitre.php
  * (`in_array($action, $actionsAdmin) && !$isAdmin`).
  *
@@ -179,34 +179,6 @@ class JugearbitreController extends BaseController
         }
 
         return $this->response->setJSON(['ok' => true, 'clubs' => $stmt->fetchAll()]);
-    }
-
-    /**
-     * Non appelée par le JS de jugearbitre.php (aucun autre fichier n'y fait
-     * appel non plus) — portée à l'identique pour parité, comme
-     * liste_tables_db dans CleanController.
-     */
-    public function majLaposte(): ResponseInterface
-    {
-        if (!$this->isAdmin()) {
-            return $this->response->setJSON(['ok' => false, 'err' => 'Accès refusé']);
-        }
-
-        $pdo = getPDO();
-
-        $idJA      = (int) ($this->request->getPost('id_ja') ?? 0);
-        $idLaPoste = ($this->request->getPost('id_laposte') ?? '') !== '' ? (int) $this->request->getPost('id_laposte') : null;
-        $cp        = ($this->request->getPost('cp') ?? '') !== '' ? trim($this->request->getPost('cp')) : null;
-        $ville     = ($this->request->getPost('ville') ?? '') !== '' ? trim($this->request->getPost('ville')) : null;
-
-        if ($idJA <= 0) {
-            return $this->response->setJSON(['ok' => false, 'msg' => 'Id_JA invalide.']);
-        }
-
-        $pdo->prepare('UPDATE ja SET Id_LaPoste = ?, Cp = ?, Ville = ? WHERE Id_JA = ?')
-            ->execute([$idLaPoste, $cp, $ville, $idJA]);
-
-        return $this->response->setJSON(['ok' => true]);
     }
 
     /**
@@ -437,20 +409,112 @@ class JugearbitreController extends BaseController
     }
 
     /**
-     * listJoueursByClub pour la liste des licences, puis xml_licence_b en
-     * appel direct (request(), pas retrieveJoueurDetails()) pour le détail :
-     * accède au tableau brut, qui expose email/Cp/Ville — ces champs
-     * pré-remplissent l'adresse d'un nouveau JA quand l'API FFTT les fournit
-     * (en pratique souvent absents de la réponse elle-même, quels que soient
-     * les identifiants applicatifs utilisés).
+     * Détail d'une licence via xml_licence_b (appel direct request(), pas
+     * retrieveJoueurDetails() : accède au tableau brut, qui expose email/Cp/Ville
+     * — ces champs pré-remplissent l'adresse d'un nouveau JA quand l'API FFTT les
+     * fournit ; en pratique souvent absents de la réponse, quels que soient les
+     * identifiants applicatifs utilisés). Un seul nouvel essai après 600 ms.
+     *
+     * Retourne null si la licence est introuvable ou n'est pas JA1/JA2/JA3
+     * (les AR sont exclus) ; lève l'exception de l'API au 2e échec.
      */
-    public function importFfttClub(): ResponseInterface
+    private function lireJaFftt(\PDO $pdo, $apiRaw, string $numClub, string $licence): ?array
+    {
+        $lb = null;
+        for ($tentative = 0; $tentative < 2; $tentative++) {
+            try {
+                $lb = $apiRaw->request('xml_licence_b', ['licence' => $licence, 'club' => $numClub])['licence'] ?? null;
+                break;
+            } catch (\Throwable $e) {
+                if ($tentative === 0) {
+                    usleep(600_000);
+                } else {
+                    throw $e;
+                }
+            }
+        }
+        if (!$lb) {
+            return null;
+        }
+
+        $grade = ffttStr($lb['ja'] ?? '') ?: ffttStr($lb['arb'] ?? '');
+        if (!preg_match('/^JA[123]$/i', $grade)) {
+            return null;
+        }
+
+        // Résolution CP / Ville / Id_LaPoste depuis les données FFTT
+        $cp        = ffttStr($lb['cp'] ?? '');
+        $ville     = normaliserVille(ffttStr($lb['ville'] ?? ''));
+        $idLaPoste = null;
+        if ($cp !== '') {
+            $stmtLap = $pdo->prepare('SELECT Id_LaPoste, Nom FROM laposte WHERE CodePostal = ? LIMIT 1');
+            $stmtLap->execute([$cp]);
+            $lap = $stmtLap->fetch();
+            if ($lap) {
+                $idLaPoste = $lap['Id_LaPoste'];
+                $ville     = $ville !== '' ? $ville : normaliserVille((string) ($lap['Nom'] ?? ''));
+            }
+        }
+
+        return [
+            'licence'    => $licence,
+            'nom'        => mb_strtoupper(ffttStr($lb['nom'] ?? ''), 'UTF-8'),
+            'prenom'     => ffttStr($lb['prenom'] ?? ''),
+            'email'      => ffttStr($lb['email'] ?? ''),
+            'grade'      => strtoupper($grade),
+            'id_club'    => ffttStr($lb['numclub'] ?? '') ?: $numClub,
+            'date_valid' => ffttStr($lb['validation'] ?? '') ?: null,
+            'id_laposte' => $idLaPoste,
+            'cp'         => $cp,
+            'ville'      => $ville,
+        ];
+    }
+
+    /**
+     * Insère ou met à jour un JA issu de l'API FFTT ($d : voir lireJaFftt()).
+     * Retourne true si le JA vient d'être créé.
+     *
+     * Actif n'est jamais remis à 1 ici : reinitialiserActifDept() (appelée par
+     * le JS avant la boucle clubs) a déjà tout mis à 0 pour le département, et
+     * ces imports ne réactivent personne — même un JA retrouvé dans le rapport
+     * FFTT reste à Actif=0 ; un nouveau JA est créé à Actif=0 pour la même raison.
+     */
+    private function upsertJaFftt(\PDO $pdo, array $d): bool
+    {
+        $exists = $pdo->prepare('SELECT 1 FROM ja WHERE Id_JA = ?');
+        $exists->execute([$d['licence']]);
+
+        if ($exists->fetchColumn()) {
+            $pdo->prepare(
+                'UPDATE ja SET DateValidationFFTT=?,
+                 Cp = COALESCE(Cp, ?), Ville = COALESCE(Ville, ?), Id_LaPoste = COALESCE(Id_LaPoste, ?)
+                 WHERE Id_JA=?'
+            )->execute([$d['date_valid'], $d['cp'], $d['ville'], $d['id_laposte'], $d['licence']]);
+
+            return false;
+        }
+
+        $pdo->prepare(
+            'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Grade, Actif, Id_Club,
+                             Defiscalisation, Nationale, DateValidationFFTT,
+                             Id_LaPoste, Cp, Ville)
+             VALUES (?, ?, ?, ?, ?, 0, ?, 0, 0, ?, ?, ?, ?)'
+        )->execute([$d['licence'], $d['nom'], $d['prenom'], $d['email'] ?: null, $d['grade'], $d['id_club'],
+            $d['date_valid'], $d['id_laposte'], $d['cp'], $d['ville']]);
+
+        return true;
+    }
+
+    /**
+     * Parcourt les licenciés d'un club et applique $traiter à chaque JA1/JA2/JA3
+     * trouvé (import direct ou simple scan). Retourne ce que le JS attend :
+     * trouves / total_membres / erreurs / erreurs_msgs (10 messages max).
+     */
+    private function parcourirClubFftt(string $action, callable $traiter): ResponseInterface
     {
         if (!$this->isAdmin()) {
             return $this->response->setJSON(['ok' => false, 'err' => 'Accès refusé']);
         }
-
-        $pdo = getPDO();
 
         $numClub = trim($this->request->getPost('num_club') ?? '');
         if ($numClub === '') {
@@ -458,6 +522,7 @@ class JugearbitreController extends BaseController
         }
 
         set_time_limit(180);
+        $pdo         = getPDO();
         $apiRaw      = getFfttRawClient();
         $membres     = $apiRaw->listJoueursByClub($numClub);
         $trouves     = [];
@@ -471,90 +536,14 @@ class JugearbitreController extends BaseController
             }
 
             try {
-                $lb = null;
-                for ($tentative = 0; $tentative < 2; $tentative++) {
-                    try {
-                        $lb = $apiRaw->request('xml_licence_b', ['licence' => $licence, 'club' => $numClub])['licence'] ?? null;
-                        break;
-                    } catch (\Throwable $e) {
-                        if ($tentative === 0) {
-                            usleep(600_000);
-                        } else {
-                            throw $e;
-                        }
-                    }
-                }
-                if (!$lb) {
-                    continue;
-                }
-
-                $ja  = ffttStr($lb['ja'] ?? '');
-                $arb = ffttStr($lb['arb'] ?? '');
-                if ($ja === '' && $arb === '') {
-                    continue;
-                }
-
-                $grade  = $ja ?: $arb;
-                $nom    = mb_strtoupper(ffttStr($lb['nom'] ?? ''), 'UTF-8');
-                $prenom = ffttStr($lb['prenom'] ?? '');
-                $email  = ffttStr($lb['email'] ?? '');
-                $idClub = ffttStr($lb['numclub'] ?? '') ?: $numClub;
-
-                // Seuls JA1, JA2, JA3 — les AR sont exclus
-                if (!preg_match('/^JA[123]$/i', $grade)) {
-                    continue;
-                }
-
-                $gradeNorm = strtoupper($grade);
-
-                $dateValidStr = ffttStr($lb['validation'] ?? '');
-                $dateValid    = $dateValidStr ?: null;
-
-                // Résolution CP / Ville / Id_LaPoste depuis les données FFTT
-                $cpFFTT    = ffttStr($lb['cp'] ?? '');
-                $villeFFTT = normaliserVille(ffttStr($lb['ville'] ?? ''));
-                $idLaPoste = null;
-                $cpFinal   = $cpFFTT;
-                $villeFinal = $villeFFTT;
-                if ($cpFFTT !== '') {
-                    $stmtLap = $pdo->prepare('SELECT Id_LaPoste, Nom FROM laposte WHERE CodePostal = ? LIMIT 1');
-                    $stmtLap->execute([$cpFFTT]);
-                    $lap = $stmtLap->fetch();
-                    if ($lap) {
-                        $idLaPoste  = $lap['Id_LaPoste'];
-                        $villeFinal = $villeFFTT !== '' ? $villeFFTT : normaliserVille((string) ($lap['Nom'] ?? ''));
-                    }
-                }
-
-                $exists = $pdo->prepare('SELECT Id_JA FROM ja WHERE Id_JA = ?');
-                $exists->execute([$licence]);
-                if ($exists->fetchColumn()) {
-                    // Actif n'est jamais remis à 1 ici : reinitialiserActifDept()
-                    // (appelée par le JS avant la boucle clubs) a déjà tout mis à 0
-                    // pour le département, et cette action ne réactive personne —
-                    // même un JA retrouvé dans le rapport FFTT reste à Actif=0.
-                    $pdo->prepare(
-                        'UPDATE ja SET DateValidationFFTT=?,
-                         Cp = COALESCE(Cp, ?), Ville = COALESCE(Ville, ?), Id_LaPoste = COALESCE(Id_LaPoste, ?)
-                         WHERE Id_JA=?'
-                    )->execute([$dateValid, $cpFinal, $villeFinal, $idLaPoste, $licence]);
-                    $trouves[] = ['licence' => $licence, 'nom' => $nom, 'prenom' => $prenom, 'grade' => $gradeNorm, 'statut' => 'mis_a_jour'];
-                } else {
-                    // Actif=0 : un nouveau JA créé via cette action n'est pas non plus
-                    // réactivé, pour rester cohérent avec la remise à zéro du département.
-                    $pdo->prepare(
-                        'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Grade, Actif, Id_Club,
-                                         Defiscalisation, Nationale, DateValidationFFTT,
-                                         Id_LaPoste, Cp, Ville)
-                         VALUES (?, ?, ?, ?, ?, 0, ?, 0, 0, ?, ?, ?, ?)'
-                    )->execute([$licence, $nom, $prenom, $email ?: null, $gradeNorm, $idClub,
-                        $dateValid, $idLaPoste, $cpFinal, $villeFinal]);
-                    $trouves[] = ['licence' => $licence, 'nom' => $nom, 'prenom' => $prenom, 'grade' => $gradeNorm, 'statut' => 'nouveau'];
+                $d = $this->lireJaFftt($pdo, $apiRaw, $numClub, $licence);
+                if ($d !== null) {
+                    $trouves[] = $traiter($pdo, $d);
                 }
             } catch (\Throwable $e) {
                 $erreurs++;
                 $msg = $e->getMessage();
-                error_log("[NIJAC] import_fftt_club $numClub licence=$licence : $msg");
+                error_log("[NIJAC] $action $numClub licence=$licence : $msg");
                 if (count($erreursMsgs) < 10) {
                     $erreursMsgs[] = "[$licence] " . mb_substr($msg, 0, 120);
                 }
@@ -564,112 +553,35 @@ class JugearbitreController extends BaseController
         return $this->response->setJSON(['ok' => true, 'trouves' => $trouves, 'total_membres' => count($membres), 'erreurs' => $erreurs, 'erreurs_msgs' => $erreursMsgs]);
     }
 
+    public function importFfttClub(): ResponseInterface
+    {
+        return $this->parcourirClubFftt('import_fftt_club', function (\PDO $pdo, array $d): array {
+            $nouveau = $this->upsertJaFftt($pdo, $d);
+
+            return ['licence' => $d['licence'], 'nom' => $d['nom'], 'prenom' => $d['prenom'], 'grade' => $d['grade'], 'statut' => $nouveau ? 'nouveau' : 'mis_a_jour'];
+        });
+    }
+
     public function scanFfttClub(): ResponseInterface
     {
-        if (!$this->isAdmin()) {
-            return $this->response->setJSON(['ok' => false, 'err' => 'Accès refusé']);
-        }
+        return $this->parcourirClubFftt('scan_fftt_club', function (\PDO $pdo, array $d): array {
+            $stmtEx = $pdo->prepare('SELECT 1 FROM ja WHERE Id_JA = ?');
+            $stmtEx->execute([$d['licence']]);
 
-        $pdo = getPDO();
-
-        $numClub = trim($this->request->getPost('num_club') ?? '');
-        if ($numClub === '') {
-            return $this->response->setJSON(['ok' => false, 'msg' => 'Numéro de club manquant.']);
-        }
-
-        set_time_limit(180);
-        $apiRaw      = getFfttRawClient();
-        $membres     = $apiRaw->listJoueursByClub($numClub);
-        $trouves     = [];
-        $erreurs     = 0;
-        $erreursMsgs = [];
-
-        foreach ($membres as $m) {
-            $licence = trim($m['licence'] ?? '');
-            if ($licence === '') {
-                continue;
-            }
-
-            try {
-                $lb = null;
-                for ($tentative = 0; $tentative < 2; $tentative++) {
-                    try {
-                        $lb = $apiRaw->request('xml_licence_b', ['licence' => $licence, 'club' => $numClub])['licence'] ?? null;
-                        break;
-                    } catch (\Throwable $e) {
-                        if ($tentative === 0) {
-                            usleep(600_000);
-                        } else {
-                            throw $e;
-                        }
-                    }
-                }
-                if (!$lb) {
-                    continue;
-                }
-
-                $ja  = ffttStr($lb['ja'] ?? '');
-                $arb = ffttStr($lb['arb'] ?? '');
-                if ($ja === '' && $arb === '') {
-                    continue;
-                }
-                $grade = $ja ?: $arb;
-                if (!preg_match('/^JA[123]$/i', $grade)) {
-                    continue;
-                }
-
-                $gradeNorm = strtoupper($grade);
-                $nom       = mb_strtoupper(ffttStr($lb['nom'] ?? ''), 'UTF-8');
-                $prenom    = ffttStr($lb['prenom'] ?? '');
-                $email     = ffttStr($lb['email'] ?? '');
-                $idClub    = ffttStr($lb['numclub'] ?? '') ?: $numClub;
-
-                $dateValidStr = ffttStr($lb['validation'] ?? '');
-                $dateValid    = $dateValidStr ?: null;
-
-                $cpFFTT    = ffttStr($lb['cp'] ?? '');
-                $villeFFTT = normaliserVille(ffttStr($lb['ville'] ?? ''));
-                $idLaPoste = null;
-                $cpFinal   = $cpFFTT;
-                $villeFinal = $villeFFTT;
-                if ($cpFFTT !== '') {
-                    $stmtLap = $pdo->prepare('SELECT Id_LaPoste, Nom FROM laposte WHERE CodePostal = ? LIMIT 1');
-                    $stmtLap->execute([$cpFFTT]);
-                    $lap = $stmtLap->fetch();
-                    if ($lap) {
-                        $idLaPoste  = $lap['Id_LaPoste'];
-                        $villeFinal = $villeFFTT !== '' ? $villeFFTT : normaliserVille((string) ($lap['Nom'] ?? ''));
-                    }
-                }
-
-                $stmtEx = $pdo->prepare('SELECT Id_JA FROM ja WHERE Id_JA = ?');
-                $stmtEx->execute([$licence]);
-                $enBase = (bool) $stmtEx->fetchColumn();
-
-                $trouves[] = [
-                    'licence'         => $licence,
-                    'nom'             => $nom,
-                    'prenom'          => $prenom,
-                    'email'           => $email,
-                    'grade'           => $gradeNorm,
-                    'id_club'         => $idClub,
-                    'id_laposte'      => $idLaPoste,
-                    'cp'              => $cpFinal,
-                    'ville'           => $villeFinal,
-                    'date_validation' => $dateValid,
-                    'en_base'         => $enBase,
-                ];
-            } catch (\Throwable $e) {
-                $erreurs++;
-                $msg = $e->getMessage();
-                error_log("[NIJAC] scan_fftt_club $numClub licence=$licence : $msg");
-                if (count($erreursMsgs) < 10) {
-                    $erreursMsgs[] = "[$licence] " . mb_substr($msg, 0, 120);
-                }
-            }
-        }
-
-        return $this->response->setJSON(['ok' => true, 'trouves' => $trouves, 'total_membres' => count($membres), 'erreurs' => $erreurs, 'erreurs_msgs' => $erreursMsgs]);
+            return [
+                'licence'         => $d['licence'],
+                'nom'             => $d['nom'],
+                'prenom'          => $d['prenom'],
+                'email'           => $d['email'],
+                'grade'           => $d['grade'],
+                'id_club'         => $d['id_club'],
+                'id_laposte'      => $d['id_laposte'],
+                'cp'              => $d['cp'],
+                'ville'           => $d['ville'],
+                'date_validation' => $d['date_valid'],
+                'en_base'         => (bool) $stmtEx->fetchColumn(),
+            ];
+        });
     }
 
     public function importFfttSelected(): ResponseInterface
@@ -689,45 +601,27 @@ class JugearbitreController extends BaseController
         $maj      = 0;
 
         foreach ($licences as $ja) {
-            $licence      = trim((string) ($ja['licence'] ?? ''));
-            $nom          = trim((string) ($ja['nom'] ?? ''));
-            $prenom       = trim((string) ($ja['prenom'] ?? ''));
-            $email        = trim((string) ($ja['email'] ?? '')) ?: null;
-            $grade        = trim((string) ($ja['grade'] ?? ''));
-            $idClub       = trim((string) ($ja['id_club'] ?? ''));
-            $idLaPoste    = $ja['id_laposte'] ?? null;
-            $cpFinal      = trim((string) ($ja['cp'] ?? ''));
-            $villeFinal   = trim((string) ($ja['ville'] ?? ''));
-            $dateValidStr = trim((string) ($ja['date_validation'] ?? ''));
-            $dateValid    = $dateValidStr ?: null;
+            $d = [
+                'licence'    => trim((string) ($ja['licence'] ?? '')),
+                'nom'        => trim((string) ($ja['nom'] ?? '')),
+                'prenom'     => trim((string) ($ja['prenom'] ?? '')),
+                'email'      => trim((string) ($ja['email'] ?? '')),
+                'grade'      => trim((string) ($ja['grade'] ?? '')),
+                'id_club'    => trim((string) ($ja['id_club'] ?? '')),
+                'id_laposte' => $ja['id_laposte'] ?? null,
+                'cp'         => trim((string) ($ja['cp'] ?? '')),
+                'ville'      => trim((string) ($ja['ville'] ?? '')),
+                'date_valid' => trim((string) ($ja['date_validation'] ?? '')) ?: null,
+            ];
 
-            if ($licence === '' || $grade === '') {
+            if ($d['licence'] === '' || $d['grade'] === '') {
                 continue;
             }
 
-            $stmtEx = $pdo->prepare('SELECT Id_JA FROM ja WHERE Id_JA = ?');
-            $stmtEx->execute([$licence]);
-            if ($stmtEx->fetchColumn()) {
-                // Actif n'est jamais remis à 1 ici : reinitialiserActifDept()
-                // (appelée par le JS avant la boucle clubs) a déjà tout mis à 0
-                // pour le département, et cette action ne réactive personne —
-                // même un JA retrouvé dans le rapport FFTT reste à Actif=0.
-                $pdo->prepare(
-                    'UPDATE ja SET DateValidationFFTT=?,
-                     Cp = COALESCE(Cp, ?), Ville = COALESCE(Ville, ?), Id_LaPoste = COALESCE(Id_LaPoste, ?)
-                     WHERE Id_JA=?'
-                )->execute([$dateValid, $cpFinal, $villeFinal, $idLaPoste, $licence]);
-                $maj++;
-            } else {
-                // Actif=0 : un nouveau JA créé via cette action n'est pas non plus
-                // réactivé, pour rester cohérent avec la remise à zéro du département.
-                $pdo->prepare(
-                    'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Grade, Actif, Id_Club,
-                                     Defiscalisation, Nationale, DateValidationFFTT,
-                                     Id_LaPoste, Cp, Ville)
-                     VALUES (?, ?, ?, ?, ?, 0, ?, 0, 0, ?, ?, ?, ?)'
-                )->execute([$licence, $nom, $prenom, $email, $grade, $idClub, $dateValid, $idLaPoste, $cpFinal, $villeFinal]);
+            if ($this->upsertJaFftt($pdo, $d)) {
                 $nouveaux++;
+            } else {
+                $maj++;
             }
         }
 
@@ -783,47 +677,6 @@ class JugearbitreController extends BaseController
         }
 
         return $this->response->setJSON(['ok' => true, 'maj' => $ok, 'echecs' => $echecs]);
-    }
-
-    /**
-     * Non appelée par le JS de jugearbitre.php — portée à l'identique pour
-     * parité (voir majLaposte()).
-     */
-    public function enrichirFftt(): ResponseInterface
-    {
-        if (!$this->isAdmin()) {
-            return $this->response->setJSON(['ok' => false, 'err' => 'Accès refusé']);
-        }
-
-        $pdo = getPDO();
-
-        $idJa = trim($this->request->getPost('id_ja') ?? '');
-        if ($idJa === '') {
-            return $this->response->setJSON(['ok' => false, 'msg' => 'id_ja manquant.']);
-        }
-
-        $lic = getFfttRawClient()->retrieveJoueurDetails($idJa);
-        if (empty($lic)) {
-            return $this->response->setJSON(['ok' => false, 'msg' => "Licence $idJa introuvable dans l'API FFTT."]);
-        }
-        if (array_is_list($lic)) {
-            return $this->response->setJSON(['ok' => false, 'msg' => "Plusieurs fiches trouvées pour la licence $idJa dans l'API FFTT."]);
-        }
-
-        $dateValidStr = ffttStr($lic['validation'] ?? '');
-        $dateValid    = $dateValidStr ?: null;
-
-        // CP, Ville et Id_LaPoste volontairement exclus : les données FFTT sont moins fiables que la BDD locale
-        $pdo->prepare(
-            'UPDATE ja SET DateValidationFFTT=? WHERE Id_JA=?'
-        )->execute([$dateValid, $idJa]);
-
-        return $this->response->setJSON([
-            'ok'         => true,
-            'date_valid' => $dateValid,
-            'nom_fftt'   => ffttStr($lic['nom'] ?? '') . ' ' . ffttStr($lic['prenom'] ?? ''),
-            'club_fftt'  => ffttStr($lic['nomclub'] ?? ''),
-        ]);
     }
 
     public function importerExcel(): ResponseInterface

@@ -372,7 +372,11 @@ $('#btn-enregistrer').on('click', function () {
     };
 
     $.ajax({ url: `${RENCONTRE_BASE}/${currentId}`, method: 'PUT', data: payload, dataType: 'json' }).done(function (res) {
-        if (res.ok) { toast(res.msg); chargerListe(currentId); }
+        if (res.ok) {
+            toast(res.msg);
+            if (res.avertissement) nijacToast(res.avertissement, 'warning', 15000);
+            chargerListe(currentId);
+        }
         else { toast(res.msg, false); setStatus(res.msg, false); }
     }).fail(() => toast('Erreur réseau.', false));
 });
@@ -384,7 +388,12 @@ $('#btn-annuler').on('click', function () {
     $('#no-selection').show();
 });
 
-$('#search-equipe').on('input', function () { searchEquipe = $(this).val().trim(); renderListe(); });
+let searchTimer;
+$('#search-equipe').on('input', function () {
+    const val = $(this).val().trim();
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () { searchEquipe = val; renderListe(); }, 200);
+});
 $('#sel-dept').on('change', function () { deptFiltre = $(this).val(); renderListe(); });
 $('#sel-poule').on('change', function () { pouleFiltre = $(this).val(); renderListe(); });
 $('#sel-journee').on('change', function () { journeeFiltre = $(this).val(); renderListe(); });

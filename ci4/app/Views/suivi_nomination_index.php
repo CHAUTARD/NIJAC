@@ -36,6 +36,8 @@
         #tbl-suivi td.num, #tbl-suivi th.num { text-align: right; }
         #tbl-suivi td.centre, #tbl-suivi th.centre { text-align: center; }
         #tbl-suivi .non-saisi { color: #9aa5b8; }
+        /* valeur saisie mais non comptée (2e rencontre du jour, ou arbitrage Club) — mêmes règles qu'EN17 */
+        #tbl-suivi .deja-compte { color: #9aa5b8; text-decoration: line-through; cursor: help; }
     </style>
 </head>
 <body>
@@ -51,9 +53,6 @@
 <div id="split-container">
     <div id="panel-liste">
         <div id="menu-strip">
-            <button type="button" class="btn btn-sm btn-light" id="btn-export" title="Exporter en CSV">
-                <i class="bi bi-download"></i> Exporter en CSV
-            </button>
             <span style="flex:1"></span>
             <span class="count-badge" id="lbl-count">0 / 0</span>
             <span style="flex:1"></span>
@@ -158,28 +157,6 @@
     </div>
 </div>
 
-<!-- Popup export CSV : période de rencontres -->
-<div class="modal fade" id="modal-export" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-sm">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h6 class="modal-title"><i class="bi bi-download me-2"></i>Export CSV</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
-            </div>
-            <div class="modal-body">
-                <label class="form-label small mb-1" for="exp-debut">Date de début</label>
-                <input type="date" id="exp-debut" class="form-control form-control-sm mb-2">
-                <label class="form-label small mb-1" for="exp-fin">Date de fin</label>
-                <input type="date" id="exp-fin" class="form-control form-control-sm">
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Annuler</button>
-                <button type="button" class="btn btn-sm btn-success" id="btn-exporter"><i class="bi bi-download me-1"></i>Exporter</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <?= view('partials/page_footer', ['pfStatusAlign' => 'left']) ?>
 
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
@@ -275,7 +252,11 @@ function renderListe() {
         return;
     }
 
+    const kmNon = nonComptees('Kilometre'), peageNon = nonComptees('Peage');
     affichees.forEach(n => {
+        // Saisi mais non compté (déjà compté sur une autre rencontre du jour, ou arbitrage Club) : barré + info-bulle
+        const nonCompte = (champ, sec) => !!n.DateSaisie && +n[champ] > 0 && (!estCra(n) || sec.has(n.Id_Nomination));
+        const titreNonCompte = estCra(n) ? 'Déjà compté sur une autre rencontre du même jour' : 'Arbitrage Club : non remboursé';
         // DateSaisie NULL = le JA n'a encore rien saisi dans EN21 : pas de valeurs à afficher
         const saisi = !!n.DateSaisie;
         const $modifier = $('<button type="button" class="btn btn-sm btn-outline-secondary" title="Modifier cette nomination">')
@@ -296,8 +277,10 @@ function renderListe() {
             $('<td>').attr('data-field', 'ja').text(n.NomJa ?? ''),
             $('<td>').attr('data-field', 'ebp').text(n.NumCompteEBP ?? ''),
             $('<td class="num">').attr('data-field', 'peage').toggleClass('non-saisi', !saisi)
+                .toggleClass('deja-compte', nonCompte('Peage', peageNon)).attr('title', nonCompte('Peage', peageNon) ? titreNonCompte : null)
                 .text(saisi ? Number(n.Peage ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) + ' €' : '—'),
             $('<td class="num">').attr('data-field', 'km').toggleClass('non-saisi', !saisi)
+                .toggleClass('deja-compte', nonCompte('Kilometre', kmNon)).attr('title', nonCompte('Kilometre', kmNon) ? titreNonCompte : null)
                 .text(saisi ? (n.Kilometre ?? 0) : '—'),
             $('<td class="centre">').attr('data-field', 'defisc').toggleClass('non-saisi', !saisi)
                 .text(saisi ? (+n.Defiscalisation ? 'Oui' : 'Non') : '—'),
@@ -379,14 +362,18 @@ $('#btn-modif-enregistrer').on('click', function () {
     });
 });
 
-// ── Export CSV du tableau affiché ────────────────────────────────────────────
-// Une ligne par nomination, sans regroupement : un JA qui arbitre deux rencontres
-// le même jour apparaît sur deux lignes, mais son trajet n'est compté qu'une fois :
-// péage et km ne sont conservés que sur la 1re rencontre du jour (heure la plus
-// précoce parmi celles dont les frais sont saisis), les suivantes sont exportées à 0.
-function idsSecondaires() {
+// ── Frais non comptés (mêmes règles qu'EN17) ─────────────────────────────────
+// Une ligne par nomination, sans regroupement. Mêmes règles qu'EN17 (tableau « Arbitrages et frais ») : seules les
+// rencontres à arbitrage CRA valent des frais (Club : 0), et un JA qui arbitre plusieurs rencontres CRA le même jour ne
+// fait qu'un déplacement — les km, et de même les péages, ne sont conservés que sur la 1re rencontre du jour qui en porte
+// (heure la plus précoce, puis n° de nomination), les suivantes sont barrées dans le tableau. Une rencontre à 0 ne « consomme »
+// pas le déplacement : le JA a pu ne saisir ses frais que sur l'une des deux.
+const estCra = n => +n.ArbitrageCRA === 1;
+
+/** Ids des nominations dont la valeur de `champ` ('Kilometre' | 'Peage') n'est PAS comptée : 2e rencontre et suivantes du jour. */
+function nonComptees(champ) {
     const vus = new Set(), sec = new Set();
-    nominations.filter(n => n.DateSaisie)
+    nominations.filter(n => estCra(n) && +n[champ] > 0)
         .sort((a, b) => ((a.Date ?? '') + (a.Heure ?? '')).localeCompare((b.Date ?? '') + (b.Heure ?? '')) || a.Id_Nomination - b.Id_Nomination)
         .forEach(n => {
             const cle = `${n.Id_JA}|${(n.Date ?? '').substring(0, 10)}`;
@@ -394,52 +381,7 @@ function idsSecondaires() {
         });
     return sec;
 }
-const jjmmaaaa = d => d ? d.substring(0, 10).split('-').reverse().join('/') : '';
-const champCsv = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
 
-// Lignes exportables : affichées (filtres) et avec frais saisis
-const lignesExportables = () => lignesAffichees().filter(n => n.DateSaisie);
-const dateRencontre = n => (n.Date ?? '').substring(0, 10);
-
-// Le bouton ouvre la popup de période : début = 1re rencontre exportable,
-// fin = plus grande date de saisie renseignée parmi les lignes exportables
-$('#btn-export').on('click', function () {
-    const lignes = lignesExportables();
-    if (!lignes.length) { toast('Aucune ligne avec date de saisie à exporter.', false); return; }
-    $('#exp-debut').val(lignes.map(dateRencontre).sort()[0]);
-    $('#exp-fin').val(lignes.map(n => n.DateSaisie.substring(0, 10)).sort().pop());
-    bootstrap.Modal.getOrCreateInstance('#modal-export').show();
-});
-
-$('#btn-exporter').on('click', function () {
-    const debut = $('#exp-debut').val(), fin = $('#exp-fin').val();
-    if (!debut || !fin) { toast('Renseignez la date de début et la date de fin.', false); return; }
-    if (debut > fin)    { toast('La date de début doit précéder la date de fin.', false); return; }
-    const lignes = lignesExportables().filter(n => dateRencontre(n) >= debut && dateRencontre(n) <= fin);
-    if (!lignes.length) { toast('Aucune ligne à exporter sur cette période.', false); return; }
-    bootstrap.Modal.getInstance('#modal-export').hide();
-
-    const secondaires = idsSecondaires();
-    const csv = [['Date', 'Division', 'Arbitrage', 'Domicile', 'Extérieur', 'N° licence', 'JA', 'Compte EBP', 'Péage', 'Km', 'Défiscalisation', 'Date saisie']]
-        .concat(lignes.map(n => [
-            jjmmaaaa(n.Date), n.Division, libArbitrage(n), n.NomDom, n.NomExt, n.Id_JA, n.NomJa, n.NumCompteEBP,
-            secondaires.has(n.Id_Nomination) ? '0' : String(n.Peage).replace('.', ','),
-            secondaires.has(n.Id_Nomination) ? 0 : n.Kilometre,
-            +n.Defiscalisation ? 'Oui' : 'Non',
-            jjmmaaaa(n.DateSaisie),
-        ]))
-        .map(l => l.map(champCsv).join(';'))
-        .join('\r\n');
-
-    // BOM UTF-8 : Excel affiche correctement les accents
-    const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }));
-    const a   = document.createElement('a');
-    a.href     = url;
-    a.download = `suivi_nominations_${new Date().toISOString().substring(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast(`${lignes.length} ligne(s) exportée(s).`);
-});
 
 function chargerListe() {
     $.get(`${SUIVI_BASE}/data`, function (res) {
@@ -456,8 +398,17 @@ function chargerListe() {
 
 $('#sel-date').on('change', function () { filtres.date = $(this).val(); renderListe(); });
 $('#sel-saisie').on('change', function () { filtres.saisie = $(this).val(); renderListe(); });
-$('#search-equipe').on('input', function () { filtres.equipe = $(this).val().trim(); renderListe(); });
-$('#search-ja').on('input', function () { filtres.ja = $(this).val().trim(); renderListe(); });
+// Debounce : renderListe() reconstruit tout le tableau
+let searchTimer;
+function filtreTexte(cle) {
+    return function () {
+        const val = $(this).val().trim();
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(function () { filtres[cle] = val; renderListe(); }, 200);
+    };
+}
+$('#search-equipe').on('input', filtreTexte('equipe'));
+$('#search-ja').on('input', filtreTexte('ja'));
 $('#btn-reset-filtres').on('click', function () {
     filtres.date = filtres.equipe = filtres.ja = filtres.saisie = '';
     $('#sel-date, #sel-saisie, #search-equipe, #search-ja').val('');

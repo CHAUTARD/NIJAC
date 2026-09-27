@@ -23,3 +23,6 @@ logs/
 .DS_Store
 Thumbs.db
 *.swp
+
+# Modèle de .env de production (à remplir puis renommer en .env sur le serveur)
+.env_Production

@@ -164,7 +164,10 @@ class AttestationDefiscController extends BaseController
                 'msg' => 'Attestation enregistrée' . ($cg !== null ? ' avec la carte grise' : '') . '. Merci !',
             ]);
         } catch (\Throwable $e) {
-            return $this->response->setJSON(['ok' => false, 'msg' => $e->getMessage()]);
+            // Endpoint public : pas de détail technique (chemins, SQL) côté client.
+            error_log('[NIJAC] ED53 : ' . $e->getMessage());
+
+            return $this->response->setJSON(['ok' => false, 'msg' => messageErreur($e, 'Erreur technique, merci de réessayer.')]);
         }
     }
 

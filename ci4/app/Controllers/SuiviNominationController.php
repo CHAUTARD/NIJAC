@@ -29,6 +29,14 @@ class SuiviNominationController extends BaseController
         return getDepartementsAutorises($_SESSION['utilisateur']['id_departement'] ?? null);
     }
 
+    /** Journalise l'exception et renvoie un message générique (pas de SQL / chemin côté navigateur). */
+    private function erreurTechnique(\Throwable $e, string $action, string $msg): ResponseInterface
+    {
+        error_log("[NIJAC] EN28 $action : " . $e->getMessage());
+
+        return $this->response->setJSON(['ok' => false, 'msg' => messageErreur($e, $msg)]);
+    }
+
     public function index()
     {
         $u = $_SESSION['utilisateur'] ?? [];
@@ -68,7 +76,7 @@ class SuiviNominationController extends BaseController
 
             return $this->response->setJSON(['ok' => true, 'nominations' => $stmt->fetchAll()]);
         } catch (\Throwable $e) {
-            return $this->response->setJSON(['ok' => false, 'msg' => $e->getMessage()]);
+            return $this->erreurTechnique($e, 'data', 'Liste indisponible.');
         }
     }
 
@@ -89,7 +97,7 @@ class SuiviNominationController extends BaseController
 
             return $this->response->setJSON(['ok' => true, 'ja' => $stmt->fetchAll()]);
         } catch (\Throwable $e) {
-            return $this->response->setJSON(['ok' => false, 'msg' => $e->getMessage()]);
+            return $this->erreurTechnique($e, 'jaListe', 'Liste des JA indisponible.');
         }
     }
 
@@ -199,7 +207,7 @@ class SuiviNominationController extends BaseController
 
             return $this->response->setJSON(['ok' => true, 'msg' => 'Nomination modifiée.']);
         } catch (\Throwable $e) {
-            return $this->response->setJSON(['ok' => false, 'msg' => 'Modification impossible : ' . $e->getMessage()]);
+            return $this->erreurTechnique($e, 'modifier', 'Modification impossible.');
         }
     }
 
@@ -235,6 +243,11 @@ class SuiviNominationController extends BaseController
             }
             if (empty($nom['Email'])) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Ce JA n\'a pas d\'adresse email.']);
+            }
+
+            $errRl = checkRateLimit(1);   // même garde-fou d'envoi que le Centre d'envoi (EN15)
+            if ($errRl !== null) {
+                return $this->response->setJSON(['ok' => false, 'msg' => $errRl]);
             }
 
             $moi = $_SESSION['utilisateur'] ?? [];
@@ -280,10 +293,12 @@ class SuiviNominationController extends BaseController
                 $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $corps));
             }
             $mail->send();
+            enregistrerEnvois(1);
 
-            return $this->response->setJSON(['ok' => true, 'msg' => "Rappel envoyé à {$nom['Prenom']} {$nom['Nom']}."]);
+            // Affiché dans un toast HTML côté client : nom du JA échappé.
+            return $this->response->setJSON(['ok' => true, 'msg' => 'Rappel envoyé à ' . htmlspecialchars($nom['Prenom'] . ' ' . $nom['Nom']) . '.']);
         } catch (\Throwable $e) {
-            return $this->response->setJSON(['ok' => false, 'msg' => 'Envoi impossible : ' . $e->getMessage()]);
+            return $this->erreurTechnique($e, 'rappel', 'Envoi impossible (voir le journal des erreurs).');
         }
     }
 }

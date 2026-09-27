@@ -24,33 +24,9 @@ class DisponibilitesController extends BaseController
     {
         require_once __DIR__ . '/../../../config/db.php';
         require_once __DIR__ . '/../../../config/app_config.php';
-
-        $pdo = getPDO();
-        // Seed initial du calendrier régional (Régionale 3/4 non couvertes par un import FFTT),
-        // une seule fois si la table est vide — voir EA84 pour l'édition ensuite.
-        $pdo->exec('
-            CREATE TABLE IF NOT EXISTS competition_regionale (
-                Id_CompetitionRegionale INT AUTO_INCREMENT PRIMARY KEY,
-                Date                    DATE NOT NULL,
-                Heure                   TIME NOT NULL,
-                Commentaire             VARCHAR(255) NULL,
-                UNIQUE KEY uq_date_heure (Date, Heure)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        ');
-        if ((int) $pdo->query('SELECT COUNT(*) FROM competition_regionale')->fetchColumn() === 0) {
-            $stmt = $pdo->prepare('INSERT INTO competition_regionale (Date, Heure) VALUES (?, ?)');
-            foreach ([
-                ['2026-09-19', '16:00'], ['2026-09-20', '14:00'],
-                ['2026-10-03', '16:00'], ['2026-10-04', '14:00'],
-                ['2026-10-17', '16:00'], ['2026-10-18', '14:00'],
-                ['2026-11-07', '16:00'], ['2026-11-08', '14:00'],
-                ['2026-11-21', '16:00'], ['2026-11-22', '14:00'],
-                ['2026-12-05', '16:00'], ['2026-12-06', '14:00'],
-                ['2026-12-12', '16:00'], ['2026-12-13', '14:00'],
-            ] as [$date, $heure]) {
-                $stmt->execute([$date, $heure]);
-            }
-        }
+        // La table competition_regionale (et son seed initial) est créée par initTableConfiguration() (EA98) ;
+        // édition ensuite via EA84. Ce constructeur la recréait + réinsérait les dates 2026 à chaque requête
+        // dès qu'elle était vide (ex. calendrier d'une nouvelle saison vidé dans EA84).
     }
 
     public function index()

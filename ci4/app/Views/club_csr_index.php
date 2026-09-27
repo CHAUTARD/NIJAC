@@ -477,7 +477,7 @@ $('#mod-club-btn-ok').on('click', function () {
             l.cor_tel    = corTel;
             renderGrille();
         } else {
-            $('#mod-club-msg').html('<span class="text-danger">✖ ' + res.msg + '</span>');
+            $('#mod-club-msg').empty().append($('<span class="text-danger">').text('✖ ' + res.msg));
         }
     }).fail(() => { spinner(false); $('#mod-club-msg').html('<span class="text-danger">Erreur réseau.</span>'); });
 });
@@ -526,9 +526,12 @@ $('#sel-dept').on('change', function () {
 });
 
 // ── Recherche ─────────────────────────────────────────────────────────────────
+// Debounce : chaque recherche reconstruit la grille
+let searchTimer;
 $('#search-input').on('input', function () {
-    searchTerm = $(this).val().trim();
-    renderGrille();
+    const val = $(this).val().trim();
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () { searchTerm = val; renderGrille(); }, 200);
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────

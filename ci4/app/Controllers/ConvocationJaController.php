@@ -161,7 +161,8 @@ class ConvocationJaController extends BaseController
                 } catch (\PDOException $ignored) {
                 }
             } catch (\PDOException $e) {
-                $erreur = 'Erreur BDD : ' . $e->getMessage();
+                error_log('[NIJAC] EN21 : ' . $e->getMessage());
+                $erreur = messageErreur($e, 'Erreur technique : impossible de charger la convocation pour le moment.');
             }
         } elseif (!$idNomination) {
             $erreur = 'Paramètre nomination manquant.';
@@ -297,20 +298,7 @@ class ConvocationJaController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => implode(' ', $erreurs)]);
             }
 
-            // Journal de debug conservé à l'identique du fichier legacy (fichier
-            // .log local, jamais exposé ni lu par l'application elle-même).
-            $params  = [$peages, $km, $rapAcc ?: null, $rapEq ?: null, $defisc, $idNomP];
-            $logFile = __DIR__ . '/../../../logs/convocation_debug.log';
-            @mkdir(dirname($logFile), 0755, true);
-            file_put_contents(
-                $logFile,
-                date('[Y-m-d H:i:s] ') .
-                "UPDATE nomination SET Peage=$params[0], Kilometre=$params[1], " .
-                'RapportAccueil=' . var_export($params[2], true) . ', ' .
-                'RapportEquipements=' . var_export($params[3], true) . ", Defiscalisation=$defisc, DateSaisie=CURDATE() " .
-                "WHERE Id_Nomination=$idNomP" . PHP_EOL,
-                FILE_APPEND
-            );
+            $params = [$peages, $km, $rapAcc ?: null, $rapEq ?: null, $defisc, $idNomP];
 
             $stmt = $pdo->prepare('
                 UPDATE `nomination` SET
@@ -323,17 +311,12 @@ class ConvocationJaController extends BaseController
                 WHERE Id_Nomination = ?
             ');
             $stmt->execute($params);
-            $affected = $stmt->rowCount();
 
-            file_put_contents(
-                $logFile,
-                date('[Y-m-d H:i:s] ') . "=> Lignes modifiées : $affected" . PHP_EOL,
-                FILE_APPEND
-            );
-
-            return $this->response->setJSON(['ok' => true, 'affected' => $affected]);
+            return $this->response->setJSON(['ok' => true, 'affected' => $stmt->rowCount()]);
         } catch (\PDOException $e) {
-            return $this->response->setJSON(['ok' => false, 'err' => $e->getMessage()]);
+            error_log('[NIJAC] EN21 sauvegarderFrais : ' . $e->getMessage());
+
+            return $this->response->setJSON(['ok' => false, 'err' => messageErreur($e, "Erreur technique : les frais n'ont pas pu être enregistrés.")]);
         }
     }
 }

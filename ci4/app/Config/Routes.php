@@ -122,12 +122,11 @@ $routes->post('clean/restaurer-table','CleanController::restaurerTableFull', ['f
 
 // ── EN11 Juges-Arbitres ──────────────────────────────────────────────────────
 // Filtre "auth" (pas "adminauth") : accessible aux Nominateurs (grille +
-// import EBP), import Excel/API FFTT et maj Id_LaPoste ponctuelle restreints
-// à l'admin dans le contrôleur, comme le fait jugearbitre.php.
+// import EBP), import Excel/API FFTT restreints à l'admin dans le
+// contrôleur, comme le fait jugearbitre.php.
 $routes->get('jugearbitre', 'JugearbitreController::index', ['filter' => 'auth']);
 $routes->get('jugearbitre/liste', 'JugearbitreController::liste', ['filter' => 'auth']);
 $routes->get('jugearbitre/clubs', 'JugearbitreController::clubsParDept', ['filter' => 'auth']);
-$routes->post('jugearbitre/laposte', 'JugearbitreController::majLaposte', ['filter' => 'auth']);
 $routes->post('jugearbitre/maj-bdd', 'JugearbitreController::majBdd', ['filter' => 'auth']);
 $routes->post('jugearbitre/fftt/clubs-dept', 'JugearbitreController::getClubsDept', ['filter' => 'auth']);
 $routes->post('jugearbitre/fftt/reset-actif-dept', 'JugearbitreController::reinitialiserActifDept', ['filter' => 'auth']);
@@ -135,7 +134,6 @@ $routes->post('jugearbitre/fftt/import-club', 'JugearbitreController::importFftt
 $routes->post('jugearbitre/fftt/scan-club', 'JugearbitreController::scanFfttClub', ['filter' => 'auth']);
 $routes->post('jugearbitre/fftt/import-selected', 'JugearbitreController::importFfttSelected', ['filter' => 'auth']);
 $routes->post('jugearbitre/import-csv-ebp', 'JugearbitreController::importCsvEbp', ['filter' => 'auth']);
-$routes->post('jugearbitre/fftt/enrichir', 'JugearbitreController::enrichirFftt', ['filter' => 'auth']);
 $routes->post('jugearbitre/import-excel', 'JugearbitreController::importerExcel', ['filter' => 'auth']);
 
 // ── EA82 Import Rencontres FFTT ──────────────────────────────────────────────
@@ -216,8 +214,8 @@ $routes->post('suivi-nomination/modifier', 'SuiviNominationController::modifier'
 $routes->post('suivi-nomination/rappel', 'SuiviNominationController::rappel', ['filter' => 'auth']);
 
 // ── EN18 Désidératas club ────────────────────────────────────────────────────
-// Page PUBLIQUE (sans authentification), tokenisée par ?club=<Id_Club> — lien
-// envoyé par email depuis EN12. Pas de filtre "auth"/"adminauth" ici.
+// Page PUBLIQUE (sans authentification), jeton signé ?club=<Id_Club>-<MAC> — lien
+// envoyé par email depuis EN12 / ES32. Pas de filtre "auth"/"adminauth" ici.
 $routes->get('desiderata-club', 'DesiderataClubController::index');
 $routes->get('desiderata-club/charger', 'DesiderataClubController::charger');
 $routes->post('desiderata-club/enregistrer', 'DesiderataClubController::enregistrer');
@@ -410,14 +408,13 @@ $routes->post('convocation-ja/sauvegarder-frais', 'ConvocationJaController::sauv
 // ── EN22 Disponibilité JA ────────────────────────────────────────────────────
 // Page PUBLIQUE (sans authentification) — accessible via ?ja=TOKEN ou ?id_ja=N.
 $routes->get('disponibilite-ja', 'DisponibiliteJaController::index');
-$routes->get('disponibilite-ja/liste-ja', 'DisponibiliteJaController::listeJa');
 $routes->get('disponibilite-ja/ja', 'DisponibiliteJaController::ja');
 $routes->get('disponibilite-ja/journees', 'DisponibiliteJaController::journees');
 $routes->post('disponibilite-ja/sauvegarder-dispo-journee', 'DisponibiliteJaController::sauvegarderDispoJournee');
-// "token" est public dans ce fichier (contrairement à EN19/adresse_ja.php) :
-// le legacy n'y appelle jamais auth_required.php pour cette action précise.
-$routes->get('disponibilite-ja/token', 'DisponibiliteJaController::token');
-$routes->post('disponibilite-ja/token', 'DisponibiliteJaController::token');
+// "token" exige une session (appelée depuis EN11) : publique, elle permettait à n'importe qui
+// de fabriquer le token de n'importe quel JA (?id=N) et donc de contourner tout le jetonnage.
+$routes->get('disponibilite-ja/token', 'DisponibiliteJaController::token', ['filter' => 'auth']);
+$routes->post('disponibilite-ja/token', 'DisponibiliteJaController::token', ['filter' => 'auth']);
 $routes->get('disponibilite-ja/lire-note', 'DisponibiliteJaController::lireNote');
 $routes->post('disponibilite-ja/sauvegarder-note', 'DisponibiliteJaController::sauvegarderNote');
 $routes->post('disponibilite-ja/sauvegarder-defiscalisation', 'DisponibiliteJaController::sauvegarderDefiscalisation');

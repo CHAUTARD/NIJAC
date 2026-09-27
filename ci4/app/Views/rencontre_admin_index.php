@@ -536,7 +536,12 @@ $('#btn-supprimer').on('click', function () {
     supprimerRencontre(currentId, `${$('#edit-equipe-dom').val()} vs ${$('#edit-equipe-ext').val() || 'exempt'}`);
 });
 
-$('#search-equipe').on('input', function () { searchEquipe = $(this).val().trim(); renderListe(); });
+let searchTimer;
+$('#search-equipe').on('input', function () {
+    const val = $(this).val().trim();
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () { searchEquipe = val; renderListe(); }, 200);
+});
 $('#sel-dept').on('change', function () { deptFiltre = $(this).val(); renderListe(); });
 $('#sel-poule').on('change', function () { pouleFiltre = $(this).val(); renderListe(); });
 $('#sel-journee').on('change', function () { journeeFiltre = $(this).val(); renderListe(); });

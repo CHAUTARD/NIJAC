@@ -46,6 +46,8 @@ class NominationController extends BaseController
         try {
             return $fn();
         } catch (\Throwable $e) {
+            error_log('[NIJAC] EN14 : ' . $e->getMessage());
+
             return $this->response->setJSON(['ok' => false, 'err' => $e->getMessage()]);
         }
     }

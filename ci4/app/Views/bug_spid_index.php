@@ -400,7 +400,7 @@ function appelerXmlClubB(id) {
 
     $.post(`${BUGSPID_BASE}/${id}/xml-club-b`, {}, function (res) {
         if (!res.ok) {
-            $('#xml-club-b-body').html(`<div class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>${res.msg}</div>`);
+            $('#xml-club-b-body').html(`<div class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>${escHtml(res.msg)}</div>`);
             return;
         }
         const url    = res.url ? `<div class="text-muted small mb-2 text-break">${res.url}</div>` : '';

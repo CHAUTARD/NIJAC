@@ -113,8 +113,9 @@ class NominateurMenuController extends BaseController
                 $stmt->execute($deptsAutorises);
                 $stats['rencontres_sans_ja'] = (int) $stmt->fetchColumn();
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             // Tableau de bord non disponible — on continue sans bloquer
+            error_log('[NIJAC] E003 tableau de bord : ' . $e->getMessage());
         }
 
         // Formater la prochaine date en français

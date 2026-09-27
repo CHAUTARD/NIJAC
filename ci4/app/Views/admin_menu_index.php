@@ -236,6 +236,17 @@
             letter-spacing: .03em;
             pointer-events: none;
         }
+
+        /* Écrans moyens / petits : 6 colonnes fixes → 4, 3, 2 puis 1 (comme E003) */
+        @media (max-width: 1399.98px) { .menu-grid { grid-template-columns: repeat(4, 1fr); } }
+        @media (max-width: 991.98px)  { .menu-grid { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 767.98px) {
+            .menu-grid { grid-template-columns: repeat(2, 1fr); padding: 12px; gap: 12px; }
+            .menu-btn { min-height: 0; }
+            .menu-btn .btn-icon { width: 100px; height: 100px; }
+            .menu-btn img { width: 100px; height: 100px; max-width: 100px; max-height: 100px; }
+        }
+        @media (max-width: 479.98px) { .menu-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
@@ -290,14 +301,14 @@
 
                 <a href="<?= site_url('salle') ?>" class="menu-btn btn-salle">
                     <span class="btn-code">EA81</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/Salle.png') ?>" alt="Salle"></div>
+                    <div class="btn-icon"><img src="<?= base_url('img/Salle.webp') ?>" alt="Salle"></div>
                     <span>Salle</span>
                     <span class="btn-desc">Référencer les salles de compétition et leur adresse</span>
                 </a>
 
                 <a href="<?= site_url('import-rencontres') ?>" class="menu-btn btn-club">
                     <span class="btn-code">EA82</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/Competition.png') ?>" alt="Import Rencontres Régionales"></div>
+                    <div class="btn-icon"><img src="<?= base_url('img/Competition.webp') ?>" alt="Import Rencontres Régionales"></div>
                     <span>Import Rencontres Régionales</span>
                     <span class="btn-desc">Importer les rencontres Régionales depuis un fichier FFTT</span>
                 </a>
@@ -311,14 +322,14 @@
 
                 <a href="<?= site_url('competition-regionale') ?>" class="menu-btn btn-competition-regionale">
                     <span class="btn-code">EA84</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/Calendrier_Regional.png') ?>" alt="Calendrier championnat régional"></div>
+                    <div class="btn-icon"><img src="<?= base_url('img/Calendrier_Regional.webp') ?>" alt="Calendrier championnat régional"></div>
                     <span>Calendrier Régional</span>
                     <span class="btn-desc">Saisir les dates du championnat régional</span>
                 </a>
 
                 <a href="<?= site_url('clean') ?>" class="menu-btn btn-saison">
                     <span class="btn-code">EA85</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/Nettoyage.png') ?>" alt="Saison"></div>
+                    <div class="btn-icon"><img src="<?= base_url('img/Nettoyage.webp') ?>" alt="Saison"></div>
                     <span>Saison</span>
                     <span class="btn-desc">Suppression des informations sur la saison dernière</span>
                 </a>
@@ -332,7 +343,7 @@
 
                 <a href="<?= site_url('utilisateur') ?>" class="menu-btn btn-utilisateur">
                     <span class="btn-code">EA86</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/Utilisateur.png') ?>" alt="Utilisateur"></div>
+                    <div class="btn-icon"><img src="<?= base_url('img/Utilisateur.webp') ?>" alt="Utilisateur"></div>
                     <span>Utilisateur</span>
                     <span class="btn-desc">Gérer les comptes et droits d'accès</span>
                 </a>
@@ -346,21 +357,21 @@
 
                 <a href="<?= site_url('equipe-regionale') ?>" class="menu-btn btn-equipe-regionale">
                     <span class="btn-code">EA92</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/Equipe.png') ?>" alt="Chargement équipe régionale"></div>
+                    <div class="btn-icon"><img src="<?= base_url('img/Equipe.webp') ?>" alt="Chargement équipe régionale"></div>
                     <span>Chargement équipe régionale</span>
                     <span class="btn-desc">Consulter et modifier les équipes régionales importées</span>
                 </a>
 
                 <a href="<?= site_url('gestion-equipes') ?>" class="menu-btn btn-gestion-equipes">
                     <span class="btn-code">EA94</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/GestEquipe.png') ?>" alt="Gestion des équipes"></div>
+                    <div class="btn-icon"><img src="<?= base_url('img/GestEquipe.webp') ?>" alt="Gestion des équipes"></div>
                     <span>Gestion des équipes</span>
                     <span class="btn-desc">Filtrer et modifier les équipes (club, division, nom)</span>
                 </a>
 
                 <a href="<?= site_url('gestion-rencontres') ?>" class="menu-btn btn-gestion-rencontres">
                     <span class="btn-code">EA95</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/Rencontre.png') ?>" alt="Gestion des rencontres"></div>
+                    <div class="btn-icon"><img src="<?= base_url('img/Rencontre.webp') ?>" alt="Gestion des rencontres"></div>
                     <span>Gestion des rencontres</span>
                     <span class="btn-desc">Filtrer et modifier date, heure, poule, journée</span>
                 </a>
@@ -374,14 +385,14 @@
 
                 <a href="<?= site_url('departement') ?>" class="menu-btn btn-departement">
                     <span class="btn-code">EA90</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/Departement.png') ?>" alt="Départements"></div>
+                    <div class="btn-icon"><img src="<?= base_url('img/Departement.webp') ?>" alt="Départements"></div>
                     <span>Départements</span>
                     <span class="btn-desc">Gérer les départements et leur région</span>
                 </a>
 
                 <a href="<?= site_url('region') ?>" class="menu-btn btn-region">
                     <span class="btn-code">EA88</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/Regions.png') ?>" alt="Régions"></div>
+                    <div class="btn-icon"><img src="<?= base_url('img/Regions.webp') ?>" alt="Régions"></div>
                     <span>Régions</span>
                     <span class="btn-desc">Gérer les régions et leur gentilé</span>
                 </a>
@@ -395,7 +406,7 @@
 
                 <a href="<?= site_url('configuration') ?>" class="menu-btn btn-configuration">
                     <span class="btn-code">EA91</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/Parametres.png') ?>" alt="Configuration"></div>
+                    <div class="btn-icon"><img src="<?= base_url('img/Parametres.webp') ?>" alt="Configuration"></div>
                     <span>Configuration</span>
                     <span class="btn-desc">Paramètres généraux de l'application</span>
                 </a>
@@ -417,14 +428,14 @@
 
                 <a href="<?= site_url('bug-spid') ?>" class="menu-btn" style="background: #ffe0b2; border: 2px solid #e65100;">
                     <span class="btn-code">EA97</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/BugSpid.png') ?>" alt="BugSpid"></div>
+                    <div class="btn-icon"><img src="<?= base_url('img/BugSpid.webp') ?>" alt="BugSpid"></div>
                     <span>BugSpid</span>
                     <span class="btn-desc">Corrections de clubs dupliqués (Id_Club fantôme)</span>
                 </a>
 
                 <a href="<?= site_url('db-admin') ?>" class="menu-btn btn-dbadmin" style="background: repeating-linear-gradient(45deg, #fce4ec, #fce4ec 10px, #ffcdd2 10px, #ffcdd2 20px); border: 2px solid #c62828;">
                     <span class="btn-code">EA98</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/database.png') ?>" alt="Base de données"></div>
+                    <div class="btn-icon"><img src="<?= base_url('img/database.webp') ?>" alt="Base de données"></div>
                     <span>Base de données</span>
                     <span class="btn-desc">Administration directe de la base de données</span>
                 </a>
@@ -438,7 +449,7 @@
     <!-- ── Commun, sous les onglets : Quitter ── -->
     <div id="zone-deconnexion">
         <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;">
-            <div class="btn-icon"><img src="<?= base_url('img/Quitter.png') ?>" alt="Se déconnecter"></div>
+            <div class="btn-icon"><img src="<?= base_url('img/Quitter.webp') ?>" alt="Se déconnecter"></div>
             <span style="color:#842029;">Se déconnecter</span>
             <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
         </a>

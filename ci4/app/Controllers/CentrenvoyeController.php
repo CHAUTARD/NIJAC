@@ -268,6 +268,9 @@ class CentrenvoyeController extends BaseController
         if (!$ja) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Nomination introuvable.']);
         }
+        if (!in_array($ja['DeptClub'], $this->deptsAutorises(), true)) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Nomination hors de votre périmètre.']);
+        }
 
         $marqueurs = construireMarqueursMessage($ja, $this->moi(), $this->ctxConvocation($ja));
         $rendu     = remplacerMarqueursMessage($sujet, $message, $marqueurs);
@@ -391,9 +394,19 @@ class CentrenvoyeController extends BaseController
         } else {
             // Pour "Demande adresse" on autorise aussi les JA inactifs sans adresse
             $activeOnly = ($type !== 'Demande adresse') ? 'AND j.Actif = 1' : '';
-            $stmt       = $pdo->prepare("SELECT j.Id_JA, j.Nom, j.Prenom, j.Email FROM ja j WHERE j.Id_JA = ? $activeOnly");
+            $stmt       = $pdo->prepare("SELECT j.Id_JA, j.Nom, j.Prenom, j.Email, j.CodeDept FROM ja j WHERE j.Id_JA = ? $activeOnly");
             $stmt->execute([$idJa]);
             $ja = $stmt->fetch();
+        }
+
+        // Périmètre du nominateur : mêmes règles que les listes de ja() (nomination →
+        // département du club recevant, autres types → CodeDept du JA). « Demande
+        // adresse » n'est pas filtrée par département dans ja(), elle ne l'est pas ici non plus.
+        if ($ja && $type !== 'Demande adresse') {
+            $deptJa = $type === 'Convocation' ? $ja['DeptClub'] : str_pad((string) ($ja['CodeDept'] ?? ''), 2, '0', STR_PAD_LEFT);
+            if (!in_array($deptJa, $this->deptsAutorises(), true)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Hors de votre périmètre.']);
+            }
         }
 
         if (!$ja || empty($ja['Email'])) {
@@ -590,7 +603,8 @@ class CentrenvoyeController extends BaseController
                    COALESCE(lps.CodePostal, lp_c.CodePostal) AS SalleCP, COALESCE(lps.Nom, lp_c.Nom) AS SalleVille,
                    co.Nom AS NomClub,
                    co.CorNom AS CorrNom, co.CorEmail AS CorrEmail, co.CorTelephone AS CorrTel,
-                   co.RefNom AS RefNom, co.RefMail AS RefMail
+                   co.RefNom AS RefNom, co.RefMail AS RefMail,
+                   SUBSTRING(ed.Id_Club, 3, 2) AS DeptClub
             FROM nomination n
             JOIN disponible dn     ON dn.Id_Disponible = n.Id_Disponible
             JOIN ja j              ON j.Id_JA        = dn.Id_JA

@@ -21,12 +21,13 @@
             flex-direction: column;
             align-items: center;
             justify-content: flex-start;
-            padding-top: 1.5rem;
+            padding: 1.5rem 1rem 1rem;
             font-family: 'Segoe UI', system-ui, sans-serif;
         }
 
         #bandeau-fftt {
-            width: 560px;
+            width: 100%;
+            max-width: 560px;
             margin-bottom: 5rem;
         }
         #bandeau-fftt img {
@@ -37,7 +38,8 @@
         }
 
         .login-card {
-            width: 560px;
+            width: 100%;
+            max-width: 560px;
             border: none;
             border-radius: 12px;
             box-shadow: 0 8px 32px rgba(26, 58, 107, 0.18);
@@ -64,6 +66,7 @@
 
         .form-panel {
             flex: 1;
+            min-width: 0;
             padding: 1.75rem 1.75rem 1.25rem;
         }
 
@@ -110,8 +113,10 @@
 
         #caps-warning {
             display: none;
+            margin-top: .35rem;
             font-size: .8rem;
-            font-style: italic;
+            font-weight: 600;
+            color: #8a5a00;
         }
 
         .btn-login {
@@ -133,11 +138,7 @@
         }
 
         #lbl-status {
-            display: block;
-            text-align: center;
             font-weight: 600;
-            font-size: .875rem;
-            min-height: 1.25rem;
         }
 
         .login-footer {
@@ -148,10 +149,25 @@
             border-top: 1px solid #dde5f0;
             display: flex;
             justify-content: center;
+            text-align: center;
+        }
+
+        /* Petits écrans : l'illustration disparaît, le formulaire prend toute la carte */
+        @media (max-width: 575.98px) {
+            .img-panel { display: none; }
+            .form-panel { padding: 1.5rem 1.25rem 1.25rem; }
+            .login-header { padding: .85rem 1.25rem; }
+            .login-header h5 { font-size: .85rem; }
+            #bandeau-fftt { margin-bottom: 2rem; }
         }
     </style>
 </head>
 <body>
+
+<?php
+// Statut renvoyé par AuthController : vide au premier affichage, sinon avertissement / erreur
+$alerteClasse = ($statutClass ?? '') === 'text-danger' ? 'alert-danger' : 'alert-warning';
+?>
 
 <div id="bandeau-fftt">
     <a href="https://www.ligue-normandie-tt.fr/" target="_blank" rel="noopener noreferrer">
@@ -171,6 +187,8 @@
             <form method="POST" action="<?= site_url('login') ?>" id="form-login" novalidate>
                 <?= csrf_field() ?>
 
+                <div id="lbl-status" role="alert" class="alert <?= $alerteClasse ?> py-2 px-3 small mb-3"<?= $status === '' ? ' hidden' : '' ?>><?= htmlspecialchars($status) ?></div>
+
                 <div class="mb-3">
                     <label for="login" class="form-label">Nom de login utilisateur :</label>
                     <input
@@ -180,7 +198,7 @@
                         name="login"
                         value="<?= htmlspecialchars($loginValue) ?>"
                         autocomplete="username"
-                        autofocus
+                        <?= $loginValue === '' ? 'autofocus' : '' ?>
                     >
                 </div>
 
@@ -192,21 +210,14 @@
                         id="password"
                         name="password"
                         autocomplete="current-password"
+                        <?= $loginValue !== '' ? 'autofocus' : '' ?>
                     >
+                    <div id="caps-warning"><i class="bi bi-exclamation-triangle-fill me-1"></i>Verr. Maj. est activ&eacute;e</div>
                 </div>
 
-                <div class="d-flex gap-2 mt-3">
-                    <button type="submit" class="btn btn-login flex-fill" id="btn-login">
-                        <img src="<?= base_url('img/se-connecter.png') ?>" alt="" width="20" height="20" class="me-1">Se connecter
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary flex-fill" id="btn-cancel">
-                        <img src="<?= base_url('img/Annuler_32.png') ?>" alt="" width="20" height="20" class="me-1">Annuler
-                    </button>
-                </div>
-
-                <div class="mt-3">
-                    <span id="lbl-status" class="<?= $statutClass ?>"><?= htmlspecialchars($status) ?></span>
-                </div>
+                <button type="submit" class="btn btn-login w-100 mt-3" id="btn-login">
+                    <img src="<?= base_url('img/se-connecter.png') ?>" alt="" width="20" height="20" class="me-1">Se connecter
+                </button>
 
                 <div class="mt-2 text-center">
                     <a href="<?= site_url('mot-de-passe-oublie') ?>" class="text-decoration-none" style="font-size:.82rem;">
@@ -218,7 +229,7 @@
         </div>
 
         <div class="img-panel">
-            <img src="<?= base_url('img/Arbitre_filet.png') ?>" alt="Arbitre">
+            <img src="<?= base_url('img/Arbitre_filet.webp') ?>" alt="Arbitre">
             <img src="<?= base_url('img/logo_region.png') ?>" alt="Ligue Normandie de Tennis de Table" class="logo-normandie">
         </div>
 
@@ -232,11 +243,13 @@
 
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
-<script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-pwd-toggle.js') ?>"></script>
 
 <script>
 'use strict';
+
+// Retour arrière (bfcache) : évite de restaurer le bouton figé sur « Connexion… »
+window.addEventListener('pageshow', function (e) { if (e.persisted) location.reload(); });
 
 $(function () {
 
@@ -248,41 +261,29 @@ $(function () {
     $('#password').on('keyup focus', function (e) { checkCapsLock(e.originalEvent); });
     $('#password').on('blur',        function ()  { $('#caps-warning').hide(); });
 
-    $('#login, #password').on('keypress', function (e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            $('#form-login').trigger('submit');
-        }
-    });
+    // Avertissement (jaune) ou erreur (rouge) ; message vide = bandeau masqué
+    function setStatus(msg, type) {
+        $('#lbl-status')
+            .text(msg)
+            .removeClass('alert-warning alert-danger')
+            .addClass(type === 'danger' ? 'alert-danger' : 'alert-warning')
+            .prop('hidden', msg === '');
+    }
 
     $('#form-login').on('submit', function () {
         const login = $.trim($('#login').val());
         const pwd   = $.trim($('#password').val());
 
         if (login === '' || pwd === '') {
-            setStatus('Veuillez remplir tous les champs.', 'text-warning');
+            setStatus('Veuillez remplir tous les champs.', 'warning');
+            $(login === '' ? '#login' : '#password').trigger('focus');
             return false;
         }
 
-        const $btn = $('#btn-login');
-        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Vérification...');
-        setStatus('Hachage et comparaison en cours…', 'text-primary');
+        setStatus('', 'warning');
+        $('#btn-login').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Connexion…');
         return true;
     });
-
-    $('#btn-cancel').on('click', function () {
-        $('#login').val('');
-        $('#password').val('');
-        setStatus('Prêt.', 'text-secondary');
-        $('#login').trigger('focus');
-    });
-
-    function setStatus(msg, cssClass) {
-        $('#lbl-status')
-            .text(msg)
-            .removeClass('text-warning text-danger text-primary text-success text-secondary')
-            .addClass(cssClass);
-    }
 
 });
 </script>

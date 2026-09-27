@@ -273,7 +273,7 @@
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script>
 'use strict';
-const ID_JA = <?= (int) $idJa ?>;
+const TOKEN_JA = <?= json_encode($token ?? '') ?>;   // jeton du lien : seul secret des actions publiques
 const BASE  = '<?= site_url('adresse-ja') ?>';
 let idLaPoste = <?= $ja && $ja['Id_LaPoste'] ? (int) $ja['Id_LaPoste'] : 'null' ?>;
 
@@ -310,7 +310,7 @@ function rechercherLaPoste() {
     $('#suggestions-bloc').hide();
     $('#suggestions-list').empty();
 
-    $.post(`${BASE}/recherche-laposte`, { cp, ville }, function (res) {
+    $.post(`${BASE}/recherche-laposte`, { ja: TOKEN_JA, cp, ville }, function (res) {
         if (res.multi) {
             setStatus('', '');
             const $list = $('#suggestions-list').empty();
@@ -348,10 +348,8 @@ $('#btn-valider').on('click', function () {
     if (!idLaPoste) return;
     const $btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Enregistrement…');
     $.post(`${BASE}/sauvegarder`, {
-        id_ja:      ID_JA,
+        ja:         TOKEN_JA,
         id_laposte: idLaPoste,
-        cp:         $('#inp-cp').val().trim(),
-        ville:      $('#inp-ville').val().trim(),
     }, function (r) {
         if (r.ok) {
             $('#form-adresse').hide();
@@ -370,7 +368,7 @@ $('#btn-valider').on('click', function () {
 // Activer le bouton si une adresse est déjà connue
 activerBouton();
 <?php if ($ja && $ja['Cp']): ?>
-if (idLaPoste) setStatus('✓ <?= addslashes(($ja['Cp'] ?? '') . ' ' . ($ja['Ville'] ?? '')) ?>', 'ok');
+if (idLaPoste) setStatus(<?= json_encode('✓ ' . ($ja['Cp'] ?? '') . ' ' . ($ja['Ville'] ?? '')) ?>, 'ok');
 <?php endif; ?>
 </script>
 </body>

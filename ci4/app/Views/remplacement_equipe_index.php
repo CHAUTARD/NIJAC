@@ -306,7 +306,12 @@ function renderListe() {
     });
 }
 
-$('#search-equipe').on('input', function () { searchEquipe = $(this).val().trim(); renderListe(); });
+let searchTimer;
+$('#search-equipe').on('input', function () {
+    const val = $(this).val().trim();
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () { searchEquipe = val; renderListe(); }, 200);
+});
 $('#sel-dept').on('change', function () { deptFiltre = $(this).val(); renderListe(); });
 $('#sel-poule').on('change', function () { pouleFiltre = $(this).val(); renderListe(); });
 $('#sel-journee').on('change', function () { journeeFiltre = $(this).val(); renderListe(); });
@@ -413,7 +418,7 @@ $('#btn-remplacer').on('click', function () {
                 ids: JSON.stringify(rencontresEquipe.map(r => r.Id_Rencontre)),
             }, function (res) {
                 if (res.ok) {
-                    toast(res.msg);
+                    nijacToast(res.msg, 'success', 15000);   // message long : JA à prévenir, rencontres ignorées
                     setStatus(res.msg);
                     equipeCourante = null;
                     equipeRemplacement = null;

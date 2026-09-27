@@ -492,6 +492,10 @@
 <script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
 <script>
 'use strict';
+
+function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 const COMMUNE_BASE = '<?= site_url('commune') ?>';
 
 let lignes           = [];
@@ -831,7 +835,7 @@ $('#add-btn-ok').on('click', function () {
             $('#add-msg').text('');
             chargerListe();
         } else {
-            $('#add-msg').html('<span class="text-danger">✖ ' + res.msg + '</span>');
+            $('#add-msg').html('<span class="text-danger">✖ ' + escHtml(res.msg) + '</span>');
         }
     }, 'json').fail(() => { spinner(false); $('#add-msg').html('<span class="text-danger">Erreur réseau.</span>'); });
 });
@@ -859,7 +863,7 @@ $('#mod-btn-ok').on('click', function () {
             $tr.find('td:eq(3)').text(res.lat).removeClass('text-muted fst-italic').addClass('col-coords');
             $tr.find('td:eq(4)').text(res.lon).removeClass('text-muted fst-italic').addClass('col-coords');
         } else {
-            $('#mod-msg').html('<span class="text-danger">✖ ' + res.msg + '</span>');
+            $('#mod-msg').html('<span class="text-danger">✖ ' + escHtml(res.msg) + '</span>');
         }
     }).fail(() => { spinner(false); $('#mod-msg').html('<span class="text-danger">Erreur réseau.</span>'); });
 });

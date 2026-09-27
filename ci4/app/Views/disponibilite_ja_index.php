@@ -186,7 +186,12 @@
             font-weight: 700; cursor: pointer;
             transition: filter .12s, transform .1s;
         }
-        .cal-jour.jour-journee:hover { filter: brightness(1.12); transform: scale(1.1); }
+        /* touch-action : pas de zoom au double-tap, sinon deux taps rapprochés (cycle à 3 états) zoomaient la page */
+        .cal-jour.jour-journee { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+        /* hover réservé aux souris : sur écran tactile il resterait « collé » après le tap */
+        @media (hover: hover) {
+            .cal-jour.jour-journee:hover { filter: brightness(1.12); transform: scale(1.1); }
+        }
         .cal-jour.statut-O { background: var(--col-dispo);   color: #fff; }
         .cal-jour.statut-N { background: var(--col-nodispo); color: #fff; }
         .cal-jour.statut-vide { background: #e2e8f0; color: #475569; }
@@ -403,8 +408,8 @@ function formatDateLong(d) {
 }
 
 function chargerInfosJA() {
-    $.getJSON(`${BASE}/ja`, { id: idJaCourant }, function (r) {
-        if (!r.ok) return;
+    $.getJSON(`${BASE}/ja`, { id_ja: idJaCourant, ja: TOKEN_JA }, function (r) {
+        if (!r.ok) { $('#section-erreur').text(r.err || 'Lien invalide.').show(); return; }
         nomJaCourant = r.data.Nom + ' ' + r.data.Prenom;
 
         $('#ja-ib-nom').text(nomJaCourant);
@@ -514,9 +519,10 @@ function chargerJournees() {
 
     $.getJSON(`${BASE}/journees`, {
         id_ja: idJaCourant,
+        ja:    TOKEN_JA,
     }, function (r) {
         if (!r.ok) {
-            $('#cal-mois-grille').html(`<div class="alert alert-danger m-3">${r.err}</div>`);
+            $('#cal-mois-grille').empty().append($('<div class="alert alert-danger m-3">').text(r.err));
             return;
         }
         if (!r.data.length) {
@@ -538,6 +544,8 @@ function chargerJournees() {
             };
         });
         renderCalendrierMensuel();
+    }).fail(function () {
+        $('#cal-mois-grille').html('<div class="alert alert-danger m-3">Impossible de charger le calendrier (réseau). Rechargez la page.</div>');
     });
 }
 
@@ -647,6 +655,7 @@ function libelleClicSuivant(statut) {
 function toggleDate(idComp) {
     const e = etatDates[idComp];
     if (!e) return;
+    const avant = { statut: e.statut, note: e.note, departement: e.departement };
     const nouveau = e.statut === 'O' ? 'N' : (e.statut === 'N' ? null : 'O');
     e.statut = nouveau;
     if (nouveau !== 'O') { e.note = ''; e.departement = ''; }
@@ -658,11 +667,14 @@ function toggleDate(idComp) {
         .addClass('statut-' + cls)
         .attr('title', `${formatDateLong(e.date)}${e.heure ? ' — ' + e.heure.substring(0,5) : ''}\nCliquez pour ${libelleClicSuivant(nouveau)}`);
 
-    sauvegarderDate(idComp, nouveau === 'O');
+    sauvegarderDate(idComp, nouveau === 'O', avant);
 }
 
-function sauvegarderDate(idComp, ouvrirPopupSiDispo) {
+function sauvegarderDate(idComp, ouvrirPopupSiDispo, avant) {
     const e = etatDates[idComp];
+    // Mise à jour optimiste : si l'enregistrement échoue (réseau mobile instable), on
+    // remet l'état d'avant — sinon le JA croit sa réponse enregistrée alors qu'elle ne l'est pas.
+    const annuler = () => { Object.assign(e, avant); renderCalendrierMensuel(); };
 
     $.post(`${BASE}/sauvegarder-dispo-journee`, {
         id_ja: idJaCourant,
@@ -672,11 +684,12 @@ function sauvegarderDate(idComp, ouvrirPopupSiDispo) {
         note: e.note || '',
         departements: e.departement ? e.departement.split(',') : [],
     }, function (r) {
-        if (!r.ok) { toast('Erreur : ' + r.err, false); return; }
+        if (!r.ok) { toast('Erreur : ' + r.err, false); annuler(); return; }
         if (r.attention) nijacToast(r.attention, 'warning', 15000);
         if (ouvrirPopupSiDispo) ouvrirPopupNote(idComp);
     }, 'json').fail(function () {
-        toast('Erreur réseau.', false);
+        toast('Erreur réseau — votre réponse n'a pas été enregistrée.', false);
+        annuler();
     });
 }
 

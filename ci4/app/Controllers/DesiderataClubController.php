@@ -7,8 +7,9 @@ use CodeIgniter\HTTP\ResponseInterface;
 /**
  * NIJAC – Désidératas club (EN18), portage CI4 de Nominateur/desiderata_club.php.
  *
- * Page PUBLIQUE, sans authentification — tokenisée par le paramètre `?club=<Id_Club>`
- * envoyé par email depuis EN12 (JA_R3R4.php, pas encore porté). Pas de filtre de
+ * Page PUBLIQUE, sans authentification — jeton signé `?club=<Id_Club>-<MAC>`
+ * (tokenDesiderataClub(), app_config.php) envoyé par email depuis EN12 / ES32 ; le numéro de
+ * club seul (public) est refusé. Pas de filtre de
  * route ("auth"/"adminauth") : seul le filtre global "canonicalhost" s'applique.
  *
  * Session native démarrée manuellement dans chaque action (comme AuthController),
@@ -41,7 +42,7 @@ class DesiderataClubController extends BaseController
         } catch (\PDOException $e) {
             log_message('error', '[NIJAC] desiderata_club PDO : ' . $e->getMessage());
 
-            return $this->response->setJSON(['ok' => false, 'msg' => 'Erreur base de données.']);
+            return $this->response->setJSON(['ok' => false, 'msg' => messageErreur($e, 'Erreur base de données.')]);
         }
     }
 
@@ -49,19 +50,20 @@ class DesiderataClubController extends BaseController
     {
         $this->startSession();
 
-        $idClubGet = trim($this->request->getGet('club') ?? '');
+        $token  = trim($this->request->getGet('club') ?? '');
+        $idClub = idClubDepuisTokenDesiderata($token);
 
         $club   = null;
         $erreur = '';
-        if ($idClubGet !== '') {
+        if ($idClub !== null) {
             $stmt = getPDO()->prepare('SELECT Id_Club, Nom FROM club WHERE Id_Club = ?');
-            $stmt->execute([$idClubGet]);
+            $stmt->execute([$idClub]);
             $club = $stmt->fetch();
             if (!$club) {
-                $erreur = "Club #$idClubGet introuvable.";
+                $erreur = 'Club introuvable.';
             }
         } else {
-            $erreur = 'Lien invalide ou paramètre manquant.';
+            $erreur = "Lien invalide ou expiré. Merci de demander l'envoi d'un nouveau lien à la Ligue.";
         }
 
         session_write_close();
@@ -71,8 +73,9 @@ class DesiderataClubController extends BaseController
         unset($_SESSION);
 
         return view('desiderata_club_index', [
-            'club'   => $club,
-            'erreur' => $erreur,
+            'club'      => $club,
+            'tokenClub' => $token,   // rejoué par le JS sur charger / enregistrer
+            'erreur'    => $erreur,
         ]);
     }
 
@@ -82,9 +85,9 @@ class DesiderataClubController extends BaseController
         session_write_close();
 
         return $this->tryJson(function () {
-            $club = trim($this->request->getGet('club') ?? '');
-            if ($club === '') {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Club manquant.']);
+            $club = idClubDepuisTokenDesiderata(trim($this->request->getGet('club') ?? ''));
+            if ($club === null) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Lien invalide ou expiré.']);
             }
 
             $pdo = getPDO();
@@ -131,9 +134,9 @@ class DesiderataClubController extends BaseController
         session_write_close();
 
         return $this->tryJson(function () {
-            $club = trim($this->request->getPost('club') ?? '');
-            if ($club === '') {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Club manquant.']);
+            $club = idClubDepuisTokenDesiderata(trim($this->request->getPost('club') ?? ''));
+            if ($club === null) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Lien invalide ou expiré.']);
             }
 
             $pdo = getPDO();
@@ -144,78 +147,92 @@ class DesiderataClubController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Club introuvable.']);
             }
 
-            $corNom   = trim($this->request->getPost('cor_nom') ?? '') ?: null;
-            $corEmail = trim($this->request->getPost('cor_email') ?? '') ?: null;
-            $corTel   = trim($this->request->getPost('cor_tel') ?? '') ?: null;
+            // Endpoint public : toute saisie est bornée avant écriture.
+            $texte    = fn (string $cle, int $max = 255): ?string => mb_substr(trim((string) $this->request->getPost($cle)), 0, $max) ?: null;
+            $corNom   = $texte('cor_nom');
+            $corEmail = $texte('cor_email');
+            $corTel   = $texte('cor_tel', 30);
             $nbAiresP = $this->request->getPost('nb_aires');
-            $nbAires  = ($nbAiresP ?? '') !== '' ? max(0, (int) $nbAiresP) : null;
-            $note     = trim($this->request->getPost('note') ?? '') ?: null;
+            $nbAires  = ($nbAiresP ?? '') !== '' ? min(100, max(0, (int) $nbAiresP)) : null;
+            $note     = $texte('note', 2000);
             $saison   = getConfig('saison', '');
 
-            $pdo->prepare(
-                'UPDATE club SET CorNom=?, CorEmail=?, CorTelephone=?, NbAiresJeu=?, DesiderataNote=?, DesiderataSaison=?, DesiderataDate=NOW()
-                 WHERE Id_Club=?'
-            )->execute([$corNom, $corEmail, $corTel, $nbAires, $note, $saison, $club]);
+            // Transaction : club, salle, équipes et resynchronisation des rencontres à venir forment un tout.
+            $pdo->beginTransaction();
+            try {
+                $pdo->prepare(
+                    'UPDATE club SET CorNom=?, CorEmail=?, CorTelephone=?, NbAiresJeu=?, DesiderataNote=?, DesiderataSaison=?, DesiderataDate=NOW()
+                     WHERE Id_Club=?'
+                )->execute([$corNom, $corEmail, $corTel, $nbAires, $note, $saison, $club]);
 
-            $salleNom   = trim($this->request->getPost('salle_nom') ?? '') ?: null;
-            $salleAdr   = trim($this->request->getPost('salle_adresse') ?? '') ?: null;
-            $salleCp    = trim($this->request->getPost('salle_cp') ?? '') ?: null;
-            $salleVille = trim($this->request->getPost('salle_ville') ?? '') ?: null;
-            $salleTel   = trim($this->request->getPost('salle_tel') ?? '') ?: null;
+                $salleNom   = $texte('salle_nom');
+                $salleAdr   = $texte('salle_adresse');
+                $salleCp    = $texte('salle_cp', 10);
+                $salleVille = $texte('salle_ville');
+                $salleTel   = $texte('salle_tel', 30);
 
-            $stmtSalleChk = $pdo->prepare('SELECT Id_Salle FROM salle WHERE Id_Club=? AND EstPrincipale=1 LIMIT 1');
-            $stmtSalleChk->execute([$club]);
-            $idSalle = $stmtSalleChk->fetchColumn();
-            if ($idSalle) {
-                // Nom laissé vide = conserve le nom existant (colonne NOT NULL)
-                $pdo->prepare('UPDATE salle SET Nom=COALESCE(?, Nom), Adresse=?, Cp=?, Ville=?, Telephone=? WHERE Id_Salle=?')
-                    ->execute([$salleNom, $salleAdr, $salleCp, $salleVille, $salleTel, $idSalle]);
-            } elseif ($salleNom !== null) {
-                $pdo->prepare('INSERT INTO salle (Nom, Adresse, Cp, Ville, Telephone, Id_Club, EstPrincipale) VALUES (?,?,?,?,?,?,1)')
-                    ->execute([$salleNom, $salleAdr, $salleCp, $salleVille, $salleTel, $club]);
-            }
+                $stmtSalleChk = $pdo->prepare('SELECT Id_Salle FROM salle WHERE Id_Club=? AND EstPrincipale=1 LIMIT 1');
+                $stmtSalleChk->execute([$club]);
+                $idSalle = $stmtSalleChk->fetchColumn();
+                if ($idSalle) {
+                    // Nom laissé vide = conserve le nom existant (colonne NOT NULL)
+                    $pdo->prepare('UPDATE salle SET Nom=COALESCE(?, Nom), Adresse=?, Cp=?, Ville=?, Telephone=? WHERE Id_Salle=?')
+                        ->execute([$salleNom, $salleAdr, $salleCp, $salleVille, $salleTel, $idSalle]);
+                } elseif ($salleNom !== null) {
+                    $pdo->prepare('INSERT INTO salle (Nom, Adresse, Cp, Ville, Telephone, Id_Club, EstPrincipale) VALUES (?,?,?,?,?,?,1)')
+                        ->execute([$salleNom, $salleAdr, $salleCp, $salleVille, $salleTel, $club]);
+                }
 
-            $equipes = json_decode($this->request->getPost('equipes') ?? '[]', true);
-            if (is_array($equipes)) {
-                // ArbitrageCRA est NOT NULL (booléen) : COALESCE(?, ArbitrageCRA) laisse la valeur
-                // en base inchangée quand le formulaire n'envoie rien (équipes hors R3M/R4M, champ
-                // absent du formulaire).
-                $stmtEq = $pdo->prepare(
-                    'UPDATE equipe SET ReEngagement=?, JourSouhaite=?, ArbitrageCRA=COALESCE(?, ArbitrageCRA), DesiderataSaison=?
-                     WHERE Id_Equipe=? AND Id_Club=?'
-                );
-                $stmtDivOf = $pdo->prepare('SELECT Division FROM equipe WHERE Id_Equipe=? AND Id_Club=?');
-                // Le souhait se fait normalement avant le début de phase ; un changement fait
-                // après ne doit s'appliquer qu'aux rencontres pas encore jouées, pas réécrire
-                // celles déjà passées.
-                $stmtRcResync = $pdo->prepare(
-                    'UPDATE rencontre SET ArbitrageCRA=? WHERE Id_EquipeDom=? AND Date >= CURDATE()'
-                );
+                $equipes = json_decode($this->request->getPost('equipes') ?? '[]', true);
+                if (is_array($equipes)) {
+                    // ArbitrageCRA est NOT NULL (booléen) : COALESCE(?, ArbitrageCRA) laisse la valeur
+                    // en base inchangée quand le formulaire n'envoie rien (équipes hors R3M/R4M, champ
+                    // absent du formulaire).
+                    $stmtEq = $pdo->prepare(
+                        'UPDATE equipe SET ReEngagement=?, JourSouhaite=?, ArbitrageCRA=COALESCE(?, ArbitrageCRA), DesiderataSaison=?
+                         WHERE Id_Equipe=? AND Id_Club=?'
+                    );
+                    $stmtDivOf = $pdo->prepare('SELECT Division FROM equipe WHERE Id_Equipe=? AND Id_Club=?');
+                    // Le souhait se fait normalement avant le début de phase ; un changement fait
+                    // après ne doit s'appliquer qu'aux rencontres pas encore jouées, pas réécrire
+                    // celles déjà passées.
+                    $stmtRcResync = $pdo->prepare(
+                        'UPDATE rencontre SET ArbitrageCRA=? WHERE Id_EquipeDom=? AND Date >= CURDATE()'
+                    );
+                    $stmtJaDemande = $pdo->prepare('UPDATE equipe SET JAdemande=? WHERE Id_Equipe=?');
 
-                foreach ($equipes as $eq) {
-                    $idEquipe = (int) ($eq['id_equipe'] ?? 0);
-                    if ($idEquipe <= 0) {
-                        continue;
-                    }
+                    foreach ($equipes as $eq) {
+                        $idEquipe = (int) ($eq['id_equipe'] ?? 0);
+                        if ($idEquipe <= 0) {
+                            continue;
+                        }
 
-                    $re  = in_array($eq['reengagement'] ?? '', ['O', 'N'], true) ? $eq['reengagement'] : null;
-                    $jr  = in_array($eq['jour'] ?? '', ['Samedi', 'Dimanche'], true) ? $eq['jour'] : null;
-                    $sja    = in_array($eq['souhait_ja'] ?? '', ['CRA', 'Club'], true) ? $eq['souhait_ja'] : null;
-                    $sjaInt = $sja === null ? null : ($sja === 'CRA' ? 1 : 0);
+                        $re  = in_array($eq['reengagement'] ?? '', ['O', 'N'], true) ? $eq['reengagement'] : null;
+                        $jr  = in_array($eq['jour'] ?? '', ['Samedi', 'Dimanche'], true) ? $eq['jour'] : null;
+                        $sja    = in_array($eq['souhait_ja'] ?? '', ['CRA', 'Club'], true) ? $eq['souhait_ja'] : null;
+                        $sjaInt = $sja === null ? null : ($sja === 'CRA' ? 1 : 0);
 
-                    $stmtEq->execute([$re, $jr, $sjaInt, $saison, $idEquipe, $club]);
+                        $stmtEq->execute([$re, $jr, $sjaInt, $saison, $idEquipe, $club]);
 
-                    // Synchronise JAdemande et les rencontres à venir pour les équipes R3M/R4M.
-                    if ($sja !== null) {
-                        $stmtDivOf->execute([$idEquipe, $club]);
-                        $divCode = (string) $stmtDivOf->fetchColumn();
-                        if (in_array($divCode, ['R3M', 'R4M'], true)) {
-                            $jademande = $sja === 'CRA' ? 1 : 0;
-                            $pdo->prepare('UPDATE equipe SET JAdemande=? WHERE Id_Equipe=?')->execute([$jademande, $idEquipe]);
-                            $stmtRcResync->execute([$sjaInt, $idEquipe]);
+                        // Synchronise JAdemande et les rencontres à venir pour les équipes R3M/R4M.
+                        if ($sja !== null) {
+                            $stmtDivOf->execute([$idEquipe, $club]);
+                            $divCode = (string) $stmtDivOf->fetchColumn();
+                            if (in_array($divCode, ['R3M', 'R4M'], true)) {
+                                $jademande = $sja === 'CRA' ? 1 : 0;
+                                $stmtJaDemande->execute([$jademande, $idEquipe]);
+                                $stmtRcResync->execute([$sjaInt, $idEquipe]);
+                            }
                         }
                     }
                 }
+
+                $pdo->commit();
+            } catch (\Throwable $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                throw $e;
             }
 
             return $this->response->setJSON(['ok' => true]);

@@ -35,12 +35,7 @@ class DisponibiliteJaController extends BaseController
         require_once __DIR__ . '/../../../Classes/Obfuscator.php';
 
         $this->obf = new \Obfuscator(OBFUSCATOR_SEED, getObfuscatorPepper());
-
-        try {
-            getPDO()->exec('ALTER TABLE disponible ADD UNIQUE KEY uq_dispo (Id_JA, Id_Rencontre)');
-        } catch (\PDOException $ignored) {
-            // index déjà présent
-        }
+        // L'index uq_dispo (Id_JA, Id_Rencontre) est posé par initTableConfiguration() (EA98).
     }
 
     private function tryJson(\Closure $fn): ResponseInterface
@@ -48,36 +43,24 @@ class DisponibiliteJaController extends BaseController
         try {
             return $fn();
         } catch (\PDOException $e) {
-            return $this->response->setJSON(['ok' => false, 'err' => 'BDD : ' . $e->getMessage()]);
+            // Page publique : pas de message SQL côté client
+            error_log('[NIJAC] EN22 : ' . $e->getMessage());
+
+            return $this->response->setJSON(['ok' => false, 'err' => messageErreur($e, 'Erreur technique, merci de réessayer.')]);
         }
     }
 
     /**
-     * Résout l'Id_JA depuis ?ja=TOKEN (obfusqué) ou ?id_ja=N (clair), comme
-     * le fait le legacy en réécrivant $_GET['id_ja'] dès le décodage du token.
+     * Résout l'Id_JA depuis ?ja=TOKEN (obfusqué), ou ?id_ja=N en clair : ce
+     * dernier n'est accepté que si l'appelant a une session authentifiée (lien
+     * utilisé directement depuis EN13 par un nominateur déjà connecté). Sans token
+     * valide ni session, retourne 0 au lieu de faire confiance à n'importe quel
+     * entier deviné par un tiers. Utilisé par TOUTES les actions, lectures
+     * comprises (identité, disponibilités et note d'un JA sont nominatives).
+     *
+     * @param bool|null $sessionOk déjà connu de l'appelant (évite de rouvrir la session), sinon lu ici
      */
-    private function resolveIdJa(): int
-    {
-        $tokenGet = trim($this->request->getGet('ja') ?? $this->request->getPost('ja') ?? '');
-        if ($tokenGet !== '') {
-            $decoded = $this->obf->deobfuscate($tokenGet);
-            if ($decoded > 0) {
-                return $decoded;
-            }
-        }
-
-        return (int) ($this->request->getGet('id_ja') ?? $this->request->getPost('id_ja') ?? 0);
-    }
-
-    /**
-     * Comme resolveIdJa(), mais pour les actions sensibles (Note interne,
-     * Défiscalisation, saisie de disponibilité) : un ?id_ja=N en clair sans
-     * token n'est accepté que si l'appelant a une session authentifiée
-     * (usage documenté : lien utilisé directement depuis EN13 par un
-     * nominateur déjà connecté). Sans token valide ni session, retourne 0 au
-     * lieu de faire confiance à n'importe quel entier deviné par un tiers.
-     */
-    private function resolveIdJaAutorise(): int
+    private function resolveIdJaAutorise(?bool $sessionOk = null): int
     {
         $tokenGet = trim($this->request->getGet('ja') ?? $this->request->getPost('ja') ?? '');
         if ($tokenGet !== '') {
@@ -88,7 +71,7 @@ class DisponibiliteJaController extends BaseController
         }
 
         $idClair = (int) ($this->request->getGet('id_ja') ?? $this->request->getPost('id_ja') ?? 0);
-        if ($idClair > 0 && $this->sessionAuthentifiee()) {
+        if ($idClair > 0 && ($sessionOk ?? $this->sessionAuthentifiee())) {
             return $idClair;
         }
 
@@ -117,7 +100,7 @@ class DisponibiliteJaController extends BaseController
         // de CI4 — voir Auth.php pour le détail du conflit avec la session native.
         unset($_SESSION);
 
-        $idJa = $this->resolveIdJa();
+        $idJa = $this->resolveIdJaAutorise(!empty($u['role']));
 
         // Bouton de retour de la toolbar : vers le menu correspondant au rôle
         // réel de la session (Nominateur -> menu nominateur, Administrateur ->
@@ -143,22 +126,14 @@ class DisponibiliteJaController extends BaseController
         ]);
     }
 
-    public function listeJa(): ResponseInterface
-    {
-        return $this->tryJson(function () {
-            $rows = getPDO()->query(
-                'SELECT Id_JA, Nom, Prenom, Grade, Ville FROM ja WHERE Actif = 1 ORDER BY Nom, Prenom'
-            )->fetchAll();
-
-            return $this->response->setJSON(['ok' => true, 'data' => $rows]);
-        });
-    }
-
     public function ja(): ResponseInterface
     {
         return $this->tryJson(function () {
-            $pdo    = getPDO();
-            $id     = (int) ($this->request->getGet('id') ?? 0);
+            $pdo = getPDO();
+            $id  = $this->resolveIdJaAutorise();
+            if (!$id) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'ID manquant ou non autorisé']);
+            }
 
             $stmt = $pdo->prepare('
                 SELECT ja.Id_JA, ja.Nom, ja.Prenom, ja.Grade,
@@ -180,9 +155,9 @@ class DisponibiliteJaController extends BaseController
     {
         return $this->tryJson(function () {
             $pdo  = getPDO();
-            $idJa = (int) ($this->request->getGet('id_ja') ?? 0);
+            $idJa = $this->resolveIdJaAutorise();
             if (!$idJa) {
-                return $this->response->setJSON(['ok' => false, 'err' => 'JA manquant']);
+                return $this->response->setJSON(['ok' => false, 'err' => 'ID manquant ou non autorisé']);
             }
 
             $stmt = $pdo->prepare('
@@ -217,16 +192,25 @@ class DisponibiliteJaController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => 'Paramètres invalides']);
             }
 
-            $pdo->prepare('DELETE FROM disponible WHERE Id_JA = ? AND DateCompetition = ? AND Id_Rencontre IS NULL')
-                ->execute([$idJa, $date]);
+            // Transaction : sur un réseau mobile qui coupe entre les deux requêtes, le DELETE
+            // seul effaçait la réponse du JA sans la remplacer.
+            $pdo->beginTransaction();
+            try {
+                $pdo->prepare('DELETE FROM disponible WHERE Id_JA = ? AND DateCompetition = ? AND Id_Rencontre IS NULL')
+                    ->execute([$idJa, $date]);
 
-            if ($statut !== 'VIDE') {
-                $deptsValides = ['14', '27', '50', '61', '76'];
-                $depts        = array_values(array_intersect((array) ($this->request->getPost('departements') ?? []), $deptsValides));
-                $departement  = $depts ? implode(',', $depts) : null;
+                if ($statut !== 'VIDE') {
+                    $deptsValides = ['14', '27', '50', '61', '76'];
+                    $depts        = array_values(array_intersect((array) ($this->request->getPost('departements') ?? []), $deptsValides));
+                    $departement  = $depts ? implode(',', $depts) : null;
 
-                $pdo->prepare('INSERT INTO disponible (Id_JA, DateCompetition, Reponse, Departement, Note, DateReponse) VALUES (?, ?, ?, ?, ?, CURDATE())')
-                    ->execute([$idJa, $date, $statut, $departement, $note]);
+                    $pdo->prepare('INSERT INTO disponible (Id_JA, DateCompetition, Reponse, Departement, Note, DateReponse) VALUES (?, ?, ?, ?, ?, CURDATE())')
+                        ->execute([$idJa, $date, $statut, $departement, $note]);
+                }
+                $pdo->commit();
+            } catch (\Throwable $e) {
+                $pdo->rollBack();
+                throw $e;
             }
 
             // Le JA se déclare non disponible : s'il est déjà désigné comme

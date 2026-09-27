@@ -207,6 +207,20 @@
             max-width: 260px;
             width: 100%;
         }
+
+        /* Écrans moyens / petits : la grille de 5 colonnes passe à 3, 2 puis 1 (comme E003) */
+        @media (max-width: 1199.98px) {
+            #menu-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+        @media (max-width: 767.98px) {
+            #menu-grid { grid-template-columns: repeat(2, 1fr); padding: 12px; gap: 12px; }
+            .menu-btn { min-height: 0; }
+            .menu-btn .btn-icon { width: 100px; height: 100px; }
+            .menu-btn img { width: 100px; height: 100px; max-width: 100px; max-height: 100px; }
+        }
+        @media (max-width: 479.98px) {
+            #menu-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -229,28 +243,28 @@
 
     <a href="<?= site_url('defiscalisation') ?>" class="menu-btn btn-defiscalisation">
         <span class="btn-code">ED51</span>
-        <div class="btn-icon"><img src="<?= base_url('img/Defiscalisation.png') ?>" alt="Défiscalisation JA"></div>
+        <div class="btn-icon"><img src="<?= base_url('img/Defiscalisation.webp') ?>" alt="Défiscalisation JA"></div>
         <span>Défiscalisation JA</span>
         <span class="btn-desc">Frais cumulés des JA défiscalisés sur une période, export CSV</span>
     </a>
 
     <a href="<?= site_url('attestation-defisc') ?>" class="menu-btn btn-attestation">
         <span class="btn-code">ED53</span>
-        <div class="btn-icon"><img src="<?= base_url('img/AttestationHonneur.png') ?>" alt="Attestation sur l'honneur"></div>
+        <div class="btn-icon"><img src="<?= base_url('img/AttestationHonneur.webp') ?>" alt="Attestation sur l'honneur"></div>
         <span>Attestation sur l'honneur</span>
         <span class="btn-desc">Document à compléter, signer à l'écran et imprimer</span>
     </a>
 
     <a href="<?= site_url('attestations-defisc') ?>" class="menu-btn btn-attestations">
         <span class="btn-code">ED54</span>
-        <div class="btn-icon"><img src="<?= base_url('img/DirDefiscalisation.png') ?>" alt="Attestations reçues"></div>
+        <div class="btn-icon"><img src="<?= base_url('img/DirDefiscalisation.webp') ?>" alt="Attestations reçues"></div>
         <span>Attestations reçues</span>
         <span class="btn-desc">Liste des attestations signées déposées par les JA</span>
     </a>
 
     <a href="<?= site_url('compta') ?>" class="menu-btn btn-compta">
         <span class="btn-code">ED55</span>
-        <div class="btn-icon"><img src="<?= base_url('img/Compta.png') ?>" alt="Comptabilite"></div>
+        <div class="btn-icon"><img src="<?= base_url('img/Compta.webp') ?>" alt="Comptabilite"></div>
         <span>Comptes EBP des JA</span>
         <span class="btn-desc">Import CSV et saisie du n° de compte EBP des JA</span>
     </a>
@@ -266,7 +280,7 @@
 <!-- Déconnexion : ligne à part, centrée -->
 <div id="zone-deconnexion">
     <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;">
-        <div class="btn-icon"><img src="<?= base_url('img/Quitter.png') ?>" alt="Se déconnecter"></div>
+        <div class="btn-icon"><img src="<?= base_url('img/Quitter.webp') ?>" alt="Se déconnecter"></div>
         <span style="color:#842029;">Se déconnecter</span>
         <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
     </a>

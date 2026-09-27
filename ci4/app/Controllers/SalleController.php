@@ -123,7 +123,9 @@ class SalleController extends BaseController
         }
 
         $pdo         = getPDO();
-        $spreadsheet = IOFactory::load($_FILES['fichier']['tmp_name']);
+        $lecteur = IOFactory::createReader('Xlsx');   // format imposé (seul .xlsx est accepté), sans détection
+        $lecteur->setReadDataOnly(true);
+        $spreadsheet = $lecteur->load($_FILES['fichier']['tmp_name']);
         $sheet       = $spreadsheet->getActiveSheet();
         $maxRow      = $sheet->getHighestRow();
 

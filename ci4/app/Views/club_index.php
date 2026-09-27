@@ -451,6 +451,11 @@ function setStatus(msg, ok = true) {
     $('#status-bar').html(msg).css('color', ok ? '#374151' : '#c00');
 }
 
+// Les libellés renvoyés par l'API FFTT (noms de club, etc.) ne doivent jamais être injectés bruts dans le DOM
+function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 // ── Tri & Recherche ───────────────────────────────────────────────────────────
 function lignesFiltreesTriees() {
     const term = searchTerm.toLowerCase();
@@ -524,7 +529,7 @@ function renderGrille() {
 }
 
 function construireLigne(l) {
-    const idx  = lignes.indexOf(l);
+    const idx  = l._idx;   // index stable, posé au chargement (indexOf serait O(n²))
     const dept = deptDeClub(l.id_club);
     const $tr  = $('<tr>').attr('data-idx', idx);
     if (dept && !DEPTS_REGION.has(dept)) $tr.addClass('hors-region').attr('title', `Département ${dept} hors région`);
@@ -667,7 +672,7 @@ $('#mod-club-btn-ok').on('click', function () {
             invaliderCacheRendu();
             renderGrille();
         } else {
-            $('#mod-club-msg').html('<span class="text-danger">✖ ' + res.msg + '</span>');
+            $('#mod-club-msg').html('<span class="text-danger">✖ ' + escHtml(res.msg) + '</span>');
         }
     }).fail(() => { spinner(false); $('#mod-club-msg').html('<span class="text-danger">Erreur réseau.</span>'); });
 });
@@ -678,7 +683,8 @@ function chargerListe() {
     $.get(`${CLUB_BASE}/liste`, function (res) {
         spinner(false);
         if (!res.ok) { toast(res.msg, false); return; }
-        lignes = res.data.map(r => ({
+        lignes = res.data.map((r, i) => ({
+            _idx:         i,
             id_club:      r.Id_Club,
             nom:          r.Nom,
             equipe_nom:   r.EquipeNom ?? '',
@@ -835,9 +841,15 @@ $('#sel-dept').on('change', function () {
 });
 
 // ── Recherche ─────────────────────────────────────────────────────────────────
+// Debounce : chaque recherche invalide le cache et reconstruit la grille
+let searchTimer;
 $('#search-input').on('input', function () {
-    searchTerm = $(this).val().trim();
-    renderGrille();
+    const val = $(this).val().trim();
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () {
+        searchTerm = val;
+        renderGrille();
+    }, 200);
 });
 
 // ── Synchronisation FFTT ─────────────────────────────────────────────────────
@@ -899,7 +911,7 @@ $('#btn-lancer-sync-fftt').on('click', function () {
                 $('#sync-fftt-step3').show();
                 $('#sync-fftt-resume').html(
                     `<i class="bi bi-check-circle-fill me-2"></i>` +
-                    `Synchronisation terminée pour le département <strong>${depLabel}</strong> — ` +
+                    `Synchronisation terminée pour le département <strong>${escHtml(depLabel)}</strong> — ` +
                     `<strong>${cntClubs}</strong> club(s), ` +
                     `<strong>${cntSalles}</strong> salle(s), ` +
                     `<strong>${cntCors}</strong> correspondant(s)` +
@@ -923,7 +935,7 @@ $('#btn-lancer-sync-fftt').on('click', function () {
                         let cls = 'text-secondary';
                         if (op.includes('Salle'))        { cls = 'text-success'; cntSalles++; }
                         if (op.includes('Correspondant')){ cls = 'text-info';    cntCors++;   }
-                        const line = `<div class="${cls}">[${club.numero}] ${op}</div>`;
+                        const line = `<div class="${cls}">[${escHtml(club.numero)}] ${escHtml(op)}</div>`;
                         logLines.push(line);
                         $('#sync-fftt-log').append(line).scrollTop(9999);
                     });
@@ -933,7 +945,7 @@ $('#btn-lancer-sync-fftt').on('click', function () {
                 } else {
                     cntErreurs++;
                     $('#sync-cnt-erreurs').text(cntErreurs);
-                    const line = `<div class="text-danger">[${club.numero}] Erreur : ${r.msg}</div>`;
+                    const line = `<div class="text-danger">[${escHtml(club.numero)}] Erreur : ${escHtml(r.msg)}</div>`;
                     logLines.push(line);
                     $('#sync-fftt-log').append(line).scrollTop(9999);
                 }
@@ -973,11 +985,11 @@ function lancerImportClubNumero() {
     $.post(`${CLUB_BASE}/fftt/sync`, { num_club: numClub }, function (r) {
         $('#btn-lancer-import-club-numero').prop('disabled', false).html('<i class="bi bi-play-fill me-1"></i>Importer');
         if (!r.ok) {
-            $('#import-club-numero-resultat').html(`<div class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>${r.msg}</div>`);
+            $('#import-club-numero-resultat').html(`<div class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>${escHtml(r.msg)}</div>`);
             return;
         }
         const lignes = r.ops.length
-            ? r.ops.map(op => `<div class="text-success"><i class="bi bi-check-circle-fill me-1"></i>${op}</div>`).join('')
+            ? r.ops.map(op => `<div class="text-success"><i class="bi bi-check-circle-fill me-1"></i>${escHtml(op)}</div>`).join('')
             : '<div class="text-muted">Aucune modification (données déjà à jour ou absentes de la fiche FFTT).</div>';
         $('#import-club-numero-resultat').html(lignes);
         nijacToast(`Club ${r.club} importé.`, 'success');

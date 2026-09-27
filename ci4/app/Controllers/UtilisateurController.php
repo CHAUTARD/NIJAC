@@ -110,6 +110,18 @@ class UtilisateurController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => $fields]);
         }
 
+        $existant = $this->utilisateurModel->select('Role, Actif')->find($id);
+        if (!$existant) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Utilisateur introuvable.']);
+        }
+
+        // Garde-fou anti-verrouillage : on ne se désactive pas soi-même et on ne quitte pas son propre rôle
+        // (le dernier administrateur perdrait tout accès aux écrans EA).
+        if ($id === (int) ($_SESSION['utilisateur']['id'] ?? 0)
+            && ((int) $fields['Actif'] !== 1 || $fields['Role'] !== $existant['Role'])) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Vous ne pouvez ni désactiver votre propre compte, ni modifier votre propre rôle.']);
+        }
+
         $this->utilisateurModel->update($id, $fields);
 
         return $this->response->setJSON(['ok' => true, 'msg' => 'Utilisateur mis à jour.', 'id' => $id, 'mdp' => $mdpGenere]);

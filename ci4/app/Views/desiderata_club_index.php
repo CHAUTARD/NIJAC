@@ -260,7 +260,7 @@
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script>
 'use strict';
-const ID_CLUB       = <?= json_encode($club['Id_Club'] ?? '') ?>;
+const ID_CLUB       = <?= json_encode($tokenClub ?? '') ?>;   // jeton signé (pas le numéro de club)
 const DESID_BASE = '<?= site_url('desiderata-club') ?>';
 
 function escHtml(s) {

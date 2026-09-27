@@ -197,6 +197,20 @@
             max-width: 260px;
             width: 100%;
         }
+
+        /* Écrans moyens / petits : la grille de 5 colonnes passe à 3, 2 puis 1 (comme E003) */
+        @media (max-width: 1199.98px) {
+            #menu-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+        @media (max-width: 767.98px) {
+            #menu-grid { grid-template-columns: repeat(2, 1fr); padding: 12px; gap: 12px; }
+            .menu-btn { min-height: 0; }
+            .menu-btn .btn-icon { width: 100px; height: 100px; }
+            .menu-btn img { width: 100px; height: 100px; max-width: 100px; max-height: 100px; }
+        }
+        @media (max-width: 479.98px) {
+            #menu-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -219,7 +233,7 @@
 
     <a href="<?= site_url('club-csr') ?>" class="menu-btn btn-club-csr">
         <span class="btn-code">ES31</span>
-        <div class="btn-icon"><img src="<?= base_url('img/Association.png') ?>" alt="Club CSR"></div>
+        <div class="btn-icon"><img src="<?= base_url('img/Association.webp') ?>" alt="Club CSR"></div>
         <span>Club CSR</span>
         <span class="btn-desc">Liste des clubs et envoi d'un email aux correspondants sélectionnés</span>
     </a>
@@ -233,7 +247,7 @@
 
     <a href="<?= site_url('souhait-equipe') ?>" class="menu-btn btn-souhait-equipe">
         <span class="btn-code">ES33</span>
-        <div class="btn-icon"><img src="<?= base_url('img/Souhait.png') ?>" alt="Souhaits des équipes"></div>
+        <div class="btn-icon"><img src="<?= base_url('img/Souhait.webp') ?>" alt="Souhaits des équipes"></div>
         <span>Souhaits des équipes</span>
         <span class="btn-desc">Jour souhaité et arbitrage des équipes R3M / R4M</span>
     </a>
@@ -243,7 +257,7 @@
 <!-- Déconnexion : ligne à part, centrée -->
 <div id="zone-deconnexion">
     <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;">
-        <div class="btn-icon"><img src="<?= base_url('img/Quitter.png') ?>" alt="Se déconnecter"></div>
+        <div class="btn-icon"><img src="<?= base_url('img/Quitter.webp') ?>" alt="Se déconnecter"></div>
         <span style="color:#842029;">Se déconnecter</span>
         <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
     </a>

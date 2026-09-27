@@ -27,22 +27,8 @@ class ImportRencontresController extends BaseController
         require_once __DIR__ . '/../../../config/db.php';
         require_once __DIR__ . '/../../../config/app_config.php';
 
-        // Garantit que la clé "region" existe en configuration
-        try {
-            $pdo0 = getPDO();
-
-            // Un nom d'équipe ne doit désigner qu'un seul club. Try/catch isolé : si des doublons
-            // existent déjà en base, on laisse la contrainte non posée plutôt que de faire échouer
-            // le reste de la migration.
-            $hasUqEquipeNom = (bool) $pdo0->query("SHOW INDEX FROM club WHERE Key_name = 'uq_club_equipenom'")->fetch();
-            if (!$hasUqEquipeNom) {
-                try {
-                    $pdo0->exec('ALTER TABLE club ADD UNIQUE KEY uq_club_equipenom (EquipeNom)');
-                } catch (\PDOException $e) {
-                }
-            }
-        } catch (\PDOException $e) {
-        }
+        // L'unicité de club.EquipeNom (uq_club_equipenom) est posée par initTableConfiguration() (EA98),
+        // plus à chaque requête de cet écran.
     }
 
     /**

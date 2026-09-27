@@ -45,22 +45,26 @@ class AdresseJaController extends BaseController
         try {
             return $fn();
         } catch (\PDOException $e) {
-            return $this->response->setJSON(['ok' => false, 'err' => $e->getMessage()]);
+            error_log('[NIJAC] EN19 : ' . $e->getMessage());
+
+            return $this->response->setJSON(['ok' => false, 'err' => messageErreur($e, 'Erreur technique, merci de réessayer.')]);
         }
+    }
+
+    /** Id_JA d'un jeton `?ja=` (GET) ou `ja` (POST), ou 0. Le jeton est le seul secret des actions publiques. */
+    private function idJaDuJeton(string $token): int
+    {
+        $token = trim($token);
+
+        return $token === '' ? 0 : max(0, $this->obf->deobfuscate($token));
     }
 
     public function index()
     {
         $this->startSession();
 
-        $idJa = 0;
         $tokenGet = trim($this->request->getGet('ja') ?? '');
-        if ($tokenGet !== '') {
-            $decoded = $this->obf->deobfuscate($tokenGet);
-            if ($decoded > 0) {
-                $idJa = $decoded;
-            }
-        }
+        $idJa     = $this->idJaDuJeton($tokenGet);
 
         $pdo    = getPDO();
         $ja     = null;
@@ -83,7 +87,8 @@ class AdresseJaController extends BaseController
                     $erreur = "Juge-Arbitre #$idJa introuvable.";
                 }
             } catch (\PDOException $e) {
-                $erreur = 'Erreur BDD : ' . $e->getMessage();
+                error_log('[NIJAC] EN19 index : ' . $e->getMessage());
+                $erreur = messageErreur($e, 'Erreur technique : impossible de charger la page pour le moment.');
             }
         } else {
             $erreur = 'Lien invalide ou paramètre manquant.';
@@ -97,6 +102,7 @@ class AdresseJaController extends BaseController
 
         return view('adresse_ja_index', [
             'idJa'   => $idJa,
+            'token'  => $idJa > 0 ? $tokenGet : '',   // rejoué par le JS sur recherche-laposte / sauvegarder
             'ja'     => $ja,
             'erreur' => $erreur,
         ]);
@@ -177,7 +183,9 @@ class AdresseJaController extends BaseController
 
                 return $this->response->setJSON(['ok' => true, 'nom' => $ja['Prenom'] . ' ' . $ja['Nom'], 'url' => $marqueurs['{URL_ADRESSE_JA}']]);
             } catch (\Exception $e) {
-                return $this->response->setJSON(['ok' => false, 'err' => $e->getMessage()]);
+                error_log('[NIJAC] EN19 envoi demande adresse : ' . $e->getMessage());
+
+                return $this->response->setJSON(['ok' => false, 'err' => messageErreur($e, 'Envoi impossible (voir le journal des erreurs).')]);
             }
         });
     }
@@ -187,12 +195,12 @@ class AdresseJaController extends BaseController
      */
     public function rechercheLaposte(): ResponseInterface
     {
-        $this->startSession();
-        if ($this->request->getMethod() === 'post') {
-        }
-        session_write_close();
-
         return $this->tryJson(function () {
+            // Action publique : sans jeton JA valide, cette recherche restait ouverte à n'importe quel script.
+            if (!$this->idJaDuJeton((string) $this->request->getPost('ja'))) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Lien invalide.']);
+            }
+
             $pdo   = getPDO();
             $cp    = trim($this->request->getPost('cp') ?? '');
             $ville = normaliserVille($this->request->getPost('ville') ?? '');
@@ -256,18 +264,15 @@ class AdresseJaController extends BaseController
      */
     public function sauvegarder(): ResponseInterface
     {
-        $this->startSession();
-        session_write_close();
-
         return $this->tryJson(function () {
-            $pdo       = getPDO();
-            $id        = (int) ($this->request->getPost('id_ja') ?? 0);
-            $idLaPoste = ($this->request->getPost('id_laposte') ?? '') !== '' ? (int) $this->request->getPost('id_laposte') : null;
-            $cp        = trim($this->request->getPost('cp') ?? '');
-            $ville     = trim($this->request->getPost('ville') ?? '');
+            $pdo = getPDO();
+            // L'Id_JA vient UNIQUEMENT du jeton : accepter un id_ja en clair permettait à n'importe qui de
+            // réécrire l'adresse (donc distances, kilomètres, rattachement) de n'importe quel JA.
+            $id        = $this->idJaDuJeton((string) $this->request->getPost('ja'));
+            $idLaPoste = (int) ($this->request->getPost('id_laposte') ?? 0);
 
             if (!$id) {
-                return $this->response->setJSON(['ok' => false, 'err' => 'JA manquant.']);
+                return $this->response->setJSON(['ok' => false, 'err' => 'Lien invalide. Merci de redemander l\'envoi du lien.']);
             }
             if (!$idLaPoste) {
                 return $this->response->setJSON(['ok' => false, 'err' => 'Veuillez sélectionner une commune valide dans la liste laposte.']);
@@ -279,8 +284,16 @@ class AdresseJaController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => 'JA introuvable.']);
             }
 
+            // CP / ville recopiés depuis laposte (pas depuis le formulaire) : cohérents avec Id_LaPoste.
+            $lp = $pdo->prepare('SELECT CodePostal, Nom FROM laposte WHERE Id_LaPoste = ?');
+            $lp->execute([$idLaPoste]);
+            $commune = $lp->fetch();
+            if (!$commune) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Commune inconnue : veuillez la sélectionner à nouveau.']);
+            }
+
             $pdo->prepare('UPDATE ja SET Id_LaPoste = ?, Cp = ?, Ville = ? WHERE Id_JA = ?')
-                ->execute([$idLaPoste, $cp ?: null, $ville ?: null, $id]);
+                ->execute([$idLaPoste, $commune['CodePostal'], $commune['Nom'], $id]);
 
             return $this->response->setJSON(['ok' => true]);
         });

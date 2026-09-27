@@ -26,7 +26,9 @@ class ComptaController extends BaseController
         try {
             return $fn();
         } catch (\Throwable $e) {
-            return $this->response->setJSON(['ok' => false, 'msg' => $e->getMessage()]);
+            error_log('[NIJAC] ED55 : ' . $e->getMessage());
+
+            return $this->response->setJSON(['ok' => false, 'msg' => messageErreur($e, 'Erreur technique, voir le journal.')]);
         }
     }
 
@@ -179,44 +181,55 @@ class ComptaController extends BaseController
             $resultats = [];
             $nbMaj     = 0;
 
-            while (($row = fgetcsv($fh, 0, $sep)) !== false) {
-                if (count($row) < 2) {
-                    continue;
-                }
-                $a = trim((string) $row[0]);
-                $b = trim((string) $row[1]);
+            // Transaction : un import interrompu en cours de fichier ne laisse pas une balance à moitié rapprochée.
+            $pdo->beginTransaction();
+            try {
+                while (($row = fgetcsv($fh, 0, $sep)) !== false) {
+                    if (count($row) < 2) {
+                        continue;
+                    }
+                    $a = trim((string) $row[0]);
+                    $b = trim((string) $row[1]);
 
-                // Repère la colonne « compte » (que des chiffres) et la colonne « nom ».
-                $aNum = ctype_digit(str_replace(' ', '', $a));
-                $bNum = ctype_digit(str_replace(' ', '', $b));
-                if ($aNum === $bNum) {
-                    continue; // 0 ou 2 colonnes numériques → en-tête, sous-totaux, ligne vide…
-                }
-                [$compte, $nom] = $aNum ? [str_replace(' ', '', $a), $b] : [str_replace(' ', '', $b), $a];
-                if ($nom === '' || $compte === '' || strlen($compte) > 20) {
-                    continue;
-                }
+                    // Repère la colonne « compte » (que des chiffres) et la colonne « nom ».
+                    $aNum = ctype_digit(str_replace(' ', '', $a));
+                    $bNum = ctype_digit(str_replace(' ', '', $b));
+                    if ($aNum === $bNum) {
+                        continue; // 0 ou 2 colonnes numériques → en-tête, sous-totaux, ligne vide…
+                    }
+                    [$compte, $nom] = $aNum ? [str_replace(' ', '', $a), $b] : [str_replace(' ', '', $b), $a];
+                    if ($nom === '' || $compte === '' || strlen($compte) > 20) {
+                        continue;
+                    }
 
-                $ids = array_keys($index[$this->normNom($nom)] ?? []);
+                    $ids = array_keys($index[$this->normNom($nom)] ?? []);
 
-                if (count($ids) === 0) {
-                    $statut = 'introuvable';
-                    $detail = 'Aucun JA du périmètre ne porte ce nom';
-                } elseif (count($ids) > 1) {
-                    $statut = 'ambigu';
-                    $detail = count($ids) . ' JA portent ce nom — non modifié';
-                } elseif ($courant[$ids[0]] === $compte) {
-                    $statut = 'inchange';
-                    $detail = 'Déjà renseigné';
-                } else {
-                    $upd->execute([$compte, $ids[0]]);
-                    $courant[$ids[0]] = $compte;
-                    $statut = 'maj';
-                    $detail = 'Compte renseigné';
-                    $nbMaj++;
+                    if (count($ids) === 0) {
+                        $statut = 'introuvable';
+                        $detail = 'Aucun JA du périmètre ne porte ce nom';
+                    } elseif (count($ids) > 1) {
+                        $statut = 'ambigu';
+                        $detail = count($ids) . ' JA portent ce nom — non modifié';
+                    } elseif ($courant[$ids[0]] === $compte) {
+                        $statut = 'inchange';
+                        $detail = 'Déjà renseigné';
+                    } else {
+                        $upd->execute([$compte, $ids[0]]);
+                        $courant[$ids[0]] = $compte;
+                        $statut = 'maj';
+                        $detail = 'Compte renseigné';
+                        $nbMaj++;
+                    }
+
+                    $resultats[] = ['nom' => $nom, 'compte' => $compte, 'statut' => $statut, 'detail' => $detail];
                 }
-
-                $resultats[] = ['nom' => $nom, 'compte' => $compte, 'statut' => $statut, 'detail' => $detail];
+                $pdo->commit();
+            } catch (\Throwable $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                fclose($fh);
+                throw $e;
             }
             fclose($fh);
 
@@ -270,9 +283,12 @@ class ComptaController extends BaseController
             ");
             $stmt->execute($params);
 
+            // Nom : sans ; ni saut de ligne (colonnes décalées) et neutralisé contre les formules Excel ;
+            // l'apostrophe éventuelle est sans effet sur le ré-import (normNom() ne garde que A-Z0-9).
             $lignes = ['compte;nom'];
             foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $r) {
-                $lignes[] = $r['NumCompteEBP'] . ';' . trim(mb_strtoupper($r['Nom'] ?? '', 'UTF-8') . ' ' . ($r['Prenom'] ?? ''));
+                $nomComplet = trim(mb_strtoupper($r['Nom'] ?? '', 'UTF-8') . ' ' . ($r['Prenom'] ?? ''));
+                $lignes[]   = $r['NumCompteEBP'] . ';' . csvSafe(str_replace([';', "\r", "\n"], [',', ' ', ' '], $nomComplet));
             }
 
             return $this->response->setJSON(['ok' => true, 'csv' => implode("\n", $lignes)]);

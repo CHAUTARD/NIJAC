@@ -456,7 +456,12 @@ $('#btn-supprimer').on('click', function () {
 });
 
 $('#sel-departement').on('change', function () { departementFiltre = $(this).val(); renderListe(); });
-$('#search-nom').on('input', function () { searchTerm = $(this).val().trim(); renderListe(); });
+let searchTimer;
+$('#search-nom').on('input', function () {
+    const val = $(this).val().trim();
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () { searchTerm = val; renderListe(); }, 200);
+});
 
 // ── Tri sur clic en-tête ──────────────────────────────────────────────────────
 // Différé : nijac-sortable-table.js est chargé après ce script (voir plus bas),

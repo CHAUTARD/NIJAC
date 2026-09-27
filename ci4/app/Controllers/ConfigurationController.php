@@ -136,6 +136,90 @@ class ConfigurationController extends BaseController
         });
     }
 
+    /** Clés dont le code dépend : jamais supprimées ni renommées depuis le tableau brut. */
+    private const CLES_PROTEGEES = ['etat_logiciel', 'email_developpement', 'departements_actifs', 'regles_departements', 'url_ligue', 'saison'];
+
+    /**
+     * Valide (et normalise, par référence) la valeur d'un paramètre. Retourne un message d'erreur, ou null si OK.
+     * Partagée par enregistrer() ET par l'éditeur de table brute (tableCreer/tableModifier) : sans cela, ce
+     * dernier contournait toutes les validations (ex. etat_logiciel quelconque = emails réels envoyés).
+     */
+    private function validerValeur(string $cle, string &$valeur): ?string
+    {
+        // Validation JSON pour regles_departements
+        if ($cle === 'regles_departements' && $valeur !== '') {
+            $decoded = json_decode($valeur, true);
+            if (!is_array($decoded)) {
+                return 'Format de règles invalide (JSON attendu).';
+            }
+        }
+
+        // Valeurs autorisées pour etat_logiciel
+        if ($cle === 'etat_logiciel' && !in_array($valeur, ['Operationnel', 'Developpement'], true)) {
+            return 'Valeur invalide pour ce paramètre.';
+        }
+
+        // Validation email pour email_developpement
+        if ($cle === 'email_developpement') {
+            if ($valeur === '' || !filter_var($valeur, FILTER_VALIDATE_EMAIL)) {
+                return 'Adresse email invalide.';
+            }
+        }
+
+        // Validation URL pour url_ligue
+        if ($cle === 'url_ligue') {
+            if ($valeur === '' || !filter_var($valeur, FILTER_VALIDATE_URL)) {
+                return 'Adresse du site invalide.';
+            }
+        }
+
+        // Validation numérique pour indemnité forfaitaire et frais kilométriques
+        if (in_array($cle, ['indemnite_forfaitaire', 'frais_kilometrique'], true)) {
+            $valeurNum = str_replace(',', '.', $valeur);
+            if ($valeurNum === '' || !is_numeric($valeurNum) || (float) $valeurNum < 0) {
+                return 'Valeur numérique positive attendue.';
+            }
+            $valeur = number_format((float) $valeurNum, 2, '.', '');
+        }
+
+        // Validation entier positif pour le nombre de sauvegardes totales à conserver
+        // et le nombre de candidats JA listés dans EN14
+        if (in_array($cle, ['backup_full_garder', 'nomination_nb_candidats'], true)) {
+            if ($valeur === '' || !ctype_digit($valeur) || (int) $valeur < 1) {
+                return 'Nombre entier positif attendu.';
+            }
+            $valeur = (string) (int) $valeur;
+        }
+
+        // Validation année fiscale (ED51) : 4 chiffres, plage raisonnable
+        if ($cle === 'annee_fiscale') {
+            if (!preg_match('/^\d{4}$/', $valeur) || (int) $valeur < 2000 || (int) $valeur > 2100) {
+                return 'Année sur 4 chiffres attendue (2000-2100).';
+            }
+        }
+
+        // Validation départements_actifs : liste de numéros séparés par virgule
+        if ($cle === 'departements_actifs') {
+            $deptsValides = ['14', '27', '50', '61', '76'];
+            $depts        = array_filter(array_map('trim', explode(',', $valeur)));
+            foreach ($depts as $d) {
+                if (!in_array($d, $deptsValides, true)) {
+                    return "Département « $d » non reconnu.";
+                }
+            }
+            $valeur = implode(',', $depts);
+        }
+
+        // Bornes des phases (EA91, format MM/JJ) : lues par EN17/EN22 pour situer la phase courante
+        if (in_array($cle, ['phase1_debut', 'phase1_fin', 'phase2_debut', 'phase2_fin'], true)) {
+            if (!preg_match('#^(\d{2})[/-](\d{2})$#', $valeur, $m) || !checkdate((int) $m[1], (int) $m[2], 2000)) {
+                return 'Date attendue au format MM/JJ (ex. 09/01).';
+            }
+        }
+
+        return null;
+    }
+
     public function enregistrer(): ResponseInterface
     {
 
@@ -153,68 +237,9 @@ class ConfigurationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => "« $cle » est géré via .env, non modifiable ici."]);
             }
 
-            // Validation JSON pour regles_departements
-            if ($cle === 'regles_departements' && $valeur !== '') {
-                $decoded = json_decode($valeur, true);
-                if (!is_array($decoded)) {
-                    return $this->response->setJSON(['ok' => false, 'msg' => 'Format de règles invalide (JSON attendu).']);
-                }
-            }
-
-            // Valeurs autorisées pour etat_logiciel
-            if ($cle === 'etat_logiciel' && !in_array($valeur, ['Operationnel', 'Developpement'], true)) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Valeur invalide pour ce paramètre.']);
-            }
-
-            // Validation email pour email_developpement
-            if ($cle === 'email_developpement') {
-                if ($valeur === '' || !filter_var($valeur, FILTER_VALIDATE_EMAIL)) {
-                    return $this->response->setJSON(['ok' => false, 'msg' => 'Adresse email invalide.']);
-                }
-            }
-
-            // Validation URL pour url_ligue
-            if ($cle === 'url_ligue') {
-                if ($valeur === '' || !filter_var($valeur, FILTER_VALIDATE_URL)) {
-                    return $this->response->setJSON(['ok' => false, 'msg' => 'Adresse du site invalide.']);
-                }
-            }
-
-            // Validation numérique pour indemnité forfaitaire et frais kilométriques
-            if (in_array($cle, ['indemnite_forfaitaire', 'frais_kilometrique'], true)) {
-                $valeurNum = str_replace(',', '.', $valeur);
-                if ($valeurNum === '' || !is_numeric($valeurNum) || (float) $valeurNum < 0) {
-                    return $this->response->setJSON(['ok' => false, 'msg' => 'Valeur numérique positive attendue.']);
-                }
-                $valeur = number_format((float) $valeurNum, 2, '.', '');
-            }
-
-            // Validation entier positif pour le nombre de sauvegardes totales à conserver
-            // et le nombre de candidats JA listés dans EN14
-            if (in_array($cle, ['backup_full_garder', 'nomination_nb_candidats'], true)) {
-                if ($valeur === '' || !ctype_digit($valeur) || (int) $valeur < 1) {
-                    return $this->response->setJSON(['ok' => false, 'msg' => 'Nombre entier positif attendu.']);
-                }
-                $valeur = (string) (int) $valeur;
-            }
-
-            // Validation année fiscale (ED51) : 4 chiffres, plage raisonnable
-            if ($cle === 'annee_fiscale') {
-                if (!preg_match('/^\d{4}$/', $valeur) || (int) $valeur < 2000 || (int) $valeur > 2100) {
-                    return $this->response->setJSON(['ok' => false, 'msg' => 'Année sur 4 chiffres attendue (2000-2100).']);
-                }
-            }
-
-            // Validation départements_actifs : liste de numéros séparés par virgule
-            if ($cle === 'departements_actifs') {
-                $deptsValides = ['14', '27', '50', '61', '76'];
-                $depts        = array_filter(array_map('trim', explode(',', $valeur)));
-                foreach ($depts as $d) {
-                    if (!in_array($d, $deptsValides, true)) {
-                        return $this->response->setJSON(['ok' => false, 'msg' => "Département « $d » non reconnu."]);
-                    }
-                }
-                $valeur = implode(',', $depts);
+            $erreur = $this->validerValeur($cle, $valeur);   // $valeur normalisée par référence
+            if ($erreur !== null) {
+                return $this->response->setJSON(['ok' => false, 'msg' => $erreur]);
             }
 
             $stmt = $pdo->prepare(
@@ -270,6 +295,9 @@ class ConfigurationController extends BaseController
             if ($existe->fetchColumn()) {
                 return $this->response->setJSON(['ok' => false, 'msg' => "La clé « $cle » existe déjà."]);
             }
+            if (($erreur = $this->validerValeur($cle, $valeur)) !== null) {
+                return $this->response->setJSON(['ok' => false, 'msg' => $erreur]);
+            }
 
             $pdo->prepare('INSERT INTO configuration (cle, valeur, description) VALUES (?, ?, ?)')
                 ->execute([$cle, $valeur, $description ?: null]);
@@ -298,6 +326,13 @@ class ConfigurationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => "« $cle » est géré via .env, non gérable ici."]);
             }
 
+            if ($cle !== $cleOriginale && (in_array($cleOriginale, self::CLES_PROTEGEES, true) || in_array($cle, self::CLES_PROTEGEES, true))) {
+                return $this->response->setJSON(['ok' => false, 'msg' => "« $cleOriginale » est une clé utilisée par le code : elle ne peut pas être renommée."]);
+            }
+            if (($erreur = $this->validerValeur($cle, $valeur)) !== null) {
+                return $this->response->setJSON(['ok' => false, 'msg' => $erreur]);
+            }
+
             if ($cle !== $cleOriginale) {
                 $existe = $pdo->prepare('SELECT 1 FROM configuration WHERE cle = ?');
                 $existe->execute([$cle]);
@@ -320,6 +355,9 @@ class ConfigurationController extends BaseController
             $cle = trim($this->request->getPost('cle') ?? '');
             if ($cle === '') {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Clé manquante.']);
+            }
+            if (in_array($cle, self::CLES_PROTEGEES, true)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => "« $cle » est une clé utilisée par le code : elle ne peut pas être supprimée."]);
             }
             getPDO()->prepare('DELETE FROM configuration WHERE cle = ?')->execute([$cle]);
 

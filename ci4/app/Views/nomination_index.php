@@ -334,7 +334,10 @@ let selectionEnvoiInitiale = new Set(); // présélection au chargement, restaur
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function ajax(action, params) {
-    return $.ajax({ url: `${NOM_BASE}/${action}`, dataType: 'json', ...params });
+    const xhr = $.ajax({ url: `${NOM_BASE}/${action}`, dataType: 'json', ...params });
+    // Réseau coupé, session expirée (redirection HTML) ou erreur 500 : sans ceci, l'action échoue en silence
+    xhr.fail(() => nijacToast('Erreur réseau ou session expirée — l\'action n\'a pas abouti.', 'danger'));
+    return xhr;
 }
 
 function spin(show) {
@@ -452,7 +455,7 @@ function chargerRencontres() {
             const r = rRenc[0];
             const j = rJa[0];
             if (!r.ok) {
-                $('#liste-rencontres').html(`<div class="text-danger p-3">${r.err}</div>`);
+                $('#liste-rencontres').html(`<div class="text-danger p-3">${escHtml(r.err)}</div>`);
                 return;
             }
             rencontres = r.data;
@@ -1035,6 +1038,9 @@ function envoyerConvocations() {
     }
     const ids = [...selectionEnvoi];
     nijacConfirm(`Envoyer ${ids.length} convocation${ids.length > 1 ? 's' : ''} par e-mail ?`, function () {
+        // L'envoi SMTP est séquentiel donc lent : bouton verrouillé (pas de double envoi) + spinner
+        $('#btn-envoyer').prop('disabled', true);
+        spin(true);
         ajax('envoyer-convocations', {
             method: 'POST',
             data: {
@@ -1043,6 +1049,7 @@ function envoyerConvocations() {
                 ids:     JSON.stringify(ids)
             }
         }).done(function (r) {
+            spin(false);   // avant chargerRencontres(), qui relance son propre spinner
             if (!r.ok) { nijacToast('Erreur : ' + r.err, 'danger'); return; }
             // Afficher la modale avec les liens
             const $body = $('#liensBody').empty();
@@ -1059,13 +1066,14 @@ function envoyerConvocations() {
             const erreurs = (r.erreurs || []).length;
             $('#msg-envoi-resume').html(
                 `<i class="bi bi-check-circle-fill text-success me-1"></i><strong>${envoyes}</strong> email${envoyes > 1 ? 's' : ''} envoyé${envoyes > 1 ? 's' : ''}.` +
-                (erreurs > 0 ? ` <span class="text-danger">${erreurs} échec${erreurs > 1 ? 's' : ''}.</span>` : '')
+                (erreurs > 0 ? ` <span class="text-danger">${erreurs} échec${erreurs > 1 ? 's' : ''} :</span>`
+                    + `<ul class="text-danger small mb-0">${r.erreurs.map(e => `<li>${escHtml(e)}</li>`).join('')}</ul>` : '')
             );
             new bootstrap.Modal('#modalLiens').show();
             // Recharger depuis le serveur pour refléter le statut d'envoi réel
             // (un échec d'email individuel ne marque pas EmailEnvoye côté serveur)
             chargerRencontres();
-        });
+        }).fail(() => spin(false)).always(mettreAJourBoutons);   // ré-évalue le disabled du bouton Envoyer
     }, null, { type: 'question', title: 'Envoi des convocations', confirmLabel: 'Envoyer' });
 }
 

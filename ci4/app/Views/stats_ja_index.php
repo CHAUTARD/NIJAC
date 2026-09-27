@@ -180,9 +180,9 @@
                     <th data-col="Club">Club</th>
                     <th data-col="nb_arbitrages" class="sort-desc">Arbitrages</th>
                     <th data-col="nb_arbitrages_club">Arbitrages Club</th>
-                    <th data-col="total_km">Km</th>
+                    <th data-col="total_km" title="Un seul déplacement compté par jour : les rencontres suivantes du même jour n'ajoutent pas de km ni de péage">Km</th>
                     <th data-col="montant_km">Montant km (€)</th>
-                    <th data-col="total_peages">Péages (€)</th>
+                    <th data-col="total_peages" title="Un seul déplacement compté par jour : les rencontres suivantes du même jour n'ajoutent pas de km ni de péage">Péages (€)</th>
                     <th data-col="total_indemnite">Indemnité (€)</th>
                     <th data-col="total_frais">Total frais (€)</th>
                 </tr>
@@ -248,10 +248,13 @@ function renderTable() {
 }
 
 function chargerTableau(phase, annee) {
+    // Masqué d'emblée : sans ça, une phase vide / pas commencée / en erreur laissait
+    // à l'écran le tableau de la sélection précédente.
+    $('#table-wrap').hide();
     $.getJSON(`${BASE}/donnees`, { phase, annee }).done(r => {
         if (!r.ok) { nijacToast(r.msg || 'Erreur serveur.', 'danger'); return; }
         _rows = r.rows;
-        if (!_rows.length) return;
+        if (!_rows.length) { nijacToast('Aucun arbitrage sur cette période.', 'info'); return; }
 
         $('#table-section-title').text(`Arbitrages et frais par Juge-Arbitre — Phase ${phase}, saison ${annee}‑${+annee + 1}`);
         renderTable();

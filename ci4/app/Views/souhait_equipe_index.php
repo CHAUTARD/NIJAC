@@ -300,7 +300,12 @@ $('#btn-annuler').on('click', function () {
     $('#no-selection').show();
 });
 
-$('#search-input').on('input', function () { searchTerm = $(this).val().trim(); renderListe(); });
+let searchTimer;
+$('#search-input').on('input', function () {
+    const val = $(this).val().trim();
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () { searchTerm = val; renderListe(); }, 200);
+});
 $('#chk-r3r4').on('change', function () { r3r4Seulement = this.checked; renderListe(); });
 
 // ── Importer engagements (xlsx → csv) ────────────────────────────────────────

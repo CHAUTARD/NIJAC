@@ -18,8 +18,22 @@ class StatsJaController extends BaseController
 {
     // Arbitrage Club (rencontre.ArbitrageCRA = 0) : ni indemnité, ni péage, ni km remboursés —
     // seules les rencontres à arbitrage CRA (ArbitrageCRA = 1) sont valorisées.
-    private const SQL_KM      = 'COALESCE(SUM(CASE WHEN r.ArbitrageCRA = 1 THEN n.Kilometre END), 0)';
-    private const SQL_PEAGE   = 'COALESCE(SUM(CASE WHEN r.ArbitrageCRA = 1 THEN n.Peage END), 0)';
+    // Kilomètres ET péages : un JA qui arbitre plusieurs rencontres CRA le même jour ne fait qu'un déplacement — seule la
+    // 1re rencontre qui porte une valeur (heure la plus précoce, puis Id_Nomination) est comptée ; les suivantes du même jour
+    // valent 0 (comme l'export d'EN28). Une rencontre à 0 ne « consomme » pas le déplacement : le JA a pu ne saisir ses
+    // km / péages que sur l'une des deux. Fragment commun aux deux colonnes, la colonne (Kilometre | Peage) s'intercale.
+    private const SQL_UNE_FOIS_PAR_JOUR_A = 'COALESCE(SUM(CASE WHEN r.ArbitrageCRA = 1 AND NOT EXISTS (
+            SELECT 1 FROM nomination n2
+            JOIN disponible d2 ON d2.Id_Disponible = n2.Id_Disponible
+            JOIN rencontre  r2 ON r2.Id_Rencontre  = n2.Id_Rencontre
+            WHERE d2.Id_JA = ja.Id_JA AND n2.Valide = 1 AND r2.ArbitrageCRA = 1 AND r2.Date = r.Date AND n2.';
+    private const SQL_UNE_FOIS_PAR_JOUR_B = ' > 0
+              AND n2.Id_Nomination <> n.Id_Nomination
+              AND (COALESCE(r2.Heure, "00:00:00") < COALESCE(r.Heure, "00:00:00")
+                   OR (COALESCE(r2.Heure, "00:00:00") = COALESCE(r.Heure, "00:00:00") AND n2.Id_Nomination < n.Id_Nomination))
+        ) THEN n.';
+    private const SQL_KM      = self::SQL_UNE_FOIS_PAR_JOUR_A . 'Kilometre' . self::SQL_UNE_FOIS_PAR_JOUR_B . 'Kilometre END), 0)';
+    private const SQL_PEAGE   = self::SQL_UNE_FOIS_PAR_JOUR_A . 'Peage' . self::SQL_UNE_FOIS_PAR_JOUR_B . 'Peage END), 0)';
     private const SQL_NB_CRA  = 'SUM(r.ArbitrageCRA = 1)';
     private const SQL_NB_CLUB = 'SUM(r.ArbitrageCRA = 0)';
 
@@ -34,6 +48,8 @@ class StatsJaController extends BaseController
         try {
             return $fn();
         } catch (\Throwable $e) {
+            error_log('[NIJAC] EN17 : ' . $e->getMessage());
+
             return $this->response->setJSON(['ok' => false, 'msg' => $e->getMessage()]);
         }
     }
@@ -184,8 +200,8 @@ class StatsJaController extends BaseController
             SELECT
                     $selectSql
             FROM ja
-            JOIN nomination n    ON n.Valide = 1
-            JOIN disponible dn   ON dn.Id_Disponible = n.Id_Disponible AND dn.Id_JA = ja.Id_JA
+            JOIN disponible dn   ON dn.Id_JA = ja.Id_JA
+            JOIN nomination n    ON n.Id_Disponible = dn.Id_Disponible AND n.Valide = 1
             JOIN rencontre  r    ON r.Id_Rencontre  = n.Id_Rencontre
             LEFT JOIN Club  cl   ON cl.Id_Club      = ja.Id_Club
             LEFT JOIN salle s    ON s.Id_Club       = cl.Id_Club AND s.EstPrincipale = 1
@@ -365,24 +381,22 @@ class StatsJaController extends BaseController
                 SELECT LEFT(COALESCE(lp.CodePostal, s.Cp), 2) AS Dept,
                        r.Journee AS Journee,
                        COUNT(*) AS nb,
-                       SUM(CASE WHEN EXISTS (
-                           SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
-                       ) THEN 1 ELSE 0 END) AS nb_avec_arbitre,
+                       SUM(CASE WHEN nv.Id_Rencontre IS NOT NULL THEN 1 ELSE 0 END) AS nb_avec_arbitre,
                        SUM(CASE WHEN r.ArbitrageCRA = 0
-                                AND NOT EXISTS (
-                           SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1
-                       ) THEN 1 ELSE 0 END) AS nb_arbitre_club,
+                                AND nv.Id_Rencontre IS NULL THEN 1 ELSE 0 END) AS nb_arbitre_club,
                        SUM(CASE WHEN r.ArbitrageCRA = 1
-                                OR EXISTS (SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1)
+                                OR nv.Id_Rencontre IS NOT NULL
                                 THEN 1 ELSE 0 END) AS nb_besoin_ja,
                        SUM(CASE WHEN r.ArbitrageCRA = 0
-                                AND NOT EXISTS (SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1)
+                                AND nv.Id_Rencontre IS NULL
                                 THEN 1 ELSE 0 END) AS nb_sans_besoin_ja
                 FROM rencontre r
                 JOIN equipe        ed ON ed.Id_Equipe   = r.Id_EquipeDom
                 LEFT JOIN Club     cl ON cl.Id_Club      = ed.Id_Club
                 LEFT JOIN salle    s  ON s.Id_Club       = cl.Id_Club AND s.EstPrincipale = 1
                 LEFT JOIN laposte  lp ON lp.Id_LaPoste   = s.Id_Laposte
+                -- 1 nomination Valide max par rencontre (uq_nomination_rencontre) : jointure unique au lieu de 5 sous-requêtes corrélées
+                LEFT JOIN (SELECT DISTINCT Id_Rencontre FROM nomination WHERE Valide = 1) nv ON nv.Id_Rencontre = r.Id_Rencontre
                 WHERE r.Date BETWEEN :debut AND :fin AND r.Journee IS NOT NULL
                       AND LEFT(COALESCE(lp.CodePostal, s.Cp), 2) IN ($inClause)
                 GROUP BY Dept, Journee

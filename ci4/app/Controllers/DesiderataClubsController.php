@@ -31,7 +31,7 @@ class DesiderataClubsController extends BaseController
         } catch (\PDOException $e) {
             log_message('error', '[NIJAC] JA_R3R4 PDO : ' . $e->getMessage());
 
-            return $this->response->setJSON(['ok' => false, 'msg' => 'Erreur base de données : ' . $e->getMessage()]);
+            return $this->response->setJSON(['ok' => false, 'msg' => messageErreur($e, 'Erreur base de données.')]);
         }
     }
 
@@ -119,6 +119,8 @@ class DesiderataClubsController extends BaseController
             $codes = $row
                 ? array_map('intval', array_filter(array_map('trim', explode(',', $row['valeur']))))
                 : [];
+            // Seuls les départements du périmètre du nominateur sont proposés : liste() refuse les autres.
+            $codes = array_values(array_intersect($codes, $this->deptsAutorises()));
             if (!$codes) {
                 return $this->response->setJSON(['ok' => true, 'data' => []]);
             }
@@ -224,7 +226,7 @@ class DesiderataClubsController extends BaseController
             $vars = [
                 '{NOM_CLUB}'       => $club['Nom'] ?? 'Nom du club',
                 '{CORR_NOM}'       => $club['CorNom'] ?? 'Nom du correspondant',
-                '{URL_DESIDERATA}' => site_url('desiderata-club') . '?club=' . urlencode($club['Id_Club'] ?? '09760136'),
+                '{URL_DESIDERATA}' => site_url('desiderata-club') . '?club=' . urlencode(tokenDesiderataClub($club['Id_Club'] ?? '09760136')),
                 '{URL_LIGUE}'      => getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),
                 '{YEAR_PHASE}'     => getAnneePhase(),
                 '{UTI_NOM}'        => $moi['nom'] ?? '',
@@ -282,7 +284,7 @@ class DesiderataClubsController extends BaseController
                     continue;
                 }
 
-                $urlDesiderata = $base . '?club=' . urlencode($c['Id_Club']);
+                $urlDesiderata = $base . '?club=' . urlencode(tokenDesiderataClub($c['Id_Club']));
                 $vars = [
                     '{NOM_CLUB}'       => $c['Nom'],
                     '{CORR_NOM}'       => $c['CorNom'] ?? '',
@@ -313,7 +315,8 @@ class DesiderataClubsController extends BaseController
                     $pdo->prepare('UPDATE club SET DesiderataEmailDate = NOW() WHERE Id_Club = ?')
                         ->execute([$c['Id_Club']]);
                 } catch (\Exception $e) {
-                    $erreurs[] = $c['Nom'] . ' : ' . $e->getMessage();
+                    error_log('[NIJAC] EN12 envoi ' . $c['Id_Club'] . ' : ' . $e->getMessage());
+                    $erreurs[] = $c['Nom'] . ' : ' . messageErreur($e, "échec d'envoi");
                 }
             }
 

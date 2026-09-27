@@ -31,8 +31,9 @@ class AuthController extends BaseController
             return redirect()->to($redirect);
         }
 
-        $status      = 'Prêt.';
-        $statutClass = 'text-secondary';
+        // Vide au premier affichage : le bandeau n'apparaît que pour un avertissement ou une erreur
+        $status      = '';
+        $statutClass = '';
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 

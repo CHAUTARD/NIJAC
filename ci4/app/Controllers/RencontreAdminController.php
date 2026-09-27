@@ -59,6 +59,12 @@ class RencontreAdminController extends BaseController
         return 'r.Phase, r.Journee, r.Poule';
     }
 
+    /** Joindre les catalogues équipes/salles au JSON de data() (formulaire complet d'EA95 uniquement). */
+    protected function avecCatalogues(): bool
+    {
+        return true;
+    }
+
     public function data(): ResponseInterface
     {
         return $this->tryJson(function () {
@@ -81,6 +87,10 @@ class RencontreAdminController extends BaseController
                  LEFT JOIN salle s ON s.Id_Salle = r.id_Salle
                  ORDER BY ' . $this->ordreListe()
             )->fetchAll();
+
+            if (!$this->avecCatalogues()) {
+                return $this->response->setJSON(['ok' => true, 'rencontres' => $rows]);
+            }
 
             // Catalogues pour le formulaire d'édition : équipe domicile/extérieure
             // (recherche par nom) et salles du club domicile sélectionné.
@@ -193,7 +203,31 @@ class RencontreAdminController extends BaseController
     public function delete(int $idRencontre): ResponseInterface
     {
         return $this->tryJson(function () use ($idRencontre) {
-            $stmt = getPDO()->prepare('DELETE FROM rencontre WHERE Id_Rencontre=?');
+            $pdo = getPDO();
+
+            // disponible.Id_Rencontre est en ON DELETE RESTRICT (et nomination en CASCADE) : une rencontre déjà
+            // nommée ne se supprime donc pas — message clair plutôt qu'une erreur SQL brute, et jamais de
+            // nomination (voire de convocation déjà envoyée) effacée en silence.
+            $nom = $pdo->prepare('
+                SELECT CONCAT(ja.Prenom, " ", ja.Nom) AS NomJa, n.EmailEnvoye
+                FROM nomination n
+                LEFT JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                LEFT JOIN ja           ON ja.Id_JA        = d.Id_JA
+                WHERE n.Id_Rencontre = ?
+            ');
+            $nom->execute([$idRencontre]);
+            if ($n = $nom->fetch()) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Suppression impossible : un JA est nommé sur cette rencontre'
+                    . ($n['NomJa'] ? ' (' . $n['NomJa'] . ')' : '') . ((int) $n['EmailEnvoye'] === 1 ? ', convocation déjà envoyée' : '')
+                    . '. Retirez d\'abord la nomination (EN14).']);
+            }
+            $dispo = $pdo->prepare('SELECT COUNT(*) FROM disponible WHERE Id_Rencontre = ?');
+            $dispo->execute([$idRencontre]);
+            if ((int) $dispo->fetchColumn() > 0) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Suppression impossible : des JA ont répondu à cette rencontre (disponibilités).']);
+            }
+
+            $stmt = $pdo->prepare('DELETE FROM rencontre WHERE Id_Rencontre=?');
             $stmt->execute([$idRencontre]);
 
             if ($stmt->rowCount() === 0) {

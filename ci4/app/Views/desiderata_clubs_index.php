@@ -367,7 +367,7 @@ const CSRF = <?= json_encode(csrf_hash()) ?>;
 const BASE = '<?= site_url('desiderata-clubs') ?>';
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
-function toast(msg, type = 'ok') {
+function notifier(msg, type = 'ok') {
     nijacToast(msg, type === 'err' ? 'danger' : 'success');
 }
 
@@ -422,7 +422,7 @@ async function chargerListe() {
     const dept = document.getElementById('sel-dept').value;
     const res  = await apiGet('liste', { dept });
     spin(false);
-    if (!res.ok) { toast(res.msg, 'err'); return; }
+    if (!res.ok) { notifier(res.msg, 'err'); return; }
     tousClubs = res.data;
     saisonActuelle = res.saison || '';
     selection.clear();
@@ -584,18 +584,26 @@ document.getElementById('btn-tout-deselectionner').addEventListener('click', () 
 });
 
 // ── Envoi du questionnaire ─────────────────────────────────────────────────────
-document.getElementById('btn-envoyer').addEventListener('click', async () => {
+document.getElementById('btn-envoyer').addEventListener('click', () => {
     if (selection.size === 0) return;
-    const $btn = document.getElementById('btn-envoyer');
-    $btn.disabled = true;
-    spin(true);
-    const res = await apiPost('envoyer', { ids: JSON.stringify(Array.from(selection)) });
-    spin(false);
-    $btn.disabled = false;
-
-    if (!res.ok) { toast(res.msg, 'err'); return; }
-    toast(res.msg, 'ok');
-    await chargerListe();
+    const n = selection.size;
+    // Envoi groupé irréversible vers des correspondants de clubs : confirmation explicite.
+    nijacConfirm(`Envoyer le questionnaire de désidératas à ${n} club${n > 1 ? 's' : ''} ?`, async () => {
+        const $btn = document.getElementById('btn-envoyer');
+        $btn.disabled = true;
+        spin(true);
+        try {
+            const res = await apiPost('envoyer', { ids: JSON.stringify(Array.from(selection)) });
+            if (!res.ok) { notifier(res.msg, 'err'); return; }
+            notifier(res.msg, 'ok');
+            await chargerListe();
+        } catch (e) {
+            notifier('Erreur réseau : envoi non confirmé, vérifiez la colonne « Envoyé le » avant de renvoyer.', 'err');
+        } finally {
+            spin(false);
+            $btn.disabled = selection.size === 0;
+        }
+    }, null, { type: 'question', title: 'Envoi du questionnaire', confirmLabel: 'Envoyer' });
 });
 
 // ── Tri par clic sur en-tête ─────────────────────────────────────────────────
@@ -609,7 +617,7 @@ document.getElementById('btn-apercu-message').addEventListener('click', async ()
     spin(true);
     const res = await apiGet('apercu', { club });
     spin(false);
-    if (!res.ok) { toast(res.msg, 'err'); return; }
+    if (!res.ok) { notifier(res.msg, 'err'); return; }
     document.getElementById('apercu-sujet').textContent = res.sujet;
     document.getElementById('apercu-iframe').srcdoc = res.corps;
     document.getElementById('modal-apercu').classList.add('visible');
@@ -626,7 +634,7 @@ async function ouvrirModalDetail(idClub) {
     spin(true);
     const res = await apiGet('detail', { club: idClub });
     spin(false);
-    if (!res.ok) { toast(res.msg, 'err'); return; }
+    if (!res.ok) { notifier(res.msg, 'err'); return; }
 
     document.getElementById('detail-sujet').textContent = res.club.Nom;
 
@@ -684,7 +692,7 @@ async function ouvrirModalJa(idClub) {
     spin(true);
     const res = await apiGet('ja-club', { club: idClub });
     spin(false);
-    if (!res.ok) { toast(res.msg, 'err'); return; }
+    if (!res.ok) { notifier(res.msg, 'err'); return; }
 
     document.getElementById('ja-sujet').textContent = 'JA du club — ' + res.club.Nom;
 

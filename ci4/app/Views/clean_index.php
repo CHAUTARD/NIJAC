@@ -788,6 +788,10 @@
 <script>
 'use strict';
 
+function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 const CLEAN_BASE = '<?= site_url('clean') ?>';
 
 function spinner(show) { $('#spinner').toggleClass('show', show); }
@@ -828,7 +832,7 @@ $('#pwd-global').on('input', function () {
                 $('#pwd-msg-global').html('<span class="text-success"><i class="bi bi-check-circle me-1"></i>Mot de passe correct.</span>');
             } else {
                 $('#pwd-global').addClass('is-invalid').removeClass('is-valid');
-                $('#pwd-msg-global').html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + res.msg + '</span>');
+                $('#pwd-msg-global').html('<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + escHtml(res.msg) + '</span>');
             }
             majBoutonsAvecPwd();
         }, 'json');
@@ -879,7 +883,7 @@ function executerNettoyage() {
             setStatus('Nettoyage terminé — ' + res.fichier);
             chargerListeSauvegardes();
         } else {
-            $box.html(`<div class="result-err"><strong>Erreur :</strong> ${res.msg}</div>`);
+            $box.html(`<div class="result-err"><strong>Erreur :</strong> ${escHtml(res.msg)}</div>`);
             majBoutonsAvecPwd();
             setStatus('Erreur nettoyage : ' + res.msg);
         }
@@ -976,7 +980,7 @@ function restaurerFichier(fichier) {
             $('#section-restore').hide();
             setStatus('Restauration terminée — ' + res.fichier);
         } else {
-            $box.html(`<div class="result-err"><strong>Erreur :</strong> ${res.msg}</div>`);
+            $box.html(`<div class="result-err"><strong>Erreur :</strong> ${escHtml(res.msg)}</div>`);
             majBoutonsAvecPwd();
             setStatus('Erreur restauration : ' + res.msg);
         }
@@ -1042,7 +1046,7 @@ function executerSauvegardeTotale() {
             setStatus('Sauvegarde totale terminée — ' + res.fichier);
             chargerListeSauvegardesTotal();
         } else {
-            $box.html(`<div class="result-err"><strong>Erreur :</strong> ${res.msg}</div>`);
+            $box.html(`<div class="result-err"><strong>Erreur :</strong> ${escHtml(res.msg)}</div>`);
             majBoutonsAvecPwd();
             setStatus('Erreur sauvegarde totale : ' + res.msg);
         }
@@ -1094,7 +1098,7 @@ function executerSauvegardeTable(table) {
             setStatus('Sauvegarde table terminée — ' + res.fichier);
             chargerFichiersTableRestore();
         } else {
-            $box.html(`<div class="result-err"><strong>Erreur :</strong> ${res.msg}</div>`);
+            $box.html(`<div class="result-err"><strong>Erreur :</strong> ${escHtml(res.msg)}</div>`);
             setStatus('Erreur sauvegarde table : ' + res.msg);
         }
         $('#btn-save-table').prop('disabled', !pwdOk || !$('#select-save-table').val());
@@ -1184,7 +1188,7 @@ function restaurerTotal(fichier) {
             $('#section-full-restore').hide();
             setStatus('Restauration totale terminée — ' + res.fichier);
         } else {
-            $box.html(`<div class="result-err"><strong>Erreur :</strong> ${res.msg}</div>`);
+            $box.html(`<div class="result-err"><strong>Erreur :</strong> ${escHtml(res.msg)}</div>`);
             majBoutonsAvecPwd();
             setStatus('Erreur restauration totale : ' + res.msg);
         }
@@ -1299,7 +1303,7 @@ $('#btn-restaurer-table').on('click', function () {
                     setStatus('✅ Restauration de « ' + res.table + ' » terminée.');
                     nijacToast('Table « ' + res.table + ' » restaurée avec succès.', 'success', 5000);
                 } else {
-                    $box.html('<div class="result-err"><strong>Erreur :</strong> ' + res.msg + '</div>');
+                    $box.html('<div class="result-err"><strong>Erreur :</strong> ' + escHtml(res.msg) + '</div>');
                     majTableRestoreMeta();
                     setStatus('Erreur restauration table : ' + res.msg);
                 }

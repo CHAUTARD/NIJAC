@@ -306,7 +306,7 @@ const MARQUEURS_EXEMPLE = {
         + '<tr style="background:#ffffff"><td>27/09/2026</td><td>16:00</td><td>R3F</td><td>TT EXEMPLE 3</td><td>CP EXEMPLE 4</td></tr>'
         + '</table>',
     '{NOM_CLUB}':           'ASSUN TT',
-    '{URL_DESIDERATA}':     <?= json_encode(site_url('desiderata-club') . '?club=09760136') ?>,
+    '{URL_DESIDERATA}':     <?= json_encode(site_url('desiderata-club') . '?club=' . tokenDesiderataClub('09760136')) ?>,
     '{URL_RESET_MDP}':      <?= json_encode(site_url('reinitialiser-mot-de-passe') . '?t=12-1893456000-abcdef') ?>
 };
 
