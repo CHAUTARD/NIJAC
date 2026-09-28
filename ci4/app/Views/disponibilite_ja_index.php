@@ -688,7 +688,7 @@ function sauvegarderDate(idComp, ouvrirPopupSiDispo, avant) {
         if (r.attention) nijacToast(r.attention, 'warning', 15000);
         if (ouvrirPopupSiDispo) ouvrirPopupNote(idComp);
     }, 'json').fail(function () {
-        toast('Erreur réseau — votre réponse n'a pas été enregistrée.', false);
+        toast('Erreur réseau — votre réponse n\'a pas été enregistrée.', false);
         annuler();
     });
 }
