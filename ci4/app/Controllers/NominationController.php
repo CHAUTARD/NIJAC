@@ -61,7 +61,7 @@ class NominationController extends BaseController
      * Vérifie que la rencontre $idRenc appartient à un club dont le
      * département fait partie de $deptsAutorises — mêmes règles que
      * journees()/rencontresJournee(), appliquées ici aux actions d'écriture
-     * (affecterJa/retirerJa/validerNominations/envoyerConvocations), qui ne
+     * (affecterJa/retirerJa/envoyerConvocations), qui ne
      * filtraient auparavant que sur des paramètres non vides, sans jamais
      * vérifier le périmètre du nominateur appelant.
      */
@@ -135,7 +135,7 @@ class NominationController extends BaseController
         if (!$existant) {
             $pdo->prepare('
                 INSERT INTO nomination (Id_Rencontre, Id_Disponible, DateNomination, Valide, EmailEnvoye)
-                VALUES (?, ?, CURDATE(), 0, 0)
+                VALUES (?, ?, CURDATE(), 1, 0)
             ')->execute([$idRenc, $idDispo]);
 
             return;
@@ -143,7 +143,7 @@ class NominationController extends BaseController
 
         if ((int) $existant['Id_Disponible'] === $idDispo) {
             $pdo->prepare('
-                UPDATE nomination SET DateNomination = CURDATE(), Valide = 0, EmailEnvoye = 0
+                UPDATE nomination SET DateNomination = CURDATE(), Valide = 1, EmailEnvoye = 0
                 WHERE Id_Nomination = ?
             ')->execute([$existant['Id_Nomination']]);
 
@@ -152,7 +152,7 @@ class NominationController extends BaseController
 
         $pdo->prepare('
             UPDATE nomination SET
-                Id_Disponible = ?, DateNomination = CURDATE(), Valide = 0, EmailEnvoye = 0,
+                Id_Disponible = ?, DateNomination = CURDATE(), Valide = 1, EmailEnvoye = 0,
                 Peage = 0, Kilometre = 0, RapportAccueil = NULL, RapportEquipements = NULL, DateSaisie = NULL
             WHERE Id_Nomination = ?
         ')->execute([$idDispo, $existant['Id_Nomination']]);
@@ -440,37 +440,6 @@ class NominationController extends BaseController
             $pdo->prepare('DELETE FROM nomination WHERE Id_Rencontre = ?')->execute([$idRenc]);
 
             return $this->response->setJSON(['ok' => true]);
-        });
-    }
-
-    public function validerNominations(): ResponseInterface
-    {
-
-        return $this->tryJson(function () {
-            $journeeRaw = $this->request->getPost('journee');
-            $date       = trim($this->request->getPost('date') ?? '');
-            if ($journeeRaw === null || $journeeRaw === '' || $date === '') {
-                return $this->response->setJSON(['ok' => false, 'err' => 'Paramètres manquants']);
-            }
-            $journee = (int) $journeeRaw;
-
-            $deptsAutorises = $this->deptsAutorises();
-            if (!$deptsAutorises) {
-                return $this->response->setJSON(['ok' => true, 'affected' => 0]);
-            }
-            $deptPh = implode(',', array_fill(0, count($deptsAutorises), '?'));
-
-            $pdo  = getPDO();
-            $stmt = $pdo->prepare("
-                UPDATE nomination n
-                JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
-                JOIN equipe ed   ON ed.Id_Equipe    = r.Id_EquipeDom
-                SET n.Valide = 1
-                WHERE r.Journee = ? AND r.Date = ? AND SUBSTRING(ed.Id_Club, 3, 2) IN ($deptPh)
-            ");
-            $stmt->execute(array_merge([$journee, $date], $deptsAutorises));
-
-            return $this->response->setJSON(['ok' => true, 'affected' => $stmt->rowCount()]);
         });
     }
 

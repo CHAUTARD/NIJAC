@@ -193,7 +193,6 @@ $routes->get('nomination/rencontres-journee', 'NominationController::rencontresJ
 $routes->get('nomination/candidats-journee', 'NominationController::candidatsJournee', ['filter' => 'auth']);
 $routes->post('nomination/affecter-ja', 'NominationController::affecterJa', ['filter' => 'auth']);
 $routes->post('nomination/retirer-ja', 'NominationController::retirerJa', ['filter' => 'auth']);
-$routes->post('nomination/valider', 'NominationController::validerNominations', ['filter' => 'auth']);
 $routes->post('nomination/envoyer-convocations', 'NominationController::envoyerConvocations', ['filter' => 'auth']);
 $routes->get('nomination/message-arbitre-club', 'NominationController::messageArbitreClub', ['filter' => 'auth']);
 $routes->post('nomination/demander-ja-club', 'NominationController::demanderJaClub', ['filter' => 'auth']);

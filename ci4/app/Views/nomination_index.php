@@ -91,14 +91,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 .btn-affecter { font-size:.8rem; padding:.25rem .7rem; }
 
 #barre-actions { background:#fff; border-top:2px solid #dee2e6; padding:.65rem 1.25rem; display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; flex-shrink:0; }
-#btn-valider { display:none; }
 #btn-envoyer { display:none; }
-
-/* ── Modale récapitulatif ── */
-#recapBody .recap-row { display:flex; align-items:center; gap:.5rem; padding:.3rem 0; border-bottom:1px solid #f0f0f0; font-size:.85rem; }
-#recapBody .recap-div { font-size:.68rem; font-weight:700; background:#1a3a6b; color:#fff; padding:.1rem .3rem; border-radius:3px; min-width:40px; text-align:center; }
-#recapBody .recap-equipes { flex:1; }
-#recapBody .recap-ja { color:#2e7d32; font-weight:600; }
 
 /* ── Modale liens ── */
 #liensBody .lien-row { padding:.4rem 0; border-bottom:1px solid #eee; font-size:.83rem; }
@@ -241,32 +234,10 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 
 <!-- Barre d'actions -->
 <div id="barre-actions">
-    <button id="btn-valider" class="btn btn-success btn-sm">
-        <i class="bi bi-check-circle-fill me-1"></i>Valider les nominations
-    </button>
     <button id="btn-envoyer" class="btn btn-primary btn-sm">
         <i class="bi bi-envelope-fill me-1"></i>Envoyer les convocations
     </button>
     <span id="msg-actions" class="ms-auto text-muted" style="font-size:.82rem"></span>
-</div>
-
-<!-- Modale récapitulatif -->
-<div class="modal fade" id="modalRecap" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-success text-white py-2">
-                <h5 class="modal-title fs-6"><i class="bi bi-list-check me-2"></i>Récapitulatif des nominations</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body py-2" id="recapBody"></div>
-            <div class="modal-footer py-2">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fermer</button>
-                <button type="button" class="btn btn-success btn-sm" id="btn-valider-modal">
-                    <i class="bi bi-check-circle-fill me-1"></i>Confirmer la validation
-                </button>
-            </div>
-        </div>
-    </div>
 </div>
 
 <!-- Modale liens d'envoi -->
@@ -365,8 +336,6 @@ $(function () {
         chargerRencontres();
     });
 
-    $('#btn-valider').on('click', afficherRecap);
-    $('#btn-valider-modal').on('click', validerNominations);
     $('#btn-envoyer').on('click', envoyerConvocations);
 });
 
@@ -878,9 +847,16 @@ function viderCandidats() {
 }
 
 // ── Affecter / Retirer ────────────────────────────────────────────────────────
-// Affecter/retirer un JA réinitialise Valide/EmailEnvoye côté serveur
-// (affecterNomination()/DELETE) — répercuté ici pour garder le badge et la
-// case à cocher de chaque rencontre cohérents sans recharger toute la page.
+// Affecter un JA valide directement la nomination (Valide = 1, côté serveur dans
+// affecterNomination()) ; retirer supprime la nomination — et donc sa validation
+// avec elle. Répercuté ici pour garder le badge et la case à cocher de chaque
+// rencontre cohérents sans recharger toute la page.
+function appliquerValidation(idRenc) {
+    const rc = rencontres.find(r => r.Id_Rencontre === idRenc);
+    if (rc) { rc.Valide = 1; rc.EmailEnvoye = 0; }
+    selectionEnvoi.add(idRenc);
+}
+
 function reinitialiserValidation(idRenc) {
     const rc = rencontres.find(r => r.Id_Rencontre === idRenc);
     if (rc) { rc.Valide = 0; rc.EmailEnvoye = 0; }
@@ -894,7 +870,7 @@ function affecterJa(idRenc, idJa, nom, prenom) {
     }).done(function (r) {
         if (!r.ok) { nijacToast('Erreur : ' + r.err, 'danger'); return; }
         nominations[idRenc] = { Id_JA: idJa, Nom: nom, Prenom: prenom };
-        reinitialiserValidation(idRenc);
+        appliquerValidation(idRenc);
 
         renderRencontres();
         mettreAJourBoutons();
@@ -929,35 +905,23 @@ function retirerJaAvecConfirmation(idRenc) {
     const jaNom   = `${nom.Prenom} ${nom.Nom}`.trim();
     nijacConfirm(`Retirer la nomination de ${jaNom} pour ${libelle} ?`, function () {
         retirerJa(idRenc);
-        if (bootstrap.Modal.getInstance('#modalRecap')) afficherRecap();
     }, null, { type: 'danger', title: 'Retirer la nomination', confirmLabel: 'Retirer' });
 }
 
-$(document).on('click', '.recap-btn-retirer', function (e) {
-    e.stopPropagation();
-    retirerJaAvecConfirmation(parseInt($(this).data('renc')));
-});
-
 // ── Mise à jour UI ────────────────────────────────────────────────────────────
-// R3M/R4M en arbitrage club sans nomination : pas de JA CRA à attribuer, ne bloque ni la validation ni l'envoi.
+// R3M/R4M en arbitrage club sans nomination : pas de JA CRA à attribuer.
 const estArbClubSansJa = rc => !nominations[rc.Id_Rencontre]
     && rc.SouhaitJADom === 'Club' && ['R3M', 'R4M'].includes(rc.DivisionCode || '');
 
 function mettreAJourBoutons() {
     const total    = rencontres.length;
     const attrib   = Object.keys(nominations).length;
-    const toutFait = (attrib > 0 && attrib + rencontres.filter(estArbClubSansJa).length === total);
     const validees = rencontres.filter(rc => rc.Valide == 1).length;
 
-    // Valider visible quand tout est attribué (y compris pour re-valider après une modification)
-    $('#btn-valider').toggle(toutFait);
-    // Envoyer visible dès qu'au moins une nomination est validée — persiste au
-    // rechargement de la page, pas seulement juste après avoir cliqué Valider
+    // Envoyer visible dès qu'au moins une nomination est validée — persiste au rechargement de la page
     $('#btn-envoyer').toggle(validees > 0).prop('disabled', selectionEnvoi.size === 0);
 
-    if (toutFait) {
-        $('#msg-actions').text('Toutes les rencontres sont attribuées — vous pouvez valider.');
-    } else if (attrib > 0) {
+    if (attrib > 0) {
         $('#msg-actions').text(`${attrib} / ${total} rencontre${attrib > 1 ? 's' : ''} attribuée${attrib > 1 ? 's' : ''}.`);
     } else {
         $('#msg-actions').text('');
@@ -982,52 +946,6 @@ function mettreAJourInfoJournee() {
     // Le tri n'a d'intérêt que s'il reste des rencontres non attribuées sur la journée.
     $('#btn-tri-priorite').toggle(attrib < total);
     $('#info-journee').css('display', 'flex');
-}
-
-// ── Récapitulatif ─────────────────────────────────────────────────────────────
-function afficherRecap() {
-    const $body = $('#recapBody').empty();
-    rencontres.forEach(rc => {
-        const nom = nominations[rc.Id_Rencontre];
-        $body.append(`
-            <div class="recap-row">
-                <span class="recap-div">${escHtml(rc.DivisionCode || '')}</span>
-                <span class="recap-equipes">${escHtml(rc.NomDom)} vs ${escHtml(rc.NomExt || '?')}</span>
-                ${nom
-                    ? `<span class="recap-ja"><i class="bi bi-person-check me-1"></i>${escHtml((nom.Prenom + ' ' + nom.Nom).trim())}</span>
-                       <button class="btn btn-sm btn-outline-danger recap-btn-retirer ms-auto" data-renc="${rc.Id_Rencontre}" title="Retirer cette nomination"><i class="bi bi-trash"></i></button>`
-                    : estArbClubSansJa(rc)
-                        ? `<span class="text-muted ms-auto">Arbitrage club</span>`
-                        : `<span class="text-danger ms-auto"><i class="bi bi-x-circle me-1"></i>Non attribué</span>`
-                }
-            </div>
-        `);
-    });
-    new bootstrap.Modal('#modalRecap').show();
-}
-
-// ── Validation ────────────────────────────────────────────────────────────────
-function validerNominations() {
-    bootstrap.Modal.getInstance('#modalRecap')?.hide();
-    ajax('valider', {
-        method: 'POST',
-        data: {
-            journee: journeeCourante.Journee,
-            date:    journeeCourante.Date
-        }
-    }).done(function (r) {
-        if (!r.ok) { nijacToast('Erreur : ' + r.err, 'danger'); return; }
-        rencontres.forEach(rc => {
-            if (nominations[rc.Id_Rencontre]) {
-                rc.Valide      = 1;
-                rc.EmailEnvoye = 0;
-                selectionEnvoi.add(rc.Id_Rencontre);
-            }
-        });
-        renderRencontres();
-        mettreAJourBoutons();
-        $('#msg-actions').html('<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Nominations validées — sélectionnez les convocations à envoyer ci-contre.</span>');
-    });
 }
 
 // ── Envoi des convocations ────────────────────────────────────────────────────

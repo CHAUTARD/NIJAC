@@ -365,7 +365,7 @@ Affecter les JA disponibles aux rencontres de la saison en appliquant les règle
 - Liste des rencontres de la journée avec statut de nomination
 - Bouton **Tri** : ordre de la liste des rencontres, basculable entre **club recevant** (défaut : ordre alphabétique du nom du club recevant, toutes ses rencontres à la suite sous un en-tête de groupe « nom du club — n rencontres », puis division au sein du club ; pas d'en-têtes avec « Non attribuées d'abord ») et **division** (ordre historique : `division.Ord`, poule). Tri fait côté client sur `NomClubDom` / `IdClubDom` / `DivisionOrd` renvoyés par `rencontres_journee` ; choix mémorisé dans le navigateur (`localStorage`) ; le bouton « Non attribuées d'abord » se superpose à cet ordre (tri stable)
 - Pour chaque rencontre : liste des JA candidats triés par priorité
-- Boutons : Affecter, Retirer, Valider, Envoyer convocations
+- Boutons : Affecter, Retirer, Envoyer convocations
 
 ### Actions AJAX
 | Action | Méthode | Description |
@@ -373,9 +373,8 @@ Affecter les JA disponibles aux rencontres de la saison en appliquant les règle
 | `journees` | GET | Retourne les journées disponibles pour le département |
 | `rencontres_journee` | GET | Retourne les rencontres d'une journée avec nominations |
 | `candidats_journee` | GET | Retourne les JA candidats de la journée : JA actifs disponibles (journée ou rencontre) rattachés à un département du nominateur — soit par le domicile (`LEFT(Cp,2)`), soit par `ja.CodeDept` — **ou** JA d'un autre département ayant coché « accepte d'arbitrer dans un département voisin » (`ja.ArbitreAutresDepts = 1` et un département du nominateur présent dans `ja.DeptsArbitrage`, testé par `FIND_IN_SET`) — voir EN22/EN11. Chaque ligne porte `HorsDept` (0/1) et `CodeDept` ; côté client, un filtre **« Autres dépts »** génère une case par département distinct des candidats `HorsDept = 1` (dépt = `LEFT(Cp,2)` sinon `CodeDept`) — un tel JA n'est affiché que si la case de son département est cochée (toutes décochées par défaut), boutons Tout cocher / Inverser visibles à partir de 2 départements, badge « Autre dépt ». Tri final côté client. |
-| `affecter_ja` | POST | Nomme un JA sur une rencontre |
-| `retirer_ja` | POST | Retire la nomination d'un JA (`DELETE FROM nomination WHERE Id_Rencontre = ?`) |
-| `valider_nominations` | POST | Valide les nominations de la journée (`Valide = 1`) |
+| `affecter_ja` | POST | Nomme un JA sur une rencontre et valide directement la nomination (`Valide = 1`) — plus d'étape de validation séparée |
+| `retirer_ja` | POST | Retire la nomination d'un JA, et sa validation avec elle (`DELETE FROM nomination WHERE Id_Rencontre = ?`) |
 | `envoyer_convocations` | POST | Envoie les emails de convocation aux JA validés |
 
 ### Modèle de données (`nomination` → `disponible`)
