@@ -273,8 +273,8 @@ function renderListe() {
             $('<td class="centre">').attr('data-field', 'arbitrage').text(libArbitrage(n)),
             $('<td>').attr('data-field', 'domicile').text(n.NomDom ?? ''),
             $('<td>').attr('data-field', 'exterieur').text(n.NomExt ?? '—'),
-            $('<td class="centre">').attr('data-field', 'licence').text(n.Id_JA),
-            $('<td>').attr('data-field', 'ja').text(n.NomJa ?? ''),
+            $('<td class="centre">').attr('data-field', 'licence').attr('title', n.Telephone || null).text(n.Id_JA),
+            $('<td>').attr('data-field', 'ja').attr('title', n.Telephone || null).text(n.NomJa ?? ''),
             $('<td>').attr('data-field', 'ebp').text(n.NumCompteEBP ?? ''),
             $('<td class="num">').attr('data-field', 'peage').toggleClass('non-saisi', !saisi)
                 .toggleClass('deja-compte', nonCompte('Peage', peageNon)).attr('title', nonCompte('Peage', peageNon) ? titreNonCompte : null)

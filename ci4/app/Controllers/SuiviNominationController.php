@@ -59,7 +59,7 @@ class SuiviNominationController extends BaseController
             $stmt = $pdo->prepare('
                 SELECT n.Id_Nomination, ja.Id_JA, r.Date, r.Heure, r.ArbitrageCRA,
                        ed.Division, dv.Color AS DivisionColor, ed.Nom AS NomDom, ee.Nom AS NomExt,
-                       CONCAT(ja.Prenom, \' \', ja.Nom) AS NomJa, ja.Email AS EmailJa, ja.NumCompteEBP,
+                       CONCAT(ja.Prenom, \' \', ja.Nom) AS NomJa, ja.Email AS EmailJa, ja.NumCompteEBP, ja.Telephone,
                        n.Peage, n.Kilometre, n.Defiscalisation, n.DateSaisie
                 FROM nomination n
                 JOIN disponible d  ON d.Id_Disponible = n.Id_Disponible
