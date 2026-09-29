@@ -640,14 +640,17 @@ Les actions `rencontres_journee` et `sauvegarder_dispo_journee` du fichier legac
 `RencontreAdminController` (CI4), routes `gestion-rencontres`, `gestion-rencontres/data`, `gestion-rencontres/doublons`, `gestion-rencontres/(:num)` (PUT/DELETE). Filtre `auth` (Nominateur ou Administrateur). Transféré du menu admin (ex-EA95) vers le menu nominateur (E003), même principe qu'EN27 (ex-EA80) et EN29 (ex-EA94) — toutes les fonctions sont restées identiques, seul l'accès a changé.
 
 ### Objectif
-Édition directe de la table `rencontre` (Date, Heure, Poule, Journee), sans repasser par les écrans d'import (EA82/EA83) ni un ré-import.
+Édition directe de la table `rencontre` (Date, Heure, Poule, Journee, Frais), sans repasser par les écrans d'import (EA82/EA83) ni un ré-import.
 
 ### Interface
-- Filtres : Département (clubs actifs + option combinée « 76 + 27 »), Division, Poule, Journée, Date, recherche Équipe (domicile ou extérieure).
+- Filtres : Département (clubs actifs + option combinée « 76 + 27 » ; combo large de 260 px, **présélectionné sur le département de l'utilisateur connecté** — 76 et 27 → « 76 + 27 », sinon « Tous » si absent de la liste), Division, Poule, Journée, Date, recherche Équipe (domicile ou extérieure).
 - Liste triée par **Phase, Journée, Poule** ; 1ʳᵉ colonne `Id_Rencontre` (triable) ; colonne **Arbitrage** (`CRA`/`Club` selon `rencontre.ArbitrageCRA`, triable).
-- Panneau d'édition : Date/Heure/Poule/Journée/Phase, équipes domicile/extérieure, salle, arbitrage obligatoire, commentaire ; libellé de l'affiche « Dom **vs** Ext ».
+- Panneau d'édition : Date/Heure/Poule/Journée/Phase, équipes domicile/extérieure, salle, arbitrage obligatoire, **Frais** (`Dom`/`Ext`), commentaire ; libellé de l'affiche « Dom **vs** Ext ».
 - Bouton « Doublons » : n'affiche que les rencontres en doublon d'affiche — `GROUP BY Id_EquipeDom, Id_EquipeExt, Phase HAVING COUNT(*)>1` (une affiche ne se joue qu'une fois par phase, quelles que soient la date/l'heure/la journée/la poule).
 - Suppression d'une rencontre (refusée si un JA y est déjà nommé — message renvoyant à EN14 — ou si des JA ont répondu à ses disponibilités).
+
+### Champ Frais
+`rencontre.Frais` : `ENUM('Dom','Ext') NOT NULL DEFAULT 'Dom'`, placé après `ArbitrageCRA` (avant `Commentaire`) ; indique quelle équipe supporte les frais du JA. Par défaut (et pour toute rencontre créée par les imports EA82/EA83, qui n'écrivent pas la colonne) : `Dom`, à la charge de l'équipe à domicile. Seul EN23 permet de passer une rencontre en `Ext` (`update()` : toute valeur autre que `Ext` est ramenée à `Dom`). Colonne créée de façon idempotente par `initTableConfiguration()` (ouvrir EA98 après déploiement).
 
 ### Saisie de l'heure (panneau d'édition)
 `<input type="time" step="60">` : n'importe quelle heure de **00:00 à 23:59** (au clavier ou via le sélecteur natif du navigateur). Les boutons **–** / **+** encadrant le champ décalent de **15 minutes**, bornés à `[00:00, 23:59]` (pas de bascule à minuit). Le contrôleur accepte tout `HH:MM` (regex `^\d{2}:\d{2}(:\d{2})?$`, complété en `:00`).
@@ -665,7 +668,7 @@ Si `update()` change `Date` ou `Heure` sur une rencontre qui porte déjà une no
 Édition directe de la table `equipe` (Nom, Division, Club), sans passer par les écrans d'import. Distinct d'EA92 (Chargement équipe régionale), qui édite les champs de désidératas (ReEngagement, JourSouhaite, ArbitrageCRA...) d'équipes déjà importées mais laisse Nom/Division/Club en lecture seule.
 
 ### Interface
-- Filtres Club, Division, Nom.
+- Filtres Département (même combo qu'EN23 : option « 76 + 27 », 260 px, présélectionné sur le département de l'utilisateur connecté au premier chargement), Club, Division, Nom.
 - Liste + panneau d'édition : Nom, Division, Club (jusqu'à 3 clubs pour une équipe « entente » — Id_Club/Id_Club2/Id_Club3), Réengagement, Jour souhaité, Souhait JA, Saison désidérata.
 - **Souhait JA** affiché uniquement pour les divisions **R3M et R4M** (champ masqué et valeur forcée à « CRA » sinon).
 - Bouton **Supprimer** (confirmation `nijacConfirm` danger ; refusé avec message clair si des rencontres référencent l'équipe — FK `rencontre` en `ON DELETE RESTRICT`, message renvoyant à EN23).
@@ -683,7 +686,7 @@ Si le Souhait JA change à l'enregistrement, `rencontre.ArbitrageCRA` est resync
 Une équipe forfait ou désistée pour le reste de la saison est remplacée par une autre équipe sur toutes ses rencontres restantes, sans repasser par un ré-import (EA82/EA83) et sans éditer manuellement chaque rencontre en EN23.
 
 ### Écran
-- **Gauche** : mêmes informations et filtres que EN23 — tableau de **toutes** les rencontres (Date, Heure, Poule, Journée, Division, Domicile, Extérieur), filtres Département/Division/Poule/Journée/Date + recherche libre Équipe, plus une colonne **JA** (« Oui »/« Non ») indiquant si une nomination existe déjà sur la rencontre. Cliquer sur le nom d'une équipe (Domicile ou Extérieur) la désigne comme **équipe à remplacer** (et filtre au passage le tableau sur son nom, comme le clic sur une équipe en EN23).
+- **Gauche** : mêmes informations et filtres que EN23 — tableau de **toutes** les rencontres (Date, Heure, Poule, Journée, Division, Domicile, Extérieur), filtres Département (même combo qu'EN23 : « 76 + 27 », présélectionné sur le département de l'utilisateur connecté)/Division/Poule/Journée/Date + recherche libre Équipe, plus une colonne **JA** (« Oui »/« Non ») indiquant si une nomination existe déjà sur la rencontre. Cliquer sur le nom d'une équipe (Domicile ou Extérieur) la désigne comme **équipe à remplacer** (et filtre au passage le tableau sur son nom, comme le clic sur une équipe en EN23).
 - **Droite** : une fois une équipe désignée à gauche, un champ de recherche libre (nom d'équipe ou de club) permet de choisir l'**équipe de remplacement** parmi toutes les équipes de la base (résultats limités à 15, pas de restriction de division — le nominateur reste libre du choix). Un bouton **Confirmer le remplacement** déclenche l'opération sur les rencontres **affichées** dans le tableau au moment du clic (celles de l'équipe désignée, réduites par les filtres Département/Division/Poule/Journée/Date/Équipe éventuellement actifs) — pas forcément toute la saison de l'équipe : le nominateur peut ainsi ne remplacer qu'une partie des rencontres (ex. une seule journée) en filtrant avant de confirmer.
 
 ### Séquence de confirmation (aucune écriture en base avant la dernière étape)
@@ -731,6 +734,8 @@ Les valeurs de péage et de kilomètres saisies mais **non comptées** sont gris
 
 ### Objectif
 Importer et gérer la liste des clubs affiliés à la ligue Normandie.
+
+Le filtre Département (JS) propose l'option « 76 + 27 » (`deptFiltre` accepte plusieurs codes séparés par `+`) et est présélectionné sur le département de l'utilisateur connecté ; même comportement sur ES31 (`club_csr_index.php`).
 
 ### Champs d'un club
 | Champ | Type | Obligatoire |
@@ -1307,6 +1312,7 @@ Définir les divisions sportives et leur niveau hiérarchique, utilisés pour cl
 - Conséquences : renommer un code division propage aux équipes ; supprimer une division encore référencée par une équipe est bloqué en base (le contrôle applicatif `$divsValides` des écrans d'import reste en place).
 - Les contraintes sont (re)créées de façon idempotente par `initTableConfiguration()` (config/app_config.php), appelée à l'ouverture d'EA98.
 - `rencontre` n'a pas de colonne `Division` : le lien passe par `rencontre.Id_EquipeDom → equipe.Division → division.Division`.
+- `rencontre.Frais` (`ENUM('Dom','Ext')`, défaut `Dom`, après `ArbitrageCRA`) : équipe supportant les frais du JA, édité dans EN23.
 - `rencontre` porte aussi une clé `UNIQUE uq_rencontre_affiche (Id_EquipeDom, Id_EquipeExt, Phase)` (posée par `initTableConfiguration()`) : anti-doublon d'affiche pour les imports EA82/EA83, c'est l'invariant qu'utilise déjà le bouton « Doublons » d'EN23. `Id_EquipeExt` NULL (exempt / bye) : MySQL autorise plusieurs NULL dans un index UNIQUE, aucune collision.
 
 ---
