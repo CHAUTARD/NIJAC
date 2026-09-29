@@ -182,6 +182,7 @@
         #menu-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
+            grid-auto-flow: dense;
             gap: 16px;
             padding: 16px 24px 24px;
             flex: 1;
@@ -249,6 +250,7 @@
         .btn-r34           { background-color: #fbe9e7; }
         .btn-correspondant { background-color: #fff8e1; }
         .btn-club          { background-color: #ede7f6; }
+        .btn-gestion-equipes { background-color: #dcedc8; }
         .btn-remplacement  { background-color: #fff3e0; }
         /* Bouton documentation : fond hachuré pour le distinguer des écrans */
         .btn-doc {
@@ -259,6 +261,9 @@
         }
         /* Bouton documentation : dernière colonne de la grille, sans code écran */
         #menu-grid .menu-btn-wrap.mbw-doc { grid-column: -2 / -1; }
+        /* Bouton déconnexion : 1re colonne, sur la même (dernière) ligne que Documentation
+           (grid-auto-flow: dense rebouche la case libre plutôt que d'ouvrir une nouvelle ligne) */
+        #menu-grid .menu-btn-wrap.mbw-logout { grid-column: 1; }
 
         /* Code écran en haut à droite de chaque bouton */
         .menu-btn { position: relative; }
@@ -290,22 +295,12 @@
         }
         .menu-btn-wrap { position: relative; }
 
-        #zone-deconnexion {
-            padding: 0 24px 24px;
-            display: flex;
-            justify-content: center;
-        }
-        #zone-deconnexion .menu-btn {
-            max-width: 260px;
-            width: 100%;
-        }
-
         .dc-clickable:focus-visible { outline: 3px solid #6a1b9a; outline-offset: 2px; }
 
         /* Écrans moyens / petits : la grille passe de 5 à 3, 2 puis 1 colonne */
         @media (max-width: 1199.98px) {
             .dash-cards, #menu-grid { grid-template-columns: repeat(3, 1fr); }
-            #menu-grid .menu-btn-wrap.mbw-doc { grid-column: auto; }
+            #menu-grid .menu-btn-wrap.mbw-doc, #menu-grid .menu-btn-wrap.mbw-logout { grid-column: auto; }
         }
         @media (max-width: 767.98px) {
             .dash-cards, #menu-grid { grid-template-columns: repeat(2, 1fr); }
@@ -451,11 +446,20 @@
     </div>
 
     <div class="menu-btn-wrap">
-        <a href="<?= site_url('rencontres-date') ?>" class="menu-btn btn-r34">
+        <a href="<?= site_url('gestion-rencontres') ?>" class="menu-btn btn-r34">
             <span class="btn-code">EN23</span>
-            <div class="btn-icon"><img src="<?= base_url('img/CalendarHour.webp') ?>" alt="Date des rencontres"></div>
-            <span>Date des rencontres</span>
-            <span class="btn-desc">Modifier la date et l'heure d'une rencontre</span>
+            <div class="btn-icon"><img src="<?= base_url('img/CalendarHour.webp') ?>" alt="Gestion des rencontres"></div>
+            <span>Gestion des rencontres</span>
+            <span class="btn-desc">Modifier date, heure, poule, journée, ou supprimer une rencontre</span>
+        </a>
+    </div>
+
+    <div class="menu-btn-wrap">
+        <a href="<?= site_url('gestion-equipes') ?>" class="menu-btn btn-gestion-equipes">
+            <span class="btn-code">EN29</span>
+            <div class="btn-icon"><img src="<?= base_url('img/GestEquipe.webp') ?>" alt="Gestion des équipes"></div>
+            <span>Gestion des équipes</span>
+            <span class="btn-desc">Filtrer et modifier les équipes (club, division, nom)</span>
         </a>
     </div>
 
@@ -485,16 +489,14 @@
         </a>
     </div>
 
+    <div class="menu-btn-wrap mbw-logout">
+        <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;">
+            <div class="btn-icon"><img src="<?= base_url('img/Quitter.webp') ?>" alt="Se déconnecter"></div>
+            <span style="color:#842029;">Se déconnecter</span>
+            <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
+        </a>
+    </div>
 
-</div>
-
-<!-- Déconnexion : ligne à part, centrée -->
-<div id="zone-deconnexion">
-    <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;">
-        <div class="btn-icon"><img src="<?= base_url('img/Quitter.webp') ?>" alt="Se déconnecter"></div>
-        <span style="color:#842029;">Se déconnecter</span>
-        <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
-    </a>
 </div>
 
 <!-- Modale détail « Convocations à envoyer » -->

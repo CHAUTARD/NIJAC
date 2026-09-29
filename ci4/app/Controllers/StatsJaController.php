@@ -313,7 +313,7 @@ class StatsJaController extends BaseController
      * CodePostal/Cp que le reste de l'appli. `journees` liste les numéros de
      * journée trouvés (triés), une ligne (courbe) par journée côté graphe.
      * "Obligatoire" effectif calculé à la volée : `rencontre.ArbitrageCRAForce=1`
-     * fait foi en premier (forçage ponctuel manuel, EA95), sinon `equipe.ArbitrageCRA=1`
+     * fait foi en premier (forçage ponctuel manuel, EN23), sinon `equipe.ArbitrageCRA=1`
      * (pertinent seulement pour R3M/R4M — NOT NULL, initialisé depuis
      * `division.ArbitrageCRA` à la création de l'équipe), sinon une nomination Valide
      * déjà posée sur cette rencontre précise (JA nommé par le nominateur ou via EN25,
@@ -372,9 +372,9 @@ class StatsJaController extends BaseController
             // de désigner l'un de ses JA, sans passer par une nomination NIJAC.
             // "Obligatoire" effectif : rencontre.ArbitrageCRA fait foi directement — photo de
             // equipe.ArbitrageCRA prise à la création (import) et resynchronisée uniquement sur
-            // les rencontres à venir à chaque changement de souhait (EN18/ES33/EA92/EA94), pour
+            // les rencontres à venir à chaque changement de souhait (EN18/ES33/EA92/EN29), pour
             // ne jamais réécrire l'historique d'une rencontre déjà jouée ; un forçage ponctuel
-            // EA95 (ArbitrageCRAForce=1) fige la valeur et la protège de ces resynchronisations.
+            // EN23 (ArbitrageCRAForce=1) fige la valeur et la protège de ces resynchronisations.
             // Seule exception vivante : une nomination Valide déjà posée compte toujours comme
             // obligatoire, même sur une rencontre restée à 0 (JA nommé malgré tout).
             $stmtR = $pdo->prepare("

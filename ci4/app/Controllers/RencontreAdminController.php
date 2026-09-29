@@ -5,15 +5,17 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Gestion des rencontres (EA95) : édition directe de la table
+ * NIJAC – Gestion des rencontres (EN23) : édition directe de la table
  * `rencontre` (Date, Heure, Poule, Journee), avec filtres Équipe domicile,
  * Équipe extérieure, Poule, Journée, Date. Distinct des écrans d'import
  * (EA82/EA83), qui créent les rencontres — celui-ci corrige un enregistrement
  * déjà en base sans repasser par un import.
  *
- * Admin uniquement (filtre "adminauth"). Pas de Model : jointures equipe/
- * division pour l'affichage, réutilise getPDO() directement comme le reste de
- * cette famille d'écrans (EquipeAdminController, EquipeRegionaleController...).
+ * Nominateur ou Administrateur (filtre "auth") — écran transféré du menu admin
+ * (ex-EA95) vers le menu nominateur, même principe qu'EN27 (ex-EA80). Pas de
+ * Model : jointures equipe/division pour l'affichage, réutilise getPDO()
+ * directement comme le reste de cette famille d'écrans (EquipeAdminController,
+ * EquipeRegionaleController...).
  */
 class RencontreAdminController extends BaseController
 {
@@ -53,25 +55,13 @@ class RencontreAdminController extends BaseController
         return view('rencontre_admin_index', $data);
     }
 
-    /** Tri de la liste — EA95 (défaut) : Phase/Journée/Poule ; surchargé par EN23 (Date/Heure). */
-    protected function ordreListe(): string
-    {
-        return 'r.Phase, r.Journee, r.Poule';
-    }
-
-    /** Joindre les catalogues équipes/salles au JSON de data() (formulaire complet d'EA95 uniquement). */
-    protected function avecCatalogues(): bool
-    {
-        return true;
-    }
-
     public function data(): ResponseInterface
     {
         return $this->tryJson(function () {
             $rows = getPDO()->query(
                 'SELECT r.Id_Rencontre, r.Date, r.Heure, r.Poule, r.Journee, r.Phase,
                         r.Id_EquipeDom, r.Id_EquipeExt, r.id_Salle, r.Commentaire,
-                        r.ArbitrageCRA,
+                        r.ArbitrageCRA, r.Frais,
                         CASE WHEN r.ArbitrageCRA = 1 THEN 1
                              WHEN EXISTS (SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1) THEN 1
                              ELSE 0 END AS ArbitrageObligatoire,
@@ -85,12 +75,8 @@ class RencontreAdminController extends BaseController
                  LEFT JOIN Club ce ON ce.Id_Club = ev.Id_Club
                  LEFT JOIN division dv ON dv.Division = ed.Division
                  LEFT JOIN salle s ON s.Id_Salle = r.id_Salle
-                 ORDER BY ' . $this->ordreListe()
+                 ORDER BY r.Phase, r.Journee, r.Poule'
             )->fetchAll();
-
-            if (!$this->avecCatalogues()) {
-                return $this->response->setJSON(['ok' => true, 'rencontres' => $rows]);
-            }
 
             // Catalogues pour le formulaire d'édition : équipe domicile/extérieure
             // (recherche par nom) et salles du club domicile sélectionné.
@@ -147,6 +133,7 @@ class RencontreAdminController extends BaseController
             $idSalleRaw  = trim((string) ($input['id_salle'] ?? ''));
             $idSalle     = $idSalleRaw === '' ? null : (int) $idSalleRaw;
             $arbitrageCra = !empty($input['arbitrage_obligatoire']) ? 1 : 0;
+            $frais       = ($input['frais'] ?? 'Dom') === 'Ext' ? 'Ext' : 'Dom';
             $commentaire = trim($input['commentaire'] ?? '') ?: null;
 
             if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
@@ -182,21 +169,39 @@ class RencontreAdminController extends BaseController
                 }
             }
 
+            // État actuel + éventuelle nomination : sert à la fois au « introuvable » et à l'avertissement
+            // (un JA déjà nommé n'est pas prévenu automatiquement d'un changement de date/heure).
+            $avant = $pdo->prepare('
+                SELECT r.Date, r.Heure, n.Id_Nomination, n.EmailEnvoye,
+                       CONCAT(ja.Prenom, " ", ja.Nom) AS NomJa
+                FROM rencontre r
+                LEFT JOIN nomination n ON n.Id_Rencontre  = r.Id_Rencontre
+                LEFT JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                LEFT JOIN ja           ON ja.Id_JA        = d.Id_JA
+                WHERE r.Id_Rencontre = ?
+            ');
+            $avant->execute([$idRencontre]);
+            $etatAvant = $avant->fetch();
+            if (!$etatAvant) {
+                return $this->response->setJSON(['ok' => false, 'msg' => "Rencontre $idRencontre introuvable."]);
+            }
+            $dateHeureChangee = substr((string) $etatAvant['Date'], 0, 10) !== $date
+                || substr((string) $etatAvant['Heure'], 0, 8) !== $heure;
+
             $stmt = $pdo->prepare(
-                'UPDATE rencontre SET Date=?, Heure=?, Poule=?, Journee=?, Phase=?, Id_EquipeDom=?, Id_EquipeExt=?, id_Salle=?, ArbitrageCRA=?, Commentaire=?
+                'UPDATE rencontre SET Date=?, Heure=?, Poule=?, Journee=?, Phase=?, Id_EquipeDom=?, Id_EquipeExt=?, id_Salle=?, ArbitrageCRA=?, Frais=?, Commentaire=?
                  WHERE Id_Rencontre=?'
             );
-            $stmt->execute([$date, $heure, $poule, $journee, $phase, $idEquipeDom, $idEquipeExt, $idSalle, $arbitrageCra, $commentaire, $idRencontre]);
+            $stmt->execute([$date, $heure, $poule, $journee, $phase, $idEquipeDom, $idEquipeExt, $idSalle, $arbitrageCra, $frais, $commentaire, $idRencontre]);
 
-            if ($stmt->rowCount() === 0) {
-                $chk = $pdo->prepare('SELECT COUNT(*) FROM rencontre WHERE Id_Rencontre = ?');
-                $chk->execute([$idRencontre]);
-                if ((int) $chk->fetchColumn() === 0) {
-                    return $this->response->setJSON(['ok' => false, 'msg' => "Rencontre $idRencontre introuvable."]);
-                }
+            $avertissement = '';
+            if ($dateHeureChangee && $etatAvant['Id_Nomination']) {
+                $avertissement = 'Un JA est déjà nommé sur cette rencontre (' . htmlspecialchars($etatAvant['NomJa'] ?? '') . ')'
+                    . ($etatAvant['EmailEnvoye'] ? ' et sa convocation a déjà été envoyée' : '')
+                    . ' : vérifiez sa disponibilité à la nouvelle date/heure et prévenez-le (ou refaites la nomination dans EN14).';
             }
 
-            return $this->response->setJSON(['ok' => true, 'msg' => 'Rencontre mise à jour.']);
+            return $this->response->setJSON(['ok' => true, 'msg' => 'Rencontre mise à jour.', 'avertissement' => $avertissement]);
         });
     }
 

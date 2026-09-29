@@ -186,11 +186,15 @@
     ?>
     <span class="combo-field">
         <label for="sel-dept">Département</label>
-        <select id="sel-dept">
+        <?php // Sélection par défaut : département de l'utilisateur connecté (76 et 27 → « 76 + 27 ») ?>
+        <?php $deptDefaut = in_array((string) $departement, ['76', '27'], true) ? '76+27' : (string) $departement; ?>
+        <select id="sel-dept" style="width:260px;">
             <option value="">Tous les départements</option>
             <optgroup label="Région">
+            <option value="76+27"<?= $deptDefaut === '76+27' ? ' selected' : '' ?>>76 + 27 — Seine-Maritime + Eure</option>
             <?php foreach ($deptActifs as $d): ?>
-            <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
+            <?php if (in_array((string) $d['CodeDept'], ['76', '27'], true)) continue; // fusionnés dans « 76 + 27 » ?>
+            <option value="<?= esc($d['CodeDept']) ?>"<?= (string) $d['CodeDept'] === $deptDefaut ? ' selected' : '' ?>><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
             <?php endforeach; ?>
             </optgroup>
             <optgroup label="Autres départements">
@@ -440,7 +444,7 @@ function deptDeClub(idClub) {
 let lignes           = [];
 const sortState      = { col: 'id_club', asc: true };
 let searchTerm       = '';
-let deptFiltre       = '';   // filtré côté JS
+let deptFiltre       = $('#sel-dept').val() || '';   // département de l'utilisateur présélectionné côté PHP
 let filtreMultiSalle = false;
 let filtreEnRegion = true; // true = En région uniquement (par défaut), false = Tous
 
@@ -460,7 +464,7 @@ function escHtml(s) {
 function lignesFiltreesTriees() {
     const term = searchTerm.toLowerCase();
     let result = [...lignes];
-    if (deptFiltre)      result = result.filter(l => deptDeClub(l.id_club) === deptFiltre);
+    if (deptFiltre)      result = result.filter(l => deptFiltre.split('+').includes(deptDeClub(l.id_club)));
     if (filtreMultiSalle) result = result.filter(l => (l.nb_salles ?? 0) > 1);
     if (filtreEnRegion) result = result.filter(l => DEPTS_REGION.has(deptDeClub(l.id_club)));
     if (term) result = result.filter(l =>

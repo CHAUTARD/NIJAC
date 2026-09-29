@@ -1,24 +1,26 @@
 <?php
 // --------------------------------------------------------------------
-// NIJAC – Gestion des équipes (EA94) : édition directe de la table `equipe` (Nom, Division, Club) avec filtres Club/Division/Nom, sans
-// passer par les écrans d'import. Distinct d'EA92 (Équipes régionales), qui édite les champs de désidératas (ReEngagement, JourSouhaite, ArbitrageCRA...) 
+// NIJAC – Gestion des équipes (EN29) : édition directe de la table `equipe` (Nom, Division, Club) avec filtres Club/Division/Nom, sans
+// passer par les écrans d'import. Distinct d'EA92 (Équipes régionales), qui édite les champs de désidératas (ReEngagement, JourSouhaite, ArbitrageCRA...)
 // d'équipes déjà importées mais laisse Nom/Division/Club en lecture seule.
-// -------------------------------------------------------------------- 
+// --------------------------------------------------------------------
 
 namespace App\Controllers;
 
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Gestion des équipes (EA94) : édition directe de la table `equipe`
+ * NIJAC – Gestion des équipes (EN29) : édition directe de la table `equipe`
  * (Nom, Division, Club) avec filtres Club/Division/Nom, sans passer par les
  * écrans d'import. Distinct d'EA92 (Équipes régionales), qui édite les champs
  * de désidératas (ReEngagement, JourSouhaite, ArbitrageCRA...) d'équipes déjà
  * importées mais laisse Nom/Division/Club en lecture seule.
  *
- * Admin uniquement (filtre "adminauth"). Pas de Model : jointure club pour
- * l'affichage, réutilise getPDO() directement comme le reste de cette famille
- * d'écrans (EquipeRegionaleController, ClubController...).
+ * Nominateur ou Administrateur (filtre "auth") — écran transféré du menu admin
+ * (ex-EA94) vers le menu nominateur, même principe qu'EN27 (ex-EA80) et EN23
+ * (ex-EA95). Pas de Model : jointure club pour l'affichage, réutilise getPDO()
+ * directement comme le reste de cette famille d'écrans (EquipeRegionaleController,
+ * ClubController...).
  */
 class EquipeAdminController extends BaseController
 {
@@ -294,7 +296,7 @@ class EquipeAdminController extends BaseController
             if ($nbRenc > 0) {
                 return $this->response->setJSON([
                     'ok'  => false,
-                    'msg' => "Suppression impossible : $nbRenc rencontre(s) référencent cette équipe. Supprimez-les d'abord (EA95).",
+                    'msg' => "Suppression impossible : $nbRenc rencontre(s) référencent cette équipe. Supprimez-les d'abord (EN23).",
                 ]);
             }
 

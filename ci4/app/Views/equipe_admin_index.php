@@ -4,16 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Gestion des équipes (EA94)</title>
+    <title>NIJAC – Gestion des équipes (EN29)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-liste-edit.css') ?>">
     <style>
+        /* En-tête vert, comme les autres écrans nominateur (E003) */
+        #page-header { background: #2e7d32; }
+
         #panel-liste { width: 65%; }
 
         /* Bandeau de filtres : comboboxes « label en encoche » (nijac.css .combo-field),
-           strip clair — même style qu'EA81 / EA92 / EA95. */
+           strip clair — même style qu'EA81 / EA92 / EN23. */
         #menu-strip {
             --strip-bg: #f8fafc;
             background: #f8fafc;
@@ -39,8 +42,9 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'people-fill', 'phTitle' => 'Gestion des équipes', 'phCode' => 'EA94',
-    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu') . '#tab-tables', 'phBackUrl' => site_url('admin-menu') . '#tab-tables',
+    'phIcon' => 'people-fill', 'phTitle' => 'Gestion des équipes', 'phCode' => 'EN29',
+    'phCrumbLabel' => 'Nominateur', 'phCrumbUrl' => site_url('nominateur-menu'), 'phBackUrl' => site_url('nominateur-menu'),
+    'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
 ]) ?>
 
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowPwdWarning' => false]) ?>
@@ -55,7 +59,7 @@
             <span style="flex:1"></span>
             <span class="combo-field">
                 <label for="sel-departement">Département</label>
-                <select id="sel-departement" style="width:auto;">
+                <select id="sel-departement" style="width:260px;">
                     <option value="">Tous</option>
                 </select>
             </span>
@@ -198,6 +202,8 @@ let departements = [];
 let currentId   = null;
 let editDivision = '';
 let departementFiltre = '';
+let deptInitialise = false;
+const DEPT_USER = <?= json_encode((string) $departement) ?>;
 let divisionFiltre   = '';
 let searchTerm        = '';
 const sortState = { col: null, asc: true };
@@ -228,7 +234,7 @@ function setStatus(msg, ok = true) {
 function equipesFiltrees() {
     const term = searchTerm.toLowerCase();
     return equipes.filter(e => {
-        if (departementFiltre && e.Departement !== departementFiltre) return false;
+        if (departementFiltre && !departementFiltre.split('+').includes(e.Departement)) return false;
         if (divisionFiltre && e.Division !== divisionFiltre) return false;
         if (term
             && !String(e.Nom ?? '').toLowerCase().includes(term)
@@ -259,8 +265,19 @@ function peuplerFiltres() {
     const $selDept = $('#sel-departement');
     const valDept   = $selDept.val();
     $selDept.find('option:not(:first)').remove();
-    departements.forEach(d => $selDept.append(new Option(`${d.CodeDept} - ${d.nom}`, d.CodeDept)));
-    $selDept.val(valDept);
+    $selDept.append(new Option('76 + 27 - Seine-Maritime + Eure', '76+27'));
+    departements.forEach(d => {
+        if (['76', '27'].includes(String(d.CodeDept))) return;   // fusionnés dans « 76 + 27 »
+        $selDept.append(new Option(`${d.CodeDept} - ${d.nom}`, d.CodeDept));
+    });
+    if (!deptInitialise) {   // 1er chargement : département de l'utilisateur connecté
+        deptInitialise = true;
+        const mien = ['76', '27'].includes(DEPT_USER) ? '76+27' : DEPT_USER;
+        if ($selDept.find('option').filter((_, o) => o.value === mien).length) departementFiltre = mien;
+        $selDept.val(departementFiltre);
+    } else {
+        $selDept.val(valDept);
+    }
 
     nijacDivisionFilter('#panel-division', divisions.map(d => d.Division), {
         libDivision,

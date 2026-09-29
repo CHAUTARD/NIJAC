@@ -165,7 +165,7 @@ function initTableConfiguration(\PDO $pdo): void
     // près. Même clé que RencontreAdminController::doublons() traite déjà comme
     // l'unicité d'une affiche. Id_EquipeExt NULL (exempt / bye) : MySQL autorise
     // plusieurs NULL dans un index UNIQUE, pas de collision. best-effort : si des
-    // doublons subsistent en base, l'ALTER échoue — les nettoyer via EA95 d'abord.
+    // doublons subsistent en base, l'ALTER échoue — les nettoyer via EN23 d'abord.
     try {
         $existe = $pdo->query(
             "SELECT 1 FROM information_schema.STATISTICS
@@ -181,7 +181,20 @@ function initTableConfiguration(\PDO $pdo): void
             );
         }
     } catch (\PDOException $e) {
-        // best-effort : doublons pré-existants (à purger via EA95) ou droits insuffisants.
+        // best-effort : doublons pré-existants (à purger via EN23) ou droits insuffisants.
+    }
+
+    // rencontre.Frais : qui supporte les frais du JA (Dom = club recevant, Ext = club visiteur) — EN23.
+    try {
+        $existe = $pdo->query(
+            "SELECT 1 FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rencontre' AND COLUMN_NAME = 'Frais'"
+        )->fetchColumn();
+        if (!$existe) {
+            $pdo->exec("ALTER TABLE rencontre ADD COLUMN Frais ENUM('Dom','Ext') NOT NULL DEFAULT 'Dom' AFTER ArbitrageCRA");
+        }
+    } catch (\PDOException $e) {
+        // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
     }
 
     // Colonnes "référent" du club : 2e contact, mis en copie (Cc) des emails
@@ -277,7 +290,7 @@ function initTableConfiguration(\PDO $pdo): void
             // suppression du bloc de sync dans DesiderataClubController, 09/2026). Photo unique
             // au moment de ce renommage — au-delà, chaque écran qui modifie
             // equipe.ArbitrageCRA resynchronise lui-même les rencontres à venir de l'équipe
-            // (EN18, ES33, EA92, EA94), jamais l'historique déjà joué.
+            // (EN18, ES33, EA92, EN29), jamais l'historique déjà joué.
             $pdo->exec(
                 'UPDATE rencontre r
                  JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
@@ -1100,7 +1113,7 @@ function getDeptActifs(): array
 /**
  * Table de correspondance code division => libellé (colonne division.Nom), triée
  * par division.Ord. Alimente les listes déroulantes « Division » (EA82, EA83,
- * EA92, EA94, EA95), affichées « code — Nom ». Cache statique par requête.
+ * EA92, EN29, EN23), affichées « code — Nom ». Cache statique par requête.
  *
  * @return array<string, string>
  */

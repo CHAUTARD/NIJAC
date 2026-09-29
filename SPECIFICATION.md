@@ -517,7 +517,7 @@ Remplace le questionnaire Excel envoyé par mail aux clubs en début de saison. 
 
 ### Règles
 - À l'enregistrement, `club.DesiderataSaison` et `club.DesiderataDate` sont mis à jour (saison courante, horodatage) — utilisés par EN12 pour afficher le statut « Soumis / En attente »
-- Pour les équipes R3M/R4M, le souhait JA écrit `equipe.ArbitrageCRA` (1 = CRA, 0 = Club), `equipe.JAdemande` (miroir 0/1 du même choix, lu par EA92/l'écran équipes régionales), **et resynchronise `rencontre.ArbitrageCRA` sur les rencontres à venir de cette équipe** (`Date >= CURDATE()`) — voir la règle unifiée **« Arbitrage requis (ArbitrageCRA) »** ci-dessous, commune à EN14, EN17, EN18, EN25, EA82/EA83, EA92, EA94, EA95 et ES33
+- Pour les équipes R3M/R4M, le souhait JA écrit `equipe.ArbitrageCRA` (1 = CRA, 0 = Club), `equipe.JAdemande` (miroir 0/1 du même choix, lu par EA92/l'écran équipes régionales), **et resynchronise `rencontre.ArbitrageCRA` sur les rencontres à venir de cette équipe** (`Date >= CURDATE()`) — voir la règle unifiée **« Arbitrage requis (ArbitrageCRA) »** ci-dessous, commune à EN14, EN17, EN18, EN25, EA82/EA83, EA92, EN29, EN23 et ES33
 
 ### Actions AJAX
 | Action | Méthode | Description |
@@ -528,11 +528,11 @@ Remplace le questionnaire Excel envoyé par mail aux clubs en début de saison. 
 ### Règle unifiée « Arbitrage requis (ArbitrageCRA) »
 Un seul nom, `ArbitrageCRA`, porté par 3 tables — toutes booléennes (`TINYINT(1) NOT NULL`, 1 = CRA fournit le JA, 0 = à la charge du club) :
 - **`division.ArbitrageCRA`** — défaut structurel : `1` pour toutes les divisions, `0` uniquement pour `R3M`/`R4M` (voir EA89).
-- **`equipe.ArbitrageCRA`** — valeur par équipe, initialisée depuis `division.ArbitrageCRA` à la création (import EA82/EA83, saisie EA92/EA94), modifiable ensuite via EN18 (le club) ou ES33 (la CSR) — en pratique uniquement pour R3M/R4M (seules divisions où le formulaire propose le choix).
+- **`equipe.ArbitrageCRA`** — valeur par équipe, initialisée depuis `division.ArbitrageCRA` à la création (import EA82/EA83, saisie EA92/EN29), modifiable ensuite via EN18 (le club) ou ES33 (la CSR) — en pratique uniquement pour R3M/R4M (seules divisions où le formulaire propose le choix).
 - **`rencontre.ArbitrageCRA`** — valeur **par rencontre**, qui fait foi directement (pas un recalcul en direct depuis `equipe`) :
   - à la création (import EA82), photo de `equipe.ArbitrageCRA` de l'équipe domicile à cet instant ;
-  - **le souhait se fait normalement avant le début de la phase** ; s'il change en cours de phase (EN18, ES33, EA92, EA94), seules les rencontres **à venir** de cette équipe (`Date >= CURDATE()`) sont mises à jour — les rencontres déjà passées gardent la valeur qu'elles avaient à l'époque, jamais réécrites rétroactivement ;
-  - EA95 (`RencontreAdminController`) permet aussi de modifier `ArbitrageCRA` à la main sur une rencontre précise (édition directe Oui/Non, comme les autres champs de cet écran) — cette valeur sera cependant écrasée par la prochaine resynchronisation si le souhait de l'équipe change avant la date de la rencontre.
+  - **le souhait se fait normalement avant le début de la phase** ; s'il change en cours de phase (EN18, ES33, EA92, EN29), seules les rencontres **à venir** de cette équipe (`Date >= CURDATE()`) sont mises à jour — les rencontres déjà passées gardent la valeur qu'elles avaient à l'époque, jamais réécrites rétroactivement ;
+  - EN23 (`RencontreAdminController`) permet aussi de modifier `ArbitrageCRA` à la main sur une rencontre précise (édition directe Oui/Non, comme les autres champs de cet écran) — cette valeur sera cependant écrasée par la prochaine resynchronisation si le souhait de l'équipe change avant la date de la rencontre.
 
 Valeur effective utilisée par EN14 (candidats/nomination), EN17 (statistiques) et l'écran de liste d'EA82 — lecture directe de `rencontre.ArbitrageCRA`, sans recalcul depuis `equipe` :
 1. Si `rencontre.ArbitrageCRA = 1` → obligatoire.
@@ -635,34 +635,52 @@ Les actions `rencontres_journee` et `sauvegarder_dispo_journee` du fichier legac
 
 ---
 
-## EN23 – Date des rencontres
+## EN23 – Gestion des rencontres
 
-`RencontreNominateurController` (CI4), routes `rencontres-date`, `rencontres-date/data`, `rencontres-date/(:num)` (PUT). Filtre `auth` (Nominateur ou Administrateur). Bouton en avant-dernière position du menu E003.
+`RencontreAdminController` (CI4), routes `gestion-rencontres`, `gestion-rencontres/data`, `gestion-rencontres/doublons`, `gestion-rencontres/(:num)` (PUT/DELETE). Filtre `auth` (Nominateur ou Administrateur). Transféré du menu admin (ex-EA95) vers le menu nominateur (E003), même principe qu'EN27 (ex-EA80) et EN29 (ex-EA94) — toutes les fonctions sont restées identiques, seul l'accès a changé.
 
 ### Objectif
-Version nominateur d'EA95 : permettre au nominateur de corriger uniquement la **date** et l'**heure** d'une rencontre déjà en base, sans passer par un import (EA82/EA83) ni ouvrir l'écran admin.
+Édition directe de la table `rencontre` (Date, Heure, Poule, Journee), sans repasser par les écrans d'import (EA82/EA83) ni un ré-import.
 
-### Différences avec EA95
-- Édition limitée à `rencontre.Date` et `rencontre.Heure` (pas de `Poule` / `Journee`).
-- Pas de suppression de rencontre, pas de bouton « Doublons ».
-- Table sans la colonne `Id_Rencontre`.
-- En-tête vert (couleurs du menu nominateur E003).
-- Contrôleur : `extends RencontreAdminController` — réutilise `data()` et `tryJson()` ; seul `update()` est redéfini (UPDATE `Date`, `Heure` uniquement).
+### Interface
+- Filtres : Département (clubs actifs + option combinée « 76 + 27 »), Division, Poule, Journée, Date, recherche Équipe (domicile ou extérieure).
+- Liste triée par **Phase, Journée, Poule** ; 1ʳᵉ colonne `Id_Rencontre` (triable) ; colonne **Arbitrage** (`CRA`/`Club` selon `rencontre.ArbitrageCRA`, triable).
+- Panneau d'édition : Date/Heure/Poule/Journée/Phase, équipes domicile/extérieure, salle, arbitrage obligatoire, commentaire ; libellé de l'affiche « Dom **vs** Ext ».
+- Bouton « Doublons » : n'affiche que les rencontres en doublon d'affiche — `GROUP BY Id_EquipeDom, Id_EquipeExt, Phase HAVING COUNT(*)>1` (une affiche ne se joue qu'une fois par phase, quelles que soient la date/l'heure/la journée/la poule).
+- Suppression d'une rencontre (refusée si un JA y est déjà nommé — message renvoyant à EN14 — ou si des JA ont répondu à ses disponibilités).
 
-### Filtres (identiques à EA95)
-Département, Division, Poule, Journée, Date, recherche Équipe.
+### Saisie de l'heure (panneau d'édition)
+`<input type="time" step="60">` : n'importe quelle heure de **00:00 à 23:59** (au clavier ou via le sélecteur natif du navigateur). Les boutons **–** / **+** encadrant le champ décalent de **15 minutes**, bornés à `[00:00, 23:59]` (pas de bascule à minuit). Le contrôleur accepte tout `HH:MM` (regex `^\d{2}:\d{2}(:\d{2})?$`, complété en `:00`).
 
-### Saisie de l'heure (panneau d'édition — identique EN23 / EA95)
-`<input type="time" step="60">` : n'importe quelle heure de **00:00 à 23:59** (au clavier ou via le sélecteur natif du navigateur). Les boutons **–** / **+** encadrant le champ décalent de **15 minutes**, bornés à `[00:00, 23:59]` (pas de bascule à minuit). Le contrôleur accepte tout `HH:MM` (regex `^\d{2}:\d{2}(:\d{2})?$`, complété en `:00`). *(Auparavant : `<select>` à 3 créneaux 09:00 / 14:00 / 16:00.)*
+### Avertissement JA déjà nommé
+Si `update()` change `Date` ou `Heure` sur une rencontre qui porte déjà une nomination, la réponse inclut un `avertissement` (affiché en toast warning côté client) : le JA n'est pas prévenu automatiquement, il faut vérifier sa disponibilité à la nouvelle date/heure et le prévenir (ou refaire la nomination dans EN14).
+
+---
+
+## EN29 – Gestion des équipes
+
+`EquipeAdminController` (CI4), routes `gestion-equipes`, `gestion-equipes/data`, `gestion-equipes/(:num)` (POST/PUT/DELETE), `gestion-equipes/(:num)/appliquer-arbitrage` (POST). Filtre `auth` (Nominateur ou Administrateur). Transféré du menu admin (ex-EA94) vers le menu nominateur (E003), même principe qu'EN27 (ex-EA80) et EN23 (ex-EA95).
+
+### Objectif
+Édition directe de la table `equipe` (Nom, Division, Club), sans passer par les écrans d'import. Distinct d'EA92 (Chargement équipe régionale), qui édite les champs de désidératas (ReEngagement, JourSouhaite, ArbitrageCRA...) d'équipes déjà importées mais laisse Nom/Division/Club en lecture seule.
+
+### Interface
+- Filtres Club, Division, Nom.
+- Liste + panneau d'édition : Nom, Division, Club (jusqu'à 3 clubs pour une équipe « entente » — Id_Club/Id_Club2/Id_Club3), Réengagement, Jour souhaité, Souhait JA, Saison désidérata.
+- **Souhait JA** affiché uniquement pour les divisions **R3M et R4M** (champ masqué et valeur forcée à « CRA » sinon).
+- Bouton **Supprimer** (confirmation `nijacConfirm` danger ; refusé avec message clair si des rencontres référencent l'équipe — FK `rencontre` en `ON DELETE RESTRICT`, message renvoyant à EN23).
+
+### Resynchronisation de l'arbitrage
+Si le Souhait JA change à l'enregistrement, `rencontre.ArbitrageCRA` est resynchronisé automatiquement sur **toutes** les rencontres de l'équipe, **y compris celles déjà jouées** — dérogation volontaire à la règle « jamais l'historique » suivie par EN18/ES33/EA92. Bouton ↻ à côté du champ Souhait JA pour resynchroniser manuellement à tout moment, sans changement de valeur (`appliquerArbitrageRencontres`).
 
 ---
 
 ## EN24 – Remplacement équipe
 
-`RemplacementEquipeController` (CI4), routes `remplacement-equipe`, `remplacement-equipe/equipes`, `remplacement-equipe/rencontres/(:num)`, `remplacement-equipe/remplacer` (POST). Filtre `auth` (Nominateur ou Administrateur). Bouton du menu E003, juste après EN23.
+`RemplacementEquipeController` (CI4), routes `remplacement-equipe`, `remplacement-equipe/equipes`, `remplacement-equipe/rencontres/(:num)`, `remplacement-equipe/remplacer` (POST). Filtre `auth` (Nominateur ou Administrateur). Bouton du menu E003, juste après EN29.
 
 ### Objectif
-Une équipe forfait ou désistée pour le reste de la saison est remplacée par une autre équipe sur toutes ses rencontres restantes, sans repasser par un ré-import (EA82/EA83) et sans éditer manuellement chaque rencontre en EA95.
+Une équipe forfait ou désistée pour le reste de la saison est remplacée par une autre équipe sur toutes ses rencontres restantes, sans repasser par un ré-import (EA82/EA83) et sans éditer manuellement chaque rencontre en EN23.
 
 ### Écran
 - **Gauche** : mêmes informations et filtres que EN23 — tableau de **toutes** les rencontres (Date, Heure, Poule, Journée, Division, Domicile, Extérieur), filtres Département/Division/Poule/Journée/Date + recherche libre Équipe, plus une colonne **JA** (« Oui »/« Non ») indiquant si une nomination existe déjà sur la rencontre. Cliquer sur le nom d'une équipe (Domicile ou Extérieur) la désigne comme **équipe à remplacer** (et filtre au passage le tableau sur son nom, comme le clic sur une équipe en EN23).
@@ -1289,7 +1307,7 @@ Définir les divisions sportives et leur niveau hiérarchique, utilisés pour cl
 - Conséquences : renommer un code division propage aux équipes ; supprimer une division encore référencée par une équipe est bloqué en base (le contrôle applicatif `$divsValides` des écrans d'import reste en place).
 - Les contraintes sont (re)créées de façon idempotente par `initTableConfiguration()` (config/app_config.php), appelée à l'ouverture d'EA98.
 - `rencontre` n'a pas de colonne `Division` : le lien passe par `rencontre.Id_EquipeDom → equipe.Division → division.Division`.
-- `rencontre` porte aussi une clé `UNIQUE uq_rencontre_affiche (Id_EquipeDom, Id_EquipeExt, Phase)` (posée par `initTableConfiguration()`) : anti-doublon d'affiche pour les imports EA82/EA83, c'est l'invariant qu'utilise déjà le bouton « Doublons » d'EA95. `Id_EquipeExt` NULL (exempt / bye) : MySQL autorise plusieurs NULL dans un index UNIQUE, aucune collision.
+- `rencontre` porte aussi une clé `UNIQUE uq_rencontre_affiche (Id_EquipeDom, Id_EquipeExt, Phase)` (posée par `initTableConfiguration()`) : anti-doublon d'affiche pour les imports EA82/EA83, c'est l'invariant qu'utilise déjà le bouton « Doublons » d'EN23. `Id_EquipeExt` NULL (exempt / bye) : MySQL autorise plusieurs NULL dans un index UNIQUE, aucune collision.
 
 ---
 

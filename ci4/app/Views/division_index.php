@@ -15,7 +15,7 @@
         #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
         #panel-liste { width: 55%; }
 
-        /* Bandeau de titre : strip clair — même style qu'EA92 / EA94 / EA95. */
+        /* Bandeau de titre : strip clair — même style qu'EA92 / EN29 / EN23. */
         #menu-strip {
             --strip-bg: #f8fafc;
             background: #f8fafc;
@@ -25,7 +25,7 @@
         #menu-strip > .strip-titre { font-weight: 700; color: var(--nijac-blue); }
 
         /* Bulle de couleur sur le code division, pour un repérage visuel rapide
-           dans la liste — même couleur que celle utilisée ailleurs (EA95...). */
+           dans la liste — même couleur que celle utilisée ailleurs (EN23...). */
         .badge-division {
             display: inline-block;
             padding: .15rem .55rem;

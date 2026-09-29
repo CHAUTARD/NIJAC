@@ -65,11 +65,14 @@
             <span style="flex:1"></span>
             <span class="combo-field">
                 <label for="sel-dept">Département</label>
-                <select id="sel-dept" style="width:190px;">
+                <select id="sel-dept" style="width:260px;">
                     <option value="">Tous</option>
-                    <option value="76+27">76 + 27 — Seine-Maritime + Eure</option>
+                    <?php // Sélection par défaut : département de l'utilisateur connecté (76 et 27 → « 76 + 27 ») ?>
+                    <?php $deptDefaut = in_array((string) $departement, ['76', '27'], true) ? '76+27' : (string) $departement; ?>
+                    <option value="76+27"<?= $deptDefaut === '76+27' ? ' selected' : '' ?>>76 + 27 — Seine-Maritime + Eure</option>
                     <?php foreach ($deptActifs as $d): ?>
-                    <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
+                    <?php if (in_array((string) $d['CodeDept'], ['76', '27'], true)) continue; // fusionnés dans « 76 + 27 » ?>
+                    <option value="<?= esc($d['CodeDept']) ?>"<?= (string) $d['CodeDept'] === $deptDefaut ? ' selected' : '' ?>><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
                     <?php endforeach; ?>
                 </select>
             </span>
@@ -168,7 +171,7 @@ let equipeCourante = null;      // équipe à remplacer (objet issu de equipesTo
 let equipeRemplacement = null;  // équipe choisie pour la remplacer (objet)
 
 let searchEquipe  = '';
-let deptFiltre     = '';
+let deptFiltre     = $('#sel-dept').val() || '';   // département de l'utilisateur présélectionné côté PHP
 let divisionFiltre = '';
 let pouleFiltre    = '';
 let journeeFiltre  = '';

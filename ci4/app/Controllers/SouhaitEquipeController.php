@@ -13,7 +13,7 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
  * Ces deux champs ne se saisissent que pour les divisions R3M et R4M — la règle
  * est appliquée aussi côté serveur dans modifier(). Les autres colonnes
  * affichées (Id_Club, nom du club, nom d'équipe, division) sont en lecture
- * seule : ce n'est pas un écran de gestion d'équipes (voir EA92/EA94).
+ * seule : ce n'est pas un écran de gestion d'équipes (voir EA92/EN29).
  *
  * Accès rôle CSR ou Administrateur (filtre "csrauth"). Pas de Model : jointure
  * Club pour l'affichage, réutilise getPDO() directement comme le reste de cette

@@ -308,28 +308,25 @@ $routes->post('equipe-regionale/import-txt', 'EquipeRegionaleController::importe
 $routes->put('equipe-regionale/(:num)', 'EquipeRegionaleController::modifier/$1', ['filter' => 'adminauth']);
 $routes->delete('equipe-regionale/(:num)', 'EquipeRegionaleController::supprimer/$1', ['filter' => 'adminauth']);
 
-// ── EA94 Gestion des équipes ─────────────────────────────────────────────────
-$routes->get('gestion-equipes', 'EquipeAdminController::index', ['filter' => 'adminauth']);
-$routes->get('gestion-equipes/data', 'EquipeAdminController::data', ['filter' => 'adminauth']);
-$routes->post('gestion-equipes', 'EquipeAdminController::store', ['filter' => 'adminauth']);
-$routes->put('gestion-equipes/(:num)', 'EquipeAdminController::update/$1', ['filter' => 'adminauth']);
-$routes->delete('gestion-equipes/(:num)', 'EquipeAdminController::delete/$1', ['filter' => 'adminauth']);
-$routes->post('gestion-equipes/(:num)/appliquer-arbitrage', 'EquipeAdminController::appliquerArbitrageRencontres/$1', ['filter' => 'adminauth']);
+// ── EN29 Gestion des équipes (nominateur) ────────────────────────────────────
+// Transféré du menu admin (ex-EA94) vers le menu nominateur (E003), même
+// principe qu'EN27 (ex-EA80) et EN23 (ex-EA95). Nominateur ou Administrateur
+// (filtre "auth").
+$routes->get('gestion-equipes', 'EquipeAdminController::index', ['filter' => 'auth']);
+$routes->get('gestion-equipes/data', 'EquipeAdminController::data', ['filter' => 'auth']);
+$routes->post('gestion-equipes', 'EquipeAdminController::store', ['filter' => 'auth']);
+$routes->put('gestion-equipes/(:num)', 'EquipeAdminController::update/$1', ['filter' => 'auth']);
+$routes->delete('gestion-equipes/(:num)', 'EquipeAdminController::delete/$1', ['filter' => 'auth']);
+$routes->post('gestion-equipes/(:num)/appliquer-arbitrage', 'EquipeAdminController::appliquerArbitrageRencontres/$1', ['filter' => 'auth']);
 
-// ── EA95 Gestion des rencontres ──────────────────────────────────────────────
-$routes->get('gestion-rencontres', 'RencontreAdminController::index', ['filter' => 'adminauth']);
-$routes->get('gestion-rencontres/data', 'RencontreAdminController::data', ['filter' => 'adminauth']);
-$routes->get('gestion-rencontres/doublons', 'RencontreAdminController::doublons', ['filter' => 'adminauth']);
-$routes->put('gestion-rencontres/(:num)', 'RencontreAdminController::update/$1', ['filter' => 'adminauth']);
-$routes->delete('gestion-rencontres/(:num)', 'RencontreAdminController::delete/$1', ['filter' => 'adminauth']);
-
-// ── EN23 Date des rencontres (nominateur) ────────────────────────────────────
-// Duplication d'EA95 pour le menu nominateur (E003) : seules Date et Heure sont
-// modifiables (ni poule/journée, ni suppression, ni doublons).
-// Nominateur ou Administrateur (filtre "auth"). data() est hérité d'EA95.
-$routes->get('rencontres-date', 'RencontreNominateurController::index', ['filter' => 'auth']);
-$routes->get('rencontres-date/data', 'RencontreNominateurController::data', ['filter' => 'auth']);
-$routes->put('rencontres-date/(:num)', 'RencontreNominateurController::update/$1', ['filter' => 'auth']);
+// ── EN23 Gestion des rencontres (nominateur) ─────────────────────────────────
+// Transféré du menu admin (ex-EA95) vers le menu nominateur (E003), même
+// principe qu'EN27 (ex-EA80). Nominateur ou Administrateur (filtre "auth").
+$routes->get('gestion-rencontres', 'RencontreAdminController::index', ['filter' => 'auth']);
+$routes->get('gestion-rencontres/data', 'RencontreAdminController::data', ['filter' => 'auth']);
+$routes->get('gestion-rencontres/doublons', 'RencontreAdminController::doublons', ['filter' => 'auth']);
+$routes->put('gestion-rencontres/(:num)', 'RencontreAdminController::update/$1', ['filter' => 'auth']);
+$routes->delete('gestion-rencontres/(:num)', 'RencontreAdminController::delete/$1', ['filter' => 'auth']);
 
 // ── EN24 Remplacement équipe (nominateur) ────────────────────────────────────
 // Une équipe forfait/désistée est remplacée par une autre sur toutes ses

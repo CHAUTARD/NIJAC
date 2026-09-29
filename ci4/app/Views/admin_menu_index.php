@@ -362,20 +362,6 @@
                     <span class="btn-desc">Consulter et modifier les équipes régionales importées</span>
                 </a>
 
-                <a href="<?= site_url('gestion-equipes') ?>" class="menu-btn btn-gestion-equipes">
-                    <span class="btn-code">EA94</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/GestEquipe.webp') ?>" alt="Gestion des équipes"></div>
-                    <span>Gestion des équipes</span>
-                    <span class="btn-desc">Filtrer et modifier les équipes (club, division, nom)</span>
-                </a>
-
-                <a href="<?= site_url('gestion-rencontres') ?>" class="menu-btn btn-gestion-rencontres">
-                    <span class="btn-code">EA95</span>
-                    <div class="btn-icon"><img src="<?= base_url('img/Rencontre.webp') ?>" alt="Gestion des rencontres"></div>
-                    <span>Gestion des rencontres</span>
-                    <span class="btn-desc">Filtrer et modifier date, heure, poule, journée</span>
-                </a>
-
                 <a href="<?= site_url('commune') ?>" class="menu-btn btn-communes">
                     <span class="btn-code">EA87</span>
                     <div class="btn-icon"><img src="<?= base_url('img/La_Poste.png') ?>" alt="Communes"></div>

@@ -12,7 +12,7 @@
     <style>
         #panel-liste { width: 60%; }
 
-        /* Bandeau de titre : strip clair — même style qu'EA92 / EA94 / EA95. */
+        /* Bandeau de titre : strip clair — même style qu'EA92 / EN29 / EN23. */
         #menu-strip {
             --strip-bg: #f8fafc;
             background: #f8fafc;

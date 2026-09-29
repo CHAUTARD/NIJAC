@@ -4,12 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Gestion des rencontres (EA95)</title>
+    <title>NIJAC – Gestion des rencontres (EN23)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-liste-edit.css') ?>">
     <style>
+        /* En-tête vert, comme les autres écrans nominateur (E003) */
+        #page-header { background: #2e7d32; }
+
         #panel-liste { width: 68%; }
         .cell-equipe:hover { text-decoration: underline; cursor: pointer; }
         /* Beaucoup de colonnes (toutes les colonnes de `rencontre`) : défilement
@@ -42,8 +45,9 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'calendar3', 'phTitle' => 'Gestion des rencontres', 'phCode' => 'EA95',
-    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu') . '#tab-tables', 'phBackUrl' => site_url('admin-menu') . '#tab-tables',
+    'phIcon' => 'calendar3', 'phTitle' => 'Gestion des rencontres', 'phCode' => 'EN23',
+    'phCrumbLabel' => 'Nominateur', 'phCrumbUrl' => site_url('nominateur-menu'), 'phBackUrl' => site_url('nominateur-menu'),
+    'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
 ]) ?>
 
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowPwdWarning' => false]) ?>
@@ -62,10 +66,12 @@
                 <label for="sel-dept">Département</label>
                 <select id="sel-dept" style="width:260px;">
                     <option value="">Tous</option>
-                    <option value="76+27">76 + 27 — Seine-Maritime + Eure</option>
+                    <?php // Sélection par défaut : département de l'utilisateur connecté (76 et 27 → « 76 + 27 ») ?>
+                    <?php $deptDefaut = in_array((string) $departement, ['76', '27'], true) ? '76+27' : (string) $departement; ?>
+                    <option value="76+27"<?= $deptDefaut === '76+27' ? ' selected' : '' ?>>76 + 27 — Seine-Maritime + Eure</option>
                     <?php foreach ($deptActifs as $d): ?>
                     <?php if (in_array((string) $d['CodeDept'], ['76', '27'], true)) continue; // fusionnés dans « 76 + 27 » ?>
-                    <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
+                    <option value="<?= esc($d['CodeDept']) ?>"<?= (string) $d['CodeDept'] === $deptDefaut ? ' selected' : '' ?>><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
                     <?php endforeach; ?>
                 </select>
             </span>
@@ -203,6 +209,14 @@
             </div>
 
             <div class="mb-2">
+                <label class="form-label" for="sel-frais">Frais</label>
+                <select id="sel-frais" class="form-select form-select-sm">
+                    <option value="Dom">Dom</option>
+                    <option value="Ext">Ext</option>
+                </select>
+            </div>
+
+            <div class="mb-2">
                 <label class="form-label" for="txt-commentaire">Commentaire</label>
                 <textarea id="txt-commentaire" class="form-control form-control-sm" rows="2"></textarea>
             </div>
@@ -235,7 +249,7 @@ let equipes    = [];
 let salles     = [];
 let currentId  = null;
 let searchEquipe  = '';
-let deptFiltre = '';
+let deptFiltre = $('#sel-dept').val() || '';   // département de l'utilisateur présélectionné côté PHP
 let divisionFiltre = '';
 let pouleFiltre   = '';
 let journeeFiltre = '';
@@ -473,6 +487,7 @@ function selectionnerLigne($tr) {
     $('#txt-phase').val(r.Phase ?? '');
     majSelectSalle(r.IdClubDom, r.id_Salle);
     $('#sel-arbitrage-obligatoire').val(r.ArbitrageCRA == 1 ? '1' : '0');
+    $('#sel-frais').val(r.Frais || 'Dom');
     $('#txt-commentaire').val(r.Commentaire ?? '');
     setStatus('');
 }
@@ -498,11 +513,16 @@ $('#btn-enregistrer').on('click', function () {
         id_equipe_ext:          idEquipeExt,
         id_salle:               $('#sel-salle').val(),
         arbitrage_obligatoire:  $('#sel-arbitrage-obligatoire').val(),
+        frais:                  $('#sel-frais').val(),
         commentaire:            $('#txt-commentaire').val().trim(),
     };
 
     $.ajax({ url: `${RENCONTRE_BASE}/${currentId}`, method: 'PUT', data: payload, dataType: 'json' }).done(function (res) {
-        if (res.ok) { toast(res.msg); chargerListe(currentId); }
+        if (res.ok) {
+            toast(res.msg);
+            if (res.avertissement) nijacToast(res.avertissement, 'warning', 15000);
+            chargerListe(currentId);
+        }
         else { toast(res.msg, false); setStatus(res.msg, false); }
     }).fail(() => toast('Erreur réseau.', false));
 });

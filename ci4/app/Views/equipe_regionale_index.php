@@ -13,7 +13,7 @@
         #panel-liste { width: 65%; }
 
         /* Bandeau de filtres : comboboxes « label en encoche » (nijac.css .combo-field),
-           strip clair — même style qu'EA81 / EA95. */
+           strip clair — même style qu'EA81 / EN23. */
         #menu-strip {
             --strip-bg: #f8fafc;
             background: #f8fafc;

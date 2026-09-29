@@ -27,7 +27,7 @@
         #txt-limitrophe-region { color: #0b7285; font-style: italic; }
 
         /* Bandeau de filtres : comboboxes « label en encoche » (nijac.css .combo-field),
-           strip clair — même style qu'EA92 / EA94 / EA95. */
+           strip clair — même style qu'EA92 / EN29 / EN23. */
         #menu-strip {
             --strip-bg: #f8fafc;
             background: #f8fafc;
