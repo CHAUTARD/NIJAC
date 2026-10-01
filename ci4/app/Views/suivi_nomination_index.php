@@ -32,6 +32,7 @@
             background: #eef2f9; border: 1.5px solid #d3dae6; border-radius: 999px;
             font-size: .82rem; font-weight: 700; color: var(--nijac-blue);
         }
+        #panel-division { margin-top: .3rem; }
 
         #tbl-suivi td.num, #tbl-suivi th.num { text-align: right; }
         #tbl-suivi td.centre, #tbl-suivi th.centre { text-align: center; }
@@ -61,6 +62,10 @@
                 <select id="sel-date" style="width:auto;">
                     <option value="">Toutes</option>
                 </select>
+            </span>
+            <span class="combo-field">
+                <label>Division</label>
+                <div id="panel-division"></div>
             </span>
             <span class="combo-field">
                 <label for="search-equipe">Équipe</label>
@@ -164,8 +169,13 @@
 <script>
 'use strict';
 const SUIVI_BASE = '<?= site_url('suivi-nomination') ?>';
+const DIVISION_NOMS = <?= json_encode($divisionNoms ?? [], JSON_UNESCAPED_UNICODE) ?>;
+function libDivision(code) {
+    const n = DIVISION_NOMS[code];
+    return n ? code + ' — ' + n : code;
+}
 let nominations = [];
-const filtres   = { date: '', equipe: '', ja: '', saisie: '' };
+const filtres   = { date: '', division: '', equipe: '', ja: '', saisie: '' };
 const sortState = { col: null, asc: true };
 
 const JOURS_SEMAINE = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -198,6 +208,7 @@ function nominationsFiltrees() {
     const ja     = filtres.ja.toLowerCase();
     return nominations.filter(n => {
         if (filtres.date && (n.Date ?? '').substring(0, 10) !== filtres.date) return false;
+        if (filtres.division && n.Division !== filtres.division) return false;
         if (equipe
             && !String(n.NomDom ?? '').toLowerCase().includes(equipe)
             && !String(n.NomExt ?? '').toLowerCase().includes(equipe)) return false;
@@ -325,7 +336,7 @@ function ouvrirModification(n) {
     modifNom = n;
     const ouvrir = () => {
         remplirListeJa(n);
-        $('#modif-rencontre').text(`${formatDateAvecJour(n.Date, true)} — ${n.NomDom} / ${n.NomExt ?? '?'}`);
+        $('#modif-rencontre').text(`${formatDateAvecJour(n.Date, true)} — ${n.NomDom} vs ${n.NomExt ?? '?'}`);
         $('#modif-arbitrage').val(+n.ArbitrageCRA ? '1' : '0');
         $('#modif-peage').val(n.Peage ?? 0);
         $('#modif-km').val(n.Kilometre ?? 0);
@@ -392,8 +403,21 @@ function chargerListe() {
         $sel.find('option:not(:first)').remove();
         dates.forEach(d => $sel.append(new Option(formatDateAvecJour(d), d)));
         $sel.val(filtres.date);
+        majPanelDivision();
         renderListe();
     }, 'json').fail(() => toast('Erreur réseau.', false));
+}
+
+/** Filtre Division (popup partagée nijac-division-filter.js, comme EN29) : divisions présentes dans les nominations. */
+function majPanelDivision() {
+    const couleurs = {};
+    nominations.forEach(n => { if (n.Division) couleurs[n.Division] = n.DivisionColor; });
+    nijacDivisionFilter('#panel-division', Object.keys(couleurs).sort(), {
+        libDivision,
+        colorFor: code => couleurs[code],
+        getFiltre: () => filtres.division,
+        onSelect: code => { filtres.division = code; majPanelDivision(); renderListe(); },
+    });
 }
 
 $('#sel-date').on('change', function () { filtres.date = $(this).val(); renderListe(); });
@@ -410,8 +434,9 @@ function filtreTexte(cle) {
 $('#search-equipe').on('input', filtreTexte('equipe'));
 $('#search-ja').on('input', filtreTexte('ja'));
 $('#btn-reset-filtres').on('click', function () {
-    filtres.date = filtres.equipe = filtres.ja = filtres.saisie = '';
+    filtres.date = filtres.division = filtres.equipe = filtres.ja = filtres.saisie = '';
     $('#sel-date, #sel-saisie, #search-equipe, #search-ja').val('');
+    majPanelDivision();
     renderListe();
 });
 
@@ -423,5 +448,6 @@ $(function () {
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-sortable-table.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-division-filter.js') ?>"></script>
 </body>
 </html>

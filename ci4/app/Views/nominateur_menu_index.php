@@ -231,8 +231,11 @@
             font-size: .72rem;
             font-weight: 400;
             color: #555;
-            margin-top: 4px;
             line-height: 1.3;
+            /* En haut du bouton, sur la ligne du code écran (top: 6px), sans le chevaucher */
+            order: -1;
+            margin: -14px 0 4px;
+            padding: 0 28px;
         }
         .menu-btn:hover .btn-desc { color: #333; }
         .menu-btn:hover {
@@ -308,7 +311,14 @@
             #menu-grid { padding: 12px 12px 16px; gap: 12px; }
             .menu-btn .btn-icon { width: 100px; height: 100px; }
             .menu-btn img { width: 100px; height: 100px; max-width: 100px; max-height: 100px; }
-            .menu-btn { min-height: 0; }
+            .menu-btn { min-height: 0; padding: 14px 8px 12px; font-size: .95rem; }
+            .menu-btn .btn-desc { margin-top: -8px; }
+            /* Écrase la taille inline de l'image Nomination (220px) */
+            .menu-btn .btn-icon img { width: 100px !important; height: 100px !important; max-width: 100px !important; max-height: 100px !important; }
+            .menu-btn .btn-icon i { font-size: 4rem; }
+            #page-header { padding: .5rem .75rem; }
+            #toolbar { flex-wrap: wrap; padding: .3rem .75rem; }
+            .dash-card .dc-value { font-size: 1.5rem; }
         }
         @media (max-width: 479.98px) {
             .dash-cards { grid-template-columns: 1fr; }
@@ -391,7 +401,7 @@
             <span class="btn-code">EN11</span>
             <div class="btn-icon"><img src="<?= base_url('img/Arbitre_filet.webp') ?>" alt="Juge-Arbitre"></div>
             <span>Juge-Arbitre</span>
-            <span class="btn-desc">Gérer la liste des juges-arbitres, grades et coordonnées</span>
+            <span class="btn-desc">Gérer la liste des juges-arbitres</span>
         </a>
     </div>
 
@@ -409,7 +419,7 @@
             <span class="btn-code">EN13</span>
             <div class="btn-icon"><img src="<?= base_url('img/Dispo.webp') ?>" alt="Disponibilités JA"></div>
             <span>Disponibilités JA</span>
-            <span class="btn-desc">Saisir ou modifier les disponibilités d'un JA par département</span>
+            <span class="btn-desc">Saisir ou modifier les disponibilités d'un JA</span>
         </a>
     </div>
 
@@ -418,7 +428,7 @@
             <span class="btn-code">EN14</span>
             <div class="btn-icon"><img src="<?= base_url('img/Nomination.webp') ?>" alt="Nomination JA" style="max-width:220px;max-height:220px;width:220px;height:220px;"></div>
             <span>Nomination JA</span>
-            <span class="btn-desc">Affecter les JA aux rencontres et valider les nominations</span>
+            <span class="btn-desc">Affecter les JA aux rencontres</span>
         </a>
         <?php if ($stats['nominations_valider'] > 0): ?>
             <span class="btn-badge"><?= (int) $stats['nominations_valider'] ?></span>
@@ -446,15 +456,6 @@
     </div>
 
     <div class="menu-btn-wrap">
-        <a href="<?= site_url('gestion-rencontres') ?>" class="menu-btn btn-r34">
-            <span class="btn-code">EN23</span>
-            <div class="btn-icon"><img src="<?= base_url('img/CalendarHour.webp') ?>" alt="Gestion des rencontres"></div>
-            <span>Gestion des rencontres</span>
-            <span class="btn-desc">Modifier date, heure, poule, journée, ou supprimer une rencontre</span>
-        </a>
-    </div>
-
-    <div class="menu-btn-wrap">
         <a href="<?= site_url('gestion-equipes') ?>" class="menu-btn btn-gestion-equipes">
             <span class="btn-code">EN29</span>
             <div class="btn-icon"><img src="<?= base_url('img/GestEquipe.webp') ?>" alt="Gestion des équipes"></div>
@@ -468,7 +469,16 @@
             <span class="btn-code">EN24</span>
             <div class="btn-icon"><img src="<?= base_url('img/Changement_Equipe.webp') ?>" alt="Remplacement équipe"></div>
             <span>Remplacement équipe</span>
-            <span class="btn-desc">Remplacer une équipe forfait sur ses rencontres restantes</span>
+            <span class="btn-desc">Remplacer une équipe déclassée</span>
+        </a>
+    </div>
+
+    <div class="menu-btn-wrap">
+        <a href="<?= site_url('gestion-rencontres') ?>" class="menu-btn btn-r34">
+            <span class="btn-code">EN23</span>
+            <div class="btn-icon"><img src="<?= base_url('img/CalendarHour.webp') ?>" alt="Gestion des rencontres"></div>
+            <span>Gestion des rencontres</span>
+            <span class="btn-desc">Modifier ou supprimer une rencontre</span>
         </a>
     </div>
 

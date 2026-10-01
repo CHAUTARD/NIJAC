@@ -487,7 +487,7 @@ Rapport agrégé, en lecture seule, des arbitrages et frais par JA pour une phas
 - Année civile d'un mois : `≥ juillet` → 1re année de la saison, sinon année suivante (ex. phase 1 de la saison 2026 = `2026-09-01` → `2027-01-31` ; phase 2 = `2027-02-01` → `2027-06-30`)
 - La date de fin est bornée à aujourd'hui ; si la date de début est future, la phase « n'a pas encore commencé » (message d'erreur, aucune ligne)
 
-### Calcul (par JA, sur les nominations `Valide = 1` de la période)
+### Calcul (par JA, sur les nominations `Valide = 1` de la période ayant une `DateSaisie` renseignée — non NULL et ≠ `0000-00-00`, tableau, totaux et export CSV)
 - **Arbitrages Club exclus des frais** : les nominations sur une rencontre `ArbitrageCRA = 0` comptent dans `nb_arbitrages` mais ne donnent ni indemnité, ni péage, ni remboursement kilométrique (seules les rencontres `ArbitrageCRA = 1` sont valorisées ci-dessous)
 - `nb_arbitrages_club` = nombre de nominations sur des rencontres `ArbitrageCRA = 0` (colonne « Arbitrages Club », incluse dans `nb_arbitrages`)
 - `total_km` = `SUM(Kilometre)`, `total_peages` = `SUM(Peage)` (rencontres `ArbitrageCRA = 1` uniquement)
@@ -712,7 +712,7 @@ Suivre, pour les nominations validées du périmètre du nominateur, les frais s
 Date de la rencontre (jour abrégé) · Division (macaron coloré comme EN23, `division.Color`) · Arbitrage (CRA ou Club, `rencontre.ArbitrageCRA`) · Domicile · Extérieur · N° licence (`Id_JA`) · JA · Compte EBP (`NumCompteEBP`) · Péage · Km · Défisc. (Oui/Non) · Date saisie · Rappel (bouton). Les trois colonnes de frais affichent « — » tant que `nomination.DateSaisie` est NULL (le JA n'a pas encore enregistré ses frais).
 
 ### Filtres (client)
-Date (combo des dates de rencontre existantes, ordre croissant), équipe (domicile ou extérieur, sous-chaîne), nom du JA (sous-chaîne), Date saisie (Toutes / Renseignée / Non renseignée). Tri par clic sur les en-têtes (sur les données, la date est triée chronologiquement). Tri initial : date décroissante.
+Date (combo des dates de rencontre existantes, ordre croissant), Division (badge + popup Messieurs/Dames `nijac-division-filter.js`, comme EN29 — divisions présentes dans les nominations chargées), équipe (domicile ou extérieur, sous-chaîne), nom du JA (sous-chaîne), Date saisie (Toutes / Renseignée / Non renseignée). Tri par clic sur les en-têtes (sur les données, la date est triée chronologiquement). Tri initial : date décroissante.
 
 ### Frais non comptés
 Les valeurs de péage et de kilomètres saisies mais **non comptées** sont grisées et barrées dans le tableau (info-bulle), avec les mêmes règles qu'EN17 : seuls les arbitrages CRA valent des frais (Club : 0), et un JA qui arbitre plusieurs rencontres CRA le même jour ne fait qu'un déplacement — km et péage ne sont conservés que sur la 1re rencontre du jour qui en porte (heure la plus précoce, puis n° de nomination).

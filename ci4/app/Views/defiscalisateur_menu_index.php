@@ -156,8 +156,11 @@
             font-size: .72rem;
             font-weight: 400;
             color: #555;
-            margin-top: 4px;
             line-height: 1.3;
+            /* En haut du bouton, sur la ligne du code écran (top: 6px), sans le chevaucher */
+            order: -1;
+            margin: -14px 0 4px;
+            padding: 0 28px;
         }
         .menu-btn:hover .btn-desc { color: #333; }
 
@@ -214,9 +217,13 @@
         }
         @media (max-width: 767.98px) {
             #menu-grid { grid-template-columns: repeat(2, 1fr); padding: 12px; gap: 12px; }
-            .menu-btn { min-height: 0; }
             .menu-btn .btn-icon { width: 100px; height: 100px; }
             .menu-btn img { width: 100px; height: 100px; max-width: 100px; max-height: 100px; }
+            .menu-btn { min-height: 0; padding: 14px 8px 12px; font-size: .95rem; }
+            .menu-btn .btn-desc { margin-top: -8px; }
+            .menu-btn .btn-icon i { font-size: 4rem; }
+            #page-header { padding: .5rem .75rem; }
+            #toolbar { flex-wrap: wrap; padding: .3rem .75rem; }
         }
         @media (max-width: 479.98px) {
             #menu-grid { grid-template-columns: 1fr; }

@@ -235,9 +235,9 @@ class JugearbitreController extends BaseController
         // Actif est accepté directement ici (checkbox de la modale Créer/Modifier
         // JA, ou colonne "Inactivité" du CSV FFTT) — l'import API par département
         // (importFfttClub()/importFfttSelected()) modifie aussi Actif, mais jamais
-        // via majBdd() : il se contente de tout remettre à 0 pour le département
-        // (reinitialiserActifDept()) sans jamais réactiver personne, quoi que le
-        // scan FFTT retrouve. En UPDATE, DateValidationFFTT / Defiscalisation /
+        // via majBdd() : il remet tout à 0 pour le département
+        // (reinitialiserActifDept()) puis passe à 1 chaque JA importé
+        // (upsertJaFftt()). En UPDATE, DateValidationFFTT / Defiscalisation /
         // Nationale / NumCompteEBP ne sont réécrits que si la ligne fournit
         // explicitement la clé (cf. SET construit ligne par ligne plus bas) :
         // seul l'import CSV FFTT porte date_validation_fftt, seule la modale
@@ -376,10 +376,9 @@ class JugearbitreController extends BaseController
 
     /**
      * Réinitialise Actif=0 pour tous les JA du département AVANT de lancer
-     * l'import/scan FFTT (voir importFfttClub()/importFfttSelected()) — cette
-     * action ne réactive ensuite personne, même un JA retrouvé dans le rapport
-     * FFTT du passage reste à Actif=0 (seuls le CSV FFTT et la modale
-     * Créer/Modifier JA peuvent remettre Actif à 1). Département résolu comme
+     * l'import/scan FFTT (voir importFfttClub()/importFfttSelected()) — chaque
+     * JA ensuite importé repasse à Actif=1 (upsertJaFftt()), les JA non
+     * retrouvés par le passage restent à Actif=0. Département résolu comme
      * dans liste() : Id_Club (positions 3-4) ou, à défaut, code postal du JA
      * — CodeDept n'est renseigné nulle part.
      */
@@ -474,10 +473,9 @@ class JugearbitreController extends BaseController
      * Insère ou met à jour un JA issu de l'API FFTT ($d : voir lireJaFftt()).
      * Retourne true si le JA vient d'être créé.
      *
-     * Actif n'est jamais remis à 1 ici : reinitialiserActifDept() (appelée par
-     * le JS avant la boucle clubs) a déjà tout mis à 0 pour le département, et
-     * ces imports ne réactivent personne — même un JA retrouvé dans le rapport
-     * FFTT reste à Actif=0 ; un nouveau JA est créé à Actif=0 pour la même raison.
+     * Tout JA retrouvé par l'API (existant ou nouveau) est mis à Actif=1 :
+     * reinitialiserActifDept() (appelée par le JS avant la boucle clubs) a déjà
+     * tout mis à 0 pour le département, seuls les JA non retrouvés y restent.
      */
     private function upsertJaFftt(\PDO $pdo, array $d): bool
     {
@@ -486,7 +484,7 @@ class JugearbitreController extends BaseController
 
         if ($exists->fetchColumn()) {
             $pdo->prepare(
-                'UPDATE ja SET DateValidationFFTT=?,
+                'UPDATE ja SET Actif=1, DateValidationFFTT=?,
                  Cp = COALESCE(Cp, ?), Ville = COALESCE(Ville, ?), Id_LaPoste = COALESCE(Id_LaPoste, ?)
                  WHERE Id_JA=?'
             )->execute([$d['date_valid'], $d['cp'], $d['ville'], $d['id_laposte'], $d['licence']]);
@@ -498,7 +496,7 @@ class JugearbitreController extends BaseController
             'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Grade, Actif, Id_Club,
                              Defiscalisation, Nationale, DateValidationFFTT,
                              Id_LaPoste, Cp, Ville)
-             VALUES (?, ?, ?, ?, ?, 0, ?, 0, 0, ?, ?, ?, ?)'
+             VALUES (?, ?, ?, ?, ?, 1, ?, 0, 0, ?, ?, ?, ?)'
         )->execute([$d['licence'], $d['nom'], $d['prenom'], $d['email'] ?: null, $d['grade'], $d['id_club'],
             $d['date_valid'], $d['id_laposte'], $d['cp'], $d['ville']]);
 

@@ -44,6 +44,7 @@ class SuiviNominationController extends BaseController
         return view('suivi_nomination_index', [
             'nomComplet'  => trim(($u['nom'] ?? '') . ' ' . ($u['prenom'] ?? '')),
             'departement' => $u['id_departement'] ?? '',
+            'divisionNoms' => getDivisionNoms(),
         ]);
     }
 

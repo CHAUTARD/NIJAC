@@ -2,6 +2,20 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Ne fais jamais le travail toi-même.
+Délège toujours à des *sub-agents
+N'utlise pas constament Fable.
+Utilise *Opus 5.5 pour les tâches les plus simples.
+
+## Routes des modèles
+- Code simple, résumés -> Opus 5.5
+- Architecture, refacto -> Fable 5.1
+- Contexte minimal pour chaque subagent
+- Résume chaque résultat en 3 lignes
+
+## Vérification
+- Relis le diff avant de conclure
+
 # Régles du projet
 Commence chaque réponse par mon prénom.
 Adapte-toi au style du code retour.

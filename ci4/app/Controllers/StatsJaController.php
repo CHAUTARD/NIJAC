@@ -26,7 +26,8 @@ class StatsJaController extends BaseController
             SELECT 1 FROM nomination n2
             JOIN disponible d2 ON d2.Id_Disponible = n2.Id_Disponible
             JOIN rencontre  r2 ON r2.Id_Rencontre  = n2.Id_Rencontre
-            WHERE d2.Id_JA = ja.Id_JA AND n2.Valide = 1 AND r2.ArbitrageCRA = 1 AND r2.Date = r.Date AND n2.';
+            WHERE d2.Id_JA = ja.Id_JA AND n2.Valide = 1 AND n2.DateSaisie IS NOT NULL AND n2.DateSaisie <> "0000-00-00"
+              AND r2.ArbitrageCRA = 1 AND r2.Date = r.Date AND n2.';
     private const SQL_UNE_FOIS_PAR_JOUR_B = ' > 0
               AND n2.Id_Nomination <> n.Id_Nomination
               AND (COALESCE(r2.Heure, "00:00:00") < COALESCE(r.Heure, "00:00:00")
@@ -202,6 +203,7 @@ class StatsJaController extends BaseController
             FROM ja
             JOIN disponible dn   ON dn.Id_JA = ja.Id_JA
             JOIN nomination n    ON n.Id_Disponible = dn.Id_Disponible AND n.Valide = 1
+                                AND n.DateSaisie IS NOT NULL AND n.DateSaisie <> '0000-00-00'
             JOIN rencontre  r    ON r.Id_Rencontre  = n.Id_Rencontre
             LEFT JOIN Club  cl   ON cl.Id_Club      = ja.Id_Club
             LEFT JOIN salle s    ON s.Id_Club       = cl.Id_Club AND s.EstPrincipale = 1
