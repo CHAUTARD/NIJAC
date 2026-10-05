@@ -191,6 +191,14 @@ class ConfigurationController extends BaseController
             $valeur = (string) (int) $valeur;
         }
 
+        // Coefficients des prestations dues par club (EN26) : entier >= 0
+        if (in_array($cle, ['nombre_arbitrage_national', 'nombre_arbitrage_regional'], true)) {
+            if (!ctype_digit($valeur)) {
+                return 'Nombre entier positif ou nul attendu.';
+            }
+            $valeur = (string) (int) $valeur;
+        }
+
         // Validation année fiscale (ED51) : 4 chiffres, plage raisonnable
         if ($cle === 'annee_fiscale') {
             if (!preg_match('/^\d{4}$/', $valeur) || (int) $valeur < 2000 || (int) $valeur > 2100) {

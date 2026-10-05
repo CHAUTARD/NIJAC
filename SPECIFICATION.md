@@ -985,6 +985,21 @@ Si `update()` change `Date` ou `Heure` sur une rencontre qui porte déjà une no
 
 ---
 
+## EN26 – Statistiques des nominations
+
+`StatsNominationController` — GET `stats-nomination` (vue) et GET `stats-nomination/data` (JSON unique : `rencontres`, `compteurs`, `clubs`, `coefNat`, `coefReg`). Filtre `auth`, lecture seule. Voir `ECRANS.md` pour le calendrier, les journées et le tableau des JA nominés.
+
+### Cartouche « Prestations par club »
+- **Périmètre** : tous les clubs (`club`) dont `SUBSTRING(Id_Club, 3, 2)` ∈ `getDepartementsAutorises()` du nominateur, y compris ceux sans équipe ni JA (valeurs 0).
+- **Équipes nationale** : nombre de lignes `equipe_nationale` du club (`Id_Club`, divisions N1…N3).
+- **Équipes régionale** : nombre de lignes `equipe` du club porteur principal (`Id_Club`) avec `Division NOT LIKE 'N%'` (PN, R1…R4).
+- **Prestations dues** = Nationale × `nombre_arbitrage_national` (défaut 7) + Régionale × `nombre_arbitrage_regional` (défaut 5), calculées côté serveur ; coefficients lus par `getConfig()` (défauts si EA98 n'a pas encore créé les clés) et rappelés dans le sous-titre.
+- **Prestations faites** : nominations `Valide = 1` (`nomination → disponible → ja`, `ja.Id_Club` = club) sur une rencontre déjà jouée (`rencontre.Date <= CURDATE()`), toutes divisions et départements confondus, arbitrages club (R3M/R4M) compris comme dans EN17. La table `rencontre` ne contient que la saison en cours.
+- **Écart** = Faites − Dues (rouge si négatif, vert si positif).
+- Tableau trié par défaut sur l'écart croissant (clubs en retard en tête), en-têtes triables, filtre texte (nom ou n° de club), compteur de clubs, ligne de totaux sur les clubs affichés.
+
+---
+
 ## EN29 – Gestion des équipes
 
 `EquipeAdminController` (CI4), routes `gestion-equipes`, `gestion-equipes/data`, `gestion-equipes/(:num)` (POST/PUT/DELETE), `gestion-equipes/(:num)/appliquer-arbitrage` (POST). Filtre `auth` (Nominateur ou Administrateur). Transféré du menu admin (ex-EA94) vers le menu nominateur (E003), même principe qu'EN27 (ex-EA80) et EN23 (ex-EA95).
@@ -1708,6 +1723,8 @@ Gérer les paramètres applicatifs stockés dans la table `configuration` (clé 
 | `saison` | Ex : `2025-2026` | Saison en cours |
 | `annee_fiscale` | Année 4 chiffres (2000-2100), ex : `2026` | Année civile de référence de la défiscalisation JA (ED51) — fenêtre 1ᵉʳ janv → 31 déc. Défaut = année système. Auto-heal `INSERT IGNORE` au chargement de l'écran. |
 | `nomination_nb_candidats` | Entier ≥ 1, défaut `15` | Nombre de candidats JA listés par rencontre (EN14) |
+| `nombre_arbitrage_national` | Entier ≥ 0, défaut `7` | EN26 « Prestations par club » : prestations JA dues par équipe en nationale. Créée par EA98 (`initTableConfiguration()`, `INSERT IGNORE`), éditable dans la table brute d'EA91 |
+| `nombre_arbitrage_regional` | Entier ≥ 0, défaut `5` | EN26 « Prestations par club » : prestations JA dues par équipe en régionale. Idem |
 | `cra_dispo_choix_etendus` | `1` / `0`, défaut `1` (clé absente) | EC74 : « À confirmer » et « Disponible sous condition » proposés (`1`) ou non (`0`) à la saisie (page publique `dispo-cra`, saisie manuelle) — modifié par l'interrupteur d'EC74 |
 
 L'utilisateur et le mot de passe SMTP (`SMTP_USER` / `SMTP_PASSWORD`) ne sont pas stockés dans

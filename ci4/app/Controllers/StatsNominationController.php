@@ -10,7 +10,7 @@ use CodeIgniter\HTTP\ResponseInterface;
  * Écran de récapitulatif ouvert dans une nouvelle fenêtre depuis EN14 : toutes
  * les journées / rencontres du périmètre du nominateur avec leur JA nominé
  * affiché en texte seul, plus un tableau des JA nominés et de leur nombre de
- * nominations.
+ * nominations, et un cartouche « Prestations par club » (dues / faites).
  *
  * Écran entièrement en lecture seule : aucune route d'écriture, aucune logique
  * métier propre. La nomination / le retrait d'un JA se font dans EN14.
@@ -86,23 +86,25 @@ class StatsNominationController extends BaseController
             $stmt->execute($depts);
             $compteurs = $stmt->fetchAll();
 
-            // Cartouche « Clubs » : pour chaque club du périmètre ayant au moins une équipe
-            // régionale, nombre de nominations faites par ses JA (ja.Id_Club) rapporté au
-            // quota = nb équipes nationales × nombre_arbitrage_national
-            //        + nb équipes régionales × nombre_arbitrage_regional.
-            // Régionales = table `equipe` (Division NOT LIKE 'N%'), club porteur principal
-            // (Id_Club) ; nationales = table `equipe_nationale`. Les nominations comptées ne
-            // sont pas restreintes au périmètre : c'est un indicateur de complétude du club.
+            // Cartouche « Prestations par club » : tous les clubs du périmètre (y compris
+            // sans équipe ni JA), prestations dues = nb équipes nationales × nombre_arbitrage_national
+            //                                      + nb équipes régionales × nombre_arbitrage_regional
+            // (clés `configuration`, amorcées par EA98), et prestations faites par ses JA (ja.Id_Club).
+            // Régionales = table `equipe` (Division NOT LIKE 'N%' : PN, R1…R4), club porteur
+            // principal (Id_Club) ; nationales = table `equipe_nationale` (N1…N3).
+            // Faites = nomination Valide sur une rencontre déjà jouée (r.Date <= CURDATE()), arbitrages
+            // club compris (comme EN17) ; la table `rencontre` ne contient que la saison en cours.
+            // Non restreintes au périmètre : c'est un indicateur de complétude du club.
             $coefReg = (int) getConfig('nombre_arbitrage_regional', '5');
             $coefNat = (int) getConfig('nombre_arbitrage_national', '7');
 
             $stmt = $pdo->prepare("
                 SELECT c.Id_Club, c.Nom,
-                       er.nb              AS NbReg,
+                       COALESCE(er.nb, 0) AS NbReg,
                        COALESCE(en.nb, 0) AS NbNat,
                        COALESCE(nm.nb, 0) AS NbNom
                 FROM Club c
-                JOIN (
+                LEFT JOIN (
                     SELECT Id_Club, COUNT(*) nb FROM equipe
                     WHERE Division NOT LIKE 'N%' GROUP BY Id_Club
                 ) er ON er.Id_Club = c.Id_Club
@@ -114,6 +116,8 @@ class StatsNominationController extends BaseController
                     FROM nomination n
                     JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
                     JOIN ja           ON ja.Id_JA        = d.Id_JA
+                    JOIN rencontre r  ON r.Id_Rencontre  = n.Id_Rencontre
+                    WHERE n.Valide = 1 AND r.Date <= CURDATE()
                     GROUP BY ja.Id_Club
                 ) nm ON nm.Id_Club = c.Id_Club
                 WHERE SUBSTRING(c.Id_Club, 3, 2) IN ($ph)
@@ -125,6 +129,7 @@ class StatsNominationController extends BaseController
                 $r['NbNat']  = (int) $r['NbNat'];
                 $r['NbNom']  = (int) $r['NbNom'];
                 $r['Quota']  = $r['NbNat'] * $coefNat + $r['NbReg'] * $coefReg;
+                $r['Ecart']  = $r['NbNom'] - $r['Quota'];
                 return $r;
             }, $stmt->fetchAll());
 

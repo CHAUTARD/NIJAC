@@ -74,6 +74,16 @@ function initTableConfiguration(\PDO $pdo): void
         }
     }
 
+    // Coefficients des prestations dues par club (EN26 « Prestations par club ») : créés
+    // seulement s'ils manquent, jamais écrasés ; modifiables dans EA91 (table brute).
+    try {
+        $pdo->exec("INSERT IGNORE INTO configuration (cle, valeur, description) VALUES
+            ('nombre_arbitrage_national', '7', 'EN26 — prestations JA dues par équipe en nationale'),
+            ('nombre_arbitrage_regional', '5', 'EN26 — prestations JA dues par équipe en régionale')");
+    } catch (\PDOException $e) {
+        // best-effort
+    }
+
     // Un nom d'équipe ne doit désigner qu'un seul club (affectation automatique
     // EA82/EA83). Best-effort : si des doublons existent déjà en base, la
     // contrainte reste non posée jusqu'à correction manuelle (écran EN27).

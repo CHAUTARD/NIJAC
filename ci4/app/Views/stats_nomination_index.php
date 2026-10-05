@@ -42,12 +42,16 @@ table.recap tr:hover td { background:#f4f9f4; }
 #tbl-clubs th, #tbl-clubs td { padding:.4rem .7rem; border-bottom:1px solid #eee; text-align:left; }
 #tbl-clubs th { background:#1a3a6b; color:#fff; }
 #tbl-clubs th.num, #tbl-clubs td.num { text-align:right; font-variant-numeric:tabular-nums; }
-#tbl-clubs td.ratio { text-align:right; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
-#tbl-clubs tr.complet td.ratio { color:#2e7d32; }
-#tbl-clubs tr.court   td.ratio { color:#e65100; }
-.jauge { position:relative; height:6px; border-radius:3px; background:#e9edf3; margin-top:.2rem; overflow:hidden; }
-.jauge > span { position:absolute; inset:0 auto 0 0; background:var(--nom-green); border-radius:3px; }
-#tbl-clubs tr.court .jauge > span { background:#f0a020; }
+#tbl-clubs thead th[data-col] { cursor:pointer; user-select:none; white-space:nowrap; }
+#tbl-clubs thead th .sort-icon::after { margin-left:.25rem; font-size:.7rem; opacity:.6; }
+#tbl-clubs thead th.sort-asc  .sort-icon::after { content:'▲'; opacity:1; }
+#tbl-clubs thead th.sort-desc .sort-icon::after { content:'▼'; opacity:1; }
+#tbl-clubs thead th[data-col]:not(.sort-asc):not(.sort-desc) .sort-icon::after { content:'⇅'; }
+#tbl-clubs td.ecart { font-weight:700; }
+#tbl-clubs td.ecart.neg { color:#c62828; }
+#tbl-clubs td.ecart.pos { color:#2e7d32; }
+#tbl-clubs tfoot td { font-weight:700; background:#f8f9fa; border-top:2px solid #dee2e6; }
+.club-code { color:#888; font-size:.75rem; }
 h2.section { font-size:1rem; color:#1a3a6b; margin:1.5rem 0 .6rem; }
 
 /* ── Sections repliables façon boutons-cartes (forme donnée en exemple) ── */
@@ -153,24 +157,29 @@ details.club-accent { border-left-color:#e65100; } .club-accent .sect-ico { back
         <summary class="sect-head">
             <span class="sect-ico"><i class="bi bi-building"></i></span>
             <span class="sect-txt">
-                <span class="sect-titre">Clubs avec équipes en régionale</span>
-                <span class="sect-desc">Nominations faites par les JA du club sur le nombre à effectuer
-                    (<span id="coef-nat"></span> par équipe nationale, <span id="coef-reg"></span> par équipe régionale)</span>
+                <span class="sect-titre">Prestations par club</span>
+                <span class="sect-desc">Prestations dues (Nationale × <span id="coef-nat"></span> · Régionale × <span id="coef-reg"></span>)
+                    et prestations faites par les JA du club (nominations validées, rencontres jouées)</span>
             </span>
             <i class="bi bi-chevron-right sect-chev"></i>
         </summary>
         <div class="sect-body">
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <input type="search" id="filtre-club" class="form-control form-control-sm" style="max-width:260px" placeholder="Filtrer un club…">
+            <span class="badge bg-secondary" id="nb-clubs"></span>
+        </div>
         <div class="recap-scroll">
         <table id="tbl-clubs">
             <thead><tr>
-                <th>Club</th>
-                <th class="num">Éq. rég.</th>
-                <th class="num">Éq. nat.</th>
-                <th class="num">Réalisées</th>
-                <th class="num">À effectuer</th>
-                <th class="ratio">Avancement</th>
+                <th data-col="Nom">Club<span class="sort-icon"></span></th>
+                <th class="num" data-col="NbNat">Éq. nationale<span class="sort-icon"></span></th>
+                <th class="num" data-col="NbReg">Éq. régionale<span class="sort-icon"></span></th>
+                <th class="num" data-col="Quota">Prestations dues<span class="sort-icon"></span></th>
+                <th class="num" data-col="NbNom">Prestations faites<span class="sort-icon"></span></th>
+                <th class="num" data-col="Ecart">Écart<span class="sort-icon"></span></th>
             </tr></thead>
             <tbody id="clubs-body"></tbody>
+            <tfoot id="clubs-foot"></tfoot>
         </table>
         </div>
         </div>
@@ -182,6 +191,7 @@ details.club-accent { border-left-color:#e65100; } .club-accent .sect-ico { back
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-sortable-table.js') ?>"></script>
 <script>
 'use strict';
 
@@ -311,35 +321,52 @@ function rendu(res) {
     });
     $('#compteurs-body').html(cbody);
 
-    // Cartouche clubs — nominations faites par les JA du club / nombre à effectuer
-    $('#coef-nat').text('× ' + (res.coefNat ?? ''));
-    $('#coef-reg').text('× ' + (res.coefReg ?? ''));
-    let kbody = '';
-    const clubs = res.clubs || [];
-    if (!clubs.length) kbody = '<tr><td colspan="6" class="text-muted">Aucun club avec équipe en régionale dans votre périmètre.</td></tr>';
-    clubs.forEach(k => {
-        const quota = parseInt(k.Quota) || 0;
-        const nom   = parseInt(k.NbNom) || 0;
-        const pct   = quota ? Math.min(100, Math.round(nom / quota * 100)) : 0;
-        const cls   = quota && nom >= quota ? 'complet' : 'court';
-        kbody += `<tr class="${cls}">
-            <td>${escHtml(k.Nom)}</td>
-            <td class="num">${escHtml(k.NbReg)}</td>
-            <td class="num">${escHtml(k.NbNat)}</td>
-            <td class="num">${nom}</td>
-            <td class="num">${quota}</td>
-            <td class="ratio">${nom} / ${quota}
-                <div class="jauge"><span style="width:${pct}%"></span></div>
-            </td>
-        </tr>`;
-    });
-    $('#clubs-body').html(kbody);
+    // Cartouche « Prestations par club »
+    $('#coef-nat').text(res.coefNat ?? '');
+    $('#coef-reg').text(res.coefReg ?? '');
+    clubs = res.clubs || [];
+    rendreClubs();
 
     buildCalendrier(groupes);   // affichage permanent ; mois repliés par défaut, état conservé au rechargement
 
     $('#chargement').hide();
     $('#contenu').show();
 }
+
+// ── Prestations par club : filtre texte, tri (écart croissant par défaut = clubs en retard d'abord), totaux ──
+let clubs = [];
+const triClubs = { col: 'Ecart', asc: true };
+
+function rendreClubs() {
+    const f = ($('#filtre-club').val() || '').trim().toLowerCase();
+    const lignes = clubs.filter(k => !f || (k.Nom + ' ' + k.Id_Club).toLowerCase().includes(f));
+    const col = triClubs.col, sens = triClubs.asc ? 1 : -1;
+    lignes.sort((a, b) => sens * (col === 'Nom'
+        ? String(a.Nom).localeCompare(String(b.Nom), 'fr')
+        : (a[col] - b[col]) || String(a.Nom).localeCompare(String(b.Nom), 'fr')));
+
+    const tot = { NbNat: 0, NbReg: 0, Quota: 0, NbNom: 0, Ecart: 0 };
+    const ecartTd = e => `<td class="num ecart ${e < 0 ? 'neg' : e > 0 ? 'pos' : ''}">${e > 0 ? '+' : ''}${e}</td>`;
+    let h = '';
+    lignes.forEach(k => {
+        Object.keys(tot).forEach(c => tot[c] += k[c]);
+        h += `<tr>
+            <td>${escHtml(k.Nom)} <span class="club-code">${escHtml(k.Id_Club)}</span></td>
+            <td class="num">${k.NbNat}</td>
+            <td class="num">${k.NbReg}</td>
+            <td class="num">${k.Quota}</td>
+            <td class="num">${k.NbNom}</td>
+            ${ecartTd(k.Ecart)}
+        </tr>`;
+    });
+    $('#clubs-body').html(h || '<tr><td colspan="6" class="text-muted">Aucun club.</td></tr>');
+    $('#clubs-foot').html(lignes.length ? `<tr><td>Total</td><td class="num">${tot.NbNat}</td><td class="num">${tot.NbReg}</td>
+        <td class="num">${tot.Quota}</td><td class="num">${tot.NbNom}</td>${ecartTd(tot.Ecart)}</tr>` : '');
+    $('#nb-clubs').text(lignes.length + ' club' + (lignes.length > 1 ? 's' : ''));
+}
+
+nijacSortableTable('#tbl-clubs thead th[data-col]', 'col', triClubs, rendreClubs, false);
+$('#filtre-club').on('input', rendreClubs);
 
 let dernierChargement = 0;
 
