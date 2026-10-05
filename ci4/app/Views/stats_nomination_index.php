@@ -38,6 +38,18 @@ table.recap tr:hover td { background:#f4f9f4; }
 #tbl-compteurs th { background:#1a3a6b; color:#fff; }
 #tbl-compteurs td.nb { text-align:right; font-weight:700; font-variant-numeric:tabular-nums; }
 
+/* Cartouche restauré « Clubs avec équipes en régionale » (préfixe reg-) */
+#tbl-clubs-reg { width:100%; min-width:560px; border-collapse:collapse; font-size:.85rem; background:#fff; }
+#tbl-clubs-reg th, #tbl-clubs-reg td { padding:.4rem .7rem; border-bottom:1px solid #eee; text-align:left; }
+#tbl-clubs-reg th { background:#1a3a6b; color:#fff; }
+#tbl-clubs-reg th.num, #tbl-clubs-reg td.num { text-align:right; font-variant-numeric:tabular-nums; }
+#tbl-clubs-reg td.ratio { text-align:right; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+#tbl-clubs-reg tr.complet td.ratio { color:#2e7d32; }
+#tbl-clubs-reg tr.court   td.ratio { color:#e65100; }
+#tbl-clubs-reg .jauge { position:relative; height:6px; border-radius:3px; background:#e9edf3; margin-top:.2rem; overflow:hidden; }
+#tbl-clubs-reg .jauge > span { position:absolute; inset:0 auto 0 0; background:var(--nom-green); border-radius:3px; }
+#tbl-clubs-reg tr.court .jauge > span { background:#f0a020; }
+
 #tbl-clubs { width:100%; min-width:560px; border-collapse:collapse; font-size:.85rem; background:#fff; }
 #tbl-clubs th, #tbl-clubs td { padding:.4rem .7rem; border-bottom:1px solid #eee; text-align:left; }
 #tbl-clubs th { background:#1a3a6b; color:#fff; }
@@ -50,6 +62,8 @@ table.recap tr:hover td { background:#f4f9f4; }
 #tbl-clubs td.ecart { font-weight:700; }
 #tbl-clubs td.ecart.neg { color:#c62828; }
 #tbl-clubs td.ecart.pos { color:#2e7d32; }
+#tbl-clubs td.arb-club { color:#6c757d; font-style:italic; background:#f8f9fa; }
+.clubs-legende { font-size:.78rem; color:#6c757d; margin-top:.4rem; }
 #tbl-clubs tfoot td { font-weight:700; background:#f8f9fa; border-top:2px solid #dee2e6; }
 .club-code { color:#888; font-size:.75rem; }
 h2.section { font-size:1rem; color:#1a3a6b; margin:1.5rem 0 .6rem; }
@@ -157,16 +171,51 @@ details.club-accent { border-left-color:#e65100; } .club-accent .sect-ico { back
         <summary class="sect-head">
             <span class="sect-ico"><i class="bi bi-building"></i></span>
             <span class="sect-txt">
-                <span class="sect-titre">Prestations par club</span>
-                <span class="sect-desc">Prestations dues (Nationale × <span id="coef-nat"></span> · Régionale × <span id="coef-reg"></span>)
-                    et prestations faites par les JA du club (nominations validées, rencontres jouées)</span>
+                <span class="sect-titre">Clubs avec équipes en régionale</span>
+                <span class="sect-desc">Nominations faites par les JA du club sur le nombre à effectuer
+                    (<span id="reg-coef-nat"></span> par équipe nationale, <span id="reg-coef-reg"></span> par équipe régionale)</span>
             </span>
             <i class="bi bi-chevron-right sect-chev"></i>
         </summary>
         <div class="sect-body">
-        <div class="d-flex align-items-center gap-2 mb-2">
-            <input type="search" id="filtre-club" class="form-control form-control-sm" style="max-width:260px" placeholder="Filtrer un club…">
-            <span class="badge bg-secondary" id="nb-clubs"></span>
+        <div class="recap-scroll">
+        <table id="tbl-clubs-reg">
+            <thead><tr>
+                <th>Club</th>
+                <th class="num">Éq. rég.</th>
+                <th class="num">Éq. nat.</th>
+                <th class="num">Réalisées</th>
+                <th class="num">À effectuer</th>
+                <th class="ratio">Avancement</th>
+            </tr></thead>
+            <tbody id="reg-clubs-body"></tbody>
+        </table>
+        </div>
+        </div>
+        </details>
+
+        <details class="sect-btn club-accent">
+        <summary class="sect-head">
+            <span class="sect-ico"><i class="bi bi-building"></i></span>
+            <span class="sect-txt">
+                <span class="sect-titre">Prestations par club</span>
+                <span class="sect-desc">Prestations dues (Nationale × <span id="coef-nat"></span> · Régionale × <span id="coef-reg"></span>)
+                    et prestations faites par les JA du club (nominations validées, rencontres jouées, arbitrage CRA)</span>
+            </span>
+            <i class="bi bi-chevron-right sect-chev"></i>
+        </summary>
+        <div class="sect-body">
+        <div class="d-flex align-items-end flex-wrap gap-2 mb-2" style="--strip-bg:#fff">
+            <span class="combo-field">
+                <label for="sel-dept-club">Département</label>
+                <select id="sel-dept-club"><option value="">Tous les départements</option></select>
+            </span>
+            <span class="badge bg-secondary mb-2" id="nb-clubs"></span>
+            <span class="ms-auto" id="wrap-export-csv" tabindex="0">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-export-csv">
+                    <i class="bi bi-filetype-csv me-1"></i>Exporter CSV
+                </button>
+            </span>
         </div>
         <div class="recap-scroll">
         <table id="tbl-clubs">
@@ -176,12 +225,15 @@ details.club-accent { border-left-color:#e65100; } .club-accent .sect-ico { back
                 <th class="num" data-col="NbReg">Éq. régionale<span class="sort-icon"></span></th>
                 <th class="num" data-col="Quota">Prestations dues<span class="sort-icon"></span></th>
                 <th class="num" data-col="NbNom">Prestations faites<span class="sort-icon"></span></th>
+                <th class="num" data-col="NbClub" title="Arbitrages club — non comptés dans le total des prestations">Arbitrages club<span class="sort-icon"></span></th>
                 <th class="num" data-col="Ecart">Écart<span class="sort-icon"></span></th>
             </tr></thead>
             <tbody id="clubs-body"></tbody>
             <tfoot id="clubs-foot"></tfoot>
         </table>
         </div>
+        <div class="clubs-legende"><i class="bi bi-info-circle me-1"></i>Écart = prestations faites − prestations dues.
+            Les arbitrages club ne sont pas comptés dans les prestations faites ni dans l'écart.</div>
         </div>
         </details>
     </div>
@@ -321,10 +373,38 @@ function rendu(res) {
     });
     $('#compteurs-body').html(cbody);
 
+    // Cartouche restauré « Clubs avec équipes en régionale » — nominations faites par les JA du club / nombre à effectuer
+    $('#reg-coef-nat').text('× ' + (res.coefNat ?? ''));
+    $('#reg-coef-reg').text('× ' + (res.coefReg ?? ''));
+    let regBody = '';
+    const regClubs = res.clubsRegionale || [];
+    if (!regClubs.length) regBody = '<tr><td colspan="6" class="text-muted">Aucun club avec équipe en régionale dans votre périmètre.</td></tr>';
+    regClubs.forEach(k => {
+        const quota = parseInt(k.Quota) || 0;
+        const nom   = parseInt(k.NbNom) || 0;
+        const pct   = quota ? Math.min(100, Math.round(nom / quota * 100)) : 0;
+        const cls   = quota && nom >= quota ? 'complet' : 'court';
+        regBody += `<tr class="${cls}">
+            <td>${escHtml(k.Nom)}</td>
+            <td class="num">${escHtml(k.NbReg)}</td>
+            <td class="num">${escHtml(k.NbNat)}</td>
+            <td class="num">${nom}</td>
+            <td class="num">${quota}</td>
+            <td class="ratio">${nom} / ${quota}
+                <div class="jauge"><span style="width:${pct}%"></span></div>
+            </td>
+        </tr>`;
+    });
+    $('#reg-clubs-body').html(regBody);
+
     // Cartouche « Prestations par club »
     $('#coef-nat').text(res.coefNat ?? '');
     $('#coef-reg').text(res.coefReg ?? '');
     clubs = res.clubs || [];
+    const $sel = $('#sel-dept-club'), deptChoisi = $sel.val();
+    $sel.find('option:not(:first)').remove();
+    (res.deptsClubs || []).forEach(d => $sel.append($('<option>').val(d.code).text(d.nom ? `${d.code} — ${d.nom}` : d.code)));
+    $sel.val($sel.find(`option[value="${deptChoisi}"]`).length ? deptChoisi : '');   // conservé au rechargement
     rendreClubs();
 
     buildCalendrier(groupes);   // affichage permanent ; mois repliés par défaut, état conservé au rechargement
@@ -333,40 +413,79 @@ function rendu(res) {
     $('#contenu').show();
 }
 
-// ── Prestations par club : filtre texte, tri (écart croissant par défaut = clubs en retard d'abord), totaux ──
+// ── Prestations par club : filtre département, tri (club alphabétique par défaut), totaux, export CSV ──
+// [EN26-CLUBS-PUR] fonctions sans DOM (extraites par le test node du scratchpad)
+const collFr = new Intl.Collator('fr', { sensitivity: 'base' });   // insensible casse + accents
+
+function lignesClubsVisibles(clubs, dept, tri) {
+    const col = tri.col, sens = tri.asc ? 1 : -1;
+    return clubs.filter(k => !dept || k.Dept === dept).sort((a, b) => sens * (col === 'Nom'
+        ? collFr.compare(String(a.Nom), String(b.Nom))
+        : (a[col] - b[col]) || collFr.compare(String(a.Nom), String(b.Nom))));
+}
+
+function totauxClubs(lignes) {
+    // NbClub (arbitrages club) : total propre, hors NbNom et hors Ecart (déjà exclus côté serveur)
+    const tot = { NbNat: 0, NbReg: 0, Quota: 0, NbNom: 0, NbClub: 0, Ecart: 0 };
+    lignes.forEach(k => Object.keys(tot).forEach(c => tot[c] += k[c]));
+    return tot;
+}
+
+function csvCellule(v) {
+    let s = String(v ?? '');
+    if (typeof v === 'string' && /^[=+\-@]/.test(s)) s = "'" + s;   // anti-injection de formule (cf. csvSafe())
+    return /[;"\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function csvClubs(lignes) {
+    const t = totauxClubs(lignes);
+    const rows = [['Département', 'Id club', 'Club', 'Équipes Nationale', 'Équipes Régionale', 'Prestations dues', 'Prestations faites', 'Arbitrages club', 'Écart']]
+        .concat(lignes.map(k => [String(k.Dept), String(k.Id_Club), String(k.Nom), k.NbNat, k.NbReg, k.Quota, k.NbNom, k.NbClub, k.Ecart]))
+        .concat([['TOTAL', '', '', t.NbNat, t.NbReg, t.Quota, t.NbNom, t.NbClub, t.Ecart]]);
+    return '\uFEFF' + rows.map(r => r.map(csvCellule).join(';')).join('\r\n') + '\r\n';
+}
+// [/EN26-CLUBS-PUR]
+
 let clubs = [];
-const triClubs = { col: 'Ecart', asc: true };
+let clubsAffiches = [];
+const triClubs = { col: 'Nom', asc: true };
 
 function rendreClubs() {
-    const f = ($('#filtre-club').val() || '').trim().toLowerCase();
-    const lignes = clubs.filter(k => !f || (k.Nom + ' ' + k.Id_Club).toLowerCase().includes(f));
-    const col = triClubs.col, sens = triClubs.asc ? 1 : -1;
-    lignes.sort((a, b) => sens * (col === 'Nom'
-        ? String(a.Nom).localeCompare(String(b.Nom), 'fr')
-        : (a[col] - b[col]) || String(a.Nom).localeCompare(String(b.Nom), 'fr')));
-
-    const tot = { NbNat: 0, NbReg: 0, Quota: 0, NbNom: 0, Ecart: 0 };
+    const lignes = clubsAffiches = lignesClubsVisibles(clubs, $('#sel-dept-club').val() || '', triClubs);
+    const tot = totauxClubs(lignes);
     const ecartTd = e => `<td class="num ecart ${e < 0 ? 'neg' : e > 0 ? 'pos' : ''}">${e > 0 ? '+' : ''}${e}</td>`;
     let h = '';
     lignes.forEach(k => {
-        Object.keys(tot).forEach(c => tot[c] += k[c]);
-        h += `<tr>
+        h += `<tr data-dept="${escHtml(k.Dept)}">
             <td>${escHtml(k.Nom)} <span class="club-code">${escHtml(k.Id_Club)}</span></td>
             <td class="num">${k.NbNat}</td>
             <td class="num">${k.NbReg}</td>
             <td class="num">${k.Quota}</td>
             <td class="num">${k.NbNom}</td>
+            <td class="num arb-club">${k.NbClub}</td>
             ${ecartTd(k.Ecart)}
         </tr>`;
     });
-    $('#clubs-body').html(h || '<tr><td colspan="6" class="text-muted">Aucun club.</td></tr>');
+    $('#clubs-body').html(h || '<tr><td colspan="7" class="text-muted">Aucun club.</td></tr>');
     $('#clubs-foot').html(lignes.length ? `<tr><td>Total</td><td class="num">${tot.NbNat}</td><td class="num">${tot.NbReg}</td>
-        <td class="num">${tot.Quota}</td><td class="num">${tot.NbNom}</td>${ecartTd(tot.Ecart)}</tr>` : '');
+        <td class="num">${tot.Quota}</td><td class="num">${tot.NbNom}</td><td class="num arb-club">${tot.NbClub}</td>${ecartTd(tot.Ecart)}</tr>` : '');
     $('#nb-clubs').text(lignes.length + ' club' + (lignes.length > 1 ? 's' : ''));
+    $('#btn-export-csv').prop('disabled', !lignes.length);
+    $('#wrap-export-csv').attr('title', lignes.length ? '' : 'Aucun club affiché : rien à exporter');
 }
 
 nijacSortableTable('#tbl-clubs thead th[data-col]', 'col', triClubs, rendreClubs, false);
-$('#filtre-club').on('input', rendreClubs);
+$('#sel-dept-club').on('change', rendreClubs);
+
+$('#btn-export-csv').on('click', function () {
+    if (!clubsAffiches.length) return;
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csvClubs(clubsAffiches)], { type: 'text/csv;charset=utf-8' }));
+    a.download = `prestations-par-club-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
 
 let dernierChargement = 0;
 

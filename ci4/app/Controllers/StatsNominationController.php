@@ -92,17 +92,60 @@ class StatsNominationController extends BaseController
             // (clés `configuration`, amorcées par EA98), et prestations faites par ses JA (ja.Id_Club).
             // Régionales = table `equipe` (Division NOT LIKE 'N%' : PN, R1…R4), club porteur
             // principal (Id_Club) ; nationales = table `equipe_nationale` (N1…N3).
-            // Faites = nomination Valide sur une rencontre déjà jouée (r.Date <= CURDATE()), arbitrages
-            // club compris (comme EN17) ; la table `rencontre` ne contient que la saison en cours.
+            // Faites = nomination Valide sur une rencontre déjà jouée (r.Date <= CURDATE()) en arbitrage
+            // CRA (r.ArbitrageCRA = 1) ; les arbitrages club (ArbitrageCRA = 0) sont comptés à part
+            // (NbClub), hors total et hors écart — même découpage que SQL_NB_CRA / SQL_NB_CLUB d'EN17
+            // (colonne NOT NULL DEFAULT 1, pas de cas NULL). La table `rencontre` ne contient que la saison en cours.
             // Non restreintes au périmètre : c'est un indicateur de complétude du club.
             $coefReg = (int) getConfig('nombre_arbitrage_regional', '5');
             $coefNat = (int) getConfig('nombre_arbitrage_national', '7');
 
+            // Cartouche restauré « Clubs avec équipes en régionale » (clé JSON `clubsRegionale`,
+            // version d'avant 650b053) : pour chaque club du périmètre ayant au moins une équipe
+            // régionale, nombre de nominations faites par ses JA (ja.Id_Club) rapporté au
+            // quota = nb équipes nationales × nombre_arbitrage_national
+            //        + nb équipes régionales × nombre_arbitrage_regional.
+            // Régionales = table `equipe` (Division NOT LIKE 'N%'), club porteur principal
+            // (Id_Club) ; nationales = table `equipe_nationale`. Les nominations comptées ne
+            // sont pas restreintes au périmètre : c'est un indicateur de complétude du club.
             $stmt = $pdo->prepare("
                 SELECT c.Id_Club, c.Nom,
-                       COALESCE(er.nb, 0) AS NbReg,
+                       er.nb              AS NbReg,
                        COALESCE(en.nb, 0) AS NbNat,
                        COALESCE(nm.nb, 0) AS NbNom
+                FROM Club c
+                JOIN (
+                    SELECT Id_Club, COUNT(*) nb FROM equipe
+                    WHERE Division NOT LIKE 'N%' GROUP BY Id_Club
+                ) er ON er.Id_Club = c.Id_Club
+                LEFT JOIN (
+                    SELECT Id_Club, COUNT(*) nb FROM equipe_nationale GROUP BY Id_Club
+                ) en ON en.Id_Club = c.Id_Club
+                LEFT JOIN (
+                    SELECT ja.Id_Club, COUNT(*) nb
+                    FROM nomination n
+                    JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                    JOIN ja           ON ja.Id_JA        = d.Id_JA
+                    GROUP BY ja.Id_Club
+                ) nm ON nm.Id_Club = c.Id_Club
+                WHERE SUBSTRING(c.Id_Club, 3, 2) IN ($ph)
+                ORDER BY c.Nom
+            ");
+            $stmt->execute($depts);
+            $clubsRegionale = array_map(static function (array $r) use ($coefReg, $coefNat): array {
+                $r['NbReg']  = (int) $r['NbReg'];
+                $r['NbNat']  = (int) $r['NbNat'];
+                $r['NbNom']  = (int) $r['NbNom'];
+                $r['Quota']  = $r['NbNat'] * $coefNat + $r['NbReg'] * $coefReg;
+                return $r;
+            }, $stmt->fetchAll());
+
+            $stmt = $pdo->prepare("
+                SELECT c.Id_Club, c.Nom, SUBSTRING(c.Id_Club, 3, 2) AS Dept,
+                       COALESCE(er.nb, 0) AS NbReg,
+                       COALESCE(en.nb, 0) AS NbNat,
+                       COALESCE(nm.nb, 0) AS NbNom,
+                       COALESCE(nm.nbClub, 0) AS NbClub
                 FROM Club c
                 LEFT JOIN (
                     SELECT Id_Club, COUNT(*) nb FROM equipe
@@ -112,7 +155,7 @@ class StatsNominationController extends BaseController
                     SELECT Id_Club, COUNT(*) nb FROM equipe_nationale GROUP BY Id_Club
                 ) en ON en.Id_Club = c.Id_Club
                 LEFT JOIN (
-                    SELECT ja.Id_Club, COUNT(*) nb
+                    SELECT ja.Id_Club, SUM(r.ArbitrageCRA = 1) nb, SUM(r.ArbitrageCRA = 0) nbClub
                     FROM nomination n
                     JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
                     JOIN ja           ON ja.Id_JA        = d.Id_JA
@@ -128,16 +171,30 @@ class StatsNominationController extends BaseController
                 $r['NbReg']  = (int) $r['NbReg'];
                 $r['NbNat']  = (int) $r['NbNat'];
                 $r['NbNom']  = (int) $r['NbNom'];
+                $r['NbClub'] = (int) $r['NbClub'];
                 $r['Quota']  = $r['NbNat'] * $coefNat + $r['NbReg'] * $coefReg;
                 $r['Ecart']  = $r['NbNom'] - $r['Quota'];
                 return $r;
             }, $stmt->fetchAll());
 
+            // Libellés du filtre « Département » (EN26) : seulement les départements présents dans les clubs.
+            $nomsDept = [];
+            foreach (getDeptActifs() as $d) {
+                $nomsDept[(int) $d['CodeDept']] = $d['nom'];
+            }
+            $deptsClubs = [];
+            foreach ($clubs as $c) {
+                $deptsClubs[$c['Dept']] = ['code' => $c['Dept'], 'nom' => $nomsDept[(int) $c['Dept']] ?? ''];
+            }
+            ksort($deptsClubs);
+
             return $this->response->setJSON([
                 'ok'         => true,
                 'rencontres' => $rencontres,
                 'compteurs'  => $compteurs,
+                'clubsRegionale' => $clubsRegionale,
                 'clubs'      => $clubs,
+                'deptsClubs' => array_values($deptsClubs),
                 'coefReg'    => $coefReg,
                 'coefNat'    => $coefNat,
             ]);

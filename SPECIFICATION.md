@@ -987,16 +987,26 @@ Si `update()` change `Date` ou `Heure` sur une rencontre qui porte déjà une no
 
 ## EN26 – Statistiques des nominations
 
-`StatsNominationController` — GET `stats-nomination` (vue) et GET `stats-nomination/data` (JSON unique : `rencontres`, `compteurs`, `clubs`, `coefNat`, `coefReg`). Filtre `auth`, lecture seule. Voir `ECRANS.md` pour le calendrier, les journées et le tableau des JA nominés.
+`StatsNominationController` — GET `stats-nomination` (vue) et GET `stats-nomination/data` (JSON unique : `rencontres`, `compteurs`, `clubsRegionale`, `clubs`, `deptsClubs`, `coefNat`, `coefReg`). Filtre `auth`, lecture seule. Voir `ECRANS.md` pour le calendrier, les journées et le tableau des JA nominés.
+
+### Cartouche « Clubs avec équipes en régionale » (restauré, avant « Prestations par club »)
+- **Périmètre** : clubs dont `SUBSTRING(Id_Club, 3, 2)` ∈ `getDepartementsAutorises()` ayant **au moins une** équipe `equipe` hors `Division LIKE 'N%'` (jointure interne). JSON `clubsRegionale`, trié par `c.Nom`.
+- **Éq. rég.** / **Éq. nat.** : comme « Prestations par club » (`equipe` hors N*, club porteur principal ; `equipe_nationale`).
+- **Réalisées** : toutes les nominations des JA du club (`nomination → disponible → ja.Id_Club`), sans filtre `Valide`, date ni type d'arbitrage, non restreintes au périmètre (indicateur de complétude du club).
+- **À effectuer** (`Quota`) = Éq. nat. × `nombre_arbitrage_national` + Éq. rég. × `nombre_arbitrage_regional` (mêmes clés/défauts, rappelés dans le sous-titre).
+- **Avancement** : « Réalisées / À effectuer » + jauge (largeur = min(100 %, Réalisées / À effectuer)) ; ligne verte si Réalisées ≥ À effectuer (> 0), orange sinon. Pas de tri, filtre ni total.
 
 ### Cartouche « Prestations par club »
 - **Périmètre** : tous les clubs (`club`) dont `SUBSTRING(Id_Club, 3, 2)` ∈ `getDepartementsAutorises()` du nominateur, y compris ceux sans équipe ni JA (valeurs 0).
 - **Équipes nationale** : nombre de lignes `equipe_nationale` du club (`Id_Club`, divisions N1…N3).
 - **Équipes régionale** : nombre de lignes `equipe` du club porteur principal (`Id_Club`) avec `Division NOT LIKE 'N%'` (PN, R1…R4).
 - **Prestations dues** = Nationale × `nombre_arbitrage_national` (défaut 7) + Régionale × `nombre_arbitrage_regional` (défaut 5), calculées côté serveur ; coefficients lus par `getConfig()` (défauts si EA98 n'a pas encore créé les clés) et rappelés dans le sous-titre.
-- **Prestations faites** : nominations `Valide = 1` (`nomination → disponible → ja`, `ja.Id_Club` = club) sur une rencontre déjà jouée (`rencontre.Date <= CURDATE()`), toutes divisions et départements confondus, arbitrages club (R3M/R4M) compris comme dans EN17. La table `rencontre` ne contient que la saison en cours.
-- **Écart** = Faites − Dues (rouge si négatif, vert si positif).
-- Tableau trié par défaut sur l'écart croissant (clubs en retard en tête), en-têtes triables, filtre texte (nom ou n° de club), compteur de clubs, ligne de totaux sur les clubs affichés.
+- **Prestations faites** : nominations `Valide = 1` (`nomination → disponible → ja`, `ja.Id_Club` = club) sur une rencontre déjà jouée (`rencontre.Date <= CURDATE()`), toutes divisions et départements confondus, **arbitrage CRA uniquement** (`rencontre.ArbitrageCRA = 1`). La table `rencontre` ne contient que la saison en cours.
+- **Arbitrages club** (colonne après « Prestations faites », texte gris italique sur fond léger, infobulle « Arbitrages club — non comptés dans le total des prestations ») : même définition mais sur les rencontres en arbitrage club (`rencontre.ArbitrageCRA = 0`, R3M/R4M sans demande CRA). Les deux compteurs viennent d'une seule sous-requête (`SUM(r.ArbitrageCRA = 1)` / `SUM(r.ArbitrageCRA = 0)`), même découpage que `SQL_NB_CRA` / `SQL_NB_CLUB` d'EN17 ; `ArbitrageCRA` est `NOT NULL DEFAULT 1`, pas de cas NULL. Non comptés dans « Prestations faites » ni dans l'écart ; total propre en pied de tableau ; rappel en légende sous le tableau.
+- **Écart** = Faites (CRA) − Dues (rouge si négatif, vert si positif).
+- Tableau trié par défaut par nom de club alphabétique (serveur `ORDER BY c.Nom` ; client `Intl.Collator('fr', {sensitivity:'base'})`, insensible casse/accents), en-têtes triables, compteur de clubs, ligne de totaux sur les clubs affichés.
+- **Filtre Département** (combo `.combo-field`, défaut « Tous les départements ») : départements présents parmi les clubs (`clubs[].Dept` = positions 3-4 de `Id_Club`, libellés « 76 — Seine-Maritime » via `getDeptActifs()`, JSON `deptsClubs`) ; filtre côté client, compteur et totaux recalculés, tri conservé.
+- **Exporter CSV** (côté navigateur, Blob) : lignes affichées (filtre et tri en cours), fichier `prestations-par-club-AAAA-MM-JJ.csv`, colonnes Département ; Id club ; Club ; Équipes Nationale ; Équipes Régionale ; Prestations dues ; Prestations faites ; Arbitrages club ; Écart, puis ligne `TOTAL`. UTF-8 avec BOM, séparateur `;`, fins de ligne CRLF, champs contenant `;` `"` ou retour ligne entre guillemets (`"` doublés), entiers bruts ; cellules texte commençant par `=` `+` `-` `@` préfixées de `'` (anti-injection de formule). Bouton désactivé quand aucun club n'est affiché.
 
 ---
 
