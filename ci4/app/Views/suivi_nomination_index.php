@@ -132,13 +132,13 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title"><i class="bi bi-pencil me-2"></i>Modifier la nomination</h6>
+                <h6 class="modal-title" id="modif-titre"><i class="bi bi-pencil me-2"></i>Modifier la nomination</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
             </div>
             <div class="modal-body">
                 <div id="modif-rencontre" class="small text-muted mb-3"></div>
                 <div class="row g-2">
-                    <div class="col-5">
+                    <div class="col-5" id="modif-col-arbitrage">
                         <label class="form-label small mb-1" for="modif-arbitrage">Arbitrage</label>
                         <select id="modif-arbitrage" class="form-select form-select-sm">
                             <option value="1">CRA</option>
@@ -300,6 +300,10 @@ function renderListe() {
             .html('<i class="bi bi-envelope"></i>')
             .on('click', function () { relancerClub(n, $(this)); });
         const relancable = !nomme && n.ArbitrageCRA !== null && +n.ArbitrageCRA === 0;
+        // Même cas (arbitrage club sans réponse du club) : le nominateur saisit lui-même le JA qui a officié
+        const $saisir = $('<button type="button" class="btn btn-sm btn-outline-success" title="Saisir le JA qui a officié (arbitrage club)">')
+            .html('<i class="bi bi-person-plus"></i>')
+            .on('click', function () { ouvrirModification(n); });
         $('<tr>').toggleClass('sans-ja', !nomme).append(
             $('<td>').attr('data-field', 'date').text(formatDateAvecJour(n.Date, true)),
             $('<td class="centre">').attr('data-field', 'division').append(macaronDivision(n.Division, n.DivisionColor)),
@@ -320,10 +324,10 @@ function renderListe() {
                 .text(saisi ? (+n.Defiscalisation ? 'Oui' : 'Non') : '—'),
             $('<td class="centre">').attr('data-field', 'saisie').toggleClass('non-saisi', !saisi)
                 .text(saisi ? n.DateSaisie.substring(0, 10).split('-').reverse().join('/') : (nomme ? '—' : '')),
-            $('<td class="centre">').append(nomme ? $modifier : ''),
+            $('<td class="centre">').append(nomme ? $modifier : (relancable ? $saisir : '')),
             $('<td class="centre">').append(relancable ? $relanceClub
                 : (!nomme || saisi || !+n.Valide ? '' : $rappel)) // sans JA, frais déjà saisis, ou arbitrage club non validé (refusé serveur) : pas de rappel
-        ).on('dblclick', function () { if (nomme) ouvrirModification(n); }).appendTo($body);
+        ).on('dblclick', function () { if (nomme || relancable) ouvrirModification(n); }).appendTo($body);
     });
 }
 
@@ -363,20 +367,36 @@ let modifNom = null;     // nomination en cours de modification
 function remplirListeJa(n) {
     const $sel = $('#modif-ja').empty();
     let liste = jaListe;
+    const option = j => $('<option>').val(j.Id_JA).text(`${j.Nom} ${j.Prenom} (${j.Id_JA})`);
+    if (!n.Id_Nomination) {
+        // « Saisir le JA » : JA du club recevant en tête, puis les autres (même tri Nom/Prénom)
+        const duClub = liste.filter(j => j.Id_Club === n.IdClubDom), autres = liste.filter(j => j.Id_Club !== n.IdClubDom);
+        $sel.append($('<option>').val('').text('— Choisir le JA —'));
+        if (duClub.length) $sel.append($('<optgroup label="JA du club recevant">').append(duClub.map(option)));
+        $sel.append($('<optgroup label="Autres JA du périmètre">').append(autres.map(option)));
+        return;
+    }
     // le JA actuel reste sélectionnable même s'il n'est pas dans la liste (inactif, autre département)
     if (!liste.some(j => +j.Id_JA === +n.Id_JA)) {
         const [prenom, ...nom] = String(n.NomJa ?? '').split(' ');
         liste = [{ Id_JA: n.Id_JA, Nom: nom.join(' '), Prenom: prenom }, ...liste];
     }
-    liste.forEach(j => $sel.append($('<option>').val(j.Id_JA).text(`${j.Nom} ${j.Prenom} (${j.Id_JA})`)));
+    liste.forEach(j => $sel.append(option(j)));
     $sel.val(n.Id_JA);
 }
 
+/** Popup « Modifier la nomination », ou « Saisir le JA » si la rencontre (arbitrage club) n'a pas de nomination. */
 function ouvrirModification(n) {
     modifNom = n;
     const ouvrir = () => {
+        const saisie = !n.Id_Nomination;
+        const libRencontre = `${formatDateAvecJour(n.Date, true)} — ${n.NomDom} vs ${n.NomExt ?? '?'}`;
         remplirListeJa(n);
-        $('#modif-rencontre').text(`${formatDateAvecJour(n.Date, true)} — ${n.NomDom} vs ${n.NomExt ?? '?'}`);
+        $('#modif-titre').empty().append(
+            $('<i class="bi me-2">').addClass(saisie ? 'bi-person-plus' : 'bi-pencil'),
+            document.createTextNode(saisie ? `Saisir le JA — ${n.NomDom} vs ${n.NomExt ?? '?'}` : 'Modifier la nomination'));
+        $('#modif-col-arbitrage').toggle(!saisie);   // saisie réservée à l'arbitrage club
+        $('#modif-rencontre').text(libRencontre);
         $('#modif-arbitrage').val(+n.ArbitrageCRA ? '1' : '0');
         $('#modif-peage').val(n.Peage ?? 0);
         $('#modif-km').val(n.Kilometre ?? 0);
@@ -393,15 +413,18 @@ function ouvrirModification(n) {
 
 $('#btn-modif-enregistrer').on('click', function () {
     if (!modifNom) return;
+    const saisie = !modifNom.Id_Nomination;
+    if (saisie && !$('#modif-ja').val()) { toast('Choisissez le juge-arbitre.', false); return; }
     const $btn = $(this).prop('disabled', true);
-    $.post(`${SUIVI_BASE}/modifier`, {
-        id_nomination: modifNom.Id_Nomination,
-        id_ja:         $('#modif-ja').val(),
-        arbitrage:     $('#modif-arbitrage').val(),
-        peage:         $('#modif-peage').val(),
-        km:            $('#modif-km').val(),
-        defisc:        $('#modif-defisc').is(':checked') ? 1 : 0,
-    }, function (r) {
+    const frais = {
+        id_ja:  $('#modif-ja').val(),
+        peage:  $('#modif-peage').val(),
+        km:     $('#modif-km').val(),
+        defisc: $('#modif-defisc').is(':checked') ? 1 : 0,
+    };
+    $.post(saisie ? `${SUIVI_BASE}/saisir` : `${SUIVI_BASE}/modifier`, saisie
+        ? { id_rencontre: modifNom.Id_Rencontre, ...frais }
+        : { id_nomination: modifNom.Id_Nomination, arbitrage: $('#modif-arbitrage').val(), ...frais }, function (r) {
         $btn.prop('disabled', false);
         toast(r.msg, !!r.ok);
         if (!r.ok) return;

@@ -62,7 +62,7 @@ class SuiviNominationController extends BaseController
             // sans nomination, les colonnes n.* / ja.* sont NULL (ligne « Aucun JA »).
             $stmt = $pdo->prepare('
                 SELECT r.Id_Rencontre, n.Id_Nomination, ja.Id_JA, r.Date, r.Heure, r.ArbitrageCRA,
-                       ed.Division, dv.Color AS DivisionColor, ed.Nom AS NomDom, ee.Nom AS NomExt,
+                       ed.Division, dv.Color AS DivisionColor, ed.Id_Club AS IdClubDom, ed.Nom AS NomDom, ee.Nom AS NomExt,
                        CONCAT(ja.Prenom, \' \', ja.Nom) AS NomJa, ja.Email AS EmailJa, ja.NumCompteEBP, ja.Telephone,
                        n.Peage, n.Kilometre, n.Defiscalisation, n.DateSaisie, n.Valide,
                        cl.Nom AS NomClub, cl.CorNom, cl.CorEmail, cl.RefNom, cl.RefMail
@@ -96,7 +96,7 @@ class SuiviNominationController extends BaseController
                 return $this->response->setJSON(['ok' => true, 'ja' => []]);
             }
             $stmt = getPDO()->prepare('
-                SELECT Id_JA, Nom, Prenom FROM ja
+                SELECT Id_JA, Nom, Prenom, Id_Club FROM ja
                 WHERE JA1 = 1 AND CodeDept IN (' . implode(',', array_fill(0, count($depts), '?')) . ')
                 ORDER BY Nom, Prenom
             ');
@@ -161,22 +161,7 @@ class SuiviNominationController extends BaseController
                     if ((int) $ja->fetchColumn() !== 1) {
                         throw new \RuntimeException('Juge-arbitre introuvable ou inactif.');
                     }
-                    $nb = $pdo->prepare('
-                        SELECT COUNT(*) AS nb, COALESCE(SUM(ed2.Id_Club <> ?), 0) AS autres_clubs
-                        FROM nomination n
-                        JOIN disponible d  ON d.Id_Disponible = n.Id_Disponible
-                        JOIN rencontre r2  ON r2.Id_Rencontre = n.Id_Rencontre
-                        JOIN equipe   ed2  ON ed2.Id_Equipe   = r2.Id_EquipeDom
-                        WHERE d.Id_JA = ? AND n.Id_Rencontre != ? AND r2.Date = ?
-                    ');
-                    $nb->execute([$nom['IdClubDom'], $idJa, $nom['Id_Rencontre'], $nom['Date']]);
-                    $deja = $nb->fetch();
-                    if ((int) $deja['nb'] >= 2) {
-                        throw new \RuntimeException('Ce JA a déjà 2 nominations ce jour-là (maximum).');
-                    }
-                    if ((int) $deja['autres_clubs'] > 0) {
-                        throw new \RuntimeException('Ce JA est déjà nommé ce jour-là sur une rencontre d\'un autre club.');
-                    }
+                    $this->controlerJourJa($pdo, $idJa, (int) $nom['Id_Rencontre'], $nom['Date'], $nom['IdClubDom']);
 
                     // disponible (JA, rencontre) : réutilisée si le JA a répondu O/P, rouverte en P s'il avait répondu N.
                     $d = $pdo->prepare('SELECT Id_Disponible, Reponse FROM disponible WHERE Id_JA = ? AND Id_Rencontre = ?');
@@ -215,6 +200,134 @@ class SuiviNominationController extends BaseController
             return $this->response->setJSON(['ok' => true, 'msg' => 'Nomination modifiée.']);
         } catch (\Throwable $e) {
             return $this->erreurTechnique($e, 'modifier', 'Modification impossible.');
+        }
+    }
+
+    /**
+     * Règle EN14/EN25 : 2 nominations max par JA et par date, et uniquement sur le même club
+     * recevant. Lève une RuntimeException (message affichable) si $idJa ne peut pas être nommé.
+     */
+    private function controlerJourJa(\PDO $pdo, int $idJa, int $idRencontre, string $date, string $idClubDom): void
+    {
+        $nb = $pdo->prepare('
+            SELECT COUNT(*) AS nb, COALESCE(SUM(ed2.Id_Club <> ?), 0) AS autres_clubs
+            FROM nomination n
+            JOIN disponible d  ON d.Id_Disponible = n.Id_Disponible
+            JOIN rencontre r2  ON r2.Id_Rencontre = n.Id_Rencontre
+            JOIN equipe   ed2  ON ed2.Id_Equipe   = r2.Id_EquipeDom
+            WHERE d.Id_JA = ? AND n.Id_Rencontre != ? AND r2.Date = ?
+        ');
+        $nb->execute([$idClubDom, $idJa, $idRencontre, $date]);
+        $deja = $nb->fetch();
+        if ((int) $deja['nb'] >= 2) {
+            throw new \RuntimeException('Ce JA a déjà 2 nominations ce jour-là (maximum).');
+        }
+        if ((int) $deja['autres_clubs'] > 0) {
+            throw new \RuntimeException('Ce JA est déjà nommé ce jour-là sur une rencontre d\'un autre club.');
+        }
+    }
+
+    /**
+     * « Saisir le JA » : le nominateur enregistre le JA qui a officié sur une rencontre en
+     * arbitrage club (ArbitrageCRA = 0) restée sans réponse du club. Même création qu'EN25
+     * (ArbitreClubController::enregistrer) : disponible 'P' + nomination Valide = 1,
+     * EmailEnvoye = 0 — aucun email envoyé.
+     */
+    public function saisir(): ResponseInterface
+    {
+        try {
+            $peage = str_replace(',', '.', trim((string) $this->request->getPost('peage')) ?: '0');
+            $kmRaw = trim((string) $this->request->getPost('km')) ?: '0';
+            if (!is_numeric($peage) || (float) $peage < 0) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Péage invalide.']);
+            }
+            if (!ctype_digit($kmRaw)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Kilomètres invalides (entier positif).']);
+            }
+
+            $this->creerNominationClub(
+                getPDO(),
+                $this->deptsAutorises(),
+                (int) $this->request->getPost('id_rencontre'),
+                (int) $this->request->getPost('id_ja'),
+                $peage,
+                (int) $kmRaw,
+                $this->request->getPost('defisc') ? 1 : 0
+            );
+
+            return $this->response->setJSON(['ok' => true, 'msg' => 'Juge-arbitre enregistré.']);
+        } catch (\RuntimeException $e) {
+            return $this->response->setJSON(['ok' => false, 'msg' => $e->getMessage()]);
+        } catch (\Throwable $e) {
+            return $this->erreurTechnique($e, 'saisir', 'Enregistrement impossible.');
+        }
+    }
+
+    /** Cœur de saisir() (sans requête HTTP). Refus métier : RuntimeException. */
+    private function creerNominationClub(\PDO $pdo, array $depts, int $idRenc, int $idJa, string $peage, int $km, int $defisc): void
+    {
+        if ($idRenc <= 0 || $idJa <= 0 || !$depts) {
+            throw new \RuntimeException('Paramètres invalides.');
+        }
+        $in = implode(',', array_fill(0, count($depts), '?'));
+
+        // Périmètre : même critère que data() (club recevant).
+        $stmt = $pdo->prepare("
+            SELECT r.Id_Rencontre, r.Date, r.ArbitrageCRA, ed.Id_Club AS IdClubDom,
+                   (SELECT COUNT(*) FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre) AS NbNom
+            FROM rencontre r
+            JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
+            WHERE r.Id_Rencontre = ? AND SUBSTRING(ed.Id_Club, 3, 2) IN ($in)
+        ");
+        $stmt->execute([$idRenc, ...$depts]);
+        $rc = $stmt->fetch();
+        if (!$rc) {
+            throw new \RuntimeException('Rencontre introuvable ou hors de votre périmètre.');
+        }
+        if ($rc['ArbitrageCRA'] === null || (int) $rc['ArbitrageCRA'] !== 0) {
+            throw new \RuntimeException('Rencontre en arbitrage CRA : la nomination se fait dans EN14.');
+        }
+        if ((int) $rc['NbNom'] > 0) {
+            throw new \RuntimeException('Un JA est déjà désigné pour cette rencontre : utilisez « Modifier ».');
+        }
+
+        $ja = $pdo->prepare("SELECT 1 FROM ja WHERE Id_JA = ? AND JA1 = 1 AND CodeDept IN ($in)");
+        $ja->execute([$idJa, ...$depts]);
+        if (!$ja->fetchColumn()) {
+            throw new \RuntimeException('Juge-arbitre introuvable, inactif ou hors de votre périmètre.');
+        }
+
+        $pdo->beginTransaction();
+        try {
+            $this->controlerJourJa($pdo, $idJa, $idRenc, $rc['Date'], $rc['IdClubDom']);
+
+            // disponible (JA, rencontre) réutilisée si elle existe (comme EN25), sinon créée en 'P'.
+            $d = $pdo->prepare('SELECT Id_Disponible FROM disponible WHERE Id_JA = ? AND Id_Rencontre = ?');
+            $d->execute([$idJa, $idRenc]);
+            $idDispo = $d->fetchColumn();
+            $note    = 'Juge-arbitre saisi depuis EN28 (arbitrage club) le ' . date('d/m/Y');
+            if ($idDispo) {
+                $pdo->prepare("UPDATE disponible SET Reponse = 'P', DateReponse = CURDATE(), DateCompetition = ?, Note = ? WHERE Id_Disponible = ?")
+                    ->execute([$rc['Date'], $note, $idDispo]);
+            } else {
+                $pdo->prepare("INSERT INTO disponible (Id_JA, Id_Rencontre, DateCompetition, Reponse, DateReponse, Note) VALUES (?, ?, ?, 'P', CURDATE(), ?)")
+                    ->execute([$idJa, $idRenc, $rc['Date'], $note]);
+                $idDispo = (int) $pdo->lastInsertId();
+            }
+
+            // uq_nomination_rencontre bloque une saisie concurrente (club via EN25, autre nominateur).
+            $pdo->prepare(
+                'INSERT INTO nomination (Id_Rencontre, Id_Disponible, Peage, Kilometre, Defiscalisation, DateSaisie, Valide, EmailEnvoye)
+                 VALUES (?, ?, ?, ?, ?, CURDATE(), 1, 0)'
+            )->execute([$idRenc, $idDispo, $peage, $km, $defisc]);
+
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            if ($e instanceof \PDOException && $e->getCode() === '23000') {
+                throw new \RuntimeException('Un JA vient d\'être désigné pour cette rencontre : rechargez la liste.');
+            }
+            throw $e;
         }
     }
 

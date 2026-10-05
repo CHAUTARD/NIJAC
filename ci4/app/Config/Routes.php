@@ -210,6 +210,7 @@ $routes->get('suivi-nomination', 'SuiviNominationController::index', ['filter' =
 $routes->get('suivi-nomination/data', 'SuiviNominationController::data', ['filter' => 'auth']);
 $routes->get('suivi-nomination/ja-liste', 'SuiviNominationController::jaListe', ['filter' => 'auth']);
 $routes->post('suivi-nomination/modifier', 'SuiviNominationController::modifier', ['filter' => 'auth']);
+$routes->post('suivi-nomination/saisir', 'SuiviNominationController::saisir', ['filter' => 'auth']);   // JA d'un arbitrage club (ArbitrageCRA = 0) sans réponse du club
 $routes->post('suivi-nomination/rappel', 'SuiviNominationController::rappel', ['filter' => 'auth']);
 $routes->post('suivi-nomination/relance-club', 'SuiviNominationController::relanceClub', ['filter' => 'auth']);
 

@@ -55,6 +55,30 @@ class CentrenvoyeController extends BaseController
         return new \Obfuscator(OBFUSCATOR_SEED, getObfuscatorPepper());
     }
 
+    /**
+     * Erreur inattendue d'un endpoint de chargement : journal complet + JSON ok:false
+     * en HTTP 200 (pour que erreurChargement() affiche ce message plutôt que « HTTP 500 »).
+     * Admin : type, message (300 car.) et fichier:ligne relatif ; autres : message
+     * générique + référence horodatée, retrouvable dans le journal.
+     * (messageErreur() d'app_config.php n'a ni fichier:ligne ni référence.)
+     */
+    private function repondreErreur(\Throwable $e): ResponseInterface
+    {
+        $ref    = date('Ymd-His');
+        $racine = realpath(__DIR__ . '/../../..') . DIRECTORY_SEPARATOR;
+        $rel    = fn (string $t): string => str_replace([$racine, str_replace('\\', '/', $racine)], '', $t);
+        $trace  = strtok($e->getTraceAsString(), "\n");
+
+        log_message('error', "[EN15 réf. {$ref}] " . get_class($e) . ' : ' . $e->getMessage()
+            . ' — ' . $e->getFile() . ':' . $e->getLine() . ' — ' . $trace);
+
+        $err = !empty($_SESSION['utilisateur']['is_admin'])
+            ? get_class($e) . ' : ' . mb_substr($rel($e->getMessage()), 0, 300) . ' — ' . $rel($e->getFile()) . ':' . $e->getLine()
+            : "Erreur technique, contactez l'administrateur (réf. {$ref})";
+
+        return $this->response->setStatusCode(200)->setJSON(['ok' => false, 'err' => $err]);
+    }
+
     public function index()
     {
         $moi = $this->moi();
@@ -83,173 +107,177 @@ class CentrenvoyeController extends BaseController
 
     public function journees(): ResponseInterface
     {
-        $pdo    = getPDO();
-        $saison = getConfig('saison') ?: null;
+        try {
+            $pdo    = getPDO();
+            $saison = getConfig('saison') ?: null;
 
-        if (!$saison) {
-            return $this->response->setJSON(['ok' => true, 'data' => []]);
+            if (!$saison) {
+                return $this->response->setJSON(['ok' => true, 'data' => []]);
+            }
+
+            // Mêmes filtres JA que la liste de convocation (cas "Convocation" de ja()) :
+            // JA1 actifs, sans filtre sur nomination.Valide — sinon le combo affiche 0
+            // tant que la journée n'a pas été validée dans EN14 alors que la liste, elle,
+            // montre déjà le JA nominé.
+            $depts = $this->deptsAutorises();
+            $ph    = implode(',', array_fill(0, count($depts), '?'));
+            $stmt = $pdo->prepare("
+                SELECT r.Journee, r.Date,
+                       COUNT(DISTINCT j.Id_JA) AS NbJA
+                FROM rencontre r
+                JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
+                LEFT JOIN nomination n  ON n.Id_Rencontre   = r.Id_Rencontre
+                LEFT JOIN disponible d  ON d.Id_Disponible  = n.Id_Disponible
+                LEFT JOIN ja j          ON j.Id_JA = d.Id_JA AND j.JA1 = 1
+                WHERE SUBSTRING(ed.Id_Club, 3, 2) IN ($ph)
+                GROUP BY r.Journee, r.Date
+                ORDER BY r.Date, r.Journee
+            ");
+            $stmt->execute($depts);
+            $rows = $stmt->fetchAll();
+
+            return $this->response->setJSON(['ok' => true, 'data' => $rows, 'saison' => $saison]);
+        } catch (\Throwable $e) {
+            return $this->repondreErreur($e);
         }
-
-        // Mêmes filtres JA que la liste de convocation (cas "Convocation" de ja()) :
-        // JA1 actifs, sans filtre sur nomination.Valide — sinon le combo affiche 0
-        // tant que la journée n'a pas été validée dans EN14 alors que la liste, elle,
-        // montre déjà le JA nominé.
-        $depts = $this->deptsAutorises();
-        $ph    = implode(',', array_fill(0, count($depts), '?'));
-        $stmt = $pdo->prepare("
-            SELECT r.Journee, r.Date,
-                   COUNT(DISTINCT j.Id_JA) AS NbJA
-            FROM rencontre r
-            JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
-            LEFT JOIN nomination n  ON n.Id_Rencontre   = r.Id_Rencontre
-            LEFT JOIN disponible d  ON d.Id_Disponible  = n.Id_Disponible
-            LEFT JOIN ja j          ON j.Id_JA = d.Id_JA AND j.JA1 = 1 AND j.Grade = 'JA1'
-            WHERE SUBSTRING(ed.Id_Club, 3, 2) IN ($ph)
-            GROUP BY r.Journee, r.Date
-            ORDER BY r.Date, r.Journee
-        ");
-        $stmt->execute($depts);
-        $rows = $stmt->fetchAll();
-
-        return $this->response->setJSON(['ok' => true, 'data' => $rows, 'saison' => $saison]);
     }
 
     public function ja(): ResponseInterface
     {
-        $pdo     = getPDO();
-        $dept    = $this->dept();
-        $saison  = getConfig('saison') ?: null;
-        $type    = $this->request->getGet('type') ?? 'Disponibilites';
-        $journee = (int) ($this->request->getGet('journee') ?? 0);
-        $date    = trim((string) ($this->request->getGet('date') ?? ''));
+        try {
+            $pdo     = getPDO();
+            $dept    = $this->dept();
+            $saison  = getConfig('saison') ?: null;
+            $type    = $this->request->getGet('type') ?? 'Disponibilites';
+            $journee = (int) ($this->request->getGet('journee') ?? 0);
+            $date    = trim((string) ($this->request->getGet('date') ?? ''));
 
-        // Toutes les listes de JA suivent la règle région (ex. 76 ⇒ 76 + 27).
-        $depts = $this->deptsAutorises();
-        $ph    = implode(',', array_fill(0, count($depts), '?'));
+            // Toutes les listes de JA suivent la règle région (ex. 76 ⇒ 76 + 27).
+            $depts = $this->deptsAutorises();
+            $ph    = implode(',', array_fill(0, count($depts), '?'));
 
-        switch ($type) {
-            // ── Disponibilités : tous JA1 actifs des départements autorisés ─
-            case 'Disponibilites':
-                $stmt = $pdo->prepare("
-                    SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
-                           lp.CodePostal AS CP
-                    FROM ja j
-                    LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
-                    WHERE j.JA1 = 1
-                      AND j.Grade = 'JA1'
-                      AND j.CodeDept IN ($ph)
-                    ORDER BY j.Nom, j.Prenom
-                ");
-                $stmt->execute($depts);
-                $rows = $stmt->fetchAll();
-                break;
-
-            // ── Rappel dispo : JA1 sans dispo dans la saison courante ───
-            case 'Rappel dispo':
-                $stmt = $pdo->prepare("
-                    SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
-                           lp.CodePostal AS CP
-                    FROM ja j
-                    LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
-                    WHERE j.JA1 = 1
-                      AND j.Grade = 'JA1'
-                      AND j.CodeDept IN ($ph)
-                      AND NOT EXISTS (
-                          SELECT 1 FROM disponible d
-                          WHERE d.Id_JA = j.Id_JA
-                      )
-                    ORDER BY j.Nom, j.Prenom
-                ");
-                $stmt->execute($depts);
-                $rows = $stmt->fetchAll();
-                break;
-
-            // ── Convocation : JA nominés pour une journée ───────────────
-            case 'Convocation':
-                if (!$journee || !$date) {
-                    $rows = [];
+            switch ($type) {
+                // ── Disponibilités : tous JA1 actifs des départements autorisés ─
+                case 'Disponibilites':
+                    $stmt = $pdo->prepare("
+                        SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
+                               lp.CodePostal AS CP
+                        FROM ja j
+                        LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
+                        WHERE j.JA1 = 1
+                          AND j.CodeDept IN ($ph)
+                        ORDER BY j.Nom, j.Prenom
+                    ");
+                    $stmt->execute($depts);
+                    $rows = $stmt->fetchAll();
                     break;
-                }
-                $stmt = $pdo->prepare("
-                    SELECT n.Id_Nomination, j.Id_JA, j.Nom, j.Prenom, j.Email,
-                           r.Date, r.Heure, r.Journee, r.Poule,
-                           ed.Division, RIGHT(ed.Division, 1) AS SexeCode,
-                           ed.Nom AS NomDom, ee.Nom AS NomExt,
-                           n.Id_Rencontre,
-                           COALESCE(s.Nom, s_c.Nom)                 AS SalleNom,
-                           COALESCE(s.Adresse, s_c.Adresse)         AS SalleAdresse,
-                           COALESCE(lps.CodePostal, lp_c.CodePostal) AS SalleCP,
-                           COALESCE(lps.Nom, lp_c.Nom)              AS SalleVille,
-                           co.Nom         AS NomClub,
-                           co.CorNom      AS CorrNom,
-                           co.CorEmail    AS CorrEmail,
-                           co.CorTelephone AS CorrTel
-                    FROM nomination n
-                    JOIN disponible dn     ON dn.Id_Disponible = n.Id_Disponible
-                    JOIN ja j              ON j.Id_JA        = dn.Id_JA
-                    JOIN rencontre r        ON r.Id_Rencontre = n.Id_Rencontre
-                    JOIN equipe ed          ON ed.Id_Equipe   = r.Id_EquipeDom
-                    LEFT JOIN equipe ee     ON ee.Id_Equipe   = r.Id_EquipeExt
-                    LEFT JOIN salle s       ON s.Id_Salle     = r.id_Salle
-                    LEFT JOIN laposte lps   ON lps.Id_LaPoste = s.Id_Laposte
-                    -- Repli : salle principale du club recevant (r.id_Salle est NULL pour la majorité des rencontres)
-                    LEFT JOIN salle   s_c   ON s_c.Id_Club    = ed.Id_Club AND s_c.EstPrincipale = 1
-                    LEFT JOIN laposte lp_c  ON lp_c.Id_LaPoste = s_c.Id_Laposte
-                    LEFT JOIN Club co ON co.Id_Club = ed.Id_Club
-                    WHERE r.Journee = ? AND r.Date = ? AND j.JA1 = 1
-                      AND j.Grade = 'JA1'
-                      AND SUBSTRING(ed.Id_Club, 3, 2) IN ($ph)
-                    ORDER BY j.Nom, j.Prenom
-                ");
-                $stmt->execute(array_merge([$journee, $date], $depts));
-                $rows = $stmt->fetchAll();
-                break;
 
-            // ── Liste nomination : JA1 ayant des nominations dans la phase ─
-            case 'Liste nomination':
-                $stmt = $pdo->prepare("
-                    SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
-                           COUNT(n.Id_Nomination) AS NbNominations
-                    FROM ja j
-                    JOIN disponible dn ON dn.Id_JA = j.Id_JA
-                    JOIN nomination n ON n.Id_Disponible = dn.Id_Disponible
-                    WHERE j.JA1 = 1
-                      AND j.Grade = 'JA1'
-                      AND j.CodeDept IN ($ph)
-                    GROUP BY j.Id_JA, j.Nom, j.Prenom, j.Email
-                    ORDER BY j.Nom, j.Prenom
-                ");
-                $stmt->execute($depts);
-                $rows = $stmt->fetchAll();
-                break;
+                // ── Rappel dispo : JA1 sans dispo dans la saison courante ───
+                case 'Rappel dispo':
+                    $stmt = $pdo->prepare("
+                        SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
+                               lp.CodePostal AS CP
+                        FROM ja j
+                        LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
+                        WHERE j.JA1 = 1
+                          AND j.CodeDept IN ($ph)
+                          AND NOT EXISTS (
+                              SELECT 1 FROM disponible d
+                              WHERE d.Id_JA = j.Id_JA
+                          )
+                        ORDER BY j.Nom, j.Prenom
+                    ");
+                    $stmt->execute($depts);
+                    $rows = $stmt->fetchAll();
+                    break;
 
-            // ── Demande adresse : JA1 actifs ou sans id_laposte ─────────
-            case 'Demande adresse':
-                $stmt = $pdo->prepare("
-                    SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
-                           COALESCE(lp.CodePostal, j.Cp)  AS Cp,
-                           COALESCE(lp.Nom,        j.Ville) AS Ville,
-                           (j.Id_LaPoste IS NOT NULL AND j.Id_LaPoste > 0) AS HasAdresse
-                    FROM ja j
-                    LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
-                    WHERE j.JA1 = 1 AND j.Grade = 'JA1' AND (j.Id_LaPoste IS NULL OR j.Id_LaPoste = 0)
-                    ORDER BY j.Nom, j.Prenom
-                ");
-                $stmt->execute();
-                $rows = $stmt->fetchAll();
-                break;
+                // ── Convocation : JA nominés pour une journée ───────────────
+                case 'Convocation':
+                    if (!$journee || !$date) {
+                        $rows = [];
+                        break;
+                    }
+                    $stmt = $pdo->prepare("
+                        SELECT n.Id_Nomination, j.Id_JA, j.Nom, j.Prenom, j.Email,
+                               r.Date, r.Heure, r.Journee, r.Poule,
+                               ed.Division, RIGHT(ed.Division, 1) AS SexeCode,
+                               ed.Nom AS NomDom, ee.Nom AS NomExt,
+                               n.Id_Rencontre,
+                               COALESCE(s.Nom, s_c.Nom)                 AS SalleNom,
+                               COALESCE(s.Adresse, s_c.Adresse)         AS SalleAdresse,
+                               COALESCE(lps.CodePostal, lp_c.CodePostal) AS SalleCP,
+                               COALESCE(lps.Nom, lp_c.Nom)              AS SalleVille,
+                               co.Nom         AS NomClub,
+                               co.CorNom      AS CorrNom,
+                               co.CorEmail    AS CorrEmail,
+                               co.CorTelephone AS CorrTel
+                        FROM nomination n
+                        JOIN disponible dn     ON dn.Id_Disponible = n.Id_Disponible
+                        JOIN ja j              ON j.Id_JA        = dn.Id_JA
+                        JOIN rencontre r        ON r.Id_Rencontre = n.Id_Rencontre
+                        JOIN equipe ed          ON ed.Id_Equipe   = r.Id_EquipeDom
+                        LEFT JOIN equipe ee     ON ee.Id_Equipe   = r.Id_EquipeExt
+                        LEFT JOIN salle s       ON s.Id_Salle     = r.id_Salle
+                        LEFT JOIN laposte lps   ON lps.Id_LaPoste = s.Id_Laposte
+                        -- Repli : salle principale du club recevant (r.id_Salle est NULL pour la majorité des rencontres)
+                        LEFT JOIN salle   s_c   ON s_c.Id_Club    = ed.Id_Club AND s_c.EstPrincipale = 1
+                        LEFT JOIN laposte lp_c  ON lp_c.Id_LaPoste = s_c.Id_Laposte
+                        LEFT JOIN Club co ON co.Id_Club = ed.Id_Club
+                        WHERE r.Journee = ? AND r.Date = ? AND j.JA1 = 1
+                          AND SUBSTRING(ed.Id_Club, 3, 2) IN ($ph)
+                        ORDER BY j.Nom, j.Prenom
+                    ");
+                    $stmt->execute(array_merge([$journee, $date], $depts));
+                    $rows = $stmt->fetchAll();
+                    break;
 
-            default:
-                $rows = [];
+                // ── Liste nomination : JA1 ayant des nominations dans la phase ─
+                case 'Liste nomination':
+                    $stmt = $pdo->prepare("
+                        SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
+                               COUNT(n.Id_Nomination) AS NbNominations
+                        FROM ja j
+                        JOIN disponible dn ON dn.Id_JA = j.Id_JA
+                        JOIN nomination n ON n.Id_Disponible = dn.Id_Disponible
+                        WHERE j.JA1 = 1
+                          AND j.CodeDept IN ($ph)
+                        GROUP BY j.Id_JA, j.Nom, j.Prenom, j.Email
+                        ORDER BY j.Nom, j.Prenom
+                    ");
+                    $stmt->execute($depts);
+                    $rows = $stmt->fetchAll();
+                    break;
+
+                // ── Demande adresse : JA1 actifs ou sans id_laposte ─────────
+                case 'Demande adresse':
+                    $stmt = $pdo->prepare("
+                        SELECT j.Id_JA, j.Nom, j.Prenom, j.Email,
+                               COALESCE(lp.CodePostal, j.Cp)  AS Cp,
+                               COALESCE(lp.Nom,        j.Ville) AS Ville,
+                               (j.Id_LaPoste IS NOT NULL AND j.Id_LaPoste > 0) AS HasAdresse
+                        FROM ja j
+                        LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
+                        WHERE j.JA1 = 1 AND (j.Id_LaPoste IS NULL OR j.Id_LaPoste = 0)
+                        ORDER BY j.Nom, j.Prenom
+                    ");
+                    $stmt->execute();
+                    $rows = $stmt->fetchAll();
+                    break;
+
+                default:
+                    $rows = [];
+            }
+
+            $obf = $this->obfuscator();
+            foreach ($rows as &$row) {
+                $row['token'] = $obf->obfuscate((int) $row['Id_JA']);
+            }
+            unset($row);
+
+            return $this->response->setJSON(['ok' => true, 'data' => $rows, 'dept' => $dept, 'saison' => $saison]);
+        } catch (\Throwable $e) {
+            return $this->repondreErreur($e);
         }
-
-        $obf = $this->obfuscator();
-        foreach ($rows as &$row) {
-            $row['token'] = $obf->obfuscate((int) $row['Id_JA']);
-        }
-        unset($row);
-
-        return $this->response->setJSON(['ok' => true, 'data' => $rows, 'dept' => $dept, 'saison' => $saison]);
     }
 
     public function apercu(): ResponseInterface

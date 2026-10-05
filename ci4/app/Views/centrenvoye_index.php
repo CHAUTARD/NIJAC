@@ -400,6 +400,7 @@
                 <option value="">— Sélectionner —</option>
             </select>
             <span id="nb-ja-journee" class="text-muted" style="font-size:.78rem;"></span>
+            <span id="err-journees" class="text-danger" style="font-size:.78rem;"></span>
         </div>
 
         <!-- Recherche -->
@@ -559,11 +560,31 @@ function majColonnesJA(type) {
     }
 }
 
+// ── Erreur de chargement commune (journées / JA) ─────────────────────────────
+// xhr : jqXHR d'un .fail() (statut HTTP, échec de parse JSON) ou {responseJSON: res}
+// pour une réponse ok:false. Retourne un détail court, déjà échappé.
+function erreurChargement(xhr, contexte) {
+    const st = xhr.status || 0, txt = xhr.responseText || '', json = xhr.responseJSON;
+    let detail;
+    if (json && json.ok === false) detail = String(json.msg || json.err || 'réponse ok:false du serveur').slice(0, 400);
+    else if (st === 0 && !txt) detail = 'serveur injoignable';
+    else if (st === 401 || st === 302 || (st < 400 && /login|<html/i.test(txt))) detail = 'session expirée, rechargez la page et reconnectez-vous';
+    else if (st >= 400) detail = 'HTTP ' + st;
+    else detail = 'réponse invalide (HTTP ' + st + ')';
+    console.error('[EN15]', contexte, st, txt.slice(0, 500));
+    detail = escHtml(detail);
+    nijacToast(`Chargement impossible (${escHtml(contexte)}) — ${detail}`, 'danger', 8000);
+    return detail;
+}
+
 // ── Journées (Convocation) ───────────────────────────────────────────────────
 function chargerJournees() {
+    $('#err-journees').html('');
     $.get(`${CENTRENVOYE_BASE}/journees`, function (res) {
         const $cbo = $('#cbo-journee').empty().append('<option value="">— Sélectionner —</option>');
-        if (res.ok) {
+        if (!res || !res.ok) {
+            $('#err-journees').html('Erreur de chargement : ' + erreurChargement({ status: 200, responseJSON: res || { ok: false } }, 'journées'));
+        } else {
             saisonCourante = res.saison;
             res.data.forEach(j => {
                 const dateFr = j.Date ? j.Date.split('-').reverse().join('/') : '';
@@ -573,7 +594,9 @@ function chargerJournees() {
             });
         }
         $('#tbody-ja').html('<tr><td colspan="7" class="text-center text-muted py-2">Sélectionner une journée</td></tr>');
-    }, 'json');
+    }, 'json').fail(function (xhr) {
+        $('#err-journees').html('Erreur de chargement : ' + erreurChargement(xhr, 'journées'));
+    });
 }
 
 $('#cbo-journee').on('change', function () {
@@ -596,9 +619,15 @@ function chargerJA() {
     $('#tbody-ja').html(`<tr><td colspan="${colSpan}" class="text-center text-muted py-2"><i class="bi bi-hourglass-split me-1"></i>Chargement…</td></tr>`);
 
     $.get(`${CENTRENVOYE_BASE}/ja`, data, function (res) {
-        saisonCourante = res.saison;
         const $body = $('#tbody-ja').empty();
-        if (!res.ok || !res.data.length) {
+        if (!res || !res.ok) {
+            const detail = erreurChargement({ status: 200, responseJSON: res || { ok: false } }, 'JA');
+            $body.append(`<tr><td colspan="${colSpan}" class="text-center text-danger py-3">Erreur de chargement : ${detail}</td></tr>`);
+            $('#nb-ja').text('');
+            return;
+        }
+        saisonCourante = res.saison;
+        if (!res.data.length) {
             $body.append(`<tr><td colspan="${colSpan}" class="text-center text-muted py-3">Aucun JA.</td></tr>`);
             $('#nb-ja').text('');
             return;
@@ -635,7 +664,11 @@ function chargerJA() {
         });
 
         $('#nb-ja').text(`${res.data.length} JA — ${nbEmail} avec email`);
-    }, 'json');
+    }, 'json').fail(function (xhr) {
+        const detail = erreurChargement(xhr, 'JA');
+        $('#tbody-ja').html(`<tr><td colspan="${colSpan}" class="text-center text-danger py-3">Erreur de chargement : ${detail}</td></tr>`);
+        $('#nb-ja').text('');
+    });
 }
 
 // ── Aperçu email convocation au clic sur une ligne ────────────────────────────
