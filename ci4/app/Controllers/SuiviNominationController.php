@@ -162,8 +162,13 @@ class SuiviNominationController extends BaseController
                         throw new \RuntimeException('Juge-arbitre introuvable ou inactif.');
                     }
                     $this->controlerJourJa($pdo, $idJa, (int) $nom['Id_Rencontre'], $nom['Date'], $nom['IdClubDom']);
+                    if ($arbCra === 1) {
+                        // Arbitrage CRA (actuel ou demandé) : JA ayant répondu non refusé, comme à la nomination.
+                        $this->controlerReponseNonJa($pdo, $idJa, (int) $nom['Id_Rencontre'], $nom['Date']);
+                    }
 
-                    // disponible (JA, rencontre) : réutilisée si le JA a répondu O/P, rouverte en P s'il avait répondu N.
+                    // disponible (JA, rencontre) : réutilisée si le JA a répondu O/P, rouverte en P s'il avait
+                    // répondu N (arbitrage club, ou CRA avec un 'O' sur la journée).
                     $d = $pdo->prepare('SELECT Id_Disponible, Reponse FROM disponible WHERE Id_JA = ? AND Id_Rencontre = ?');
                     $d->execute([$idJa, $nom['Id_Rencontre']]);
                     $dispo = $d->fetch();
@@ -228,10 +233,13 @@ class SuiviNominationController extends BaseController
     }
 
     /**
-     * « Saisir le JA » : le nominateur enregistre le JA qui a officié sur une rencontre en
-     * arbitrage club (ArbitrageCRA = 0) restée sans réponse du club. Même création qu'EN25
-     * (ArbitreClubController::enregistrer) : disponible 'P' + nomination Valide = 1,
-     * EmailEnvoye = 0 — aucun email envoyé.
+     * Rencontre sans nomination :
+     *  - arbitrage club (ArbitrageCRA = 0), « Saisir le JA » : le nominateur enregistre le JA qui a
+     *    officié, restée sans réponse du club. Même création qu'EN25 (ArbitreClubController::enregistrer) :
+     *    disponible 'P' + nomination Valide = 1, EmailEnvoye = 0, frais + DateSaisie du jour ;
+     *  - arbitrage CRA (ArbitrageCRA = 1), « Nommer un JA » : mêmes règles qu'EN14 (affecterJa), sauf
+     *    la disponibilité 'O' non exigée — voir creerNomination(). Frais ignorés (saisis par le JA en EN21).
+     * Aucun email envoyé.
      */
     public function saisir(): ResponseInterface
     {
@@ -245,7 +253,7 @@ class SuiviNominationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Kilomètres invalides (entier positif).']);
             }
 
-            $this->creerNominationClub(
+            $cra = $this->creerNomination(
                 getPDO(),
                 $this->deptsAutorises(),
                 (int) $this->request->getPost('id_rencontre'),
@@ -255,7 +263,7 @@ class SuiviNominationController extends BaseController
                 $this->request->getPost('defisc') ? 1 : 0
             );
 
-            return $this->response->setJSON(['ok' => true, 'msg' => 'Juge-arbitre enregistré.']);
+            return $this->response->setJSON(['ok' => true, 'msg' => $cra ? 'Juge-arbitre nommé.' : 'Juge-arbitre enregistré.']);
         } catch (\RuntimeException $e) {
             return $this->response->setJSON(['ok' => false, 'msg' => $e->getMessage()]);
         } catch (\Throwable $e) {
@@ -263,8 +271,11 @@ class SuiviNominationController extends BaseController
         }
     }
 
-    /** Cœur de saisir() (sans requête HTTP). Refus métier : RuntimeException. */
-    private function creerNominationClub(\PDO $pdo, array $depts, int $idRenc, int $idJa, string $peage, int $km, int $defisc): void
+    /**
+     * Cœur de saisir() (sans requête HTTP). Refus métier : RuntimeException.
+     * Renvoie true si la rencontre est en arbitrage CRA.
+     */
+    private function creerNomination(\PDO $pdo, array $depts, int $idRenc, int $idJa, string $peage, int $km, int $defisc): bool
     {
         if ($idRenc <= 0 || $idJa <= 0 || !$depts) {
             throw new \RuntimeException('Paramètres invalides.');
@@ -284,9 +295,10 @@ class SuiviNominationController extends BaseController
         if (!$rc) {
             throw new \RuntimeException('Rencontre introuvable ou hors de votre périmètre.');
         }
-        if ($rc['ArbitrageCRA'] === null || (int) $rc['ArbitrageCRA'] !== 0) {
-            throw new \RuntimeException('Rencontre en arbitrage CRA : la nomination se fait dans EN14.');
+        if ($rc['ArbitrageCRA'] === null) {
+            throw new \RuntimeException('Type d\'arbitrage (CRA / Club) non renseigné pour cette rencontre.');
         }
+        $cra = (int) $rc['ArbitrageCRA'] !== 0;
         if ((int) $rc['NbNom'] > 0) {
             throw new \RuntimeException('Un JA est déjà désigné pour cette rencontre : utilisez « Modifier ».');
         }
@@ -300,6 +312,13 @@ class SuiviNominationController extends BaseController
         $pdo->beginTransaction();
         try {
             $this->controlerJourJa($pdo, $idJa, $idRenc, $rc['Date'], $rc['IdClubDom']);
+
+            if ($cra) {
+                $this->creerNominationCra($pdo, $idJa, $idRenc, $rc['Date']);
+                $pdo->commit();
+
+                return true;
+            }
 
             // disponible (JA, rencontre) réutilisée si elle existe (comme EN25), sinon créée en 'P'.
             $d = $pdo->prepare('SELECT Id_Disponible FROM disponible WHERE Id_JA = ? AND Id_Rencontre = ?');
@@ -329,6 +348,66 @@ class SuiviNominationController extends BaseController
             }
             throw $e;
         }
+
+        return false;
+    }
+
+    /**
+     * Nomination d'un arbitrage CRA, règles d'EN14 (NominationController::resoudreDisponible /
+     * affecterNomination) : une réponse 'O' (rencontre, sinon journée) est réutilisée / matérialisée
+     * comme dans EN14 ; sans réponse 'O', un JA ayant répondu 'N' (rencontre ou journée) est refusé,
+     * un JA sans réponse est accepté (disponible créée/rouverte en 'P'). Appelée dans la transaction.
+     */
+    private function creerNominationCra(\PDO $pdo, int $idJa, int $idRenc, string $date): void
+    {
+        [$dispo, $journee] = $this->controlerReponseNonJa($pdo, $idJa, $idRenc, $date);
+        $repRenc = $dispo['Reponse'] ?? null;
+        $repJour = $journee['Reponse'] ?? null;
+
+        if ($repRenc === 'O') {
+            $idDispo = (int) $dispo['Id_Disponible'];
+        } else {
+            // 'O' de la journée → 'O' daté de cette réponse (comme EN14), sinon 'P' du jour.
+            $rep  = $repJour === 'O' ? 'O' : 'P';
+            $dRep = $repJour === 'O' ? $journee['DateReponse'] : null;
+            $note = 'Juge-arbitre nommé depuis EN28 (arbitrage CRA) le ' . date('d/m/Y');
+            if ($dispo) {
+                $idDispo = (int) $dispo['Id_Disponible'];
+                $pdo->prepare('UPDATE disponible SET Reponse = ?, DateReponse = COALESCE(?, CURDATE()), DateCompetition = ?, Note = ? WHERE Id_Disponible = ?')
+                    ->execute([$rep, $dRep, $date, $note, $idDispo]);
+            } else {
+                $pdo->prepare('INSERT INTO disponible (Id_JA, Id_Rencontre, DateCompetition, Reponse, DateReponse, Note) VALUES (?, ?, ?, ?, COALESCE(?, CURDATE()), ?)')
+                    ->execute([$idJa, $idRenc, $date, $rep, $dRep, $note]);
+                $idDispo = (int) $pdo->lastInsertId();
+            }
+        }
+
+        // Même insertion qu'EN14 (affecterNomination) : frais/DateSaisie laissés au JA (EN21).
+        $pdo->prepare('INSERT INTO nomination (Id_Rencontre, Id_Disponible, DateNomination, Valide, EmailEnvoye) VALUES (?, ?, CURDATE(), 1, 0)')
+            ->execute([$idRenc, $idDispo]);
+    }
+
+    /**
+     * Règle EN14 (arbitrage CRA) : sans réponse 'O' (rencontre ou journée), un JA ayant répondu 'N'
+     * sur la rencontre ou la journée est refusé (RuntimeException). Renvoie [disponible rencontre,
+     * disponible journée] (null si absente). Utilisée par creerNominationCra() et modifier().
+     */
+    private function controlerReponseNonJa(\PDO $pdo, int $idJa, int $idRenc, string $date): array
+    {
+        $d = $pdo->prepare('SELECT Id_Disponible, Reponse FROM disponible WHERE Id_JA = ? AND Id_Rencontre = ?');
+        $d->execute([$idJa, $idRenc]);
+        $dispo = $d->fetch() ?: null;
+        $j = $pdo->prepare("SELECT Reponse, DateReponse FROM disponible WHERE Id_JA = ? AND Id_Rencontre IS NULL AND DateCompetition = ? ORDER BY Reponse = 'O' DESC LIMIT 1");
+        $j->execute([$idJa, $date]);
+        $journee = $j->fetch() ?: null;
+
+        $repRenc = $dispo['Reponse'] ?? null;
+        $repJour = $journee['Reponse'] ?? null;
+        if ($repRenc !== 'O' && $repJour !== 'O' && ($repRenc === 'N' || $repJour === 'N')) {
+            throw new \RuntimeException('Ce JA a répondu « non disponible » pour cette ' . ($repRenc === 'N' ? 'rencontre.' : 'journée.'));
+        }
+
+        return [$dispo, $journee];
     }
 
     /** Renvoie au JA de la nomination le modèle « Convocation » (lien EN21 vers ses frais). */

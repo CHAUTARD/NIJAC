@@ -149,22 +149,22 @@
                         <label class="form-label small mb-1" for="modif-ja">Juge-arbitre</label>
                         <select id="modif-ja" class="form-select form-select-sm"></select>
                     </div>
-                    <div class="col-4">
+                    <div class="col-4 modif-frais">
                         <label class="form-label small mb-1" for="modif-peage">Péage (€)</label>
                         <input type="number" id="modif-peage" class="form-control form-control-sm" min="0" step="0.01">
                     </div>
-                    <div class="col-4">
+                    <div class="col-4 modif-frais">
                         <label class="form-label small mb-1" for="modif-km">Kilomètres</label>
                         <input type="number" id="modif-km" class="form-control form-control-sm" min="0" step="1">
                     </div>
-                    <div class="col-4 d-flex align-items-end">
+                    <div class="col-4 d-flex align-items-end modif-frais">
                         <div class="form-check mb-1">
                             <input type="checkbox" id="modif-defisc" class="form-check-input">
                             <label class="form-check-label small" for="modif-defisc">Défiscalisation</label>
                         </div>
                     </div>
                 </div>
-                <div class="small text-muted mt-3"><i class="bi bi-info-circle me-1"></i>La date de saisie sera mise à la date du jour.</div>
+                <div class="small text-muted mt-3 modif-frais"><i class="bi bi-info-circle me-1"></i>La date de saisie sera mise à la date du jour.</div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Annuler</button>
@@ -300,8 +300,11 @@ function renderListe() {
             .html('<i class="bi bi-envelope"></i>')
             .on('click', function () { relancerClub(n, $(this)); });
         const relancable = !nomme && n.ArbitrageCRA !== null && +n.ArbitrageCRA === 0;
-        // Même cas (arbitrage club sans réponse du club) : le nominateur saisit lui-même le JA qui a officié
-        const $saisir = $('<button type="button" class="btn btn-sm btn-outline-success" title="Saisir le JA qui a officié (arbitrage club)">')
+        // Sans JA : arbitrage club → le nominateur saisit lui-même le JA qui a officié ; arbitrage CRA → il nomme un JA (règles EN14)
+        const nommable = !nomme && n.ArbitrageCRA !== null;
+        const $saisir = $('<button type="button" class="btn btn-sm btn-outline-success">')
+            .attr('title', estCra(n) ? 'Nommer un JA (arbitrage CRA)' : 'Saisir le JA qui a officié (arbitrage club)')
+            .attr('aria-label', estCra(n) ? 'Nommer un JA' : 'Saisir le JA')
             .html('<i class="bi bi-person-plus"></i>')
             .on('click', function () { ouvrirModification(n); });
         $('<tr>').toggleClass('sans-ja', !nomme).append(
@@ -324,10 +327,10 @@ function renderListe() {
                 .text(saisi ? (+n.Defiscalisation ? 'Oui' : 'Non') : '—'),
             $('<td class="centre">').attr('data-field', 'saisie').toggleClass('non-saisi', !saisi)
                 .text(saisi ? n.DateSaisie.substring(0, 10).split('-').reverse().join('/') : (nomme ? '—' : '')),
-            $('<td class="centre">').append(nomme ? $modifier : (relancable ? $saisir : '')),
+            $('<td class="centre">').append(nomme ? $modifier : (nommable ? $saisir : '')),
             $('<td class="centre">').append(relancable ? $relanceClub
                 : (!nomme || saisi || !+n.Valide ? '' : $rappel)) // sans JA, frais déjà saisis, ou arbitrage club non validé (refusé serveur) : pas de rappel
-        ).on('dblclick', function () { if (nomme || relancable) ouvrirModification(n); }).appendTo($body);
+        ).on('dblclick', function () { if (nomme || nommable) ouvrirModification(n); }).appendTo($body);
     });
 }
 
@@ -368,6 +371,11 @@ function remplirListeJa(n) {
     const $sel = $('#modif-ja').empty();
     let liste = jaListe;
     const option = j => $('<option>').val(j.Id_JA).text(`${j.Nom} ${j.Prenom} (${j.Id_JA})`);
+    if (!n.Id_Nomination && estCra(n)) {
+        // « Nommer un JA » (arbitrage CRA) : JA actifs du périmètre, ordre alphabétique
+        $sel.append($('<option>').val('').text('— Choisir le JA —'), liste.map(option));
+        return;
+    }
     if (!n.Id_Nomination) {
         // « Saisir le JA » : JA du club recevant en tête, puis les autres (même tri Nom/Prénom)
         const duClub = liste.filter(j => j.Id_Club === n.IdClubDom), autres = liste.filter(j => j.Id_Club !== n.IdClubDom);
@@ -385,17 +393,18 @@ function remplirListeJa(n) {
     $sel.val(n.Id_JA);
 }
 
-/** Popup « Modifier la nomination », ou « Saisir le JA » si la rencontre (arbitrage club) n'a pas de nomination. */
+/** Popup « Modifier la nomination », ou, sans nomination, « Saisir le JA » (arbitrage club) / « Nommer un JA » (arbitrage CRA). */
 function ouvrirModification(n) {
     modifNom = n;
     const ouvrir = () => {
-        const saisie = !n.Id_Nomination;
+        const saisie = !n.Id_Nomination, nommer = saisie && estCra(n);
         const libRencontre = `${formatDateAvecJour(n.Date, true)} — ${n.NomDom} vs ${n.NomExt ?? '?'}`;
         remplirListeJa(n);
         $('#modif-titre').empty().append(
             $('<i class="bi me-2">').addClass(saisie ? 'bi-person-plus' : 'bi-pencil'),
-            document.createTextNode(saisie ? `Saisir le JA — ${n.NomDom} vs ${n.NomExt ?? '?'}` : 'Modifier la nomination'));
-        $('#modif-col-arbitrage').toggle(!saisie);   // saisie réservée à l'arbitrage club
+            document.createTextNode(saisie ? `${nommer ? 'Nommer un JA' : 'Saisir le JA'} — ${n.NomDom} vs ${n.NomExt ?? '?'}` : 'Modifier la nomination'));
+        $('#modif-col-arbitrage').toggle(!saisie);   // arbitrage de la rencontre conservé à la saisie
+        $('#modal-modif .modif-frais').toggle(!nommer);   // CRA : frais saisis ensuite par le JA (EN21) ou via « Modifier »
         $('#modif-rencontre').text(libRencontre);
         $('#modif-arbitrage').val(+n.ArbitrageCRA ? '1' : '0');
         $('#modif-peage').val(n.Peage ?? 0);
