@@ -200,7 +200,7 @@ details.club-accent { border-left-color:#e65100; } .club-accent .sect-ico { back
             <span class="sect-txt">
                 <span class="sect-titre">Prestations par club</span>
                 <span class="sect-desc">Prestations dues (Nationale × <span id="coef-nat"></span> · Régionale × <span id="coef-reg"></span>)
-                    et prestations faites par les JA du club (nominations validées, rencontres jouées, arbitrage CRA)</span>
+                    et prestations faites par les JA du club (nominations validées, rencontres jouées, toutes prestations)</span>
             </span>
             <i class="bi bi-chevron-right sect-chev"></i>
         </summary>
@@ -225,7 +225,7 @@ details.club-accent { border-left-color:#e65100; } .club-accent .sect-ico { back
                 <th class="num" data-col="NbReg">Éq. régionale<span class="sort-icon"></span></th>
                 <th class="num" data-col="Quota">Prestations dues<span class="sort-icon"></span></th>
                 <th class="num" data-col="NbNom">Prestations faites<span class="sort-icon"></span></th>
-                <th class="num" data-col="NbClub" title="Arbitrages club — non comptés dans le total des prestations">Arbitrages club<span class="sort-icon"></span></th>
+                <th class="num" data-col="NbClub" title="Part des prestations faites réalisée en arbitrage club — incluse dans Prestations faites">dont arbitrages club<span class="sort-icon"></span></th>
                 <th class="num" data-col="Ecart">Écart<span class="sort-icon"></span></th>
             </tr></thead>
             <tbody id="clubs-body"></tbody>
@@ -233,7 +233,7 @@ details.club-accent { border-left-color:#e65100; } .club-accent .sect-ico { back
         </table>
         </div>
         <div class="clubs-legende"><i class="bi bi-info-circle me-1"></i>Écart = prestations faites − prestations dues.
-            Les arbitrages club ne sont pas comptés dans les prestations faites ni dans l'écart.</div>
+            Prestations faites inclut les arbitrages club (colonne « dont arbitrages club »).</div>
         </div>
         </details>
     </div>
@@ -425,7 +425,7 @@ function lignesClubsVisibles(clubs, dept, tri) {
 }
 
 function totauxClubs(lignes) {
-    // NbClub (arbitrages club) : total propre, hors NbNom et hors Ecart (déjà exclus côté serveur)
+    // NbNom inclut déjà les arbitrages club ; NbClub (leur part) a son propre total, jamais réadditionné
     const tot = { NbNat: 0, NbReg: 0, Quota: 0, NbNom: 0, NbClub: 0, Ecart: 0 };
     lignes.forEach(k => Object.keys(tot).forEach(c => tot[c] += k[c]));
     return tot;
@@ -439,7 +439,7 @@ function csvCellule(v) {
 
 function csvClubs(lignes) {
     const t = totauxClubs(lignes);
-    const rows = [['Département', 'Id club', 'Club', 'Équipes Nationale', 'Équipes Régionale', 'Prestations dues', 'Prestations faites', 'Arbitrages club', 'Écart']]
+    const rows = [['Département', 'Id club', 'Club', 'Équipes Nationale', 'Équipes Régionale', 'Prestations dues', 'Prestations faites', 'Dont arbitrages club', 'Écart']]
         .concat(lignes.map(k => [String(k.Dept), String(k.Id_Club), String(k.Nom), k.NbNat, k.NbReg, k.Quota, k.NbNom, k.NbClub, k.Ecart]))
         .concat([['TOTAL', '', '', t.NbNat, t.NbReg, t.Quota, t.NbNom, t.NbClub, t.Ecart]]);
     return '\uFEFF' + rows.map(r => r.map(csvCellule).join(';')).join('\r\n') + '\r\n';

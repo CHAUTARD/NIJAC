@@ -92,10 +92,10 @@ class StatsNominationController extends BaseController
             // (clés `configuration`, amorcées par EA98), et prestations faites par ses JA (ja.Id_Club).
             // Régionales = table `equipe` (Division NOT LIKE 'N%' : PN, R1…R4), club porteur
             // principal (Id_Club) ; nationales = table `equipe_nationale` (N1…N3).
-            // Faites = nomination Valide sur une rencontre déjà jouée (r.Date <= CURDATE()) en arbitrage
-            // CRA (r.ArbitrageCRA = 1) ; les arbitrages club (ArbitrageCRA = 0) sont comptés à part
-            // (NbClub), hors total et hors écart — même découpage que SQL_NB_CRA / SQL_NB_CLUB d'EN17
-            // (colonne NOT NULL DEFAULT 1, pas de cas NULL). La table `rencontre` ne contient que la saison en cours.
+            // Faites (NbNom) = toutes les nominations Valide sur une rencontre déjà jouée (r.Date <= CURDATE()),
+            // arbitrage CRA ET arbitrage club, servant à l'écart et aux totaux ; NbClub = part en arbitrage
+            // club (r.ArbitrageCRA = 0, colonne NOT NULL DEFAULT 1), détail informatif déjà inclus dans NbNom.
+            // La table `rencontre` ne contient que la saison en cours.
             // Non restreintes au périmètre : c'est un indicateur de complétude du club.
             $coefReg = (int) getConfig('nombre_arbitrage_regional', '5');
             $coefNat = (int) getConfig('nombre_arbitrage_national', '7');
@@ -155,7 +155,7 @@ class StatsNominationController extends BaseController
                     SELECT Id_Club, COUNT(*) nb FROM equipe_nationale GROUP BY Id_Club
                 ) en ON en.Id_Club = c.Id_Club
                 LEFT JOIN (
-                    SELECT ja.Id_Club, SUM(r.ArbitrageCRA = 1) nb, SUM(r.ArbitrageCRA = 0) nbClub
+                    SELECT ja.Id_Club, COUNT(*) nb, SUM(r.ArbitrageCRA = 0) nbClub
                     FROM nomination n
                     JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
                     JOIN ja           ON ja.Id_JA        = d.Id_JA
