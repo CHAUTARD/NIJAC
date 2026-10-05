@@ -711,7 +711,7 @@
                 <li><strong>Comptabilité</strong> — générer le journal comptable de la phase (<code>ED55</code>) et transmettre les pièces ; les indemnités JA sont soldées en fin de phase.</li>
                 <li><strong>Sauvegarde totale</strong> — onglet « Sauvegarde » → « Sauvegarder toute la base de données » (fichier <code>Full_*.sql</code>, à conserver hors serveur).</li>
                 <li><strong>Vérifier la configuration</strong> (<code>EA91</code>) — bornes <code>phase2_debut</code> / <code>phase2_fin</code> et saison courante.</li>
-                <li><strong>Nettoyage de phase</strong> — carte « Nettoyage — Nouvelle phase » ci-dessous → « Sauvegarder et démarrer nouvelle phase » : sauvegarde SQL puis vidage de <code>Disponible</code>, <code>Equipe</code>, <code>Equipe_Nationale</code>, <code>Rencontre</code>, <code>Nomination</code>, <code>Competition_Regionale</code> ; désactivation des JA (<code>Actif&nbsp;=&nbsp;0</code>, conservés) ; purge des <code>.xlsx</code> de <code>Importation/Rencontres</code>.</li>
+                <li><strong>Nettoyage de phase</strong> — carte « Nettoyage — Nouvelle phase » ci-dessous → « Sauvegarder et démarrer nouvelle phase » : sauvegarde SQL puis vidage de <code>Disponible</code>, <code>Equipe</code>, <code>Equipe_Nationale</code>, <code>Rencontre</code>, <code>Nomination</code>, <code>Competition_Regionale</code> ; désactivation des JA (<code>JA1&nbsp;=&nbsp;0</code>, conservés) ; purge des <code>.xlsx</code> de <code>Importation/Rencontres</code>.</li>
                 <li><strong>Ré-importer les équipes régionales</strong> (<code>EA92</code>) si la composition change pour la nouvelle phase.</li>
                 <li><strong>Ré-importer les rencontres</strong> — régionales (<code>EA82</code>) puis nationales (<code>EA83</code>) ; recharger le calendrier régional (<code>EA84</code>) si nécessaire.</li>
                 <li><strong>Réactiver les JA</strong> concernés (<code>EN11</code>) et vérifier grades / dates de validation FFTT.</li>
@@ -851,7 +851,7 @@ $('#btn-executer').on('click', function () {
     nijacConfirm(
         'DERNIÈRE CONFIRMATION\n\n' +
         '• Les tables Competition_Regionale, Disponible, Equipe, Equipe_Nationale, Nomination et Rencontre seront vidées.\n' +
-        '• Tous les JA seront désactivés (Actif = 0) mais conservés.\n' +
+        '• Tous les JA seront désactivés (JA1 = 0) mais conservés.\n' +
         '• Les fichiers .xlsx du dossier Importation/Rencontres seront supprimés.\n\n' +
         'Une sauvegarde sera effectuée avant le nettoyage.\n\n' +
         'Cette opération est IRRÉVERSIBLE.',

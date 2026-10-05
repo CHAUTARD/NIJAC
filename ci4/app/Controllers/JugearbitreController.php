@@ -35,6 +35,39 @@ class JugearbitreController extends BaseController
     /** Codes département FFTT (xml_club_dep2) pour la Corse, distincts des codes INSEE 2A/2B utilisés partout ailleurs dans l'appli. */
     private const DEPT_FFTT_CORSE = ['2A' => '98', '2B' => '99'];
 
+    /**
+     * Qualifications JA lues dans le champ grade FFTT (xml_licence_b `ja`, à
+     * défaut `arb`) → ['JA1' => 0|1, ..., 'JAI' => 0|1]. Mappage tolérant
+     * (casse, espaces/tirets, libellés longs) faute de doc FFTT listant les
+     * valeurs exactes ; plusieurs codes peuvent coexister (ex. « JAN JA3 »).
+     * Pas de cumul implicite : JA3 seul ne met pas JA1/JA2 à 1.
+     */
+    private function niveauxJaFftt(string $brut): array
+    {
+        $s       = mb_strtoupper($brut, 'UTF-8');
+        $motifs  = [
+            // Libellés longs : « JUGE » exigé pour ne pas confondre avec un
+            // grade d'arbitre (« Arbitre National » du repli `arb`).
+            'JA1' => '/\bJA\s*-?\s*1\b|\bJUGE.*\b1\s*(ER|ÈRE|ERE)?\s+DEGR/u',
+            'JA2' => '/\bJA\s*-?\s*2\b|\bJUGE.*\b2\s*(E|È|EME|ÈME)?\s+DEGR/u',
+            'JA3' => '/\bJA\s*-?\s*3\b|\bJUGE.*\b3\s*(E|È|EME|ÈME)?\s+DEGR/u',
+            'JAN' => '/\bJA\s*-?\s*N\b|\bJUGE.*\bNATIONAL/u',
+            'JAI' => '/\bJA\s*-?\s*I\b|\bJUGE.*\bINTERNATIONAL/u',
+        ];
+        $niveaux = [];
+        foreach ($motifs as $col => $re) {
+            $niveaux[$col] = preg_match($re, $s) ? 1 : 0;
+        }
+
+        return $niveaux;
+    }
+
+    /** Libellé « JA2 JAN » des qualifications à 1 (rapport d'import). */
+    private function libelleNiveaux(array $niveaux): string
+    {
+        return implode(' ', array_keys(array_filter($niveaux)));
+    }
+
     /** Rang du grade : J3=3, J2=2, JA1=1 — plus c'est haut, plus c'est prioritaire */
     private function gradeRank(string $grade): int
     {
@@ -75,6 +108,16 @@ class JugearbitreController extends BaseController
         return $tel;
     }
 
+    /** Code → Libelle des grades ; vide si JugeArbitre n'existe pas encore (EA98 pas chargé). */
+    private function gradesLibelles(): array
+    {
+        try {
+            return getPDO()->query('SELECT Code, Libelle FROM JugeArbitre')->fetchAll(\PDO::FETCH_KEY_PAIR);
+        } catch (\PDOException $e) {
+            return [];
+        }
+    }
+
     public function index()
     {
         $moi = $_SESSION['utilisateur'] ?? [];
@@ -87,6 +130,8 @@ class JugearbitreController extends BaseController
             'deptUser'        => $moi['id_departement'] ?? '',
             'deptActifs'      => getDeptActifs(),
             'deptLimitrophes' => getDepartementsLimitrophes(),
+            // Infobulles des 5 grades (colonnes + cases de la modale) : Code → Libelle
+            'gradesLibelles'  => $this->gradesLibelles(),
         ];
 
         // Pour chaque département actif : ses voisins de la région (codes) — sert
@@ -113,7 +158,7 @@ class JugearbitreController extends BaseController
 
         $stmt = $pdo->prepare(
             'SELECT j.Id_JA, j.Nom, j.Prenom, j.Email, j.Telephone,
-                    j.Grade, j.Actif, j.Id_Club, j.Id_LaPoste,
+                    j.Grade, j.JA1, j.JA2, j.JA3, j.JAN, j.JAI, j.Id_Club, j.Id_LaPoste,
                     j.Defiscalisation, j.Nationale, j.NumCompteEBP,
                     j.DateValidationFFTT,
                     j.ArbitreAutresDepts, j.DeptsArbitrage,
@@ -139,7 +184,11 @@ class JugearbitreController extends BaseController
             'Email'                  => $r['Email'],
             'Telephone'              => $r['Telephone'],
             'Grade'                  => $r['Grade'],
-            'Actif'                  => $r['Actif'],
+            'JA1'                    => $r['JA1'],
+            'JA2'                    => $r['JA2'],
+            'JA3'                    => $r['JA3'],
+            'JAN'                    => $r['JAN'],
+            'JAI'                    => $r['JAI'],
             'Id_Club'                => $r['Id_Club'],
             'Id_LaPoste'             => $r['Id_LaPoste'],
             'CodeDept'               => $r['CodeDept'],
@@ -232,29 +281,34 @@ class JugearbitreController extends BaseController
         // plutôt que de perdre toute la ligne pour une seule référence orpheline.
         $clubsValides = array_flip(array_column($pdo->query('SELECT Id_Club FROM Club')->fetchAll(), 'Id_Club'));
 
-        // Actif est accepté directement ici (checkbox de la modale Créer/Modifier
-        // JA, ou colonne "Inactivité" du CSV FFTT) — l'import API par département
-        // (importFfttClub()/importFfttSelected()) modifie aussi Actif, mais jamais
-        // via majBdd() : il remet tout à 0 pour le département
-        // (reinitialiserActifDept()) puis passe à 1 chaque JA importé
-        // (upsertJaFftt()). En UPDATE, DateValidationFFTT / Defiscalisation /
-        // Nationale / NumCompteEBP ne sont réécrits que si la ligne fournit
+        // JA1/JA2/JA3/JAN/JAI : en INSERT, valeur fournie ou 0 ; en UPDATE,
+        // réécrits seulement si la ligne porte la clé (ja1/ja2/ja3/jan/jai).
+        // La modale Créer/Modifier JA envoie toujours ses 5 cases (toutes
+        // écrites) ; l'import CSV FFTT (importerExcel) n'envoie que la clé du
+        // grade de chaque ligne (« Grade Arb/Ja », 1 si « Inactivité » = Actif,
+        // 0 sinon) — les autres grades du JA ne sont pas écrasés. L'import API par département
+        // (importFfttClub()/importFfttSelected()) gère les 5 colonnes sans passer
+        // par majBdd() : il les remet toutes à 0 pour le département
+        // (reinitialiserActifDept()) puis écrit pour chaque JA importé les
+        // qualifications lues dans l'API (upsertJaFftt()). En UPDATE,
+        // DateValidationFFTT / Defiscalisation / Nationale / NumCompteEBP ne sont réécrits que si la ligne fournit
         // explicitement la clé (cf. SET construit ligne par ligne plus bas) :
         // seul l'import CSV FFTT porte date_validation_fftt, seule la modale
         // Créer/Modifier JA porte les trois autres — les imports ne doivent pas
-        // écraser une valeur saisie ou synchronisée ailleurs.
+        // écraser une valeur saisie ou synchronisée ailleurs. En INSERT, Nationale
+        // absente (imports) prend le défaut de la table (1, cf. initTableConfiguration()).
         $stmtCheck  = $pdo->prepare('SELECT COUNT(*) FROM ja WHERE Id_JA = ?');
         $stmtInsert = $pdo->prepare(
-            'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Telephone, Grade, Actif,
+            'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Telephone, Grade, JA1, JA2, JA3, JAN, JAI,
                              Id_Club, Id_LaPoste, Defiscalisation, Nationale, NumCompteEBP,
                              Cp, Ville, DateValidationFFTT, CodeDept)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, DEFAULT(Nationale)), ?, ?, ?, ?, ?)'
         );
         $stmtInsertAuto = $pdo->prepare(
-            'INSERT INTO ja (Nom, Prenom, Email, Telephone, Grade, Actif,
+            'INSERT INTO ja (Nom, Prenom, Email, Telephone, Grade, JA1, JA2, JA3, JAN, JAI,
                              Id_Club, Id_LaPoste, Defiscalisation, Nationale, NumCompteEBP,
                              Cp, Ville, DateValidationFFTT, CodeDept)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, DEFAULT(Nationale)), ?, ?, ?, ?, ?)'
         );
 
         foreach ($lignes as $l) {
@@ -264,9 +318,14 @@ class JugearbitreController extends BaseController
             $email     = ($l['email'] ?? '') !== '' ? $l['email'] : null;
             $tel       = $this->formaterTelephone(($l['telephone'] ?? '') !== '' ? $l['telephone'] : null);
             $grade     = trim($l['grade'] ?? '');
-            $actif     = !empty($l['actif']) ? 1 : 0;
-            $defisc    = !empty($l['defiscalisation']) ? 1 : 0;
-            $nationale = !empty($l['nationale']) ? 1 : 0;
+            $autres    = []; // JA1/JA2/JA3/JAN/JAI → 0|1, null = clé absente
+            foreach (['JA1' => 'ja1', 'JA2' => 'ja2', 'JA3' => 'ja3', 'JAN' => 'jan', 'JAI' => 'jai'] as $colJa => $cle) {
+                $autres[$colJa] = array_key_exists($cle, $l) ? (!empty($l[$cle]) ? 1 : 0) : null;
+            }
+            $autresIns = array_map(static fn ($v) => $v ?? 0, array_values($autres));
+            $defisc   = !empty($l['defiscalisation']) ? 1 : 0;
+            // null = clé absente (imports) → INSERT prend le défaut de la table (1), UPDATE n'y touche pas
+            $nationale = array_key_exists('nationale', $l) ? (!empty($l['nationale']) ? 1 : 0) : null;
             $idClub    = ($l['id_club'] ?? '') !== '' ? trim($l['id_club']) : null;
             $idLap     = ($l['id_laposte'] ?? '') !== '' ? (int) $l['id_laposte'] : null;
             $deptManuel = ($l['dept'] ?? '') !== '' ? trim((string) $l['dept']) : null;
@@ -321,21 +380,27 @@ class JugearbitreController extends BaseController
                             $setOpt .= 'NumCompteEBP=?, ';
                             $paramsOpt[] = $cpteEbp;
                         }
+                        foreach ($autres as $colJa => $v) {
+                            if ($v !== null) {
+                                $setOpt .= "$colJa=?, ";
+                                $paramsOpt[] = $v;
+                            }
+                        }
                         $sql = "UPDATE ja SET {$setOpt}Nom=?, Prenom=?, Email=?, Telephone=?, Grade=?,
-                                       Actif=?, Id_Club=?, Id_LaPoste=?,
+                                       Id_Club=?, Id_LaPoste=?,
                                        Cp=?, Ville=?, CodeDept=?
                                 WHERE Id_JA=?";
                         $pdo->prepare($sql)->execute(array_merge(
                             $paramsOpt,
-                            [$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $cp, $ville, $codeDept, $id]
+                            [$nom, $prenom, $email, $tel, $grade, $idClub, $idLap, $cp, $ville, $codeDept, $id]
                         ));
                         $updates++;
                     } else {
-                        $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid, $codeDept]);
+                        $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, $grade, ...$autresIns, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid, $codeDept]);
                         $inserts++;
                     }
                 } else {
-                    $stmtInsertAuto->execute([$nom, $prenom, $email, $tel, $grade, $actif, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid, $codeDept]);
+                    $stmtInsertAuto->execute([$nom, $prenom, $email, $tel, $grade, ...$autresIns, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid, $codeDept]);
                     $inserts++;
                 }
             } catch (\PDOException $ex) {
@@ -375,10 +440,11 @@ class JugearbitreController extends BaseController
     }
 
     /**
-     * Réinitialise Actif=0 pour tous les JA du département AVANT de lancer
-     * l'import/scan FFTT (voir importFfttClub()/importFfttSelected()) — chaque
-     * JA ensuite importé repasse à Actif=1 (upsertJaFftt()), les JA non
-     * retrouvés par le passage restent à Actif=0. Département résolu comme
+     * Réinitialise JA1=JA2=JA3=JAN=JAI=0 pour tous les JA du département AVANT
+     * de lancer l'import/scan FFTT (voir importFfttClub()/importFfttSelected())
+     * — chaque JA ensuite importé reçoit les qualifications lues dans l'API
+     * (upsertJaFftt()), les JA non retrouvés n'ont plus aucune qualification.
+     * Département résolu comme
      * dans liste() : Id_Club (positions 3-4) ou, à défaut, code postal du JA
      * — CodeDept n'est renseigné nulle part.
      */
@@ -396,7 +462,7 @@ class JugearbitreController extends BaseController
         $pdo    = getPDO();
         $depPad = str_pad($dep, 2, '0', STR_PAD_LEFT);
         $stmt   = $pdo->prepare(
-            'UPDATE ja j SET j.Actif = 0
+            'UPDATE ja j SET j.JA1 = 0, j.JA2 = 0, j.JA3 = 0, j.JAN = 0, j.JAI = 0
              WHERE (
                  SUBSTRING(j.Id_Club, 3, 2) = ?
                  OR ((j.Id_Club IS NULL OR j.Id_Club = \'\') AND LEFT((SELECT lp2.CodePostal FROM laposte lp2 WHERE lp2.Id_LaPoste = j.Id_LaPoste LIMIT 1), 2) = ?)
@@ -414,7 +480,8 @@ class JugearbitreController extends BaseController
      * fournit ; en pratique souvent absents de la réponse, quels que soient les
      * identifiants applicatifs utilisés). Un seul nouvel essai après 600 ms.
      *
-     * Retourne null si la licence est introuvable ou n'est pas JA1/JA2/JA3
+     * Retourne null si la licence est introuvable ou si son grade (`ja`, à défaut
+     * `arb`) n'indique aucune qualification JA reconnue par niveauxJaFftt()
      * (les AR sont exclus) ; lève l'exception de l'API au 2e échec.
      */
     private function lireJaFftt(\PDO $pdo, $apiRaw, string $numClub, string $licence): ?array
@@ -437,7 +504,8 @@ class JugearbitreController extends BaseController
         }
 
         $grade = ffttStr($lb['ja'] ?? '') ?: ffttStr($lb['arb'] ?? '');
-        if (!preg_match('/^JA[123]$/i', $grade)) {
+        $niveaux = $this->niveauxJaFftt($grade);
+        if (!array_filter($niveaux)) {
             return null;
         }
 
@@ -461,6 +529,7 @@ class JugearbitreController extends BaseController
             'prenom'     => ffttStr($lb['prenom'] ?? ''),
             'email'      => ffttStr($lb['email'] ?? ''),
             'grade'      => strtoupper($grade),
+            'niveaux'    => $this->libelleNiveaux($niveaux),
             'id_club'    => ffttStr($lb['numclub'] ?? '') ?: $numClub,
             'date_valid' => ffttStr($lb['validation'] ?? '') ?: null,
             'id_laposte' => $idLaPoste,
@@ -473,40 +542,44 @@ class JugearbitreController extends BaseController
      * Insère ou met à jour un JA issu de l'API FFTT ($d : voir lireJaFftt()).
      * Retourne true si le JA vient d'être créé.
      *
-     * Tout JA retrouvé par l'API (existant ou nouveau) est mis à Actif=1 :
-     * reinitialiserActifDept() (appelée par le JS avant la boucle clubs) a déjà
-     * tout mis à 0 pour le département, seuls les JA non retrouvés y restent.
+     * Tout JA retrouvé par l'API (existant ou nouveau) reçoit JA1/JA2/JA3/JAN/JAI
+     * selon son grade FFTT (niveauxJaFftt() sur $d['grade'], recalculé ici
+     * plutôt que repris du client pour importFfttSelected()) : 1 si l'API indique
+     * la qualification, 0 sinon — aucun JA1=1 par défaut. reinitialiserActifDept()
+     * (appelée par le JS avant la boucle clubs) a déjà tout mis à 0 pour le
+     * département, les JA non retrouvés restent sans qualification.
      */
     private function upsertJaFftt(\PDO $pdo, array $d): bool
     {
-        $exists = $pdo->prepare('SELECT 1 FROM ja WHERE Id_JA = ?');
+        $niveaux = array_values($this->niveauxJaFftt($d['grade']));
+        $exists  = $pdo->prepare('SELECT 1 FROM ja WHERE Id_JA = ?');
         $exists->execute([$d['licence']]);
 
         if ($exists->fetchColumn()) {
             $pdo->prepare(
-                'UPDATE ja SET Actif=1, DateValidationFFTT=?,
+                'UPDATE ja SET JA1=?, JA2=?, JA3=?, JAN=?, JAI=?, DateValidationFFTT=?,
                  Cp = COALESCE(Cp, ?), Ville = COALESCE(Ville, ?), Id_LaPoste = COALESCE(Id_LaPoste, ?)
                  WHERE Id_JA=?'
-            )->execute([$d['date_valid'], $d['cp'], $d['ville'], $d['id_laposte'], $d['licence']]);
+            )->execute([...$niveaux, $d['date_valid'], $d['cp'], $d['ville'], $d['id_laposte'], $d['licence']]);
 
             return false;
         }
 
         $pdo->prepare(
-            'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Grade, Actif, Id_Club,
-                             Defiscalisation, Nationale, DateValidationFFTT,
+            'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Grade, JA1, JA2, JA3, JAN, JAI, Id_Club,
+                             Defiscalisation, DateValidationFFTT,
                              Id_LaPoste, Cp, Ville)
-             VALUES (?, ?, ?, ?, ?, 1, ?, 0, 0, ?, ?, ?, ?)'
-        )->execute([$d['licence'], $d['nom'], $d['prenom'], $d['email'] ?: null, $d['grade'], $d['id_club'],
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)'
+        )->execute([$d['licence'], $d['nom'], $d['prenom'], $d['email'] ?: null, $d['grade'], ...$niveaux, $d['id_club'],
             $d['date_valid'], $d['id_laposte'], $d['cp'], $d['ville']]);
 
         return true;
     }
 
     /**
-     * Parcourt les licenciés d'un club et applique $traiter à chaque JA1/JA2/JA3
-     * trouvé (import direct ou simple scan). Retourne ce que le JS attend :
-     * trouves / total_membres / erreurs / erreurs_msgs (10 messages max).
+     * Parcourt les licenciés d'un club et applique $traiter à chaque JA (grade
+     * FFTT JA1/JA2/JA3/JAN/JAI) trouvé (import direct ou simple scan).
+     * Retourne ce que le JS attend : trouves / total_membres / erreurs / erreurs_msgs (10 messages max).
      */
     private function parcourirClubFftt(string $action, callable $traiter): ResponseInterface
     {
@@ -556,7 +629,7 @@ class JugearbitreController extends BaseController
         return $this->parcourirClubFftt('import_fftt_club', function (\PDO $pdo, array $d): array {
             $nouveau = $this->upsertJaFftt($pdo, $d);
 
-            return ['licence' => $d['licence'], 'nom' => $d['nom'], 'prenom' => $d['prenom'], 'grade' => $d['grade'], 'statut' => $nouveau ? 'nouveau' : 'mis_a_jour'];
+            return ['licence' => $d['licence'], 'nom' => $d['nom'], 'prenom' => $d['prenom'], 'grade' => $d['grade'], 'niveaux' => $d['niveaux'], 'statut' => $nouveau ? 'nouveau' : 'mis_a_jour'];
         });
     }
 
@@ -572,6 +645,7 @@ class JugearbitreController extends BaseController
                 'prenom'          => $d['prenom'],
                 'email'           => $d['email'],
                 'grade'           => $d['grade'],
+                'niveaux'         => $d['niveaux'],
                 'id_club'         => $d['id_club'],
                 'id_laposte'      => $d['id_laposte'],
                 'cp'              => $d['cp'],
@@ -728,8 +802,12 @@ class JugearbitreController extends BaseController
         $lignes           = [];
         $idsClubManquants = [];
         while (($ligne = fgetcsv($handle)) !== false) {
-            $grade = trim((string) ($ligne[$col['Grade Arb/Ja']] ?? ''));
-            if (!preg_match('/^JA1$/i', $grade)) {
+            // Qualification lue dans « Grade Arb/Ja » (JA1, JA2, JA3, JAN, JAI) via
+            // le même mappage que l'import API ; grade non reconnu (adjoints
+            // JAAA/JAAE, arbitres, vide) → ligne ignorée.
+            $grade   = trim((string) ($ligne[$col['Grade Arb/Ja']] ?? ''));
+            $niveaux = $this->niveauxJaFftt($grade);
+            if (!array_filter($niveaux)) {
                 continue;
             }
 
@@ -750,7 +828,16 @@ class JugearbitreController extends BaseController
             }
 
             $tel          = $telPortable !== '' ? $telPortable : $telFixe;
-            $actif        = strtolower($actifRaw) === 'actif' ? 1 : 0;
+            // Une ligne ne positionne QUE la colonne de son grade (1 si
+            // « Inactivité » = Actif, 0 sinon) ; les autres grades du JA ne sont
+            // pas transmis à majBdd() donc jamais modifiés (un JA peut être
+            // inactif en JA1 et actif en JA2/JA3 ; importer JAN après JA1
+            // n'écrase plus JA1).
+            $valeur = mb_strtolower($actifRaw, 'UTF-8') === 'actif' ? 1 : 0;
+            $grades = [];
+            foreach (array_keys(array_filter($niveaux)) as $colJa) {
+                $grades[strtolower($colJa)] = $valeur;
+            }
             $dateValidStr = preg_match('#^\d{1,2}/\d{2}/\d{4}$#', $dateValidRaw) ? $dateValidRaw : '';
 
             if ($idClub !== '' && !isset($clubsMap[$idClub])) {
@@ -764,13 +851,12 @@ class JugearbitreController extends BaseController
                 'email'                => $email !== '' ? $email : null,
                 'telephone'            => $this->formaterTelephone($tel !== '' ? $tel : null),
                 'grade'                => $grade,
-                'actif'                => $actif,
                 'date_validation_fftt' => $dateValidStr !== '' ? $dateValidStr : null,
                 'id_club'              => $idClub !== '' ? $idClub : null,
                 'id_laposte'           => null, // résolu côté JS avec progression
                 'cp'                   => $cp,
                 'ville'                => $ville,
-            ];
+            ] + $grades;
         }
         fclose($handle);
 
@@ -796,7 +882,29 @@ class JugearbitreController extends BaseController
         }
         unset($l);
 
-        $lignes = $this->deduplicateJA($lignes, 'nom', 'prenom', 'grade');
+        // Fusion des lignes d'un même JA (N° licence, à défaut Nom+Prénom) :
+        // les clés de grade se cumulent (dernière valeur par colonne) au lieu
+        // qu'une ligne écrase l'autre ; le reste de la fiche suit le grade le
+        // plus haut (gradeRank, comme l'ancien deduplicateJA()).
+        $parJa = [];
+        foreach ($lignes as $l) {
+            $cle = $l['id'] > 0 ? 'L' . $l['id'] : mb_strtoupper($l['nom'] . '|' . $l['prenom']);
+            if (!isset($parJa[$cle])) {
+                $parJa[$cle] = $l;
+                continue;
+            }
+            $base = $this->gradeRank($l['grade']) > $this->gradeRank($parJa[$cle]['grade']) ? $l : $parJa[$cle];
+            foreach (['ja1', 'ja2', 'ja3', 'jan', 'jai'] as $g) {
+                unset($base[$g]);
+                if (array_key_exists($g, $l)) {
+                    $base[$g] = $l[$g];
+                } elseif (array_key_exists($g, $parJa[$cle])) {
+                    $base[$g] = $parJa[$cle][$g];
+                }
+            }
+            $parJa[$cle] = $base;
+        }
+        $lignes = array_values($parJa);
 
         return $this->response->setJSON(['ok' => true, 'data' => $lignes, 'count' => count($lignes), 'clubs_crees' => $clubsCrees]);
     }

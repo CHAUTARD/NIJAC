@@ -39,6 +39,10 @@
         #tbl-suivi .non-saisi { color: #9aa5b8; }
         /* valeur saisie mais non comptée (2e rencontre du jour, ou arbitrage Club) — mêmes règles qu'EN17 */
         #tbl-suivi .deja-compte { color: #9aa5b8; text-decoration: line-through; cursor: help; }
+        /* rencontre sans JA nommé (#table-wrapper : passe devant le zébrage nth-child de nijac-liste-edit.css) */
+        #table-wrapper #tbl-suivi tbody tr.sans-ja { background: #FFE4E8; }
+        #table-wrapper #tbl-suivi tbody tr.sans-ja:hover { background: #E9ECEF; }
+        #tbl-suivi .aucun-ja { color: #9aa5b8; font-style: italic; }
     </style>
 </head>
 <body>
@@ -81,6 +85,14 @@
                     <option value="">Toutes</option>
                     <option value="oui">Renseignée</option>
                     <option value="non">Non renseignée</option>
+                </select>
+            </span>
+            <span class="combo-field">
+                <label for="sel-avecja">Nomination</label>
+                <select id="sel-avecja" style="width:120px;">
+                    <option value="">Tous</option>
+                    <option value="oui">Avec JA</option>
+                    <option value="non">Sans JA</option>
                 </select>
             </span>
             <button type="button" class="btn btn-sm btn-light" id="btn-reset-filtres" title="Réinitialiser les filtres">
@@ -175,7 +187,7 @@ function libDivision(code) {
     return n ? code + ' — ' + n : code;
 }
 let nominations = [];
-const filtres   = { date: '', division: '', equipe: '', ja: '', saisie: '' };
+const filtres   = { date: '', division: '', equipe: '', ja: '', saisie: '', avecJa: '' };
 const sortState = { col: null, asc: true };
 
 const JOURS_SEMAINE = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -214,7 +226,9 @@ function nominationsFiltrees() {
             && !String(n.NomExt ?? '').toLowerCase().includes(equipe)) return false;
         if (ja && !String(n.NomJa ?? '').toLowerCase().includes(ja)) return false;
         if (filtres.saisie === 'oui' && !n.DateSaisie) return false;
-        if (filtres.saisie === 'non' && n.DateSaisie) return false;
+        if (filtres.saisie === 'non' && n.DateSaisie) return false;   // inclut les rencontres sans JA
+        if (filtres.avecJa === 'oui' && !n.Id_Nomination) return false;
+        if (filtres.avecJa === 'non' && n.Id_Nomination) return false;
         return true;
     });
 }
@@ -230,7 +244,7 @@ const CLES_TRI = {
     arbitrage: n => libArbitrage(n),
     domicile:  n => n.NomDom ?? '',
     exterieur: n => n.NomExt ?? '',
-    licence:   n => +n.Id_JA,
+    licence:   n => n.Id_JA === null ? -1 : +n.Id_JA,
     ja:        n => n.NomJa ?? '',
     ebp:       n => n.NumCompteEBP ?? '',
     peage:     n => n.DateSaisie ? +n.Peage : -1,
@@ -239,7 +253,7 @@ const CLES_TRI = {
     saisie:    n => n.DateSaisie ?? '',
 };
 
-/** Lignes du tableau : filtrées puis triées (une ligne par nomination). */
+/** Lignes du tableau : filtrées puis triées (une ligne par rencontre). */
 function lignesAffichees() {
     const affichees = nominationsFiltrees();
     const cle = CLES_TRI[sortState.col];
@@ -259,7 +273,7 @@ function renderListe() {
     $('#lbl-count').text(`${affichees.length} / ${nominations.length}`);
 
     if (!affichees.length) {
-        $body.append('<tr><td colspan="14" class="text-center text-muted py-3">Aucune nomination.</td></tr>');
+        $body.append('<tr><td colspan="14" class="text-center text-muted py-3">Aucune rencontre.</td></tr>');
         return;
     }
 
@@ -270,6 +284,7 @@ function renderListe() {
         const titreNonCompte = estCra(n) ? 'Déjà compté sur une autre rencontre du même jour' : 'Arbitrage Club : non remboursé';
         // DateSaisie NULL = le JA n'a encore rien saisi dans EN21 : pas de valeurs à afficher
         const saisi = !!n.DateSaisie;
+        const nomme = !!n.Id_Nomination;   // rencontre sans JA nommé : ni modification ni rappel
         const $modifier = $('<button type="button" class="btn btn-sm btn-outline-secondary" title="Modifier cette nomination">')
             .html('<i class="bi bi-pencil"></i>')
             .on('click', function () { ouvrirModification(n); });
@@ -278,14 +293,22 @@ function renderListe() {
             .prop('disabled', !n.EmailJa)
             .html('<i class="bi bi-envelope"></i>')
             .on('click', function () { envoyerRappel(n, $(this)); });
-        $('<tr>').append(
+        // Arbitrage club sans réponse du club (aucun JA désigné) : relance du club (message n°7)
+        const $relanceClub = $('<button type="button" class="btn btn-sm btn-outline-warning btn-relance-club">')
+            .attr('title', n.CorEmail ? 'Envoyer au club la demande de JA (message n°7)' : 'Club sans email de correspondant (à compléter en EN27)')
+            .prop('disabled', !n.CorEmail)
+            .html('<i class="bi bi-envelope"></i>')
+            .on('click', function () { relancerClub(n, $(this)); });
+        const relancable = !nomme && n.ArbitrageCRA !== null && +n.ArbitrageCRA === 0;
+        $('<tr>').toggleClass('sans-ja', !nomme).append(
             $('<td>').attr('data-field', 'date').text(formatDateAvecJour(n.Date, true)),
             $('<td class="centre">').attr('data-field', 'division').append(macaronDivision(n.Division, n.DivisionColor)),
             $('<td class="centre">').attr('data-field', 'arbitrage').text(libArbitrage(n)),
             $('<td>').attr('data-field', 'domicile').text(n.NomDom ?? ''),
             $('<td>').attr('data-field', 'exterieur').text(n.NomExt ?? '—'),
-            $('<td class="centre">').attr('data-field', 'licence').attr('title', n.Telephone || null).text(n.Id_JA),
-            $('<td>').attr('data-field', 'ja').attr('title', n.Telephone || null).text(n.NomJa ?? ''),
+            $('<td class="centre">').attr('data-field', 'licence').attr('title', n.Telephone || null).text(n.Id_JA ?? ''),
+            $('<td>').attr('data-field', 'ja').attr('title', n.Telephone || null).toggleClass('aucun-ja', !nomme)
+                .text(nomme ? (n.NomJa ?? '') : '— Aucun JA'),
             $('<td>').attr('data-field', 'ebp').text(n.NumCompteEBP ?? ''),
             $('<td class="num">').attr('data-field', 'peage').toggleClass('non-saisi', !saisi)
                 .toggleClass('deja-compte', nonCompte('Peage', peageNon)).attr('title', nonCompte('Peage', peageNon) ? titreNonCompte : null)
@@ -296,10 +319,11 @@ function renderListe() {
             $('<td class="centre">').attr('data-field', 'defisc').toggleClass('non-saisi', !saisi)
                 .text(saisi ? (+n.Defiscalisation ? 'Oui' : 'Non') : '—'),
             $('<td class="centre">').attr('data-field', 'saisie').toggleClass('non-saisi', !saisi)
-                .text(saisi ? n.DateSaisie.substring(0, 10).split('-').reverse().join('/') : '—'),
-            $('<td class="centre">').append($modifier),
-            $('<td class="centre">').append(saisi ? '' : $rappel) // frais déjà saisis : plus de rappel
-        ).on('dblclick', function () { ouvrirModification(n); }).appendTo($body);
+                .text(saisi ? n.DateSaisie.substring(0, 10).split('-').reverse().join('/') : (nomme ? '—' : '')),
+            $('<td class="centre">').append(nomme ? $modifier : ''),
+            $('<td class="centre">').append(relancable ? $relanceClub
+                : (!nomme || saisi || !+n.Valide ? '' : $rappel)) // sans JA, frais déjà saisis, ou arbitrage club non validé (refusé serveur) : pas de rappel
+        ).on('dblclick', function () { if (nomme) ouvrirModification(n); }).appendTo($body);
     });
 }
 
@@ -311,6 +335,22 @@ function envoyerRappel(n, $btn) {
             $btn.prop('disabled', false);
         }, 'json').fail(function () {
             toast('Erreur réseau.', false);
+            $btn.prop('disabled', false);
+        });
+    });
+}
+
+function relancerClub(n, $btn) {
+    const dest = `${n.CorNom || 'Correspondant'} <${n.CorEmail}>`
+        + (n.RefMail ? `\nCc référent : ${n.RefNom || ''} <${n.RefMail}>` : '');
+    nijacConfirm(`Envoyer au club ${n.NomClub || n.NomDom} la demande de JA (message n°7) pour la rencontre `
+        + `${n.NomDom} / ${n.NomExt ?? '?'} du ${formatDateAvecJour(n.Date, true)} ?\n\nDestinataire : ${dest}`, function () {
+        $btn.prop('disabled', true);
+        $.post(`${SUIVI_BASE}/relance-club`, { id_rencontre: n.Id_Rencontre }, function (r) {
+            toast(r.msg, !!r.ok);
+            $btn.prop('disabled', false);
+        }, 'json').fail(function () {
+            toast('Erreur réseau ou session expirée.', false);
             $btn.prop('disabled', false);
         });
     });
@@ -422,6 +462,7 @@ function majPanelDivision() {
 
 $('#sel-date').on('change', function () { filtres.date = $(this).val(); renderListe(); });
 $('#sel-saisie').on('change', function () { filtres.saisie = $(this).val(); renderListe(); });
+$('#sel-avecja').on('change', function () { filtres.avecJa = $(this).val(); renderListe(); });
 // Debounce : renderListe() reconstruit tout le tableau
 let searchTimer;
 function filtreTexte(cle) {
@@ -434,8 +475,8 @@ function filtreTexte(cle) {
 $('#search-equipe').on('input', filtreTexte('equipe'));
 $('#search-ja').on('input', filtreTexte('ja'));
 $('#btn-reset-filtres').on('click', function () {
-    filtres.date = filtres.division = filtres.equipe = filtres.ja = filtres.saisie = '';
-    $('#sel-date, #sel-saisie, #search-equipe, #search-ja').val('');
+    filtres.date = filtres.division = filtres.equipe = filtres.ja = filtres.saisie = filtres.avecJa = '';
+    $('#sel-date, #sel-saisie, #sel-avecja, #search-equipe, #search-ja').val('');
     majPanelDivision();
     renderListe();
 });

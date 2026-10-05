@@ -45,7 +45,7 @@ class NominateurMenuController extends BaseController
             if ($deptsAutorises) {
                 $stmt = $pdo->prepare("
                     SELECT COUNT(*) FROM ja j
-                    WHERE j.Actif = 1
+                    WHERE j.JA1 = 1
                       AND j.CodeDept IN ($deptPh)
                 ");
                 $stmt->execute($deptsAutorises);

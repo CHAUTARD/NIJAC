@@ -22,6 +22,8 @@ class UtilisateurController extends BaseController
         assurerRoleCsr(getPDO());
         // Auto-migration : rôle Defiscalisateur, voir config/app_config.php.
         assurerRoleDefiscalisateur(getPDO());
+        // Auto-migration : rôle CRA Convoc, voir config/app_config.php.
+        assurerRoleCraConvoc(getPDO());
     }
 
     public function index()

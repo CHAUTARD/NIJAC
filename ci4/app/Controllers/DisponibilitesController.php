@@ -97,7 +97,7 @@ class DisponibilitesController extends BaseController
             FROM ja
             LEFT JOIN Club    cl ON cl.Id_Club    = ja.Id_Club
             LEFT JOIN laposte lp ON lp.Id_LaPoste = ja.Id_LaPoste
-            WHERE ja.Actif = 1
+            WHERE ja.JA1 = 1
               AND ja.CodeDept IN ($placeholders)
             ORDER BY ja.CodeDept, ja.Nom, ja.Prenom
         ");

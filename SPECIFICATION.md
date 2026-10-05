@@ -13,6 +13,12 @@
 - [E006 – Changement du mot de passe](#e006--changement-du-mot-de-passe)
 - [E007 – Mot de passe oublié (demande)](#e007--mot-de-passe-oublié-demande)
 - [E008 – Réinitialisation du mot de passe](#e008--réinitialisation-du-mot-de-passe)
+- [E009 – Menu CRA Convoc](#e009--menu-cra-convoc)
+- [EC71 – Compétitions CRA](#ec71--compétitions-cra)
+- [EC72 – Degrés Juge-Arbitre](#ec72--degrés-juge-arbitre)
+- [EC73 – Désignation CRA](#ec73--désignation-cra)
+- [EC74 – Disponibilités CRA](#ec74--disponibilités-cra)
+- [EC75 – Statistiques CRA](#ec75--statistiques-cra)
 - [EN11 – Juges-Arbitres](#en11--juges-arbitres)
 - [EN12 – Désidératas clubs](#en12--désidératas-clubs)
 - [EN13 – Disponibilités JA](#en13--disponibilités-ja)
@@ -84,7 +90,7 @@ $_SESSION['utilisateur'] = [
     'login'          => string,
     'nom'            => string,
     'prenom'         => string,
-    'role'           => 'Administrateur' | 'Nominateur' | 'CSR',
+    'role'           => 'Administrateur' | 'Nominateur' | 'CSR' | 'Defiscalisateur' | 'CRA Convoc',
     'id_departement' => string,
     'change_login'   => bool,
     'is_admin'       => bool,
@@ -109,6 +115,7 @@ Page d'accueil de l'espace administrateur. Donne accès à tous les écrans de p
 ### Interface
 - Barre utilisateur : nom, département, alerte changement de mot de passe
 - Bouton **Menu nominateur** (bascule vers E003)
+- Bouton **Menu CRA Convoc** (bascule vers E009, route `cra-convoc-menu`), à côté de Menu CSR / Menu Défiscalisateur
 - Grille de boutons (5 colonnes) avec code écran en haut à droite de chaque bouton :
 
 | Bouton | Code | Destination |
@@ -148,8 +155,8 @@ Page d'accueil de l'espace nominateur avec tableau de bord et accès aux fonctio
 | Indicateur | Description |
 |------------|-------------|
 | Prochaine journée | Date + numéro de journée des rencontres à venir du département |
-| JA actifs | Nombre de JA avec `Actif = 1` dans le département |
-| Nominations à valider | Nominations avec `Valide = 0` sur des rencontres futures |
+| JA actifs | Nombre de JA avec `JA1 = 1` dans le département |
+| Nominations à valider | Nominations avec `Valide = 0` sur des rencontres futures — toujours 0 depuis la règle « nomination = valide d'office » (voir EN14) |
 | Convocations à envoyer | Nominations `Valide = 1` et `EmailEnvoye = 0` sur rencontres futures |
 | Rencontres sans JA | Rencontres futures sans nomination validée |
 
@@ -196,7 +203,7 @@ Permet à l'utilisateur connecté de changer son propre mot de passe : saisie du
 ### Règles métier
 - Nouveau mot de passe : règle commune `validerRobustesseMotDePasse()` (10 caractères min, minuscule + majuscule + chiffre + caractère spécial — voir E008), doit être confirmé à l'identique
 - Le mot de passe actuel est vérifié via `SecurePasswordHasher::verify()` avant tout changement
-- Le lien de retour (`retour`) pointe vers E002 (menu admin) ou E003 (menu nominateur) selon `is_admin`
+- Le lien de retour (`retour`) pointe vers E002 (menu admin) si `is_admin`, E009 (menu CRA Convoc) pour le rôle « CRA Convoc », sinon E003 (menu nominateur)
 
 ---
 
@@ -244,6 +251,293 @@ L'utilisateur non connecté demande un lien de réinitialisation en saisissant s
 
 ---
 
+## E009 – Menu CRA Convoc
+
+**Fichier :** `CraConvocMenuController` (CI4), vue `cra_convoc_menu_index.php`, route `cra-convoc-menu`
+**Accès :** rôle « CRA Convoc » ou Administrateur (filtre `craconvocauth`, voir `CraConvocAuth.php`)
+
+### Objectif
+Page d'accueil du rôle « CRA Convoc », atteinte automatiquement après connexion (`AuthController::redirectForRole()`). Aucun accès BDD (lit seulement `$_SESSION['utilisateur']`).
+
+### Boutons de menu
+| Bouton | Code | Destination |
+|--------|------|-------------|
+| Compétitions CRA | EC71 | `cra-competition` |
+| Disponibilités CRA | EC74 | `cra-dispo` |
+| Désignation CRA | EC73 | `cra-designation` |
+| Statistiques CRA | EC75 | `cra-stats` |
+| Degrés Juge-Arbitre | EC72 | `cra-juge-arbitre` |
+| Se déconnecter | — | `logout` |
+
+### Règles
+- Bandeau utilisateur standard (alerte « Mot de passe à modifier », bouton **Menu administrateur** visible seulement pour un Administrateur en prévisualisation)
+- Le lien de retour d'E006 ramène ce rôle vers E009
+
+---
+
+## EC71 – Compétitions CRA
+
+**Fichier :** `CraCompetitionController` (CI4), vue `cra_competition_index.php`, route `cra-competition`
+**Accès :** rôle « CRA Convoc » ou Administrateur (filtre `craconvocauth`) sur toutes les routes · lien depuis E009, retour vers `cra-convoc-menu`
+
+### Objectif
+Gérer le calendrier des compétitions régionales (table `CRA_Competition`, créée et seedée par `initTableConfiguration()`).
+
+### Champs
+| Champ | Colonne | Règle |
+|-------|---------|-------|
+| N° | `Numero` INT | Obligatoire, entier ≥ 1, unique |
+| Date de début | `DateDebut` DATE | Obligatoire, date valide |
+| Date de fin | `DateFin` DATE NULL | Facultative, ≥ date de début |
+| Libellé | `Libelle` VARCHAR(150) | Obligatoire |
+| Tables min / max | `NbTablesMin` / `NbTablesMax` INT NULL | Facultatifs, entiers ≥ 1, Min ≤ Max si les deux sont saisis |
+| Lieu | `Lieu` VARCHAR(100) | Obligatoire, conservé tel que saisi |
+| Id club | `Id_Club` CHAR(8) NULL | Facultatif, lecture seule dans la modale (rempli par la recherche club) ; doit exister dans `Club` ; FK `fk_cracompet_club` → `Club.Id_Club` `ON DELETE SET NULL ON UPDATE CASCADE` (best-effort) |
+| Nom du club | `NomClub` VARCHAR(100) NULL | Lecture seule ; recopié côté serveur depuis `Club.Nom` quand `Id_Club` est fourni, NULL sinon |
+| Niveau JA | `NiveauJA` VARCHAR(20) | Obligatoire, `JA2` / `JA3` / `JAN JA3` |
+| JA (total) | `NbrJA` TINYINT UNSIGNED NOT NULL DEFAULT 1 | Nombre **total** de JA, adjoints compris. Entier 1..20 ; pré-rempli à 1 à la création, 1 si absent |
+| dont adjoints | `NbrAdjoint` TINYINT UNSIGNED NOT NULL DEFAULT 0 | Nombre d'adjoints **parmi** `NbrJA`. Entier 0..`NbrJA − 1` (au moins un JA principal ; contrôle serveur + modale) ; pré-rempli à 0 à la création, 0 si absent |
+
+Ex. : `NbrJA`=2, `NbrAdjoint`=1 → 1 JA principal + 1 adjoint ; `NbrJA`=2, `NbrAdjoint`=0 → 2 JA principaux ; `NbrJA`=1, `NbrAdjoint`=0 → 1 JA.
+
+`Id_Club` / `NomClub` sont ajoutés (après `Lieu`) par `initTableConfiguration()` si absents ; pas de backfill des lignes existantes. `NbrJA` / `NbrAdjoint` sont ajoutés (après `NiveauJA`) de la même façon ; les lignes existantes prennent les défauts 1 / 0.
+
+### Interface
+- Liste triable côté client (tri par défaut : date de début) : N°, Dates (`10/10/2026`, ou `14-15/11/2026` si même mois), Libellé, Tables (`16` ou `16 à 24`), Lieu, Dépt (centré ; calculé dans `data()` par `SUBSTRING(Id_Club,3,2) AS CodeDept`, vide sans club, pas de colonne en base ni dans la modale), Id club, Nom du club, Niveau JA, JA (total), dont adjoints, corbeille
+- Filtres côté client : recherche texte (libellé, lieu, dépt, id et nom du club), niveau JA ; compteur de lignes affichées
+- Bouton « Nouvelle compétition » et clic sur une ligne → modale Bootstrap de saisie ; erreurs serveur affichées dans la modale
+- Recherche du club à partir du Lieu : bouton « Rechercher le club » (loupe) à côté du Lieu, sur clic uniquement → `cra-competition/clubs?q=<lieu>` ; un seul résultat exact (nom ou ville identique) → sélection automatique, plusieurs → liste cliquable (id, nom, ville) sous le champ, aucun → toast « Aucun club trouvé pour ce lieu ». Bouton « Effacer le club » vide Id club / Nom du club
+- Suppression : corbeille par ligne, `nijacConfirm(..., {type:'danger'})`
+
+### Actions AJAX
+| Méthode | Route | Action |
+|---------|-------|--------|
+| GET | `cra-competition/data` | Liste complète `{ok, data}` |
+| GET | `cra-competition/clubs?q=<lieu>` | Jusqu'à 15 clubs `{ok, data:[{Id_Club, Nom, Ville, exact}]}` dont `Club.Nom` ou la ville d'une `Salle` du club contient le Lieu (LIKE, casse/accents ignorés par la collation ; tirets/apostrophes → espaces, « Saint(e) » → « St(e) ») ; `Ville` = salle principale |
+| POST | `cra-competition` | Création (`numero`, `date_debut`, `date_fin`, `libelle`, `nb_tables_min`, `nb_tables_max`, `lieu`, `id_club`, `niveau_ja`, `nbr_ja`, `nbr_adjoint`) ; refus si `nbr_adjoint` > `nbr_ja` − 1 |
+| PUT | `cra-competition/{id}` | Modification (mêmes champs) |
+| DELETE | `cra-competition/{id}` | Suppression |
+
+Toutes renvoient `{ok: bool, msg}` ; en cas d'erreur de validation `ok=false` et `msg` explicite.
+
+---
+
+## EC73 – Désignation CRA
+
+**Fichier :** `CraDesignationController` (CI4), vue `cra_designation_index.php`, route `cra-designation`
+**Accès :** rôle « CRA Convoc » ou Administrateur (filtre `craconvocauth`) sur toutes les routes · lien depuis E009 (après EC71 et EC74), retour vers `cra-convoc-menu`
+
+### Objectif
+Désigner les juges-arbitres et adjoints d'une compétition `CRA_Competition` (table `CRA_Designation`).
+
+### Interface
+- Mise en page en 2 colonnes (~45 % / ~55 %, hauteur = écran moins en-tête/barre d'outils, chaque panneau défile seul) ; sous 992 px les panneaux s'empilent (tableau au-dessus, hauteur limitée, formulaire dessous)
+- **À gauche** : tableau des compétitions (style EC71/EN11, en-tête collant) — colonnes (dans l'ordre) case à cocher d'envoi des convocations (1re colonne, remplace l'ancienne colonne N°), indicateur (✔ = désignation complète, ◐ = partielle ; suivi de « ✉ » si des convocations ont été envoyées, infobulle « Convocations envoyées le JJ/MM/AAAA à HH:MM (n JA) »), Dates, Libellé préfixé du n° (« n°17 — Libellé »), Lieu, Dépt (`SUBSTRING(Id_Club,3,2)`, centré, vide sans club), Niveau JA, désignés/attendus « n/N » (adjoints compris) ; tri par clic sur les en-têtes (sauf la colonne des cases), par défaut par date de début
+- En-tête du panneau, sur une ligne (passe à la ligne si trop étroit) : compteur (`#lbl-count`, nombre centré dans sa pastille, même hauteur que le champ et aligné sur lui — conteneur `align-items:flex-end`, pas sur le libellé) à gauche, et **champ de recherche aligné à droite** au style du champ de recherche d'EN11 (libellé « Recherche » au-dessus, motif `.combo-field` d'EN11 avec `<label for="txt-recherche">`, pilule blanche 290 px, bordure fine `--en-line`, ombre légère, placeholder « Rechercher (n°, libellé, lieu)… », bordure bleue au focus ; recherche sur n°, libellé, lieu, dépt ; pleine largeur en dessous du compteur sur mobile) ; le bouton « Envoyer les convocations (n) » est **sous le tableau**, dans une barre collée au bas du panneau (fond clair, filet supérieur, toujours visible pendant que le tableau défile au-dessus ; pleine largeur sur mobile ; reste sous le tableau quand les panneaux sont empilés sous 992 px)
+- Fonds des lignes, par priorité : sélection (#c2e6cf + liseré) > survol gris #E9ECEF (toutes les lignes, roses et vertes comprises) > rose « sans JA » / vert « complète » > zébrage neutre (#f7f8fa / blanc, plus de zébrage vert)
+- Ligne sur fond vert clair #E3F4E9 (classe `.complete`, infobulle « Désignation complète », pastille « Complète » dans la légende) quand `Complete` est vrai (tous les JA principaux et adjoints attendus désignés)
+- Ligne sur fond rose pâle #FFE4E8 (survol gris comme les autres lignes, classe `.sans-ja`, infobulle « Aucun JA principal désigné », pastille « Sans JA principal » dans la légende) quand `NbDesJA = 0` et `NbPrincipaux > 0` (adjoints ignorés) ; recalculé à chaque rechargement de `data()` ; la ligne sélectionnée garde son style de sélection, avec un liseré rose en plus
+- **Sélection par clic** (ou Entrée) sur une ligne : la ligne est surlignée et le formulaire s'affiche à droite (sur écran étroit, la page défile jusqu'au formulaire) ; re-cliquer la ligne courante ne recharge pas la saisie ; après enregistrement/effacement, la liste et la compétition courante sont rechargées
+- **À droite** : invite « Sélectionnez une compétition dans la liste » tant qu'aucune n'est choisie, puis le formulaire ci-dessous
+- Bandeau des critères de la compétition choisie : n°, libellé, dates (DateDebut–DateFin), lieu, club (`NomClub` + `Id_Club`), dépt (`SUBSTRING(Id_Club,3,2)`), tables (Min–Max), niveau JA, « JA attendus : N en tout (dont X adjoint(s)) »
+- Quantités : `NbrJA` = nombre **total** de JA, adjoints compris ; `NbrAdjoint` = adjoints parmi ce total. JA principaux = `NbrJA − NbrAdjoint`, adjoints = `NbrAdjoint`, total = `NbrJA`. Une ligne antérieure hors règle EC71 (`NbrAdjoint` ≥ `NbrJA`) est ramenée à adjoints = `NbrJA − 1` (au moins un JA principal, total toujours `NbrJA`)
+- Formulaire généré : `NbrJA − NbrAdjoint` listes « JA n°1…n » puis `NbrAdjoint` listes « Adjoint n°1…n », chacune précédée d'un champ « Filtrer… » (masque les options non correspondantes) ; libellé « NOM Prénom (dépt) — club — grades » (dépt = `ja.CodeDept`, repli positions 3-4 de `ja.Id_Club`, omis si inconnu ; le filtre texte ne porte que sur nom + prénom), tri par nom
+- Les listes sont regroupées dans deux cartouches (côte à côte sur grand écran, sinon empilés) titrés « Juges-Arbitres (désignés/`NbrJA − NbrAdjoint`) » et « Adjoints (désignés/`NbrAdjoint`) », compteurs mis à jour à chaque changement ; le cartouche Adjoints est masqué s'il n'y a aucun adjoint attendu ni désigné
+- Un JA ne peut être choisi qu'une fois (JA ou adjoint) : ses options sont désactivées dans les autres listes
+- Disponibilité déclarée en EC74 (`CRA_Dispo.Disponible`) préfixée au libellé de l'option : ✔ Disponible · ◐ Disponible sous condition / À confirmer (précisé en suffixe « (sous condition) » / « (à confirmer) ») · ✖ Indisponible · ? Non renseigné ou aucune ligne `CRA_Dispo` ; infobulle de l'option = statut — simple information, aucun choix n'est interdit ; une fois les statuts de la compétition chargés, les options sont triées par statut (Disponible, À confirmer, Disponible sous condition, Non renseigné, Indisponible) puis NOM prénom (« — non désigné — » en tête), avec un fond clair par statut (vert #e3f4e9, orange #FCE4D6, bleu #DDEBF7, gris #EDEDED, rose #FFC7CE) repris sur la liste fermée pour l'option choisie, et une légende des couleurs au-dessus des cartouches
+- **Indisponibles masqués** : les JA dont la disponibilité est « Indisponible » pour la compétition courante ne sont pas proposés dans les listes (sauf s'ils sont déjà désignés dans cette liste, pour ne pas perdre la valeur) ; les autres statuts sont triés Disponible, À confirmer, Disponible sous condition, Non renseigné, avec un fond clair par statut.
+- **Liste déroulante personnalisée colorée** (le natif ne garantit pas les couleurs d'option selon navigateur/OS) : chaque `<select>` natif reste dans la page, caché, comme magasin de données (mêmes options, valeurs, événements `change`) ; un bouton (fond = statut du JA choisi, rouge si conflit) ouvre un panneau (≤ 18rem, défilant, vers le haut si pas de place en bas) listant « — non désigné — » puis les options visibles sur fond coloré par statut, avec entêtes de groupe (Disponibles, À confirmer, Sous condition, Non renseignés), option choisie en gras ✓, options désactivées grisées ; le champ « Filtrer… » filtre aussi le panneau et l'ouvre à la frappe ; clavier ↑/↓, Entrée, Échap, clic extérieur ; panneau reconstruit à l'ouverture et bouton resynchronisé après chaque recalcul (`syncCombo()` en fin de `majOptions()`)
+- **Chevauchement de dates bloquant** : un JA ne peut être désigné (JA ou adjoint) qu'une fois sur une date donnée, donc jamais sur deux compétitions dont les plages `[DateDebut, COALESCE(DateFin, DateDebut)]` se chevauchent (ex. 14-15/11 et 15/11 = conflit). Les JA déjà désignés sur une autre compétition en conflit sont désactivés (grisés) dans toutes les listes, avec la mention « déjà désigné : EC n°X (dates) » dans le libellé de l'option
+- Conflit antérieur (JA déjà enregistré ici et devenu en conflit) : la consultation reste possible, la liste est encadrée en rouge avec « ⛔ Déjà désigné aux mêmes dates sur EC n°X Libellé (dates) : à remplacer avant d'enregistrer » + toast d'alerte au chargement ; l'enregistrement est refusé tant qu'il n'est pas corrigé
+- Chargement de la désignation enregistrée (`GET cra-designation/{id}`) en échec (session expirée → redirection vers la connexion, erreur serveur) : formulaire retiré, message « Impossible de charger la désignation enregistrée… rechargez la page » à la place + toast (évite d'afficher « — non désigné — » et d'écraser la désignation réelle à l'enregistrement)
+- Refus serveur : message d'erreur détaillé (une ligne par conflit) affiché dans le formulaire au-dessus des boutons + toast « Enregistrement refusé »
+- Barre d'actions en bas du formulaire, séparée par un filet, alignée à droite : « Effacer la désignation » (`nijacConfirm` type danger) puis « Enregistrer la désignation » ; boutons pleine largeur sur mobile ; retours par `nijacToast`
+
+### Envoi des convocations
+- Colonne de cases à cocher (cochés conservés entre deux affichages / recherches) : case **désactivée** quand aucun JA principal n'est désigné (`NbDesJA = 0`, rien à convoquer) ; un clic sur la case ne sélectionne pas la ligne (`stopPropagation`), le reste de la ligne reste cliquable. En-tête : case « tout cocher » (infobulle « Envoyer les convocations ») qui ne coche/décoche que les lignes affichées par la recherche et cochables (état indéterminé si partiel)
+- Bouton « Envoyer les convocations (n) » (n = compétitions cochées, désactivé à 0) → `nijacConfirm` : nombre de compétitions et de destinataires (désignés = JA principaux + adjoints, détaillé), avertissements (désignations incomplètes, désignés sans email, désignés déjà convoqués, mode Développement) ; options ajoutées à la modale : « Renvoyer aussi à ceux déjà convoqués » (décochée, affichée seulement s'il y en a) et « M'envoyer une copie (Cc) »
+- Envoi séquentiel, **un appel par compétition** (progression « compétition i / n »), puis compte-rendu dans une zone juste au-dessus du bouton, dans la barre sous le tableau (hauteur limitée, défilante si long) + `nijacToast` : envoyés (détaillés JA principaux / adjoints) / échecs / sans email / ignorés (déjà convoqués) — les adjoints sont suffixés « (adjoint) » dans les listes ; arrêt si `checkRateLimit()` est atteint ; la liste est rechargée (✉ à jour) et les coches vidées
+- **Modèles = messages système de la table `messagerie`** (éditables en EA93, `CraDesignationController::modeleConvocation()`), identifiés par leur `Type` (pas d’`Id_Messagerie` fixe : les ids sont attribués par AUTO_INCREMENT à l’amorçage, ex. 11/12/13 en dev) : `CRA Convocation JA` (amorcé depuis `Convocation/Convocation_1JA.html`), `CRA Convocation JA + adjoint` (`Convocation_1JA_1Adjoint.html`), `CRA Convocation adjoint` (`Convocation_Adjoint.html`). Résolution `resoudreModeleMessagerieParType()` : copie personnelle de l’utilisateur courant (« Copier pour personnaliser » en EA93, même `Type`, `Id_Utilisateur` = lui) en priorité, sinon message système (`Id_Utilisateur IS NULL`, le plus ancien) ; rapprochement par `Type` et non par `Sujet` (JA et JA + adjoint partagent le même sujet). **Repli** : ligne absente (EA98 pas encore passé) → fichier `Convocation/` correspondant, sujet par défaut, Cc/ReplyTo = 1. Amorçage : `assurerModelesConvocationCra()` (appelée par `initTableConfiguration()`, EA98) étend l’ENUM `messagerie.Type` et crée chaque message seulement si aucun message système de ce Type n’existe (jamais d’écrasement), corps = fichier tel quel, Cc = ReplyTo = 1 (comme le n°3) ; fichier introuvable → message non créé + `error_log`. `messagerie.Message` passé en `MEDIUMTEXT` (les modèles font ~53 Ko avec leurs images base64). Les fichiers de `Convocation/` ne sont jamais modifiés par l’application
+- **Choix du modèle** selon la composition de la compétition : au moins un adjoint attendu (`NbAdjoints ≥ 1`) **ou** désigné (≥ 1 ligne `Role = 'Adjoint'`), quel que soit leur nombre (1 ou plusieurs) → `CRA Convocation JA + adjoint` (JA principal chargé de solliciter son adjoint « parmi les personnes disponibles ci-dessous » : `{LISTE_JA_DISPONIBLES}` = JA **disponibles** EC74, pas les adjoints désignés — sauf adjoints déjà validés, voir « Adjoints validés » ci-dessous) ; sinon → `CRA Convocation JA` (JA principal seul). Le modèle avec adjoint s'accorde au nombre d'adjoints via les marqueurs de pluralisation (voir ci-dessous). Hypothèse : **plusieurs JA principaux** : chacun reçoit le même modèle (texte au singulier). **Adjoints désignés** : chacun reçoit `CRA Convocation adjoint` (titre « CONVOCATION JA ADJOINT », convoqué en qualité de Juge-Arbitre adjoint, mêmes informations pratiques — épreuve, date(s), salle et adresse, nombre de tables —, bloc « Coordonnées du Juge-Arbitre principal » (nom, téléphone, email), coordination (horaire de présence, répartition des missions) assurée par le JA principal, confirmation de réception/disponibilité à la CRA, note de frais LUCCA, indisponibilité à signaler à la CRA ; ni sollicitation d'adjoint, ni liste des JA disponibles, ni rapport de fin d'épreuve)
+- Destinataires : chaque JA principal **et chaque adjoint** désigné ayant un email (sans email : listé, pas d'envoi) ; déjà convoqué (`DateConvocation` renseignée) : ignoré sauf « Renvoyer ». Aucun JA principal désigné → aucun envoi pour la compétition (adjoints compris : rien à leur présenter), `{ok:false}` avec ce motif ; modèle `CRA Convocation adjoint` introuvable (ni ligne ni fichier) → adjoints en échec, les JA principaux sont convoqués quand même
+- **Marqueurs du modèle adjoint** (clé de contexte `ja_principaux` = JA principaux désignés de la compétition, `ctxConvocation($c, 0, $principaux)` ; absente → valeurs vides, rétro-compatible) : `{NOM_JA_PRINCIPAL}` « Prénom NOM », `{TEL_JA_PRINCIPAL}` (10 chiffres → 06.12.34.56.78, même format que `JugearbitreController::formaterTelephone()`), `{EMAIL_JA_PRINCIPAL}` ; plusieurs JA principaux → « A, B et C » (valeurs vides omises), texte échappé HTML par `rendreConvocation()`
+- Marqueurs remplacés via `construireMarqueursMessage($ja, $moi, $ctx)` : `{SAISON}`, `{DATE_EDITION}`, `{NOM_COMPLET}`, `{EPREUVE}` = `Libelle`, `{DATE_LONGUE}` = `DateDebut`, en plage si `DateFin` diffère (clé de contexte `date_fin`, rétro-compatible : « samedi 14 – dimanche 15 novembre 2026 », mois/année du début répétés seulement s'ils diffèrent), `{NB_TABLES}` = « 16 » ou « 16 à 24 » (`NbTablesMin`/`NbTablesMax`), `{SALLE_NOM}`/`{SALLE_ADRESSE}`/`{SALLE_CP}`/`{SALLE_VILLE}` = salle du club organisateur (`CRA_Competition.Id_Club` → `salle`, principale en priorité ; vides sans club, `{SALLE_VILLE}` = `Lieu` alors), `{LISTE_JA_DISPONIBLES}` (modèle avec adjoint seulement) = JA ayant répondu Disponible / À confirmer / Disponible sous condition (`CRA_Dispo`, statut précisé après le nom sauf « Disponible », triés Disponible d'abord puis nom), au moins JA2, hors JA désignés sur cette compétition ou sur une compétition aux dates qui se chevauchent. Valeurs échappées (`htmlspecialchars`) dans le corps, sauf `{LISTE_JA_DISPONIBLES}` (HTML déjà échappé)
+- **Marqueurs de pluralisation** (modèle avec adjoint, propres aux convocations CRA, absents des listes EN15/EA) — clé de contexte `nb_adjoints` = `NbrAdjoint` attendu, ou nombre d'adjoints désignés s'il est supérieur, minimum 1 (`ctxConvocation()`) ; clé absente ou 1 → forme singulière, rendu identique à l'ancien texte du modèle. Forme 1 / forme N (nombre en lettres de deux à dix, en chiffres au-delà) : `{NB_ADJOINTS}` « 1 » / « 2 » ; `{TITRE_ADJOINTS}` « 1 ADJOINT » / « 2 ADJOINTS » ; `{ADJOINTS_TEXTE}` « un seul Juge-Arbitre adjoint » / « deux Juges-Arbitres adjoints » ; `{ADJOINTS_A_SOLLICITER}` « un JA2 ou un JA3 » / « deux JA2 ou JA3 » ; `{ADJOINTS_RETENUS}` « la personne retenue afin de confirmer sa disponibilité et son accord » / « les personnes retenues … leur disponibilité et leur accord » ; `{ADJOINTS_SOLLICITES}` « le nom et le prénom du Juge-Arbitre adjoint sollicité … sa convocation lui sera adressée » / « les noms et prénoms des Juges-Arbitres adjoints sollicités … leur convocation leur sera adressée » ; `{VOTRE_ADJOINT}` « votre adjoint » / « vos adjoints » ; `{LUI_LEUR}` « lui » / « leur »
+- **Adjoints validés** (modèle avec adjoint) : adjoint validé = désigné dans `CRA_Designation` (`Role = 'Adjoint'`) pour la compétition ; clés de contexte `adjoints_valides` (nombre) et `liste_adjoints_valides` (lignes Nom, Prenom, Telephone, Email, Rang, triées par Rang), comparées à `nb_adjoints` (attendus). (a) **aucun validé** (ou clés absentes) : rendu strictement identique à l'ancien (tableau des JA disponibles, texte « solliciter… ») ; (b) **tous validés** (validés ≥ attendus) : le tableau ne liste **que** les adjoints validés (même format de lignes : Prénom NOM, « téléphone — email »), aucun JA disponible (`ja_disponibles` n'est même pas calculé), texte « Le Juge-Arbitre adjoint désigné par la CRA est indiqué ci-dessous » / « Les Juges-Arbitres adjoints désignés par la CRA sont indiqués ci-dessous », « Vous voudrez bien le/les contacter pour convenir de l'horaire de présence et de la répartition des missions » ; (c) **en partie** : le tableau liste d'abord les validés, puis une ligne d'en-tête « Adjoint(s) restant(s) à solliciter parmi les personnes disponibles » et les JA disponibles (hors désignés), le texte distingue « déjà désigné(s) » et « encore à solliciter » (nombre restant en lettres). Marqueurs du modèle : `{ADJOINTS_INTRO}` (phrase solliciter / désignés / désignés + encore à solliciter), `{TITRE_LISTE_ADJOINTS}` (« Juges-Arbitres disponibles » / « Juge(s)-Arbitre(s) adjoint(s) désigné(s) » / « … et Juges-Arbitres disponibles »), `{ADJOINTS_CONTACT}` (prise de contact) ; `{ADJOINTS_A_SOLLICITER}`, `{ADJOINTS_RETENUS}` et `{ADJOINTS_SOLLICITES}` s'accordent au nombre **restant** à solliciter, `{ADJOINTS_SOLLICITES}` devenant « la confirmation de votre prise de contact avec le(s) … désigné(s) ; sa/leur convocation lui/leur est adressée directement par la CRA » en (b). Un ancien modèle sans ces marqueurs reste compatible
+- Email : sujet = `Sujet` du message (par défaut « CRA – Convocation – {EPREUVE} – {DATE_LONGUE} », adjoint : « CRA – Convocation adjoint – {EPREUVE} – {DATE_LONGUE} », marqueurs remplacés ; un marqueur inconnu reste visible tel quel) (préfixe « [DEV] » en mode Développement), corps = HTML du modèle (`msgHTML()` : les images base64 du modèle deviennent des pièces jointes inline CID, texte brut généré), `getNijacMailer()` + `getEmailDestinataire()`, Reply-To utilisateur si `ReplyTo = 1` sur le message, Cc si `Cc = 1` sur le message **et** « M’envoyer une copie » coché, `checkRateLimit()` / `enregistrerEnvois()` ; succès → `CRA_Designation.DateConvocation = NOW()` (désignation du JA ou de l'adjoint convoqué)
+
+### Règles d'éligibilité
+Hiérarchie JA1 < JA2 < JA3 < JAN < JAI (colonnes `ja.JA1…JAI` TINYINT(1) à 1 = grade actif).
+- **JA** : au moins un des grades de `NiveauJA` ou un grade supérieur — codes séparés par espace = l'un ou l'autre, donc seuil = le plus bas des codes (`JA2` → JA2/JA3/JAN/JAI ; `JA3` et `JAN JA3` → JA3/JAN/JAI)
+- **Adjoint** : au moins JA2 (JA2, JA3, JAN ou JAI à 1)
+- JA proposés : ceux des départements actifs de la région (`ja.CodeDept` ∈ `getDeptActifs()` ; aucun filtre si la configuration est vide)
+- Validation serveur à l'enregistrement : compétition existante, JA existants, éligibles (grade uniquement, pas la région), aucun doublon dans la compétition (ni deux fois JA/adjoint, ni JA et adjoint), aucun JA désigné au-delà de `NbrJA − NbrAdjoint` listes JA / `NbrAdjoint` listes adjoint (positions excédentaires vides acceptées), **aucun JA désigné sur une autre compétition aux dates qui se chevauchent** (contrôle dans la transaction, avant toute écriture ; refus global, rollback) ; listes vides autorisées (désignation partielle)
+
+### Actions AJAX
+| Méthode | Route | Action |
+|---------|-------|--------|
+| GET | `cra-designation/data` | `{ok, competitions:[… + CodeDept, NbDesJA, NbDesAdj, RangMaxJA, RangMaxAdj, NbConvoques, NbConvAdj, DerniereConvocation, NbSansEmail, NbPrincipaux, NbAdjoints, Complete], jas:[Id_JA, Nom, Prenom, JA2, JA3, JAN, JAI, NomClub], modeDev}` (JA de la région ayant au moins JA2 ; `NbConvoques` = désignations (JA et adjoints) avec `DateConvocation`, dont `NbConvAdj` adjoints — infobulle ✉ « x JA principal(aux), y adjoint(s) », « tous les désignés convoqués » ou « sur N désigné(s) » ; `NbSansEmail` = désignés sans email, tous rôles ; `DerniereConvocation` = MAX) |
+| GET | `cra-designation/{id}` | `{ok, data:[{Role, Rang, Id_JA}], indispos:{Id_JA:[{Nom, Numero, Libelle, DateDebut, DateFin}]}, dispos:{Id_JA: statut}}` — `indispos` = JA désignés sur une AUTRE compétition aux dates qui se chevauchent (une requête) ; `dispos` = lignes `CRA_Dispo` de la compétition, statut = une des 5 valeurs de `Disponible` (vide si la table n'existe pas encore) |
+| POST | `cra-designation/{id}` | `ja[]`, `adjoint[]` positionnels (rang = position, vide = non désigné) ; remplace la désignation (transaction DELETE + INSERT) ; `{ok, msg}` ou, en cas de chevauchement, `{ok:false, err, msg}` (`err` = « NOM Prénom : déjà désigné sur EC n°X Libellé (dates) » par conflit, aucune écriture) |
+| POST | `cra-designation/convocations` | `id` (compétition), `renvoyer` (0/1), `cc` (0/1) ; envoie les convocations de la compétition (voir ci-dessus) ; `{ok, titre, modele, envoyes[] (JA principaux), envoyesAdj[] (adjoints), echecs[], sansEmail[], ignores[], stop?}` ou `{ok:false, titre, msg}` (aucun JA principal, modèle introuvable) |
+| DELETE | `cra-designation/{id}` | Efface toute la désignation de la compétition |
+
+### Table `CRA_Designation`
+Créée par `initTableConfiguration()` (InnoDB utf8mb4_unicode_ci, best-effort) : `Id_CRA_Designation` INT AI PK · `Id_CRA_Competition` INT NOT NULL (FK `fk_cradesig_compet` → `CRA_Competition`, CASCADE/CASCADE) · `Role` ENUM('JA','Adjoint') · `Rang` TINYINT UNSIGNED (1..n) · `Id_JA` INT NOT NULL (FK `fk_cradesig_ja` → `ja.Id_JA`, CASCADE/CASCADE, posée dans un try/catch séparé) · `DateSaisie` DATETIME DEFAULT CURRENT_TIMESTAMP · `Id_Utilisateur` INT NULL (saisie, depuis la session) · `DateConvocation` DATETIME NULL (dernier envoi réussi de la convocation ; ajoutée par un `ADD COLUMN` conditionnel ; conservée à l'enregistrement pour un JA maintenu dans le même rôle) · UNIQUE (`Id_CRA_Competition`, `Role`, `Rang`) et (`Id_CRA_Competition`, `Id_JA`).
+
+---
+
+## EC74 – Disponibilités CRA
+
+**Fichier :** `CraDispoController` (CI4), vues `cra_dispo_index.php` (écran interne) et `cra_dispo_public.php` (page publique), routes `cra-dispo` et `dispo-cra`
+**Accès :** écran interne : rôle « CRA Convoc » ou Administrateur (filtre `craconvocauth`) · lien depuis E009 (juste après EC71), retour vers `cra-convoc-menu` · page `dispo-cra` : **publique** (aucun filtre d'auth, comme EN22), identifiée par `?ja=TOKEN`
+
+### Objectif
+Demander par email aux JA éligibles leurs disponibilités pour une ou plusieurs compétitions `CRA_Competition`, recueillir leurs réponses (page publique tokenisée) ou les saisir à la main (réponse par téléphone), et suivre l'état des réponses (table `CRA_Dispo`).
+
+### Écran interne (EC74)
+- Mise en page d'EC73 (2 colonnes, empilées sous 992 px)
+- **À gauche** : tableau des compétitions — case à cocher (désactivée pour une compétition passée ; case d'en-tête = toutes les compétitions à venir), N°, Dates, Libellé, Lieu, Niveau JA, Dem. (demandes envoyées), Réponses (pastilles de couleur, affichées seulement si non nulles : Disponible, À confirmer, Sous condition, Indisponible, Sans réponse = demandés encore « Non renseigné » ; tri de la colonne = nombre de disponibles) ; légende des couleurs au-dessus du tableau ; recherche (libellé, lieu), tri par en-tête (défaut : date de début) ; clic sur une ligne = compétition courante
+- **À droite** : bandeau de la compétition courante (dates, lieu, niveau, compteurs) ; « Envoi pour : … » = compétitions **cochées** (à venir), ou à défaut la compétition courante si elle est à venir ; champ optionnel « Répondre avant le » (date) ; case « M'envoyer une copie (Cc) »
+- Liste des JA éligibles à la compétition courante (même règle et même périmètre qu'EC73 : grade ≥ seuil de `NiveauJA`, JA2+ ; `ja.CodeDept` ∈ départements actifs) : case de sélection, NOM Prénom + club (« ✖ pas d'email » le cas échéant), grades, statut (Pas demandé / Demandé le JJ/MM/AAAA tant que « Non renseigné » / sinon pastille du statut + date de réponse, source « réponse du JA » ou « saisie par Prénom Nom », commentaire), **saisie manuelle** : sélecteur des 5 statuts (pré-rempli) + commentaire optionnel (255 car., pré-rempli) + « Enregistrer » ; « Non renseigné » = effacer la réponse
+- Couleurs des statuts (celles de la matrice de suivi) : Disponible vert · Indisponible rose · Non renseigné gris · À confirmer orange · Disponible sous condition bleu
+- Boutons « Tout sélectionner les non-demandés » / « Aucun »
+- **Filtre « Disponibilité »** (côté client, au-dessus de la liste des JA) : Tous · Disponible · Disponible sous condition · À confirmer · Indisponible · Non renseigné (toujours les 5 valeurs, quel que soit `cra_dispo_choix_etendus`) · Pas demandé (aucune ligne `CRA_Dispo`) ; compteur « n affichés / N » + « k sélectionné(s) dont m masqué(s), non envoyé(s) » ; conservé au changement de compétition, remis à « Tous » au rechargement ; « Tout sélectionner les non-demandés » et « Relancer » ne portent que sur les lignes affichées, les coches des lignes masquées sont conservées (« Demander » n'envoie qu'aux lignes cochées ET affichées ; « Aucun » décoche tout)
+- **Réglage « Proposer « À confirmer » et « Sous condition » »** (interrupteur au-dessus du tableau des compétitions, à côté de « Importer la matrice ») : clé `cra_dispo_choix_etendus` de la table `configuration` (`'1'` par défaut / clé absente = proposés, `'0'` = masqués), état rechargé à l'ouverture (`cra-dispo/data` → `choixEtendus`), enregistré immédiatement (POST `cra-dispo/reglage`, toast ; en cas d'échec la case revient à l'état précédent). À « non » : la page publique et la saisie manuelle ne proposent plus ces 2 choix (la valeur **déjà enregistrée** sur une ligne reste proposée, marquée « (valeur actuelle) », pour pouvoir la conserver), validation serveur identique ; l'import de la matrice les importe quand même et l'aperçu le signale. Les valeurs déjà enregistrées restent **toujours** affichées (liste, compteurs, pastilles, EC73 ◐) : seuls les choix proposés à la saisie changent
+- Saisie manuelle, réglage à « non » : sélecteur limité à Non renseigné / Indisponible / Disponible (+ valeur actuelle de la ligne si c'est « À confirmer » ou « Disponible sous condition »)
+- **Demander les disponibilités** : JA cochés · **Relancer les sans réponse** : JA de la liste demandés et encore « Non renseigné » pour la compétition courante (cases ignorées) ; `nijacConfirm` avec le nombre de destinataires, le nombre de JA sans email (ignorés) et la mention du mode Développement ; envoi séquentiel, un appel AJAX par JA (comme EN15) ; compte-rendu dans l'écran (envoyés, JA sans email, JA sans compétition concernée, échecs avec motif ; arrêt si la limite d'envoi est atteinte) + toast ; rechargement des compteurs/statuts
+- Un **seul email par JA**, listant toutes les compétitions visées pour lesquelles il est éligible (relance : seulement celles demandées et encore « Non renseigné ») ; compétitions passées toujours exclues
+
+### Email
+- Sujet « CRA – Demande de disponibilités » (préfixe `[DEV]` si redirigé en mode Développement) ; corps HTML construit dans le contrôleur (**pas** de modèle `messagerie` ni de nouveau type de message) : « Bonjour Prénom Nom », mention « Rappel » en relance, tableau N° / Dates / Compétition / Lieu, bouton + lien en clair vers `dispo-cra?ja=TOKEN` (`site_url`), « Merci de répondre avant le JJ/MM/AAAA » si la date est saisie, signature (Prénom Nom de l'utilisateur, « Commission Régionale d'Arbitrage », son email)
+- Envoi via `getNijacMailer()`, destinataire passé par `getEmailDestinataire()` (mode Développement → adresse de développement), Reply-To = email de l'utilisateur connecté, Cc = lui-même si la case est cochée ; limitation de débit `checkRateLimit()` / `enregistrerEnvois()` (session rouverte le temps de l'envoi pour que le compteur persiste) ; erreur SMTP journalisée (`error_log`)
+- Après envoi réussi : ligne `CRA_Dispo` créée ou mise à jour (`DateDemande` = maintenant) pour chaque compétition de l'email ; un statut ≠ « Non renseigné » n'est jamais écrasé (`Disponible`, `Source`, `Commentaire`, `Id_Utilisateur` de la saisie conservés)
+
+### Page publique `dispo-cra?ja=TOKEN`
+- Vue autonome responsive (en-tête sarcelle avec le nom du JA, sans menu ni toolbar), `noindex`
+- Token Obfuscator **avec pepper** (`new Obfuscator(OBFUSCATOR_SEED, getObfuscatorPepper())`) ; token absent, invalide (`deobfuscate` = -1) ou JA inexistant → message « Lien invalide ou expiré » ; aucune autre donnée personnelle dans l'URL
+- Liste uniquement les compétitions **demandées à ce JA** (`CRA_Dispo.DateDemande` non NULL) : n°, dates, libellé, lieu, niveau ; pour chacune choix obligatoire parmi 4 réponses **Disponible / Disponible sous condition / À confirmer / Indisponible** (« Non renseigné » n'est pas un choix : aucun bouton coché tant que le JA n'a pas répondu) + commentaire (255 car.), **obligatoire pour « Disponible sous condition »** (la condition à préciser), facultatif sinon, pré-remplis avec les réponses enregistrées ; **réglage `cra_dispo_choix_etendus` = '0'** : seuls Disponible / Indisponible sont proposés (+ la valeur actuelle du JA si c'est « À confirmer » ou « Disponible sous condition », marquée « (valeur actuelle) »), commentaire toujours facultatif (plus de condition obligatoire) ; compétition passée (`COALESCE(DateFin, DateDebut)` < aujourd'hui) affichée en lecture seule ; aucune donnée d'un autre JA
+- Validation client : tous les choix renseignés et ∈ les 4 réponses, condition saisie pour « Disponible sous condition » (blocs fautifs encadrés en rouge) → récapitulatif (pastilles de couleur + libellé du statut + commentaire) → bouton « Valider mes disponibilités » (« Modifier » pour revenir ; toute modification masque le récapitulatif)
+- Validation serveur (POST `dispo-cra`) : token/JA valides, chaque compétition reçue réellement demandée à ce JA et non passée, valeur ∈ {Disponible, Disponible sous condition, À confirmer, Indisponible} pour **chaque** compétition modifiable, commentaire ≤ 255 caractères et non vide pour « Disponible sous condition » (seulement si le réglage est à « oui ») ; réglage à « non » : « À confirmer » / « Disponible sous condition » refusés sauf si c'est la valeur déjà enregistrée sur la ligne ; en cas d'erreur, formulaire réaffiché avec le message et les valeurs saisies ; écriture en transaction (`Disponible`, `Commentaire`, `DateReponse` = maintenant, `Source` = 'JA')
+- Protection CSRF : filtre `csrf` global (mode cookie), `csrf_field()` dans le formulaire ; pas de limitation de débit (EN22 n'en a pas)
+- Après validation : message de remerciement + récapitulatif (libellés des statuts), lien « Modifier mes réponses »
+
+### Import de la matrice Excel (« Importer la matrice »)
+- Bouton « Importer la matrice » (au-dessus du tableau des compétitions) → modale : fichier `.xlsx` (5 Mo max. ; contrôles serveur : upload valide, taille, extension `xlsx`, type MIME xlsx/zip, ouverture réelle par PhpSpreadsheet, lecteur `Xlsx` imposé, données seules) + case « Écraser les réponses existantes » (décochée par défaut)
+- **Analyser** (POST `cra-dispo/import/apercu`) : aperçu **sans écriture** — JA lus / rapprochés / non rapprochés (avec motif, noms affichés dans la modale uniquement, jamais journalisés), épreuves lues / compétitions rapprochées, lignes à créer / à mettre à jour, ignorées (« Non renseigné », réponse existante conservée, valeur inconnue), divergences. **Importer** (POST `cra-dispo/import/valider`) : le navigateur renvoie le même fichier, le serveur refait toute l'analyse puis écrit ; le bouton n'est actif qu'après une analyse avec au moins une écriture, et redevient inactif si le fichier ou la case change
+- Aucun classeur conservé : lecture directe du fichier temporaire d'upload PHP (ni déplacé ni copié, supprimé par PHP en fin de requête)
+- Structure attendue : feuille **« Matrice »** — ligne 1 = JA « Prénom NOM » à partir de la colonne B ; colonne A à partir de la ligne 2 = « JJ/MM/AAAA | libellé » (ou « JJ-JJ/MM/AAAA | … » : date de début) ; cellules = texte (la couleur est ignorée). Feuille **« Référents »** facultative — colonne A = nom, colonne B = licence (noms de feuilles comparés sans casse ni accents)
+- **Rapprochement des JA** : clé de nom = mots normalisés (casse, accents, tirets/espaces) triés, donc indépendante de l'ordre Nom/Prénom. Licence lue dans « Référents » (même clé de nom) = `ja.Id_JA`, acceptée seulement si ce JA existe et porte le même nom ; licence absente ou inconnue en base → repli sur nom + prénom dans `ja`, accepté seulement si **un seul** JA correspond. Homonymes, absence, licence attribuée à un autre nom, JA en double dans la matrice → « non rapproché », colonne ignorée (aucune déduction)
+- **Rapprochement des compétitions** : date de début + libellé normalisé de `CRA_Competition` (correspondance unique), à défaut position (ligne r = `Numero` r−1) ; toute divergence est signalée (rapprochement par position, numéro différent de la position, ligne sans compétition — ignorée —, compétition déjà rapprochée par une autre ligne, date illisible)
+- **Mapping** direct (texte comparé sans casse ni accents) : « Disponible », « Indisponible », « À confirmer », « Disponible sous condition » → même valeur dans `Disponible` · « Non renseigné » ou cellule vide → **aucune écriture** (ni création, ni modification) · autre texte → ignoré et signalé. `Commentaire` NULL à la création, remis à NULL lors d'une mise à jour (il se rapportait à l'ancienne réponse)
+- **Écrasement** : pas de ligne → création (`DateDemande` NULL) ; ligne « Non renseigné » → complétée ; ligne avec réponse (statut ≠ « Non renseigné ») → conservée, sauf si « Écraser les réponses existantes » est coché
+- Aperçu / compte-rendu : en plus des compteurs, effectifs par statut à écrire / écrits (`parStatut`)
+- Réglage `cra_dispo_choix_etendus` = '0' : les cellules « À confirmer » / « Disponible sous condition » sont importées **telles quelles** (données source conservées, import non bloqué) ; l'aperçu et le compte-rendu affichent un avertissement avec leur nombre (`masquees`, résumé en orange)
+- Écriture : `Source`='Saisie', `DateReponse`=NOW(), `DateDemande` inchangée, `Id_Utilisateur` = utilisateur courant ; **une seule transaction** (rollback complet en cas d'erreur) ; requêtes préparées ; compétitions passées incluses ; périmètre/éligibilité EC73 non contrôlés (la dispo est une information)
+- Résultat : compte-rendu dans la modale + toast (créées / mises à jour / ignorées / JA non rapprochés), puis rechargement des compteurs et de la compétition courante
+
+### Actions
+| Méthode | Route | Action |
+|---------|-------|--------|
+| GET | `cra-dispo` | Écran interne |
+| POST | `cra-dispo/import/apercu` | multipart `xlsx` (fichier), `ecraser` (0/1) → `{ok, ecrit:false, nbJa, jaRapproches, nonRapproches:[{nom, raison}], nbEpreuves, competRapprochees, creer, maj, parStatut:{statut: nb}, ignNonRenseigne, ignConservees, ignInconnues, divergences[], choixEtendus, masquees}` ou `{ok:false, msg}` ; aucune écriture |
+| POST | `cra-dispo/import/valider` | mêmes paramètres → même réponse avec `ecrit:true` après écriture en transaction |
+| GET | `cra-dispo/data` | `{ok, competitions:[Id_CRA_Competition, Numero, DateDebut, DateFin, Libelle, Lieu, NiveauJA, Passee, NbDemandes, NbDispo, NbConfirmer, NbCondition, NbIndispo, NbSans], jas:[Id_JA, Nom, Prenom, JA2, JA3, JAN, JAI, NomClub, AEmail], modeDev, choixEtendus}` |
+| POST | `cra-dispo/reglage` | `valeur` ∈ {`1`, `0`} → `configuration.cra_dispo_choix_etendus` (INSERT … ON DUPLICATE KEY UPDATE) → `{ok, choixEtendus, msg}` ou `{ok:false, msg}` |
+| GET | `cra-dispo/{id}` | `{ok, data:[{Id_JA, Disponible, Commentaire, DateDemande, DateReponse, Source, NomUtilisateur}]}` |
+| POST | `cra-dispo/envoyer` | `id_ja`, `competitions[]`, `relance` (0/1), `date_limite` (AAAA-MM-JJ, optionnel), `cc` (0/1) → `{ok, nom, nb}` ou `{ok:false, skip, sansEmail?, stop?, nom, msg}` ; JA contrôlé côté serveur (périmètre + éligibilité par compétition) |
+| POST | `cra-dispo/{id}/saisie` | `id_ja`, `valeur` ∈ les 5 statuts (validation stricte ; réglage à « non » : « À confirmer » / « Disponible sous condition » refusés sauf valeur actuelle de la ligne), `commentaire` optionnel (≤ 255) — saisie : `Disponible`, `Commentaire`, `Source`='Saisie', `Id_Utilisateur`, `DateReponse` ; `valeur` = « Non renseigné » = Effacer (ligne supprimée si jamais demandée, sinon retour à « Non renseigné », commentaire/date/source vidés) ; JA éligible requis |
+| GET | `dispo-cra?ja=TOKEN` | Page publique |
+| POST | `dispo-cra` | `ja` (token), `dispo[Id_CRA_Competition]` ∈ {Disponible, Disponible sous condition, À confirmer, Indisponible}, `commentaire[Id_CRA_Competition]` (obligatoire pour « Disponible sous condition » si le réglage est à « oui ») ; réglage à « non » : seules Disponible / Indisponible ou la valeur déjà enregistrée sont acceptées |
+
+### Table `CRA_Dispo`
+Créée par `initTableConfiguration()` (InnoDB utf8mb4_unicode_ci, best-effort) : `Id_CRA_Dispo` INT AI PK · `Id_CRA_Competition` INT NOT NULL (FK `fk_cradispo_compet` → `CRA_Competition`, CASCADE/CASCADE) · `Id_JA` INT NOT NULL (FK `fk_cradispo_ja` → `ja.Id_JA`, CASCADE/CASCADE, posée dans un try/catch séparé) · `Disponible` ENUM('Non renseigné','Indisponible','Disponible','À confirmer','Disponible sous condition') NOT NULL DEFAULT 'Non renseigné' (les 5 valeurs de la matrice de suivi ; « Non renseigné » = demandé sans réponse ou ligne créée sans réponse) · `Commentaire` VARCHAR(255) NULL · `DateDemande` DATETIME NULL · `DateReponse` DATETIME NULL · `Source` ENUM('JA','Saisie') NULL · `Id_Utilisateur` INT NULL (dernier demandeur tant qu'il n'y a pas de réponse, puis auteur de la saisie) · UNIQUE (`Id_CRA_Competition`, `Id_JA`).
+
+**Migration** (dans `initTableConfiguration()`, EA98) d'une table créée avec l'ancien `Disponible` TINYINT(1) NULL (NULL / 1 / 0) : si `information_schema.COLUMNS.DATA_TYPE` de `Disponible` n'est pas `enum` → (a) `MODIFY` en VARCHAR(30) NULL ; (b) conversion — lignes dont `Commentaire` vaut « À confirmer » / « Disponible sous condition » (anciennes substitutions de l'import) → ce statut, commentaire vidé ; puis NULL → « Non renseigné », 1 → « Disponible », 0 → « Indisponible » ; contrôle qu'aucune valeur hors des 5 ne reste ; (c) `MODIFY` en ENUM définitif. La première étape en échec arrête la migration de la table (`error_log`) ; elle est rejouée sans risque au passage EA98 suivant (colonne toujours non-ENUM, l'UPDATE ne touche que les anciennes valeurs).
+
+---
+
+## EC75 – Statistiques CRA
+
+**Fichier :** `CraStatsController` (CI4), vue `cra_stats_index.php`, route `cra-stats`
+**Accès :** rôle « CRA Convoc » ou Administrateur (filtre `craconvocauth`) sur toutes les routes · lien depuis E009 (après EC73, avant EC72), retour vers `cra-convoc-menu`
+
+### Objectif
+Lister les JA disponibles avec leurs nombres de nominations comme JA principal et comme adjoint, pour répartir les désignations (par défaut, les JA les moins nommés en haut). Lecture seule.
+
+### Définitions
+- **JA disponible** : au moins une ligne `CRA_Dispo` avec `Disponible = 'Disponible'` (toutes compétitions) ; « À confirmer » / « Disponible sous condition » seuls ne suffisent pas.
+- **Périmètre** : celui d'EC73 (`CraDesignationController::data()`) — au moins JA2 (`JA2`, `JA3`, `JAN` ou `JAI` à 1) et `ja.CodeDept` ∈ `getDeptActifs()` s'il y a des départements actifs.
+
+### Colonnes
+| Colonne | Calcul |
+|---------|--------|
+| NOM Prénom | `UPPER(ja.Nom)` + `ja.Prenom` |
+| Dépt | `COALESCE(NULLIF(ja.CodeDept,''), SUBSTRING(NULLIF(ja.Id_Club,''),3,2))` |
+| Club | `Club.Nom` (LEFT JOIN sur `ja.Id_Club`) |
+| Grades | codes JA1/JA2/JA3/JAN/JAI à 1, séparés par un espace (« JA2 JA3 ») |
+| Disponible | nombre de lignes `CRA_Dispo` « Disponible » ; détail « n à confirmer, n sous condition » en petit dessous et en infobulle |
+| Nominations principal | nombre de lignes `CRA_Designation` `Role = 'JA'` (toutes compétitions) |
+| Nominations adjoint | nombre de lignes `CRA_Designation` `Role = 'Adjoint'` (toutes compétitions) |
+| Total | principal + adjoint |
+| Dispos non utilisées | `max(0, Disponible − Total)` |
+| Désigné ici | (seulement avec une compétition sélectionnée) rôle du JA sur cette compétition : JA / Adjoint / — |
+
+Ligne de totaux en pied (somme principal, adjoint, total des lignes affichées).
+
+### Filtres et tri (côté client, sauf la compétition)
+- **Compétition** (select, défaut « Toutes les compétitions », options « n°X — dates — libellé ») : rechargement `cra-stats/data?competition=ID` ; ne garde que les JA « Disponible » pour cette compétition ; les compteurs restent les totaux sur toutes les compétitions ; colonne « Désigné ici » affichée.
+- **Recherche** (nom / prénom, libellé au-dessus, aligné à droite, style EN11/EC71).
+- Tri par clic sur les en-têtes, par défaut Total croissant puis NOM Prénom (départage par nom sur toutes les colonnes).
+- Compteur `#lbl-count` centré = nombre de JA affichés.
+
+### Routes
+| Méthode | Route | Action |
+|---------|-------|--------|
+| GET | `cra-stats` | page (liste des compétitions pour le filtre) |
+| GET | `cra-stats/data[?competition=ID]` | JSON `{ok, data}` : une ligne par JA disponible (requête unique préparée, agrégats `CRA_Dispo` et `CRA_Designation` en sous-requêtes `GROUP BY Id_JA`, pas de N+1) |
+
+Échec AJAX ou session expirée : toast + message « rechargez la page » dans le tableau.
+
+---
+
+## EC72 – Degrés Juge-Arbitre
+
+**Fichier :** `CraJugeArbitreController` (CI4), vue `cra_juge_arbitre_index.php`, route `cra-juge-arbitre`
+**Accès :** rôle « CRA Convoc » ou Administrateur (filtre `craconvocauth`) sur toutes les routes · lien depuis E009, retour vers `cra-convoc-menu`
+
+### Objectif
+Gérer la table de référence des degrés de la filière juge-arbitre (table `JugeArbitre`, créée et seedée par `initTableConfiguration()` : JA1, JA2, JA3, JAN, JAI).
+
+### Champs
+| Champ | Colonne | Règle |
+|-------|---------|-------|
+| Code | `Code` CHAR(3) | Obligatoire, exactement 3 caractères, unique (insensible à la casse) · saisissable en création uniquement (lecture seule en modification, ignoré par le PUT) car il correspond à une colonne TINYINT de `ja` |
+| Libellé | `Libelle` VARCHAR(26) | Obligatoire, 26 car. max |
+| Description | `Description` TEXT | Obligatoire (textarea, pas de limite courte) |
+
+### Interface
+- Liste triable côté client (tri par défaut : code) : Code, Libellé, Description, corbeille
+- Filtre côté client : recherche texte (code + libellé + description) ; compteur de lignes affichées
+- Bouton « Nouveau degré » et clic sur une ligne → modale Bootstrap de saisie ; erreurs serveur affichées dans la modale
+- Suppression : corbeille par ligne, `nijacConfirm(..., {type:'danger'})`
+
+### Règles de suppression
+- Si `ja` possède une colonne du même nom que le Code (recherche dans `information_schema.COLUMNS`) et qu'au moins un JA a cette colonne à 1 → refus, `{ok:false, msg}` indiquant le nombre de JA concernés
+- Sinon (aucune colonne homonyme, ou aucun JA à 1) → suppression
+
+### Actions AJAX
+| Méthode | Route | Action |
+|---------|-------|--------|
+| GET | `cra-juge-arbitre/data` | Liste complète `{ok, data}` |
+| POST | `cra-juge-arbitre` | Création (`code`, `libelle`, `description`) |
+| PUT | `cra-juge-arbitre/{id}` | Modification (`libelle`, `description` ; `code` ignoré) |
+| DELETE | `cra-juge-arbitre/{id}` | Suppression (voir règles ci-dessus) |
+
+Toutes renvoient `{ok: bool, msg}` ; en cas d'erreur de validation `ok=false` et `msg` explicite.
+
+---
+
 ## EN11 – Juges-Arbitres
 
 **Fichier :** `Nominateur/jugearbitre.php`  
@@ -262,34 +556,45 @@ Gérer la liste complète des Juges-Arbitres : import depuis fichier FFTT, consu
 | Code postal / Ville | Via `Id_LaPoste` | Non |
 | Email | Email | Non |
 | Téléphone | Texte | Non |
-| Actif | Booléen | Oui |
+| JA1 (ex-`Actif` : JA actif 1er degré) | Booléen | Oui |
+| JA2 / JA3 / JAN / JAI | Booléens `TINYINT(1) NOT NULL DEFAULT 0` (codes de la table de référence `JugeArbitre`, sans FK) | Non |
+
+Modale Créer/Modifier : 5 cases à cocher **JA1, JA2, JA3, JAN, JAI** (infobulle = `JugeArbitre.Libelle`, passé par `index()` en `$gradesLibelles` Code → Libelle ; JA1 coché par défaut à la création). Clés POST/JS : `ja1`, `ja2`, `ja3`, `jan`, `jai` (0/1, toujours envoyées par la modale → les 5 colonnes réécrites en UPDATE comme en INSERT).
 | Défiscalisation | Booléen | Non |
-| Nationale | Booléen (Oui/Non) | Non |
+| Nationale | Booléen (Oui/Non), `DEFAULT 1` — **Oui par défaut** (case cochée à la création) | Non |
 | Accepte d'arbitrer dans des départements voisins | Booléen (`ja.ArbitreAutresDepts`) | Non |
 | Départements voisins souhaités | SET 14/27/50/61/76 (`ja.DeptsArbitrage`) | Non |
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `liste` | GET | Retourne les JA filtrés par département |
+| `liste` | GET | Retourne les JA filtrés par département (clés JSON des grades : `JA1`, `JA2`, `JA3`, `JAN`, `JAI`) |
 | `recherche_laposte` | GET | Recherche de commune pour le sélecteur |
 | `importer_excel` | POST | Import depuis fichier Excel FFTT (upsert par licence) |
 | `clubs_par_dept` | GET | Liste des clubs du département |
-| `maj_bdd` | POST | Créer ou modifier un JA. En **UPDATE**, le `SET` est construit ligne par ligne : `DateValidationFFTT`, `Defiscalisation`, `Nationale`, `NumCompteEBP` ne sont réécrits **que si la ligne postée porte la clé correspondante**. Seul l'import CSV FFTT (`importer_excel`) fournit `date_validation_fftt` ; seule la modale Créer/Modifier fournit `defiscalisation` / `nationale` / `num_compte_ebp`. Un import FFTT (CSV ou API) ne transmet pas ces trois-là et **préserve donc la valeur en base**. |
+| `maj_bdd` | POST | Créer ou modifier un JA. En **UPDATE**, le `SET` est construit ligne par ligne : `DateValidationFFTT`, `Defiscalisation`, `Nationale`, `NumCompteEBP` ne sont réécrits **que si la ligne postée porte la clé correspondante**. Les colonnes `JA1`…`JAI` suivent la même règle (clés `ja1`…`jai` ; l'import CSV n'envoie que celle du grade de la ligne). Seul l'import CSV FFTT (`importer_excel`) fournit `date_validation_fftt` ; seule la modale Créer/Modifier fournit `defiscalisation` / `nationale` / `num_compte_ebp`. Un import FFTT (CSV ou API) ne transmet pas ces trois-là et **préserve donc la valeur en base**. |
 
 ### Affichage de la grille
 - Menu **Colonnes** (dropdown `<details>`, centré dans le bandeau entre le compteur « x/y JA » et le sélecteur Département) : une case par colonne pour l'afficher/masquer. Le sous-ensemble masqué est mémorisé dans `localStorage` (`nijac_en11_colonnes_cachees`), réappliqué à chaque rendu de la grille.
 - La grille expose toutes les colonnes de la table `ja` **sauf `Note` et `Id_LaPoste`** (plus la colonne calculée `nom_club`).
+- Grades : une colonne compacte par grade (**JA1, JA2, JA3, JAN, JAI**, en-têtes courts centrés avec infobulle `Libelle`, teinte commune pour les regrouper) — pastille verte ✓ si qualifié, « — » sinon ; triables (numérique).
+- Filtre **Grade** (combobox du bandeau) : **Tous les JA** [défaut] = JA ayant au moins un grade (JA1/JA2/JA3/JAN/JAI) / **Tous** = aucun filtre (avec ou sans grade) / JA1 / JA2 / JA3 / JAN / JAI = JA ayant cette qualification / **Aucun grade** = JA sans aucun des 5 grades. Remplace l'ancien bouton « Actifs seulement » ; par défaut « Tous les JA » (JA sans aucun grade masqués). Le bouton **Tous** remet Grade à « Tous » et désactive le filtre Erreurs CP/Ville.
 - Masquées par défaut (jeu initial `COLONNES_CACHEES_DEFAUT` quand la clé `localStorage` est absente) : `grade`, `date_validation_fftt`, `defiscalisation`, `nationale`, `num_compte_ebp`, `arbitre_autres_depts`, `depts_arbitrage`. Toutes réactivables depuis le menu.
 
 ### Import Excel
 - Colonnes attendues : N° licence, Nom, Prénom, Grade, Club, Code postal, Ville
 - Comportement : upsert sur le N° licence
 - Normalisation automatique du nom de ville via la table `laposte`
-- L'import (CSV `102_*.csv` comme API FFTT) ne renseigne pas `Defiscalisation` / `Nationale` / `NumCompteEBP` : ces colonnes, gérées à la main dans la modale, ne sont jamais écrasées par un import (voir action `maj_bdd`).
+- Qualifications (CSV `102_*.csv`, un fichier par grade : `102_*_JA1.csv`, `_JA2`, `_JA3`, `_JAN`…) : **chaque ligne n'affecte que la colonne de son grade**, indépendamment des autres grades. La colonne « Grade Arb/Ja » est convertie par `niveauxJaFftt()` (même mappage que l'import API) en `JA1`/`JA2`/`JA3`/`JAN`/`JAI` ; la ligne positionne uniquement cette colonne : 1 si « Inactivité » = `Actif` (insensible à la casse), 0 sinon. Un JA peut ainsi être inactif en JA1 et actif en JA2/JA3, et importer le fichier JAN après le fichier JA1 n'écrase pas JA1. Lignes sans grade JA reconnu (adjoints `JAAA`/`JAAE`, vide…) ignorées. Un même JA présent sur plusieurs lignes d'un fichier est fusionné par N° licence (à défaut Nom+Prénom) : les clés de grade se cumulent (dernière valeur par colonne), le reste de la fiche suit le grade le plus haut. `maj_bdd` n'écrit en UPDATE que les colonnes grade dont la clé (`ja1`/`ja2`/`ja3`/`jan`/`jai`) est présente dans la ligne (la modale Créer/Modifier envoie toujours les 5) ; en INSERT, colonnes absentes = 0. Les JA absents du fichier restent inchangés.
+- L'import (CSV `102_*.csv` comme API FFTT) ne renseigne pas `Defiscalisation` / `Nationale` / `NumCompteEBP` : ces colonnes, gérées à la main dans la modale, ne sont jamais écrasées par un import (voir action `maj_bdd`). Un JA créé par un import prend `Nationale = 1` (défaut de la table). Migration unique (`initTableConfiguration()`, EA98) : défaut passé à 1 et tous les JA existants mis à Oui — gardée par le défaut, elle ne se rejoue pas (les Non saisis ensuite sont conservés).
+
+### Importer les JA depuis l'API FFTT (par département)
+- `fftt/reset-actif-dept` (`reinitialiserActifDept()`) remet d'abord `JA1`, `JA2`, `JA3`, `JAN`, `JAI` à 0 pour tous les JA du département : un JA non retrouvé n'a plus aucune qualification.
+- Chaque licencié est lu via `xml_licence_b` ; son grade (champ `ja`, à défaut `arb`) est converti en qualifications par un mappage tolérant (`JA1`/`JA 1`/« 1er degré », `JA2`, `JA3`, `JAN`/« National », `JAI`/« International », plusieurs codes possibles). Seuls les licenciés ayant au moins une qualification sont retenus (AR exclus).
+- Pour chaque JA importé (UPDATE ou INSERT) : chaque colonne vaut 1 si l'API indique la qualification, 0 sinon — pas de `JA1 = 1` par défaut, pas de cumul implicite (JA3 seul ne coche pas JA1/JA2). Le rapport (journal, sélection limitrophes) affiche ces qualifications.
 
 ### Règles
-- Seuls les JA avec `Actif = 1` sont proposés à la nomination (EN14)
+- Seuls les JA avec `JA1 = 1` sont proposés à la nomination (EN14)
 - Le département d'un JA est déterminé par le code postal de sa salle principale de club
 - Le sélecteur de département (filtre liste + import FFTT) propose, en plus des départements actifs (`getDeptActifs()`), un groupe **« Départements limitrophes »** alimenté par `getDepartementsLimitrophes()` — liste paramétrable via la clé `departements_limitrophes` en EA91 (par défaut `28,35,53,60,72,78,80,95`). Ce mécanisme est distinct de la règle 76→27 (`regles_departements`, voir EA91) : il permet de gérer des JA rattachés à des départements hors Normandie qui interviennent occasionnellement en Normandie, plutôt qu'une inclusion automatique entre deux départements normands.
 - La modale Créer/Modifier reprend la case **« Accepte d'arbitrer dans un ou plusieurs départements voisins »** d'EN22 (case maîtresse + sélection des départements). La sélection est filtrée : seuls les départements **voisins de région du champ « Exerce dans »** sont proposés (`voisinsParDept` = `getLimitrophesRegion()` par département actif, injecté en JS ; `njaMajArbVoisins()` masque et décoche les cases non voisines, se recalcule au `change` du département et au chargement d'une fiche). Le corps de la fiche part par `maj_bdd`, puis, une fois l'enregistrement confirmé, la préférence est envoyée par un second POST vers l'action `sauvegarder_arbitrage_voisins` d'EN22 (endpoint partagé, `maj_bdd` n'écrit pas ces colonnes) — un échec de ce second appel n'annule pas l'enregistrement du reste de la fiche (toast d'avertissement).
@@ -365,7 +670,15 @@ Affecter les JA disponibles aux rencontres de la saison en appliquant les règle
 - Liste des rencontres de la journée avec statut de nomination
 - Bouton **Tri** : ordre de la liste des rencontres, basculable entre **club recevant** (défaut : ordre alphabétique du nom du club recevant, toutes ses rencontres à la suite sous un en-tête de groupe « nom du club — n rencontres », puis division au sein du club ; pas d'en-têtes avec « Non attribuées d'abord ») et **division** (ordre historique : `division.Ord`, poule). Tri fait côté client sur `NomClubDom` / `IdClubDom` / `DivisionOrd` renvoyés par `rencontres_journee` ; choix mémorisé dans le navigateur (`localStorage`) ; le bouton « Non attribuées d'abord » se superpose à cet ordre (tri stable)
 - Pour chaque rencontre : liste des JA candidats triés par priorité
-- Boutons : Affecter, Retirer, Envoyer convocations
+- Boutons : Affecter, Retirer, Envoyer convocations, Feuille de pointage (PDF)
+
+### Feuille de pointage (PDF)
+- Bouton « Feuille de pointage (PDF) » de la barre d'actions (désactivé, avec infobulle, quand la journée n'a aucune rencontre) : PDF A4 paysage généré **côté navigateur** avec `asset/js/jspdf.umd.min.js` (même lib que l'attestation ED, tableau dessiné à la main — pas de plugin autotable), téléchargé sous `feuille-pointage-J{journée}-{date}.pdf`. Lecture seule : aucun appel serveur, aucune écriture.
+- Contenu : **toutes** les rencontres de la journée affichée (pas seulement les cochées pour l'envoi), JA nommé = état courant de l'écran (y compris les affectations faites dans la session).
+- En-tête (page 1) : « Feuille de pointage — Journée n° N du JJ/MM/AAAA », départements du nominateur (`getDepartementsAutorises()`, code + nom), date d'édition. Pied de chaque page : date d'édition + « Page x / y ».
+- Colonnes : Division (code court), Club (club recevant), Équipe domicile, Équipe extérieure, JA (NOM Prénom), Tél JA (10 chiffres → `06.12.34.56.78`, sinon tel quel), Email JA, Pointé (carré vide dessiné). Police Helvetica 8,5 pt, retour à la ligne dans les cellules (`splitTextToSize`), en-tête gras blanc sur fond bleu `#1a3a6b` répété sur chaque page, une ligne sur deux grisée (`#E9ECEF`).
+- Tri : NOM puis Prénom du JA (`localeCompare('fr', {sensitivity:'base'})`, insensible casse/accents), puis division / club ; rencontres sans JA à la fin (colonnes JA vides), triées par division (`division.Ord`) puis club.
+- Données : `rencontres_journee` renvoie `NomJa`, `PrenomJa`, `TelJa`, `EmailJa` (`ja.Telephone` / `ja.Email` du JA nommé) ; `candidats_journee` renvoie `Telephone` / `Email` pour un JA affecté pendant la session.
 
 ### Actions AJAX
 | Action | Méthode | Description |
@@ -375,10 +688,22 @@ Affecter les JA disponibles aux rencontres de la saison en appliquant les règle
 | `candidats_journee` | GET | Retourne les JA candidats de la journée : JA actifs disponibles (journée ou rencontre) rattachés à un département du nominateur — soit par le domicile (`LEFT(Cp,2)`), soit par `ja.CodeDept` — **ou** JA d'un autre département ayant coché « accepte d'arbitrer dans un département voisin » (`ja.ArbitreAutresDepts = 1` et un département du nominateur présent dans `ja.DeptsArbitrage`, testé par `FIND_IN_SET`) — voir EN22/EN11. Chaque ligne porte `HorsDept` (0/1) et `CodeDept` ; côté client, un filtre **« Autres dépts »** génère une case par département distinct des candidats `HorsDept = 1` (dépt = `LEFT(Cp,2)` sinon `CodeDept`) — un tel JA n'est affiché que si la case de son département est cochée (toutes décochées par défaut), boutons Tout cocher / Inverser visibles à partir de 2 départements, badge « Autre dépt ». Tri final côté client. |
 | `affecter_ja` | POST | Nomme un JA sur une rencontre et valide directement la nomination (`Valide = 1`) — plus d'étape de validation séparée |
 | `retirer_ja` | POST | Retire la nomination d'un JA, et sa validation avec elle (`DELETE FROM nomination WHERE Id_Rencontre = ?`) |
-| `envoyer_convocations` | POST | Envoie les emails de convocation aux JA validés |
+| `envoyer_convocations` | POST | Envoie les emails de convocation aux JA validés (`ids` = rencontres cochées) ; `copie_clubs=1` → copie sans lien aux clubs (voir ci-dessous). Réponse : `envoyes`, `erreurs`, `liens` (chaque ligne porte `copie` = compte-rendu texte de la copie), `copies` = `{envoyees, echecs, sans_destinataire}` ou `null` si case décochée |
+
+### Copie de la convocation aux clubs (sans lien)
+- Case « Envoyer une copie (sans lien) aux clubs » ajoutée à la fenêtre de confirmation de l'envoi, **cochée par défaut**, transmise en POST (`copie_clubs`).
+- Destinataires, pour chaque rencontre convoquée : correspondant (`Club.CorNom` / `CorEmail`) et référent (`Club.RefNom` / `RefMail`) du club **recevant et** du club **visiteur** (`equipe.Id_Club` de `Id_EquipeDom` / `Id_EquipeExt`) — adresses valides seulement, dédoublonnées sans casse (une adresse ne reçoit qu'une copie par rencontre), adresse du JA exclue (`destinatairesCopieClubs()`, `config/app_config.php`). Un seul email par rencontre, tous les destinataires en « À ».
+- Envoyée **après** l'envoi réussi au JA uniquement : pas de copie si le JA n'a pas d'email ou si sa convocation échoue (signalé dans le compte-rendu). Jamais bloquante : un échec de copie ne remet pas en cause `EmailEnvoye = 1`.
+- Contenu : sujet de la convocation préfixé « Copie – », corps du même modèle n°3 (personnalisé du nominateur sinon système) mais **sans les liens personnels du JA** : `retirerLiensPersonnelsModele()` retire, avant substitution, `{URL_CONVOCATION_JA}` / `{LIEN_CONVOCATION}` / `{URL_ADRESSE_JA}` / `{URL_DISPONIBILITE_JA}` / `{URL_ATTESTATION_JA}` — ligne (texte) ou bloc `<p>`/`<li>`/`<div>`/`<a>` (HTML) du marqueur, plus la phrase d'introduction qui le précède immédiatement (« lien », « cliquez », « ci-dessous », « suivant : » ou finissant par « : ») ; filet final : toute URL personnelle restante est effacée. Ligne d'en-tête « Ceci est une copie pour information de la convocation adressée à Prénom Nom » (échappée en HTML).
+- Reply-To du nominateur selon le flag `ReplyTo` du modèle ; pas de Cc (le nominateur est déjà en Cc de la convocation du JA si le flag `Cc` est actif).
+- Limite d'envoi : `checkRateLimit(nb destinataires)` avant chaque copie (dépassement → copie comptée en échec), `enregistrerEnvois()` après envoi.
+- Mode Développement : `getEmailDestinataire()` ramène tous les destinataires sur `email_developpement` (dédoublonnés par PHPMailer) → **un** mail de test par rencontre, sujet préfixé `[DEV → adresses réelles]`.
+- Compte-rendu (fenêtre « Convocations envoyées ») : total copies envoyées / en échec / sans destinataire, et sous chaque rencontre le statut de sa copie.
 
 ### Modèle de données (`nomination` → `disponible`)
 Depuis la migration décrite dans le commit *« modification dans la table nomination de id_ja par id_disponible »*, la table `nomination` ne référence plus directement `ja.Id_JA` mais **`disponible.Id_Disponible`** (`nomination.Id_Disponible`). Le JA nominé s'obtient par jointure `nomination → disponible → ja`. Une contrainte d'unicité `uq_nomination_rencontre` sur `nomination.Id_Rencontre` garantit qu'**une rencontre ne peut avoir qu'une seule nomination**.
+
+**Règle « nomination = valide d'office »** : si un JA est nommé sur une rencontre, elle devient automatiquement valide — plus de validation manuelle (bouton « Valider les nominations » supprimé). Chaque écriture qui crée une nomination ou change son JA pose `Valide = 1` explicitement : EN14 (`affecterNomination()`), EN25 (`ArbitreClubController::enregistrer`, arbitrage club), import des rencontres (`ImportRencontresController`), EN28 (`suivi-nomination/modifier`). EN23/EN24 ne créent ni ne modifient de nomination. `nomination.Valide` a `DEFAULT 1` ; migration unique dans `initTableConfiguration()` (EA98) : si le défaut n'est pas déjà `1`, `ALTER TABLE nomination MODIFY Valide … DEFAULT 1` (type et nullabilité conservés) puis `UPDATE nomination SET Valide = 1 WHERE Valide = 0` — le défaut sert de garde, l'UPDATE ne se rejoue pas. `EmailEnvoye` n'est pas touché, aucun email envoyé. Retirer un JA (`retirer_ja`) supprime la nomination : il n'existe plus d'état « nomination invalide ».
 
 Deux fonctions internes portent cette logique dans `nomination.php` :
 - `resoudreDisponible($pdo, $idJa, $idRenc, $dateRenc)` : trouve/crée la ligne `disponible` à utiliser — priorité à une réponse précise sur la rencontre (`Reponse='O'`), sinon une disponibilité « toute la journée » (`Id_Rencontre IS NULL`) qu'elle matérialise en ligne précise, sinon retourne `null` (JA non disponible → nomination refusée)
@@ -440,9 +765,9 @@ Renseigner le champ `ja.NumCompteEBP` (n° de compte fournisseur dans le logicie
 ### Interface
 Motif partagé **liste + panneau d'édition** (`asset/css/nijac-liste-edit.css`).
 
-- **Volet liste** (gauche) : table triable des JA du périmètre. Bandeau de filtres au style comboboxes « label en encoche » de EN11 (`#menu-strip` + `.combo-field`) : recherche nom/prénom, **Compte EBP** (tous / sans compte [défaut] / avec compte), **Défisc.** (tous / oui / non), **Actif** (tous [défaut] / oui / non), bouton de réinitialisation ; badge `affichés / total`.
-  Colonnes : Nom, Prénom, **Actif** (Oui/Non), **Défisc.** (Oui/Non), puis — **uniquement pour les JA ayant demandé la défiscalisation** (`ja.Defiscalisation = 1`) — **Km total** (somme de `nomination.Kilometre` sur toutes les nominations du JA en base), **CV** (`ja.PuissanceFiscale`), **Énergie** (`ja.VehiculeElectrique` → `Therm.` / `Élec.`) — puis N° compte EBP. Lignes des JA inactifs grisées.
-- **Volet édition** (droite) : sur sélection d'une ligne, Nom / Prénom / Actif en lecture seule, rappel défiscalisation (`n CV · thermique|électrique · n km cumulés`) le cas échéant, champ **N° de compte EBP** (vide = efface) + bouton **Enregistrer**.
+- **Volet liste** (gauche) : table triable des JA du périmètre. Bandeau de filtres au style comboboxes « label en encoche » de EN11 (`#menu-strip` + `.combo-field`) : recherche nom/prénom, **Compte EBP** (tous / sans compte [défaut] / avec compte), **Défisc.** (tous / oui / non), **JA1** (tous [défaut] / oui / non), bouton de réinitialisation ; badge `affichés / total`.
+  Colonnes : Nom, Prénom, **JA1** (Oui/Non), **Défisc.** (Oui/Non), puis — **uniquement pour les JA ayant demandé la défiscalisation** (`ja.Defiscalisation = 1`) — **Km total** (somme de `nomination.Kilometre` sur toutes les nominations du JA en base), **CV** (`ja.PuissanceFiscale`), **Énergie** (`ja.VehiculeElectrique` → `Therm.` / `Élec.`) — puis N° compte EBP. Lignes des JA inactifs grisées.
+- **Volet édition** (droite) : sur sélection d'une ligne, Nom / Prénom / JA1 en lecture seule, rappel défiscalisation (`n CV · thermique|électrique · n km cumulés`) le cas échéant, champ **N° de compte EBP** (vide = efface) + bouton **Enregistrer**.
 - **Importer CSV** (bouton du bandeau liste) : fichier `.csv`, deux colonnes — « nom + prénom » et « n° de compte EBP » — dans un **ordre indifférent** (la colonne 100 % chiffres est prise pour le compte, l'autre pour le nom), séparateur `;` ou `,` ; lignes d'en-tête / sous-totaux (0 ou 2 colonnes numériques) ignorées. Compte-rendu dans un encart, **lignes sans correspondance en tête** : chaque nom sans correspondance (et chaque cas ambigu) est cliquable → filtre la liste sur le nom de famille pour retrouver et compléter le JA manuellement.
 - **Exporter CSV** (bouton du bandeau liste) : télécharge `comptes_ebp_ja.csv` — uniquement les JA défiscalisés avec un kilométrage arbitré > 0.
 
@@ -706,13 +1031,16 @@ Pas de Model, `getPDO()` direct comme le reste de cette famille d'écrans. Aucun
 **Accès :** Nominateur ou Administrateur (filtre "auth") — bouton du menu nominateur (E003), après EN14
 
 ### Objectif
-Suivre, pour les nominations validées du périmètre du nominateur, les frais saisis par le JA dans EN21 et relancer les JA.
+Afficher **toutes les rencontres prévues** du périmètre du nominateur (toutes dates, nommées ou non) et, pour les nominations validées (et les arbitrages club désignés via EN25), suivre les frais saisis par le JA dans EN21 et relancer les JA.
+
+### Rencontres sans JA
+Une ligne par rencontre (au plus une nomination par rencontre, `uq_nomination_rencontre`). Une rencontre sans nomination (ou dont la nomination n'est pas retenue, voir `data`) apparaît sur fond rose clair (#FFE4E8, survol #E9ECEF), JA « — Aucun JA » en gris italique, N° licence / Compte EBP / Date saisie vides, sans bouton Modifier ni Rappel (pas de double-clic) — sauf, en arbitrage club (`ArbitrageCRA = 0`), le bouton **Relancer le club** (colonne Rappel, voir `relance-club`). La colonne Arbitrage (CRA/Club) reste affichée. `rencontre` n'a pas de colonne de statut (annulée/reportée/forfait) : aucune rencontre n'est exclue à ce titre.
 
 ### Colonnes
-Date de la rencontre (jour abrégé) · Division (macaron coloré comme EN23, `division.Color`) · Arbitrage (CRA ou Club, `rencontre.ArbitrageCRA`) · Domicile · Extérieur · N° licence (`Id_JA`) · JA · Compte EBP (`NumCompteEBP`) · Péage · Km · Défisc. (Oui/Non) · Date saisie · Rappel (bouton). Les trois colonnes de frais affichent « — » tant que `nomination.DateSaisie` est NULL (le JA n'a pas encore enregistré ses frais).
+Date de la rencontre (jour abrégé) · Division (macaron coloré comme EN23, `division.Color`) · Arbitrage (CRA ou Club, `rencontre.ArbitrageCRA`) · Domicile · Extérieur · N° licence (`Id_JA`) · JA · Compte EBP (`NumCompteEBP`) · Péage · Km · Défisc. (Oui/Non) · Date saisie · Rappel (bouton de rappel au JA, ou « Relancer le club » sur une rencontre en arbitrage club sans JA). Les trois colonnes de frais affichent « — » tant que `nomination.DateSaisie` est NULL (le JA n'a pas encore enregistré ses frais).
 
 ### Filtres (client)
-Date (combo des dates de rencontre existantes, ordre croissant), Division (badge + popup Messieurs/Dames `nijac-division-filter.js`, comme EN29 — divisions présentes dans les nominations chargées), équipe (domicile ou extérieur, sous-chaîne), nom du JA (sous-chaîne), Date saisie (Toutes / Renseignée / Non renseignée). Tri par clic sur les en-têtes (sur les données, la date est triée chronologiquement). Tri initial : date décroissante.
+Date (combo des dates de rencontre existantes, ordre croissant), Division (badge + popup Messieurs/Dames `nijac-division-filter.js`, comme EN29 — divisions présentes dans les rencontres chargées), équipe (domicile ou extérieur, sous-chaîne), nom du JA (sous-chaîne), Date saisie (Toutes / Renseignée / Non renseignée — « Non renseignée » inclut les rencontres sans JA), Nomination (Tous / Avec JA / Sans JA). Compteur `#lbl-count` = lignes affichées / total des rencontres chargées. Tri par clic sur les en-têtes (sur les données, la date est triée chronologiquement). Tri initial : date décroissante.
 
 ### Frais non comptés
 Les valeurs de péage et de kilomètres saisies mais **non comptées** sont grisées et barrées dans le tableau (info-bulle), avec les mêmes règles qu'EN17 : seuls les arbitrages CRA valent des frais (Club : 0), et un JA qui arbitre plusieurs rencontres CRA le même jour ne fait qu'un déplacement — km et péage ne sont conservés que sur la 1re rencontre du jour qui en porte (heure la plus précoce, puis n° de nomination).
@@ -720,10 +1048,11 @@ Les valeurs de péage et de kilomètres saisies mais **non comptées** sont gris
 ### Actions AJAX
 | Route | Méthode | Description |
 |-------|---------|-------------|
-| `suivi-nomination/data` | GET | Nominations `Valide = 1` dont le club domicile est dans les départements autorisés |
-| `suivi-nomination/ja-liste` | GET | JA actifs (`Actif = 1`) des départements autorisés (`Id_JA`, `Nom`, `Prenom`), pour la liste déroulante de la popup de modification |
-| `suivi-nomination/modifier` | POST | `id_nomination`, `id_ja`, `arbitrage` (1 = CRA, 0 = Club), `peage`, `km`, `defisc` → en transaction : met à jour `rencontre.ArbitrageCRA` et `nomination` (`Peage`, `Kilometre`, `Defiscalisation`, `DateSaisie = CURDATE()`). Si le JA change : JA actif exigé, 2 nominations max par JA et par date, `disponible` (JA, rencontre) réutilisée (rouverte en `P` si `N`) ou créée en `P` avec la note « Juge-arbitre modifié depuis EN28 » ; `Valide`, `EmailEnvoye`, `DateNomination` inchangés. Refus hors périmètre du nominateur |
+| `suivi-nomination/data` | GET | Toutes les rencontres dont le club domicile est dans les départements autorisés (même critère qu'EN14 : `SUBSTRING(equipe.Id_Club, 3, 2)`), une seule requête `FROM rencontre` + `LEFT JOIN nomination / disponible / ja` (`Id_Rencontre` toujours présent, `Id_Nomination` et champs JA/frais NULL si aucune nomination). Nomination retenue si `Valide = 1` (toute nomination l'est d'office, voir EN14) — le `OR rencontre.ArbitrageCRA = 0` conservé ne couvre plus que les arbitrages club EN25 restés à `Valide = 0` tant que la migration EA98 n'a pas tourné ; sinon la rencontre s'affiche sans JA. Tri `Date DESC, Heure, Id_Rencontre`. Pas de bouton Rappel sur une nomination non validée (refusé par `rappel`) |
+| `suivi-nomination/ja-liste` | GET | JA actifs (`JA1 = 1`) des départements autorisés (`Id_JA`, `Nom`, `Prenom`), pour la liste déroulante de la popup de modification |
+| `suivi-nomination/modifier` | POST | `id_nomination`, `id_ja`, `arbitrage` (1 = CRA, 0 = Club), `peage`, `km`, `defisc` → en transaction : met à jour `rencontre.ArbitrageCRA` et `nomination` (`Peage`, `Kilometre`, `Defiscalisation`, `DateSaisie = CURDATE()`). Si le JA change : JA actif exigé, 2 nominations max par JA et par date, `disponible` (JA, rencontre) réutilisée (rouverte en `P` si `N`) ou créée en `P` avec la note « Juge-arbitre modifié depuis EN28 » ; `Valide = 1` (nomination valide d'office), `EmailEnvoye`, `DateNomination` inchangés. Refus hors périmètre du nominateur |
 | `suivi-nomination/rappel` | POST | `id_nomination` → envoie au JA le modèle messagerie n°3 (Convocation, `resoudreModeleMessagerie()` : modèle personnalisé du nominateur si présent), marqueurs de `construireMarqueursMessage()` ; Cc/Reply-To selon le modèle ; passe par `getEmailDestinataire()` (mode Développement). Refus si nomination hors périmètre, non validée, frais déjà saisis (`DateSaisie` renseignée), ou JA sans email |
+| `suivi-nomination/relance-club` | POST | `id_rencontre` → « Relancer le club » (bouton enveloppe orange de la colonne Rappel, affiché seulement si `ArbitrageCRA = 0` et aucune nomination ; confirmation avec club, rencontre, correspondant `Club.CorNom/CorEmail` et référent `Club.RefNom/RefMail` en Cc — fournis par `data`, `LEFT JOIN club`). Envoie le message n°7 « JA Club » (lien public EN25) via `envoyerDemandeJaClub()` (`config/app_config.php`), le même cœur d'envoi que `nomination/demander-ja-club` (EN14) : modèle perso du nominateur sinon système (`resoudreModeleMessagerie()`), marqueurs `construireMarqueursMessage()`, référent en Cc, Cc/Reply-To du modèle, `getEmailDestinataire()` (mode Développement). En plus d'EN14 : `checkRateLimit(1)` / `enregistrerEnvois(1)`. Refus si hors périmètre (club recevant), JA déjà désigné (« le club a déjà répondu »), rencontre pas en arbitrage club, ou club sans email de correspondant. Aucun suivi d'envoi en base (pas de colonne « demande envoyée le ») |
 
 ---
 
@@ -790,13 +1119,13 @@ Récapituler, par JA ayant opté pour la défiscalisation, les frais de déplace
 - Bouton **Export CSV**.
 
 ### Population de la liste
-`LEFT JOIN` depuis `ja`, `WHERE ( ja.Defiscalisation = 1 OR EXISTS (nomination.Defiscalisation = 1 sur une rencontre de l'année fiscale pour ce JA) )` — un JA est donc retenu par son **choix global** (`ja.Defiscalisation`, fiche EN11 / écran EN22) **ou** par un **choix par mission** fait sur sa convocation EN21 (`nomination.Defiscalisation`), même sans avoir coché le drapeau global. **Pas de filtre `Actif`** : le reçu fiscal de l'année reste dû aux JA désactivés en fin de saison (EA85). `GROUP BY j.Id_JA` → aucun doublon. Les JA sans mission cette année-là apparaissent aussi, totaux à 0. Cumul via `nomination → disponible → ja`, rencontres dont `rencontre.Date` tombe dans l'année fiscale, nominations retenues si `Valide = 1 OR Peage IS NOT NULL OR Kilometre IS NOT NULL OR Defiscalisation = 1`.
+`LEFT JOIN` depuis `ja`, `WHERE ( ja.Defiscalisation = 1 OR EXISTS (nomination.Defiscalisation = 1 sur une rencontre de l'année fiscale pour ce JA) )` — un JA est donc retenu par son **choix global** (`ja.Defiscalisation`, fiche EN11 / écran EN22) **ou** par un **choix par mission** fait sur sa convocation EN21 (`nomination.Defiscalisation`), même sans avoir coché le drapeau global. **Pas de filtre `JA1`** : le reçu fiscal de l'année reste dû aux JA désactivés en fin de saison (EA85). `GROUP BY j.Id_JA` → aucun doublon. Les JA sans mission cette année-là apparaissent aussi, totaux à 0. Cumul via `nomination → disponible → ja`, rencontres dont `rencontre.Date` tombe dans l'année fiscale, nominations retenues si `Valide = 1 OR Peage IS NOT NULL OR Kilometre IS NOT NULL OR Defiscalisation = 1`.
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
 | `donnees` | POST | Agrégat par JA : `NbMissions`, `Peage`, `Kilometre`, `PuissanceFiscale`, `VehiculeElectrique`, `FraisKmPeages` (taux plat), `MontantBareme` (ou `null`) |
-| `relancer-vehicule` | POST (`ids[]`) | Envoie le modèle `messagerie` n°10 aux JA dont l'`Id_JA` est coché — nettoyage des ids (entiers > 0, dédup), filtre serveur `Actif = 1` + email présent + ( `Defiscalisation = 1` **ou** `nomination.Defiscalisation = 1` sur l'année fiscale ). Un seul mailer (SMTP keep-alive), `Reply-To` selon le modèle, garde-fou `checkRateLimit()` / `enregistrerEnvois()`. Retour `{ok, envoyes, total, erreurs[], msg}` |
+| `relancer-vehicule` | POST (`ids[]`) | Envoie le modèle `messagerie` n°10 aux JA dont l'`Id_JA` est coché — nettoyage des ids (entiers > 0, dédup), filtre serveur `JA1 = 1` + email présent + ( `Defiscalisation = 1` **ou** `nomination.Defiscalisation = 1` sur l'année fiscale ). Un seul mailer (SMTP keep-alive), `Reply-To` selon le modèle, garde-fou `checkRateLimit()` / `enregistrerEnvois()`. Retour `{ok, envoyes, total, erreurs[], msg}` |
 | `export-csv` | POST | Renvoie le CSV en JSON (téléchargement déclenché côté client) |
 
 ### Calcul du montant défiscalisable (colonne « Frais défiscalisables »)
@@ -1147,7 +1476,7 @@ Préparer l'application pour une nouvelle saison : sauvegarde SQL puis vidage de
 
 #### 1. Sauvegarde + nettoyage de phase
 - Génère un fichier SQL dans `/SQL/` (horodaté)
-- Désactive tous les JA (`Actif = 0`)
+- Désactive tous les JA (`JA1 = 0`)
 - Vide les tables : `disponible`, `equipe`, `rencontre`, `nomination`
 - Nécessite une confirmation admin
 
@@ -1379,6 +1708,7 @@ Gérer les paramètres applicatifs stockés dans la table `configuration` (clé 
 | `saison` | Ex : `2025-2026` | Saison en cours |
 | `annee_fiscale` | Année 4 chiffres (2000-2100), ex : `2026` | Année civile de référence de la défiscalisation JA (ED51) — fenêtre 1ᵉʳ janv → 31 déc. Défaut = année système. Auto-heal `INSERT IGNORE` au chargement de l'écran. |
 | `nomination_nb_candidats` | Entier ≥ 1, défaut `15` | Nombre de candidats JA listés par rencontre (EN14) |
+| `cra_dispo_choix_etendus` | `1` / `0`, défaut `1` (clé absente) | EC74 : « À confirmer » et « Disponible sous condition » proposés (`1`) ou non (`0`) à la saisie (page publique `dispo-cra`, saisie manuelle) — modifié par l'interrupteur d'EC74 |
 
 L'utilisateur et le mot de passe SMTP (`SMTP_USER` / `SMTP_PASSWORD`) ne sont pas stockés dans
 `configuration` : ils sont lus depuis `.env` (encodés ROT47, comme `DB_USER`/`DB_PASS`/`FFTT_APP_ID`/`FFTT_APP_KEY`),
@@ -1430,6 +1760,8 @@ Créer et gérer les modèles de messages utilisés pour les convocations, rappe
 - Les messages système (`Id_Utilisateur IS NULL` ou `Id_Messagerie` entre 1 et 6) ne sont modifiables/supprimables que par un administrateur ; un nominateur peut les dupliquer pour créer sa propre variante
 - Un nominateur ne peut modifier/supprimer que ses propres messages personnels
 - Les modèles système sont référencés par type depuis d'autres écrans : `Convocation` (EN15), `Demande adresse` (EN19)
+- **Convocations CRA (EC73)** : 3 messages système `CRA Convocation JA`, `CRA Convocation JA + adjoint`, `CRA Convocation adjoint` (HTML complet ~53 Ko avec images base64, amorcés par EA98 depuis `Convocation/*.html`, voir EC73). Édités comme les autres dans le textarea (source HTML, pas de nettoyage côté serveur hormis `trim`) + bouton « Aperçu HTML » (iframe, marqueurs d'exemple de `MARQUEURS_EXEMPLE`, y compris les marqueurs CRA). Bloc de marqueurs « Convocation CRA (EC73) » affiché seulement quand le Type sélectionné commence par `CRA Convocation`. Non proposés par EN15 (onglets à Types fixes). Personnalisation = « Copier pour personnaliser » (copie prioritaire pour son propriétaire à l'envoi) ; revenir au modèle système = supprimer sa copie
+- **Rôle « CRA Convoc »** (bouton EA93 « Modèles de convocation » du menu E009, route sous filtre `auth`) : ne voit que les messages `CRA Convocation …` (système en lecture seule + ses copies), peut les copier, modifier/supprimer ses copies (Type restant `CRA Convocation …`), ne peut pas créer de message ; retour vers E009
 
 ---
 

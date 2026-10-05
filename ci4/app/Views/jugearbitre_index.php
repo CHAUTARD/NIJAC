@@ -123,6 +123,10 @@
         /* Actif badge */
         .badge-actif     { background: #d1fae5; color: #065f46; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
         .badge-inactif   { background: #fee2e2; color: #991b1b; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
+        /* Colonnes grades JA1/JA2/JA3/JAN/JAI : étroites, teinte commune pour les regrouper */
+        #tbl-ja thead th.col-grade { text-align: center; padding-left: .2rem; padding-right: .2rem; color: #1e3a8a; }
+        #tbl-ja tbody td.col-grade { background-color: rgba(30, 58, 138, .05); } /* translucide : survol / sélection de ligne restent visibles */
+        .grade-non { color: #c4c9d2; }
         .badge-defisc    { background: #dbeafe; color: #1e40af; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
         .badge-no-defisc { background: #f3f4f6; color: #6b7280; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
 
@@ -309,7 +313,7 @@
         <div class="win-menu-drop" id="win-menu-drop">
             <?php if ($isAdmin): ?>
             <button class="drop-item" id="btn-import-fftt-dept" data-bs-toggle="modal" data-bs-target="#modal-import-fftt">
-                <i class="bi bi-cloud-arrow-down-fill"></i>Importer JA1/JA2/JA3 depuis FFTT (par département)
+                <i class="bi bi-cloud-arrow-down-fill"></i>Importer les JA depuis l'API FFTT (par département)
             </button>
             <button class="drop-item" id="btn-importer">
                 <i class="bi bi-file-earmark-spreadsheet"></i>Importer depuis fichier FFTT (102_*.csv)
@@ -329,8 +333,7 @@
         </div>
     </div>
     <div id="toggle-actif" style="margin-left:.5rem">
-        <button id="btn-tous">Tous</button>
-        <button id="btn-actifs"       class="active">Actifs seulement</button>
+        <button id="btn-tous" class="active">Tous</button>
         <button id="btn-erreurs-cp">⚠ Erreurs CP/Ville</button>
     </div>
     <span class="count-badge" id="lbl-count">0 JA</span>
@@ -358,6 +361,17 @@
         </select>
     </span>
     <span class="combo-field">
+        <label for="sel-grade">Grade</label>
+        <select id="sel-grade">
+            <option value="">Tous les JA</option>
+            <option value="tousja">Tous</option>
+            <?php foreach (['ja1' => 'JA1', 'ja2' => 'JA2', 'ja3' => 'JA3', 'jan' => 'JAN', 'jai' => 'JAI'] as $cleG => $codeG): ?>
+            <option value="<?= $cleG ?>"><?= $codeG ?></option>
+            <?php endforeach; ?>
+            <option value="aucun">Aucun grade</option>
+        </select>
+    </span>
+    <span class="combo-field">
         <label for="sel-perimetre">Périmètre</label>
         <select id="sel-perimetre">
             <option value="1">Région uniquement</option>
@@ -381,7 +395,9 @@
                 <th style="width:140px" data-field="prenom">Prénom<span class="sort-icon"></span></th>
                 <th style="width:210px" data-field="email">Email<span class="sort-icon"></span></th>
                 <th style="width:120px" data-field="telephone">Téléphone<span class="sort-icon"></span></th>
-                <th style="width:65px"  data-field="actif">Actif<span class="sort-icon"></span></th>
+                <?php foreach (['ja1' => 'JA1', 'ja2' => 'JA2', 'ja3' => 'JA3', 'jan' => 'JAN', 'jai' => 'JAI'] as $cleG => $codeG): ?>
+                <th style="width:44px" class="col-grade" data-field="<?= $cleG ?>" title="<?= esc($gradesLibelles[$codeG] ?? $codeG) ?>"><?= $codeG ?><span class="sort-icon"></span></th>
+                <?php endforeach; ?>
                 <th style="width:100px;display:none" data-field="date_validation_fftt">Date Validation<span class="sort-icon"></span></th>
                 <th style="width:75px"  data-field="id_club">N° Club<span class="sort-icon"></span></th>
                 <th style="width:200px" data-field="nom_club">Nom du club<span class="sort-icon"></span></th>
@@ -397,7 +413,7 @@
             </tr>
         </thead>
         <tbody id="tbody-grille">
-            <tr><td colspan="19" class="text-center text-muted py-3">Chargement…</td></tr>
+            <tr><td colspan="23" class="text-center text-muted py-3">Chargement…</td></tr>
         </tbody>
     </table>
 </div>
@@ -479,7 +495,7 @@
   <div class="modal-dialog modal-xl">
     <div class="modal-content">
       <div class="modal-header" style="background:#0d6efd;color:#fff;">
-        <h5 class="modal-title" id="modal-import-fftt-titre"><i class="bi bi-cloud-arrow-down-fill me-2"></i>Importer les JA1 / JA2 / JA3 depuis l'API FFTT</h5>
+        <h5 class="modal-title" id="modal-import-fftt-titre"><i class="bi bi-cloud-arrow-down-fill me-2"></i>Importer les JA depuis l'API FFTT</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" id="btn-fermer-import-fftt"></button>
       </div>
       <div class="modal-body">
@@ -489,7 +505,8 @@
           <p class="text-muted small mb-3">
             Sélectionnez un département. L'import parcourt tous les clubs,
             vérifie chaque licencié via <code>xml_licence_b</code> et insère ou met à jour
-            les JA1/JA2/JA3 trouvés. Les AR sont exclus. <strong>CP et Ville ne sont pas écrasés.</strong>
+            les JA trouvés, avec leurs qualifications JA1 / JA2 / JA3 / JAN / JAI lues dans l'API
+            (toutes remises à Non pour le département avant l'import). Les AR sont exclus. <strong>CP et Ville ne sont pas écrasés.</strong>
           </p>
           <div class="input-group mb-3" style="max-width:380px">
             <label class="input-group-text" for="import-fftt-dept"><i class="bi bi-map me-1"></i>Département</label>
@@ -662,10 +679,12 @@
             </div>
             <div class="col-12">
               <div class="d-flex gap-4 mt-1">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="nja-actif" checked>
-                  <label class="form-check-label" for="nja-actif">Actif</label>
+                <?php foreach (['ja1' => 'JA1', 'ja2' => 'JA2', 'ja3' => 'JA3', 'jan' => 'JAN', 'jai' => 'JAI'] as $cleG => $codeG): ?>
+                <div class="form-check" title="<?= esc($gradesLibelles[$codeG] ?? $codeG) ?>">
+                  <input class="form-check-input nja-grade-chk" type="checkbox" id="nja-<?= $cleG ?>" data-cle="<?= $cleG ?>" <?= $cleG === 'ja1' ? 'checked' : '' ?>>
+                  <label class="form-check-label" for="nja-<?= $cleG ?>"><?= $codeG ?></label>
                 </div>
+                <?php endforeach; ?>
                 <div class="form-check">
                   <input class="form-check-input" type="checkbox" id="nja-defisc">
                   <label class="form-check-label" for="nja-defisc">Défiscalisation</label>
@@ -721,7 +740,9 @@ const DISPONIBILITE_JA_BASE = '<?= site_url('disponibilite-ja') ?>';
 const VOISINS_PAR_DEPT = <?= json_encode($voisinsParDept ?? [], JSON_UNESCAPED_UNICODE) ?>;
 
 let lignes     = [];
-let filtreActif   = true;   // false = tous, true = actifs seulement
+// Clés JS des 5 grades (= colonnes ja.JA1…JAI)
+const GRADES = { ja1: 'JA1', ja2: 'JA2', ja3: 'JA3', jan: 'JAN', jai: 'JAI' };
+let filtreGrade   = '';  // '' = tous (défaut), sinon clé du grade exigé
 let filtreErreursCp = false; // true = uniquement les lignes sans id_laposte
 let filtreEnRegion = true; // true = En région uniquement (par défaut), false = Tous
 const sortState = { col: 'nom', asc: true };
@@ -745,7 +766,11 @@ function deptDeJA(l) {
 function lignesFiltreesTriees() {
     const term = searchTerm.toLowerCase();
     let source = [...lignes];
-    if (filtreActif)     source = source.filter(l => l.actif === 1);
+    // Grade « Tous les JA » (''): JA ayant au moins un grade ; « Tous » ('tousja') : aucun filtre ; 'aucun' : JA sans aucun grade ; sinon JA ayant ce grade
+    const aUnGrade = l => Object.keys(GRADES).some(g => l[g] === 1);
+    if (filtreGrade !== 'tousja') {
+        source = source.filter(l => filtreGrade === 'aucun' ? !aUnGrade(l) : filtreGrade ? l[filtreGrade] === 1 : aUnGrade(l));
+    }
     if (filtreErreursCp) source = source.filter(l => l.id_laposte == null);
     if (filtreEnRegion)  source = source.filter(l => DEPTS_REGION.has(deptDeJA(l)));
     let result = term
@@ -762,14 +787,11 @@ function lignesFiltreesTriees() {
             String(l.ville           ?? '').toLowerCase().includes(term))
         : source;
 
-    const numFields = ['id'];
+    const numFields = ['id', ...Object.keys(GRADES)];
     const sortField = sortState.col, sortDir = sortState.asc ? 'asc' : 'desc';
     result.sort((a, b) => {
         if (numFields.includes(sortField)) {
             return sortDir === 'asc' ? (+a[sortField]) - (+b[sortField]) : (+b[sortField]) - (+a[sortField]);
-        }
-        if (sortField === 'actif') {
-            return sortDir === 'asc' ? a.actif - b.actif : b.actif - a.actif;
         }
         const va = String(a[sortField] ?? '').toLowerCase();
         const vb = String(b[sortField] ?? '').toLowerCase();
@@ -787,7 +809,7 @@ function renderGrille() {
 
     if (!affichees.length) {
         const msg = searchTerm ? 'Aucun résultat pour cette recherche.' : 'Aucun juge-arbitre.';
-        $body.append(`<tr><td colspan="19" class="text-center text-muted py-3">${msg}</td></tr>`);
+        $body.append(`<tr><td colspan="23" class="text-center text-muted py-3">${msg}</td></tr>`);
     } else {
         affichees.forEach(l => {
             const idx  = l._idx;          // index stable, indépendant du filtre/tri
@@ -795,9 +817,6 @@ function renderGrille() {
             const dja = deptDeJA(l);      // coloration ligne : en région / hors région (comme EN27)
             if (dja && !DEPTS_REGION.has(dja)) $tr.addClass('hors-region').attr('title', `Département ${dja} hors région`);
             else if (dja) $tr.addClass('en-region');
-            const actifHtml = l.actif
-                ? '<span class="badge-actif">Oui</span>'
-                : '<span class="badge-inactif">Non</span>';
             const defiscHtml = l.defiscalisation
                 ? '<span class="badge-actif">Oui</span>'
                 : '<span class="badge-inactif">Non</span>';
@@ -814,7 +833,11 @@ function renderGrille() {
             $tr.append(makeTd(l.prenom,           idx, 'prenom',          false));
             $tr.append(makeTd(l.email,            idx, 'email',           false));
             $tr.append(makeTd(l.telephone,        idx, 'telephone',       false));
-            $tr.append(makeTdHtml(actifHtml,      idx, 'actif'));
+            Object.entries(GRADES).forEach(([cle, code]) => {
+                $tr.append(makeTdHtml(l[cle]
+                    ? `<span class="badge-actif" title="${code}">✓</span>`
+                    : '<span class="grade-non">—</span>', idx, cle).addClass('col-grade'));
+            });
             $tr.append(makeTd(l.date_validation_fftt, idx, 'date_validation_fftt', true));
             $tr.append(makeTd(l.id_club,          idx, 'id_club',         true));
             $tr.append(makeTd(l.nom_club,         idx, 'nom_club',        true));
@@ -848,7 +871,7 @@ function renderGrille() {
 
     // Cartes statistiques (EN11)
     const deptTxt = ($('#sel-dept option:selected').text().split('—').pop() || '').trim();
-    $('#sc-actifs').text(lignes.filter(l => l.actif === 1).length);
+    $('#sc-actifs').text(lignes.filter(l => l.ja1 === 1).length);
     $('#sc-actifs-sub').text(`/ ${lignes.length} au total`);
     $('#sc-clubs').text(new Set(affichees.map(l => l.id_club).filter(Boolean)).size);
     $('#sc-clubs-sub').text(deptTxt || 'Tous départements');
@@ -913,7 +936,11 @@ function chargerListe() {
             email:           r.Email,
             telephone:       r.Telephone,
             grade:           r.Grade,
-            actif:           +r.Actif,
+            ja1:             +r.JA1,
+            ja2:             +r.JA2,
+            ja3:             +r.JA3,
+            jan:             +r.JAN,
+            jai:             +r.JAI,
             id_club:         r.Id_Club,
             codedept:        r.CodeDept ?? '',
             nom_club:        r.NomClub ?? '',
@@ -997,9 +1024,9 @@ function lancerProgressionClubs(dep, depText, modeScan) {
         $('#cnt-maj-col').hide();
     }
 
-    // Réinitialise Actif=0 pour tout le département avant l'import : seuls les
-    // JA effectivement retrouvés dans le rapport FFTT ci-dessous repasseront
-    // à Actif=1 (voir reinitialiserActifDept()).
+    // Réinitialise JA1/JA2/JA3/JAN/JAI=0 pour tout le département avant
+    // l'import : seuls les JA effectivement retrouvés dans le rapport FFTT
+    // ci-dessous récupèrent leurs qualifications (voir reinitialiserActifDept()).
     $.post(`${JUGEARBITRE_BASE}/fftt/reset-actif-dept`, { dep }, function (resReset) {
         if (!resReset.ok) {
             nijacToast('Erreur : ' + (resReset.msg || 'réinitialisation du département'), 'danger');
@@ -1008,7 +1035,7 @@ function lancerProgressionClubs(dep, depText, modeScan) {
             return;
         }
 
-        $('#import-fftt-log').append(`<div class="text-primary">↻ Remise à Actif = Non de tous les JA du département <strong>${escHtml(depText)}</strong>.</div>`).scrollTop(9999);
+        $('#import-fftt-log').append(`<div class="text-primary">↻ Remise à Non de JA1 / JA2 / JA3 / JAN / JAI pour tous les JA du département <strong>${escHtml(depText)}</strong>.</div>`).scrollTop(9999);
 
         lancerImportApresReset(dep, depText, modeScan);
     }, 'json').fail(() => {
@@ -1087,13 +1114,13 @@ function lancerImportApresReset(dep, depText, modeScan) {
                             totalNouveaux = _scanJAs.length;
                             const cls  = ja.en_base ? 'text-secondary' : 'text-success';
                             const lbl  = ja.en_base ? '≡ EN BASE' : '✚ NOUVEAU';
-                            const line = `<div class="${cls}">[${lbl}] ${ja.grade} — ${ja.nom} ${ja.prenom} (${ja.licence})</div>`;
+                            const line = `<div class="${cls}">[${lbl}] ${ja.niveaux || ja.grade} — ${ja.nom} ${ja.prenom} (${ja.licence})</div>`;
                             logLines.push(line);
                             $('#import-fftt-log').append(line).scrollTop(9999);
                         } else {
                             const cls   = ja.statut === 'nouveau' ? 'text-success' : 'text-info';
                             const label = ja.statut === 'nouveau' ? '✚ NOUVEAU' : '↻ MAJ';
-                            const line  = `<div class="${cls}">[${label}] ${ja.grade} — ${ja.nom} ${ja.prenom} (${ja.licence})</div>`;
+                            const line  = `<div class="${cls}">[${label}] ${ja.niveaux || ja.grade} — ${ja.nom} ${ja.prenom} (${ja.licence})</div>`;
                             logLines.push(line);
                             $('#import-fftt-log').append(line).scrollTop(9999);
                             if (ja.statut === 'nouveau') totalNouveaux++; else totalMaj++;
@@ -1129,7 +1156,7 @@ function afficherSelectionJAs(jas, totalMembres, totalErreurs, logLines, depText
     if (!jas.length) {
         $list.html('<div class="text-muted text-center py-4"><i class="bi bi-person-x fs-2 d-block mb-2"></i>Aucun JA trouvé dans ce département.</div>');
     } else {
-        const gradeBg = { JA1: 'primary', JA2: 'success', JA3: 'warning text-dark' };
+        const gradeBg = { JA1: 'primary', JA2: 'success', JA3: 'warning text-dark', JAN: 'danger', JAI: 'dark' };
         jas.forEach((ja, i) => {
             const bg    = gradeBg[ja.grade] || 'secondary';
             const lieu  = [ja.cp, ja.ville].filter(Boolean).join(' ');
@@ -1139,7 +1166,7 @@ function afficherSelectionJAs(jas, totalMembres, totalErreurs, logLines, depText
             $list.append(`
                 <div class="d-flex align-items-center gap-2 py-1 border-bottom">
                     <input type="checkbox" class="form-check-input ja-sel-check" data-idx="${i}" ${!ja.en_base ? 'checked' : ''} style="flex-shrink:0;width:1.1em;height:1.1em">
-                    <span class="badge bg-${bg}" style="flex-shrink:0">${ja.grade}</span>
+                    <span class="badge bg-${bg}" style="flex-shrink:0">${ja.niveaux || ja.grade}</span>
                     <span class="fw-semibold small" style="min-width:0">${escHtml(ja.prenom)} ${escHtml(ja.nom)}</span>
                     <span class="text-muted small text-truncate">${escHtml(lieu)}</span>
                     ${badge}
@@ -1344,24 +1371,22 @@ $('#search-input').on('input', function () {
 // ── Toggles filtres ───────────────────────────────────────────────────────────
 $('#btn-tous').on('click', function () {
     // Réinitialise tous les filtres
-    filtreActif = false; filtreErreursCp = false;
+    filtreGrade = ''; filtreErreursCp = false;
+    $('#sel-grade').val('');
     $('#btn-tous').addClass('active');
-    $('#btn-actifs, #btn-erreurs-cp').removeClass('active');
+    $('#btn-erreurs-cp').removeClass('active');
     renderGrille();
 });
-$('#btn-actifs').on('click', function () {
-    filtreActif = !filtreActif;
-    $(this).toggleClass('active', filtreActif);
+$('#sel-grade').on('change', function () {
+    filtreGrade = $(this).val();
     // Si aucun filtre actif, revenir à "Tous"
-    if (!filtreActif && !filtreErreursCp) $('#btn-tous').addClass('active');
-    else $('#btn-tous').removeClass('active');
+    $('#btn-tous').toggleClass('active', !filtreGrade && !filtreErreursCp);
     renderGrille();
 });
 $('#btn-erreurs-cp').on('click', function () {
     filtreErreursCp = !filtreErreursCp;
     $(this).toggleClass('active', filtreErreursCp);
-    if (!filtreActif && !filtreErreursCp) $('#btn-tous').addClass('active');
-    else $('#btn-tous').removeClass('active');
+    $('#btn-tous').toggleClass('active', !filtreGrade && !filtreErreursCp);
     renderGrille();
 });
 
@@ -1431,7 +1456,7 @@ function ouvrirModaleJa(record) {
         $('#nja-cp').val(record.cp || '');
         $('#nja-ville').val(record.ville || '');
         $('#nja-cpte-ebp').val(record.num_compte_ebp || '');
-        $('#nja-actif').prop('checked', !!record.actif);
+        $('.nja-grade-chk').each(function () { this.checked = !!record[this.dataset.cle]; });
         $('#nja-defisc').prop('checked', !!record.defiscalisation);
         $('#nja-nationale').prop('checked', !!record.nationale);
         $('#nja-dept').val(record.codedept || '');   // avant njaSyncArbVoisins : filtre les voisins
@@ -1450,7 +1475,8 @@ function ouvrirModaleJa(record) {
         $('#btn-enregistrer-ja').html('<i class="bi bi-check-lg me-1"></i>Créer le JA');
         $('#nja-id-label').html('N° Licence <span class="text-danger">*</span>');
         $('#nja-id').val('').prop('disabled', false);
-        $('#nja-actif').prop('checked', true);
+        $('.nja-grade-chk').each(function () { this.checked = this.dataset.cle === 'ja1'; });
+        $('#nja-nationale').prop('checked', true); // cohérent avec le défaut 1 de ja.Nationale
         $('#nja-id-club').html('<option value="">— Sélectionnez d\'abord un département —</option>').prop('disabled', false);
     }
 
@@ -1581,10 +1607,11 @@ $('#btn-enregistrer-ja').on('click', function () {
         ville:           $('#nja-ville').val().trim() || null,
         id_laposte:      njaIdLaPoste,
         num_compte_ebp:  $('#nja-cpte-ebp').val().trim() || null,
-        actif:           $('#nja-actif').is(':checked') ? 1 : 0,
         defiscalisation: $('#nja-defisc').is(':checked') ? 1 : 0,
         nationale:       $('#nja-nationale').is(':checked') ? 1 : 0,
     };
+    // Les 5 grades (ja1, ja2, ja3, jan, jai) : toujours envoyés → réécrits en UPDATE
+    $('.nja-grade-chk').each(function () { record[this.dataset.cle] = this.checked ? 1 : 0; });
 
     spinner(true);
     $.post(`${JUGEARBITRE_BASE}/maj-bdd`, { lignes: JSON.stringify([record]) }, function (res) {
@@ -1754,11 +1781,12 @@ $('#btn-importer').on('click', function () {
                 }
 
                 // Initialiser le tableau de lignes (id_laposte = null pour l'instant)
+                // Clés de grade : seules celles fournies par le CSV (grade de la
+                // ligne / fusion par JA) — surtout ne pas créer les absentes
+                // (NaN → null en JSON → maj-bdd les écrirait à 0).
                 lignes = rows.map((r, i) => Object.assign({}, r, {
                     _idx:            i,
-                    actif:           +r.actif,
-                    defiscalisation: r.defiscalisation != null ? +r.defiscalisation : 0,
-                    nationale:       r.nationale       != null ? +r.nationale       : 0,
+                    // pas de clés « defiscalisation » / « nationale » : maj-bdd ne doit jamais les écrire à l'import
                     cp:              r.cp    ?? '',
                     ville:           r.ville ?? '',
                     id_laposte:      null,
@@ -1844,8 +1872,10 @@ $('#btn-importer').on('click', function () {
             if (multiples) xlsxLog(`<span class="text-warning"><i class="bi bi-exclamation-triangle-fill"></i> <strong>${multiples}</strong> CP avec plusieurs communes — à préciser (clic CP/Ville dans la grille).</span>`);
             if (inconnues) xlsxLog(`<span class="text-danger"><i class="bi bi-x-circle-fill"></i> <strong>${inconnues}</strong> commune(s) introuvable(s) — à corriger dans la grille.</span>`);
             // La désactivation globale des JA n'est plus faite ici : elle relève
-            // du changement de saison. maj-bdd applique Actif ligne par ligne
-            // (colonne « Inactivité » du fichier), les JA absents restent inchangés.
+            // du changement de saison. maj-bdd n'écrit, pour chaque JA, que les
+            // grades présents dans le fichier (colonne « Grade Arb/Ja » : 1 si
+            // « Inactivité » = Actif, 0 sinon) ; autres grades et JA absents
+            // restent inchangés.
             enregistrerImportExcel();
         }
 

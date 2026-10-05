@@ -14,7 +14,7 @@ Le détail complet de chaque écran (fonctionnalités, fichier source, règles m
 
 | Plage de code | Menu | Contenu |
 |---|---|---|
-| E001–E008 | Connexion / mots de passe | Connexion, menus (Admin, Nominateur, CSR, Défiscalisateur), changement et réinitialisation de mot de passe |
+| E001–E009 | Connexion / mots de passe | Connexion, menus (Admin, Nominateur, CSR, Défiscalisateur, CRA Convoc), changement et réinitialisation de mot de passe |
 | EN11–EN28 | Nominateur + pages publiques JA | Gestion des JA et des clubs, désidératas, disponibilités, nomination aux rencontres, centre d'envoi, convocation/frais, statistiques, suivi des nominations… |
 | ES31–ES33 | CSR (Commission Sportive Régionale) | Réengagement des clubs, souhaits des équipes |
 | ED51–ED55 | Défiscalisateur | Défiscalisation des JA, barème kilométrique, attestations, comptes EBP |
@@ -26,7 +26,7 @@ Quelques écrans marquants :
 |------|-------|-------------|
 | E001 | Connexion | Authentification, redirection selon le rôle, forçage du changement de mot de passe |
 | EN11 | Juges-Arbitres | Import FFTT (API ou fichier), fiche JA (grade, club, commune, défiscalisation, nationale) |
-| EN14 | Nomination | Affectation JA ↔ rencontres selon les règles métier, validation, envoi des convocations |
+| EN14 | Nomination | Affectation JA ↔ rencontres selon les règles métier (nomination valide d'office), envoi des convocations (+ copie sans lien aux correspondants/référents des 2 clubs), feuille de pointage PDF de la journée |
 | EN21 | Convocation et frais JA | Page publique tokenisée : consultation de la convocation, saisie des frais (péage, km, défiscalisation) par le JA |
 | EN27 | Clubs / Associations | Import et gestion des clubs affiliés (upsert depuis l'API FFTT) |
 | EN28 | Suivi des nominations | Suivi des frais saisis par les JA, correction et relance |
@@ -95,10 +95,11 @@ NIJAC/
 ├── tools/rot47.php        # CLI pour pré-calculer une valeur ROT47 à coller dans .env
 ├── SQL/                   # Sauvegardes (EA85) — lues côté serveur uniquement
 ├── Importation/           # Dépôt de fichiers d'import — lu/écrit côté serveur uniquement
+├── Convocation/           # Source d'amorçage (EA98) des 3 messages « CRA Convocation … » de la table messagerie (EC73), repli si la ligne est absente
 ├── ci4/
 │   ├── app/
 │   │   ├── Config/Routes.php     # Toutes les routes, commentées par code EXXXX
-│   │   ├── Config/Filters.php    # Filtres d'accès (auth, adminauth, csrauth, defiscauth, csrf…)
+│   │   ├── Config/Filters.php    # Filtres d'accès (auth, adminauth, csrauth, defiscauth, craconvocauth, csrf…)
 │   │   ├── Config/Security.php   # CSRF en mode "cookie" (double-submit), header X-CSRF-Token
 │   │   ├── Controllers/          # Un contrôleur par écran ou famille d'écrans
 │   │   ├── Views/                # Une vue autonome par écran (pas de layout partagé)
@@ -125,7 +126,7 @@ ja ─── disponible ─── nomination
            division
 ```
 
-- **`ja`** : fiche JA (Grade, Actif, Defiscalisation, Nationale, Id_Club, Id_LaPoste, Cp/Ville de repli)
+- **`ja`** : fiche JA (Grade, JA1 [ex-Actif : JA actif 1er degré] + JA2 / JA3 / JAN / JAI [TINYINT(1) NOT NULL DEFAULT 0, écho des codes de la table de référence `JugeArbitre`, sans FK], Defiscalisation, Nationale [DEFAULT 1 = Oui, saisie manuelle uniquement, jamais touchée par les imports], Id_Club, Id_LaPoste, Cp/Ville de repli)
 - **`disponible`** : réponse d'un JA pour une rencontre ou une journée entière (O/P/N)
 - **`nomination`** : affectation JA ↔ rencontre (via `disponible`) + frais (Peage, Kilometre, Defiscalisation, dates de nomination/saisie)
 - **`rencontre`** : matchs à arbitrer (Date, Heure, Poule, Journee, équipes domicile/extérieure, ArbitrageCRA)
@@ -143,6 +144,7 @@ ja ─── disponible ─── nomination
 | **Nominateur** | Menu nominateur (EN11 à EN28) |
 | **CSR** | Menu CSR (ES31–ES33) ; passe aussi le filtre `auth` du menu Nominateur, sans y avoir de lien de menu |
 | **Défiscalisateur** | Menu Défiscalisateur (ED51–ED55) |
+| **CRA Convoc** | Menu CRA Convoc (E009) : Compétitions CRA (EC71), Disponibilités CRA (EC74, + page publique `dispo-cra?ja=TOKEN`), Désignation CRA (EC73), Statistiques CRA (EC75), Degrés Juge-Arbitre (EC72), déconnexion |
 
 La session (native PHP, pas le service Session de CI4) stocke `$_SESSION['utilisateur']` avec les clés `id`, `login`, `nom`, `prenom`, `role`, `is_admin`, `id_departement`, `change_login`, `email`. Un JA ne se connecte jamais : ses écrans (EN19, EN21, EN22, EN25) sont publics, identifiés par un lien tokenisé (Obfuscator) envoyé par email.
 

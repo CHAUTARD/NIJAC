@@ -14,9 +14,9 @@ use CodeIgniter\HTTP\ResponseInterface;
  * Le correspondant choisit dans une liste déroulante le juge-arbitre qui
  * dirigera la rencontre — uniquement les JA actifs rattachés au club,
  * triés alphabétiquement. La réponse
- * crée une `nomination` (Peage/Kilometre/Defiscalisation = 0, Valide = 0,
- * EmailEnvoye = 0) pour l'arbitrage club : elle reste « à valider » côté
- * nominateur (EN14) et n'est comptée comme arbitrée (EN17) qu'une fois validée.
+ * crée une `nomination` (Peage/Kilometre/Defiscalisation = 0, Valide = 1,
+ * EmailEnvoye = 0) pour l'arbitrage club : un JA nommé rend la nomination
+ * valide d'office (plus de validation manuelle en EN14).
  *
  * À renseigner dans les 5 jours qui suivent la rencontre : au-delà, simple
  * avertissement, la saisie reste possible.
@@ -140,7 +140,7 @@ class ArbitreClubController extends BaseController
         $stmt = $pdo->prepare(
             "SELECT Id_JA, Nom, Prenom, 1 AS EstClub
              FROM ja
-             WHERE COALESCE(Actif, 1) = 1 AND Id_Club = ? " . self::SQL_JA_LIBRE . "
+             WHERE COALESCE(JA1, 1) = 1 AND Id_Club = ? " . self::SQL_JA_LIBRE . "
              ORDER BY Nom, Prenom"
         );
         $stmt->execute([$ctx['Id_Club'], ...$this->paramsJaLibre($ctx)]);
@@ -155,7 +155,7 @@ class ArbitreClubController extends BaseController
 
     private function estJaActif(\PDO $pdo, int $idJa): bool
     {
-        $stmt = $pdo->prepare('SELECT COUNT(*) FROM ja WHERE Id_JA = ? AND COALESCE(Actif, 1) = 1');
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM ja WHERE Id_JA = ? AND COALESCE(JA1, 1) = 1');
         $stmt->execute([$idJa]);
 
         return (int) $stmt->fetchColumn() > 0;
@@ -184,7 +184,7 @@ class ArbitreClubController extends BaseController
             $stmt = $pdo->prepare(
                 "SELECT Id_JA, Nom, Prenom
                  FROM ja
-                 WHERE COALESCE(Actif, 1) = 1
+                 WHERE COALESCE(JA1, 1) = 1
                    AND (CONCAT(Nom, ' ', Prenom) LIKE ? OR CONCAT(Prenom, ' ', Nom) LIKE ?)
                    " . self::SQL_JA_LIBRE . "
                  ORDER BY Nom, Prenom
@@ -302,7 +302,7 @@ class ArbitreClubController extends BaseController
 
                 $pdo->prepare(
                     'INSERT INTO nomination (Id_Rencontre, Id_Disponible, Peage, Kilometre, Defiscalisation, DateSaisie, Valide, EmailEnvoye)
-                     VALUES (?, ?, 0, 0, 0, CURDATE(), 0, 0)'
+                     VALUES (?, ?, 0, 0, 0, CURDATE(), 1, 0)'
                 )->execute([$id, $idDispo]);
 
                 $pdo->commit();

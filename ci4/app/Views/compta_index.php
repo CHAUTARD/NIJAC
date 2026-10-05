@@ -58,11 +58,11 @@
         td.col-num { text-align: right; font-variant-numeric: tabular-nums; }
         td.col-center { text-align: center; }
         tr.ja-inactif td { color: #9aa5b8; }
-        /* Pastille Actif — même rendu que EN11 */
+        /* Pastille JA1 — même rendu que EN11 */
         .badge-actif   { background: #d1fae5; color: #065f46; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
         .badge-inactif { background: #fee2e2; color: #991b1b; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
 
-        /* Comboboxes Défisc. / Actif : valeur « Oui » verte, « Non » rouge.
+        /* Comboboxes Défisc. / JA1 : valeur « Oui » verte, « Non » rouge.
            (le color sur <option> est ignoré par Chrome/Edge Windows → classe en JS) */
         #menu-strip select.val-oui { color: #065f46; font-weight: 600; }
         #menu-strip select.val-non { color: #991b1b; font-weight: 600; }
@@ -134,7 +134,7 @@
                 </select>
             </span>
             <span class="combo-field">
-                <label for="sel-actif">Actif</label>
+                <label for="sel-actif">JA1</label>
                 <select id="sel-actif">
                     <option value="" selected>Tous</option>
                     <option value="1">Oui</option>
@@ -162,7 +162,7 @@
                         <th class="col-sort th-pk" style="width:110px" data-col="8" title="Numéro de licence FFTT (= Id JA)">N° de licence <span class="sort-icon">↕</span></th>
                         <th class="col-sort" data-col="0">Nom <span class="sort-icon">↕</span></th>
                         <th class="col-sort" data-col="1">Prénom <span class="sort-icon">↕</span></th>
-                        <th class="col-sort" style="width:55px" data-col="2">Actif <span class="sort-icon">↕</span></th>
+                        <th class="col-sort" style="width:55px" data-col="2">JA1 <span class="sort-icon">↕</span></th>
                         <th class="col-sort" style="width:70px" data-col="3" title="Défiscalisation demandée">Défisc. <span class="sort-icon">↕</span></th>
                         <th class="col-sort" style="width:95px" data-col="4" title="Total des kilomètres arbitrés">Km total <span class="sort-icon">↕</span></th>
                         <th class="col-sort" style="width:55px" data-col="5" title="Puissance fiscale (CV)">CV <span class="sort-icon">↕</span></th>
@@ -196,7 +196,7 @@
                     <div class="form-readonly" id="txt-prenom"></div>
                 </div>
                 <div class="col-auto">
-                    <span class="form-label d-block">Actif</span>
+                    <span class="form-label d-block">JA1</span>
                     <div class="form-readonly" id="txt-actif"></div>
                 </div>
             </div>
@@ -259,7 +259,7 @@ function lignesFiltrees() {
         if (fCompte === 'sans' && aCompte) return false;
         if (fCompte === 'avec' && !aCompte) return false;
         if (fDefisc !== '' && String(+l.Defiscalisation) !== fDefisc) return false;
-        if (fActif !== '' && String(+l.Actif) !== fActif) return false;
+        if (fActif !== '' && String(+l.JA1) !== fActif) return false;
         if (term && !`${l.Nom ?? ''} ${l.Prenom ?? ''}`.toLowerCase().includes(term)) return false;
         return true;
     });
@@ -271,7 +271,7 @@ function valeurTri(l, col) {
     switch (col) {
         case 0:  return (l.Nom ?? '').toLowerCase();
         case 1:  return (l.Prenom ?? '').toLowerCase();
-        case 2:  return +l.Actif ? 'oui' : 'non';
+        case 2:  return +l.JA1 ? 'oui' : 'non';
         case 3:  return def ? 'oui' : 'non';
         case 4:  return def ? (parseFloat(l.KmTotal) || 0) : -1;
         case 5:  return def ? (parseInt(l.PuissanceFiscale, 10) || 0) : -1;
@@ -324,13 +324,13 @@ function renderListe() {
         const energieManquante = l.VehiculeElectrique == null || l.VehiculeElectrique === '';
         const aRelancer = def && (parseFloat(l.KmTotal) || 0) > 0 && (cvManquant || energieManquante);
         $('<tr>').attr('data-id', l.Id_JA)
-            .toggleClass('ja-inactif', !+l.Actif)
+            .toggleClass('ja-inactif', !+l.JA1)
             .toggleClass('ja-defisc-incomplet', aRelancer)
             .append(
             $('<td>').addClass('col-num').text(l.Id_JA),
             $('<td>').text(l.Nom ?? ''),
             $('<td>').text(l.Prenom ?? ''),
-            $('<td>').addClass('col-center').html(+l.Actif
+            $('<td>').addClass('col-center').html(+l.JA1
                 ? '<span class="badge-actif">Oui</span>'
                 : '<span class="badge-inactif">Non</span>'),
             $('<td>').addClass('col-center').html(def
@@ -362,7 +362,7 @@ function selectionnerLigne($tr) {
     $('#txt-licence').text(l.Id_JA ?? '');
     $('#txt-nom').text(l.Nom ?? '');
     $('#txt-prenom').text(l.Prenom ?? '');
-    $('#txt-actif').text(+l.Actif ? 'Oui' : 'Non');
+    $('#txt-actif').text(+l.JA1 ? 'Oui' : 'Non');
     if (+l.Defiscalisation === 1) {
         const cv = l.PuissanceFiscale ? `${l.PuissanceFiscale} CV` : 'CV non renseigné';
         $('#txt-defisc').text(`${cv} · ${(+l.VehiculeElectrique ? 'électrique' : 'thermique')} · ${fmtKm(l.KmTotal)} km cumulés`);
@@ -393,7 +393,7 @@ $('#search-input').on('input', function () {
     searchTerm = $(this).val().trim();
     renderListe();
 });
-// Couleur de la valeur affichée des menus Défisc. / Actif (Oui vert / Non rouge)
+// Couleur de la valeur affichée des menus Défisc. / JA1 (Oui vert / Non rouge)
 function colorerSelectOuiNon() {
     $('#sel-defisc, #sel-actif').each(function () {
         $(this).toggleClass('val-oui', this.value === '1')

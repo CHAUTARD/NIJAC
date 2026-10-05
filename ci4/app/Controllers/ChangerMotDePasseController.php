@@ -37,7 +37,8 @@ class ChangerMotDePasseController extends BaseController
             return redirect()->to(site_url('login'));
         }
 
-        $retour = !empty($moi['is_admin']) ? site_url('admin-menu') : site_url('nominateur-menu');
+        $retour = !empty($moi['is_admin']) ? site_url('admin-menu')
+            : (($moi['role'] ?? '') === 'CRA Convoc' ? site_url('cra-convoc-menu') : site_url('nominateur-menu'));
         $isAjax = strtolower($this->request->getHeaderLine('X-Requested-With')) === 'xmlhttprequest';
 
         $status      = !empty($moi['change_login'])

@@ -84,7 +84,7 @@ class DefiscalisationController extends BaseController
      * « Défiscalisé » = drapeau global `ja.Defiscalisation = 1` OU au moins une
      * mission de l'année civile marquée `nomination.Defiscalisation = 1` (choix
      * fait sur la convocation EN21, sans forcément avoir coché le drapeau global).
-     * Pas de filtre `Actif` : le reçu fiscal reste dû aux JA désactivés en fin de
+     * Pas de filtre `JA1` : le reçu fiscal reste dû aux JA désactivés en fin de
      * saison (EA85) pour leurs missions de l'année. `GROUP BY j.Id_JA` → 0 doublon.
      */
     private function requeteAgregee(\PDO $pdo, string $dateDebut, string $dateFin): array
@@ -161,7 +161,7 @@ class DefiscalisationController extends BaseController
      * qu'ils renseignent la puissance et la motorisation de leur véhicule via le
      * lien de l'attestation (ED53). Les cases des lignes sans puissance fiscale
      * sont pré-cochées côté client, mais le défiscalisateur peut ajuster la
-     * sélection. Filtre serveur : Actif=1, Defiscalisation=1, email présent. Un
+     * sélection. Filtre serveur : JA1=1, Defiscalisation=1, email présent. Un
      * seul mailer réutilisé (SMTP keep-alive), Reply-To = email du défiscalisateur.
      */
     public function relancerVehicule(): ResponseInterface
@@ -192,7 +192,7 @@ class DefiscalisationController extends BaseController
                 SELECT j.Id_JA, j.Nom, j.Prenom, j.Email
                 FROM ja j
                 WHERE j.Id_JA IN ($in)
-                  AND j.Actif = 1
+                  AND j.JA1 = 1
                   AND (
                       j.Defiscalisation = 1
                       OR EXISTS (

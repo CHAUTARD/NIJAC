@@ -173,6 +173,7 @@ class NominationController extends BaseController
             'changeLogin'  => !empty($u['change_login']),
             'isAdmin'      => !empty($u['is_admin']),
             'deptNoms'     => $deptNoms,
+            'deptsAutorises' => $this->deptsAutorises(),   // en-tête de la feuille de pointage PDF
             'nbCandidats'  => max(1, (int) getConfig('nomination_nb_candidats', '15')),
         ];
 
@@ -251,6 +252,11 @@ class NominationController extends BaseController
                     COALESCE(lp_r.Longitude, lp_c.Longitude) AS VenueLon,
                     d_n.Id_JA    AS IdJaAffecte,
                     CONCAT(ja_n.Prenom, ' ', ja_n.Nom) AS NomJaAffecte,
+                    -- Feuille de pointage PDF (tri NOM/Prénom + coordonnées du JA)
+                    ja_n.Nom       AS NomJa,
+                    ja_n.Prenom    AS PrenomJa,
+                    ja_n.Telephone AS TelJa,
+                    ja_n.Email     AS EmailJa,
                     n.Valide,
                     n.EmailEnvoye
                 FROM rencontre r
@@ -309,6 +315,8 @@ class NominationController extends BaseController
                     ja.Id_JA,
                     ja.Nom,
                     ja.Prenom,
+                    ja.Telephone,                    -- feuille de pointage PDF (JA nommé en cours de session)
+                    ja.Email,
                     ja.Grade,
                     COALESCE(ja.Nationale, 0)        AS Nationale,
                     ja.Id_Club,
@@ -345,7 +353,7 @@ class NominationController extends BaseController
                     JOIN disponible d2 ON d2.Id_Disponible = n2.Id_Disponible
                     GROUP BY d2.Id_JA
                 ) nbnom ON nbnom.Id_JA = ja.Id_JA
-                WHERE ja.Actif = 1
+                WHERE ja.JA1 = 1
                   AND (dj.Id_JA IS NOT NULL OR dr.Id_JA IS NOT NULL)
                   AND (($inDeptSql)$arbSql)
                 GROUP BY ja.Id_JA
@@ -483,7 +491,10 @@ class NominationController extends BaseController
                        COALESCE(s_r.Adresse, s_c.Adresse)         AS SalleAdresse,
                        COALESCE(lp_r.CodePostal, lp_c.CodePostal) AS SalleCP,
                        COALESCE(lp_r.Nom, lp_c.Nom)               AS SalleVille,
-                       cl.CorNom AS CorrNom, cl.CorEmail AS CorrEmail, cl.CorTelephone AS CorrTel
+                       cl.CorNom AS CorrNom, cl.CorEmail AS CorrEmail, cl.CorTelephone AS CorrTel,
+                       -- Destinataires de la copie sans lien : correspondant + référent des 2 clubs.
+                       cl.RefNom AS DomRefNom, cl.RefMail AS DomRefMail,
+                       cx.CorNom AS ExtCorNom, cx.CorEmail AS ExtCorEmail, cx.RefNom AS ExtRefNom, cx.RefMail AS ExtRefMail
                 FROM nomination n
                 JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
                 JOIN rencontre r  ON r.Id_Rencontre  = n.Id_Rencontre
@@ -491,6 +502,7 @@ class NominationController extends BaseController
                 JOIN equipe  ed   ON ed.Id_Equipe     = r.Id_EquipeDom
                 LEFT JOIN equipe ee ON ee.Id_Equipe   = r.Id_EquipeExt
                 LEFT JOIN Club cl ON cl.Id_Club       = ed.Id_Club
+                LEFT JOIN Club cx ON cx.Id_Club       = ee.Id_Club
                 LEFT JOIN salle   s_r  ON s_r.Id_Salle    = r.id_Salle
                 LEFT JOIN laposte lp_r ON lp_r.Id_LaPoste = s_r.Id_Laposte
                 LEFT JOIN salle   s_c  ON s_c.Id_Club     = ed.Id_Club AND s_c.EstPrincipale = 1
@@ -507,6 +519,9 @@ class NominationController extends BaseController
             $envoyes = 0;
             $erreurs = [];
             $liens   = [];
+            // Copie sans lien aux correspondants/référents des 2 clubs (case cochée dans la confirmation EN14).
+            $copieClubs = $this->request->getPost('copie_clubs') === '1';
+            $copies     = ['envoyees' => 0, 'echecs' => 0, 'sans_destinataire' => 0];
 
             foreach ($nominations as $nom) {
                 // Forme "chemin" (sans ?, = ni &) — cf. {URL_CONVOCATION_JA} dans app_config.php.
@@ -517,7 +532,9 @@ class NominationController extends BaseController
                     'email'     => $nom['Email'] ?? '',
                     'rencontre' => "{$nom['NomDom']} vs {$nom['NomExt']}",
                     'lien'      => $lien,
+                    'copie'     => $copieClubs ? 'Copie clubs : non envoyée (JA sans email)' : '',
                 ];
+                $iLien = array_key_last($liens);
 
                 if (!empty($nom['Email'])) {
                     // Charger le template 'Convocation' depuis messagerie (personnalisé du
@@ -587,12 +604,93 @@ class NominationController extends BaseController
                             ->execute([$nom['Id_Rencontre']]);
                     } catch (\Exception $e) {
                         $erreurs[] = $nom['Email'] . ' (' . $e->getMessage() . ')';
+                        if ($copieClubs) {
+                            $liens[$iLien]['copie'] = 'Copie clubs : non envoyée (échec de la convocation)';
+                        }
+                        continue;
+                    }
+
+                    // Après l'envoi réussi au JA uniquement ; jamais bloquant (EmailEnvoye déjà à 1).
+                    if ($copieClubs) {
+                        [$statut, $texte] = $this->envoyerCopieClubs($nom, $tplConv, $marqueurs, $lien, $sujet, $moi);
+                        $copies[$statut]++;
+                        $liens[$iLien]['copie'] = 'Copie clubs : ' . $texte;
                     }
                 }
             }
 
-            return $this->response->setJSON(['ok' => true, 'envoyes' => $envoyes, 'erreurs' => $erreurs, 'liens' => $liens]);
+            return $this->response->setJSON(['ok' => true, 'envoyes' => $envoyes, 'erreurs' => $erreurs, 'liens' => $liens, 'copies' => $copieClubs ? $copies : null]);
         });
+    }
+
+    /**
+     * Copie pour information de la convocation d'une rencontre, SANS les liens
+     * personnels du JA (retirerLiensPersonnelsModele()), aux correspondants et
+     * référents des clubs recevant et visiteur (Club.CorEmail / Club.RefMail,
+     * dédoublonnés, adresse du JA exclue) — un seul email par rencontre, tous
+     * les destinataires en « À ». Reply-To du nominateur selon le flag du
+     * modèle ; pas de Cc (le nominateur est déjà en Cc de la convocation du JA).
+     * En mode Développement, getEmailDestinataire() ramène tous les
+     * destinataires sur l'adresse de test (PHPMailer dédoublonne) : un mail de
+     * test par rencontre, sujet préfixé [DEV → adresses réelles].
+     *
+     * @return array{0: 'envoyees'|'echecs'|'sans_destinataire', 1: string} statut + texte du compte-rendu
+     */
+    private function envoyerCopieClubs(array $nom, array $tplConv, array $marqueurs, string $lien, string $sujet, array $moi): array
+    {
+        $dest = destinatairesCopieClubs([
+            ['CorNom' => $nom['CorrNom'],   'CorEmail' => $nom['CorrEmail'],   'RefNom' => $nom['DomRefNom'], 'RefMail' => $nom['DomRefMail']],
+            ['CorNom' => $nom['ExtCorNom'], 'CorEmail' => $nom['ExtCorEmail'], 'RefNom' => $nom['ExtRefNom'], 'RefMail' => $nom['ExtRefMail']],
+        ], $nom['Email']);
+        if (!$dest) {
+            return ['sans_destinataire', 'aucun destinataire (correspondant/référent sans email valide)'];
+        }
+
+        $errRl = checkRateLimit(count($dest));
+        if ($errRl !== null) {
+            return ['echecs', 'non envoyée — ' . $errRl];
+        }
+
+        $corps = trim((string) $tplConv['Message']) !== ''
+            ? strtr(retirerLiensPersonnelsModele($tplConv['Message']), $marqueurs + ['{LIEN_LIGUE}' => getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr')])
+            : "Bonjour,\r\n\r\n{$nom['Prenom']} {$nom['Nom']} est nominé(e) pour la rencontre {$nom['NomDom']} vs {$nom['NomExt']} le {$nom['Date']}.";
+        // Filet : aucune URL personnelle du JA ne doit subsister (marqueur écrit autrement dans le modèle…).
+        $urlsPerso = array_filter([$lien, $marqueurs['{URL_ADRESSE_JA}'] ?? '', $marqueurs['{URL_DISPONIBILITE_JA}'] ?? '', $marqueurs['{URL_ATTESTATION_JA}'] ?? '']);
+        $corps     = str_replace($urlsPerso, '', $corps);
+        $sujet     = 'Copie – ' . str_replace($urlsPerso, '', $sujet);
+        if (str_contains($corps, 'data:image/')) {
+            $corps = preg_replace('/src="data:image\/[^;]+;base64,[^"]*"/', 'src=""', $corps);
+        }
+
+        $isHtml = strip_tags($corps) !== $corps;
+        $info   = 'Ceci est une copie pour information de la convocation adressée à ' . trim("{$nom['Prenom']} {$nom['Nom']}") . '.';
+        $corps  = $isHtml
+            ? '<p><em>' . htmlspecialchars($info, ENT_QUOTES, 'UTF-8') . '</em></p>' . $corps
+            : $info . "\r\n\r\n" . $corps;
+
+        try {
+            $mail = getNijacMailer();
+            $mail->isHTML($isHtml);
+            foreach ($dest as $adresse => $nomDest) {
+                $mail->addAddress(getEmailDestinataire($adresse), $nomDest);
+            }
+            if (!empty($tplConv['ReplyTo']) && !empty($moi['email'])) {
+                $mail->addReplyTo($moi['email'], trim(($moi['prenom'] ?? '') . ' ' . ($moi['nom'] ?? '')));
+            }
+            $mail->Subject = isModeDeveloppement() ? '[DEV → ' . implode(', ', array_keys($dest)) . "] $sujet" : $sujet;
+            $mail->Body    = $corps;
+            if ($isHtml) {
+                $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $corps));
+            }
+            $mail->send();
+            enregistrerEnvois(count($dest));
+
+            return ['envoyees', 'envoyée à ' . count($dest) . ' destinataire' . (count($dest) > 1 ? 's' : '') . ' (' . implode(', ', array_keys($dest)) . ')'];
+        } catch (\Exception $e) {
+            error_log('[NIJAC] EN14 copie clubs : ' . $e->getMessage());
+
+            return ['echecs', 'échec (' . $e->getMessage() . ')'];
+        }
     }
 
     /**
@@ -648,101 +746,16 @@ class NominationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => 'Rencontre non autorisée.']);
             }
 
-            $stmt = $pdo->prepare(
-                "SELECT r.Id_Rencontre, r.Date, r.Heure, r.Journee, r.Poule,
-                        ed.Division, CASE WHEN r.ArbitrageCRA = 1 THEN 'CRA' ELSE 'Club' END AS SouhaitJA,
-                        ed.Nom AS NomDom, ev.Nom AS NomExt,
-                        cl.CorNom, cl.CorEmail, cl.RefNom, cl.RefMail,
-                        COALESCE(sr.Nom, sc.Nom) AS SalleNom, COALESCE(sr.Adresse, sc.Adresse) AS SalleAdresse,
-                        COALESCE(sr.Cp, sc.Cp) AS SalleCp, COALESCE(sr.Ville, sc.Ville) AS SalleVille
-                 FROM rencontre r
-                 JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
-                 LEFT JOIN equipe ev ON ev.Id_Equipe = r.Id_EquipeExt
-                 LEFT JOIN club cl ON cl.Id_Club = ed.Id_Club
-                 LEFT JOIN salle sr ON sr.Id_Salle = r.id_Salle
-                 LEFT JOIN salle sc ON sc.Id_Club = ed.Id_Club AND sc.EstPrincipale = 1
-                 WHERE r.Id_Rencontre = ?"
+            // Cœur d'envoi partagé avec EN28 (« Relancer le club ») : config/app_config.php.
+            $res = envoyerDemandeJaClub(
+                $pdo, $idRenc, $moi,
+                trim((string) $this->request->getPost('sujet')),
+                trim((string) $this->request->getPost('message'))
             );
-            $stmt->execute([$idRenc]);
-            $rc = $stmt->fetch();
-            if (!$rc) {
-                return $this->response->setJSON(['ok' => false, 'err' => 'Rencontre introuvable.']);
-            }
-            if ($rc['SouhaitJA'] !== 'Club') {
-                return $this->response->setJSON(['ok' => false, 'err' => "Cette rencontre n'est pas en arbitrage club."]);
-            }
-            $dejaNom = $pdo->prepare('SELECT COUNT(*) FROM nomination WHERE Id_Rencontre = ?');
-            $dejaNom->execute([$idRenc]);
-            if ((int) $dejaNom->fetchColumn() > 0) {
-                return $this->response->setJSON(['ok' => false, 'err' => 'Un JA est déjà désigné pour cette rencontre.']);
-            }
-            if (empty($rc['CorEmail'])) {
-                return $this->response->setJSON(['ok' => false, 'err' => "Le club recevant n'a pas d'email de correspondant (à compléter en EN27)."]);
-            }
 
-            if (function_exists('assurerTemplateArbitreClub')) { assurerTemplateArbitreClub($pdo); } // tolère un app_config.php encore en cache opcache
-            $tpl = resoudreModeleMessagerie($pdo, 7, (int) ($moi['id'] ?? 0))
-                ?: ['Sujet' => 'Juge-arbitre pour {DOM} / {EXT}', 'Message' => '', 'Cc' => 0, 'ReplyTo' => 0];
-
-            // Sujet / corps éventuellement retouchés dans le panneau EN14.
-            $sujetEdit = trim((string) $this->request->getPost('sujet'));
-            $msgEdit   = trim((string) $this->request->getPost('message'));
-            if ($sujetEdit !== '') {
-                $tpl['Sujet'] = $sujetEdit;
-            }
-            if ($msgEdit !== '') {
-                $tpl['Message'] = $msgEdit;
-            }
-
-            $marqueurs = construireMarqueursMessage([], $moi, [
-                'id_rencontre'  => $idRenc,
-                'date'          => $rc['Date'],
-                'heure'         => $rc['Heure'],
-                'journee'       => $rc['Journee'],
-                'poule'         => $rc['Poule'],
-                'division'      => $rc['Division'],
-                'dom'           => $rc['NomDom'],
-                'ext'           => $rc['NomExt'],
-                'salle_nom'     => $rc['SalleNom'],
-                'salle_adresse' => $rc['SalleAdresse'],
-                'salle_cp'      => $rc['SalleCp'],
-                'salle_ville'   => $rc['SalleVille'],
-                'corr_nom'      => $rc['CorNom'],
-                'corr_email'    => $rc['CorEmail'],
-            ]);
-            $rendu = remplacerMarqueursMessage($tpl['Sujet'], $tpl['Message'], $marqueurs);
-            $corps = $rendu['corps'] !== '' ? $rendu['corps']
-                : "Bonjour,\r\n\r\nMerci d'indiquer le juge-arbitre de la rencontre {$rc['NomDom']} / {$rc['NomExt']} du "
-                  . date('d/m/Y', strtotime($rc['Date'])) . " :\r\n" . $marqueurs['{URL_ARBITRE_CLUB}'];
-
-            $modeDev = isModeDeveloppement();
-            $dest    = getEmailDestinataire($rc['CorEmail']);
-            $isHtml  = strip_tags($corps) !== $corps;
-
-            $mail = getNijacMailer();
-            $mail->isHTML($isHtml);
-            $mail->addAddress($dest, (string) $rc['CorNom']);
-            // Référent du club en copie s'il est renseigné (colonne Club.RefMail, EN27).
-            if (!empty($rc['RefMail'])) {
-                $mail->addCC(getEmailDestinataire($rc['RefMail']), (string) ($rc['RefNom'] ?? ''));
-            }
-            if (!empty($tpl['ReplyTo']) && !empty($moi['email'])) {
-                $mail->addReplyTo($moi['email'], trim(($moi['prenom'] ?? '') . ' ' . ($moi['nom'] ?? '')));
-            }
-            if (!empty($tpl['Cc']) && !empty($moi['email'])) {
-                $mail->addCC(getEmailDestinataire($moi['email']), trim(($moi['prenom'] ?? '') . ' ' . ($moi['nom'] ?? '')));
-            }
-            $mail->Subject = ($modeDev && $dest !== $rc['CorEmail']) ? "[DEV → {$rc['CorEmail']}] {$rendu['sujet']}" : $rendu['sujet'];
-            $mail->Body    = $corps;
-            if ($isHtml) {
-                $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $corps));
-            }
-            $mail->send();
-
-            return $this->response->setJSON([
-                'ok'  => true,
-                'msg' => 'Demande envoyée à ' . ($rc['CorNom'] ?: $rc['CorEmail']) . '.',
-            ]);
+            return $this->response->setJSON($res['ok']
+                ? ['ok' => true, 'msg' => $res['msg']]
+                : ['ok' => false, 'err' => $res['msg']]);
         });
     }
 }

@@ -45,7 +45,7 @@
 
         #toolbar .ts-pwd-warning:hover { color: #900; }
 
-        #btn-switch-nominateur, #btn-switch-csr, #btn-switch-defisc {
+        #btn-switch-nominateur, #btn-switch-csr, #btn-switch-defisc, #btn-switch-craconvoc {
             display: inline-flex;
             align-items: center;
             gap: .35rem;
@@ -65,6 +65,8 @@
         #btn-switch-csr:hover { background: #4a148c; color: #fff; }
         #btn-switch-defisc { background: #e65100; }
         #btn-switch-defisc:hover { background: #bf360c; color: #fff; }
+        #btn-switch-craconvoc { background: #00838f; }
+        #btn-switch-craconvoc:hover { background: #006064; color: #fff; }
 
         #page-header {
             background: var(--nijac-blue);
@@ -265,7 +267,7 @@
         </div>
     </div>
 
-    <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowCsr' => true, 'tbShowDefisc' => true, 'tbSwitchTo' => 'nominateur']) ?>
+    <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowCsr' => true, 'tbShowDefisc' => true, 'tbShowCraConvoc' => true, 'tbSwitchTo' => 'nominateur']) ?>
 
     <?php if ($ffttJoursExpiration !== null && $ffttJoursExpiration <= 60): ?>
     <div class="alert alert-<?= $ffttJoursExpiration < 0 ? 'danger' : 'warning' ?> d-flex align-items-center gap-2 mb-0" style="border-radius:0;font-size:.85rem;">

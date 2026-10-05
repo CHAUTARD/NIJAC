@@ -115,6 +115,264 @@ function initTableConfiguration(\PDO $pdo): void
         // best-effort
     }
 
+    // Calendrier des compétitions régionales (CRA) 2026-2027 : seed initial UNIQUEMENT si la table est vide.
+    try {
+        $pdo->exec('
+            CREATE TABLE IF NOT EXISTS CRA_Competition (
+                Id_CRA_Competition INT AUTO_INCREMENT PRIMARY KEY,
+                Numero             INT NOT NULL,
+                DateDebut          DATE NOT NULL,
+                DateFin            DATE NULL,
+                Libelle            VARCHAR(150) NOT NULL,
+                NbTablesMin        INT NULL,
+                NbTablesMax        INT NULL,
+                Lieu               VARCHAR(100) NOT NULL,
+                NiveauJA           VARCHAR(20) NOT NULL,
+                NbrJA              TINYINT UNSIGNED NOT NULL DEFAULT 1,
+                NbrAdjoint         TINYINT UNSIGNED NOT NULL DEFAULT 0,
+                UNIQUE KEY uq_cra_numero (Numero)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ');
+        if (!(int) $pdo->query('SELECT COUNT(*) FROM CRA_Competition')->fetchColumn()) {
+            $stmtCra = $pdo->prepare('INSERT INTO CRA_Competition
+                (Numero, DateDebut, DateFin, Libelle, NbTablesMin, NbTablesMax, Lieu, NiveauJA)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+            foreach ([
+                [1,  '2026-10-10', null, '1er tour Critérium Féminin et Benjamins Normandie', 16, null, 'Saint-Pierre-lès-Elbeuf', 'JA2'],
+                [2,  '2026-10-11', null, '1er tour Jeunes et Seniors Régionale 1 Normandie', 16, null, 'Saint-Pierre-lès-Elbeuf', 'JA2'],
+                [3,  '2026-10-11', null, '1er tour Seniors Régionale 2 Zone 1', 8, null, 'Cormelles-le-Royal', 'JA2'],
+                [4,  '2026-10-11', null, '1er tour Seniors Régionale 2 Zone 2', 8, null, 'AS Stéphanaise', 'JA2'],
+                [5,  '2026-11-14', '2026-11-15', '2e tour Critérium fédéral Nationale 2', 24, null, 'Flers', 'JAN JA3'],
+                [6,  '2026-11-14', null, '2e tour Critérium Féminin et Benjamins Normandie', 16, null, 'Vire', 'JA2'],
+                [7,  '2026-11-15', null, '2e tour Jeunes et Seniors Régionale 1 Normandie', 16, null, 'Vire', 'JA2'],
+                [8,  '2026-11-15', null, '2e tour Seniors Régionale 2 Zone 1', 8, null, 'Cormelles-le-Royal', 'JA2'],
+                [9,  '2026-11-15', null, '2e tour Seniors Régionale 2 Zone 2', 8, null, 'Caudebec-lès-Elbeuf', 'JA2'],
+                [10, '2026-11-28', null, 'Tournoi régional féminin', 16, 24, 'À déterminer', 'JA3'],
+                [11, '2027-01-09', null, 'Journée qualificative Championnats de France Vétérans', 24, null, 'Bolbec', 'JA3'],
+                [12, '2027-01-10', null, 'Top Détection', 22, 24, 'Bolbec', 'JA3'],
+                [13, '2027-01-30', null, '3e tour Critérium Féminin et Benjamins Normandie', 16, null, 'Le Havre', 'JA2'],
+                [14, '2027-01-31', null, '3e tour Jeunes et Seniors Régionale 1 Normandie', 16, null, 'Le Havre', 'JA2'],
+                [15, '2027-01-31', null, '3e tour Seniors Régionale 2 - Cormelles', 8, null, 'Cormelles-le-Royal', 'JA2'],
+                [16, '2027-01-31', null, '3e tour Seniors Régionale 2 - Zone 2', 8, null, 'Caudebec-lès-Elbeuf ou Saint-Étienne-du-Rouvray', 'JA2'],
+                [17, '2027-02-20', null, 'Coupe nationale Vétérans - échelon régional', 14, 16, 'Caudebec-lès-Elbeuf', 'JA3'],
+                [18, '2027-02-21', null, 'Titres individuels Normandie', 24, null, 'Saint-Lô', 'JA3'],
+                [19, '2027-03-06', '2027-03-07', '4e tour Critérium fédéral Nationale 2', 24, null, 'Saint-Pierre-lès-Elbeuf', 'JAN JA3'],
+                [20, '2027-03-06', null, '4e tour Critérium Féminin et Benjamins Normandie', 16, null, 'Flers', 'JA2'],
+                [21, '2027-03-07', null, '4e tour Jeunes et Seniors Régionale 1 Normandie', 16, null, 'Flers', 'JA2'],
+                [22, '2027-03-07', null, '4e tour Seniors Régionale 2 Zone 1', 8, null, 'Cormelles-le-Royal', 'JA2'],
+                [23, '2027-03-07', null, '4e tour Seniors Régionale 2 Zone 2', 8, null, 'Pacy-sur-Eure', 'JA2'],
+                [24, '2027-04-17', '2027-04-18', 'Finale régionale par classements', 24, null, 'Le Havre', 'JA3'],
+                [25, '2027-05-15', '2027-05-16', 'Grand Prix Jeunes Crédit Agricole', 40, 50, 'Saint-Pierre-lès-Elbeuf', 'JA3'],
+                [26, '2027-06-12', '2027-06-13', 'Titres régionaux Championnat par équipes', 16, null, 'Ducey', 'JA3'],
+                [27, '2027-06-12', '2027-06-13', 'Inter-comités', 20, 24, 'À déterminer', 'JA3'],
+            ] as $ligneCra) {
+                $stmtCra->execute($ligneCra);
+            }
+        }
+    } catch (\PDOException $e) {
+        // best-effort
+    }
+
+    // EC71 : club organisateur (Id_Club = Club.Id_Club, NomClub = copie dénormalisée de Club.Nom),
+    // renseigné à la main via la recherche « club à partir du Lieu » — pas de backfill.
+    try {
+        if (!$pdo->query("SHOW COLUMNS FROM CRA_Competition LIKE 'Id_Club'")->fetch()) {
+            $pdo->exec("ALTER TABLE CRA_Competition ADD COLUMN Id_Club CHAR(8) COLLATE utf8mb4_unicode_ci NULL AFTER Lieu");
+        }
+        if (!$pdo->query("SHOW COLUMNS FROM CRA_Competition LIKE 'NomClub'")->fetch()) {
+            $pdo->exec("ALTER TABLE CRA_Competition ADD COLUMN NomClub VARCHAR(100) COLLATE utf8mb4_unicode_ci NULL AFTER Id_Club");
+        }
+    } catch (\PDOException $e) {
+        // best-effort
+    }
+    // EC71 : nombre de juges-arbitres et d'adjoints requis (lignes existantes → défauts 1 / 0).
+    try {
+        if (!$pdo->query("SHOW COLUMNS FROM CRA_Competition LIKE 'NbrJA'")->fetch()) {
+            $pdo->exec("ALTER TABLE CRA_Competition ADD COLUMN NbrJA TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER NiveauJA");
+        }
+        if (!$pdo->query("SHOW COLUMNS FROM CRA_Competition LIKE 'NbrAdjoint'")->fetch()) {
+            $pdo->exec("ALTER TABLE CRA_Competition ADD COLUMN NbrAdjoint TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER NbrJA");
+        }
+    } catch (\PDOException $e) {
+        // best-effort
+    }
+    try {
+        $existe = $pdo->query(
+            "SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
+             WHERE CONSTRAINT_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'cra_competition'
+               AND CONSTRAINT_NAME = 'fk_cracompet_club'"
+        )->fetchColumn();
+        if (!$existe) {
+            $pdo->exec(
+                'ALTER TABLE CRA_Competition
+                 ADD CONSTRAINT fk_cracompet_club FOREIGN KEY (Id_Club) REFERENCES Club (Id_Club)
+                 ON DELETE SET NULL ON UPDATE CASCADE'
+            );
+        }
+    } catch (\PDOException $e) {
+        // best-effort : ne bloque pas EA98 si l'ALTER échoue
+    }
+
+    // Référentiel des degrés de la filière juge-arbitre (sans lien FK avec ja.Grade) : seed UNIQUEMENT si la table est vide.
+    try {
+        $pdo->exec('
+            CREATE TABLE IF NOT EXISTS JugeArbitre (
+                Id_JugeArbitre INT AUTO_INCREMENT PRIMARY KEY,
+                Code           CHAR(3) NOT NULL,
+                Libelle        VARCHAR(26) NOT NULL,
+                Description    TEXT NOT NULL,
+                UNIQUE KEY uq_jugearbitre_code (Code)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ');
+        // Colonne Ordre supprimée : retire-la si la table a déjà été créée avec.
+        if ($pdo->query("SHOW COLUMNS FROM JugeArbitre LIKE 'Ordre'")->fetch()) {
+            $pdo->exec('ALTER TABLE JugeArbitre DROP COLUMN Ordre');
+        }
+        // Anciens types (VARCHAR(10)/(60)/(255)) : mise à niveau si la table a déjà été créée avec.
+        $typesJug = [];
+        foreach ($pdo->query('SHOW COLUMNS FROM JugeArbitre')->fetchAll(\PDO::FETCH_ASSOC) as $colJug) {
+            $typesJug[$colJug['Field']] = strtolower($colJug['Type']);
+        }
+        if (($typesJug['Code'] ?? '') !== 'char(3)' || ($typesJug['Libelle'] ?? '') !== 'varchar(26)' || ($typesJug['Description'] ?? '') !== 'text') {
+            $pdo->exec('ALTER TABLE JugeArbitre MODIFY Code CHAR(3) NOT NULL, MODIFY Libelle VARCHAR(26) NOT NULL, MODIFY Description TEXT NOT NULL');
+        }
+        if (!(int) $pdo->query('SELECT COUNT(*) FROM JugeArbitre')->fetchColumn()) {
+            $stmtJug = $pdo->prepare('INSERT INTO JugeArbitre (Code, Libelle, Description) VALUES (?, ?, ?)');
+            foreach ([
+                ['JA1', 'Juge-Arbitre 1er degré', 'Responsable du déroulement des rencontres par équipes.'],
+                ['JA2', 'Juge-Arbitre 2ème degré', 'Chargé de diriger le critérium fédéral et les épreuves individuelles.'],
+                ['JA3', 'Juge-Arbitre 3ème degré', 'Dirige les compétitions régionales et les tournois.'],
+                ['JAN', 'Juge-Arbitre National', 'A la charge de l\'organisation des épreuves nationales.'],
+                ['JAI', 'Juge-Arbitre International', 'Supervise l\'ensemble des arbitres lors d\'épreuves internationales.'],
+            ] as $ligneJug) {
+                $stmtJug->execute($ligneJug);
+            }
+        }
+    } catch (\PDOException $e) {
+        // best-effort
+    }
+
+    // EC73 : désignation des JA / adjoints d'une compétition CRA (remplacée en bloc par l'écran).
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS CRA_Designation (
+                Id_CRA_Designation INT AUTO_INCREMENT PRIMARY KEY,
+                Id_CRA_Competition INT NOT NULL,
+                Role               ENUM('JA','Adjoint') NOT NULL,
+                Rang               TINYINT UNSIGNED NOT NULL,
+                Id_JA              INT NOT NULL,
+                DateSaisie         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                Id_Utilisateur     INT NULL,
+                DateConvocation    DATETIME NULL,
+                UNIQUE KEY uq_cradesig_rang (Id_CRA_Competition, Role, Rang),
+                UNIQUE KEY uq_cradesig_ja (Id_CRA_Competition, Id_JA),
+                KEY idx_cradesig_ja (Id_JA),
+                CONSTRAINT fk_cradesig_compet FOREIGN KEY (Id_CRA_Competition) REFERENCES CRA_Competition (Id_CRA_Competition)
+                    ON DELETE CASCADE ON UPDATE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+    } catch (\PDOException $e) {
+        // best-effort
+    }
+    try {
+        $existe = $pdo->query(
+            "SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
+             WHERE CONSTRAINT_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'cra_designation'
+               AND CONSTRAINT_NAME = 'fk_cradesig_ja'"
+        )->fetchColumn();
+        if (!$existe) {
+            $pdo->exec(
+                'ALTER TABLE CRA_Designation
+                 ADD CONSTRAINT fk_cradesig_ja FOREIGN KEY (Id_JA) REFERENCES ja (Id_JA)
+                 ON DELETE CASCADE ON UPDATE CASCADE'
+            );
+        }
+    } catch (\PDOException $e) {
+        // best-effort : ne bloque pas EA98 si l'ALTER échoue
+    }
+    // EC73 : date du dernier envoi réussi de la convocation (cra-designation/convocations), NULL = jamais convoqué.
+    try {
+        if (!$pdo->query("SHOW COLUMNS FROM CRA_Designation LIKE 'DateConvocation'")->fetch()) {
+            $pdo->exec('ALTER TABLE CRA_Designation ADD COLUMN DateConvocation DATETIME NULL AFTER Id_Utilisateur');
+        }
+    } catch (\PDOException $e) {
+        // best-effort
+    }
+
+    // EC74 : disponibilités des JA pour les compétitions CRA (demande par email, réponse via dispo-cra?ja=TOKEN
+    // ou saisie manuelle). Disponible = les 5 statuts de la matrice de suivi ; 'Non renseigné' = demandé sans réponse.
+    $enumDispo = "ENUM('Non renseigné','Indisponible','Disponible','À confirmer','Disponible sous condition') NOT NULL DEFAULT 'Non renseigné'";
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS CRA_Dispo (
+                Id_CRA_Dispo       INT AUTO_INCREMENT PRIMARY KEY,
+                Id_CRA_Competition INT NOT NULL,
+                Id_JA              INT NOT NULL,
+                Disponible         $enumDispo,
+                Commentaire        VARCHAR(255) NULL,
+                DateDemande        DATETIME NULL,
+                DateReponse        DATETIME NULL,
+                Source             ENUM('JA','Saisie') NULL,
+                Id_Utilisateur     INT NULL,
+                UNIQUE KEY uq_cradispo (Id_CRA_Competition, Id_JA),
+                KEY idx_cradispo_ja (Id_JA),
+                CONSTRAINT fk_cradispo_compet FOREIGN KEY (Id_CRA_Competition) REFERENCES CRA_Competition (Id_CRA_Competition)
+                    ON DELETE CASCADE ON UPDATE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+    } catch (\PDOException $e) {
+        // best-effort
+    }
+    // Migration (10/2026) d'une table créée avec l'ancien Disponible TINYINT(1) NULL (NULL / 1 / 0) vers l'ENUM.
+    // Étapes séquentielles (DDL = commit implicite, pas de transaction possible) : la première qui échoue arrête
+    // la migration et la journalise. Reprise sûre au passage EA98 suivant : la colonne n'étant toujours pas un
+    // ENUM, les étapes sont rejouées (l'UPDATE ne touche que les anciennes valeurs).
+    try {
+        $type = $pdo->query(
+            "SELECT DATA_TYPE FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'cra_dispo' AND COLUMN_NAME = 'Disponible'"
+        )->fetchColumn();
+        if ($type !== false && strtolower((string) $type) !== 'enum') {
+            // (a) texte libre le temps de la conversion
+            $pdo->exec('ALTER TABLE CRA_Dispo MODIFY Disponible VARCHAR(30) NULL');
+            // (b) conversion : commentaires de substitution de l'ancien import d'abord (commentaire vidé), puis 1 / 0 / NULL
+            $pdo->exec("UPDATE CRA_Dispo SET Disponible = Commentaire, Commentaire = NULL
+                        WHERE Commentaire IN ('À confirmer', 'Disponible sous condition')");
+            $pdo->exec("UPDATE CRA_Dispo SET Disponible = CASE
+                            WHEN Disponible IS NULL THEN 'Non renseigné'
+                            WHEN Disponible = '1' THEN 'Disponible'
+                            WHEN Disponible = '0' THEN 'Indisponible'
+                            ELSE Disponible END");
+            // garde-fou : jamais d'ENUM posé sur une valeur hors liste (tronquée en '' en mode non strict)
+            $restant = (int) $pdo->query("SELECT COUNT(*) FROM CRA_Dispo WHERE Disponible NOT IN
+                ('Non renseigné','Indisponible','Disponible','À confirmer','Disponible sous condition')")->fetchColumn();
+            if ($restant > 0) {
+                throw new \RuntimeException("$restant valeur(s) de Disponible non convertible(s)");
+            }
+            // (c) type définitif
+            $pdo->exec("ALTER TABLE CRA_Dispo MODIFY Disponible $enumDispo");
+        }
+    } catch (\Throwable $e) {
+        // Arrêt de la migration de CRA_Dispo (colonne laissée en VARCHAR si (a) est passée) : rejouée au prochain EA98.
+        error_log('[NIJAC] Migration CRA_Dispo.Disponible -> ENUM interrompue : ' . $e->getMessage());
+    }
+    try {
+        $existe = $pdo->query(
+            "SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
+             WHERE CONSTRAINT_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'cra_dispo'
+               AND CONSTRAINT_NAME = 'fk_cradispo_ja'"
+        )->fetchColumn();
+        if (!$existe) {
+            $pdo->exec(
+                'ALTER TABLE CRA_Dispo
+                 ADD CONSTRAINT fk_cradispo_ja FOREIGN KEY (Id_JA) REFERENCES ja (Id_JA)
+                 ON DELETE CASCADE ON UPDATE CASCADE'
+            );
+        }
+    } catch (\PDOException $e) {
+        // best-effort : ne bloque pas EA98 si l'ALTER échoue
+    }
+
     // Une seule réponse par (JA, rencontre) — EN22 / EN14. Best-effort : doublons existants => reste non posée.
     try {
         if (!$pdo->query("SHOW INDEX FROM disponible WHERE Key_name = 'uq_dispo'")->fetch()) {
@@ -192,6 +450,68 @@ function initTableConfiguration(\PDO $pdo): void
         )->fetchColumn();
         if (!$existe) {
             $pdo->exec("ALTER TABLE rencontre ADD COLUMN Frais ENUM('Dom','Ext') NOT NULL DEFAULT 'Dom' AFTER ArbitrageCRA");
+        }
+    } catch (\PDOException $e) {
+        // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
+    }
+
+    // ja.Actif -> ja.JA1 (même type/défaut, données conservées) + degrés JA2/JA3/JAN/JAI
+    // (codes de la table de référence JugeArbitre, sans FK). Index idx_ja_actif -> idx_ja_ja1.
+    try {
+        $colsJa = $pdo->query(
+            "SELECT COLUMN_NAME FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ja'"
+        )->fetchAll(\PDO::FETCH_COLUMN);
+        if (in_array('Actif', $colsJa, true) && !in_array('JA1', $colsJa, true)) {
+            $pdo->exec("ALTER TABLE ja CHANGE Actif JA1 TINYINT(1) DEFAULT '1'");
+            $colsJa[] = 'JA1';
+        }
+        $apres = 'JA1';
+        foreach (['JA2', 'JA3', 'JAN', 'JAI'] as $colJa) {
+            if (!in_array($colJa, $colsJa, true)) {
+                $pdo->exec("ALTER TABLE ja ADD COLUMN $colJa TINYINT(1) NOT NULL DEFAULT 0 AFTER $apres");
+            }
+            $apres = $colJa;
+        }
+        if ($pdo->query("SHOW INDEX FROM ja WHERE Key_name = 'idx_ja_actif'")->fetch()) {
+            $pdo->exec('ALTER TABLE ja RENAME INDEX idx_ja_actif TO idx_ja_ja1');
+        }
+    } catch (\PDOException $e) {
+        // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
+    }
+
+    // ja.Nationale : défaut 1 (Oui) + passage unique de tous les JA existants à 1.
+    // Le défaut sert de garde : une fois à 1, l'UPDATE ne se rejoue plus (les JA
+    // remis ensuite à Non dans la modale EN11 sont préservés). Type et nullabilité
+    // existants conservés. Les imports n'écrivent jamais cette colonne.
+    try {
+        $col = $pdo->query(
+            "SELECT COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ja' AND COLUMN_NAME = 'Nationale'"
+        )->fetch(\PDO::FETCH_ASSOC);
+        if ($col && trim((string) $col['COLUMN_DEFAULT'], "'") !== '1') {
+            $null = $col['IS_NULLABLE'] === 'YES' ? 'NULL' : 'NOT NULL';
+            $pdo->exec("ALTER TABLE ja MODIFY Nationale {$col['COLUMN_TYPE']} $null DEFAULT 1");
+            $pdo->exec('UPDATE ja SET Nationale = 1');
+        }
+    } catch (\PDOException $e) {
+        // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
+    }
+
+    // nomination.Valide : défaut 1 — un JA nommé sur une rencontre la rend valide
+    // d'office (plus de validation manuelle depuis la suppression du bouton
+    // « Valider les nominations » d'EN14). Passage unique des nominations restées
+    // à 0 ; le défaut sert de garde (l'UPDATE ne se rejoue plus). Type et
+    // nullabilité existants conservés. EmailEnvoye non touché.
+    try {
+        $col = $pdo->query(
+            "SELECT COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nomination' AND COLUMN_NAME = 'Valide'"
+        )->fetch(\PDO::FETCH_ASSOC);
+        if ($col && trim((string) $col['COLUMN_DEFAULT'], "'") !== '1') {
+            $null = $col['IS_NULLABLE'] === 'YES' ? 'NULL' : 'NOT NULL';
+            $pdo->exec("ALTER TABLE nomination MODIFY Valide {$col['COLUMN_TYPE']} $null DEFAULT 1");
+            $pdo->exec('UPDATE nomination SET Valide = 1 WHERE Valide = 0');
         }
     } catch (\PDOException $e) {
         // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
@@ -299,6 +619,27 @@ function initTableConfiguration(\PDO $pdo): void
         }
     } catch (\PDOException $e) {
         // best-effort — droits insuffisants.
+    }
+
+    // messagerie.Message TEXT (64 Ko) -> MEDIUMTEXT : les convocations CRA (EC73) font ~53 Ko
+    // (images base64), une simple retouche les ferait dépasser TEXT.
+    try {
+        $type = $pdo->query(
+            "SELECT DATA_TYPE FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'messagerie' AND COLUMN_NAME = 'Message'"
+        )->fetchColumn();
+        if (in_array($type, ['tinytext', 'text'], true)) {
+            $pdo->exec('ALTER TABLE messagerie MODIFY Message MEDIUMTEXT COLLATE utf8mb4_unicode_ci NOT NULL');
+        }
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] messagerie.Message -> MEDIUMTEXT : ' . $e->getMessage());
+    }
+
+    // EC73 : les 3 modèles de convocation CRA deviennent des messages système (voir assurerModelesConvocationCra()).
+    try {
+        assurerModelesConvocationCra($pdo);
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] Amorçage des modèles de convocation CRA : ' . $e->getMessage());
     }
 }
 
@@ -451,6 +792,16 @@ function assurerRoleDefiscalisateur(\PDO $pdo): void
 }
 
 /**
+ * Ajoute le rôle 'CRA Convoc' à l'ENUM utilisateur.Role s'il n'y est pas déjà — même principe
+ * que assurerRoleCsr(). Pas encore de menu/route/filtre dédié : à la connexion, ce rôle tombe
+ * dans le cas par défaut de AuthController::redirectForRole() (menu Nominateur).
+ */
+function assurerRoleCraConvoc(\PDO $pdo): void
+{
+    ajouterValeurEnum($pdo, 'utilisateur', 'Role', 'CRA Convoc', 'Nominateur');
+}
+
+/**
  * Garantit l'existence du type de message système "Expiration FFTT API" (ENUM messagerie.Type +
  * une ligne de gabarit par défaut, marqueurs {DATE_EXPIRATION}/{DELAI}) — éditable ensuite comme
  * les autres modèles système via EA93 (Id_Utilisateur NULL = protégé en écriture pour les non-admin,
@@ -506,6 +857,169 @@ function assurerTemplateArbitreClub(\PDO $pdo): void
         $pdo->prepare('UPDATE messagerie SET Type = ?, Sujet = ?, Message = ?, Cc = 1, ReplyTo = 1 WHERE Id_Messagerie = 7')
             ->execute(['JA Club', $sujet, $message]);
     }
+}
+
+/**
+ * Envoie le message n°7 (« JA Club ») au correspondant du club recevant de la
+ * rencontre $idRenc (référent Club.RefMail en Cc), avec le lien EN25 pour que
+ * le club désigne son juge-arbitre. Partagé par EN14 (« Envoyer la demande au
+ * club », sujet/corps éventuellement retouchés dans le panneau) et EN28
+ * (« Relancer le club »). Le périmètre du nominateur est vérifié par l'appelant.
+ * Refus (rencontre introuvable, pas en arbitrage club, JA déjà désigné, club
+ * sans email de correspondant) → ['ok' => false, 'msg' => ...], sans envoi ;
+ * succès → ['ok' => true, 'msg' => ...]. Une erreur d'envoi lève l'exception
+ * PHPMailer. Pas de rate limit ni de journalisation ici (laissés à l'appelant).
+ */
+function envoyerDemandeJaClub(\PDO $pdo, int $idRenc, array $moi, string $sujetEdit = '', string $msgEdit = ''): array
+{
+    $stmt = $pdo->prepare(
+        "SELECT r.Id_Rencontre, r.Date, r.Heure, r.Journee, r.Poule,
+                ed.Division, CASE WHEN r.ArbitrageCRA = 1 THEN 'CRA' ELSE 'Club' END AS SouhaitJA,
+                ed.Nom AS NomDom, ev.Nom AS NomExt,
+                cl.CorNom, cl.CorEmail, cl.RefNom, cl.RefMail,
+                COALESCE(sr.Nom, sc.Nom) AS SalleNom, COALESCE(sr.Adresse, sc.Adresse) AS SalleAdresse,
+                COALESCE(sr.Cp, sc.Cp) AS SalleCp, COALESCE(sr.Ville, sc.Ville) AS SalleVille
+         FROM rencontre r
+         JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
+         LEFT JOIN equipe ev ON ev.Id_Equipe = r.Id_EquipeExt
+         LEFT JOIN club cl ON cl.Id_Club = ed.Id_Club
+         LEFT JOIN salle sr ON sr.Id_Salle = r.id_Salle
+         LEFT JOIN salle sc ON sc.Id_Club = ed.Id_Club AND sc.EstPrincipale = 1
+         WHERE r.Id_Rencontre = ?"
+    );
+    $stmt->execute([$idRenc]);
+    $rc = $stmt->fetch();
+    if (!$rc) {
+        return ['ok' => false, 'msg' => 'Rencontre introuvable.'];
+    }
+    if ($rc['SouhaitJA'] !== 'Club') {
+        return ['ok' => false, 'msg' => "Cette rencontre n'est pas en arbitrage club."];
+    }
+    $dejaNom = $pdo->prepare('SELECT COUNT(*) FROM nomination WHERE Id_Rencontre = ?');
+    $dejaNom->execute([$idRenc]);
+    if ((int) $dejaNom->fetchColumn() > 0) {
+        return ['ok' => false, 'msg' => 'Un JA est déjà désigné pour cette rencontre.'];
+    }
+    if (empty($rc['CorEmail'])) {
+        return ['ok' => false, 'msg' => "Le club recevant n'a pas d'email de correspondant (à compléter en EN27)."];
+    }
+
+    assurerTemplateArbitreClub($pdo);
+    $tpl = resoudreModeleMessagerie($pdo, 7, (int) ($moi['id'] ?? 0))
+        ?: ['Sujet' => 'Juge-arbitre pour {DOM} / {EXT}', 'Message' => '', 'Cc' => 0, 'ReplyTo' => 0];
+
+    // Sujet / corps éventuellement retouchés dans le panneau EN14.
+    if ($sujetEdit !== '') {
+        $tpl['Sujet'] = $sujetEdit;
+    }
+    if ($msgEdit !== '') {
+        $tpl['Message'] = $msgEdit;
+    }
+
+    $marqueurs = construireMarqueursMessage([], $moi, [
+        'id_rencontre'  => $idRenc,
+        'date'          => $rc['Date'],
+        'heure'         => $rc['Heure'],
+        'journee'       => $rc['Journee'],
+        'poule'         => $rc['Poule'],
+        'division'      => $rc['Division'],
+        'dom'           => $rc['NomDom'],
+        'ext'           => $rc['NomExt'],
+        'salle_nom'     => $rc['SalleNom'],
+        'salle_adresse' => $rc['SalleAdresse'],
+        'salle_cp'      => $rc['SalleCp'],
+        'salle_ville'   => $rc['SalleVille'],
+        'corr_nom'      => $rc['CorNom'],
+        'corr_email'    => $rc['CorEmail'],
+    ]);
+    $rendu = remplacerMarqueursMessage($tpl['Sujet'], $tpl['Message'], $marqueurs);
+    $corps = $rendu['corps'] !== '' ? $rendu['corps']
+        : "Bonjour,\r\n\r\nMerci d'indiquer le juge-arbitre de la rencontre {$rc['NomDom']} / {$rc['NomExt']} du "
+          . date('d/m/Y', strtotime($rc['Date'])) . " :\r\n" . $marqueurs['{URL_ARBITRE_CLUB}'];
+
+    $modeDev = isModeDeveloppement();
+    $dest    = getEmailDestinataire($rc['CorEmail']);
+    $isHtml  = strip_tags($corps) !== $corps;
+
+    $mail = getNijacMailer();
+    $mail->isHTML($isHtml);
+    $mail->addAddress($dest, (string) $rc['CorNom']);
+    // Référent du club en copie s'il est renseigné (colonne Club.RefMail, EN27).
+    if (!empty($rc['RefMail'])) {
+        $mail->addCC(getEmailDestinataire($rc['RefMail']), (string) ($rc['RefNom'] ?? ''));
+    }
+    if (!empty($tpl['ReplyTo']) && !empty($moi['email'])) {
+        $mail->addReplyTo($moi['email'], trim(($moi['prenom'] ?? '') . ' ' . ($moi['nom'] ?? '')));
+    }
+    if (!empty($tpl['Cc']) && !empty($moi['email'])) {
+        $mail->addCC(getEmailDestinataire($moi['email']), trim(($moi['prenom'] ?? '') . ' ' . ($moi['nom'] ?? '')));
+    }
+    $mail->Subject = ($modeDev && $dest !== $rc['CorEmail']) ? "[DEV → {$rc['CorEmail']}] {$rendu['sujet']}" : $rendu['sujet'];
+    $mail->Body    = $corps;
+    if ($isHtml) {
+        $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $corps));
+    }
+    $mail->send();
+
+    return ['ok' => true, 'msg' => 'Demande envoyée à ' . ($rc['CorNom'] ?: $rc['CorEmail']) . '.'];
+}
+
+/**
+ * Modèles de convocation CRA (EC73) : Type messagerie => [fichier de Convocation/ (source
+ * d'amorçage et repli à l'exécution), sujet par défaut]. Messages système identifiés par leur
+ * Type (Id_Utilisateur NULL), pas par un Id_Messagerie fixe : les ids suivants sont déjà pris
+ * par des copies personnelles sur certains environnements (AUTO_INCREMENT).
+ */
+function modelesConvocationCra(): array
+{
+    return [
+        'CRA Convocation JA'           => ['Convocation_1JA.html',          'CRA – Convocation – {EPREUVE} – {DATE_LONGUE}'],
+        'CRA Convocation JA + adjoint' => ['Convocation_1JA_1Adjoint.html', 'CRA – Convocation – {EPREUVE} – {DATE_LONGUE}'],
+        'CRA Convocation adjoint'      => ['Convocation_Adjoint.html',      'CRA – Convocation adjoint – {EPREUVE} – {DATE_LONGUE}'],
+    ];
+}
+
+/**
+ * Amorce (initTableConfiguration(), EA98) les 3 messages système de convocation CRA : Type ENUM
+ * étendu, puis ligne créée seulement si aucun message système de ce Type n'existe (jamais
+ * d'écrasement d'un contenu retouché via EA93), corps = fichier de Convocation/ tel quel,
+ * Cc/ReplyTo = 1 comme le message n°3. Fichier introuvable : message ignoré + error_log.
+ */
+function assurerModelesConvocationCra(\PDO $pdo): void
+{
+    foreach (array_keys(modelesConvocationCra()) as $type) {
+        ajouterTypeMessagerie($pdo, $type);
+    }
+    $existe = $pdo->prepare('SELECT COUNT(*) FROM messagerie WHERE Type = ? AND Id_Utilisateur IS NULL');
+    $ins    = $pdo->prepare('INSERT INTO messagerie (Type, Sujet, Message, Id_Utilisateur, Cc, ReplyTo) VALUES (?, ?, ?, NULL, 1, 1)');
+    foreach (modelesConvocationCra() as $type => [$fichier, $sujet]) {
+        $existe->execute([$type]);
+        if ((int) $existe->fetchColumn() > 0) {
+            continue;
+        }
+        $corps = @file_get_contents(__DIR__ . '/../Convocation/' . $fichier);
+        if ($corps === false) {
+            error_log("[NIJAC] Modèle Convocation/$fichier introuvable : message « $type » non créé.");
+            continue;
+        }
+        $ins->execute([$type, $sujet, $corps]);
+    }
+}
+
+/**
+ * Comme resoudreModeleMessagerie() mais par Type (convocations CRA, EC73) : copie personnelle
+ * de l'utilisateur courant (Id_Utilisateur = lui) en priorité, sinon le message système
+ * (Id_Utilisateur NULL, le plus ancien). Pas de rapprochement par Sujet : « CRA Convocation JA »
+ * et « CRA Convocation JA + adjoint » ont le même sujet.
+ */
+function resoudreModeleMessagerieParType(\PDO $pdo, string $type, int $idUtilisateurCourant): ?array
+{
+    $stmt = $pdo->prepare('SELECT Sujet, Message, Cc, ReplyTo FROM messagerie
+        WHERE Type = ? AND (Id_Utilisateur IS NULL OR Id_Utilisateur = ?)
+        ORDER BY Id_Utilisateur IS NULL, Id_Messagerie LIMIT 1');
+    $stmt->execute([$type, $idUtilisateurCourant]);
+
+    return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
 }
 
 /**
@@ -715,9 +1229,19 @@ function idClubDepuisTokenDesiderata(string $token): ?string
  *                    le(s) marqueur(s) correspondant(s) vide(s) :
  *                    {PHASE} : numéro de phase (config `phase`, saisi manuellement — distinct de {YEAR_PHASE}
  *                    qui est calculé à partir de la date du jour, voir getAnneePhase()).
- *                    id_nomination, id_rencontre (pour {URL_ARBITRE_CLUB}), sexe_code ('F'|'M'), date, heure, journee, poule, division, dom, ext,
+ *                    id_nomination, id_rencontre (pour {URL_ARBITRE_CLUB}), sexe_code ('F'|'M'), date, date_fin (plage de {DATE_LONGUE}, EC73), heure, journee, poule, division, dom, ext,
  *                    nom_club, salle_nom, salle_adresse, salle_cp, salle_ville,
- *                    corr_nom, corr_email, corr_tel, liste_nominations (HTML de {LISTE_NOMINATIONS}).
+ *                    epreuve ({EPREUVE}), nb_tables ({NB_TABLES}) — aucune source en base à ce jour,
+ *                    corr_nom, corr_email, corr_tel, liste_nominations (HTML de {LISTE_NOMINATIONS}),
+ *                    ja_disponibles (liste de lignes Nom/Prenom/Telephone/Email → <tr> de {LISTE_JA_DISPONIBLES}),
+ *                    nb_adjoints (EC73 : {NB_ADJOINTS}, {TITRE_ADJOINTS}, {ADJOINTS_TEXTE}, {ADJOINTS_A_SOLLICITER},
+ *                    {ADJOINTS_RETENUS}, {ADJOINTS_SOLLICITES}, {VOTRE_ADJOINT}, {LUI_LEUR} ; absent → singulier),
+ *                    adjoints_valides + liste_adjoints_valides (EC73 : adjoints désignés, lignes Nom/Prenom/Telephone/Email/Rang ;
+ *                    0/absent → texte et {LISTE_JA_DISPONIBLES} d'origine ; ≥ nb_adjoints → validés seuls, sans JA disponibles ;
+ *                    entre les deux → validés puis restants à solliciter) → {ADJOINTS_INTRO}, {ADJOINTS_CONTACT}, {TITRE_LISTE_ADJOINTS},
+ *                    ja_principaux (EC73, Convocation_Adjoint.html : liste de ['nom','prenom','telephone','email'] →
+ *                    {NOM_JA_PRINCIPAL} « Prénom NOM », {TEL_JA_PRINCIPAL}, {EMAIL_JA_PRINCIPAL} ; plusieurs = « A, B et C »,
+ *                    valeurs vides ignorées ; texte brut, échappé par l'appelant comme les autres marqueurs).
  * @return array<string,string> Table marqueur => valeur, prête pour remplacerMarqueursMessage().
  */
 function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = []): array
@@ -737,7 +1261,124 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
         default => '',
     };
 
+    // Date longue FR sans locale/intl (mêmes tableaux que ConvocationJaController).
+    $jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+    $mois  = ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+    $dateLongue = '';
+    if (!empty($ctx['date'])) {
+        $ts    = strtotime($ctx['date']);
+        $dateLongue = $jours[(int) date('w', $ts)] . ' ' . date('j', $ts) . ' ' . $mois[(int) date('n', $ts)] . ' ' . date('Y', $ts);
+        // Plage (EC73) : « samedi 14 – dimanche 15 novembre 2026 » ; mois / année du début répétés seulement s'ils diffèrent.
+        if (!empty($ctx['date_fin']) && $ctx['date_fin'] !== $ctx['date']) {
+            $tf    = strtotime($ctx['date_fin']);
+            $debut = $jours[(int) date('w', $ts)] . ' ' . date('j', $ts)
+                . (date('Y-n', $ts) !== date('Y-n', $tf) ? ' ' . $mois[(int) date('n', $ts)] : '')
+                . (date('Y', $ts) !== date('Y', $tf) ? ' ' . date('Y', $ts) : '');
+            $dateLongue = $debut . ' – ' . $jours[(int) date('w', $tf)] . ' ' . date('j', $tf) . ' ' . $mois[(int) date('n', $tf)] . ' ' . date('Y', $tf);
+        }
+    }
+    // Date du jour d'édition/envoi, sans jour de semaine (ex. "1 octobre 2026").
+    $dateEdition = date('j') . ' ' . $mois[(int) date('n')] . ' ' . date('Y');
+
+    // {LISTE_JA_DISPONIBLES} : lignes <tr> seules (l'en-tête "Nom et prénom /
+    // Coordonnées" reste dans le modèle), même style que Convocation_1JA_1Adjoint.html.
+    $td     = 'border:1px solid #999;text-align:left;';
+    $lignes = function (array $rows) use ($td): string {
+        $html = '';
+        foreach (array_values($rows) as $idx => $d) {
+            $style  = $td . ($idx % 2 === 0 ? 'background:#D9E2F3;' : '');
+            $coords = implode(' — ', array_filter([trim((string) ($d['Telephone'] ?? '')), trim((string) ($d['Email'] ?? ''))]));
+            $html  .= sprintf(
+                '<tr><td style="%s">%s</td><td style="%s">%s</td></tr>',
+                $style,
+                htmlspecialchars(trim(($d['Prenom'] ?? '') . ' ' . ($d['Nom'] ?? ''))),
+                $style,
+                htmlspecialchars($coords)
+            );
+        }
+
+        return $html;
+    };
+
+    // Pluralisation de Convocation_1JA_1Adjoint.html (EC73) : nb_adjoints absent ou < 2 → forme singulière d'origine.
+    $nbAdj  = max(1, (int) ($ctx['nb_adjoints'] ?? 1));
+    $pluriel = $nbAdj > 1;
+    $lettres = fn (int $n): string => [2 => 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix'][$n] ?? (string) $n;
+    $nbLettres = $lettres($nbAdj);
+
+    // Adjoints validés (EC73 : désignés dans CRA_Designation) : 0 → (a) texte et liste des JA disponibles d'origine ;
+    // tous les attendus (≥ nb_adjoints) → (b) seuls les validés, jamais de JA disponibles ;
+    // sinon → (c) validés, puis « restant(s) à solliciter » parmi les JA disponibles.
+    $nbVal    = max(0, (int) ($ctx['adjoints_valides'] ?? 0));
+    $complet  = $nbVal > 0 && $nbVal >= $nbAdj;
+    $partiel  = $nbVal > 0 && !$complet;
+    $nbSol    = $partiel ? $nbAdj - $nbVal : $nbAdj; // adjoints encore à solliciter (a, c)
+    $aSollic  = fn (int $n): string => $n > 1 ? $lettres($n) . ' JA2 ou JA3' : 'un JA2 ou un JA3';
+    $retenus  = fn (int $n): string => $n > 1 ? 'les personnes retenues afin de confirmer leur disponibilité et leur accord'
+                                              : 'la personne retenue afin de confirmer sa disponibilité et son accord';
+    $valPl    = $nbVal > 1;
+    $valides  = $valPl ? 'Juges-Arbitres adjoints désignés' : 'Juge-Arbitre adjoint désigné';
+
+    $listeJaDispo = '';
+    $vide = '<tr><td colspan="2" style="' . $td . '"><em>(aucun autre JA disponible)</em></td></tr>';
+    if ($nbVal > 0) {
+        $listeJaDispo = $lignes((array) ($ctx['liste_adjoints_valides'] ?? []));
+        if ($partiel) {
+            $listeJaDispo .= '<tr><th colspan="2" style="' . $td . 'background:#4472C4;color:#FFFFFF;">'
+                . ($nbSol > 1 ? 'Adjoints restants' : 'Adjoint restant') . ' à solliciter parmi les personnes disponibles</th></tr>'
+                . ($lignes((array) ($ctx['ja_disponibles'] ?? [])) ?: $vide);
+        }
+    } elseif (isset($ctx['ja_disponibles'])) {
+        $listeJaDispo = $lignes($ctx['ja_disponibles']) ?: $vide;
+    }
+
+    // JA principaux présentés à l'adjoint (Convocation_Adjoint.html) : « A, B et C », valeurs vides ignorées.
+    $principaux = (array) ($ctx['ja_principaux'] ?? []);
+    $liste = function (callable $f) use ($principaux): string {
+        $v = array_values(array_filter(array_map(fn ($p) => trim((string) $f((array) $p)), $principaux), 'strlen'));
+        $dernier = array_pop($v);
+
+        return $v ? implode(', ', $v) . ' et ' . $dernier : (string) $dernier;
+    };
+
     return [
+        '{NOM_JA_PRINCIPAL}'     => $liste(fn ($p) => trim(($p['prenom'] ?? '') . ' ' . mb_strtoupper((string) ($p['nom'] ?? ''), 'UTF-8'))),
+        // Même format que JugearbitreController::formaterTelephone() : 10 chiffres → 06.12.34.56.78, sinon tel quel.
+        '{TEL_JA_PRINCIPAL}'     => $liste(fn ($p) => strlen($t = preg_replace('/\D/', '', (string) ($p['telephone'] ?? ''))) === 10
+                                        ? implode('.', str_split($t, 2)) : ($p['telephone'] ?? '')),
+        '{EMAIL_JA_PRINCIPAL}'   => $liste(fn ($p) => $p['email'] ?? ''),
+        '{NB_ADJOINTS}'          => (string) $nbAdj,
+        '{TITRE_ADJOINTS}'       => $nbAdj . ($pluriel ? ' ADJOINTS' : ' ADJOINT'),
+        '{ADJOINTS_TEXTE}'       => $pluriel ? "$nbLettres Juges-Arbitres adjoints" : 'un seul Juge-Arbitre adjoint',
+        '{ADJOINTS_A_SOLLICITER}' => $aSollic($nbSol),
+        '{ADJOINTS_RETENUS}'     => $retenus($nbSol),
+        '{ADJOINTS_SOLLICITES}'  => $complet
+            ? 'la confirmation de votre prise de contact avec ' . ($valPl
+                ? 'les Juges-Arbitres adjoints désignés ; leur convocation leur est adressée directement par la CRA'
+                : 'le Juge-Arbitre adjoint désigné ; sa convocation lui est adressée directement par la CRA')
+            : ($nbSol > 1 ? 'les noms et prénoms des Juges-Arbitres adjoints sollicités ainsi que la confirmation de leur accord. Après validation par la CRA, leur convocation leur sera adressée'
+                          : 'le nom et le prénom du Juge-Arbitre adjoint sollicité ainsi que la confirmation de son accord. Après validation par la CRA, sa convocation lui sera adressée'),
+        // Phrases de Convocation_1JA_1Adjoint.html qui changent selon les adjoints validés (a / b / c ci-dessus).
+        '{ADJOINTS_INTRO}'       => match (true) {
+            $complet => $valPl ? 'Les Juges-Arbitres adjoints désignés par la CRA sont indiqués ci-dessous.'
+                               : 'Le Juge-Arbitre adjoint désigné par la CRA est indiqué ci-dessous.',
+            $partiel => ($valPl ? 'Les ' . $lettres($nbVal) . ' Juges-Arbitres adjoints déjà désignés par la CRA sont indiqués'
+                                : 'Le Juge-Arbitre adjoint déjà désigné par la CRA est indiqué')
+                . ' ci-dessous ; vous devez encore solliciter ' . $aSollic($nbSol)
+                . ' parmi les personnes disponibles listées à la suite, puis transmettre votre proposition à la CRA pour validation.',
+            default  => 'Vous devez solliciter ' . $aSollic($nbSol) . ' parmi les personnes disponibles ci-dessous, puis transmettre votre proposition à la CRA pour validation.',
+        },
+        '{ADJOINTS_CONTACT}'     => match (true) {
+            $complet => 'Vous voudrez bien ' . ($valPl ? 'les' : 'le') . ' contacter pour convenir de l’horaire de présence et de la répartition des missions.',
+            $partiel => 'Vous voudrez bien contacter ' . ($valPl ? 'les Juges-Arbitres adjoints déjà désignés' : 'le Juge-Arbitre adjoint déjà désigné')
+                . ' pour convenir de l’horaire de présence et de la répartition des missions ; pour '
+                . ($nbSol > 1 ? 'les adjoints restants' : 'l’adjoint restant') . ', merci de prendre directement contact avec '
+                . $retenus($nbSol) . ' avant d’en informer la CRA.',
+            default  => 'Merci de prendre directement contact avec ' . $retenus($nbSol) . ' avant d’en informer la CRA.',
+        },
+        '{TITRE_LISTE_ADJOINTS}' => $complet ? $valides : ($partiel ? "$valides et Juges-Arbitres disponibles" : 'Juges-Arbitres disponibles'),
+        '{VOTRE_ADJOINT}'        => $pluriel ? 'vos adjoints' : 'votre adjoint',
+        '{LUI_LEUR}'             => $pluriel ? 'leur' : 'lui',
         '{NOM}'                  => $ja['Nom'] ?? '',
         '{PRENOM}'               => $ja['Prenom'] ?? '',
         '{NOM_COMPLET}'          => trim(($ja['Prenom'] ?? '') . ' ' . ($ja['Nom'] ?? '')),
@@ -757,6 +1398,11 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
         '{YEAR_PHASE}'           => getAnneePhase(),
         '{PHASE}'                => getConfig('phase', '1'),
         '{DATE}'                 => !empty($ctx['date']) ? date('d/m/Y', strtotime($ctx['date'])) : '',
+        '{DATE_LONGUE}'          => $dateLongue,
+        '{DATE_EDITION}'         => $dateEdition,
+        '{SAISON}'               => getConfig('saison', ''),
+        '{EPREUVE}'              => $ctx['epreuve']   ?? '',
+        '{NB_TABLES}'            => isset($ctx['nb_tables']) ? (string) $ctx['nb_tables'] : '',
         '{HEURE}'                => substr((string)($ctx['heure'] ?? ''), 0, 5),
         '{JOURNEE}'              => $ctx['journee']  ?? '',
         '{POULE}'                => $ctx['poule']    ?? '',
@@ -772,6 +1418,7 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
         '{CORR_EMAIL}'           => $ctx['corr_email'] ?? '',
         '{CORR_TEL}'             => $ctx['corr_tel']   ?? '',
         '{LISTE_NOMINATIONS}'    => $ctx['liste_nominations'] ?? '',
+        '{LISTE_JA_DISPONIBLES}' => $listeJaDispo,
     ];
 }
 
@@ -787,6 +1434,92 @@ function remplacerMarqueursMessage(string $sujet, string $corps, array $marqueur
         'sujet' => strtr($sujet, $marqueurs),
         'corps' => strtr($corps, $marqueurs),
     ];
+}
+
+/**
+ * Retire d'un modèle de message (AVANT substitution des marqueurs) les liens
+ * personnels d'un JA — {URL_CONVOCATION_JA}, alias {LIEN_CONVOCATION},
+ * {URL_ADRESSE_JA}, {URL_DISPONIBILITE_JA}, {URL_ATTESTATION_JA} — ainsi que
+ * la phrase qui les introduit. Utilisé pour la copie « sans lien » de la
+ * convocation envoyée aux clubs (EN14).
+ *
+ * HTML : supprime le bloc <p>/<li>/<div> (sans bloc imbriqué) contenant le
+ * marqueur et, s'il le précède immédiatement, le bloc d'introduction (« lien »,
+ * « cliquez », « suivant », ou finissant par « : ») ; un <a> isolé contenant le
+ * marqueur est retiré. Texte : supprime la ligne du marqueur et la ligne
+ * d'introduction qui la précède (mêmes critères).
+ */
+function retirerLiensPersonnelsModele(string $modele): string
+{
+    $marqueurs = ['{URL_CONVOCATION_JA}', '{LIEN_CONVOCATION}', '{URL_ADRESSE_JA}', '{URL_DISPONIBILITE_JA}', '{URL_ATTESTATION_JA}'];
+    $alt       = implode('|', array_map(fn ($m) => preg_quote($m, '/'), $marqueurs));
+    // Phrase d'introduction d'un lien : « lien », « cliquez », « suivant : », « ci-dessous », ou finissant par « : ».
+    $estIntro  = fn (string $t): bool => mb_strlen($t = trim($t)) <= 300
+        && (bool) preg_match('/(?:\blien|cliqu|suivante?s?\s*:|ci-dessous|:\s*$)/iu', $t);
+
+    // 1. HTML : bloc <p>/<li>/<div> (sans bloc imbriqué) portant un marqueur → sentinelle \x00,
+    //    puis le bloc d'introduction juste avant (paragraphes vides intercalés compris) est retiré.
+    $sansBloc = '(?:(?!<\/?(?:p|li|div)\b).)*?';
+    $modele   = preg_replace("/<(p|li|div)\\b[^>]*>$sansBloc(?:$alt)$sansBloc<\\/\\1>/is", "\x00", $modele) ?? $modele;
+    $vides    = '(?:\s*<p\b[^>]*>(?:\s|&nbsp;|<br\s*\/?>)*<\/p>)*\s*';
+    $modele   = preg_replace_callback(
+        "/<(p|li|div)\\b[^>]*>($sansBloc)<\\/\\1>$vides\x00/is",
+        fn ($m) => $estIntro(html_entity_decode(strip_tags($m[2]), ENT_QUOTES | ENT_HTML5, 'UTF-8')) ? '' : $m[0],
+        $modele
+    ) ?? $modele;
+    $modele = str_replace("\x00", '', $modele);
+    // Lien <a> isolé (hors bloc) portant un marqueur.
+    $modele = preg_replace_callback('/<a\b[^>]*>.*?<\/a>/is', fn ($m) => preg_match("/$alt/", $m[0]) ? '' : $m[0], $modele) ?? $modele;
+
+    // 2. Texte brut, ligne par ligne.
+    $lignes = preg_split('/\R/', $modele);
+    $sortie = [];
+    foreach ($lignes as $ligne) {
+        if (!preg_match("/$alt/", $ligne)) {
+            $sortie[] = $ligne;
+            continue;
+        }
+        if (strlen(strip_tags($ligne)) !== strlen($ligne) && strlen($ligne) > 300) {
+            // ponytail: longue ligne HTML monobloc — on retire le marqueur seul plutôt que tout le corps.
+            $sortie[] = preg_replace("/$alt/", '', $ligne);
+            continue;
+        }
+        // Retire la ligne d'introduction précédente (en sautant les lignes vides).
+        for ($i = count($sortie) - 1; $i >= 0 && trim(strip_tags($sortie[$i])) === ''; $i--);
+        if ($i >= 0 && $estIntro(html_entity_decode(strip_tags($sortie[$i]), ENT_QUOTES | ENT_HTML5, 'UTF-8'))) {
+            array_splice($sortie, $i);
+        }
+    }
+
+    // Pas plus d'une ligne vide consécutive là où le lien a été retiré.
+    return preg_replace('/(\R[ \t]*){3,}/', "\n\n", implode("\n", $sortie));
+}
+
+/**
+ * Destinataires de la copie de convocation aux clubs (EN14) : correspondant et
+ * référent (Club.CorEmail / Club.RefMail) de chaque club passé, adresses
+ * valides seulement, dédoublonnées sans casse, l'adresse du JA exclue.
+ *
+ * @param array<array{CorNom?:?string,CorEmail?:?string,RefNom?:?string,RefMail?:?string}> $clubs
+ * @return array<string,string> email => nom affiché
+ */
+function destinatairesCopieClubs(array $clubs, ?string $emailJa): array
+{
+    $exclus = [strtolower(trim((string) $emailJa)) => true];
+    $dest   = [];
+    foreach ($clubs as $c) {
+        foreach ([['CorEmail', 'CorNom', 'Correspondant'], ['RefMail', 'RefNom', 'Référent']] as [$cE, $cN, $defaut]) {
+            $email = trim((string) ($c[$cE] ?? ''));
+            $cle   = strtolower($email);
+            if ($email === '' || isset($exclus[$cle]) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                continue;
+            }
+            $exclus[$cle]  = true;
+            $dest[$email] = trim((string) ($c[$cN] ?? '')) ?: $defaut;
+        }
+    }
+
+    return $dest;
 }
 
 /**

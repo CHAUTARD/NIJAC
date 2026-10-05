@@ -5894,7 +5894,11 @@ CREATE TABLE `ja` (
   `Grade` varchar(3) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `Nationale` tinyint(1) NOT NULL DEFAULT '0',
   `NumCompteEBP` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `Actif` tinyint(1) DEFAULT '1',
+  `JA1` tinyint(1) DEFAULT '1',
+  `JA2` tinyint(1) NOT NULL DEFAULT '0',
+  `JA3` tinyint(1) NOT NULL DEFAULT '0',
+  `JAN` tinyint(1) NOT NULL DEFAULT '0',
+  `JAI` tinyint(1) NOT NULL DEFAULT '0',
   `Id_Club` char(8) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `Defiscalisation` tinyint(1) NOT NULL DEFAULT '0',
   `PuissanceFiscale` tinyint unsigned DEFAULT NULL,
@@ -5911,7 +5915,7 @@ CREATE TABLE `ja` (
   PRIMARY KEY (`Id_JA`),
   KEY `fk_ja_club` (`Id_Club`),
   KEY `fk_ja_laposte` (`Id_LaPoste`),
-  KEY `idx_ja_actif` (`Actif`),
+  KEY `idx_ja_ja1` (`JA1`),
   KEY `idx_ja_nom_prenom` (`Nom`,`Prenom`),
   KEY `fk_ja_departement` (`CodeDept`),
   CONSTRAINT `fk_ja_club` FOREIGN KEY (`Id_Club`) REFERENCES `club` (`Id_Club`) ON DELETE SET NULL ON UPDATE CASCADE,
@@ -5919,7 +5923,7 @@ CREATE TABLE `ja` (
   CONSTRAINT `fk_ja_laposte` FOREIGN KEY (`Id_LaPoste`) REFERENCES `laposte` (`Id_LaPoste`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=9744891 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Liste de Juges Arbitre de la région ou assimilés';
 
-INSERT INTO `ja` (`Id_JA`, `Nom`, `Prenom`, `Email`, `Telephone`, `Grade`, `Nationale`, `NumCompteEBP`, `Actif`, `Id_Club`, `Defiscalisation`, `PuissanceFiscale`, `VehiculeElectrique`, `Note`, `Id_LaPoste`, `Classement`, `DateValidationFFTT`, `Cp`, `Ville`, `CodeDept`, `ArbitreAutresDepts`, `DeptsArbitrage`) VALUES
+INSERT INTO `ja` (`Id_JA`, `Nom`, `Prenom`, `Email`, `Telephone`, `Grade`, `Nationale`, `NumCompteEBP`, `JA1`, `Id_Club`, `Defiscalisation`, `PuissanceFiscale`, `VehiculeElectrique`, `Note`, `Id_LaPoste`, `Classement`, `DateValidationFFTT`, `Cp`, `Ville`, `CodeDept`, `ArbitreAutresDepts`, `DeptsArbitrage`) VALUES
 ('276', 'DAVERTON', 'Jean-Claude', 'stephane.petroz@orange.fr', '06.47.99.22.47', 'JA2', '1', NULL, '0', '09270089', '0', NULL, '0', NULL, '27343', NULL, NULL, '27120', 'HOULBEC COCHEREL', '27', '0', NULL),
 ('1449', 'TABLIN', 'Karine', 'karine.tablin@laposte.net', '06.87.04.70.42', 'JA1', '1', '4010002', '0', '09140072', '0', NULL, '0', NULL, '14258', NULL, NULL, '14700', 'FALAISE', '14', '0', NULL),
 ('1454', 'SERVAGER', 'Michel', 'michel.servager@wanadoo.fr', '06.80.60.85.40', 'JA1', '1', '4010369', '0', '09140003', '0', NULL, '0', NULL, '14654', NULL, NULL, '14170', 'ST PIERRE EN AUGE', '14', '0', NULL),
@@ -6120,7 +6124,7 @@ INSERT INTO `ja` (`Id_JA`, `Nom`, `Prenom`, `Email`, `Telephone`, `Grade`, `Nati
 ('504670', 'GAULARD', 'Eric', 'gaularderic@orange.fr', '06.72.20.76.45', 'JA1', '1', NULL, '0', '09500131', '0', NULL, '0', NULL, '50436', NULL, NULL, '50140', 'ROMAGNY FONTENAY', '50', '0', NULL),
 ('504749', 'LECLERE', 'Carine', 'a-renseigner-obligatoirement@fftt.email', '06.61.33.78.66', 'JA1', '1', NULL, '0', '09500013', '0', NULL, '0', NULL, '50147', NULL, NULL, '50200', 'COUTANCES', '50', '0', NULL),
 ('504938', 'VAMMALE', 'Patrick', 'patrick.vammale@wanadoo.fr', '06.31.80.32.09', 'JA1', '1', NULL, '0', '09500087', '0', NULL, '0', NULL, '50444', NULL, NULL, '50160', 'ST AMAND VILLAGES', '50', '0', NULL);
-INSERT INTO `ja` (`Id_JA`, `Nom`, `Prenom`, `Email`, `Telephone`, `Grade`, `Nationale`, `NumCompteEBP`, `Actif`, `Id_Club`, `Defiscalisation`, `PuissanceFiscale`, `VehiculeElectrique`, `Note`, `Id_LaPoste`, `Classement`, `DateValidationFFTT`, `Cp`, `Ville`, `CodeDept`, `ArbitreAutresDepts`, `DeptsArbitrage`) VALUES
+INSERT INTO `ja` (`Id_JA`, `Nom`, `Prenom`, `Email`, `Telephone`, `Grade`, `Nationale`, `NumCompteEBP`, `JA1`, `Id_Club`, `Defiscalisation`, `PuissanceFiscale`, `VehiculeElectrique`, `Note`, `Id_LaPoste`, `Classement`, `DateValidationFFTT`, `Cp`, `Ville`, `CodeDept`, `ArbitreAutresDepts`, `DeptsArbitrage`) VALUES
 ('505171', 'ENOUF', 'Andre', 'a-renseigner-obligatoirement@fftt.email', '02.33.05.09.40', 'JA1', '1', NULL, '0', '09500022', '0', NULL, '0', NULL, '50502', NULL, NULL, '50000', 'ST LO', '50', '0', NULL),
 ('505322', 'LE PELLETIER', 'David', 'vautier.antoine@sfr.fr', '02.33.43.85.30', 'JA1', '1', NULL, '0', '09500159', '0', NULL, '0', NULL, '50077', NULL, NULL, '50110', 'BRETTEVILLE', '50', '0', NULL),
 ('505324', 'VAUTIER', 'Melanie', 'vautier.antoine@sfr.fr', '07.89.58.14.13', 'JA1', '1', NULL, '1', '09500159', '0', NULL, '0', NULL, '50134', NULL, '12/07/2026', '50100', 'CHERBOURG EN COTENTIN', '50', '0', NULL),
@@ -6321,7 +6325,7 @@ INSERT INTO `ja` (`Id_JA`, `Nom`, `Prenom`, `Email`, `Telephone`, `Grade`, `Nati
 ('1416971', 'DUPONT', 'Christian', 'christiandupont@free.fr', '06.62.11.56.52', 'JA1', '1', '4010539', '1', '09140063', '0', NULL, '0', 'Les dates sur lesquelles je ne me suis pas positionné, sont les rencontre de notre R3 à domicile.', '14319', NULL, '06/07/2026', '14540', 'GRENTHEVILLE', '14', '0', NULL),
 ('1417076', 'BECART', 'Didier', 'didierping@yahoo.fr', '07.49.77.83.76', 'JA1', '1', '4010171', '0', '09140019', '0', NULL, '0', NULL, '14118', NULL, NULL, '14000', 'CAEN', '14', '0', NULL),
 ('1417140', 'BUSQUET', 'Thomas', 'a-renseigner-obligatoirement@fftt.email', NULL, 'JA1', '1', NULL, '0', '09140007', '0', NULL, '0', NULL, '14623', NULL, NULL, '14320', 'ST MARTIN DE FONTENAY', '14', '0', NULL);
-INSERT INTO `ja` (`Id_JA`, `Nom`, `Prenom`, `Email`, `Telephone`, `Grade`, `Nationale`, `NumCompteEBP`, `Actif`, `Id_Club`, `Defiscalisation`, `PuissanceFiscale`, `VehiculeElectrique`, `Note`, `Id_LaPoste`, `Classement`, `DateValidationFFTT`, `Cp`, `Ville`, `CodeDept`, `ArbitreAutresDepts`, `DeptsArbitrage`) VALUES
+INSERT INTO `ja` (`Id_JA`, `Nom`, `Prenom`, `Email`, `Telephone`, `Grade`, `Nationale`, `NumCompteEBP`, `JA1`, `Id_Club`, `Defiscalisation`, `PuissanceFiscale`, `VehiculeElectrique`, `Note`, `Id_LaPoste`, `Classement`, `DateValidationFFTT`, `Cp`, `Ville`, `CodeDept`, `ArbitreAutresDepts`, `DeptsArbitrage`) VALUES
 ('1417245', 'NOCQUET', 'Philippe', 'philippe.nocquet@gmail.com', '06.12.41.77.76', 'JA1', '1', '4010454', '0', '09140052', '0', NULL, '0', NULL, '14712', NULL, '29/07/2026', '14670', 'TROARN', '14', '0', NULL),
 ('1417265', 'BERTHELOT', 'Matthew', 'btmdbz@hotmail.fr', '06.58.85.77.11', 'JA1', '1', NULL, '0', '09140111', '0', NULL, '0', NULL, '14692', NULL, NULL, '14250', 'TILLY SUR SEULLES', '14', '0', NULL),
 ('1417372', 'DESMORTREUX', 'Cyril', 'a-renseigner-obligatoirement@fftt.email', '02.31.89.33.37', 'JA1', '1', NULL, '0', '09140071', '0', NULL, '0', NULL, '14333', NULL, NULL, '14600', 'HONFLEUR', '14', '0', NULL),
@@ -6522,7 +6526,7 @@ INSERT INTO `ja` (`Id_JA`, `Nom`, `Prenom`, `Email`, `Telephone`, `Grade`, `Nati
 ('7610984', 'LAGUERRE', 'Jerome', 'jerome.laguerre@orange.fr', '06.66.96.09.83', 'JA1', '1', '4010061', '0', '09760018', '0', NULL, '0', NULL, '76452', NULL, NULL, '76710', 'MONTVILLE', '76', '0', NULL),
 ('7611290', 'LEBAS', 'Christophe', 'cesalebas@free.fr', '06.62.47.46.37', 'JA1', '1', NULL, '0', '09270187', '0', NULL, '0', NULL, '27095', NULL, '14/08/2026', '27800', 'BOSROBERT', '27', '0', NULL),
 ('7611433', 'BAUDRY', 'Sylvain', 'pongman@free.fr', '06.81.22.57.21', 'JA1', '1', '4010184', '0', '09760414', '0', NULL, '0', NULL, '76596', NULL, NULL, '76700', 'ST LAURENT DE BREVEDENT', '76', '0', NULL);
-INSERT INTO `ja` (`Id_JA`, `Nom`, `Prenom`, `Email`, `Telephone`, `Grade`, `Nationale`, `NumCompteEBP`, `Actif`, `Id_Club`, `Defiscalisation`, `PuissanceFiscale`, `VehiculeElectrique`, `Note`, `Id_LaPoste`, `Classement`, `DateValidationFFTT`, `Cp`, `Ville`, `CodeDept`, `ArbitreAutresDepts`, `DeptsArbitrage`) VALUES
+INSERT INTO `ja` (`Id_JA`, `Nom`, `Prenom`, `Email`, `Telephone`, `Grade`, `Nationale`, `NumCompteEBP`, `JA1`, `Id_Club`, `Defiscalisation`, `PuissanceFiscale`, `VehiculeElectrique`, `Note`, `Id_LaPoste`, `Classement`, `DateValidationFFTT`, `Cp`, `Ville`, `CodeDept`, `ArbitreAutresDepts`, `DeptsArbitrage`) VALUES
 ('7611527', 'LIOT', 'Guillaume', 'liotguillaume@yahoo.fr', '06.99.67.00.78', 'JA1', '1', NULL, '0', '09760107', '0', NULL, '0', NULL, '76322', NULL, '07/07/2026', '76120', 'LE GRAND QUEVILLY', '76', '0', NULL),
 ('7611530', 'ZEDE', 'Francis', 'a-renseigner-obligatoirement@fftt.email', '02.35.92.18.17', 'JA1', '1', NULL, '0', '09760039', '0', NULL, '0', NULL, '76057', NULL, NULL, '76360', 'BARENTIN', '76', '0', NULL),
 ('7612049', 'LECOINTRE', 'Françoise', 'francoise.sudron@free.fr', '06.21.64.27.36', 'JA1', '1', '4010064', '1', '09760018', '0', NULL, '0', NULL, '76322', NULL, NULL, '76120', 'LE GRAND QUEVILLY', '76', '0', NULL),

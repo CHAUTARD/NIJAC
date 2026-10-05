@@ -211,6 +211,7 @@ $routes->get('suivi-nomination/data', 'SuiviNominationController::data', ['filte
 $routes->get('suivi-nomination/ja-liste', 'SuiviNominationController::jaListe', ['filter' => 'auth']);
 $routes->post('suivi-nomination/modifier', 'SuiviNominationController::modifier', ['filter' => 'auth']);
 $routes->post('suivi-nomination/rappel', 'SuiviNominationController::rappel', ['filter' => 'auth']);
+$routes->post('suivi-nomination/relance-club', 'SuiviNominationController::relanceClub', ['filter' => 'auth']);
 
 // ── EN18 Désidératas club ────────────────────────────────────────────────────
 // Page PUBLIQUE (sans authentification), jeton signé ?club=<Id_Club>-<MAC> — lien
@@ -442,6 +443,60 @@ $routes->post('club-csr/envoyer', 'ClubCsrController::envoyer', ['filter' => 'cs
 // ── E005 Menu Défiscalisateur ────────────────────────────────────────────────
 // Rôle Defiscalisateur ou Administrateur — voir DefiscalisateurAuth.php.
 $routes->get('defiscalisateur-menu', 'DefiscalisateurMenuController::index', ['filter' => 'defiscauth']);
+
+// ── E009 Menu CRA Convoc ─────────────────────────────────────────────────────
+// Rôle « CRA Convoc » ou Administrateur — voir CraConvocAuth.php. Compétitions CRA (EC71), Disponibilités CRA (EC74), Désignation CRA (EC73), Statistiques CRA (EC75), Degrés Juge-Arbitre (EC72) + déconnexion.
+$routes->get('cra-convoc-menu', 'CraConvocMenuController::index', ['filter' => 'craconvocauth']);
+
+// ── EC71 Compétitions CRA — CRUD de la table CRA_Competition ─────────────────
+// Accès depuis E009. Rôle « CRA Convoc » ou Administrateur (filtre "craconvocauth").
+$routes->get('cra-competition', 'CraCompetitionController::index', ['filter' => 'craconvocauth']);
+$routes->get('cra-competition/data', 'CraCompetitionController::data', ['filter' => 'craconvocauth']);
+$routes->get('cra-competition/clubs', 'CraCompetitionController::clubs', ['filter' => 'craconvocauth']);
+$routes->post('cra-competition', 'CraCompetitionController::store', ['filter' => 'craconvocauth']);
+$routes->put('cra-competition/(:num)', 'CraCompetitionController::update/$1', ['filter' => 'craconvocauth']);
+$routes->delete('cra-competition/(:num)', 'CraCompetitionController::delete/$1', ['filter' => 'craconvocauth']);
+
+// ── EC73 Désignation CRA — JA et adjoints d'une compétition (table CRA_Designation) ──
+// Accès depuis E009. Rôle « CRA Convoc » ou Administrateur (filtre "craconvocauth").
+$routes->get('cra-designation', 'CraDesignationController::index', ['filter' => 'craconvocauth']);
+$routes->get('cra-designation/data', 'CraDesignationController::data', ['filter' => 'craconvocauth']);
+$routes->get('cra-designation/(:num)', 'CraDesignationController::show/$1', ['filter' => 'craconvocauth']);
+$routes->post('cra-designation/(:num)', 'CraDesignationController::save/$1', ['filter' => 'craconvocauth']);
+// Envoi des convocations (messages « CRA Convocation … » de la table messagerie, repli Convocation/*.html), un appel par compétition cochée ; journalisé dans CRA_Designation.DateConvocation.
+$routes->post('cra-designation/convocations', 'CraDesignationController::convocations', ['filter' => 'craconvocauth']);
+$routes->delete('cra-designation/(:num)', 'CraDesignationController::delete/$1', ['filter' => 'craconvocauth']);
+
+// ── EC74 Disponibilités CRA — demande par email / saisie des dispos des JA (table CRA_Dispo) ──
+// Accès depuis E009. Rôle « CRA Convoc » ou Administrateur (filtre "craconvocauth").
+$routes->get('cra-dispo', 'CraDispoController::index', ['filter' => 'craconvocauth']);
+$routes->get('cra-dispo/data', 'CraDispoController::data', ['filter' => 'craconvocauth']);
+$routes->get('cra-dispo/(:num)', 'CraDispoController::show/$1', ['filter' => 'craconvocauth']);
+$routes->post('cra-dispo/envoyer', 'CraDispoController::envoyer', ['filter' => 'craconvocauth']);
+$routes->post('cra-dispo/(:num)/saisie', 'CraDispoController::saisie/$1', ['filter' => 'craconvocauth']);
+// Réglage « choix étendus » (À confirmer / Disponible sous condition proposés ou non) — clé configuration.cra_dispo_choix_etendus.
+$routes->post('cra-dispo/reglage', 'CraDispoController::reglage', ['filter' => 'craconvocauth']);
+// Import de la matrice Excel : aperçu sans écriture, puis validation (le navigateur renvoie le fichier, rien n'est conservé).
+$routes->post('cra-dispo/import/apercu', 'CraDispoController::importApercu', ['filter' => 'craconvocauth']);
+$routes->post('cra-dispo/import/valider', 'CraDispoController::importValider', ['filter' => 'craconvocauth']);
+// Page PUBLIQUE EC74 (sans authentification, comme EN22) : réponse du JA via ?ja=TOKEN (Obfuscator + pepper).
+// POST protégé par le filtre csrf global (csrf_field() dans le formulaire).
+$routes->get('dispo-cra', 'CraDispoController::formulaire');
+$routes->post('dispo-cra', 'CraDispoController::valider');
+
+// ── EC75 Statistiques CRA — JA disponibles (CRA_Dispo) et nombre de désignations (CRA_Designation), lecture seule ──
+// Accès depuis E009. Rôle « CRA Convoc » ou Administrateur (filtre "craconvocauth"). data : ?competition=ID facultatif.
+$routes->get('cra-stats', 'CraStatsController::index', ['filter' => 'craconvocauth']);
+$routes->get('cra-stats/data', 'CraStatsController::data', ['filter' => 'craconvocauth']);
+
+// ── EC72 Degrés Juge-Arbitre — CRUD de la table de référence JugeArbitre ─────
+// Accès depuis E009. Rôle « CRA Convoc » ou Administrateur (filtre "craconvocauth").
+// Code non modifiable (= colonne de `ja`) ; suppression refusée si un JA a cette colonne à 1.
+$routes->get('cra-juge-arbitre', 'CraJugeArbitreController::index', ['filter' => 'craconvocauth']);
+$routes->get('cra-juge-arbitre/data', 'CraJugeArbitreController::data', ['filter' => 'craconvocauth']);
+$routes->post('cra-juge-arbitre', 'CraJugeArbitreController::store', ['filter' => 'craconvocauth']);
+$routes->put('cra-juge-arbitre/(:num)', 'CraJugeArbitreController::update/$1', ['filter' => 'craconvocauth']);
+$routes->delete('cra-juge-arbitre/(:num)', 'CraJugeArbitreController::delete/$1', ['filter' => 'craconvocauth']);
 
 // ── ED51 Défiscalisation JA ──────────────────────────────────────────────────
 $routes->get('defiscalisation', 'DefiscalisationController::index', ['filter' => 'defiscauth']);

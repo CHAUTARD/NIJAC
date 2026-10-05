@@ -193,7 +193,7 @@ class DesiderataClubsController extends BaseController
             }
 
             $stmtJ = $pdo->prepare(
-                'SELECT Id_JA, Nom, Prenom, Grade FROM ja WHERE Id_Club = ? AND Actif = 1 ORDER BY Nom, Prenom'
+                'SELECT Id_JA, Nom, Prenom, Grade FROM ja WHERE Id_Club = ? AND JA1 = 1 ORDER BY Nom, Prenom'
             );
             $stmtJ->execute([$idClub]);
             $jas = $stmtJ->fetchAll();

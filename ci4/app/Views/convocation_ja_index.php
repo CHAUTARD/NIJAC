@@ -502,7 +502,7 @@
     <div class="defisc-row" style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin:2mm 0 3mm;font-size:.92rem;">
         <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;user-select:none;font-weight:700;">
             <input type="checkbox" id="chk-defisc" style="width:1.1rem;height:1.1rem;cursor:pointer;accent-color:#2e7d32;"
-                   <?= !empty($frais['Defiscalisation']) ? 'checked' : '' ?>>
+                   <?= $defiscCoche ? 'checked' : '' ?>>
             Défiscalisation des frais kilométriques
         </label>
         <span id="defisc-montant" style="font-weight:700;color:#2e7d32;"></span>

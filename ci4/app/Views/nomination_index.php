@@ -237,6 +237,12 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
     <button id="btn-envoyer" class="btn btn-primary btn-sm">
         <i class="bi bi-envelope-fill me-1"></i>Envoyer les convocations
     </button>
+    <!-- span porteur de l'infobulle : un bouton désactivé n'affiche pas son title -->
+    <span id="wrap-pointage" title="Aucune rencontre à imprimer">
+        <button id="btn-pointage" class="btn btn-outline-secondary btn-sm" disabled>
+            <i class="bi bi-file-earmark-pdf me-1"></i>Feuille de pointage (PDF)
+        </button>
+    </span>
     <span id="msg-actions" class="ms-auto text-muted" style="font-size:.82rem"></span>
 </div>
 
@@ -288,11 +294,13 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
 <script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
+<script src="<?= base_url('asset/js/jspdf.umd.min.js') ?>"></script>
 <script>
 'use strict';
 
 const NOM_BASE = '<?= site_url('nomination') ?>';
 const DEPT_NOMS = <?= json_encode($deptNoms ?? [], JSON_UNESCAPED_UNICODE) ?>;
+const DEPTS_AUTORISES = <?= json_encode(array_values($deptsAutorises ?? []), JSON_UNESCAPED_UNICODE) ?>;
 const MAX_CANDIDATS = <?= (int) ($nbCandidats ?? 15) ?> || 15;  // EA91 → nomination_nb_candidats
 
 // ── État ─────────────────────────────────────────────────────────────────────
@@ -337,6 +345,14 @@ $(function () {
     });
 
     $('#btn-envoyer').on('click', envoyerConvocations);
+    $('#btn-pointage').on('click', function () {
+        if (!rencontres.length) { nijacToast('Aucune rencontre à imprimer.', 'warning'); return; }
+        try {
+            genererFeuillePointage();
+        } catch (e) {
+            nijacToast('Échec de la génération du PDF : ' + e.message, 'danger');
+        }
+    });
 });
 
 // ── Journées ─────────────────────────────────────────────────────────────────
@@ -920,6 +936,8 @@ function mettreAJourBoutons() {
 
     // Envoyer visible dès qu'au moins une nomination est validée — persiste au rechargement de la page
     $('#btn-envoyer').toggle(validees > 0).prop('disabled', selectionEnvoi.size === 0);
+    $('#btn-pointage').prop('disabled', total === 0);
+    $('#wrap-pointage').attr('title', total ? 'Feuille de pointage PDF de toutes les rencontres de la journée' : 'Aucune rencontre à imprimer');
 
     if (attrib > 0) {
         $('#msg-actions').text(`${attrib} / ${total} rencontre${attrib > 1 ? 's' : ''} attribuée${attrib > 1 ? 's' : ''}.`);
@@ -956,6 +974,7 @@ function envoyerConvocations() {
     }
     const ids = [...selectionEnvoi];
     nijacConfirm(`Envoyer ${ids.length} convocation${ids.length > 1 ? 's' : ''} par e-mail ?`, function () {
+        const copieClubs = $('#chk-copie-clubs').is(':checked');
         // L'envoi SMTP est séquentiel donc lent : bouton verrouillé (pas de double envoi) + spinner
         $('#btn-envoyer').prop('disabled', true);
         spin(true);
@@ -964,7 +983,8 @@ function envoyerConvocations() {
             data: {
                 journee: journeeCourante.Journee,
                 date:    journeeCourante.Date,
-                ids:     JSON.stringify(ids)
+                ids:     JSON.stringify(ids),
+                copie_clubs: copieClubs ? '1' : '0'
             }
         }).done(function (r) {
             spin(false);   // avant chargerRencontres(), qui relance son propre spinner
@@ -977,6 +997,7 @@ function envoyerConvocations() {
                         <div class="lien-nom"><i class="bi bi-person-fill me-1 text-success"></i>${escHtml(l.nom)} — ${escHtml(l.rencontre)}</div>
                         ${l.email ? `<div class="text-muted" style="font-size:.75rem"><i class="bi bi-envelope me-1"></i>${escHtml(l.email)}</div>` : '<div class="text-warning" style="font-size:.75rem"><i class="bi bi-exclamation-triangle me-1"></i>Pas d\'email</div>'}
                         <div class="lien-url"><a href="${escHtml(l.lien)}" target="_blank">${escHtml(l.lien)}</a></div>
+                        ${l.copie ? `<div class="text-muted" style="font-size:.75rem"><i class="bi bi-files me-1"></i>${escHtml(l.copie)}</div>` : ''}
                     </div>
                 `);
             });
@@ -986,6 +1007,8 @@ function envoyerConvocations() {
                 `<i class="bi bi-check-circle-fill text-success me-1"></i><strong>${envoyes}</strong> email${envoyes > 1 ? 's' : ''} envoyé${envoyes > 1 ? 's' : ''}.` +
                 (erreurs > 0 ? ` <span class="text-danger">${erreurs} échec${erreurs > 1 ? 's' : ''} :</span>`
                     + `<ul class="text-danger small mb-0">${r.erreurs.map(e => `<li>${escHtml(e)}</li>`).join('')}</ul>` : '')
+                + (r.copies ? `<br><i class="bi bi-files me-1"></i>Copies aux clubs : <strong>${r.copies.envoyees}</strong> envoyée(s)`
+                    + `, ${r.copies.echecs} en échec, ${r.copies.sans_destinataire} sans destinataire.` : '')
             );
             new bootstrap.Modal('#modalLiens').show();
             // Recharger depuis le serveur pour refléter le statut d'envoi réel
@@ -993,7 +1016,128 @@ function envoyerConvocations() {
             chargerRencontres();
         }).fail(() => spin(false)).always(mettreAJourBoutons);   // ré-évalue le disabled du bouton Envoyer
     }, null, { type: 'question', title: 'Envoi des convocations', confirmLabel: 'Envoyer' });
+    // Case « copie aux clubs » ajoutée sous le message (le corps est réécrit à chaque nijacConfirm).
+    $('#nijac-confirm-modal-body').append(
+        '<div class="form-check mt-2" style="white-space:normal">'
+        + '<input class="form-check-input" type="checkbox" id="chk-copie-clubs" checked>'
+        + '<label class="form-check-label" for="chk-copie-clubs">Envoyer une copie (sans lien) aux clubs'
+        + ' <span class="text-muted">— correspondants et référents des 2 clubs</span></label></div>'
+    );
 }
+
+// ── Feuille de pointage PDF (jsPDF, tableau dessiné à la main) ───────────────
+// Toutes les rencontres de la journée affichée ; lecture seule (aucun appel serveur).
+const cmpFr = (a, b) => String(a || '').localeCompare(String(b || ''), 'fr', { sensitivity: 'base' });
+
+function formaterTel(t) {   // même règle que JugearbitreController::formaterTelephone()
+    const c = String(t || '').replace(/\D/g, '');
+    return c.length === 10 ? c.match(/../g).join('.') : String(t || '');
+}
+
+// JA nommé = état local `nominations` (à jour des affectations faites dans la session) ;
+// coordonnées : colonnes JA de rencontres-journee si c'est le même JA, sinon jaList (candidats).
+// Tri : NOM puis Prénom du JA, rencontres sans JA à la fin par division puis club.
+function lignesPointage(rencontres, nominations, jaList) {
+    return rencontres.map(rc => {
+        const n  = nominations[rc.Id_Rencontre];
+        const ja = !n ? null
+            : rc.IdJaAffecte == n.Id_JA
+                ? { Nom: rc.NomJa, Prenom: rc.PrenomJa, Telephone: rc.TelJa, Email: rc.EmailJa }
+                : (jaList.find(j => j.Id_JA == n.Id_JA) || { Nom: n.Nom, Prenom: n.Prenom });
+        return {
+            div: rc.DivisionCode || '', ord: +rc.DivisionOrd || 0,
+            club: rc.NomClubDom || rc.NomDom || '', dom: rc.NomDom || '', ext: rc.NomExt || '',
+            aJa: ja ? 1 : 0, nom: ja?.Nom || '', prenom: ja?.Prenom || '',
+            ja: ja ? `${String(ja.Nom || '').toUpperCase()} ${ja.Prenom || ''}`.trim() : '',
+            tel: ja ? formaterTel(ja.Telephone) : '', email: ja?.Email || '',
+        };
+    }).sort((a, b) => (b.aJa - a.aJa) || cmpFr(a.nom, b.nom) || cmpFr(a.prenom, b.prenom)
+        || (a.ord - b.ord) || cmpFr(a.club, b.club));
+}
+
+// Découpe des lignes (hauteurs en mm) en pages : dispo1 = place sous le titre en page 1, dispo = pages suivantes.
+function paginer(hauteurs, dispo1, dispo) {
+    const pages = [[]];
+    let reste = dispo1;
+    hauteurs.forEach((h, i) => {
+        if (h > reste && pages[pages.length - 1].length) { pages.push([]); reste = dispo; }
+        pages[pages.length - 1].push(i);
+        reste -= h;
+    });
+    return pages;
+}
+
+function genererFeuillePointage() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const M = 10, PW = 297, PH = 210, FS = 8.5, PAD = 1.4;
+    const LH = FS * 0.3528 * 1.15;                     // hauteur d'une ligne de texte (mm)
+    const COLS = [                                      // total 277 mm = 297 - 2 marges
+        ['Division', 'div', 17], ['Club', 'club', 44], ['Équipe domicile', 'dom', 44],
+        ['Équipe extérieure', 'ext', 44], ['JA', 'ja', 40], ['Tél JA', 'tel', 23],
+        ['Email JA', 'email', 52], ['Pointé', null, 13],
+    ];
+    const [a, m, j] = journeeCourante.Date.split('-');
+    const now = new Date();
+    const edite = `Édité le ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+    const depts = DEPTS_AUTORISES.map(c => DEPT_NOMS[c] ? `${c} ${DEPT_NOMS[c]}` : c).join(', ');
+
+    // Titre (page 1)
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
+    doc.text(`Feuille de pointage — Journée n° ${journeeCourante.Journee} du ${j}/${m}/${a}`, M, M + 5);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    doc.text(`Département(s) : ${depts || '—'}`, M, M + 11);
+    doc.text(edite, PW - M, M + 11, { align: 'right' });
+    const yTable1 = M + 15, yBas = PH - M - 6;
+
+    // Lignes + hauteurs (retour à la ligne dans chaque cellule)
+    doc.setFontSize(FS);
+    const lignes = lignesPointage(rencontres, nominations, jaList).map(l => {
+        const cells = COLS.map(([, k, w]) => k ? doc.splitTextToSize(l[k], w - 2 * PAD) : []);
+        return { cells, h: Math.max(1, ...cells.map(c => c.length)) * LH + 2 * PAD };
+    });
+    doc.setFont('helvetica', 'bold');
+    const entetes = COLS.map(([t, , w]) => doc.splitTextToSize(t, w - 2 * PAD));
+    const hEnt = Math.max(...entetes.map(c => c.length)) * LH + 2 * PAD;
+
+    const ligne = (cells, y, h, fond, bold) => {
+        let x = M;
+        doc.setFont('helvetica', bold ? 'bold' : 'normal');
+        COLS.forEach(([, k, w], i) => {
+            if (fond) { doc.setFillColor(...fond); doc.rect(x, y, w, h, 'F'); }
+            doc.rect(x, y, w, h);
+            if (k || bold) doc.text(cells[i], x + PAD, y + PAD, { baseline: 'top' });
+            else doc.rect(x + (w - 4) / 2, y + (h - 4) / 2, 4, 4);   // case à cocher à la main
+            x += w;
+        });
+    };
+
+    doc.setDrawColor(150); doc.setLineWidth(0.2);
+    const pages = paginer(lignes.map(l => l.h), yBas - yTable1 - hEnt, yBas - M - hEnt);
+    pages.forEach((idx, p) => {
+        if (p) doc.addPage();
+        let y = p ? M : yTable1;
+        doc.setTextColor(255);
+        ligne(entetes, y, hEnt, [26, 58, 107], true);   // en-tête répété sur chaque page
+        doc.setTextColor(0);
+        y += hEnt;
+        idx.forEach(i => {
+            ligne(lignes[i].cells, y, lignes[i].h, i % 2 ? [233, 236, 239] : null, false);
+            y += lignes[i].h;
+        });
+    });
+
+    // Pied : date d'édition + Page x / y
+    const nb = doc.getNumberOfPages();
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(100);
+    for (let p = 1; p <= nb; p++) {
+        doc.setPage(p);
+        doc.text(edite, M, PH - M);
+        doc.text(`Page ${p} / ${nb}`, PW - M, PH - M, { align: 'right' });
+    }
+    doc.save(`feuille-pointage-J${journeeCourante.Journee}-${journeeCourante.Date}.pdf`);
+}
+// ── Fin feuille de pointage ──────────────────────────────────────────────────
 
 // ── Note JA (lecture seule) ───────────────────────────────────────────────────
 $(document).on('click', '.btn-note-ja-trigger', function (e) {

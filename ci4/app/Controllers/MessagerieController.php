@@ -51,6 +51,20 @@ class MessagerieController extends BaseController
         return ($_SESSION['utilisateur']['role'] ?? '') === 'CSR';
     }
 
+    /**
+     * Rôle « CRA Convoc » (menu E009) : ne voit que les messages « CRA Convocation … » (EC73) —
+     * système en lecture seule + ses copies personnelles, mêmes droits qu'un Nominateur sur ces copies.
+     */
+    private function isCraConvoc(): bool
+    {
+        return ($_SESSION['utilisateur']['role'] ?? '') === 'CRA Convoc';
+    }
+
+    private static function estTypeCra(?string $type): bool
+    {
+        return str_starts_with((string) $type, 'CRA Convocation');
+    }
+
     private function idCurrentUser(): int
     {
         return (int) ($_SESSION['utilisateur']['id'] ?? 0);
@@ -80,6 +94,7 @@ class MessagerieController extends BaseController
             'changeLogin'   => !empty($moi['change_login']),
             'isAdmin'       => $this->isAdmin(),
             'isCsr'         => $this->isCsr(),
+            'isCraConvoc'   => $this->isCraConvoc(),
             'idCurrentUser' => $this->idCurrentUser(),
             'enumTypes'     => $this->typesValides($pdo),
         ];
@@ -100,6 +115,18 @@ class MessagerieController extends BaseController
                  FROM messagerie WHERE Id_Messagerie = ?'
             );
             $stmt->execute([self::ID_MESSAGE_CSR]);
+
+            return $this->response->setJSON(['ok' => true, 'data' => $stmt->fetchAll()]);
+        }
+
+        if ($this->isCraConvoc()) {
+            $stmt = $pdo->prepare(
+                "SELECT Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, Cc, ReplyTo, NULL AS NomUtilisateur, 0 AS EstSysteme
+                 FROM messagerie
+                 WHERE Type LIKE 'CRA Convocation%' AND (Id_Utilisateur IS NULL OR Id_Utilisateur = ?)
+                 ORDER BY Type, Id_Utilisateur IS NOT NULL, Id_Messagerie"
+            );
+            $stmt->execute([$idCurrentUser]);
 
             return $this->response->setJSON(['ok' => true, 'data' => $stmt->fetchAll()]);
         }
@@ -137,6 +164,8 @@ class MessagerieController extends BaseController
 
         if ($row && $this->isCsr() && $id !== self::ID_MESSAGE_CSR) {
             $row = false; // le rôle CSR ne voit que le message n°6 (Réengagements)
+        } elseif ($row && $this->isCraConvoc() && !self::estTypeCra($row['Type'])) {
+            $row = false; // le rôle CRA Convoc ne voit que les convocations CRA
         } elseif ($row && !$this->isAdmin() && !$this->isCsr()) {
             // Même restriction que data() : un nominateur ne voit que les messages
             // système et les siens, jamais le message personnel d'un autre nominateur.
@@ -158,8 +187,8 @@ class MessagerieController extends BaseController
 
     public function store(): ResponseInterface
     {
-        if ($this->isCsr()) {
-            return $this->response->setJSON(['ok' => false, 'msg' => 'Le rôle CSR ne peut pas créer de nouveau message.']);
+        if ($this->isCsr() || $this->isCraConvoc()) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Votre rôle ne peut pas créer de nouveau message.']);
         }
 
         $pdo    = getPDO();
@@ -206,6 +235,10 @@ class MessagerieController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => $fields]);
         }
 
+        if ($this->isCraConvoc() && (!$existing || !self::estTypeCra($existing['Type']) || !self::estTypeCra($fields['type']))) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Seules les convocations CRA sont modifiables par votre rôle.']);
+        }
+
         $isAdmin = $this->isAdmin();
         if ($existing && ($existing['Id_Utilisateur'] === null || ($id >= 1 && $id <= self::NB_MESSAGES_SYSTEME)) && !$isAdmin) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Ce message système ne peut être modifié que par un administrateur.']);
@@ -233,7 +266,7 @@ class MessagerieController extends BaseController
         $src->execute([$id]);
         $orig = $src->fetch();
 
-        if (!$orig) {
+        if (!$orig || ($this->isCraConvoc() && !self::estTypeCra($orig['Type']))) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Message introuvable.']);
         }
 

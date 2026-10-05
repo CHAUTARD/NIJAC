@@ -103,7 +103,7 @@ class CentrenvoyeController extends BaseController
             JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
             LEFT JOIN nomination n  ON n.Id_Rencontre   = r.Id_Rencontre
             LEFT JOIN disponible d  ON d.Id_Disponible  = n.Id_Disponible
-            LEFT JOIN ja j          ON j.Id_JA = d.Id_JA AND j.Actif = 1 AND j.Grade = 'JA1'
+            LEFT JOIN ja j          ON j.Id_JA = d.Id_JA AND j.JA1 = 1 AND j.Grade = 'JA1'
             WHERE SUBSTRING(ed.Id_Club, 3, 2) IN ($ph)
             GROUP BY r.Journee, r.Date
             ORDER BY r.Date, r.Journee
@@ -135,7 +135,7 @@ class CentrenvoyeController extends BaseController
                            lp.CodePostal AS CP
                     FROM ja j
                     LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
-                    WHERE j.Actif = 1
+                    WHERE j.JA1 = 1
                       AND j.Grade = 'JA1'
                       AND j.CodeDept IN ($ph)
                     ORDER BY j.Nom, j.Prenom
@@ -151,7 +151,7 @@ class CentrenvoyeController extends BaseController
                            lp.CodePostal AS CP
                     FROM ja j
                     LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
-                    WHERE j.Actif = 1
+                    WHERE j.JA1 = 1
                       AND j.Grade = 'JA1'
                       AND j.CodeDept IN ($ph)
                       AND NOT EXISTS (
@@ -196,7 +196,7 @@ class CentrenvoyeController extends BaseController
                     LEFT JOIN salle   s_c   ON s_c.Id_Club    = ed.Id_Club AND s_c.EstPrincipale = 1
                     LEFT JOIN laposte lp_c  ON lp_c.Id_LaPoste = s_c.Id_Laposte
                     LEFT JOIN Club co ON co.Id_Club = ed.Id_Club
-                    WHERE r.Journee = ? AND r.Date = ? AND j.Actif = 1
+                    WHERE r.Journee = ? AND r.Date = ? AND j.JA1 = 1
                       AND j.Grade = 'JA1'
                       AND SUBSTRING(ed.Id_Club, 3, 2) IN ($ph)
                     ORDER BY j.Nom, j.Prenom
@@ -213,7 +213,7 @@ class CentrenvoyeController extends BaseController
                     FROM ja j
                     JOIN disponible dn ON dn.Id_JA = j.Id_JA
                     JOIN nomination n ON n.Id_Disponible = dn.Id_Disponible
-                    WHERE j.Actif = 1
+                    WHERE j.JA1 = 1
                       AND j.Grade = 'JA1'
                       AND j.CodeDept IN ($ph)
                     GROUP BY j.Id_JA, j.Nom, j.Prenom, j.Email
@@ -232,7 +232,7 @@ class CentrenvoyeController extends BaseController
                            (j.Id_LaPoste IS NOT NULL AND j.Id_LaPoste > 0) AS HasAdresse
                     FROM ja j
                     LEFT JOIN laposte lp ON lp.Id_LaPoste = j.Id_LaPoste
-                    WHERE j.Actif = 1 AND j.Grade = 'JA1' AND (j.Id_LaPoste IS NULL OR j.Id_LaPoste = 0)
+                    WHERE j.JA1 = 1 AND j.Grade = 'JA1' AND (j.Id_LaPoste IS NULL OR j.Id_LaPoste = 0)
                     ORDER BY j.Nom, j.Prenom
                 ");
                 $stmt->execute();
@@ -393,7 +393,7 @@ class CentrenvoyeController extends BaseController
             $ja = $this->chargerNominationConvocation($pdo, $idNomination);
         } else {
             // Pour "Demande adresse" on autorise aussi les JA inactifs sans adresse
-            $activeOnly = ($type !== 'Demande adresse') ? 'AND j.Actif = 1' : '';
+            $activeOnly = ($type !== 'Demande adresse') ? 'AND j.JA1 = 1' : '';
             $stmt       = $pdo->prepare("SELECT j.Id_JA, j.Nom, j.Prenom, j.Email, j.CodeDept FROM ja j WHERE j.Id_JA = ? $activeOnly");
             $stmt->execute([$idJa]);
             $ja = $stmt->fetch();
@@ -649,7 +649,34 @@ class CentrenvoyeController extends BaseController
             'corr_nom'      => $ja['CorrNom']       ?? null,
             'corr_email'    => $ja['CorrEmail']     ?? null,
             'corr_tel'      => $ja['CorrTel']       ?? null,
+            'ja_disponibles' => $this->jaDisponibles($ja),
         ];
+    }
+
+    /**
+     * {LISTE_JA_DISPONIBLES} : autres JA actifs disponibles (EN22, Reponse='O')
+     * le jour de la rencontre — toute la journée ou pour cette rencontre précise —,
+     * hors JA convoqué, limités aux départements autorisés du nominateur.
+     */
+    private function jaDisponibles(array $ja): array
+    {
+        if (empty($ja['Date'])) {
+            return [];
+        }
+        $depts = $this->deptsAutorises();
+        $stmt  = getPDO()->prepare("
+            SELECT DISTINCT j.Nom, j.Prenom, j.Telephone, j.Email
+            FROM disponible d
+            JOIN ja j ON j.Id_JA = d.Id_JA
+            WHERE d.Reponse = 'O' AND d.DateCompetition = ?
+              AND (d.Id_Rencontre IS NULL OR d.Id_Rencontre = ?)
+              AND j.JA1 = 1 AND j.Id_JA <> ?
+              AND LPAD(j.CodeDept, 2, '0') IN (" . implode(',', array_fill(0, count($depts), '?')) . ")
+            ORDER BY j.Nom, j.Prenom
+        ");
+        $stmt->execute(array_merge([$ja['Date'], (int) $ja['Id_Rencontre'], (int) $ja['Id_JA']], $depts));
+
+        return $stmt->fetchAll();
     }
 
     /**

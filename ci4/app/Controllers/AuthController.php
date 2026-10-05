@@ -124,7 +124,8 @@ class AuthController extends BaseController
             'Administrateur'  => site_url('admin-menu'),
             'CSR'             => site_url('csr-menu'),
             'Defiscalisateur' => site_url('defiscalisateur-menu'),
-            default           => site_url('nominateur-menu'),
+            'CRA Convoc'      => site_url('cra-convoc-menu'),
+            default          => site_url('nominateur-menu'),
         };
     }
 }

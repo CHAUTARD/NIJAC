@@ -105,7 +105,7 @@ class ConvocationJaController extends BaseController
             try {
                 $stmtJa = $pdo->prepare('
                     SELECT ja.Id_JA, ja.Nom, ja.Prenom, ja.Grade,
-                           ja.PuissanceFiscale, ja.VehiculeElectrique,
+                           ja.PuissanceFiscale, ja.VehiculeElectrique, ja.Defiscalisation,
                            cl.Nom AS Association,
                            lp.CodePostal AS Cp,
                            lp.Nom        AS Ville,
@@ -160,7 +160,7 @@ class ConvocationJaController extends BaseController
 
                 try {
                     $stmtF = $pdo->prepare('
-                        SELECT Peage, Kilometre, RapportAccueil, RapportEquipements, Defiscalisation
+                        SELECT Peage, Kilometre, RapportAccueil, RapportEquipements, Defiscalisation, DateSaisie
                         FROM nomination WHERE Id_Nomination = ?
                     ');
                     $stmtF->execute([$idNomination]);
@@ -203,6 +203,11 @@ class ConvocationJaController extends BaseController
             $defiscEuroParKm = $m !== null ? $m / 1000 : null;
         }
 
+        // Case cochée : choix déjà saisi sur la nomination, sinon valeur par défaut de la fiche JA.
+        $defiscCoche = ($frais && $frais['DateSaisie'] !== null)
+            ? !empty($frais['Defiscalisation'])
+            : !empty($ja['Defiscalisation']);
+
         $dateFormatee = '';
         if ($rencontre && $rencontre['Date']) {
             $jours = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -230,6 +235,7 @@ class ConvocationJaController extends BaseController
             'total'            => $total,
             'arbitrageClub'    => $arbitrageClub,
             'defiscEuroParKm'  => $defiscEuroParKm,
+            'defiscCoche'      => $defiscCoche,
             'dateFormatee'     => $dateFormatee,
             'heure'            => $heure,
         ]);

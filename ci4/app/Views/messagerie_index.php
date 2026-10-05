@@ -64,6 +64,8 @@
 // Retour : CSR -> menu CSR ; Admin -> menu admin, onglet « Gestion des tables » (#tab-tables) ; Nominateur -> menu nominateur.
 if ($isCsr) {
     $backLabel = 'CSR';         $backUrl = site_url('csr-menu');
+} elseif ($isCraConvoc) {
+    $backLabel = 'CRA Convoc';  $backUrl = site_url('cra-convoc-menu');
 } elseif ($isAdmin) {
     $backLabel = 'Admin';       $backUrl = site_url('admin-menu') . '#tab-tables';
 } else {
@@ -151,7 +153,7 @@ if ($isCsr) {
 
         <!-- Boutons -->
         <div id="panel-boutons">
-            <button class="btn btn-sm btn-nouveau px-3<?= $isCsr ? ' d-none' : '' ?>" id="btn-nouveau">
+            <button class="btn btn-sm btn-nouveau px-3<?= $isCsr || $isCraConvoc ? ' d-none' : '' ?>" id="btn-nouveau">
                 <i class="bi bi-plus-circle me-1"></i>Nouveau
             </button>
             <button class="btn btn-sm btn-enregistrer px-3" id="btn-enregistrer">
@@ -190,6 +192,11 @@ if ($isCsr) {
             <div class="mb-1">
                 <span class="badge me-1 fw-normal" style="background:#1a7f4b;">Convocation</span>
                 <code data-marqueur="{DATE}" class="me-2">{DATE}</code>
+                <code data-marqueur="{DATE_LONGUE}" class="me-2">{DATE_LONGUE}</code>
+                <code data-marqueur="{DATE_EDITION}" class="me-2">{DATE_EDITION}</code>
+                <code data-marqueur="{SAISON}" class="me-2">{SAISON}</code>
+                <code data-marqueur="{EPREUVE}" class="me-2">{EPREUVE}</code>
+                <code data-marqueur="{NB_TABLES}" class="me-2">{NB_TABLES}</code>
                 <code data-marqueur="{HEURE}" class="me-2">{HEURE}</code>
                 <code data-marqueur="{JOURNEE}" class="me-2">{JOURNEE}</code>
                 <code data-marqueur="{POULE}" class="me-2">{POULE}</code>
@@ -207,6 +214,7 @@ if ($isCsr) {
                 <code data-marqueur="{ID_CONVOCATION}" class="me-2">{ID_CONVOCATION}</code>
                 <code data-marqueur="{SEXE}" class="me-2">{SEXE}</code>
                 <code data-marqueur="{URL_CONVOCATION_JA}" class="me-2">{URL_CONVOCATION_JA}</code>
+                <code data-marqueur="{LISTE_JA_DISPONIBLES}" class="me-2" title="Lignes &lt;tr&gt; à placer dans un tableau Nom et prénom / Coordonnées">{LISTE_JA_DISPONIBLES}</code>
             </div>
             <div class="mb-1">
                 <span class="badge me-1 fw-normal" style="background:#6f42c1;">Liste nomination</span>
@@ -229,6 +237,37 @@ if ($isCsr) {
             <div>
                 <span class="badge me-1 fw-normal" style="background:#495057;">Mot de passe oublié (E007)</span>
                 <code data-marqueur="{URL_RESET_MDP}" class="me-2">{URL_RESET_MDP}</code>
+            </div>
+            <!-- Convocations CRA (EC73) : affiché seulement pour un Type « CRA Convocation … », voir majMarqueursCra(). -->
+            <div id="marqueurs-cra" class="mt-1 d-none">
+                <span class="badge me-1 fw-normal" style="background:#00796b;">Convocation CRA (EC73)</span>
+                <code data-marqueur="{SAISON}" class="me-2">{SAISON}</code>
+                <code data-marqueur="{EPREUVE}" class="me-2">{EPREUVE}</code>
+                <code data-marqueur="{DATE_LONGUE}" class="me-2">{DATE_LONGUE}</code>
+                <code data-marqueur="{DATE_EDITION}" class="me-2">{DATE_EDITION}</code>
+                <code data-marqueur="{NB_TABLES}" class="me-2">{NB_TABLES}</code>
+                <code data-marqueur="{SALLE_NOM}" class="me-2">{SALLE_NOM}</code>
+                <code data-marqueur="{SALLE_ADRESSE}" class="me-2">{SALLE_ADRESSE}</code>
+                <code data-marqueur="{SALLE_CP}" class="me-2">{SALLE_CP}</code>
+                <code data-marqueur="{SALLE_VILLE}" class="me-2">{SALLE_VILLE}</code>
+                <code data-marqueur="{NOM_COMPLET}" class="me-2">{NOM_COMPLET}</code>
+                <br><span class="badge me-1 fw-normal" style="background:#00796b;">JA + adjoint</span>
+                <code data-marqueur="{TITRE_ADJOINTS}" class="me-2">{TITRE_ADJOINTS}</code>
+                <code data-marqueur="{NB_ADJOINTS}" class="me-2">{NB_ADJOINTS}</code>
+                <code data-marqueur="{ADJOINTS_TEXTE}" class="me-2">{ADJOINTS_TEXTE}</code>
+                <code data-marqueur="{ADJOINTS_INTRO}" class="me-2">{ADJOINTS_INTRO}</code>
+                <code data-marqueur="{ADJOINTS_CONTACT}" class="me-2">{ADJOINTS_CONTACT}</code>
+                <code data-marqueur="{ADJOINTS_A_SOLLICITER}" class="me-2">{ADJOINTS_A_SOLLICITER}</code>
+                <code data-marqueur="{ADJOINTS_RETENUS}" class="me-2">{ADJOINTS_RETENUS}</code>
+                <code data-marqueur="{ADJOINTS_SOLLICITES}" class="me-2">{ADJOINTS_SOLLICITES}</code>
+                <code data-marqueur="{TITRE_LISTE_ADJOINTS}" class="me-2">{TITRE_LISTE_ADJOINTS}</code>
+                <code data-marqueur="{LISTE_JA_DISPONIBLES}" class="me-2" title="Lignes &lt;tr&gt; à placer dans un tableau Nom et prénom / Coordonnées">{LISTE_JA_DISPONIBLES}</code>
+                <code data-marqueur="{VOTRE_ADJOINT}" class="me-2">{VOTRE_ADJOINT}</code>
+                <code data-marqueur="{LUI_LEUR}" class="me-2">{LUI_LEUR}</code>
+                <br><span class="badge me-1 fw-normal" style="background:#00796b;">Adjoint</span>
+                <code data-marqueur="{NOM_JA_PRINCIPAL}" class="me-2">{NOM_JA_PRINCIPAL}</code>
+                <code data-marqueur="{TEL_JA_PRINCIPAL}" class="me-2">{TEL_JA_PRINCIPAL}</code>
+                <code data-marqueur="{EMAIL_JA_PRINCIPAL}" class="me-2">{EMAIL_JA_PRINCIPAL}</code>
             </div>
         </div>
 
@@ -285,6 +324,11 @@ const MARQUEURS_EXEMPLE = {
     '{YEAR_PHASE}':         <?= json_encode(getAnneePhase()) ?>,
     '{PHASE}':              <?= json_encode(getConfig('phase', '1')) ?>,
     '{DATE}':               '15/03/2026',
+    '{DATE_LONGUE}':        'dimanche 15 mars 2026',
+    '{DATE_EDITION}':       '1 octobre 2026',
+    '{SAISON}':             <?= json_encode(getConfig('saison', '2026-2027')) ?>,
+    '{EPREUVE}':            '1er tour Seniors Régionale 2 Normandie — Zone 1',
+    '{NB_TABLES}':          '8',
     '{HEURE}':              '14:30',
     '{JOURNEE}':            '12',
     '{POULE}':              'A',
@@ -305,7 +349,24 @@ const MARQUEURS_EXEMPLE = {
         + '<tr style="background:#f0f4fa"><td>13/09/2026</td><td>14:00</td><td>R2M</td><td>US EXEMPLE 1</td><td>AS EXEMPLE 2</td></tr>'
         + '<tr style="background:#ffffff"><td>27/09/2026</td><td>16:00</td><td>R3F</td><td>TT EXEMPLE 3</td><td>CP EXEMPLE 4</td></tr>'
         + '</table>',
-    '{NOM_CLUB}':           'ASSUN TT',
+    '{LISTE_JA_DISPONIBLES}': '<tr><td style="border:1px solid #999;text-align:left;background:#D9E2F3;">Jean EXEMPLE</td><td style="border:1px solid #999;text-align:left;background:#D9E2F3;">06 12 34 56 78 — jean.exemple@mail.fr</td></tr>'
+        + '<tr><td style="border:1px solid #999;text-align:left;">Marie EXEMPLE</td><td style="border:1px solid #999;text-align:left;">marie.exemple@mail.fr</td></tr>',
+    // Convocations CRA (EC73) — exemple : 2 adjoints attendus, aucun encore désigné.
+    '{NB_ADJOINTS}':          '2',
+    '{TITRE_ADJOINTS}':       '2 ADJOINTS',
+    '{ADJOINTS_TEXTE}':       'deux Juges-Arbitres adjoints',
+    '{ADJOINTS_A_SOLLICITER}': 'deux JA2 ou JA3',
+    '{ADJOINTS_RETENUS}':     'les personnes retenues afin de confirmer leur disponibilité et leur accord',
+    '{ADJOINTS_SOLLICITES}':  'les noms et prénoms des Juges-Arbitres adjoints sollicités ainsi que la confirmation de leur accord. Après validation par la CRA, leur convocation leur sera adressée',
+    '{ADJOINTS_INTRO}':       'Vous devez solliciter deux JA2 ou JA3 parmi les personnes disponibles ci-dessous, puis transmettre votre proposition à la CRA pour validation.',
+    '{ADJOINTS_CONTACT}':     'Merci de prendre directement contact avec les personnes retenues afin de confirmer leur disponibilité et leur accord avant d’en informer la CRA.',
+    '{TITRE_LISTE_ADJOINTS}': 'Juges-Arbitres disponibles',
+    '{VOTRE_ADJOINT}':        'vos adjoints',
+    '{LUI_LEUR}':             'leur',
+    '{NOM_JA_PRINCIPAL}':     'Jean DUPONT',
+    '{TEL_JA_PRINCIPAL}':     '06.12.34.56.78',
+    '{EMAIL_JA_PRINCIPAL}':   'jean.dupont@mail.fr',
+    '{NOM_CLUB}':          'ASSUN TT',
     '{URL_DESIDERATA}':     <?= json_encode(site_url('desiderata-club') . '?club=' . tokenDesiderataClub('09760136')) ?>,
     '{URL_RESET_MDP}':      <?= json_encode(site_url('reinitialiser-mot-de-passe') . '?t=12-1893456000-abcdef') ?>
 };
@@ -326,6 +387,12 @@ function estMessageHtml(texte) {
 function majBoutonApercu() {
     $('#btn-apercu-html').toggleClass('d-none', !estMessageHtml($('#txt-message').val()));
 }
+
+// Marqueurs CRA visibles seulement pour un Type « CRA Convocation … » (EC73).
+function majMarqueursCra() {
+    $('#marqueurs-cra').toggleClass('d-none', !String($('#cbo-type').val() || '').startsWith('CRA Convocation'));
+}
+$('#cbo-type').on('change', majMarqueursCra);
 
 let currentId       = null;
 let currentEstSys   = false; // true si message système (Id_Utilisateur === null)
@@ -405,6 +472,7 @@ function selectionnerLigne($tr) {
         $('#btn-dupliquer').prop('disabled', !peutDupliquer);
         $('#msg-systeme-info').toggleClass('d-none', !locked);
         majBoutonApercu();
+        majMarqueursCra();
         setStatus('');
     }, 'json');
 }
@@ -425,6 +493,7 @@ $('#btn-nouveau').on('click', function () {
     $('#btn-dupliquer').prop('disabled', true);
     $('#msg-systeme-info').addClass('d-none');
     majBoutonApercu();
+    majMarqueursCra();
     setStatus('');
 });
 

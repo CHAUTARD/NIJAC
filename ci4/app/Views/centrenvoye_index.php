@@ -324,6 +324,11 @@
                 <div id="cart-convocation" style="display:none;margin-top:.2rem;">
                     <span class="badge me-1 fw-normal" style="font-size:.68rem;background:#1a7f4b;">Convocation</span>
                     <code data-cible="message" data-marqueur="{DATE}">{DATE}</code>
+                    <code data-cible="message" data-marqueur="{DATE_LONGUE}">{DATE_LONGUE}</code>
+                    <code data-cible="message" data-marqueur="{DATE_EDITION}">{DATE_EDITION}</code>
+                    <code data-cible="message" data-marqueur="{SAISON}">{SAISON}</code>
+                    <code data-cible="message" data-marqueur="{EPREUVE}">{EPREUVE}</code>
+                    <code data-cible="message" data-marqueur="{NB_TABLES}">{NB_TABLES}</code>
                     <code data-cible="message" data-marqueur="{HEURE}">{HEURE}</code>
                     <code data-cible="message" data-marqueur="{JOURNEE}">{JOURNEE}</code>
                     <code data-cible="message" data-marqueur="{POULE}">{POULE}</code>
@@ -340,6 +345,7 @@
                     <code data-cible="message" data-marqueur="{ID_CONVOCATION}">{ID_CONVOCATION}</code>
                     <code data-cible="message" data-marqueur="{SEXE}">{SEXE}</code>
                     <code data-cible="message" data-marqueur="{URL_CONVOCATION_JA}">{URL_CONVOCATION_JA}</code>
+                    <code data-cible="message" data-marqueur="{LISTE_JA_DISPONIBLES}">{LISTE_JA_DISPONIBLES}</code>
                 </div>
                 <div id="cart-liste-nom" style="display:none;margin-top:.2rem;">
                     <span class="badge me-1 fw-normal" style="font-size:.68rem;background:#6f42c1;">Liste nomination</span>
@@ -668,6 +674,7 @@ $('#btn-apercu-html').on('click', function () {
 
     const exemples = {
         '{LISTE_NOMINATIONS}': tableExemple,
+        '{LISTE_JA_DISPONIBLES}': '<tr><td style="border:1px solid #999;text-align:left;background:#D9E2F3;">Jean EXEMPLE</td><td style="border:1px solid #999;text-align:left;background:#D9E2F3;">06 12 34 56 78 — jean.exemple@mail.fr</td></tr>',
         '{PRENOM}': 'Jean', '{NOM}': 'DUPONT', '{NOM_COMPLET}': 'Jean DUPONT',
         '{UTI_PRENOM}': 'Le', '{UTI_NOM}': 'Nominateur',
         '{YEAR_PHASE}': '2025/2026', '{PHASE}': '2',

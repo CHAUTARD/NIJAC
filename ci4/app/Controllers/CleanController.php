@@ -392,7 +392,7 @@ class CleanController extends BaseController
                 $pdo->exec("DELETE FROM `$t`");
             }
             // JA : désactivation plutôt que suppression
-            $jaDesactives = $pdo->exec('UPDATE `ja` SET Actif = 0');
+            $jaDesactives = $pdo->exec('UPDATE `ja` SET JA1 = 0');
             $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
 
             // Suppression des fichiers d'import de la phase précédente

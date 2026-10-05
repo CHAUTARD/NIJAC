@@ -360,7 +360,7 @@ class StatsJaController extends BaseController
                 SELECT LEFT(COALESCE(lp.CodePostal, ja.Cp), 2) AS Dept, COUNT(*) AS nb
                 FROM ja
                 LEFT JOIN laposte lp ON lp.Id_LaPoste = ja.Id_LaPoste
-                WHERE ja.Actif = 1 AND LEFT(COALESCE(lp.CodePostal, ja.Cp), 2) IN ($inClause)
+                WHERE ja.JA1 = 1 AND LEFT(COALESCE(lp.CodePostal, ja.Cp), 2) IN ($inClause)
                 GROUP BY Dept
             ");
             $stmtJa->execute($params);

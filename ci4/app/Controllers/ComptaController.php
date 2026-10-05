@@ -86,7 +86,7 @@ class ComptaController extends BaseController
 
             $stmt = $pdo->prepare("
                 SELECT
-                    j.Id_JA, j.Nom, j.Prenom, j.CodeDept, j.Actif,
+                    j.Id_JA, j.Nom, j.Prenom, j.CodeDept, j.JA1,
                     COALESCE(j.NumCompteEBP, '') AS NumCompteEBP,
                     j.Defiscalisation, j.PuissanceFiscale, j.VehiculeElectrique,
                     (SELECT COALESCE(SUM(n.Kilometre), 0)

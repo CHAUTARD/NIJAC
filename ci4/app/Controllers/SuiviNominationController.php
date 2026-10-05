@@ -7,7 +7,7 @@ use CodeIgniter\HTTP\ResponseInterface;
 /**
  * NIJAC – Suivi des nominations (EN28).
  *
- * Liste des nominations validées du périmètre du nominateur avec les frais saisis
+ * Liste de toutes les rencontres du périmètre du nominateur (nommées ou non) avec les frais saisis
  * par le JA (péage, kilomètres, défiscalisation — renseignés depuis EN21) et un
  * bouton de rappel par ligne (masqué une fois les frais saisis) : renvoie au JA le modèle « Convocation » de la table
  * messagerie (lien EN21 vers sa convocation / note de frais).
@@ -57,21 +57,27 @@ class SuiviNominationController extends BaseController
             }
 
             $pdo  = getPDO();
+            // Toutes les rencontres du périmètre (même critère qu'EN14 : club recevant), nommées ou non.
+            // Une nomination au plus par rencontre (uq_nomination_rencontre) → une ligne par rencontre ;
+            // sans nomination, les colonnes n.* / ja.* sont NULL (ligne « Aucun JA »).
             $stmt = $pdo->prepare('
-                SELECT n.Id_Nomination, ja.Id_JA, r.Date, r.Heure, r.ArbitrageCRA,
+                SELECT r.Id_Rencontre, n.Id_Nomination, ja.Id_JA, r.Date, r.Heure, r.ArbitrageCRA,
                        ed.Division, dv.Color AS DivisionColor, ed.Nom AS NomDom, ee.Nom AS NomExt,
                        CONCAT(ja.Prenom, \' \', ja.Nom) AS NomJa, ja.Email AS EmailJa, ja.NumCompteEBP, ja.Telephone,
-                       n.Peage, n.Kilometre, n.Defiscalisation, n.DateSaisie
-                FROM nomination n
-                JOIN disponible d  ON d.Id_Disponible = n.Id_Disponible
-                JOIN ja            ON ja.Id_JA        = d.Id_JA
-                JOIN rencontre r   ON r.Id_Rencontre  = n.Id_Rencontre
+                       n.Peage, n.Kilometre, n.Defiscalisation, n.DateSaisie, n.Valide,
+                       cl.Nom AS NomClub, cl.CorNom, cl.CorEmail, cl.RefNom, cl.RefMail
+                FROM rencontre r
                 JOIN equipe ed     ON ed.Id_Equipe    = r.Id_EquipeDom
                 JOIN division dv   ON dv.Division     = ed.Division
                 LEFT JOIN equipe ee ON ee.Id_Equipe   = r.Id_EquipeExt
-                WHERE n.Valide = 1
-                  AND SUBSTRING(ed.Id_Club, 3, 2) IN (' . implode(',', array_fill(0, count($depts), '?')) . ')
-                ORDER BY r.Date DESC, r.Heure, n.Id_Nomination
+                LEFT JOIN club cl   ON cl.Id_Club     = ed.Id_Club   -- destinataires de « Relancer le club »
+                -- Toute nomination est valide par défaut (Valide = 1) ; le OR couvre les
+                -- arbitrages club restés à 0 avant la migration EA98.
+                LEFT JOIN nomination n ON n.Id_Rencontre = r.Id_Rencontre AND (n.Valide = 1 OR r.ArbitrageCRA = 0)
+                LEFT JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                LEFT JOIN ja           ON ja.Id_JA        = d.Id_JA
+                WHERE SUBSTRING(ed.Id_Club, 3, 2) IN (' . implode(',', array_fill(0, count($depts), '?')) . ')
+                ORDER BY r.Date DESC, r.Heure, r.Id_Rencontre
             ');
             $stmt->execute($depts);
 
@@ -91,7 +97,7 @@ class SuiviNominationController extends BaseController
             }
             $stmt = getPDO()->prepare('
                 SELECT Id_JA, Nom, Prenom FROM ja
-                WHERE Actif = 1 AND CodeDept IN (' . implode(',', array_fill(0, count($depts), '?')) . ')
+                WHERE JA1 = 1 AND CodeDept IN (' . implode(',', array_fill(0, count($depts), '?')) . ')
                 ORDER BY Nom, Prenom
             ');
             $stmt->execute($depts);
@@ -105,8 +111,8 @@ class SuiviNominationController extends BaseController
     /**
      * Correction d'une nomination depuis EN28 : Arbitrage (rencontre.ArbitrageCRA), JA,
      * péage, kilomètres, défiscalisation. DateSaisie prend la date du jour (le compte EBP
-     * se modifie dans la fiche JA, EN11). Le changement de JA garde la nomination (Valide, EmailEnvoye,
-     * DateNomination inchangés) et applique la règle de 2 nominations max par JA et par jour.
+     * se modifie dans la fiche JA, EN11). Le changement de JA garde la nomination (EmailEnvoye,
+     * DateNomination inchangés ; Valide forcé à 1 — un JA nommé = nomination valide d'office) et applique la règle de 2 nominations max par JA et par jour.
      */
     public function modifier(): ResponseInterface
     {
@@ -150,7 +156,7 @@ class SuiviNominationController extends BaseController
             try {
                 $idDispo = (int) $nom['Id_Disponible'];
                 if ($idJa !== (int) $nom['IdJaActuel']) {
-                    $ja = $pdo->prepare('SELECT Actif FROM ja WHERE Id_JA = ?');
+                    $ja = $pdo->prepare('SELECT JA1 FROM ja WHERE Id_JA = ?');
                     $ja->execute([$idJa]);
                     if ((int) $ja->fetchColumn() !== 1) {
                         throw new \RuntimeException('Juge-arbitre introuvable ou inactif.');
@@ -192,7 +198,7 @@ class SuiviNominationController extends BaseController
 
                 $pdo->prepare('UPDATE rencontre SET ArbitrageCRA = ? WHERE Id_Rencontre = ?')->execute([$arbCra, $nom['Id_Rencontre']]);
                 $pdo->prepare('
-                    UPDATE nomination SET Id_Disponible = ?, Peage = ?, Kilometre = ?, Defiscalisation = ?, DateSaisie = CURDATE()
+                    UPDATE nomination SET Id_Disponible = ?, Peage = ?, Kilometre = ?, Defiscalisation = ?, DateSaisie = CURDATE(), Valide = 1
                     WHERE Id_Nomination = ?
                 ')->execute([$idDispo, $peage, $km, $defisc, $idNom]);
 
@@ -300,6 +306,54 @@ class SuiviNominationController extends BaseController
             return $this->response->setJSON(['ok' => true, 'msg' => 'Rappel envoyé à ' . htmlspecialchars($nom['Prenom'] . ' ' . $nom['Nom']) . '.']);
         } catch (\Throwable $e) {
             return $this->erreurTechnique($e, 'rappel', 'Envoi impossible (voir le journal des erreurs).');
+        }
+    }
+
+    /**
+     * « Relancer le club » : renvoie au club recevant d'une rencontre en arbitrage club
+     * encore sans JA le message n°7 (lien EN25), via envoyerDemandeJaClub() partagée avec EN14.
+     */
+    public function relanceClub(): ResponseInterface
+    {
+        try {
+            $pdo    = getPDO();
+            $idRenc = (int) $this->request->getPost('id_rencontre');
+            $depts  = $this->deptsAutorises();
+            if ($idRenc <= 0 || !$depts) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Rencontre invalide.']);
+            }
+
+            // Périmètre du nominateur : même critère que data() (club recevant). Arbitrage club
+            // et email du correspondant sont vérifiés par envoyerDemandeJaClub().
+            $stmt = $pdo->prepare('
+                SELECT (SELECT COUNT(*) FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre) AS NbNom
+                FROM rencontre r
+                JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
+                WHERE r.Id_Rencontre = ? AND SUBSTRING(ed.Id_Club, 3, 2) IN (' . implode(',', array_fill(0, count($depts), '?')) . ')
+            ');
+            $stmt->execute([$idRenc, ...$depts]);
+            $rc = $stmt->fetch();
+            if (!$rc) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Rencontre introuvable ou hors de votre périmètre.']);
+            }
+            if ((int) $rc['NbNom'] > 0) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Le club a déjà répondu : un JA est désigné pour cette rencontre.']);
+            }
+
+            $errRl = checkRateLimit(1);   // même garde-fou d'envoi que le rappel au JA
+            if ($errRl !== null) {
+                return $this->response->setJSON(['ok' => false, 'msg' => $errRl]);
+            }
+
+            $res = envoyerDemandeJaClub($pdo, $idRenc, $_SESSION['utilisateur'] ?? []);
+            if ($res['ok']) {
+                enregistrerEnvois(1);
+            }
+
+            // Affiché dans un toast HTML côté client : nom du correspondant échappé.
+            return $this->response->setJSON(['ok' => $res['ok'], 'msg' => htmlspecialchars($res['msg'])]);
+        } catch (\Throwable $e) {
+            return $this->erreurTechnique($e, 'relanceClub', 'Envoi impossible (voir le journal des erreurs).');
         }
     }
 }
