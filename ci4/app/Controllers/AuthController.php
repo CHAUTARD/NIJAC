@@ -270,6 +270,9 @@ class AuthController extends BaseController
             $mail->addAddress(getEmailDestinataire($email));
             $mail->Subject = $rendu['sujet'];
             $mail->Body    = $rendu['corps'];
+            if ($rendu['html']) {
+                $mail->AltBody = $rendu['texte'];
+            }
             $mail->send();
         } catch (\Throwable $e) {
             error_log('[NIJAC][SEC] envoi du code de sécurité impossible (Id_Utilisateur ' . (int) $etat['id'] . ') : ' . $e->getMessage());

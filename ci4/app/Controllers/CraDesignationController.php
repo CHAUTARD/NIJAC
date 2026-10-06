@@ -206,15 +206,15 @@ class CraDesignationController extends BaseController
      * POST cra-designation/convocations : id (compétition), renvoyer (0/1), cc (0/1).
      * Un appel par compétition (la boucle sur les compétitions cochées est côté client,
      * comme EC74 / EN15) : un email HTML par JA principal désigné. Modèles = messages de la table
-     * messagerie (Type, voir modeleConvocation() : copie perso, sinon système, sinon fichier Convocation/) :
-     * « CRA Convocation JA + adjoint » (Convocation_1JA_1Adjoint.html) dès qu'un adjoint est attendu (NbrAdjoint ≥ 1)
-     * ou désigné (≥ 1 ligne Role='Adjoint'), quel que soit leur nombre ; sinon « CRA Convocation JA » (Convocation_1JA.html).
+     * messagerie (Type, voir modeleConvocation() : copie perso, sinon système ; absent → envoi refusé) :
+     * « CRA Convocation JA + adjoint » dès qu'un adjoint est attendu (NbrAdjoint ≥ 1)
+     * ou désigné (≥ 1 ligne Role='Adjoint'), quel que soit leur nombre ; sinon « CRA Convocation JA ».
      * Le modèle avec adjoint invite le JA principal à solliciter son adjoint « parmi les personnes
      * disponibles ci-dessous » → {LISTE_JA_DISPONIBLES} = JA disponibles EC74 (pas les désignés) ; si des
      * adjoints sont déjà désignés (« validés ») : tous là → le tableau ne liste qu'eux (aucun JA disponible),
      * en partie → eux puis les JA disponibles pour les restants ({ADJOINTS_INTRO}/{ADJOINTS_CONTACT} accordés).
-     * Chaque adjoint désigné (Role='Adjoint') reçoit « CRA Convocation adjoint » (Convocation_Adjoint.html, sujet
-     * par défaut « CRA – Convocation adjoint – … »), qui lui présente le(s) JA principal(aux) désigné(s) : {NOM_JA_PRINCIPAL},
+     * Chaque adjoint désigné (Role='Adjoint') reçoit « CRA Convocation adjoint » (sujet
+     * « CRA – Convocation adjoint – … »), qui lui présente le(s) JA principal(aux) désigné(s) : {NOM_JA_PRINCIPAL},
      * {TEL_JA_PRINCIPAL}, {EMAIL_JA_PRINCIPAL}. Aucun JA principal désigné → rien n'est envoyé (adjoints compris).
      * Déjà convoqués ignorés sauf renvoyer=1 ; sans email listés, jamais envoyés.
      * Succès → CRA_Designation.DateConvocation = NOW() (JA comme adjoint).
@@ -257,7 +257,7 @@ class CraDesignationController extends BaseController
         $type      = $avecAdj ? 'CRA Convocation JA + adjoint' : 'CRA Convocation JA';
         $modele    = self::modeleConvocation($pdo, $type, $uid);
         if (!$modele) {
-            return $this->response->setJSON(['ok' => false, 'titre' => $titre, 'msg' => "modèle « $type » introuvable (messagerie et Convocation/)."]);
+            return $this->response->setJSON(['ok' => false, 'titre' => $titre, 'msg' => "Modèle de convocation « $type » introuvable dans la messagerie (EA93)."]);
         }
         $adjoints = array_values(array_filter($des, fn ($d) => $d['Role'] === 'Adjoint')); // triés par Rang (ORDER BY)
         $ctx      = self::ctxConvocation($c, count($adjoints));
@@ -285,7 +285,7 @@ class CraDesignationController extends BaseController
             $adj = $d['Role'] === 'Adjoint';
             $nom = trim($d['Prenom'] . ' ' . $d['Nom']) . ($adj ? ' (adjoint)' : '');
             if ($adj && !$modeleAdj) {
-                $cr['echecs'][] = "$nom : modèle « CRA Convocation adjoint » introuvable (messagerie et Convocation/).";
+                $cr['echecs'][] = "$nom : Modèle de convocation « CRA Convocation adjoint » introuvable dans la messagerie (EA93).";
                 continue;
             }
             if ($d['DateConvocation'] && !$renvoyer) {
@@ -334,26 +334,18 @@ class CraDesignationController extends BaseController
     }
 
     /**
-     * Modèle de convocation CRA $type (voir modelesConvocationCra()) : ['Sujet', 'Message', 'Cc', 'ReplyTo'].
-     * Copie personnelle de l'utilisateur, sinon message système (table messagerie), sinon — EA98 pas
-     * encore passé — fichier Convocation/ avec son sujet par défaut et Cc/ReplyTo à 1 ; null si rien.
+     * Modèle de convocation CRA $type (Type messagerie) : ['Sujet', 'Message', 'Cc', 'ReplyTo'].
+     * Copie personnelle de l'utilisateur, sinon message système (table messagerie, EA93) ; null si aucun.
      */
     public static function modeleConvocation(\PDO $pdo, string $type, int $idUtilisateur): ?array
     {
-        $row = resoudreModeleMessagerieParType($pdo, $type, $idUtilisateur);
-        if ($row) {
-            return $row;
-        }
-        [$fichier, $sujet] = modelesConvocationCra()[$type];
-        $corps = @file_get_contents(__DIR__ . '/../../../Convocation/' . $fichier);
-
-        return $corps === false ? null : ['Sujet' => $sujet, 'Message' => $corps, 'Cc' => 1, 'ReplyTo' => 1];
+        return resoudreModeleMessagerieParType($pdo, $type, $idUtilisateur);
     }
 
     /**
      * Contexte de construireMarqueursMessage() pour une compétition CRA (salle du club, sinon Lieu pour la ville).
-     * nb_adjoints (pluriel de Convocation_1JA_1Adjoint.html) = NbrAdjoint attendu, ou nombre désigné s'il est supérieur, au moins 1.
-     * $principaux (lignes Nom/Prenom/Telephone/Email des JA principaux désignés) → ja_principaux de Convocation_Adjoint.html.
+     * nb_adjoints (pluriel de « CRA Convocation JA + adjoint ») = NbrAdjoint attendu, ou nombre désigné s'il est supérieur, au moins 1.
+     * $principaux (lignes Nom/Prenom/Telephone/Email des JA principaux désignés) → ja_principaux de « CRA Convocation adjoint ».
      */
     public static function ctxConvocation(array $c, int $nbAdjDesignes = 0, array $principaux = []): array
     {

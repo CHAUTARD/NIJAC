@@ -314,7 +314,6 @@ if ($isCsr) {
 const MESSAGERIE_BASE = '<?= site_url('messagerie') ?>';
 const IS_ADMIN         = <?= $isAdmin ? 'true' : 'false' ?>;
 const IS_CSR            = <?= $isCsr ? 'true' : 'false' ?>;
-const ID_CURRENT_USER  = <?= (int) $idCurrentUser ?>;
 
 function escHtml(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');

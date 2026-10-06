@@ -103,8 +103,18 @@
                     <option value="non">Non reçu</option>
                 </select>
             </span>
+            <span class="combo-field">
+                <label for="sel-f131">FFTT 131</label>
+                <select id="sel-f131" style="width:120px;">
+                    <option value="">Tous</option>
+                    <option value="oui">Mis à jour par 131</option>
+                </select>
+            </span>
             <button type="button" class="btn btn-sm btn-light" id="btn-reset-filtres" title="Réinitialiser les filtres">
                 <i class="bi bi-x-circle"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-success" id="btn-f131" title="Mettre à jour les nominations depuis l'édition FFTT 131 « Activités détaillées des arbitres »">
+                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Mise à jour FFTT 131
             </button>
         </div>
         <div id="table-wrapper">
@@ -183,6 +193,36 @@
     </div>
 </div>
 
+<!-- Popup « Mise à jour FFTT 131 » : aide → fichier + Analyser (aperçu sans écriture) → Mettre à jour -->
+<div class="modal fade" id="modal-f131" tabindex="-1" aria-labelledby="f131-titre" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="f131-titre"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Mise à jour depuis l'édition FFTT 131</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small mb-2">
+                    <strong>1.</strong> Générez l'édition <strong>131 - Activités détaillées des arbitres</strong> (format Excel) dans le logiciel fédéral.
+                    <button type="button" class="btn btn-link btn-sm p-0 align-baseline" id="btn-f131-aide"><i class="bi bi-question-circle me-1"></i>Comment obtenir le fichier ?</button>
+                </p>
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                    <strong class="small">2.</strong>
+                    <input type="file" id="f131-fichier" class="form-control form-control-sm" style="max-width:420px" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="btn-f131-analyser"><i class="bi bi-search me-1"></i>Analyser</button>
+                </div>
+                <p class="small text-muted mb-2">Seules les lignes dont la colonne G vaut « JA » sont utilisées ; aucune donnée n'est modifiée par l'analyse.</p>
+                <div id="f131-resultat"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-outline-secondary me-auto d-none" id="btn-f131-csv"><i class="bi bi-filetype-csv me-1"></i>Rapport complet (CSV)</button>
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                <button type="button" class="btn btn-sm btn-success" id="btn-f131-valider" disabled><i class="bi bi-check2 me-1"></i>Mettre à jour</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?= view('partials/page_footer', ['pfStatusAlign' => 'left']) ?>
 
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
@@ -196,7 +236,7 @@ function libDivision(code) {
     return n ? code + ' — ' + n : code;
 }
 let nominations = [];
-const filtres   = { date: '', division: '', equipe: '', ja: '', saisie: '', avecJa: '', accuse: '' };
+const filtres   = { date: '', division: '', equipe: '', ja: '', saisie: '', avecJa: '', accuse: '', f131: '' };
 const sortState = { col: null, asc: true };
 
 const JOURS_SEMAINE = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -254,6 +294,7 @@ function nominationsFiltrees() {
         if (filtres.avecJa === 'non' && n.Id_Nomination) return false;
         if (filtres.accuse === 'oui' && !n.AccuseReception) return false;
         if (filtres.accuse === 'non' && (!n.Id_Nomination || n.AccuseReception)) return false;   // nominations sans accusé seulement
+        if (filtres.f131 === 'oui' && !+n.F131) return false;
         return true;
     });
 }
@@ -341,7 +382,8 @@ function renderListe() {
             $('<td>').attr('data-field', 'exterieur').text(n.NomExt ?? '—'),
             $('<td class="centre">').attr('data-field', 'licence').attr('title', n.Telephone || null).text(n.Id_JA ?? ''),
             $('<td>').attr('data-field', 'ja').attr('title', n.Telephone || null).toggleClass('aucun-ja', !nomme)
-                .text(nomme ? (n.NomJa ?? '') : '— Aucun JA'),
+                .text(nomme ? (n.NomJa ?? '') : '— Aucun JA')
+                .append(nomme && +n.F131 ? $('<span class="badge rounded-pill text-bg-light border ms-1 badge-f131">').text('131').attr('title', 'Mise à jour depuis le fichier FFTT 131') : ''),
             $('<td>').attr('data-field', 'ebp').text(n.NumCompteEBP ?? ''),
             $('<td class="num">').attr('data-field', 'peage').toggleClass('non-saisi', !saisi)
                 .toggleClass('deja-compte', nonCompte('Peage', peageNon)).attr('title', nonCompte('Peage', peageNon) ? titreNonCompte : null)
@@ -551,6 +593,7 @@ $('#sel-date').on('change', function () { filtres.date = $(this).val(); renderLi
 $('#sel-saisie').on('change', function () { filtres.saisie = $(this).val(); renderListe(); });
 $('#sel-avecja').on('change', function () { filtres.avecJa = $(this).val(); renderListe(); });
 $('#sel-accuse').on('change', function () { filtres.accuse = $(this).val(); renderListe(); });
+$('#sel-f131').on('change', function () { filtres.f131 = $(this).val(); renderListe(); });
 // Debounce : renderListe() reconstruit tout le tableau
 let searchTimer;
 function filtreTexte(cle) {
@@ -563,11 +606,124 @@ function filtreTexte(cle) {
 $('#search-equipe').on('input', filtreTexte('equipe'));
 $('#search-ja').on('input', filtreTexte('ja'));
 $('#btn-reset-filtres').on('click', function () {
-    filtres.date = filtres.division = filtres.equipe = filtres.ja = filtres.saisie = filtres.avecJa = filtres.accuse = '';
-    $('#sel-date, #sel-saisie, #sel-avecja, #sel-accuse, #search-equipe, #search-ja').val('');
+    filtres.date = filtres.division = filtres.equipe = filtres.ja = filtres.saisie = filtres.avecJa = filtres.accuse = filtres.f131 = '';
+    $('#sel-date, #sel-saisie, #sel-avecja, #sel-accuse, #sel-f131, #search-equipe, #search-ja').val('');
     majPanelDivision();
     renderListe();
 });
+
+// ── Mise à jour FFTT 131 (aperçu sans écriture, puis validation : le fichier est renvoyé, rien n'est conservé serveur) ──
+let fichier131 = null, rapport131 = null;
+const F131_MAX_LIGNES = 200;
+
+$('#btn-f131').on('click', function () {
+    fichier131 = rapport131 = null;
+    $('#f131-fichier').val('');
+    $('#f131-resultat').empty();
+    $('#btn-f131-valider').prop('disabled', true);
+    $('#btn-f131-csv').addClass('d-none');
+    bootstrap.Modal.getOrCreateInstance('#modal-f131').show();
+});
+// Aide « comme la 102 » : fenêtre asset/aide/import-131.html, qui peut aussi choisir le fichier (importerFichier131).
+$('#btn-f131-aide').on('click', function () {
+    window.open('<?= base_url('asset/aide/import-131.html') ?>', 'aideImport131', 'width=640,height=680,resizable=yes,scrollbars=yes');
+});
+$('#f131-fichier').on('change', function () {
+    fichier131 = this.files[0] || null;
+    $('#btn-f131-valider').prop('disabled', true);
+});
+window.importerFichier131 = function (file) {
+    fichier131 = file;
+    $('#f131-fichier').val('');
+    envoyer131('apercu');
+};
+$('#btn-f131-analyser').on('click', () => envoyer131('apercu'));
+$('#btn-f131-valider').on('click', function () {
+    if (!rapport131) return;
+    nijacConfirm(`Appliquer ${rapport131.creees} création(s) et ${rapport131.modifiees} remplacement(s) de JA ?`, () => envoyer131('valider'));
+});
+$('#btn-f131-csv').on('click', function () {
+    if (!rapport131) return;
+    const blob = new Blob([csv131(rapport131)], { type: 'text/csv;charset=utf-8' });
+    const a = $('<a>').attr({ href: URL.createObjectURL(blob), download: 'rapport_131.csv' }).appendTo('body');
+    a[0].click();
+    URL.revokeObjectURL(a.attr('href'));
+    a.remove();
+});
+
+function envoyer131(etape) {
+    const f = fichier131;
+    if (!f) { nijacToast('Choisissez le fichier 131 (.xlsx).', 'warning'); return; }
+    if (!/\.xlsx$/i.test(f.name) || f.size > 5 * 1024 * 1024) { nijacToast('Fichier .xlsx de 5 Mo maximum.', 'warning'); return; }
+    const fd = new FormData();
+    fd.append('xlsx', f);
+    const $btns = $('#btn-f131-analyser, #btn-f131-valider').prop('disabled', true);
+    $('#f131-resultat').html('<div class="text-muted small"><span class="spinner-border spinner-border-sm me-2"></span>' + (etape === 'apercu' ? 'Analyse…' : 'Mise à jour…') + '</div>');
+    $.ajax({ url: `${SUIVI_BASE}/f131/${etape}`, method: 'POST', data: fd, processData: false, contentType: false, dataType: 'json' })
+        .done(function (r) {
+            $('#btn-f131-analyser').prop('disabled', false);
+            if (!r.ok) {
+                rapport131 = null;
+                $('#btn-f131-csv').addClass('d-none');
+                $('#f131-resultat').empty().append($('<div class="alert alert-danger small mb-0">').text(r.msg || 'Erreur.'));
+                return;
+            }
+            rapport131 = r;
+            afficher131(r);
+            $('#btn-f131-csv').removeClass('d-none');
+            if (!r.ecrit) {
+                $('#btn-f131-valider').prop('disabled', r.creees + r.modifiees === 0);
+                return;
+            }
+            nijacToast(`FFTT 131 : ${r.creees} nomination(s) créée(s), ${r.modifiees} modifiée(s), ${r.incoherences} incohérence(s).`, r.incoherences ? 'warning' : 'success');
+            chargerListe();
+        })
+        .fail(() => { $btns.prop('disabled', false); $('#btn-f131-valider').prop('disabled', true); $('#f131-resultat').empty(); nijacToast('Erreur réseau ou session expirée.', 'danger'); });
+}
+
+const fr131 = d => d ? d.split('-').reverse().join('/') : '?';
+
+/** Compte rendu : chiffres puis détail (200 lignes max), tout le texte en .text() (aucun HTML venant du fichier). */
+function afficher131(r) {
+    const ign = Object.entries(r.ignores).map(([g, n]) => `${g} : ${n}`).join(', ') || 'aucune';
+    const cats = Object.entries(r.parCategorie).map(([c, n]) => `${c} : ${n}`).join(', ');
+    const fait = r.ecrit;
+    const lignes = [
+        `Fichier : ${r.fichier} — ${r.nbLignes} ligne(s), du ${fr131(r.dateMin)} au ${fr131(r.dateMax)}` + (r.vides ? ` (${r.vides} ligne(s) vide(s))` : ''),
+        `Lignes ignorées (colonne G ≠ « JA ») : ${ign}`,
+        `Lignes JA retenues : ${r.retenues} = ${r.conformes} conforme(s) + ${r.creees} ${fait ? 'créée(s)' : 'à créer'} + ${r.modifiees} ${fait ? 'modifiée(s)' : 'à modifier'} + ${r.incoherences} incohérence(s) + ${r.horsPerimetre} hors périmètre`,
+    ];
+    if (cats) lignes.push(`Incohérences : ${cats}`);
+    const $res = $('#f131-resultat').empty();
+    $('<div class="alert small mb-2" style="white-space:pre-line">')
+        .addClass(fait ? 'alert-success' : (r.incoherences ? 'alert-warning' : 'alert-info'))
+        .text((fait ? 'Mise à jour effectuée.\n' : 'Aperçu — rien n\'a encore été modifié.\n') + lignes.join('\n')).appendTo($res);
+    if (!r.details.length) return;
+    const $tb = $('<tbody>');
+    r.details.slice(0, F131_MAX_LIGNES).forEach(d => $('<tr>').append(
+        $('<td>').text(d.action), $('<td class="text-end">').text(d.ligne), $('<td>').text(d.date),
+        $('<td>').text(d.rencontre), $('<td>').text(d.ja), $('<td>').text(d.motif)
+    ).appendTo($tb));
+    $('<table class="table table-sm table-striped small mb-1">')
+        .append($('<thead><tr><th>Action</th><th>Ligne</th><th>Date</th><th>Rencontre</th><th>JA</th><th>Motif</th></tr></thead>'), $tb).appendTo($res);
+    if (r.details.length > F131_MAX_LIGNES) {
+        $('<div class="small text-muted">').text(`… et ${r.details.length - F131_MAX_LIGNES} autre(s) : voir le rapport complet (CSV).`).appendTo($res);
+    }
+}
+
+/** Cellule CSV : anti-injection de formule (cf. EN26 csvCellule()), guillemets si nécessaire. */
+function csvCellule131(v) {
+    let s = String(v ?? '');
+    if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return /[;"\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+/** Rapport complet : UTF-8 BOM, « ; », CRLF. */
+function csv131(r) {
+    const rows = [['Action', 'Ligne', 'Date', 'Rencontre', 'JA', 'Motif']]
+        .concat(r.details.map(d => [d.action, d.ligne, d.date, d.rencontre, d.ja, d.motif]));
+    return '﻿' + rows.map(l => l.map(csvCellule131).join(';')).join('\r\n') + '\r\n';
+}
 
 $(function () {
     nijacSortableTable('#tbl-suivi thead th[data-field]', 'field', sortState, renderListe);

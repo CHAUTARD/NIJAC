@@ -127,8 +127,6 @@
         #tbl-ja thead th.col-grade { text-align: center; padding-left: .2rem; padding-right: .2rem; color: #1e3a8a; }
         #tbl-ja tbody td.col-grade { background-color: rgba(30, 58, 138, .05); } /* translucide : survol / sélection de ligne restent visibles */
         .grade-non { color: #c4c9d2; }
-        .badge-defisc    { background: #dbeafe; color: #1e40af; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
-        .badge-no-defisc { background: #f3f4f6; color: #6b7280; border-radius: 10px; padding: .1rem .45rem; font-size: .75rem; font-weight: 600; }
 
         /* ── Toggle Tous / Actifs (aligné sur les comboboxes) ── */
         #toggle-actif {

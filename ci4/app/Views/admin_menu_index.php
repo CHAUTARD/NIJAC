@@ -228,8 +228,6 @@
         .btn-competition-regionale { background-color: #f3e5f5; }
         .btn-equipe-regionale { background-color: #e8f5e9; }
         .btn-messagerie   { background-color: #fff8e1; }
-        .btn-gestion-equipes { background-color: #e3f2fd; }
-        .btn-gestion-rencontres { background-color: #fff3e0; }
 
         .btn-code {
             position: absolute;

@@ -58,7 +58,6 @@
         #table-wrapper table tfoot td { border-top: 2px solid var(--en-line); font-weight: 700; background: var(--en-card); }
         #table-wrapper td.td-total { font-weight: 700; }
         .dispo-detail { display: block; font-size: .7rem; color: var(--en-muted); }
-        .badge-role { font-size: .72rem; }
     </style>
 </head>
 <body>
