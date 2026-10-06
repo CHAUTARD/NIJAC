@@ -145,10 +145,11 @@ class MessagerieController extends BaseController
                 "SELECT Id_Messagerie, Type, Sujet, Message, Id_Utilisateur, Cc, ReplyTo, NULL AS NomUtilisateur,
                         (Id_Messagerie BETWEEN 1 AND $nbSys) AS EstSysteme
                  FROM messagerie
-                 WHERE Id_Messagerie BETWEEN 1 AND $nbSys OR Id_Utilisateur IS NULL OR Id_Utilisateur = ?
+                 WHERE (Id_Messagerie BETWEEN 1 AND $nbSys OR Id_Utilisateur IS NULL OR Id_Utilisateur = ?)
+                   AND Type <> ?
                  ORDER BY (Id_Messagerie BETWEEN 1 AND $nbSys) DESC, Id_Messagerie * (Id_Messagerie BETWEEN 1 AND $nbSys), Type, Sujet"
             );
-            $stmt->execute([$idCurrentUser]);
+            $stmt->execute([$idCurrentUser, TYPE_MESSAGE_CODE_SECURITE]); // code de sécurité (E010) : admin seul
             $rows = $stmt->fetchAll();
         }
 
@@ -166,6 +167,8 @@ class MessagerieController extends BaseController
             $row = false; // le rôle CSR ne voit que le message n°6 (Réengagements)
         } elseif ($row && $this->isCraConvoc() && !self::estTypeCra($row['Type'])) {
             $row = false; // le rôle CRA Convoc ne voit que les convocations CRA
+        } elseif ($row && !$this->isAdmin() && $row['Type'] === TYPE_MESSAGE_CODE_SECURITE) {
+            $row = false; // code de sécurité (E010) : visible des seuls administrateurs
         } elseif ($row && !$this->isAdmin() && !$this->isCsr()) {
             // Même restriction que data() : un nominateur ne voit que les messages
             // système et les siens, jamais le message personnel d'un autre nominateur.
@@ -269,6 +272,10 @@ class MessagerieController extends BaseController
         if (!$orig || ($this->isCraConvoc() && !self::estTypeCra($orig['Type']))) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Message introuvable.']);
         }
+        // Code de sécurité (E010) : message système unique, jamais de copie personnelle (ignorée à l'envoi).
+        if ($orig['Type'] === TYPE_MESSAGE_CODE_SECURITE) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Ce message système ne peut pas être personnalisé.']);
+        }
 
         $stmt = $pdo->prepare('INSERT INTO messagerie (Id_Utilisateur, Type, Sujet, Message, Cc, ReplyTo) VALUES (?, ?, ?, ?, ?, ?)');
         $stmt->execute([$this->idCurrentUser(), $orig['Type'], $orig['Sujet'], $orig['Message'], $orig['Cc'], $orig['ReplyTo']]);
@@ -322,6 +329,9 @@ class MessagerieController extends BaseController
         }
         if (!in_array($type, $this->typesValides($pdo), true)) {
             return 'Type invalide.';
+        }
+        if ($type === TYPE_MESSAGE_CODE_SECURITE && !$this->isAdmin()) {
+            return 'Ce type de message est réservé aux administrateurs.';
         }
 
         $cc      = (($input['cc'] ?? '0') === '1') ? 1 : 0;

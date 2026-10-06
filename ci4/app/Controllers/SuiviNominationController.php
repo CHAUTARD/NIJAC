@@ -57,6 +57,8 @@ class SuiviNominationController extends BaseController
             }
 
             $pdo  = getPDO();
+            // Accusé de réception EN21 : colonne ajoutée par EA98, lue seulement si présente.
+            $colAccuse = nominationAAccuseReception($pdo) ? 'n.AccuseReception' : 'NULL AS AccuseReception';
             // Toutes les rencontres du périmètre (même critère qu'EN14 : club recevant), nommées ou non.
             // Une nomination au plus par rencontre (uq_nomination_rencontre) → une ligne par rencontre ;
             // sans nomination, les colonnes n.* / ja.* sont NULL (ligne « Aucun JA »).
@@ -64,7 +66,7 @@ class SuiviNominationController extends BaseController
                 SELECT r.Id_Rencontre, n.Id_Nomination, ja.Id_JA, r.Date, r.Heure, r.ArbitrageCRA,
                        ed.Division, dv.Color AS DivisionColor, ed.Id_Club AS IdClubDom, ed.Nom AS NomDom, ee.Nom AS NomExt,
                        CONCAT(ja.Prenom, \' \', ja.Nom) AS NomJa, ja.Email AS EmailJa, ja.NumCompteEBP, ja.Telephone,
-                       n.Peage, n.Kilometre, n.Defiscalisation, n.DateSaisie, n.Valide,
+                       n.Peage, n.Kilometre, n.Defiscalisation, n.DateSaisie, n.Valide, ' . $colAccuse . ',
                        cl.Nom AS NomClub, cl.CorNom, cl.CorEmail, cl.RefNom, cl.RefMail
                 FROM rencontre r
                 JOIN equipe ed     ON ed.Id_Equipe    = r.Id_EquipeDom
@@ -109,10 +111,81 @@ class SuiviNominationController extends BaseController
     }
 
     /**
+     * GET ja-disponibles?rencontre=ID : JA proposés pour nommer / modifier le JA d'une rencontre en arbitrage CRA.
+     * Même filtre que les contrôles du clic (saisir()/modifier()), en une requête : JA actif du périmètre,
+     * règle stricte d'EN14 (jaDisponiblePourNomination()) et règle du jour (controlerJourJa()).
+     * Le JA actuellement nommé est toujours inclus (actuel = true), même s'il ne passe plus la règle.
+     */
+    public function jaDisponibles(): ResponseInterface
+    {
+        try {
+            $ja = $this->listerJaDisponibles(getPDO(), $this->deptsAutorises(), (int) $this->request->getGet('rencontre'));
+
+            return $this->response->setJSON(['ok' => true, 'ja' => $ja]);
+        } catch (\RuntimeException $e) {
+            return $this->response->setJSON(['ok' => false, 'msg' => $e->getMessage()]);
+        } catch (\Throwable $e) {
+            return $this->erreurTechnique($e, 'jaDisponibles', 'Liste des JA disponibles indisponible.');
+        }
+    }
+
+    /** Cœur de jaDisponibles() (sans requête HTTP). Refus métier : RuntimeException. */
+    private function listerJaDisponibles(\PDO $pdo, array $depts, int $idRenc): array
+    {
+        if ($idRenc <= 0 || !$depts) {
+            throw new \RuntimeException('Paramètres invalides.');
+        }
+        $in = implode(',', array_fill(0, count($depts), '?'));
+
+        // Périmètre : même critère que saisir()/modifier() (club recevant).
+        $stmt = $pdo->prepare("
+            SELECT r.Date, ed.Id_Club AS IdClubDom, d.Id_JA AS IdJaActuel
+            FROM rencontre r
+            JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
+            LEFT JOIN nomination n ON n.Id_Rencontre = r.Id_Rencontre
+            LEFT JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+            WHERE r.Id_Rencontre = ? AND SUBSTRING(ed.Id_Club, 3, 2) IN ($in)
+        ");
+        $stmt->execute([$idRenc, ...$depts]);
+        $rc = $stmt->fetch();
+        if (!$rc) {
+            throw new \RuntimeException('Rencontre introuvable ou hors de votre périmètre.');
+        }
+        $actuel = (int) $rc['IdJaActuel'];
+
+        // Réponse $r du JA sur la rencontre ou la journée : même condition que jaDisponiblePourNomination().
+        $rep = fn(string $r) => "EXISTS (SELECT 1 FROM disponible dx WHERE dx.Id_JA = j.Id_JA AND dx.Reponse = '$r'
+                AND (dx.Id_Rencontre = ? OR (dx.Id_Rencontre IS NULL AND dx.DateCompetition = ?)))";
+        // Autres nominations du JA ce jour-là : même périmètre que controlerJourJa().
+        $jour = 'FROM nomination n2
+                 JOIN disponible d2 ON d2.Id_Disponible = n2.Id_Disponible
+                 JOIN rencontre  r2 ON r2.Id_Rencontre  = n2.Id_Rencontre
+                 JOIN equipe    ed2 ON ed2.Id_Equipe    = r2.Id_EquipeDom
+                 WHERE d2.Id_JA = j.Id_JA AND n2.Id_Rencontre <> ? AND r2.Date = ?';
+        $stmt = $pdo->prepare("
+            SELECT j.Id_JA, j.Nom, j.Prenom, j.Id_Club
+            FROM ja j
+            WHERE j.Id_JA = ? OR (
+                j.JA1 = 1 AND j.CodeDept IN ($in)
+                AND {$rep('O')} AND NOT {$rep('N')}
+                AND (SELECT COUNT(*) $jour) < 2
+                AND NOT EXISTS (SELECT 1 $jour AND ed2.Id_Club <> ?)
+            )
+            ORDER BY j.Nom, j.Prenom
+        ");
+        $d = $rc['Date'];
+        $stmt->execute([$actuel, ...$depts, $idRenc, $d, $idRenc, $d, $idRenc, $d, $idRenc, $d, $rc['IdClubDom']]);
+
+        return array_map(fn($j) => $j + ['actuel' => (int) $j['Id_JA'] === $actuel], $stmt->fetchAll());
+    }
+
+    /**
      * Correction d'une nomination depuis EN28 : Arbitrage (rencontre.ArbitrageCRA), JA,
      * péage, kilomètres, défiscalisation. DateSaisie prend la date du jour (le compte EBP
      * se modifie dans la fiche JA, EN11). Le changement de JA garde la nomination (EmailEnvoye,
      * DateNomination inchangés ; Valide forcé à 1 — un JA nommé = nomination valide d'office) et applique la règle de 2 nominations max par JA et par jour.
+     * Nouveau JA en arbitrage CRA (CRA→CRA, club→CRA) : règle stricte d'EN14 (controlerDispoCra()) ;
+     * vers un arbitrage club (CRA→club, club→club) : souple (JA actif, disponible en 'P').
      */
     public function modifier(): ResponseInterface
     {
@@ -156,33 +229,41 @@ class SuiviNominationController extends BaseController
             try {
                 $idDispo = (int) $nom['Id_Disponible'];
                 if ($idJa !== (int) $nom['IdJaActuel']) {
-                    $ja = $pdo->prepare('SELECT JA1 FROM ja WHERE Id_JA = ?');
-                    $ja->execute([$idJa]);
-                    if ((int) $ja->fetchColumn() !== 1) {
-                        throw new \RuntimeException('Juge-arbitre introuvable ou inactif.');
-                    }
-                    $this->controlerJourJa($pdo, $idJa, (int) $nom['Id_Rencontre'], $nom['Date'], $nom['IdClubDom']);
+                    $note = 'Juge-arbitre modifié depuis EN28 le ' . date('d/m/Y');
                     if ($arbCra === 1) {
-                        // Arbitrage CRA (actuel ou demandé) : JA ayant répondu non refusé, comme à la nomination.
-                        $this->controlerReponseNonJa($pdo, $idJa, (int) $nom['Id_Rencontre'], $nom['Date']);
+                        // Arbitrage CRA demandé (CRA→CRA, club→CRA) : règle stricte d'EN14, ligne 'O' réutilisée.
+                        $this->controlerDispoCra($pdo, $depts, $idJa, (int) $nom['Id_Rencontre'], $nom['Date']);
+                        $this->controlerJourJa($pdo, $idJa, (int) $nom['Id_Rencontre'], $nom['Date'], $nom['IdClubDom']);
+                        $idDispo = $this->disponibleOuiCra($pdo, $idJa, (int) $nom['Id_Rencontre'], $nom['Date'], $note);
+                    } else {
+                        $ja = $pdo->prepare('SELECT JA1 FROM ja WHERE Id_JA = ?');
+                        $ja->execute([$idJa]);
+                        if ((int) $ja->fetchColumn() !== 1) {
+                            throw new \RuntimeException('Juge-arbitre introuvable ou inactif.');
+                        }
+                        $this->controlerJourJa($pdo, $idJa, (int) $nom['Id_Rencontre'], $nom['Date'], $nom['IdClubDom']);
+
+                        // Arbitrage club (CRA→club, club→club) : disponible (JA, rencontre) réutilisée si le JA a répondu O/P,
+                        // rouverte en P s'il avait répondu N, créée en P sinon.
+                        $d = $pdo->prepare('SELECT Id_Disponible, Reponse FROM disponible WHERE Id_JA = ? AND Id_Rencontre = ?');
+                        $d->execute([$idJa, $nom['Id_Rencontre']]);
+                        $dispo = $d->fetch();
+                        if ($dispo) {
+                            $idDispo = (int) $dispo['Id_Disponible'];
+                            if ($dispo['Reponse'] === 'N') {
+                                $pdo->prepare("UPDATE disponible SET Reponse = 'P', DateReponse = CURDATE(), Note = ? WHERE Id_Disponible = ?")
+                                    ->execute([$note, $idDispo]);
+                            }
+                        } else {
+                            $pdo->prepare("INSERT INTO disponible (Id_JA, Id_Rencontre, DateCompetition, Reponse, DateReponse, Note) VALUES (?, ?, ?, 'P', CURDATE(), ?)")
+                                ->execute([$idJa, $nom['Id_Rencontre'], $nom['Date'], $note]);
+                            $idDispo = (int) $pdo->lastInsertId();
+                        }
                     }
 
-                    // disponible (JA, rencontre) : réutilisée si le JA a répondu O/P, rouverte en P s'il avait
-                    // répondu N (arbitrage club, ou CRA avec un 'O' sur la journée).
-                    $d = $pdo->prepare('SELECT Id_Disponible, Reponse FROM disponible WHERE Id_JA = ? AND Id_Rencontre = ?');
-                    $d->execute([$idJa, $nom['Id_Rencontre']]);
-                    $dispo = $d->fetch();
-                    $note  = 'Juge-arbitre modifié depuis EN28 le ' . date('d/m/Y');
-                    if ($dispo) {
-                        $idDispo = (int) $dispo['Id_Disponible'];
-                        if ($dispo['Reponse'] === 'N') {
-                            $pdo->prepare("UPDATE disponible SET Reponse = 'P', DateReponse = CURDATE(), Note = ? WHERE Id_Disponible = ?")
-                                ->execute([$note, $idDispo]);
-                        }
-                    } else {
-                        $pdo->prepare("INSERT INTO disponible (Id_JA, Id_Rencontre, DateCompetition, Reponse, DateReponse, Note) VALUES (?, ?, ?, 'P', CURDATE(), ?)")
-                            ->execute([$idJa, $nom['Id_Rencontre'], $nom['Date'], $note]);
-                        $idDispo = (int) $pdo->lastInsertId();
+                    // Nouveau JA : l'accusé de réception de l'ancien JA n'est pas hérité (colonne EA98).
+                    if (nominationAAccuseReception($pdo)) {
+                        $pdo->prepare('UPDATE nomination SET AccuseReception = NULL WHERE Id_Nomination = ?')->execute([$idNom]);
                     }
                 }
 
@@ -237,8 +318,8 @@ class SuiviNominationController extends BaseController
      *  - arbitrage club (ArbitrageCRA = 0), « Saisir le JA » : le nominateur enregistre le JA qui a
      *    officié, restée sans réponse du club. Même création qu'EN25 (ArbitreClubController::enregistrer) :
      *    disponible 'P' + nomination Valide = 1, EmailEnvoye = 0, frais + DateSaisie du jour ;
-     *  - arbitrage CRA (ArbitrageCRA = 1), « Nommer un JA » : mêmes règles qu'EN14 (affecterJa), sauf
-     *    la disponibilité 'O' non exigée — voir creerNomination(). Frais ignorés (saisis par le JA en EN21).
+     *  - arbitrage CRA (ArbitrageCRA = 1), « Nommer un JA » : mêmes règles qu'EN14 (affecterJa), dont la
+     *    disponibilité stricte — voir creerNominationCra(). Frais ignorés (saisis par le JA en EN21).
      * Aucun email envoyé.
      */
     public function saisir(): ResponseInterface
@@ -311,6 +392,9 @@ class SuiviNominationController extends BaseController
 
         $pdo->beginTransaction();
         try {
+            if ($cra) {
+                $this->controlerDispoCra($pdo, $depts, $idJa, $idRenc, $rc['Date']);
+            }
             $this->controlerJourJa($pdo, $idJa, $idRenc, $rc['Date'], $rc['IdClubDom']);
 
             if ($cra) {
@@ -353,34 +437,12 @@ class SuiviNominationController extends BaseController
     }
 
     /**
-     * Nomination d'un arbitrage CRA, règles d'EN14 (NominationController::resoudreDisponible /
-     * affecterNomination) : une réponse 'O' (rencontre, sinon journée) est réutilisée / matérialisée
-     * comme dans EN14 ; sans réponse 'O', un JA ayant répondu 'N' (rencontre ou journée) est refusé,
-     * un JA sans réponse est accepté (disponible créée/rouverte en 'P'). Appelée dans la transaction.
+     * Nomination d'un arbitrage CRA (règles d'EN14), après controlerDispoCra() dans la transaction :
+     * la ligne 'O' est réutilisée / matérialisée (disponibleOuiCra()), puis même insertion qu'EN14.
      */
     private function creerNominationCra(\PDO $pdo, int $idJa, int $idRenc, string $date): void
     {
-        [$dispo, $journee] = $this->controlerReponseNonJa($pdo, $idJa, $idRenc, $date);
-        $repRenc = $dispo['Reponse'] ?? null;
-        $repJour = $journee['Reponse'] ?? null;
-
-        if ($repRenc === 'O') {
-            $idDispo = (int) $dispo['Id_Disponible'];
-        } else {
-            // 'O' de la journée → 'O' daté de cette réponse (comme EN14), sinon 'P' du jour.
-            $rep  = $repJour === 'O' ? 'O' : 'P';
-            $dRep = $repJour === 'O' ? $journee['DateReponse'] : null;
-            $note = 'Juge-arbitre nommé depuis EN28 (arbitrage CRA) le ' . date('d/m/Y');
-            if ($dispo) {
-                $idDispo = (int) $dispo['Id_Disponible'];
-                $pdo->prepare('UPDATE disponible SET Reponse = ?, DateReponse = COALESCE(?, CURDATE()), DateCompetition = ?, Note = ? WHERE Id_Disponible = ?')
-                    ->execute([$rep, $dRep, $date, $note, $idDispo]);
-            } else {
-                $pdo->prepare('INSERT INTO disponible (Id_JA, Id_Rencontre, DateCompetition, Reponse, DateReponse, Note) VALUES (?, ?, ?, ?, COALESCE(?, CURDATE()), ?)')
-                    ->execute([$idJa, $idRenc, $date, $rep, $dRep, $note]);
-                $idDispo = (int) $pdo->lastInsertId();
-            }
-        }
+        $idDispo = $this->disponibleOuiCra($pdo, $idJa, $idRenc, $date, 'Juge-arbitre nommé depuis EN28 (arbitrage CRA) le ' . date('d/m/Y'));
 
         // Même insertion qu'EN14 (affecterNomination) : frais/DateSaisie laissés au JA (EN21).
         $pdo->prepare('INSERT INTO nomination (Id_Rencontre, Id_Disponible, DateNomination, Valide, EmailEnvoye) VALUES (?, ?, CURDATE(), 1, 0)')
@@ -388,26 +450,59 @@ class SuiviNominationController extends BaseController
     }
 
     /**
-     * Règle EN14 (arbitrage CRA) : sans réponse 'O' (rencontre ou journée), un JA ayant répondu 'N'
-     * sur la rencontre ou la journée est refusé (RuntimeException). Renvoie [disponible rencontre,
-     * disponible journée] (null si absente). Utilisée par creerNominationCra() et modifier().
+     * Contrôles d'EN14 (verifierEtNommer) à l'instant de l'écriture pour un JA nommé en arbitrage CRA,
+     * dans la transaction : verrous rencontre / JA / disponible (FOR UPDATE, même ordre qu'EN14),
+     * JA actif et du périmètre, puis disponibilité stricte (jaDisponiblePourNomination(), partagée).
+     * Refus : RuntimeException (message affichable).
      */
-    private function controlerReponseNonJa(\PDO $pdo, int $idJa, int $idRenc, string $date): array
+    private function controlerDispoCra(\PDO $pdo, array $depts, int $idJa, int $idRenc, string $date): void
+    {
+        $pdo->prepare('SELECT Id_Rencontre FROM rencontre WHERE Id_Rencontre = ? FOR UPDATE')->execute([$idRenc]);
+        $st = $pdo->prepare('SELECT JA1, CodeDept FROM ja WHERE Id_JA = ? FOR UPDATE');
+        $st->execute([$idJa]);
+        $ja = $st->fetch();
+        $pdo->prepare('
+            SELECT Id_Disponible FROM disponible
+            WHERE Id_JA = ? AND (Id_Rencontre = ? OR (Id_Rencontre IS NULL AND DateCompetition = ?))
+            FOR UPDATE
+        ')->execute([$idJa, $idRenc, $date]);
+
+        if (!$ja || (int) $ja['JA1'] !== 1 || !in_array((string) $ja['CodeDept'], $depts, true)) {
+            throw new \RuntimeException('Juge-arbitre introuvable, inactif ou hors de votre périmètre.');
+        }
+        $err = jaDisponiblePourNomination($pdo, $idJa, $idRenc, $date);
+        if ($err !== null) {
+            throw new \RuntimeException($err);
+        }
+    }
+
+    /**
+     * Id_Disponible 'O' du JA pour la rencontre (garanti par controlerDispoCra()) : ligne rencontre 'O'
+     * réutilisée, sinon matérialisée en 'O' datée de la réponse 'O' de la journée, comme EN14
+     * (NominationController::resoudreDisponible()) ; une ligne rencontre existante ('P') est mise à jour.
+     */
+    private function disponibleOuiCra(\PDO $pdo, int $idJa, int $idRenc, string $date, string $note): int
     {
         $d = $pdo->prepare('SELECT Id_Disponible, Reponse FROM disponible WHERE Id_JA = ? AND Id_Rencontre = ?');
         $d->execute([$idJa, $idRenc]);
-        $dispo = $d->fetch() ?: null;
-        $j = $pdo->prepare("SELECT Reponse, DateReponse FROM disponible WHERE Id_JA = ? AND Id_Rencontre IS NULL AND DateCompetition = ? ORDER BY Reponse = 'O' DESC LIMIT 1");
-        $j->execute([$idJa, $date]);
-        $journee = $j->fetch() ?: null;
-
-        $repRenc = $dispo['Reponse'] ?? null;
-        $repJour = $journee['Reponse'] ?? null;
-        if ($repRenc !== 'O' && $repJour !== 'O' && ($repRenc === 'N' || $repJour === 'N')) {
-            throw new \RuntimeException('Ce JA a répondu « non disponible » pour cette ' . ($repRenc === 'N' ? 'rencontre.' : 'journée.'));
+        $dispo = $d->fetch();
+        if ($dispo && $dispo['Reponse'] === 'O') {
+            return (int) $dispo['Id_Disponible'];
         }
 
-        return [$dispo, $journee];
+        $j = $pdo->prepare("SELECT DateReponse FROM disponible WHERE Id_JA = ? AND Id_Rencontre IS NULL AND DateCompetition = ? AND Reponse = 'O' LIMIT 1");
+        $j->execute([$idJa, $date]);
+        $dRep = $j->fetchColumn() ?: null;
+        if ($dispo) {
+            $pdo->prepare("UPDATE disponible SET Reponse = 'O', DateReponse = COALESCE(?, CURDATE()), DateCompetition = ?, Note = ? WHERE Id_Disponible = ?")
+                ->execute([$dRep, $date, $note, $dispo['Id_Disponible']]);
+
+            return (int) $dispo['Id_Disponible'];
+        }
+        $pdo->prepare("INSERT INTO disponible (Id_JA, Id_Rencontre, DateCompetition, Reponse, DateReponse, Note) VALUES (?, ?, ?, 'O', COALESCE(?, CURDATE()), ?)")
+            ->execute([$idJa, $idRenc, $date, $dRep, $note]);
+
+        return (int) $pdo->lastInsertId();
     }
 
     /** Renvoie au JA de la nomination le modèle « Convocation » (lien EN21 vers ses frais). */

@@ -97,8 +97,10 @@
             </div>
 
             <div class="mb-2">
-                <label class="form-label" for="txt-email">Adresse email :</label>
-                <input type="email" id="txt-email" class="form-control form-control-sm" maxlength="150">
+                <label class="form-label" for="txt-email">Adresse email (*) :</label>
+                <input type="email" id="txt-email" class="form-control form-control-sm" maxlength="150" required
+                       title="Obligatoire : le code de sécurité de connexion est envoyé à cette adresse">
+                <div class="form-text small">Le code de sécurité de connexion (E010) est envoyé à cette adresse.</div>
             </div>
 
             <div class="row g-2 mb-2">
@@ -273,6 +275,12 @@ $('#btn-enregistrer').on('click', function () {
         actif:   $('#chk-actif').is(':checked') ? '1' : '0',
         ecraser: (isNew || $('#chk-ecraser').is(':checked')) ? '1' : '0',
     };
+    // Email obligatoire (code de sécurité E010) — revérifié côté serveur.
+    if (payload.email === '' || !document.getElementById('txt-email').checkValidity()) {
+        const msg = payload.email === '' ? "L'adresse email est obligatoire." : 'Adresse email invalide.';
+        toast(msg, false); setStatus(msg, false); $('#txt-email').trigger('focus');
+        return;
+    }
     const url    = isNew ? UTILISATEUR_BASE : `${UTILISATEUR_BASE}/${currentId}`;
     const method = isNew ? 'POST' : 'PUT';
 

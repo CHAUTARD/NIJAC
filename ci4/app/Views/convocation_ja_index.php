@@ -241,11 +241,23 @@
         box-shadow: 0 4px 12px rgba(0,0,0,.3);
     }
 
+    /*  Accusé de réception  */
+    #accuse-bloc {
+        max-width: 210mm; margin: 1rem auto 0; padding: .6rem .8rem;
+        display: flex; flex-wrap: wrap; align-items: center; gap: .6rem;
+        background: #fff; border: 1px solid #d3dae6; border-radius: 6px; font-size: .95rem;
+    }
+    #accuse-bloc .accuse-ok {
+        display: inline-block; background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7;
+        border-radius: 999px; padding: .35rem .9rem; font-weight: 700;
+    }
+
     /*  Adaptation smartphone (écran uniquement — l'impression garde le A4 ci-dessous)  */
     @media screen and (max-width: 820px) {
         body { font-size: 13px; }
         #action-bar { padding: .5rem .8rem; }
         #action-bar h1 { font-size: .92rem; }
+        #accuse-bloc { margin: .6rem .6rem 0; }
         .page {
             width: auto;
             min-height: 0;
@@ -281,7 +293,7 @@
         }
 
         #action-bar,
-        #btn-save-frais, #save-status,
+        #btn-save-frais, #save-status, #accuse-bloc,
         .btn, .alert-info,
         .modal, .modal-backdrop,
         script, style { display: none !important; }
@@ -335,6 +347,33 @@
     Paramètre <code>nomination</code> manquant dans l'URL.
 </div>
 <?php else: ?>
+
+<?php if ($estConnecte): ?>
+<!--  Aperçu nominateur : actions du JA masquées (et refusées côté serveur)  -->
+<div class="alert alert-info m-3 mb-0 fw-bold">
+    <i class="bi bi-eye me-2"></i>Aperçu nominateur — ce que voit le JA. L'accusé de réception et la saisie des frais sont réservés au JA.
+</div>
+<?php endif; ?>
+
+<?php if ($accuse && ($accuse['date'] || $accuse['accusable'] || $accuse['passee'])): ?>
+<!--  Accusé de réception (nomination.AccuseReception)  -->
+<div id="accuse-bloc">
+    <span id="accuse-etat">
+    <?php if ($accuse['date']): ?>
+        <span class="accuse-ok"><i class="bi bi-check2-circle me-1"></i>Accusé de réception enregistré le <?= esc(str_replace(' ', ' à ', $accuse['date'])) ?></span>
+    <?php elseif ($accuse['accusable'] && $estConnecte): ?>
+        <span class="text-muted"><i class="bi bi-clock me-1"></i>Pas encore d'accusé de réception du JA</span>
+    <?php elseif ($accuse['accusable']): ?>
+        <button type="button" id="btn-accuser" class="btn btn-primary btn-lg">
+            <i class="bi bi-check2-circle me-1"></i>J'accuse réception de cette convocation
+        </button>
+    <?php endif; ?>
+    </span>
+    <?php if ($accuse['passee']): ?>
+        <span class="text-muted ms-2"><i class="bi bi-clock-history me-1"></i>Rencontre passée</span>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
 
 <!--  Page A4  -->
 <div class="page">
@@ -479,7 +518,7 @@
                         <input type="number" id="inp-peages" class="form-control" min="0" step="0.01"
                                style="min-width:0;width:50px"
                                value="<?= esc(number_format($peages, 2, '.', '')) ?>"
-                               placeholder="0">
+                               placeholder="0"<?= $fraisBloques || $estConnecte ? ' disabled' : '' ?>>
                         <span class="input-group-text">€</span>
                     </div>
                 </td>
@@ -487,7 +526,7 @@
                 <td>
                     <input type="number" id="inp-km" min="0" step="1"
                            value="<?= (int) $km ?>"
-                           placeholder="0">
+                           placeholder="0"<?= $fraisBloques || $estConnecte ? ' disabled' : '' ?>>
                 </td>
                 <td style="white-space:nowrap;padding-left:2px;">
                     km &nbsp;×&nbsp; <?= number_format($tauxKm, 2, ',', ' ') ?> €
@@ -502,7 +541,7 @@
     <div class="defisc-row" style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin:2mm 0 3mm;font-size:.92rem;">
         <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;user-select:none;font-weight:700;">
             <input type="checkbox" id="chk-defisc" style="width:1.1rem;height:1.1rem;cursor:pointer;accent-color:#2e7d32;"
-                   <?= $defiscCoche ? 'checked' : '' ?>>
+                   <?= $defiscCoche ? 'checked' : '' ?><?= $fraisBloques || $estConnecte ? ' disabled' : '' ?>>
             Défiscalisation des frais kilométriques
         </label>
         <span id="defisc-montant" style="font-weight:700;color:#2e7d32;"></span>
@@ -522,11 +561,11 @@
         </tr>
         <tr>
             <th>Accueil, ambiance</th>
-            <td><textarea id="inp-rapport-accueil" rows="2"><?= esc($frais['RapportAccueil'] ?? '') ?></textarea></td>
+            <td><textarea id="inp-rapport-accueil" rows="2"<?= $fraisBloques || $estConnecte ? ' disabled' : '' ?>><?= esc($frais['RapportAccueil'] ?? '') ?></textarea></td>
         </tr>
         <tr>
             <th>Équipements, salle…</th>
-            <td><textarea id="inp-rapport-eq" rows="2"><?= esc($frais['RapportEquipements'] ?? '') ?></textarea></td>
+            <td><textarea id="inp-rapport-eq" rows="2"<?= $fraisBloques || $estConnecte ? ' disabled' : '' ?>><?= esc($frais['RapportEquipements'] ?? '') ?></textarea></td>
         </tr>
     </table>
 
@@ -550,9 +589,16 @@
 
 </div><!-- /.page -->
 
-<!--  Bouton sauvegarder (hors impression)  -->
+<!--  Bouton sauvegarder (hors impression) — absent en aperçu nominateur  -->
+<?php if (!$estConnecte): ?>
 <div style="text-align:center;margin-bottom:2rem">
-    <button id="btn-save-frais" class="btn btn-success btn-lg">
+    <?php if ($fraisBloques): ?>
+    <!-- Saisie des frais bloquée tant que l'accusé de réception n'est pas enregistré (fraisBloquesSansAccuse) -->
+    <div id="frais-bloque-msg" class="alert alert-warning d-inline-block fw-bold mb-0">
+        <i class="bi bi-exclamation-triangle-fill me-1"></i>Pour saisir vos frais, accusez d'abord réception de cette convocation.
+    </div>
+    <?php endif; ?>
+    <button id="btn-save-frais" class="btn btn-success btn-lg"<?= $fraisBloques ? ' style="display:none"' : '' ?>>
         <i class="bi bi-floppy me-1"></i>Enregistrer les frais
     </button>
     <div id="save-status" class="alert alert-success mb-0" role="status">
@@ -560,11 +606,13 @@
         Merci pour votre participation et pour votre disponibilité !
     </div>
 </div>
+<?php endif; ?>
 
 <?php endif; ?>
 
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
+<script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
 <script>
 'use strict';
 const BASE    = '<?= site_url('convocation-ja') ?>';
@@ -619,6 +667,34 @@ $('#btn-save-frais').on('click', function () {
     }, 'json').fail(function () {
         $btn.prop('disabled', false);
         alert('Erreur réseau.');
+    });
+});
+
+// ── Accusé de réception (POST convocation-ja/accuse) ─────────────────────────
+$('#btn-accuser').on('click', function () {
+    const $btn = $(this);
+    $btn.prop('disabled', true);
+    $.post(`${BASE}/accuse`, { id_nomination: ID_NOMINATION, cnv: CNV_TOKEN }, function (r) {
+        if (!r.ok) {
+            $btn.prop('disabled', false);
+            nijacToast(r.err || 'Erreur inconnue.', 'danger', 0);
+            return;
+        }
+        if (r.date) {
+            $('#accuse-etat').empty().append($('<span class="accuse-ok">')
+                .append('<i class="bi bi-check2-circle me-1"></i>')
+                .append(document.createTextNode('Accusé de réception enregistré le ' + r.date.replace(' ', ' à '))));
+        }
+        // Saisie des frais débloquée sans rechargement.
+        $('#inp-peages, #inp-km, #chk-defisc, #inp-rapport-accueil, #inp-rapport-eq').prop('disabled', false);
+        $('#frais-bloque-msg').remove();
+        $('#btn-save-frais').show();
+        nijacToast('Accusé de réception enregistré. Merci !', 'success');
+    }, 'json').fail(function (x) {
+        $btn.prop('disabled', false);
+        nijacToast(x.status === 403
+            ? 'Session expirée : rechargez la page (F5) puis cliquez à nouveau.'
+            : "Erreur réseau : l'accusé de réception n'a pas été enregistré, réessayez.", 'danger', 0);
     });
 });
 

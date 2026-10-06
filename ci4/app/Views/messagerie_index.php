@@ -217,6 +217,13 @@ if ($isCsr) {
                 <code data-marqueur="{LISTE_JA_DISPONIBLES}" class="me-2" title="Lignes &lt;tr&gt; à placer dans un tableau Nom et prénom / Coordonnées">{LISTE_JA_DISPONIBLES}</code>
             </div>
             <div class="mb-1">
+                <span class="badge me-1 fw-normal" style="background:#1a3a6b;">Convocation clubs (copie EN14)</span>
+                <code data-marqueur="{COORDONNEES_JA}" class="me-2" title="Bloc HTML « Téléphone : … · Email : … » du JA convoqué, parties vides omises, vide si aucune coordonnée">{COORDONNEES_JA}</code>
+                <code data-marqueur="{TEL_JA}" class="me-2">{TEL_JA}</code>
+                <code data-marqueur="{EMAIL_JA}" class="me-2">{EMAIL_JA}</code>
+                <span class="text-muted">+ mêmes marqueurs que Convocation ({PRENOM}/{NOM} = JA convoqué), sans {URL_…_JA} : liens personnels retirés à l'envoi.</span>
+            </div>
+            <div class="mb-1">
                 <span class="badge me-1 fw-normal" style="background:#6f42c1;">Liste nomination</span>
                 <code data-marqueur="{LISTE_NOMINATIONS}" class="me-2">{LISTE_NOMINATIONS}</code>
             </div>
@@ -237,6 +244,10 @@ if ($isCsr) {
             <div>
                 <span class="badge me-1 fw-normal" style="background:#495057;">Mot de passe oublié (E007)</span>
                 <code data-marqueur="{URL_RESET_MDP}" class="me-2">{URL_RESET_MDP}</code>
+            </div>
+            <div>
+                <span class="badge me-1 fw-normal" style="background:#495057;">Code de sécurité (E010, admin)</span>
+                <code data-marqueur="{CODE}" class="me-2" title="Code de 6 chiffres envoyé au titulaire du compte — seul marqueur de ce message">{CODE}</code>
             </div>
             <!-- Convocations CRA (EC73) : affiché seulement pour un Type « CRA Convocation … », voir majMarqueursCra(). -->
             <div id="marqueurs-cra" class="mt-1 d-none">
@@ -366,9 +377,14 @@ const MARQUEURS_EXEMPLE = {
     '{NOM_JA_PRINCIPAL}':     'Jean DUPONT',
     '{TEL_JA_PRINCIPAL}':     '06.12.34.56.78',
     '{EMAIL_JA_PRINCIPAL}':   'jean.dupont@mail.fr',
+    // Convocation clubs (copie EN14) : coordonnées du JA convoqué.
+    '{TEL_JA}':               '06.12.34.56.78',
+    '{EMAIL_JA}':             'jean.dupont@mail.fr',
+    '{COORDONNEES_JA}':       '<br><span style="font-weight:normal;font-size:13px;color:#4b5563;">Téléphone : 06.12.34.56.78 · Email : <a href="mailto:jean.dupont@mail.fr" style="color:#1a3a6b;">jean.dupont@mail.fr</a></span>',
     '{NOM_CLUB}':          'ASSUN TT',
     '{URL_DESIDERATA}':     <?= json_encode(site_url('desiderata-club') . '?club=' . tokenDesiderataClub('09760136')) ?>,
-    '{URL_RESET_MDP}':      <?= json_encode(site_url('reinitialiser-mot-de-passe') . '?t=12-1893456000-abcdef') ?>
+    '{URL_RESET_MDP}':      <?= json_encode(site_url('reinitialiser-mot-de-passe') . '?t=12-1893456000-abcdef') ?>,
+    '{CODE}':               '042917'
 };
 
 function resoudreMarqueurs(txt) {

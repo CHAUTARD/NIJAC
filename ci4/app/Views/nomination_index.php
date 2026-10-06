@@ -50,6 +50,13 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 .renc-item .renc-equipes { font-size:.82rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .renc-item .renc-lieu { font-size:.72rem; color:#666; }
 .renc-item .renc-ja { font-size:.72rem; color:#3949ab; font-weight:600; }
+/* Repère d'état de la convocation, devant l'icône d'attribution (largeur fixe → icônes alignées d'une carte à l'autre) */
+.renc-item .renc-etat { display:flex; align-items:center; gap:.35rem; flex-shrink:0; align-self:center; }
+.picto-convoc { display:inline-flex; align-items:center; justify-content:center; width:1.6rem; font-size:1.1rem; line-height:1; }
+.picto-convoc .picto-valide { font-size:1.2rem; color:#198754; -webkit-text-stroke:.6px #198754; }
+.legende-convoc { font-size:.72rem; color:#6c757d; white-space:nowrap; }
+.legende-convoc .picto-convoc { width:auto; font-size:.85rem; vertical-align:-.1em; }
+.legende-convoc .picto-convoc .picto-valide { font-size:.95rem; -webkit-text-stroke:.4px #198754; }
 .renc-item .renc-ico { font-size:1rem; flex-shrink:0; }
 .renc-item.attribue .renc-ico { color:#3949ab; }
 .renc-item:not(.attribue) .renc-ico { color:#bbb; }
@@ -143,6 +150,26 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
             <option value="">— chargement —</option>
         </select>
     </span>
+    <span class="combo-field">
+        <label for="sel-accuse">Accusé de réception</label>
+        <select id="sel-accuse" style="width:auto;">
+            <option value="">Tous</option>
+            <option value="recu">Reçu</option>
+            <option value="attente">Envoyé sans accusé</option>
+            <option value="nonenvoye">Pas encore envoyé</option>
+        </select>
+    </span>
+    <div id="grp-validation" class="btn-group btn-group-sm" role="group" aria-label="Filtre validation des convocations"
+         title="Validée = le JA a accusé réception de sa convocation">
+        <button type="button" class="btn btn-secondary" data-val="">Toutes</button>
+        <button type="button" class="btn btn-outline-secondary" data-val="valide">Validées (<span id="nb-valide">0</span>)</button>
+        <button type="button" class="btn btn-outline-secondary" data-val="nonvalide">Non validées (<span id="nb-nonvalide">0</span>)</button>
+    </div>
+    <span class="legende-convoc" title="Légende de l'état des convocations">
+        <span class="picto-convoc"><i class="bi bi-check-lg picto-valide" style="color:#198754"></i></span> validée (accusé reçu)
+        · <span class="picto-convoc"><i class="bi bi-hourglass-split" style="color:#fd7e14"></i></span> en attente d'accusé
+        · <span class="picto-convoc text-muted">—</span> non envoyée
+    </span>
     <div id="spinner-barre" class="spinner-border spinner-sm text-secondary ms-2" role="status" style="display:none"><span class="visually-hidden">Chargement…</span></div>
     <a href="<?= site_url('stats-nomination') ?>" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm ms-auto">
         <i class="bi bi-bar-chart-line me-1"></i>Statistiques
@@ -225,7 +252,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
                 <code data-m="<?= $mk ?>"><?= $mk ?></code>
                 <?php endforeach; ?>
             </div>
-            <button id="ac-envoyer" class="btn btn-warning btn-sm w-100"><i class="bi bi-envelope-fill me-1"></i>Envoyer la demande au club</button>
+            <button id="ac-envoyer" class="btn btn-warning btn-sm w-100" title="Envoyer immédiatement la demande au correspondant du club (message n°7)"><i class="bi bi-envelope-fill me-1"></i>Envoyer la demande au club</button>
             <div id="ac-status" class="small mt-2"></div>
         </div>
     </div>
@@ -350,7 +377,7 @@ $(function () {
         try {
             genererFeuillePointage();
         } catch (e) {
-            nijacToast('Échec de la génération du PDF : ' + e.message, 'danger');
+            nijacToast('Échec de la génération du PDF : ' + escHtml(e.message), 'danger');
         }
     });
 });
@@ -416,8 +443,11 @@ $('#btn-titre-rencontres').on('click', function () {
 });
 
 // ── Rencontres + JA chargés en parallèle ─────────────────────────────────────
-function chargerRencontres() {
+// idGarder : rencontre à resélectionner après rechargement (refus « rafraichir » d'affecterJa),
+// la sélection d'envoi en cours est alors conservée.
+function chargerRencontres(idGarder) {
     if (!journeeCourante) return;
+    const envoiAvant = idGarder ? new Set(selectionEnvoi) : null;
     etatTitreRenc = 0;
     majTitreRencontres();
     spin(true);
@@ -455,13 +485,18 @@ function chargerRencontres() {
                 rencontres.filter(rc => rc.Valide == 1 && rc.EmailEnvoye != 1).map(rc => rc.Id_Rencontre)
             );
             selectionEnvoiInitiale = new Set(selectionEnvoi);
+            if (envoiAvant) selectionEnvoi = new Set(rencontres.filter(rc => rc.Valide == 1 && envoiAvant.has(rc.Id_Rencontre)).map(rc => rc.Id_Rencontre));
             if (j.ok) jaList = j.data;
+            // Rechargement : les cases « autre dépt » cochées sont reportées après reconstruction
+            const hdAvant = idGarder ? $('.hd-chk:checked').map(function () { return this.value; }).get() : [];
             majFiltreHorsDept();
+            $('.hd-chk').each(function () { if (hdAvant.includes(this.value)) this.checked = true; });
             renderRencontres();
             mettreAJourInfoJournee();
             mettreAJourBoutons();
-            // Sélectionner automatiquement la première rencontre non attribuée, sinon la première
-            const premiereRenc = rencontres.find(rc => !nominations[rc.Id_Rencontre]) || rencontres[0];
+            // Sélectionner la rencontre gardée, sinon la première non attribuée, sinon la première
+            const premiereRenc = (idGarder && rencontres.find(rc => rc.Id_Rencontre == idGarder))
+                || rencontres.find(rc => !nominations[rc.Id_Rencontre]) || rencontres[0];
             if (premiereRenc) selectionnerRencontre(premiereRenc.Id_Rencontre);
         })
         .always(() => spin(false));
@@ -506,15 +541,87 @@ $('#btn-tri-priorite').on('click', function () {
     renderRencontres();
 });
 
+// ── Filtre accusé de réception (fonctions pures, testées hors navigateur) ──
+// État d'une rencontre : '' sans JA, 'recu' (AccuseReception renseigné), 'attente'
+// (convocation envoyée sans accusé), 'nonenvoye'. Filtre '' = tout afficher.
+function etatAccuse(rc, aJa) {
+    if (!aJa) return '';
+    if (rc.AccuseReception) return 'recu';
+    return rc.EmailEnvoye == 1 ? 'attente' : 'nonenvoye';
+}
+function passeFiltreAccuse(rc, aJa, filtre) {
+    return !filtre || etatAccuse(rc, aJa) === filtre;
+}
+// Convocation validée = le JA a accusé réception (même base que etatAccuse, Valide n'intervient pas) :
+// '' sans JA, 'valide' (AccuseReception renseigné), 'nonvalide' (envoyée sans accusé ou pas encore envoyée).
+function etatValidation(rc, aJa) {
+    const e = etatAccuse(rc, aJa);
+    return e === '' ? '' : (e === 'recu' ? 'valide' : 'nonvalide');
+}
+function passeFiltreValidation(rc, aJa, filtre) {
+    return !filtre || etatValidation(rc, aJa) === filtre;
+}
+// ── fin filtre accusé ──
+let filtreAccuse = '';   // conservé au changement de journée (non réinitialisé par chargerRencontres)
+let filtreValidation = '';   // idem
+const estAffichee = rc => {
+    const aJa = !!nominations[rc.Id_Rencontre];
+    return passeFiltreAccuse(rc, aJa, filtreAccuse) && passeFiltreValidation(rc, aJa, filtreValidation);
+};
+// Envoi : seulement les rencontres cochées ET affichées par le filtre.
+const idsEnvoiAffiches = () => rencontres.filter(rc => selectionEnvoi.has(rc.Id_Rencontre) && estAffichee(rc)).map(rc => rc.Id_Rencontre);
+
+$('#sel-accuse').on('change', function () {
+    filtreAccuse = this.value;
+    renderRencontres();
+    mettreAJourBoutons();
+});
+$('#grp-validation').on('click', 'button', function () {
+    filtreValidation = $(this).data('val') || '';
+    $('#grp-validation button').removeClass('btn-secondary').addClass('btn-outline-secondary');
+    $(this).removeClass('btn-outline-secondary').addClass('btn-secondary');
+    renderRencontres();
+    mettreAJourBoutons();
+});
+
+function formatDateHeure(dt) {   // 'YYYY-MM-DD HH:MM:SS' → 'jj/mm/aaaa à hh:mm' (comme EN28)
+    return dt.substring(0, 10).split('-').reverse().join('/') + ' à ' + dt.substring(11, 16);
+}
+
+// Repère unique à 3 états (validée = accusé de réception reçu), affiché devant l'icône d'attribution
+// (.renc-ico) dans un emplacement de largeur fixe (.picto-convoc) pour garder les icônes alignées.
+// Validée = V vert épais (bi-check-lg), distinct de .renc-ico (personne + coche indigo).
+function pictoConvocation(rc) {
+    switch (etatAccuse(rc, true)) {
+        case 'recu': {
+            const t = `Convocation validée — accusé de réception le ${escHtml(formatDateHeure(rc.AccuseReception))}`;
+            return `<span class="picto-convoc"><i class="bi bi-check-lg picto-valide" style="color:#198754" role="img" title="${t}" aria-label="${t}"></i></span>`;
+        }
+        case 'attente': return '<span class="picto-convoc"><i class="bi bi-hourglass-split" style="color:#fd7e14" title="Convocation non validée — en attente d\'accusé de réception"></i></span>';
+        default:        return '<span class="picto-convoc text-muted" title="Convocation pas encore envoyée">—</span>';
+    }
+}
+
 function renderRencontres() {
     const $liste = $('#liste-rencontres').empty();
+    const etatsVal = rencontres.map(rc => etatValidation(rc, !!nominations[rc.Id_Rencontre]));
+    $('#nb-valide').text(etatsVal.filter(e => e === 'valide').length);
+    $('#nb-nonvalide').text(etatsVal.filter(e => e === 'nonvalide').length);
     if (!rencontres.length) {
         $liste.html('<div class="text-center text-muted py-4" style="font-size:.85rem">Aucune rencontre</div>');
         return;
     }
-    const listeAffichee = triPriorite
+    const listeAffichee = (triPriorite
         ? [...rencontres].sort((a, b) => rangPriorite(a) - rangPriorite(b))
-        : rencontres;
+        : rencontres).filter(estAffichee);
+    const nb    = rencontres.length;
+    const nbAttr = Object.keys(nominations).length;
+    $('#compteur-renc').text(`${nbAttr}/${nb} attribué${nbAttr > 1 ? 's' : ''}`
+        + (filtreAccuse || filtreValidation ? ` · ${listeAffichee.length} affichée${listeAffichee.length > 1 ? 's' : ''}` : ''));
+    if (!listeAffichee.length) {
+        $liste.html('<div class="text-center text-muted py-4" style="font-size:.85rem">Aucune rencontre pour ce filtre</div>');
+        return;
+    }
     // En-têtes de groupe : seulement en tri « club recevant » sans tri priorité (qui disperse les clubs)
     const groupes = triOrdre === 'club' && !triPriorite;
     const nbParClub = {};
@@ -560,10 +667,10 @@ function renderRencontres() {
                         ${lieu  ? `<span class="ms-2"><i class="bi bi-geo-alt" style="font-size:.68rem"></i> ${lieu}</span>` : ''}
                         ${envoiBadge}
                     </div>
-                    ${attr ? `<div class="renc-ja"><i class="bi bi-person-check me-1"></i>${escHtml(nomJa)}</div>` : ''}
+                    ${attr ? `<div class="renc-ja">${escHtml(nomJa)}</div>` : ''}
                     ${btnAsk}
                 </div>
-                <i class="bi ${attr ? 'bi-person-check-fill' : 'bi-person-dash'} renc-ico"></i>
+                <div class="renc-etat">${attr ? pictoConvocation(rc) : '<span class="picto-convoc"></span>'}<i class="bi ${attr ? 'bi-person-check-fill' : 'bi-person-dash'} renc-ico"></i></div>
             </div>
         `);
     });
@@ -578,11 +685,6 @@ function renderRencontres() {
         if (this.checked) selectionEnvoi.add(id); else selectionEnvoi.delete(id);
         mettreAJourBoutons();
     });
-
-
-    const nb    = rencontres.length;
-    const nbAttr = Object.keys(nominations).length;
-    $('#compteur-renc').text(`${nbAttr}/${nb} attribué${nbAttr > 1 ? 's' : ''}`);
 }
 
 // ── Sélection d'une rencontre ─────────────────────────────────────────────────
@@ -672,7 +774,8 @@ function afficherCandidatsPourRencontre(idRenc) {
             ? ja.DispoRencontres.split(',').map(Number)
             : [];
         const prefereRenc  = dispoRencs.includes(idRenc);
-        if (!dispoJournee && !prefereRenc) return;
+        // Disponibilité : règle serveur unique (sqlDispoRencontre), revérifiée à la nomination.
+        if (!String(ja.RencontresOk || '').split(',').map(Number).includes(idRenc)) return;
 
         // JA d'un autre département (accepte via EN22) : affiché seulement si la
         // case de SON département est cochée dans le filtre « Autres dépts »
@@ -845,7 +948,7 @@ $('#ac-envoyer').on('click', function () {
     }, function (res) {
         if (res.ok) {
             $('#ac-status').addClass('text-success').text(res.msg);
-            toast(res.msg);
+            toast(escHtml(res.msg));
         } else {
             $('#ac-status').addClass('text-danger').text(res.err || res.msg || 'Erreur.');
             $b.prop('disabled', false);
@@ -875,16 +978,26 @@ function appliquerValidation(idRenc) {
 
 function reinitialiserValidation(idRenc) {
     const rc = rencontres.find(r => r.Id_Rencontre === idRenc);
-    if (rc) { rc.Valide = 0; rc.EmailEnvoye = 0; }
+    if (rc) { rc.Valide = 0; rc.EmailEnvoye = 0; rc.AccuseReception = null; }   // nomination supprimée
     selectionEnvoi.delete(idRenc);
 }
 
 function affecterJa(idRenc, idJa, nom, prenom) {
     ajax('affecter-ja', {
         method: 'POST',
-        data:   { id_rencontre: idRenc, id_ja: idJa }
+        // id_ja_actuel : JA affiché nommé ('' = aucun) — le serveur refuse si un autre JA a été nommé entre-temps.
+        data:   { id_rencontre: idRenc, id_ja: idJa, id_ja_actuel: nominations[idRenc]?.Id_JA ?? '' }
     }).done(function (r) {
-        if (!r.ok) { nijacToast('Erreur : ' + r.err, 'danger'); return; }
+        if (!r.ok) {
+            nijacToast('Erreur : ' + escHtml(r.err), 'danger');
+            // Situation changée depuis le chargement (dispo, JA désactivé, autre nomination…) :
+            // rechargement des rencontres et candidats en gardant la rencontre sélectionnée.
+            if (r.rafraichir) chargerRencontres(idRenc);
+            return;
+        }
+        // Changement de JA : l'accusé de l'ancien JA est remis à NULL côté serveur (affecterNomination)
+        const rcAff = rencontres.find(rc => rc.Id_Rencontre === idRenc);
+        if (rcAff && nominations[idRenc]?.Id_JA != idJa) rcAff.AccuseReception = null;
         nominations[idRenc] = { Id_JA: idJa, Nom: nom, Prenom: prenom };
         appliquerValidation(idRenc);
 
@@ -903,7 +1016,7 @@ function retirerJa(idRenc) {
         method: 'POST',
         data:   { id_rencontre: idRenc }
     }).done(function (r) {
-        if (!r.ok) { nijacToast('Erreur : ' + r.err, 'danger'); return; }
+        if (!r.ok) { nijacToast('Erreur : ' + escHtml(r.err), 'danger'); return; }
         delete nominations[idRenc];
         reinitialiserValidation(idRenc);
         renderRencontres();
@@ -935,7 +1048,7 @@ function mettreAJourBoutons() {
     const validees = rencontres.filter(rc => rc.Valide == 1).length;
 
     // Envoyer visible dès qu'au moins une nomination est validée — persiste au rechargement de la page
-    $('#btn-envoyer').toggle(validees > 0).prop('disabled', selectionEnvoi.size === 0);
+    $('#btn-envoyer').toggle(validees > 0).prop('disabled', idsEnvoiAffiches().length === 0);
     $('#btn-pointage').prop('disabled', total === 0);
     $('#wrap-pointage').attr('title', total ? 'Feuille de pointage PDF de toutes les rencontres de la journée' : 'Aucune rencontre à imprimer');
 
@@ -968,11 +1081,11 @@ function mettreAJourInfoJournee() {
 
 // ── Envoi des convocations ────────────────────────────────────────────────────
 function envoyerConvocations() {
-    if (selectionEnvoi.size === 0) {
+    const ids = idsEnvoiAffiches();   // les lignes masquées par les filtres « Accusé de réception » / validation ne partent pas
+    if (ids.length === 0) {
         nijacToast('Sélectionnez au moins une convocation à envoyer.', 'warning');
         return;
     }
-    const ids = [...selectionEnvoi];
     nijacConfirm(`Envoyer ${ids.length} convocation${ids.length > 1 ? 's' : ''} par e-mail ?`, function () {
         const copieClubs = $('#chk-copie-clubs').is(':checked');
         // L'envoi SMTP est séquentiel donc lent : bouton verrouillé (pas de double envoi) + spinner
@@ -988,7 +1101,7 @@ function envoyerConvocations() {
             }
         }).done(function (r) {
             spin(false);   // avant chargerRencontres(), qui relance son propre spinner
-            if (!r.ok) { nijacToast('Erreur : ' + r.err, 'danger'); return; }
+            if (!r.ok) { nijacToast('Erreur : ' + escHtml(r.err), 'danger'); return; }
             // Afficher la modale avec les liens
             const $body = $('#liensBody').empty();
             (r.liens || []).forEach(l => {

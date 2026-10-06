@@ -191,7 +191,12 @@ class UtilisateurController extends BaseController
         if ($dept <= 0) {
             return 'Le département est obligatoire.';
         }
-        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        // Obligatoire : le code de sécurité de connexion (E010) part à cette adresse.
+        // Pas de contrôle d'unicité : des comptes partagent déjà une adresse en base.
+        if ($email === '') {
+            return "L'adresse email est obligatoire (envoi du code de sécurité de connexion).";
+        }
+        if (mb_strlen($email) > 150 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return 'Adresse email invalide.';
         }
 
@@ -202,7 +207,7 @@ class UtilisateurController extends BaseController
             'Role'           => $role,
             'Id_Departement' => $dept,
             'Actif'          => $actif,
-            'Email'          => $email !== '' ? $email : null,
+            'Email'          => $email,
         ];
 
         if ($isNew || $ecraser) {

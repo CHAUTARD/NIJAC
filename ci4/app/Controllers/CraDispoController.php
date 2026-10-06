@@ -744,7 +744,7 @@ class CraDispoController extends BaseController
             . '<th style="' . $td . '">N°</th><th style="' . $td . '">Dates</th><th style="' . $td . '">Compétition</th><th style="' . $td . '">Lieu</th></tr>'
             . $lignes . '</table>'
             . '<p style="margin:22px 0;"><a href="' . $h($url) . '" style="background:#00695c;color:#fff;padding:10px 18px;border-radius:5px;text-decoration:none;font-weight:bold;">Indiquer mes disponibilités</a></p>'
-            . '<p style="font-size:12px;color:#555;">Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br>' . $h($url) . '</p>'
+            . '<p style="font-size:12px;color:#555;">Si le bouton ne fonctionne pas, valider ce lien dans votre navigateur :<br>' . $h($url) . '</p>'
             . ($limite !== '' ? '<p><b>Merci de répondre avant le ' . $h(date('d/m/Y', strtotime($limite))) . '.</b></p>' : '')
             . '<p>Cordialement,<br>' . $h($signature) . ($signature !== '' ? '<br>' : '') . 'Commission Régionale d\'Arbitrage'
             . (!empty($moi['email']) ? '<br>' . $h($moi['email']) : '') . '</p></div>';

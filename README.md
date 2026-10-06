@@ -27,9 +27,9 @@ Quelques écrans marquants :
 | E001 | Connexion | Authentification, redirection selon le rôle, forçage du changement de mot de passe |
 | EN11 | Juges-Arbitres | Import FFTT (API ou fichier), fiche JA (grade, club, commune, défiscalisation, nationale) |
 | EN14 | Nomination | Affectation JA ↔ rencontres selon les règles métier (nomination valide d'office), envoi des convocations (+ copie sans lien aux correspondants/référents des 2 clubs), feuille de pointage PDF de la journée |
-| EN21 | Convocation et frais JA | Page publique tokenisée : consultation de la convocation, saisie des frais (péage, km, défiscalisation) par le JA |
+| EN21 | Convocation et frais JA | Page publique tokenisée : consultation de la convocation, saisie des frais (péage, km, défiscalisation) et accusé de réception de la convocation par le JA |
 | EN27 | Clubs / Associations | Import et gestion des clubs affiliés (upsert depuis l'API FFTT) |
-| EN28 | Suivi des nominations | Suivi des frais saisis par les JA, correction et relance |
+| EN28 | Suivi des nominations | Suivi des frais saisis par les JA et des accusés de réception, correction et relance |
 | EA91 | Configuration | Paramètres applicatifs (état logiciel, SMTP, phases, frais kilométriques…) |
 | EA98 | Administration BDD | Requêteur SQL libre, structure des tables, accès restreint (compte CHAUTARD) |
 
@@ -157,6 +157,7 @@ Deux écrans (EA96, EA98) restent réservés en plus au compte `CHAUTARD`, véri
 - **CSRF** : géré globalement par le filtre `csrf` de CodeIgniter (`Config\Filters`) sur tout POST/PUT/PATCH/DELETE, sans appel explicite dans les contrôleurs. Chaque vue expose le jeton via `<meta name="csrf-token">`, injecté dans l'en-tête `X-CSRF-Token` par `asset/js/nijac-csrf.js` (préfiltre jQuery AJAX).
 - **Obfuscation des IDs JA** dans les URL publiques via `Classes/Obfuscator.php` (bcmath + hash de Knuth), avec un pepper secret optionnel (`.env`) qui rend les tokens non forgeables sans lui.
 - **Mots de passe** hashés via `Classes/SecurePasswordHasher.php` (bcrypt).
+- **Double authentification par email** : après le mot de passe (E001), un code de 6 chiffres (`random_int`) est envoyé à `utilisateur.Email` (obligatoire) et saisi en E010 — valable 10 min, usage unique, 5 essais, renvoi limité (60 s, 3 / 10 min), seul son hash est conservé en session, `$_SESSION['utilisateur']` n'existe qu'après validation. Coupe-circuit d'urgence (panne SMTP, adresse erronée) : `UPDATE configuration SET valeur = '0' WHERE cle = 'double_authentification';` (retour au mot de passe seul, journalisé ; remettre `'1'` ensuite).
 - **Rate limiting** sur l'envoi d'emails (fenêtre glissante, `config/app_config.php`).
 - **Secrets** : jamais dans le dépôt, ROT47-encodés dans `.env` (non versionné), explicitement refusés par `.htaccess` en dehors de tout appel applicatif — de même pour `SQL/` et `Importation/`.
 

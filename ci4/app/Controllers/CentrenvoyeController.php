@@ -85,7 +85,10 @@ class CentrenvoyeController extends BaseController
         $pdo = getPDO();
 
         $modeles = [];
-        $rows    = $pdo->query('SELECT Type, Sujet, Message, Cc, ReplyTo FROM messagerie ORDER BY Id_Messagerie')->fetchAll();
+        // Le code de sécurité (E010) n'est jamais un modèle d'envoi d'EN15.
+        $rows    = $pdo->prepare('SELECT Type, Sujet, Message, Cc, ReplyTo FROM messagerie WHERE Type <> ? ORDER BY Id_Messagerie');
+        $rows->execute([TYPE_MESSAGE_CODE_SECURITE]);
+        $rows    = $rows->fetchAll();
         foreach ($rows as $r) {
             if (!isset($modeles[$r['Type']])) {
                 $modeles[$r['Type']] = ['sujet' => $r['Sujet'], 'message' => $r['Message'], 'cc' => (bool) $r['Cc'], 'replyto' => (bool) $r['ReplyTo']];

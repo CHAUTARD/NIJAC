@@ -46,11 +46,9 @@ class ConvocationJaController extends BaseController
     public function index($nomSeg = null, $cnvSeg = null)
     {
         // Page publique (JA via lien email) mais aussi ouverte depuis la session
-        // d'un nominateur/admin : le bouton Retour n'est utile qu'à ces derniers.
-        demarrerSessionNijac();
-        $estConnecte = !empty($_SESSION['utilisateur']['role'] ?? null);
-        session_write_close();
-        unset($_SESSION); // évite que CI4 redémarre son service Session (cf. DisponibiliteJaController)
+        // d'un nominateur/admin (ex. lien de la fenêtre d'envoi EN14) : bouton Retour +
+        // mode aperçu (actions du JA masquées, refusées côté serveur).
+        $estConnecte = $this->sessionUtilisateur();
 
         $pdo          = getPDO();
         $idNomination = (int) ($nomSeg ?? $this->request->getGet('nomination') ?? 0);
@@ -217,6 +215,25 @@ class ConvocationJaController extends BaseController
         }
         $heure = $rencontre ? substr($rencontre['Heure'] ?? '09:00', 0, 5) : '';
 
+        // Accusé de réception (colonne nomination.AccuseReception, EA98) : bloc masqué
+        // tant que la colonne n'existe pas ou en cas d'erreur.
+        $accuse = null;
+        if ($ja && $rencontre && !$erreur && nominationAAccuseReception($pdo)) {
+            try {
+                $st = $pdo->prepare('SELECT AccuseReception FROM nomination WHERE Id_Nomination = ?');
+                $st->execute([$idNomination]);
+                $dt = $st->fetchColumn();
+                $accuse = [
+                    'date'      => $dt ? date('d/m/Y H:i', strtotime($dt)) : null,
+                    'accusable' => convocationAccusable($pdo, $idNomination),
+                    'passee'    => $rencontre['Date'] && $rencontre['Date'] < date('Y-m-d'),
+                ];
+            } catch (\PDOException $e) {
+                error_log('[NIJAC] EN21 accusé : ' . $e->getMessage());
+                $accuse = null;
+            }
+        }
+
         return view('convocation_ja_index', [
             'idNomination'     => $idNomination,
             'tokenCnv'         => $tokenValide ? $tokenCnv : '',
@@ -238,11 +255,97 @@ class ConvocationJaController extends BaseController
             'defiscCoche'      => $defiscCoche,
             'dateFormatee'     => $dateFormatee,
             'heure'            => $heure,
+            'accuse'           => $accuse,
+            // Même règle que fraisBloquesSansAccuse() : convocation accusable mais pas encore accusée.
+            'fraisBloques'     => $accuse !== null && !$accuse['date'] && $accuse['accusable'],
         ]);
     }
 
+    /**
+     * Vrai si la page est ouverte dans une session NIJAC (Nominateur/Admin/CSR…) : un JA ne
+     * se connecte jamais, donc toute session = aperçu nominateur, sans action réservée au JA.
+     */
+    private function sessionUtilisateur(): bool
+    {
+        demarrerSessionNijac();
+        $connecte = !empty($_SESSION['utilisateur']['role'] ?? null);
+        session_write_close();
+        unset($_SESSION); // évite que CI4 redémarre son service Session (cf. DisponibiliteJaController)
+
+        return $connecte;
+    }
+
+    private const ERR_APERCU = 'Aperçu nominateur : action réservée au JA.';
+
+    /**
+     * Saisie des frais bloquée tant que le JA n'a pas accusé réception (EN21) : vrai si la colonne
+     * nomination.AccuseReception existe (EA98), vaut NULL et que la convocation est encore accusable
+     * (Valide = 1, rencontre du jour ou à venir — mêmes critères que convocationAccusable()).
+     * Exceptions volontaires : rencontre passée sans accusé (le JA doit pouvoir saisir ses frais réels)
+     * et colonne absente avant EA98 → saisie autorisée.
+     */
+    public static function fraisBloquesSansAccuse(\PDO $pdo, int $idNomination, bool $colonneExiste): bool
+    {
+        if (!$colonneExiste) {
+            return false;
+        }
+        $st = $pdo->prepare(
+            'SELECT 1
+             FROM nomination n
+             JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+             JOIN rencontre  r ON r.Id_Rencontre  = n.Id_Rencontre
+             WHERE n.Id_Nomination = ? AND n.AccuseReception IS NULL
+               AND d.Id_JA IS NOT NULL AND n.Valide = 1 AND r.Date >= CURDATE()'
+        );
+        $st->execute([$idNomination]);
+
+        return (bool) $st->fetchColumn();
+    }
+
+    /**
+     * Accusé de réception de la convocation par le JA (POST convocation-ja/accuse).
+     * Jeton cnv vérifié comme sauvegarderFrais() ; seule la nomination du lien est accusable
+     * (`cible` vide ou égale à son id, sinon « Action non disponible »). Règles (Valide = 1,
+     * rencontre du jour ou à venir, idempotence) : accuserReceptionConvocation() (config/app_config.php). Aucun email.
+     */
+    public function accuser(): ResponseInterface
+    {
+        if ($this->sessionUtilisateur()) {
+            return $this->response->setJSON(['ok' => false, 'err' => self::ERR_APERCU]);
+        }
+        try {
+            $pdo      = getPDO();
+            $idNomP   = (int) ($this->request->getPost('id_nomination') ?? 0);
+            $tokenCnv = trim((string) ($this->request->getPost('cnv') ?? ''));
+            $cible    = trim((string) ($this->request->getPost('cible') ?? ''));
+            $tokenValide = $idNomP > 0 && $tokenCnv !== '' && (
+                $this->obf->deobfuscate($tokenCnv) === $idNomP
+                || $this->obfSansPepper->deobfuscate($tokenCnv) === $idNomP
+            );
+            if (!$tokenValide) {
+                return $this->response->setJSON(['ok' => false, 'err' => "Lien de convocation invalide. Merci de redemander l'envoi de votre convocation."]);
+            }
+            if ($cible !== '' && $cible !== (string) $idNomP) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Action non disponible.']);
+            }
+            if (!nominationAAccuseReception($pdo)) {
+                return $this->response->setJSON(['ok' => false, 'err' => "L'accusé de réception n'est pas encore disponible. Merci de réessayer plus tard."]);
+            }
+
+            return $this->response->setJSON(accuserReceptionConvocation($pdo, $idNomP, $cible));
+        } catch (\PDOException $e) {
+            error_log('[NIJAC] EN21 accuser : ' . $e->getMessage());
+
+            return $this->response->setJSON(['ok' => false, 'err' => messageErreur($e, "Erreur technique : l'accusé de réception n'a pas pu être enregistré.")]);
+        }
+    }
+
+    // Frais saisis par le JA ; le nominateur les corrige via EN28 (route distincte, non concernée).
     public function sauvegarderFrais(): ResponseInterface
     {
+        if ($this->sessionUtilisateur()) {
+            return $this->response->setJSON(['ok' => false, 'err' => self::ERR_APERCU]);
+        }
         try {
             $pdo      = getPDO();
             $idNomP   = (int) ($this->request->getPost('id_nomination') ?? 0);
@@ -268,6 +371,9 @@ class ConvocationJaController extends BaseController
             $rowNom = $rowNom->fetch();
             if (!$rowNom) {
                 return $this->response->setJSON(['ok' => false, 'err' => 'Nomination introuvable.']);
+            }
+            if (self::fraisBloquesSansAccuse($pdo, $idNomP, nominationAAccuseReception($pdo))) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'Accusez réception de la convocation avant de saisir vos frais.']);
             }
 
             $peagesRaw = trim($this->request->getPost('peages') ?? '');

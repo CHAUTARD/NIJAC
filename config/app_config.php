@@ -527,6 +527,21 @@ function initTableConfiguration(\PDO $pdo): void
         // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
     }
 
+    // nomination.AccuseReception : date/heure de l'accusé de réception de la
+    // convocation par le JA (EN21, POST convocation-ja/accuse) ; NULL = pas encore.
+    // Lue par EN21 et EN28 seulement si présente (tolérance avant passage EA98).
+    try {
+        $existe = $pdo->query(
+            "SELECT 1 FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nomination' AND COLUMN_NAME = 'AccuseReception'"
+        )->fetchColumn();
+        if (!$existe) {
+            $pdo->exec('ALTER TABLE nomination ADD COLUMN AccuseReception DATETIME NULL DEFAULT NULL AFTER EmailEnvoye');
+        }
+    } catch (\PDOException $e) {
+        // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
+    }
+
     // Colonnes "référent" du club : 2e contact, mis en copie (Cc) des emails
     // envoyés au correspondant. Mêmes types que CorNom / CorEmail / CorTelephone.
     try {
@@ -651,6 +666,61 @@ function initTableConfiguration(\PDO $pdo): void
     } catch (\PDOException $e) {
         error_log('[NIJAC] Amorçage des modèles de convocation CRA : ' . $e->getMessage());
     }
+
+    // Message n°3 « Convocation » (EN14) : ancien texte brut par défaut -> modèle HTML avec
+    // bouton vers EN21 (modeleHtmlConvocationJa()). Jamais si le corps a été personnalisé via
+    // EA93 ou est déjà à jour (une version HTML précédente non modifiée est mise à niveau) ; Sujet, Cc/ReplyTo et copies perso des nominateurs intacts.
+    try {
+        $corps = $pdo->query('SELECT Message FROM messagerie WHERE Id_Messagerie = 3')->fetchColumn();
+        if ($corps !== false && corpsConvocationJaMigrable((string) $corps)) {
+            $pdo->prepare('UPDATE messagerie SET Message = ? WHERE Id_Messagerie = 3')->execute([modeleHtmlConvocationJa()]);
+        } elseif ($corps !== false && $corps !== modeleHtmlConvocationJa()) {
+            error_log('[NIJAC] message n°3 personnalisé : modèle HTML non appliqué');
+        }
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] Message n°3 -> modèle HTML : ' . $e->getMessage());
+    }
+
+    // EN14 : message système dédié à la copie de convocation aux correspondants/référents des clubs.
+    try {
+        assurerModeleCopieConvocationClubs($pdo);
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] Amorçage du message « ' . TYPE_MESSAGE_COPIE_CONVOCATION_CLUBS . ' » : ' . $e->getMessage());
+    }
+
+    // E010 : message système du code de sécurité (double authentification par email).
+    try {
+        assurerModeleCodeSecurite($pdo);
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] Amorçage du message « ' . TYPE_MESSAGE_CODE_SECURITE . ' » : ' . $e->getMessage());
+    }
+
+    // Coupe-circuit de la double authentification (1 = active, 0 = mot de passe seul) : jamais écrasé.
+    try {
+        $pdo->exec("INSERT IGNORE INTO configuration (cle, valeur, description) VALUES
+            ('double_authentification', '1', 'E001/E010 — double authentification par email : 1 = active, 0 = coupe-circuit (mot de passe seul)')");
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] Clé double_authentification : ' . $e->getMessage());
+    }
+
+    // utilisateur.Email obligatoire (code de sécurité E010) : NOT NULL, type/longueur/collation conservés,
+    // NULL -> '' (aucune adresse fabriquée ; ces comptes ne peuvent pas se connecter tant que la
+    // double authentification est active — à corriger en EA86). Ne s'exécute que si la colonne est NULL-able.
+    try {
+        $col = $pdo->query(
+            "SELECT COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME, COLLATION_NAME
+             FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'utilisateur' AND COLUMN_NAME = 'Email'"
+        )->fetch(\PDO::FETCH_ASSOC);
+        if ($col && (int) $col['CHARACTER_MAXIMUM_LENGTH'] < 100) {
+            error_log("[NIJAC] utilisateur.Email ({$col['COLUMN_TYPE']}) trop court pour une adresse réelle : à agrandir manuellement");
+        }
+        foreach ($col ? sqlEmailUtilisateurObligatoire($col, $pdo) : [] as $sql) {
+            $pdo->exec($sql);
+        }
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] utilisateur.Email NOT NULL : ' . $e->getMessage());
+    }
 }
 
 /**
@@ -749,6 +819,100 @@ function getFfttApiJoursAvantExpiration(): ?int
     }
 
     return (int) (new \DateTime('today'))->diff($date)->format('%r%a');
+}
+
+/**
+ * nomination.AccuseReception existe-t-elle ? (ajoutée par EA98 — EN21/EN28 la lisent
+ * seulement si présente, pour ne pas planter avant la migration). Cache statique : une
+ * seule vérification par requête.
+ */
+function nominationAAccuseReception(\PDO $pdo): bool
+{
+    static $existe = null;
+    if ($existe === null) {
+        try {
+            $existe = (bool) $pdo->query(
+                "SELECT 1 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nomination' AND COLUMN_NAME = 'AccuseReception'"
+            )->fetchColumn();
+        } catch (\PDOException $e) {
+            $existe = false;
+        }
+    }
+
+    return $existe;
+}
+
+/**
+ * Règle stricte de disponibilité pour nommer un JA en arbitrage CRA, identique à EN14
+ * (NominationController::sqlDispoRencontre()) : une réponse 'O' sur la rencontre ou la journée
+ * (Id_Rencontre NULL, même date) ET aucune réponse 'N' ni sur la rencontre ni sur la journée.
+ * Sans réponse / 'P' seul → refus. Renvoie null si nommable, sinon le message d'EN14.
+ * Utilisée par EN28 ; un test d'équivalence la compare à sqlDispoRencontre() d'EN14.
+ */
+function jaDisponiblePourNomination(\PDO $pdo, int $idJa, int $idRenc, string $date): ?string
+{
+    $rep = fn(string $r) => "EXISTS (SELECT 1 FROM disponible dx WHERE dx.Id_JA = ? AND dx.Reponse = '$r'
+            AND (dx.Id_Rencontre = ? OR (dx.Id_Rencontre IS NULL AND dx.DateCompetition = ?)))";
+    $st = $pdo->prepare('SELECT ' . $rep('O') . ', ' . $rep('N'));
+    $st->execute([$idJa, $idRenc, $date, $idJa, $idRenc, $date]);
+    [$aOui, $aNon] = array_map('intval', $st->fetch(\PDO::FETCH_NUM));
+
+    if ($aNon) {
+        return 'Ce JA n\'est plus disponible pour cette rencontre/journée (il a répondu « non »).';
+    }
+
+    return $aOui ? null : 'Ce JA n\'est pas disponible pour cette rencontre (aucune réponse « oui »).';
+}
+
+/**
+ * La convocation peut-elle recevoir un accusé de réception (EN21) ? Nomination existante,
+ * rattachée à un JA, valide (Valide = 1) et dont la rencontre est aujourd'hui ou à venir.
+ */
+function convocationAccusable(\PDO $pdo, int $idNomination): bool
+{
+    $st = $pdo->prepare(
+        'SELECT 1
+         FROM nomination n
+         JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+         JOIN rencontre  r ON r.Id_Rencontre  = n.Id_Rencontre
+         WHERE n.Id_Nomination = ? AND d.Id_JA IS NOT NULL AND n.Valide = 1 AND r.Date >= CURDATE()'
+    );
+    $st->execute([$idNomination]);
+
+    return (bool) $st->fetchColumn();
+}
+
+/**
+ * Accusé de réception de convocation par le JA (EN21, POST convocation-ja/accuse).
+ * $idNomination : nomination du lien (jeton cnv déjà vérifié par l'appelant) — seule
+ * nomination accusable par ce lien. $cible : vide ou cet Id_Nomination ; toute autre
+ * valeur est refusée. Idempotent : une date déjà posée n'est jamais réécrite.
+ * Retourne ['ok', 'nb' (1 si nouvellement accusée, sinon 0), 'date' (jj/mm/aaaa hh:mm)]
+ * ou ['ok' => false, 'err'].
+ */
+function accuserReceptionConvocation(\PDO $pdo, int $idNomination, string $cible = ''): array
+{
+    if ($cible !== '' && $cible !== (string) $idNomination) {
+        return ['ok' => false, 'err' => 'Action non disponible.'];
+    }
+    if (!convocationAccusable($pdo, $idNomination)) {
+        return ['ok' => false, 'err' => "Cette convocation ne peut pas faire l'objet d'un accusé de réception "
+            . '(convocation introuvable, rencontre passée ou nomination annulée).'];
+    }
+
+    $upd = $pdo->prepare('UPDATE nomination SET AccuseReception = NOW() WHERE Id_Nomination = ? AND AccuseReception IS NULL');
+    $upd->execute([$idNomination]);
+
+    $sel = $pdo->prepare('SELECT AccuseReception FROM nomination WHERE Id_Nomination = ?');
+    $sel->execute([$idNomination]);
+    $dt = $sel->fetchColumn();
+
+    return [
+        'ok'   => true,
+        'nb'   => $upd->rowCount(),
+        'date' => $dt ? date('d/m/Y H:i', strtotime($dt)) : null,
+    ];
 }
 
 /**
@@ -971,7 +1135,9 @@ function envoyerDemandeJaClub(\PDO $pdo, int $idRenc, array $moi, string $sujetE
     }
     $mail->send();
 
-    return ['ok' => true, 'msg' => 'Demande envoyée à ' . ($rc['CorNom'] ?: $rc['CorEmail']) . '.'];
+    $nb = count($mail->getToAddresses()) + count($mail->getCcAddresses());
+    return ['ok' => true, 'msg' => 'Demande envoyée à ' . ($rc['CorNom'] ?: $rc['CorEmail'])
+        . ($nb > 1 ? " ($nb destinataires)." : '.')];
 }
 
 /**
@@ -1032,6 +1198,142 @@ function resoudreModeleMessagerieParType(\PDO $pdo, string $type, int $idUtilisa
     return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
 }
 
+/** Type messagerie du message système « copie de convocation aux clubs » (EN14, envoyerCopieClubs()). */
+defined('TYPE_MESSAGE_COPIE_CONVOCATION_CLUBS') || define('TYPE_MESSAGE_COPIE_CONVOCATION_CLUBS', 'Convocation clubs');
+
+/**
+ * Amorce (initTableConfiguration(), EA98) le message système « Convocation clubs » : copie pour
+ * information de la convocation d'un JA, envoyée par EN14 aux correspondants/référents des deux
+ * clubs (NominationController::envoyerCopieClubs()). Type ENUM étendu, ligne créée seulement si
+ * aucun message système de ce Type n'existe (jamais d'écrasement ni de copie perso touchée).
+ * Sujet utilisé tel quel (préfixe « Copie – » inclus) ; Cc = 0 (le nominateur est déjà en Cc de
+ * la convocation du JA), ReplyTo = 1 comme le message n°3.
+ */
+function assurerModeleCopieConvocationClubs(\PDO $pdo): void
+{
+    ajouterTypeMessagerie($pdo, TYPE_MESSAGE_COPIE_CONVOCATION_CLUBS);
+
+    $existe = $pdo->prepare('SELECT Id_Messagerie, Message FROM messagerie WHERE Type = ? AND Id_Utilisateur IS NULL');
+    $existe->execute([TYPE_MESSAGE_COPIE_CONVOCATION_CLUBS]);
+    $lignes = $existe->fetchAll(\PDO::FETCH_ASSOC);
+    if ($lignes) {
+        // Mise à niveau : corps système resté à une ancienne version par défaut → version courante
+        // (coordonnées du JA). Corps personnalisé en EA93 : laissé tel quel. Copies perso jamais touchées.
+        $norm    = fn ($s): string => trim(str_replace("\r\n", "\n", (string) $s));
+        $anciens = array_map($norm, ancienCorpsCopieConvocationClubs());
+        foreach ($lignes as $l) {
+            if (in_array($norm($l['Message']), $anciens, true)) {
+                $pdo->prepare('UPDATE messagerie SET Message = ? WHERE Id_Messagerie = ?')
+                    ->execute([modeleHtmlCopieConvocationClubs(), $l['Id_Messagerie']]);
+            } elseif (!str_contains((string) $l['Message'], '{COORDONNEES_JA}')) {
+                error_log('[NIJAC] message Convocation clubs personnalisé : coordonnées JA non ajoutées');
+            }
+        }
+        return;
+    }
+    $pdo->prepare('INSERT INTO messagerie (Type, Sujet, Message, Id_Utilisateur, Cc, ReplyTo) VALUES (?, ?, ?, NULL, 0, 1)')
+        ->execute([
+            TYPE_MESSAGE_COPIE_CONVOCATION_CLUBS,
+            'Copie – Convocation JA du {DATE} à {HEURE} à {NOM_CLUB}',
+            modeleHtmlCopieConvocationClubs(),
+        ]);
+}
+
+/**
+ * Anciennes versions par défaut du corps « Convocation clubs », remplacées par
+ * assurerModeleCopieConvocationClubs() si la base les contient encore à l'identique.
+ * v1 = version courante sans {COORDONNEES_JA} (seule différence). ponytail: dérivée du modèle
+ * courant ; à figer en dur avant toute autre modification de modeleHtmlCopieConvocationClubs().
+ *
+ * @return string[]
+ */
+function ancienCorpsCopieConvocationClubs(): array
+{
+    return [str_replace('{COORDONNEES_JA}', '', modeleHtmlCopieConvocationClubs())];
+}
+
+/**
+ * Corps par défaut du message « Convocation clubs » : même charte que modeleHtmlConvocationJa(),
+ * destiné à un correspondant de club — aucun lien personnel du JA ni consigne qui lui est destinée.
+ */
+function modeleHtmlCopieConvocationClubs(): string
+{
+    return <<<'NIJAC_COPIE_CLUBS_HTML'
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>Copie de convocation — Juge-Arbitre</title>
+</head>
+<body style="margin:0;padding:0;background-color:#eef1f6;color:#1f2937;">
+<span style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">Juge-arbitre désigné : {PRENOM} {NOM} — {DOM} – {EXT}, le {DATE_LONGUE} à {HEURE}.</span>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#eef1f6" style="background-color:#eef1f6;">
+<tr>
+<td align="center" style="padding:24px 12px;">
+<!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#ffffff;border:1px solid #d5dbe5;border-radius:8px;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+
+<!-- En-tête -->
+<tr>
+<td bgcolor="#1a3a6b" style="background-color:#1a3a6b;padding:22px 28px;border-radius:8px 8px 0 0;">
+<span style="display:block;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#c9d6ea;">Ligue de Normandie de Tennis de Table</span>
+<span style="display:block;font-size:22px;font-weight:bold;line-height:30px;color:#ffffff;">Copie de convocation — Juge-Arbitre</span>
+</td>
+</tr>
+
+<!-- Introduction -->
+<tr>
+<td style="padding:26px 28px 6px 28px;font-size:15px;line-height:23px;color:#1f2937;">
+Bonjour,<br><br>
+Ceci est une copie, pour information, de la convocation adressée à <strong>{PRENOM} {NOM}</strong> (juge-arbitre), désigné(e) pour diriger la rencontre suivante du Championnat de France par Équipes {SEXE}.
+</td>
+</tr>
+
+<!-- Récapitulatif de la rencontre -->
+<tr>
+<td style="padding:16px 28px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f3f6fb" style="background-color:#f3f6fb;border-left:4px solid #1a3a6b;border-radius:4px;font-size:14px;line-height:21px;color:#1f2937;">
+<tr><td colspan="2" style="padding:14px 16px 4px 16px;font-size:17px;font-weight:bold;color:#1a3a6b;">{DOM} <span style="color:#6b7280;font-weight:normal;">à</span> {EXT}</td></tr>
+<tr><td width="34%" valign="top" style="padding:6px 16px;color:#4b5563;">Date</td><td valign="top" style="padding:6px 16px 6px 0;font-weight:bold;color:#1f2937;">{DATE_LONGUE} à {HEURE}</td></tr>
+<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Compétition</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">Journée n° {JOURNEE} — Division : {DIVISION} — Poule : {POULE}</td></tr>
+<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Club recevant</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{NOM_CLUB}</td></tr>
+<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Salle</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{SALLE_NOM}<br>{SALLE_ADRESSE}<br>{SALLE_CP} {SALLE_VILLE}</td></tr>
+<tr><td valign="top" style="padding:6px 16px 14px 16px;color:#4b5563;">Juge-arbitre</td><td valign="top" style="padding:6px 16px 14px 0;font-weight:bold;color:#1f2937;">{PRENOM} {NOM}{COORDONNEES_JA}</td></tr>
+</table>
+</td>
+</tr>
+
+<!-- Signature -->
+<tr>
+<td style="padding:18px 28px 24px 28px;font-size:15px;line-height:23px;color:#1f2937;">
+Sportivement,<br><br>
+<strong>{UTI_PRENOM} {UTI_NOM}</strong><br>
+<span style="font-size:13px;color:#4b5563;">Ligue de Normandie de Tennis de Table</span>
+</td>
+</tr>
+
+<!-- Pied de page -->
+<tr>
+<td bgcolor="#f3f4f6" style="background-color:#f3f4f6;padding:14px 28px;border-top:1px solid #e5e7eb;border-radius:0 0 8px 8px;font-size:11px;line-height:17px;color:#6b7280;">
+Message envoyé automatiquement par l'application de nomination des juges-arbitres de la Ligue, pour information des correspondants et référents des clubs concernés. Pour toute question, répondez à ce message.<br>
+<a href="{URL_LIGUE}" style="color:#1a3a6b;">{URL_LIGUE}</a>
+</td>
+</tr>
+
+</table>
+<!--[if mso]></td></tr></table><![endif]-->
+</td>
+</tr>
+</table>
+</body>
+</html>
+
+NIJAC_COPIE_CLUBS_HTML;
+}
+
 /**
  * Garantit l'existence du type de message système « Mot de passe oublié » (ENUM messagerie.Type +
  * une ligne de gabarit par défaut, marqueur {URL_RESET_MDP}) — éditable ensuite comme les autres
@@ -1056,6 +1358,169 @@ function assurerTemplateMotDePasseOublie(\PDO $pdo): void
             . "Cliquez sur le lien suivant pour choisir un nouveau mot de passe :\n{URL_RESET_MDP}\n\n"
             . "Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.",
         ]);
+}
+
+// ── Double authentification par email (E001 → E010) ──────────────────────────────────────────
+
+/** Type messagerie du message système « code de sécurité » (E010), jamais personnalisable par un nominateur. */
+defined('TYPE_MESSAGE_CODE_SECURITE') || define('TYPE_MESSAGE_CODE_SECURITE', 'Code de sécurité');
+/** Sujet par défaut du message « Code de sécurité » (amorçage EA98 et repli). */
+defined('SUJET_CODE_SECURITE') || define('SUJET_CODE_SECURITE', 'Votre code de sécurité NIJAC');
+
+const CODE_SECURITE_DUREE      = 600; // durée de vie du code (s) — expiration absolue
+const CODE_SECURITE_ESSAIS     = 5;   // essais maximum, puis retour à E001
+const CODE_SECURITE_DELAI      = 60;  // délai minimal entre deux envois (s)
+const CODE_SECURITE_ENVOIS_MAX = 3;   // envois maximum par fenêtre de CODE_SECURITE_DUREE
+
+/**
+ * Coupe-circuit : '0' dans configuration.double_authentification = connexion par mot de passe
+ * seul (panne SMTP, adresse erronée). Clé absente = active.
+ */
+function doubleAuthentificationActive(): bool
+{
+    return getConfig('double_authentification', '1') !== '0';
+}
+
+/** Code de sécurité : 6 chiffres exactement, zéros de tête conservés. */
+function genererCodeSecurite(): string
+{
+    return str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+}
+
+/** Seul le hash du code est conservé (session) — jamais le code en clair. */
+function hacherCodeSecurite(string $code): string
+{
+    return password_hash($code, PASSWORD_DEFAULT);
+}
+
+/**
+ * Nouvel état d'attente après un envoi réussi : remplace le code précédent et remet les essais à 0.
+ * $etat['envois'] (horodatages des envois) est conservé pour la limite de renvoi.
+ */
+function emettreCodeSecurite(array $etat, string $hash, int $maintenant): array
+{
+    return ['hash' => $hash, 'emis' => $maintenant, 'essais' => 0] + $etat;
+}
+
+/**
+ * Vérifie une saisie contre l'état d'attente (fonction pure : aucune session, aucune base).
+ * Retourne ['ok' => bool, 'erreur' => null|'invalide'|'epuise', 'etat' => ?array] :
+ *  - ok : code consommé (etat = null, usage unique) ;
+ *  - 'invalide' : code faux, expiré (> CODE_SECURITE_DUREE) ou déjà consommé — etat mis à jour ;
+ *  - 'epuise' : CODE_SECURITE_ESSAIS échecs atteints — etat = null, l'utilisateur doit se reconnecter.
+ * Toute saisie non conforme (autre chose que 6 chiffres après retrait des espaces) compte comme un échec.
+ */
+function verifierCodeSecurite(array $etat, string $saisie, int $maintenant): array
+{
+    $saisie = preg_replace('/\s+/', '', $saisie);
+    $hash   = $etat['hash'] ?? null;
+    $valide = is_string($hash)
+        && $maintenant - (int) ($etat['emis'] ?? 0) <= CODE_SECURITE_DUREE
+        && preg_match('/^\d{6}$/', $saisie) === 1;
+
+    // password_verify : comparaison en temps constant
+    if ($valide && password_verify($saisie, $hash)) {
+        return ['ok' => true, 'erreur' => null, 'etat' => null];
+    }
+
+    $etat['essais'] = (int) ($etat['essais'] ?? 0) + 1;
+    if ($etat['essais'] >= CODE_SECURITE_ESSAIS) {
+        return ['ok' => false, 'erreur' => 'epuise', 'etat' => null];
+    }
+
+    return ['ok' => false, 'erreur' => 'invalide', 'etat' => $etat];
+}
+
+/**
+ * Renvoi d'un code autorisé ? (fonction pure). Au plus CODE_SECURITE_ENVOIS_MAX envois par fenêtre
+ * de CODE_SECURITE_DUREE et CODE_SECURITE_DELAI secondes entre deux envois.
+ * Retourne ['ok' => bool, 'attente' => secondes avant le prochain envoi possible, 'etat' => etat
+ * avec les envois hors fenêtre purgés].
+ */
+function peutRenvoyerCode(array $etat, int $maintenant): array
+{
+    $envois = array_values(array_filter(
+        $etat['envois'] ?? [],
+        fn ($ts) => $maintenant - (int) $ts < CODE_SECURITE_DUREE
+    ));
+    $etat['envois'] = $envois;
+
+    $attente = 0;
+    if ($envois) {
+        $attente = max($attente, (int) end($envois) + CODE_SECURITE_DELAI - $maintenant);
+    }
+    if (count($envois) >= CODE_SECURITE_ENVOIS_MAX) {
+        $attente = max($attente, (int) $envois[0] + CODE_SECURITE_DUREE - $maintenant);
+    }
+
+    return ['ok' => $attente <= 0, 'attente' => max(0, $attente), 'etat' => $etat];
+}
+
+/** Corps par défaut (texte brut, LF) du message « Code de sécurité » : amorçage EA98 et repli avant EA98. */
+function corpsParDefautCodeSecurite(): string
+{
+    return "Bonjour,\n\n"
+        . "Votre code de sécurité est le suivant :\n"
+        . "{CODE}\n"
+        . "Il est valable 10 minutes. Au-delà de ce délai, vous devrez demander un nouveau code.\n\n"
+        . "Si vous n’êtes pas à l’origine de cette demande, veuillez-vous rapprocher de votre nominateur dans les plus brefs délais.\n\n"
+        . "Ce message est généré automatiquement, ne pas répondre.\n\n"
+        . "Nous vous remercions de votre attention.";
+}
+
+/**
+ * Amorce (initTableConfiguration(), EA98) le message système « Code de sécurité » : Type ENUM étendu,
+ * ligne créée seulement si aucun message système de ce Type n'existe (jamais d'écrasement).
+ * Cc = 0, ReplyTo = 0 : envoyé au seul titulaire du compte.
+ */
+function assurerModeleCodeSecurite(\PDO $pdo): void
+{
+    ajouterTypeMessagerie($pdo, TYPE_MESSAGE_CODE_SECURITE);
+
+    $existe = $pdo->prepare('SELECT COUNT(*) FROM messagerie WHERE Type = ? AND Id_Utilisateur IS NULL');
+    $existe->execute([TYPE_MESSAGE_CODE_SECURITE]);
+    if ((int) $existe->fetchColumn() > 0) {
+        return;
+    }
+    $pdo->prepare('INSERT INTO messagerie (Type, Sujet, Message, Id_Utilisateur, Cc, ReplyTo) VALUES (?, ?, ?, NULL, 0, 0)')
+        ->execute([TYPE_MESSAGE_CODE_SECURITE, SUJET_CODE_SECURITE, corpsParDefautCodeSecurite()]);
+}
+
+/**
+ * Sujet/corps de l'email du code. $modele = ligne messagerie système (Sujet/Message) ou null
+ * (avant EA98 : repli sur le texte par défaut). {CODE} remplacé par le code échappé (6 chiffres).
+ *
+ * @return array{sujet: string, corps: string, html: bool}
+ */
+function rendreMessageCodeSecurite(?array $modele, string $code): array
+{
+    $sujet = trim((string) ($modele['Sujet'] ?? '')) ?: SUJET_CODE_SECURITE;
+    $corps = trim((string) ($modele['Message'] ?? '')) !== '' ? (string) $modele['Message'] : corpsParDefautCodeSecurite();
+    $rendu = remplacerMarqueursMessage($sujet, $corps, ['{CODE}' => htmlspecialchars($code, ENT_QUOTES, 'UTF-8')]);
+
+    return $rendu + ['html' => strip_tags($rendu['corps']) !== $rendu['corps']];
+}
+
+/**
+ * Requêtes rendant utilisateur.Email NOT NULL à partir de sa définition information_schema
+ * (COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, CHARACTER_SET_NAME, COLLATION_NAME) : type, longueur,
+ * jeu de caractères et défaut conservés ; NULL -> '' (aucune adresse fabriquée). [] si déjà NOT NULL.
+ *
+ * @return string[]
+ */
+function sqlEmailUtilisateurObligatoire(array $col, \PDO $pdo): array
+{
+    if (($col['IS_NULLABLE'] ?? 'NO') !== 'YES') {
+        return [];
+    }
+    $charset = !empty($col['CHARACTER_SET_NAME']) ? " CHARACTER SET {$col['CHARACTER_SET_NAME']} COLLATE {$col['COLLATION_NAME']}" : '';
+    $defaut  = $col['COLUMN_DEFAULT'] ?? null;
+    $defaut  = ($defaut === null || strtoupper($defaut) === 'NULL') ? '' : ' DEFAULT ' . $pdo->quote(trim($defaut, "'"));
+
+    return [
+        "UPDATE utilisateur SET Email = '' WHERE Email IS NULL",
+        "ALTER TABLE utilisateur MODIFY Email {$col['COLUMN_TYPE']}{$charset} NOT NULL{$defaut}",
+    ];
 }
 
 /**
@@ -1233,7 +1698,8 @@ function idClubDepuisTokenDesiderata(string $token): ?string
  * "{URL_CONVOCATION_JA} non remplacé" (EN14 ne connaissait que
  * {LIEN_CONVOCATION}).
  *
- * @param array $ja   Ligne JA : au moins Id_JA, Nom, Prenom.
+ * @param array $ja   Ligne JA : au moins Id_JA, Nom, Prenom ; Telephone/Email optionnels → {TEL_JA}, {EMAIL_JA}
+ *                    (texte brut) et {COORDONNEES_JA} (HTML échappé, vide si ni téléphone ni email).
  * @param array $moi  Utilisateur connecté ($_SESSION['utilisateur']) ; tableau vide pour un envoi sans session.
  * @param array $ctx  Contexte optionnel de la rencontre/convocation — toute clé absente laisse
  *                    le(s) marqueur(s) correspondant(s) vide(s) :
@@ -1351,12 +1817,27 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
         return $v ? implode(', ', $v) . ' et ' . $dernier : (string) $dernier;
     };
 
+    // Même format que JugearbitreController::formaterTelephone() : 10 chiffres → 06.12.34.56.78, sinon tel quel.
+    $fmtTel = fn ($tel): string => strlen($t = preg_replace('/\D/', '', (string) $tel)) === 10
+        ? implode('.', str_split($t, 2)) : trim((string) $tel);
+
+    // Coordonnées du JA convoqué (copie aux clubs, EN14) : {COORDONNEES_JA} = bloc HTML déjà échappé,
+    // « Téléphone : … · Email : <mailto> », parties vides omises, chaîne vide si aucune.
+    $telJa   = $fmtTel($ja['Telephone'] ?? '');
+    $emailJa = trim((string) ($ja['Email'] ?? ''));
+    $h       = fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+    $coordJa = implode(' · ', array_filter([
+        $telJa !== ''   ? 'Téléphone : ' . $h($telJa) : '',
+        $emailJa !== '' ? 'Email : <a href="mailto:' . $h($emailJa) . '" style="color:#1a3a6b;">' . $h($emailJa) . '</a>' : '',
+    ]));
+
     return [
         '{NOM_JA_PRINCIPAL}'     => $liste(fn ($p) => trim(($p['prenom'] ?? '') . ' ' . mb_strtoupper((string) ($p['nom'] ?? ''), 'UTF-8'))),
-        // Même format que JugearbitreController::formaterTelephone() : 10 chiffres → 06.12.34.56.78, sinon tel quel.
-        '{TEL_JA_PRINCIPAL}'     => $liste(fn ($p) => strlen($t = preg_replace('/\D/', '', (string) ($p['telephone'] ?? ''))) === 10
-                                        ? implode('.', str_split($t, 2)) : ($p['telephone'] ?? '')),
+        '{TEL_JA_PRINCIPAL}'     => $liste(fn ($p) => $fmtTel($p['telephone'] ?? '')),
         '{EMAIL_JA_PRINCIPAL}'   => $liste(fn ($p) => $p['email'] ?? ''),
+        '{TEL_JA}'               => $telJa,
+        '{EMAIL_JA}'             => $emailJa,
+        '{COORDONNEES_JA}'       => $coordJa !== '' ? '<br><span style="font-weight:normal;font-size:13px;color:#4b5563;">' . $coordJa . '</span>' : '',
         '{NB_ADJOINTS}'          => (string) $nbAdj,
         '{TITRE_ADJOINTS}'       => $nbAdj . ($pluriel ? ' ADJOINTS' : ' ADJOINT'),
         '{ADJOINTS_TEXTE}'       => $pluriel ? "$nbLettres Juges-Arbitres adjoints" : 'un seul Juge-Arbitre adjoint',
@@ -1530,6 +2011,208 @@ function destinatairesCopieClubs(array $clubs, ?string $emailJa): array
     }
 
     return $dest;
+}
+
+/**
+ * Corps par défaut du message système n°3 « Convocation » (EN14) : e-mail HTML
+ * (tableaux + styles en ligne) avec le bouton « Consulter et confirmer ma
+ * convocation » vers {URL_CONVOCATION_JA} (EN21). Le bloc <div> du bouton
+ * (phrase d'introduction + bouton + lien de secours) est retiré en entier par
+ * retirerLiensPersonnelsModele() pour la copie aux clubs. Appliqué aux bases
+ * existantes par initTableConfiguration() (EA98) seulement si le corps est
+ * encore un ancien texte par défaut (corpsConvocationJaMigrable()).
+ */
+function modeleHtmlConvocationJa(): string
+{
+    return <<<'NIJAC_CONVOCATION_HTML'
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<!-- Sujet proposé (champ Sujet, inchangé : la version perso du nominateur est retrouvée par Sujet) : Convocation JA du {DATE} à {HEURE} à {NOM_CLUB} -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>Convocation — Juge-Arbitre</title>
+</head>
+<body style="margin:0;padding:0;background-color:#eef1f6;color:#1f2937;">
+<span style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">Vous êtes désigné(e) juge-arbitre : {DOM} – {EXT}, le {DATE_LONGUE} à {HEURE}.</span>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#eef1f6" style="background-color:#eef1f6;">
+<tr>
+<td align="center" style="padding:24px 12px;">
+<!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#ffffff;border:1px solid #d5dbe5;border-radius:8px;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+
+<!-- En-tête -->
+<tr>
+<td bgcolor="#1a3a6b" style="background-color:#1a3a6b;padding:22px 28px;border-radius:8px 8px 0 0;">
+<span style="display:block;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#c9d6ea;">Ligue de Normandie de Tennis de Table</span>
+<span style="display:block;font-size:22px;font-weight:bold;line-height:30px;color:#ffffff;">Convocation — Juge-Arbitre</span>
+</td>
+</tr>
+
+<!-- Introduction -->
+<tr>
+<td style="padding:26px 28px 6px 28px;font-size:15px;line-height:23px;color:#1f2937;">
+Bonjour {PRENOM},<br><br>
+Nom du JUGE ARBITRE : <strong>{PRENOM} {NOM}</strong><br><br>
+J'ai l'avantage de vous informer que vous êtes désigné(e) pour diriger la rencontre suivante du Championnat de France par Équipes {SEXE}.
+</td>
+</tr>
+
+<!-- Récapitulatif de la rencontre -->
+<tr>
+<td style="padding:16px 28px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f3f6fb" style="background-color:#f3f6fb;border-left:4px solid #1a3a6b;border-radius:4px;font-size:14px;line-height:21px;color:#1f2937;">
+<tr><td colspan="2" style="padding:14px 16px 4px 16px;font-size:17px;font-weight:bold;color:#1a3a6b;">{DOM} <span style="color:#6b7280;font-weight:normal;">à</span> {EXT}</td></tr>
+<tr><td width="34%" valign="top" style="padding:6px 16px;color:#4b5563;">Date</td><td valign="top" style="padding:6px 16px 6px 0;font-weight:bold;color:#1f2937;">{DATE_LONGUE} à {HEURE}</td></tr>
+<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Compétition</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">Journée n° {JOURNEE} — Division : {DIVISION} — Poule : {POULE}</td></tr>
+<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Club recevant</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{NOM_CLUB}</td></tr>
+<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Adresse</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{SALLE_NOM}<br>{SALLE_ADRESSE}<br>{SALLE_CP} {SALLE_VILLE}</td></tr>
+<tr><td valign="top" style="padding:6px 16px 14px 16px;color:#4b5563;">Correspondant</td><td valign="top" style="padding:6px 16px 14px 0;color:#1f2937;">{CORR_NOM}<br>Tél : {CORR_TEL}<br>Courriel : <a href="mailto:{CORR_EMAIL}" style="color:#1a3a6b;">{CORR_EMAIL}</a></td></tr>
+</table>
+</td>
+</tr>
+
+<!-- Bouton : bloc <div> unique (sans <p>/<div>/<li> imbriqué) retiré en entier par retirerLiensPersonnelsModele() pour la copie aux clubs -->
+<tr>
+<td style="padding:0;">
+<div style="padding:12px 28px 8px 28px;font-size:15px;line-height:23px;color:#1f2937;">
+Ci-joint le lien vers la convocation pour la saisie de vos frais d'arbitrages de cette rencontre.<br><br>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+<tr>
+<td align="center" bgcolor="#1a3a6b" style="background-color:#1a3a6b;border-radius:6px;">
+<!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{URL_CONVOCATION_JA}" style="height:48px;v-text-anchor:middle;width:380px;" arcsize="12%" strokecolor="#1a3a6b" fillcolor="#1a3a6b"><w:anchorlock/><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">Consulter et confirmer ma convocation</center></v:roundrect><![endif]-->
+<!--[if !mso]><!--><a href="{URL_CONVOCATION_JA}" target="_blank" style="display:inline-block;padding:14px 28px;min-height:20px;line-height:20px;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:6px;background-color:#1a3a6b;">Consulter et confirmer ma convocation</a><!--<![endif]-->
+</td>
+</tr>
+</table>
+<br>
+<span style="font-size:12px;line-height:18px;color:#6b7280;">Si le bouton ne fonctionne pas, valider ce lien :<br><a href="{URL_CONVOCATION_JA}" style="color:#1a3a6b;word-break:break-all;">{URL_CONVOCATION_JA}</a></span>
+</div>
+</td>
+</tr>
+
+<!-- Consignes (reprises du message n°3 actuel) -->
+<tr>
+<td style="padding:16px 28px 6px 28px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#fff6e5" style="background-color:#fff6e5;border:1px solid #f0c36d;border-radius:4px;font-size:14px;line-height:21px;color:#5c3d00;">
+<tr><td style="padding:12px 16px;">
+<strong style="color:#8a5a00;">IMPORTANT :</strong><br>
+• Merci de m’accuser réception du présent envoi.<br>
+• Veuillez me retourner obligatoirement la Convocation complétée de vos kms, dans les 5 jours qui suivent la rencontre.
+</td></tr>
+</table>
+</td>
+</tr>
+
+<!-- Signature -->
+<tr>
+<td style="padding:18px 28px 24px 28px;font-size:15px;line-height:23px;color:#1f2937;">
+Veuillez agréer mes meilleurs sentiments.<br><br>
+<strong>{UTI_PRENOM} {UTI_NOM}</strong><br>
+<span style="font-size:13px;color:#4b5563;">Ligue de Normandie de Tennis de Table</span>
+</td>
+</tr>
+
+<!-- Pied de page -->
+<tr>
+<td bgcolor="#f3f4f6" style="background-color:#f3f4f6;padding:14px 28px;border-top:1px solid #e5e7eb;border-radius:0 0 8px 8px;font-size:11px;line-height:17px;color:#6b7280;">
+Message envoyé automatiquement par l'application de nomination des juges-arbitres de la Ligue. Pour toute question, répondez à ce message.<br>
+<a href="{URL_LIGUE}" style="color:#1a3a6b;">{URL_LIGUE}</a>
+</td>
+</tr>
+
+</table>
+<!--[if mso]></td></tr></table><![endif]-->
+</td>
+</tr>
+</table>
+</body>
+</html>
+
+NIJAC_CONVOCATION_HTML;
+}
+
+/**
+ * Anciens corps par défaut (texte brut) du message n°3, toutes variantes
+ * historiques des dumps SQL : seul un de ceux-là est remplacé par le modèle HTML.
+ *
+ * @return string[]
+ */
+function ancienCorpsConvocationJa(): array
+{
+    $commun = <<<'NIJAC_CONVOCATION_TXT'
+Convocation
+
+Nom du JUGE ARBITRE : {PRENOM} {NOM}
+
+J'ai l'avantage de vous informer que vous êtes désigné(e) pour diriger la rencontre suivante du Championnat de France par Équipes {SEXE}.
+
+Journée n° {JOURNEE}      Division : {DIVISION}    Poule : {POULE}
+Opposant : {DOM} à {EXT}
+le {DATE} à {HEURE}
+
+Adresse : {SALLE_NOM} {SALLE_ADRESSE} {SALLE_CP} {SALLE_VILLE}
+
+Nom, PRÉNOM du CORRESPONDANT, {CORR_NOM}
+
+ Tél : {CORR_TEL}                               Courriel : {CORR_EMAIL}
+
+Veuillez agréer mes meilleurs sentiments.
+{UTI_PRENOM} {UTI_NOM}
+
+
+NIJAC_CONVOCATION_TXT;
+
+    return [
+        $commun . <<<'NIJAC_CONVOCATION_TXT'
+Ci-joint le lien vers la convocation pour la saisie de vos frais d'arbitrages de cette rencontre.
+{URL_CONVOCATION_JA}
+
+IMPORTANT :
+
+Merci de m’accuser réception du présent envoi
+
+Veuillez me retourner obligatoirement la Convocation complétée de vos kms.
+Dans les 5 jours qui suivent la rencontre.
+NIJAC_CONVOCATION_TXT,
+        $commun . <<<'NIJAC_CONVOCATION_TXT'
+Ci-joint le lien pour la saisie de vos frais pour les arbitrages du Championnat.
+{URL_LIGUE}//nijac/Nominateur/convocation_ja.php?nomination={ID_CONVOCATION}
+NIJAC_CONVOCATION_TXT,
+        $commun . <<<'NIJAC_CONVOCATION_TXT'
+Ci-joint le lien pour la saisie de vos frais pour les arbitrages du Championnat.
+{URL_LIGUE}/nijac/Nominateur/convocation_ja.php?nomination={ID_CONVOCATION}
+NIJAC_CONVOCATION_TXT,
+    ];
+}
+
+/**
+ * Versions HTML précédentes du modèle par défaut du message n°3 (déjà appliquées
+ * à des bases par EA98) : le modèle actuel avec l'ancien libellé du lien de secours.
+ *
+ * @return string[]
+ */
+function ancienneVersionHtmlConvocationJa(): array
+{
+    return [str_replace(
+        'Si le bouton ne fonctionne pas, valider ce lien :',
+        'Si le bouton ne fonctionne pas, copiez ce lien :',
+        modeleHtmlConvocationJa()
+    )];
+}
+
+/**
+ * Vrai si $corps (message n°3) est encore un ancien texte par défaut ou une version
+ * HTML précédente non modifiée — comparaison tolérante (trim + fins de ligne \r\n → \n).
+ * Faux s'il a été personnalisé (EA93) ou s'il est déjà à jour : il ne doit alors pas être écrasé.
+ */
+function corpsConvocationJaMigrable(string $corps): bool
+{
+    $norm = fn (string $s): string => trim(str_replace("\r\n", "\n", $s));
+
+    return in_array($norm($corps), array_map($norm, [...ancienCorpsConvocationJa(), ...ancienneVersionHtmlConvocationJa()]), true);
 }
 
 /**
@@ -1906,7 +2589,8 @@ function isModeDeveloppement(): bool
 }
 
 /**
- * Retourne une instance PHPMailer préconfigurée avec les paramètres SMTP.
+ * Retourne une instance PHPMailer (sous-classe NijacMailer, voir Classes/NijacMailer.php)
+ * préconfigurée avec les paramètres SMTP.
  * Host/port/sécurité/expéditeur viennent de la table `configuration` ; l'utilisateur
  * et le mot de passe viennent de .env (SMTP_USER / SMTP_PASSWORD, encodés ROT47).
  * Lance une exception en cas d'erreur de configuration.
@@ -1914,8 +2598,12 @@ function isModeDeveloppement(): bool
 function getNijacMailer(string $forcedPrefix = null): \PHPMailer\PHPMailer\PHPMailer
 {
     require_once __DIR__ . '/../vendor/autoload.php';
+    require_once __DIR__ . '/../Classes/NijacMailer.php';
 
-    $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
+    // Garantie centrale du mode Développement : NijacMailer remplace tout destinataire
+    // (To/Cc/Bcc/Reply-To) par l'adresse dev, et bloque l'envoi si elle est vide.
+    // En Production (null), comportement PHPMailer strictement identique.
+    $mail = new \NijacMailer(true, isModeDeveloppement() ? getEmailDestinataire('') : null);
     $mail->CharSet   = 'UTF-8';
     $mail->Encoding  = 'quoted-printable';
 

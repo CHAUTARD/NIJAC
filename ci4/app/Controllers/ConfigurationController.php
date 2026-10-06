@@ -154,6 +154,11 @@ class ConfigurationController extends BaseController
             }
         }
 
+        // Coupe-circuit de la double authentification (E010) : '1' active, '0' mot de passe seul
+        if ($cle === 'double_authentification' && !in_array($valeur, ['0', '1'], true)) {
+            return 'Valeur attendue : 1 (active) ou 0 (désactivée).';
+        }
+
         // Valeurs autorisées pour etat_logiciel
         if ($cle === 'etat_logiciel' && !in_array($valeur, ['Operationnel', 'Developpement'], true)) {
             return 'Valeur invalide pour ce paramètre.';

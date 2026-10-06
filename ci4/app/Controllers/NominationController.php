@@ -52,6 +52,15 @@ class NominationController extends BaseController
         }
     }
 
+    /**
+     * URL publique EN21 d'une nomination (forme "chemin", jeton cnv avec pepper) —
+     * même lien que celui des convocations envoyées et de {URL_CONVOCATION_JA}.
+     */
+    private function urlConvocation(int $idNomination): string
+    {
+        return site_url('convocation-ja/' . $idNomination . '/' . $this->obf->obfuscate($idNomination));
+    }
+
     private function deptsAutorises(): array
     {
         return getDepartementsAutorises($_SESSION['utilisateur']['id_departement'] ?? null);
@@ -79,6 +88,154 @@ class NominationController extends BaseController
         $stmt->execute(array_merge([$idRenc], $deptsAutorises));
 
         return (int) $stmt->fetchColumn() > 0;
+    }
+
+    /**
+     * Périmètre d'un JA (alias ja / lp_ja) pour le nominateur : domicile (code postal) ou
+     * CodeDept dans $depts (« in »), ou JA d'un autre département acceptant d'arbitrer dans
+     * l'un de ces départements (« arb », EN22/EN11). Partagé par candidatsJournee() et la
+     * revérification de nomination (verifierEtNommer()) pour que les deux ne divergent pas.
+     */
+    private function sqlPerimetreJa(array $depts): array
+    {
+        $ph = implode(',', array_fill(0, count($depts), '?'));
+
+        return [
+            'in'        => "LEFT(lp_ja.CodePostal, 2) IN ($ph) OR ja.CodeDept IN ($ph)",
+            'inParams'  => array_merge($depts, $depts),
+            'arb'       => 'ja.ArbitreAutresDepts = 1 AND ('
+                . implode(' OR ', array_fill(0, count($depts), 'FIND_IN_SET(?, ja.DeptsArbitrage)')) . ')',
+            'arbParams' => $depts,
+        ];
+    }
+
+    /** EXISTS : le JA $ja a une réponse $rep sur la rencontre $renc ou pour la journée $date (expressions SQL). */
+    private function sqlReponseDispo(string $rep, string $ja, string $renc, string $date): string
+    {
+        return "EXISTS (SELECT 1 FROM disponible dx WHERE dx.Id_JA = $ja AND dx.Reponse = '$rep'
+                AND (dx.Id_Rencontre = $renc OR (dx.Id_Rencontre IS NULL AND dx.DateCompetition = $date)))";
+    }
+
+    /**
+     * Règle unique de disponibilité EN14 (liste des candidats ET nomination) : une réponse 'O'
+     * sur la rencontre ou la journée, et aucune réponse 'N' ni sur la rencontre ni sur la journée.
+     * Sans réponse / 'P' seul → non disponible.
+     */
+    private function sqlDispoRencontre(string $ja, string $renc, string $date): string
+    {
+        return '(' . $this->sqlReponseDispo('O', $ja, $renc, $date)
+            . ' AND NOT ' . $this->sqlReponseDispo('N', $ja, $renc, $date) . ')';
+    }
+
+    /**
+     * Nomination de $idJa sur $idRenc avec revérification complète en base à l'instant de
+     * l'écriture (la liste des candidats a pu vieillir) : transaction + verrous.
+     * $idJaAttendu = JA que le navigateur affichait nommé (0 = aucun, null = pas de contrôle).
+     */
+    private function nommer(\PDO $pdo, int $idRenc, int $idJa, ?int $idJaAttendu, array $depts): array
+    {
+        if (!$this->rencontreAutorisee($pdo, $idRenc, $depts)) {
+            return ['ok' => false, 'err' => 'Rencontre hors de votre périmètre'];
+        }
+
+        $pdo->beginTransaction();
+        try {
+            $err = $this->verifierEtNommer($pdo, $idRenc, $idJa, $idJaAttendu, $depts);
+            $err === null ? $pdo->commit() : $pdo->rollBack();
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+
+        return $err === null ? ['ok' => true] : ['ok' => false, 'err' => $err, 'rafraichir' => true];
+    }
+
+    /** Contrôles + écriture (transaction ouverte par nommer()). Renvoie null si nommé, sinon le motif du refus. */
+    private function verifierEtNommer(\PDO $pdo, int $idRenc, int $idJa, ?int $idJaAttendu, array $depts): ?string
+    {
+        // Verrous AVANT toute lecture non verrouillante (qui fixerait l'instantané InnoDB) :
+        // la rencontre sérialise deux nominateurs sur la même rencontre, le JA deux nominations
+        // du même JA (limite journalière), ses lignes disponible une réponse EN22 concurrente.
+        $st = $pdo->prepare('SELECT Date FROM rencontre WHERE Id_Rencontre = ? FOR UPDATE');
+        $st->execute([$idRenc]);
+        $date = $st->fetchColumn();
+        if ($date === false) {
+            return 'Rencontre introuvable';
+        }
+        $st = $pdo->prepare('SELECT JA1 FROM ja WHERE Id_JA = ? FOR UPDATE');
+        $st->execute([$idJa]);
+        $ja1 = $st->fetchColumn();
+        $pdo->prepare('
+            SELECT Id_Disponible FROM disponible
+            WHERE Id_JA = ? AND (Id_Rencontre = ? OR (Id_Rencontre IS NULL AND DateCompetition = ?))
+            FOR UPDATE
+        ')->execute([$idJa, $idRenc, $date]);
+
+        // Nomination concurrente : un autre JA nommé depuis le chargement de la page. La
+        // réaffectation voulue (clic « Affecter » alors que la page montrait déjà ce JA) passe.
+        $st = $pdo->prepare('
+            SELECT d.Id_JA FROM nomination n JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+            WHERE n.Id_Rencontre = ? FOR UPDATE
+        ');
+        $st->execute([$idRenc]);
+        $jaNomme = (int) $st->fetchColumn();
+        if ($idJaAttendu !== null && $jaNomme && $jaNomme !== $idJa && $jaNomme !== $idJaAttendu) {
+            return 'Un autre JA vient d\'être nommé sur cette rencontre.';
+        }
+
+        if ((int) $ja1 !== 1) {
+            return 'Ce JA n\'est plus actif.';
+        }
+
+        $p  = $this->sqlPerimetreJa($depts);
+        $st = $pdo->prepare("
+            SELECT CASE WHEN ({$p['in']}) OR ({$p['arb']}) THEN 1 ELSE 0 END
+            FROM ja LEFT JOIN laposte lp_ja ON lp_ja.Id_LaPoste = ja.Id_LaPoste
+            WHERE ja.Id_JA = ?
+        ");
+        $st->execute(array_merge($p['inParams'], $p['arbParams'], [$idJa]));
+        if (!(int) $st->fetchColumn()) {
+            return 'Ce JA n\'est plus dans votre périmètre (département non autorisé).';
+        }
+
+        $st = $pdo->prepare('SELECT ' . $this->sqlReponseDispo('N', '?', '?', '?') . ', ' . $this->sqlDispoRencontre('?', '?', '?'));
+        $st->execute([$idJa, $idRenc, $date, $idJa, $idRenc, $date, $idJa, $idRenc, $date]);
+        [$aNon, $dispo] = array_map('intval', $st->fetch(\PDO::FETCH_NUM));
+        if (!$dispo) {
+            return $aNon
+                ? 'Ce JA n\'est plus disponible pour cette rencontre/journée (il a répondu « non »).'
+                : 'Ce JA n\'est pas disponible pour cette rencontre (aucune réponse « oui »).';
+        }
+
+        // Règle : au maximum 2 nominations par JA sur une même journée, et uniquement sur
+        // des rencontres du même club recevant (même lieu). Le nominateur décide lui-même
+        // de la 2ᵉ (aucune affectation automatique).
+        $st = $pdo->prepare('
+            SELECT COUNT(*) AS nb, COALESCE(SUM(ed2.Id_Club <> ed.Id_Club), 0) AS autres_clubs
+            FROM nomination n
+            JOIN disponible d  ON d.Id_Disponible = n.Id_Disponible
+            JOIN rencontre  r2 ON r2.Id_Rencontre = n.Id_Rencontre
+            JOIN equipe    ed2 ON ed2.Id_Equipe   = r2.Id_EquipeDom
+            JOIN rencontre  r  ON r.Id_Rencontre  = ?
+            JOIN equipe     ed ON ed.Id_Equipe    = r.Id_EquipeDom
+            WHERE d.Id_JA = ? AND n.Id_Rencontre != r.Id_Rencontre AND r2.Date = r.Date
+        ');
+        $st->execute([$idRenc, $idJa]);
+        $deja = $st->fetch();
+        if ((int) $deja['nb'] >= 2) {
+            return 'Ce JA a déjà 2 nominations ce jour.';
+        }
+        if ((int) $deja['autres_clubs'] > 0) {
+            return 'Ce JA est déjà nommé ce jour-là sur une rencontre d\'un autre club.';
+        }
+
+        $idDispo = $this->resoudreDisponible($pdo, $idJa, $idRenc, $date);
+        if (!$idDispo) {   // garde-fou : sqlDispoRencontre() garantit une réponse 'O'
+            return "Ce JA n'est pas disponible pour cette rencontre";
+        }
+        $this->affecterNomination($pdo, $idRenc, $idDispo);
+
+        return null;
     }
 
     /**
@@ -150,12 +307,14 @@ class NominationController extends BaseController
             return;
         }
 
-        $pdo->prepare('
+        // Changement de JA : l'accusé de réception de l'ancien JA n'est pas hérité (colonne EA98).
+        $razAccuse = nominationAAccuseReception($pdo) ? ', AccuseReception = NULL' : '';
+        $pdo->prepare("
             UPDATE nomination SET
                 Id_Disponible = ?, DateNomination = CURDATE(), Valide = 1, EmailEnvoye = 0,
-                Peage = 0, Kilometre = 0, RapportAccueil = NULL, RapportEquipements = NULL, DateSaisie = NULL
+                Peage = 0, Kilometre = 0, RapportAccueil = NULL, RapportEquipements = NULL, DateSaisie = NULL$razAccuse
             WHERE Id_Nomination = ?
-        ')->execute([$idDispo, $existant['Id_Nomination']]);
+        ")->execute([$idDispo, $existant['Id_Nomination']]);
     }
 
     public function index()
@@ -223,6 +382,8 @@ class NominationController extends BaseController
 
             $pdo    = getPDO();
             $deptPh = implode(',', array_fill(0, count($deptsAutorises), '?'));
+            // Colonne ajoutée par EA98 : EN14 reste fonctionnel avant la migration.
+            $colAccuse = nominationAAccuseReception($pdo) ? 'n.AccuseReception' : 'NULL AS AccuseReception';
 
             $stmt = $pdo->prepare("
                 SELECT
@@ -258,7 +419,8 @@ class NominationController extends BaseController
                     ja_n.Telephone AS TelJa,
                     ja_n.Email     AS EmailJa,
                     n.Valide,
-                    n.EmailEnvoye
+                    n.EmailEnvoye,
+                    $colAccuse
                 FROM rencontre r
                 JOIN  equipe   ed   ON ed.Id_Equipe    = r.Id_EquipeDom
                 JOIN  division dv   ON dv.Division  = ed.Division
@@ -297,18 +459,13 @@ class NominationController extends BaseController
             $pdo    = getPDO();
             $deptPh = implode(',', array_fill(0, count($deptsAutorises), '?'));
 
-            // « Dans le département » = domicile (code postal) OU CodeDept dans le
-            // périmètre du nominateur. Sert à la fois au filtre WHERE et au flag
-            // HorsDept renvoyé au client (case à cocher « autres départements »).
-            $inDeptSql  = "LEFT(lp_ja.CodePostal, 2) IN ($deptPh) OR ja.CodeDept IN ($deptPh)";
-            $deptParams = array_merge($deptsAutorises, $deptsAutorises);
-
-            // JA d'un autre département ayant coché « accepte d'arbitrer dans un
-            // département voisin » (EN22/EN11) : retenus si l'un des départements
-            // du nominateur figure dans ja.DeptsArbitrage.
-            $arbSql = ' OR (ja.ArbitreAutresDepts = 1 AND ('
-                . implode(' OR ', array_fill(0, count($deptsAutorises), 'FIND_IN_SET(?, ja.DeptsArbitrage)'))
-                . '))';
+            // Périmètre JA partagé avec la revérification de nomination (sqlPerimetreJa()) :
+            // « in » sert aussi au flag HorsDept (case à cocher « autres départements »).
+            $p         = $this->sqlPerimetreJa($deptsAutorises);
+            $inDeptSql = $p['in'];
+            // Rencontres du jour pour lesquelles le JA est disponible selon la règle unique
+            // sqlDispoRencontre() — la même que celle revérifiée à la nomination.
+            $dispoSql  = $this->sqlDispoRencontre('ja.Id_JA', 'rok.Id_Rencontre', 'rok.Date');
 
             $stmt = $pdo->prepare("
                 SELECT
@@ -334,6 +491,11 @@ class NominationController extends BaseController
                        AND dr2.DateCompetition = ?
                        AND dr2.Id_Rencontre IS NOT NULL
                        AND dr2.Reponse = 'O') AS DispoRencontres,
+                    (SELECT GROUP_CONCAT(rok.Id_Rencontre ORDER BY rok.Id_Rencontre)
+                     FROM rencontre rok
+                     JOIN equipe eok ON eok.Id_Equipe = rok.Id_EquipeDom
+                     WHERE rok.Date = ? AND SUBSTRING(eok.Id_Club, 3, 2) IN ($deptPh)   -- rencontres de rencontresJournee()
+                       AND $dispoSql) AS RencontresOk,
                     COALESCE(nbnom.NbNominations, 0) AS NbNominations
                 FROM ja
                 LEFT JOIN laposte lp_ja ON lp_ja.Id_LaPoste = ja.Id_LaPoste
@@ -342,11 +504,6 @@ class NominationController extends BaseController
                     AND dj.DateCompetition = ?
                     AND dj.Id_Rencontre    IS NULL
                     AND dj.Reponse         = 'O'
-                LEFT JOIN disponible dr
-                    ON  dr.Id_JA           = ja.Id_JA
-                    AND dr.DateCompetition = ?
-                    AND dr.Id_Rencontre    IS NOT NULL
-                    AND dr.Reponse         = 'O'
                 LEFT JOIN (
                     SELECT d2.Id_JA, COUNT(*) AS NbNominations
                     FROM nomination n2
@@ -354,16 +511,18 @@ class NominationController extends BaseController
                     GROUP BY d2.Id_JA
                 ) nbnom ON nbnom.Id_JA = ja.Id_JA
                 WHERE ja.JA1 = 1
-                  AND (dj.Id_JA IS NOT NULL OR dr.Id_JA IS NOT NULL)
-                  AND (($inDeptSql)$arbSql)
+                  AND (($inDeptSql) OR ({$p['arb']}))
                 GROUP BY ja.Id_JA
+                HAVING RencontresOk IS NOT NULL
                 ORDER BY ja.Nom, ja.Prenom
             ");
             $stmt->execute(array_merge(
-                $deptParams,          // CASE ... HorsDept
-                [$date, $date, $date],
-                $deptParams,          // WHERE ($inDeptSql)
-                $deptsAutorises       // WHERE ... FIND_IN_SET
+                $p['inParams'],       // CASE ... HorsDept
+                [$date, $date],       // DispoRencontres, RencontresOk
+                $deptsAutorises,      // RencontresOk : périmètre
+                [$date],              // dj
+                $p['inParams'],       // WHERE in
+                $p['arbParams']       // WHERE arb (FIND_IN_SET)
             ));
 
             return $this->response->setJSON(['ok' => true, 'data' => $stmt->fetchAll()]);
@@ -381,49 +540,12 @@ class NominationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => 'Paramètres manquants']);
             }
 
-            if (!$this->rencontreAutorisee($pdo, $idRenc, $this->deptsAutorises())) {
-                return $this->response->setJSON(['ok' => false, 'err' => 'Rencontre hors de votre périmètre']);
+            // JA que la page affichait nommé sur la rencontre ('' = aucun) ; absent = ancien client, pas de contrôle.
+            $attendu = $this->request->getPost('id_ja_actuel');
+            $res     = $this->nommer($pdo, $idRenc, $idJa, $attendu === null ? null : (int) $attendu, $this->deptsAutorises());
+            if (!$res['ok']) {
+                return $this->response->setJSON($res);
             }
-
-            $dateRenc = $pdo->prepare('
-                SELECT r.Date, ed.Id_Club
-                FROM rencontre r
-                JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
-                WHERE r.Id_Rencontre = ?
-            ');
-            $dateRenc->execute([$idRenc]);
-            $ri = $dateRenc->fetch();
-            if (!$ri) {
-                return $this->response->setJSON(['ok' => false, 'err' => 'Rencontre introuvable']);
-            }
-
-            // Règle : au maximum 2 nominations par JA sur une même journée, et uniquement sur
-            // des rencontres du même club recevant (même lieu). Le nominateur décide lui-même
-            // de la 2ᵉ (aucune affectation automatique).
-            $checkDate = $pdo->prepare('
-                SELECT COUNT(*) AS nb, COALESCE(SUM(ed2.Id_Club <> ?), 0) AS autres_clubs
-                FROM nomination n
-                JOIN disponible d  ON d.Id_Disponible = n.Id_Disponible
-                JOIN rencontre  r2 ON r2.Id_Rencontre = n.Id_Rencontre
-                JOIN equipe    ed2 ON ed2.Id_Equipe   = r2.Id_EquipeDom
-                WHERE d.Id_JA = ? AND n.Id_Rencontre != ? AND r2.Date = ?
-            ');
-            $checkDate->execute([$ri['Id_Club'], $idJa, $idRenc, $ri['Date']]);
-            $deja = $checkDate->fetch();
-            if ((int) $deja['nb'] >= 2) {
-                return $this->response->setJSON(['ok' => false, 'err' => 'Ce JA a déjà 2 nominations ce jour-là (maximum).']);
-            }
-            if ((int) $deja['autres_clubs'] > 0) {
-                return $this->response->setJSON(['ok' => false, 'err' => 'Ce JA est déjà nommé ce jour-là sur une rencontre d\'un autre club.']);
-            }
-
-            // Règle : pour être nominé, un JA doit être disponible
-            $idDispo = $this->resoudreDisponible($pdo, $idJa, $idRenc, $ri['Date']);
-            if (!$idDispo) {
-                return $this->response->setJSON(['ok' => false, 'err' => "Ce JA n'est pas disponible pour cette rencontre"]);
-            }
-
-            $this->affecterNomination($pdo, $idRenc, $idDispo);
 
             $jaInfo = $pdo->prepare('SELECT Nom, Prenom, Grade, Id_Club FROM ja WHERE Id_JA = ?');
             $jaInfo->execute([$idJa]);
@@ -482,7 +604,7 @@ class NominationController extends BaseController
             // Récupérer les nominations + email JA
             $placeholders = implode(',', array_fill(0, count($idsRencontre), '?'));
             $stmt = $pdo->prepare("
-                SELECT n.Id_Nomination, n.Id_Rencontre, ja.Id_JA, ja.Nom, ja.Prenom, ja.Email,
+                SELECT n.Id_Nomination, n.Id_Rencontre, ja.Id_JA, ja.Nom, ja.Prenom, ja.Email, ja.Telephone,
                        ed.Nom AS NomDom, ee.Nom AS NomExt, cl.Nom AS NomClub,
                        r.Date, r.Heure, r.Journee, r.Poule, ed.Division, RIGHT(ed.Division, 1) AS SexeCode,
                        -- Salle propre à la rencontre si renseignée, sinon salle principale du club recevant
@@ -524,9 +646,7 @@ class NominationController extends BaseController
             $copies     = ['envoyees' => 0, 'echecs' => 0, 'sans_destinataire' => 0];
 
             foreach ($nominations as $nom) {
-                // Forme "chemin" (sans ?, = ni &) — cf. {URL_CONVOCATION_JA} dans app_config.php.
-                $lien    = site_url('convocation-ja/' . (int) $nom['Id_Nomination']
-                    . '/' . $this->obf->obfuscate((int) $nom['Id_Nomination']));
+                $lien    = $this->urlConvocation((int) $nom['Id_Nomination']);
                 $liens[] = [
                     'nom'       => "{$nom['Prenom']} {$nom['Nom']}",
                     'email'     => $nom['Email'] ?? '',
@@ -625,11 +745,15 @@ class NominationController extends BaseController
 
     /**
      * Copie pour information de la convocation d'une rencontre, SANS les liens
-     * personnels du JA (retirerLiensPersonnelsModele()), aux correspondants et
-     * référents des clubs recevant et visiteur (Club.CorEmail / Club.RefMail,
-     * dédoublonnés, adresse du JA exclue) — un seul email par rencontre, tous
-     * les destinataires en « À ». Reply-To du nominateur selon le flag du
-     * modèle ; pas de Cc (le nominateur est déjà en Cc de la convocation du JA).
+     * personnels du JA, aux correspondants et référents des clubs recevant et
+     * visiteur (Club.CorEmail / Club.RefMail, dédoublonnés, adresse du JA
+     * exclue) — un seul email par rencontre, tous les destinataires en « À ».
+     * Modèle : message système « Convocation clubs » (TYPE_MESSAGE_COPIE_CONVOCATION_CLUBS,
+     * copie perso prioritaire, sujet tel quel) ; à défaut (EA98 pas chargé),
+     * message n°3 passé par retirerLiensPersonnelsModele(), sujet préfixé
+     * « Copie – » et ligne « copie pour information » en tête. Reply-To du
+     * nominateur selon le flag du modèle ; Cc seulement si le message dédié le
+     * demande (repli : jamais, le nominateur est déjà en Cc de la convocation du JA).
      * En mode Développement, getEmailDestinataire() ramène tous les
      * destinataires sur l'adresse de test (PHPMailer dédoublonne) : un mail de
      * test par rencontre, sujet préfixé [DEV → adresses réelles].
@@ -651,22 +775,46 @@ class NominationController extends BaseController
             return ['echecs', 'non envoyée — ' . $errRl];
         }
 
-        $corps = trim((string) $tplConv['Message']) !== ''
-            ? strtr(retirerLiensPersonnelsModele($tplConv['Message']), $marqueurs + ['{LIEN_LIGUE}' => getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr')])
-            : "Bonjour,\r\n\r\n{$nom['Prenom']} {$nom['Nom']} est nominé(e) pour la rencontre {$nom['NomDom']} vs {$nom['NomExt']} le {$nom['Date']}.";
+        // Message système dédié « Convocation clubs » (version perso du nominateur prioritaire) ;
+        // absent (EA98 pas encore chargé) → repli sur le message n°3 sans liens + ligne « copie pour information ».
+        $tplCopie = defined('TYPE_MESSAGE_COPIE_CONVOCATION_CLUBS') // tolère un app_config.php encore en cache opcache
+            ? resoudreModeleMessagerieParType(getPDO(), TYPE_MESSAGE_COPIE_CONVOCATION_CLUBS, (int) ($moi['id'] ?? 0))
+            : null;
+        if ($tplCopie !== null && trim((string) $tplCopie['Message']) === '') {
+            $tplCopie = null;
+        }
+        $lienLigue = ['{LIEN_LIGUE}' => getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr')];
+        $perso     = '/\{(?:URL_CONVOCATION_JA|LIEN_CONVOCATION|URL_ADRESSE_JA|URL_DISPONIBILITE_JA|URL_ATTESTATION_JA)\}/';
+
+        if ($tplCopie !== null) {
+            $tpl    = $tplCopie;
+            $modele = (string) $tplCopie['Message'];
+            // Par sécurité si le message a été édité avec un lien personnel du JA.
+            $corps = strtr(preg_match($perso, $modele) ? retirerLiensPersonnelsModele($modele) : $modele, $marqueurs + $lienLigue);
+            $sujet = strtr((string) $tplCopie['Sujet'], $marqueurs + $lienLigue); // préfixe « Copie – » inclus dans le modèle
+        } else {
+            $tpl   = $tplConv;
+            $corps = trim((string) $tplConv['Message']) !== ''
+                ? strtr(retirerLiensPersonnelsModele($tplConv['Message']), $marqueurs + $lienLigue)
+                : "Bonjour,\r\n\r\n{$nom['Prenom']} {$nom['Nom']} est nominé(e) pour la rencontre {$nom['NomDom']} vs {$nom['NomExt']} le {$nom['Date']}.";
+            $sujet = 'Copie – ' . $sujet;
+        }
         // Filet : aucune URL personnelle du JA ne doit subsister (marqueur écrit autrement dans le modèle…).
         $urlsPerso = array_filter([$lien, $marqueurs['{URL_ADRESSE_JA}'] ?? '', $marqueurs['{URL_DISPONIBILITE_JA}'] ?? '', $marqueurs['{URL_ATTESTATION_JA}'] ?? '']);
         $corps     = str_replace($urlsPerso, '', $corps);
-        $sujet     = 'Copie – ' . str_replace($urlsPerso, '', $sujet);
+        $sujet     = str_replace($urlsPerso, '', $sujet);
         if (str_contains($corps, 'data:image/')) {
             $corps = preg_replace('/src="data:image\/[^;]+;base64,[^"]*"/', 'src=""', $corps);
         }
 
         $isHtml = strip_tags($corps) !== $corps;
-        $info   = 'Ceci est une copie pour information de la convocation adressée à ' . trim("{$nom['Prenom']} {$nom['Nom']}") . '.';
-        $corps  = $isHtml
-            ? '<p><em>' . htmlspecialchars($info, ENT_QUOTES, 'UTF-8') . '</em></p>' . $corps
-            : $info . "\r\n\r\n" . $corps;
+        if ($tplCopie === null) {
+            // Repli seulement : dans le message dédié, la mention fait partie du texte.
+            $info  = 'Ceci est une copie pour information de la convocation adressée à ' . trim("{$nom['Prenom']} {$nom['Nom']}") . '.';
+            $corps = $isHtml
+                ? '<p><em>' . htmlspecialchars($info, ENT_QUOTES, 'UTF-8') . '</em></p>' . $corps
+                : $info . "\r\n\r\n" . $corps;
+        }
 
         try {
             $mail = getNijacMailer();
@@ -674,8 +822,12 @@ class NominationController extends BaseController
             foreach ($dest as $adresse => $nomDest) {
                 $mail->addAddress(getEmailDestinataire($adresse), $nomDest);
             }
-            if (!empty($tplConv['ReplyTo']) && !empty($moi['email'])) {
+            if (!empty($tpl['ReplyTo']) && !empty($moi['email'])) {
                 $mail->addReplyTo($moi['email'], trim(($moi['prenom'] ?? '') . ' ' . ($moi['nom'] ?? '')));
+            }
+            // Cc du nominateur : seulement si le message dédié le demande (repli : jamais, déjà en Cc de la convocation du JA).
+            if ($tplCopie !== null && !empty($tpl['Cc']) && !empty($moi['email'])) {
+                $mail->addCC(getEmailDestinataire($moi['email']), trim(($moi['prenom'] ?? '') . ' ' . ($moi['nom'] ?? '')));
             }
             $mail->Subject = isModeDeveloppement() ? '[DEV → ' . implode(', ', array_keys($dest)) . "] $sujet" : $sujet;
             $mail->Body    = $corps;

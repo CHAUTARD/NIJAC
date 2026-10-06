@@ -11,6 +11,14 @@ $routes->get('/', 'AuthController::index');
 $routes->get('login', 'AuthController::index');
 $routes->post('login', 'AuthController::index');
 
+// ── E010 Code de sécurité (double authentification par email) ───────────────
+// Public (pas de filtre) : n'est utilisable qu'avec l'état $_SESSION['mfa_attente']
+// posé par E001 après un mot de passe valide, sinon retour à E001. Le filtre csrf
+// global couvre les POST.
+$routes->get('login/code', 'AuthController::code');
+$routes->post('login/code', 'AuthController::code');
+$routes->post('login/code/renvoi', 'AuthController::renvoyerCode');
+
 // ── E002 Menu administrateur ─────────────────────────────────────────────────
 $routes->get('admin-menu', 'AdminMenuController::index', ['filter' => 'adminauth']);
 
@@ -209,6 +217,7 @@ $routes->get('stats-nomination/data', 'StatsNominationController::data', ['filte
 $routes->get('suivi-nomination', 'SuiviNominationController::index', ['filter' => 'auth']);
 $routes->get('suivi-nomination/data', 'SuiviNominationController::data', ['filter' => 'auth']);
 $routes->get('suivi-nomination/ja-liste', 'SuiviNominationController::jaListe', ['filter' => 'auth']);
+$routes->get('suivi-nomination/ja-disponibles', 'SuiviNominationController::jaDisponibles', ['filter' => 'auth']);   // ?rencontre=ID : JA nommables en arbitrage CRA (règle stricte EN14 + 2/jour), JA actuel toujours inclus
 $routes->post('suivi-nomination/modifier', 'SuiviNominationController::modifier', ['filter' => 'auth']);
 $routes->post('suivi-nomination/saisir', 'SuiviNominationController::saisir', ['filter' => 'auth']);   // JA d'une rencontre sans nomination : arbitrage club (saisie) ou CRA (nomination, règles EN14)
 $routes->post('suivi-nomination/rappel', 'SuiviNominationController::rappel', ['filter' => 'auth']);
@@ -402,6 +411,8 @@ $routes->get('convocation-ja', 'ConvocationJaController::index');
 // acceptée pour les convocations déjà envoyées.
 $routes->get('convocation-ja/(:num)/(:alphanum)', 'ConvocationJaController::index/$1/$2');
 $routes->post('convocation-ja/sauvegarder-frais', 'ConvocationJaController::sauvegarderFrais');
+// Accusé de réception par le JA (jeton cnv, nomination.AccuseReception — colonne ajoutée par EA98).
+$routes->post('convocation-ja/accuse', 'ConvocationJaController::accuser');
 
 // ── EN22 Disponibilité JA ────────────────────────────────────────────────────
 // Page PUBLIQUE (sans authentification) — accessible via ?ja=TOKEN ou ?id_ja=N.
