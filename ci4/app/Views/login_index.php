@@ -236,7 +236,7 @@ $alerteClasse = ($statutClass ?? '') === 'text-danger' ? 'alert-danger' : 'alert
     </div>
 
     <div class="login-footer">
-        <span>&copy; <?= date('Y') ?> &mdash; Ligue Normandie de Tennis de Table &mdash; Version&nbsp;: <?= defined('APP_VERSION') ? APP_VERSION : '' ?></span>
+        <span>&copy; <?= date('Y') ?> Patrick CHAUTARD &mdash; Ligue Normandie de Tennis de Table &mdash; Version&nbsp;: <?= defined('APP_VERSION') ? APP_VERSION : '' ?></span>
     </div>
 
 </div>

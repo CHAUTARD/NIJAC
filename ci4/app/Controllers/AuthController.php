@@ -174,6 +174,9 @@ class AuthController extends BaseController
         }
 
         $renvoi = peutRenvoyerCode($_SESSION['mfa_attente'], time());
+        // Repli (état posé avant cette version) : relecture du compte, masquage aussitôt.
+        $emailMasque = $_SESSION['mfa_attente']['email_masque']
+            ?? masquerEmailAffichage((string) ($this->chargerUtilisateur((int) $etat['id'])['Email'] ?? ''));
         session_write_close();
         unset($_SESSION); // voir index() : pas de démarrage du service Session de CI4
 
@@ -181,6 +184,7 @@ class AuthController extends BaseController
             'status'      => $status,
             'statutClass' => $statutClass,
             'attente'     => $renvoi['attente'],
+            'emailMasque' => $emailMasque,
         ]);
     }
 
@@ -248,6 +252,8 @@ class AuthController extends BaseController
      */
     private function envoyerCode(array $etat, string $email): array
     {
+        // Seule la forme masquée est conservée (affichage E010) — jamais l'adresse complète en session.
+        $etat['email_masque'] = masquerEmailAffichage($email);
         $cle = 'mfa_envoi:' . (int) $etat['id'];
         if ($limite = checkTentativesRateLimit($cle, 6, 15)) {
             return ['ok' => false, 'etat' => $etat, 'erreur' => $limite];

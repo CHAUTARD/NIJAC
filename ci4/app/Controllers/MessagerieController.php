@@ -205,7 +205,7 @@ class MessagerieController extends BaseController
         $stmt   = $pdo->prepare('INSERT INTO messagerie (Id_Utilisateur, Type, Sujet, Message, Cc, ReplyTo) VALUES (?, ?, ?, ?, ?, ?)');
         $stmt->execute([$idUser, $fields['type'], $fields['sujet'], $fields['message'], $fields['cc'], $fields['replyto']]);
 
-        return $this->response->setJSON(['ok' => true, 'msg' => 'Message créé.', 'id' => (int) $pdo->lastInsertId()]);
+        return $this->response->setJSON(['ok' => true, 'msg' => 'Message créé.', 'id' => (int) $pdo->lastInsertId(), 'avertissement' => self::avertissementLienJa($fields)]);
     }
 
     public function update($id = null): ResponseInterface
@@ -253,7 +253,7 @@ class MessagerieController extends BaseController
         $stmt = $pdo->prepare('UPDATE messagerie SET Type=?, Sujet=?, Message=?, Cc=?, ReplyTo=? WHERE Id_Messagerie=?');
         $stmt->execute([$fields['type'], $fields['sujet'], $fields['message'], $fields['cc'], $fields['replyto'], $id]);
 
-        return $this->response->setJSON(['ok' => true, 'msg' => 'Message mis à jour.', 'id' => $id]);
+        return $this->response->setJSON(['ok' => true, 'msg' => 'Message mis à jour.', 'id' => $id, 'avertissement' => self::avertissementLienJa($fields)]);
     }
 
     public function duplicate($id = null): ResponseInterface
@@ -307,6 +307,18 @@ class MessagerieController extends BaseController
         $pdo->prepare('DELETE FROM messagerie WHERE Id_Messagerie = ?')->execute([$id]);
 
         return $this->response->setJSON(['ok' => true, 'msg' => 'Message supprimé.']);
+    }
+
+    /**
+     * Avertissement non bloquant : le message « Convocation clubs » (copie EN14 aux clubs)
+     * est envoyé tel quel, sans filtrage — il ne doit pas contenir le lien personnel du JA.
+     */
+    private static function avertissementLienJa(array $fields): ?string
+    {
+        return $fields['type'] === TYPE_MESSAGE_COPIE_CONVOCATION_CLUBS
+            && preg_match('/\{(?:URL_CONVOCATION_JA|LIEN_CONVOCATION)\}/', $fields['sujet'] . $fields['message'])
+            ? 'Ce message est envoyé aux clubs : n\'y mettez pas le lien personnel du JA.'
+            : null;
     }
 
     /**

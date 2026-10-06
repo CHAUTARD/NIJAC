@@ -82,8 +82,7 @@ $alerte = match ($statutClass ?? '') {
 
     <div class="form-panel">
         <p class="small text-muted mb-3">
-            Un code de sécurité à 6 chiffres vient d'être envoyé à l'adresse email enregistrée sur votre compte.
-            Il est valable 10 minutes.
+            Un code de sécurité à 6 chiffres vient d'être envoyé à l'adresse email <strong><?= esc($emailMasque ?? '(adresse non renseignée)') ?></strong> enregistrée sur votre compte. Il est valable 10 minutes.
         </p>
 
         <form method="POST" action="<?= site_url('login/code') ?>" id="form-code" novalidate>
@@ -113,7 +112,7 @@ $alerte = match ($statutClass ?? '') {
     </div>
 
     <div class="login-footer">
-        <span>&copy; <?= date('Y') ?> &mdash; Ligue Normandie de Tennis de Table &mdash; Version&nbsp;: <?= defined('APP_VERSION') ? APP_VERSION : '' ?></span>
+        <span>&copy; <?= date('Y') ?> Patrick CHAUTARD &mdash; Ligue Normandie de Tennis de Table &mdash; Version&nbsp;: <?= defined('APP_VERSION') ? APP_VERSION : '' ?></span>
     </div>
 
 </div>

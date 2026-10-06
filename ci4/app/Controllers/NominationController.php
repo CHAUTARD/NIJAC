@@ -732,7 +732,7 @@ class NominationController extends BaseController
 
                     // Après l'envoi réussi au JA uniquement ; jamais bloquant (EmailEnvoye déjà à 1).
                     if ($copieClubs) {
-                        [$statut, $texte] = $this->envoyerCopieClubs($nom, $tplConv, $marqueurs, $lien, $sujet, $moi);
+                        [$statut, $texte] = $this->envoyerCopieClubs($nom, $marqueurs, $moi);
                         $copies[$statut]++;
                         $liens[$iLien]['copie'] = 'Copie clubs : ' . $texte;
                     }
@@ -744,23 +744,21 @@ class NominationController extends BaseController
     }
 
     /**
-     * Copie pour information de la convocation d'une rencontre, SANS les liens
-     * personnels du JA, aux correspondants et référents des clubs recevant et
-     * visiteur (Club.CorEmail / Club.RefMail, dédoublonnés, adresse du JA
-     * exclue) — un seul email par rencontre, tous les destinataires en « À ».
-     * Modèle : message système « Convocation clubs » (TYPE_MESSAGE_COPIE_CONVOCATION_CLUBS,
-     * copie perso prioritaire, sujet tel quel) ; à défaut (EA98 pas chargé),
-     * message n°3 passé par retirerLiensPersonnelsModele(), sujet préfixé
-     * « Copie – » et ligne « copie pour information » en tête. Reply-To du
-     * nominateur selon le flag du modèle ; Cc seulement si le message dédié le
-     * demande (repli : jamais, le nominateur est déjà en Cc de la convocation du JA).
+     * Copie pour information de la convocation d'une rencontre aux correspondants
+     * et référents des clubs recevant et visiteur (Club.CorEmail / Club.RefMail,
+     * dédoublonnés, adresse du JA exclue) — un seul email par rencontre, tous les
+     * destinataires en « À ». Modèle : message système « Convocation clubs »
+     * (TYPE_MESSAGE_COPIE_CONVOCATION_CLUBS, copie perso prioritaire, sujet et corps
+     * tels quels, sans lien personnel du JA) ; absent ou vide (EA98 pas chargé) :
+     * modèle codé en dur modeleHtmlCopieConvocationClubs() + sujetParDefautCopieConvocationClubs(),
+     * Cc = 0 / ReplyTo = 1. Reply-To du nominateur et Cc selon les flags du modèle.
      * En mode Développement, getEmailDestinataire() ramène tous les
      * destinataires sur l'adresse de test (PHPMailer dédoublonne) : un mail de
      * test par rencontre, sujet préfixé [DEV → adresses réelles].
      *
      * @return array{0: 'envoyees'|'echecs'|'sans_destinataire', 1: string} statut + texte du compte-rendu
      */
-    private function envoyerCopieClubs(array $nom, array $tplConv, array $marqueurs, string $lien, string $sujet, array $moi): array
+    private function envoyerCopieClubs(array $nom, array $marqueurs, array $moi): array
     {
         $dest = destinatairesCopieClubs([
             ['CorNom' => $nom['CorrNom'],   'CorEmail' => $nom['CorrEmail'],   'RefNom' => $nom['DomRefNom'], 'RefMail' => $nom['DomRefMail']],
@@ -775,46 +773,21 @@ class NominationController extends BaseController
             return ['echecs', 'non envoyée — ' . $errRl];
         }
 
-        // Message système dédié « Convocation clubs » (version perso du nominateur prioritaire) ;
-        // absent (EA98 pas encore chargé) → repli sur le message n°3 sans liens + ligne « copie pour information ».
-        $tplCopie = defined('TYPE_MESSAGE_COPIE_CONVOCATION_CLUBS') // tolère un app_config.php encore en cache opcache
-            ? resoudreModeleMessagerieParType(getPDO(), TYPE_MESSAGE_COPIE_CONVOCATION_CLUBS, (int) ($moi['id'] ?? 0))
-            : null;
-        if ($tplCopie !== null && trim((string) $tplCopie['Message']) === '') {
-            $tplCopie = null;
+        // Message système dédié « Convocation clubs » (version perso du nominateur prioritaire).
+        $tpl = resoudreModeleMessagerieParType(getPDO(), TYPE_MESSAGE_COPIE_CONVOCATION_CLUBS, (int) ($moi['id'] ?? 0));
+        if ($tpl === null || trim((string) $tpl['Message']) === '') {
+            // Avant EA98 : modèle codé en dur, mêmes Sujet/Cc/ReplyTo que l'amorçage.
+            $tpl = ['Sujet' => sujetParDefautCopieConvocationClubs(), 'Message' => modeleHtmlCopieConvocationClubs(), 'Cc' => 0, 'ReplyTo' => 1];
         }
-        $lienLigue = ['{LIEN_LIGUE}' => getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr')];
-        $perso     = '/\{(?:URL_CONVOCATION_JA|LIEN_CONVOCATION|URL_ADRESSE_JA|URL_DISPONIBILITE_JA|URL_ATTESTATION_JA)\}/';
-
-        if ($tplCopie !== null) {
-            $tpl    = $tplCopie;
-            $modele = (string) $tplCopie['Message'];
-            // Par sécurité si le message a été édité avec un lien personnel du JA.
-            $corps = strtr(preg_match($perso, $modele) ? retirerLiensPersonnelsModele($modele) : $modele, $marqueurs + $lienLigue);
-            $sujet = strtr((string) $tplCopie['Sujet'], $marqueurs + $lienLigue); // préfixe « Copie – » inclus dans le modèle
-        } else {
-            $tpl   = $tplConv;
-            $corps = trim((string) $tplConv['Message']) !== ''
-                ? strtr(retirerLiensPersonnelsModele($tplConv['Message']), $marqueurs + $lienLigue)
-                : "Bonjour,\r\n\r\n{$nom['Prenom']} {$nom['Nom']} est nominé(e) pour la rencontre {$nom['NomDom']} vs {$nom['NomExt']} le {$nom['Date']}.";
-            $sujet = 'Copie – ' . $sujet;
-        }
-        // Filet : aucune URL personnelle du JA ne doit subsister (marqueur écrit autrement dans le modèle…).
-        $urlsPerso = array_filter([$lien, $marqueurs['{URL_ADRESSE_JA}'] ?? '', $marqueurs['{URL_DISPONIBILITE_JA}'] ?? '', $marqueurs['{URL_ATTESTATION_JA}'] ?? '']);
-        $corps     = str_replace($urlsPerso, '', $corps);
-        $sujet     = str_replace($urlsPerso, '', $sujet);
+        // Tel quel : un lien personnel du JA ajouté en EA93 n'est pas filtré (avertissement à l'enregistrement).
+        $marqueurs += ['{LIEN_LIGUE}' => getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr')];
+        $corps = strtr((string) $tpl['Message'], $marqueurs);
+        $sujet = strtr((string) $tpl['Sujet'], $marqueurs); // préfixe « Copie – » inclus dans le modèle
         if (str_contains($corps, 'data:image/')) {
             $corps = preg_replace('/src="data:image\/[^;]+;base64,[^"]*"/', 'src=""', $corps);
         }
 
         $isHtml = strip_tags($corps) !== $corps;
-        if ($tplCopie === null) {
-            // Repli seulement : dans le message dédié, la mention fait partie du texte.
-            $info  = 'Ceci est une copie pour information de la convocation adressée à ' . trim("{$nom['Prenom']} {$nom['Nom']}") . '.';
-            $corps = $isHtml
-                ? '<p><em>' . htmlspecialchars($info, ENT_QUOTES, 'UTF-8') . '</em></p>' . $corps
-                : $info . "\r\n\r\n" . $corps;
-        }
 
         try {
             $mail = getNijacMailer();
@@ -825,8 +798,8 @@ class NominationController extends BaseController
             if (!empty($tpl['ReplyTo']) && !empty($moi['email'])) {
                 $mail->addReplyTo($moi['email'], trim(($moi['prenom'] ?? '') . ' ' . ($moi['nom'] ?? '')));
             }
-            // Cc du nominateur : seulement si le message dédié le demande (repli : jamais, déjà en Cc de la convocation du JA).
-            if ($tplCopie !== null && !empty($tpl['Cc']) && !empty($moi['email'])) {
+            // Cc du nominateur : seulement si le message le demande (défaut 0, déjà en Cc de la convocation du JA).
+            if (!empty($tpl['Cc']) && !empty($moi['email'])) {
                 $mail->addCC(getEmailDestinataire($moi['email']), trim(($moi['prenom'] ?? '') . ' ' . ($moi['nom'] ?? '')));
             }
             $mail->Subject = isModeDeveloppement() ? '[DEV → ' . implode(', ', array_keys($dest)) . "] $sujet" : $sujet;

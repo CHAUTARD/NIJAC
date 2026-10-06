@@ -542,7 +542,7 @@ $('#btn-enregistrer').on('click', function () {
     const method = isNew ? 'POST' : 'PUT';
 
     $.ajax({ url, method, data: payload, dataType: 'json' }).done(function (res) {
-        if (res.ok) { toast(res.msg); chargerListe(res.id); }
+        if (res.ok) { toast(res.msg); chargerListe(res.id); if (res.avertissement) nijacToast(res.avertissement, 'warning', 8000); }
         else { toast(res.msg, false); setStatus(res.msg, false); }
     });
 });

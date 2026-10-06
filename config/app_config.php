@@ -1234,9 +1234,15 @@ function assurerModeleCopieConvocationClubs(\PDO $pdo): void
     $pdo->prepare('INSERT INTO messagerie (Type, Sujet, Message, Id_Utilisateur, Cc, ReplyTo) VALUES (?, ?, ?, NULL, 0, 1)')
         ->execute([
             TYPE_MESSAGE_COPIE_CONVOCATION_CLUBS,
-            'Copie – Convocation JA du {DATE} à {HEURE} à {NOM_CLUB}',
+            sujetParDefautCopieConvocationClubs(),
             modeleHtmlCopieConvocationClubs(),
         ]);
+}
+
+/** Sujet par défaut du message « Convocation clubs » (amorçage EA98 et repli d'EN14 avant EA98). */
+function sujetParDefautCopieConvocationClubs(): string
+{
+    return 'Copie – Convocation JA du {DATE} à {HEURE} à {NOM_CLUB}';
 }
 
 /**
@@ -1391,6 +1397,27 @@ function genererCodeSecurite(): string
 function hacherCodeSecurite(string $code): string
 {
     return password_hash($code, PASSWORD_DEFAULT);
+}
+
+/**
+ * Adresse affichée sur E010 (fonction pure, UTF-8) : 2 premiers caractères de la partie locale, puis
+ * autant d'astérisques que de caractères restants (plafonné à 6 ; '***' si la partie locale fait 2
+ * caractères ou moins), puis '@' et le domaine complet (dernier '@'). Vide ou sans '@' :
+ * « (adresse non renseignée) ». Résultat NON échappé : la vue l'échappe.
+ */
+function masquerEmailAffichage(string $email): string
+{
+    $email = trim($email);
+    $pos   = mb_strrpos($email, '@', 0, 'UTF-8');
+    if ($pos === false) {
+        return '(adresse non renseignée)';
+    }
+    $local = mb_substr($email, 0, $pos, 'UTF-8');
+    $reste = mb_strlen($local, 'UTF-8') - 2;
+
+    return mb_substr($local, 0, 2, 'UTF-8')
+        . str_repeat('*', $reste > 0 ? min($reste, 6) : 3)
+        . mb_substr($email, $pos, null, 'UTF-8');
 }
 
 /**
@@ -1928,65 +1955,6 @@ function remplacerMarqueursMessage(string $sujet, string $corps, array $marqueur
 }
 
 /**
- * Retire d'un modèle de message (AVANT substitution des marqueurs) les liens
- * personnels d'un JA — {URL_CONVOCATION_JA}, alias {LIEN_CONVOCATION},
- * {URL_ADRESSE_JA}, {URL_DISPONIBILITE_JA}, {URL_ATTESTATION_JA} — ainsi que
- * la phrase qui les introduit. Utilisé pour la copie « sans lien » de la
- * convocation envoyée aux clubs (EN14).
- *
- * HTML : supprime le bloc <p>/<li>/<div> (sans bloc imbriqué) contenant le
- * marqueur et, s'il le précède immédiatement, le bloc d'introduction (« lien »,
- * « cliquez », « suivant », ou finissant par « : ») ; un <a> isolé contenant le
- * marqueur est retiré. Texte : supprime la ligne du marqueur et la ligne
- * d'introduction qui la précède (mêmes critères).
- */
-function retirerLiensPersonnelsModele(string $modele): string
-{
-    $marqueurs = ['{URL_CONVOCATION_JA}', '{LIEN_CONVOCATION}', '{URL_ADRESSE_JA}', '{URL_DISPONIBILITE_JA}', '{URL_ATTESTATION_JA}'];
-    $alt       = implode('|', array_map(fn ($m) => preg_quote($m, '/'), $marqueurs));
-    // Phrase d'introduction d'un lien : « lien », « cliquez », « suivant : », « ci-dessous », ou finissant par « : ».
-    $estIntro  = fn (string $t): bool => mb_strlen($t = trim($t)) <= 300
-        && (bool) preg_match('/(?:\blien|cliqu|suivante?s?\s*:|ci-dessous|:\s*$)/iu', $t);
-
-    // 1. HTML : bloc <p>/<li>/<div> (sans bloc imbriqué) portant un marqueur → sentinelle \x00,
-    //    puis le bloc d'introduction juste avant (paragraphes vides intercalés compris) est retiré.
-    $sansBloc = '(?:(?!<\/?(?:p|li|div)\b).)*?';
-    $modele   = preg_replace("/<(p|li|div)\\b[^>]*>$sansBloc(?:$alt)$sansBloc<\\/\\1>/is", "\x00", $modele) ?? $modele;
-    $vides    = '(?:\s*<p\b[^>]*>(?:\s|&nbsp;|<br\s*\/?>)*<\/p>)*\s*';
-    $modele   = preg_replace_callback(
-        "/<(p|li|div)\\b[^>]*>($sansBloc)<\\/\\1>$vides\x00/is",
-        fn ($m) => $estIntro(html_entity_decode(strip_tags($m[2]), ENT_QUOTES | ENT_HTML5, 'UTF-8')) ? '' : $m[0],
-        $modele
-    ) ?? $modele;
-    $modele = str_replace("\x00", '', $modele);
-    // Lien <a> isolé (hors bloc) portant un marqueur.
-    $modele = preg_replace_callback('/<a\b[^>]*>.*?<\/a>/is', fn ($m) => preg_match("/$alt/", $m[0]) ? '' : $m[0], $modele) ?? $modele;
-
-    // 2. Texte brut, ligne par ligne.
-    $lignes = preg_split('/\R/', $modele);
-    $sortie = [];
-    foreach ($lignes as $ligne) {
-        if (!preg_match("/$alt/", $ligne)) {
-            $sortie[] = $ligne;
-            continue;
-        }
-        if (strlen(strip_tags($ligne)) !== strlen($ligne) && strlen($ligne) > 300) {
-            // ponytail: longue ligne HTML monobloc — on retire le marqueur seul plutôt que tout le corps.
-            $sortie[] = preg_replace("/$alt/", '', $ligne);
-            continue;
-        }
-        // Retire la ligne d'introduction précédente (en sautant les lignes vides).
-        for ($i = count($sortie) - 1; $i >= 0 && trim(strip_tags($sortie[$i])) === ''; $i--);
-        if ($i >= 0 && $estIntro(html_entity_decode(strip_tags($sortie[$i]), ENT_QUOTES | ENT_HTML5, 'UTF-8'))) {
-            array_splice($sortie, $i);
-        }
-    }
-
-    // Pas plus d'une ligne vide consécutive là où le lien a été retiré.
-    return preg_replace('/(\R[ \t]*){3,}/', "\n\n", implode("\n", $sortie));
-}
-
-/**
  * Destinataires de la copie de convocation aux clubs (EN14) : correspondant et
  * référent (Club.CorEmail / Club.RefMail) de chaque club passé, adresses
  * valides seulement, dédoublonnées sans casse, l'adresse du JA exclue.
@@ -2016,15 +1984,297 @@ function destinatairesCopieClubs(array $clubs, ?string $emailJa): array
 /**
  * Corps par défaut du message système n°3 « Convocation » (EN14) : e-mail HTML
  * (tableaux + styles en ligne) avec le bouton « Consulter et confirmer ma
- * convocation » vers {URL_CONVOCATION_JA} (EN21). Le bloc <div> du bouton
- * (phrase d'introduction + bouton + lien de secours) est retiré en entier par
- * retirerLiensPersonnelsModele() pour la copie aux clubs. Appliqué aux bases
+ * convocation » vers {URL_CONVOCATION_JA} (EN21). La copie aux clubs n'en
+ * dérive pas (message dédié modeleHtmlCopieConvocationClubs()). Appliqué aux bases
  * existantes par initTableConfiguration() (EA98) seulement si le corps est
  * encore un ancien texte par défaut (corpsConvocationJaMigrable()).
  */
 function modeleHtmlConvocationJa(): string
 {
     return <<<'NIJAC_CONVOCATION_HTML'
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<!-- Sujet proposé (champ Sujet, inchangé : la version perso du nominateur est retrouvée par Sujet) : Convocation JA du {DATE} à {HEURE} à {NOM_CLUB} -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>Convocation — Juge-Arbitre</title>
+</head>
+<body style="margin:0;padding:0;background-color:#eef1f6;color:#1f2937;">
+<span style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">Vous êtes désigné(e) juge-arbitre : {DOM} – {EXT}, le {DATE_LONGUE} à {HEURE}.</span>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#eef1f6" style="background-color:#eef1f6;">
+<tr>
+<td align="center" style="padding:24px 12px;">
+<!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#ffffff;border:1px solid #d5dbe5;border-radius:8px;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+
+<!-- En-tête -->
+<tr>
+<td bgcolor="#1a3a6b" style="background-color:#1a3a6b;padding:22px 28px;border-radius:8px 8px 0 0;">
+<span style="display:block;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#c9d6ea;">Ligue de Normandie de Tennis de Table</span>
+<span style="display:block;font-size:22px;font-weight:bold;line-height:30px;color:#ffffff;">Convocation — Juge-Arbitre</span>
+</td>
+</tr>
+
+<!-- Introduction -->
+<tr>
+<td style="padding:26px 28px 6px 28px;font-size:15px;line-height:23px;color:#1f2937;">
+Bonjour {PRENOM},<br><br>
+Nous avons l'avantage de vous informer que vous êtes désigné(e) pour diriger la rencontre suivante du Championnat de France par Équipes {SEXE}.
+</td>
+</tr>
+
+<!-- Récapitulatif de la rencontre -->
+<tr>
+<td style="padding:16px 28px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f3f6fb" style="background-color:#f3f6fb;border-left:4px solid #1a3a6b;border-radius:4px;font-size:14px;line-height:21px;color:#1f2937;">
+<tr><td colspan="2" style="padding:14px 16px 4px 16px;font-size:17px;font-weight:bold;color:#1a3a6b;">{DOM} <span style="color:#6b7280;font-weight:normal;">à</span> {EXT}</td></tr>
+<tr><td width="34%" valign="top" style="padding:6px 16px;color:#4b5563;">Date</td><td valign="top" style="padding:6px 16px 6px 0;font-weight:bold;color:#1f2937;">{DATE_LONGUE} à {HEURE}</td></tr>
+<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Compétition</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">Journée n° {JOURNEE} — Division : {DIVISION} — Poule : {POULE}</td></tr>
+<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Juge-arbitre</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{PRENOM} {NOM}</td></tr>
+<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Club recevant</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{NOM_CLUB}</td></tr>
+<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Adresse</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{SALLE_NOM}<br>{SALLE_ADRESSE}<br>{SALLE_CP} {SALLE_VILLE}</td></tr>
+<tr><td valign="top" style="padding:6px 16px 14px 16px;color:#4b5563;">Correspondant</td><td valign="top" style="padding:6px 16px 14px 0;color:#1f2937;">{CORR_NOM}<br>Tél : {CORR_TEL}<br>Courriel : <a href="mailto:{CORR_EMAIL}" style="color:#1a3a6b;">{CORR_EMAIL}</a></td></tr>
+</table>
+</td>
+</tr>
+
+<!-- Actions attendues -->
+<tr>
+<td style="padding:0 28px 6px 28px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#fff6e5" style="background-color:#fff6e5;border:1px solid #f0c36d;border-radius:4px;font-size:14px;line-height:21px;color:#5c3d00;">
+<tr><td style="padding:12px 16px;">
+<strong style="color:#8a5a00;">Actions attendues :</strong><br>
+• Confirmer votre désignation en cliquant sur le bouton ci-dessous ou Signaler au plus vite toute indisponibilité ou difficulté particulière.<br>
+• Conserver les justificatifs nécessaires à l'établissement de vos frais et compléter votre convocation dans un délai de 5 jours après la rencontre.
+</td></tr>
+</table>
+</td>
+</tr>
+
+<!-- Bouton vers la convocation (EN21) + lien de secours -->
+<tr>
+<td style="padding:0;">
+<div style="padding:12px 28px 8px 28px;font-size:15px;line-height:23px;color:#1f2937;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+<tr>
+<td align="center" bgcolor="#1a3a6b" style="background-color:#1a3a6b;border-radius:6px;">
+<!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{URL_CONVOCATION_JA}" style="height:48px;v-text-anchor:middle;width:380px;" arcsize="12%" strokecolor="#1a3a6b" fillcolor="#1a3a6b"><w:anchorlock/><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">Consulter et confirmer ma convocation</center></v:roundrect><![endif]-->
+<!--[if !mso]><!--><a href="{URL_CONVOCATION_JA}" target="_blank" style="display:inline-block;padding:14px 28px;min-height:20px;line-height:20px;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:6px;background-color:#1a3a6b;">Consulter et confirmer ma convocation</a><!--<![endif]-->
+</td>
+</tr>
+</table>
+<br>
+<span style="font-size:12px;line-height:18px;color:#6b7280;">Si le bouton ne fonctionne pas, valider ce lien :<br><a href="{URL_CONVOCATION_JA}" style="color:#1a3a6b;word-break:break-all;">{URL_CONVOCATION_JA}</a></span>
+</div>
+</td>
+</tr>
+
+<!-- Signature -->
+<tr>
+<td style="padding:18px 28px 24px 28px;font-size:15px;line-height:23px;color:#1f2937;">
+Nous vous remercions pour votre investissement au service du tennis de table normand et vous souhaitons une excellente rencontre.<br><br>
+<strong>{UTI_PRENOM} {UTI_NOM}</strong><br>
+<span style="font-size:13px;color:#4b5563;">Ligue de Normandie de Tennis de Table</span>
+</td>
+</tr>
+
+<!-- Pied de page -->
+<tr>
+<td bgcolor="#f3f4f6" style="background-color:#f3f4f6;padding:14px 28px;border-top:1px solid #e5e7eb;border-radius:0 0 8px 8px;font-size:11px;line-height:17px;color:#6b7280;">
+Message envoyé automatiquement par l'application de nomination des juges-arbitres de la Ligue. Pour toute question, répondez à ce message.<br>
+<a href="{URL_LIGUE}" style="color:#1a3a6b;">{URL_LIGUE}</a>
+</td>
+</tr>
+
+</table>
+<!--[if mso]></td></tr></table><![endif]-->
+</td>
+</tr>
+</table>
+</body>
+</html>
+
+NIJAC_CONVOCATION_HTML;
+}
+
+/**
+ * Anciens corps par défaut (texte brut) du message n°3, toutes variantes
+ * historiques des dumps SQL : seul un de ceux-là est remplacé par le modèle HTML.
+ *
+ * @return string[]
+ */
+function ancienCorpsConvocationJa(): array
+{
+    $commun = <<<'NIJAC_CONVOCATION_TXT'
+Convocation
+
+Nom du JUGE ARBITRE : {PRENOM} {NOM}
+
+J'ai l'avantage de vous informer que vous êtes désigné(e) pour diriger la rencontre suivante du Championnat de France par Équipes {SEXE}.
+
+Journée n° {JOURNEE}      Division : {DIVISION}    Poule : {POULE}
+Opposant : {DOM} à {EXT}
+le {DATE} à {HEURE}
+
+Adresse : {SALLE_NOM} {SALLE_ADRESSE} {SALLE_CP} {SALLE_VILLE}
+
+Nom, PRÉNOM du CORRESPONDANT, {CORR_NOM}
+
+ Tél : {CORR_TEL}                               Courriel : {CORR_EMAIL}
+
+Veuillez agréer mes meilleurs sentiments.
+{UTI_PRENOM} {UTI_NOM}
+
+
+NIJAC_CONVOCATION_TXT;
+
+    return [
+        $commun . <<<'NIJAC_CONVOCATION_TXT'
+Ci-joint le lien vers la convocation pour la saisie de vos frais d'arbitrages de cette rencontre.
+{URL_CONVOCATION_JA}
+
+IMPORTANT :
+
+Merci de m’accuser réception du présent envoi
+
+Veuillez me retourner obligatoirement la Convocation complétée de vos kms.
+Dans les 5 jours qui suivent la rencontre.
+NIJAC_CONVOCATION_TXT,
+        $commun . <<<'NIJAC_CONVOCATION_TXT'
+Ci-joint le lien pour la saisie de vos frais pour les arbitrages du Championnat.
+{URL_LIGUE}//nijac/Nominateur/convocation_ja.php?nomination={ID_CONVOCATION}
+NIJAC_CONVOCATION_TXT,
+        $commun . <<<'NIJAC_CONVOCATION_TXT'
+Ci-joint le lien pour la saisie de vos frais pour les arbitrages du Championnat.
+{URL_LIGUE}/nijac/Nominateur/convocation_ja.php?nomination={ID_CONVOCATION}
+NIJAC_CONVOCATION_TXT,
+    ];
+}
+
+/**
+ * Versions HTML précédentes du modèle par défaut du message n°3 (déjà appliquées
+ * à des bases par EA98), figées en dur (jamais dérivées du modèle actuel, sinon elles
+ * se désynchroniseraient à la moindre modification de modeleHtmlConvocationJa()).
+ *
+ * @return string[]
+ */
+function ancienneVersionHtmlConvocationJa(): array
+{
+    return [
+        // (a) première version HTML : lien de secours « copiez ce lien : »
+        <<<'NIJAC_CONVOCATION_HTML_V1'
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<!-- Sujet proposé (champ Sujet, inchangé : la version perso du nominateur est retrouvée par Sujet) : Convocation JA du {DATE} à {HEURE} à {NOM_CLUB} -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>Convocation — Juge-Arbitre</title>
+</head>
+<body style="margin:0;padding:0;background-color:#eef1f6;color:#1f2937;">
+<span style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">Vous êtes désigné(e) juge-arbitre : {DOM} – {EXT}, le {DATE_LONGUE} à {HEURE}.</span>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#eef1f6" style="background-color:#eef1f6;">
+<tr>
+<td align="center" style="padding:24px 12px;">
+<!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#ffffff;border:1px solid #d5dbe5;border-radius:8px;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+
+<!-- En-tête -->
+<tr>
+<td bgcolor="#1a3a6b" style="background-color:#1a3a6b;padding:22px 28px;border-radius:8px 8px 0 0;">
+<span style="display:block;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#c9d6ea;">Ligue de Normandie de Tennis de Table</span>
+<span style="display:block;font-size:22px;font-weight:bold;line-height:30px;color:#ffffff;">Convocation — Juge-Arbitre</span>
+</td>
+</tr>
+
+<!-- Introduction -->
+<tr>
+<td style="padding:26px 28px 6px 28px;font-size:15px;line-height:23px;color:#1f2937;">
+Bonjour {PRENOM},<br><br>
+Nom du JUGE ARBITRE : <strong>{PRENOM} {NOM}</strong><br><br>
+J'ai l'avantage de vous informer que vous êtes désigné(e) pour diriger la rencontre suivante du Championnat de France par Équipes {SEXE}.
+</td>
+</tr>
+
+<!-- Récapitulatif de la rencontre -->
+<tr>
+<td style="padding:16px 28px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f3f6fb" style="background-color:#f3f6fb;border-left:4px solid #1a3a6b;border-radius:4px;font-size:14px;line-height:21px;color:#1f2937;">
+<tr><td colspan="2" style="padding:14px 16px 4px 16px;font-size:17px;font-weight:bold;color:#1a3a6b;">{DOM} <span style="color:#6b7280;font-weight:normal;">à</span> {EXT}</td></tr>
+<tr><td width="34%" valign="top" style="padding:6px 16px;color:#4b5563;">Date</td><td valign="top" style="padding:6px 16px 6px 0;font-weight:bold;color:#1f2937;">{DATE_LONGUE} à {HEURE}</td></tr>
+<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Compétition</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">Journée n° {JOURNEE} — Division : {DIVISION} — Poule : {POULE}</td></tr>
+<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Club recevant</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{NOM_CLUB}</td></tr>
+<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Adresse</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{SALLE_NOM}<br>{SALLE_ADRESSE}<br>{SALLE_CP} {SALLE_VILLE}</td></tr>
+<tr><td valign="top" style="padding:6px 16px 14px 16px;color:#4b5563;">Correspondant</td><td valign="top" style="padding:6px 16px 14px 0;color:#1f2937;">{CORR_NOM}<br>Tél : {CORR_TEL}<br>Courriel : <a href="mailto:{CORR_EMAIL}" style="color:#1a3a6b;">{CORR_EMAIL}</a></td></tr>
+</table>
+</td>
+</tr>
+
+<!-- Bouton : bloc <div> unique (sans <p>/<div>/<li> imbriqué) retiré en entier par retirerLiensPersonnelsModele() pour la copie aux clubs -->
+<tr>
+<td style="padding:0;">
+<div style="padding:12px 28px 8px 28px;font-size:15px;line-height:23px;color:#1f2937;">
+Ci-joint le lien vers la convocation pour la saisie de vos frais d'arbitrages de cette rencontre.<br><br>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+<tr>
+<td align="center" bgcolor="#1a3a6b" style="background-color:#1a3a6b;border-radius:6px;">
+<!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{URL_CONVOCATION_JA}" style="height:48px;v-text-anchor:middle;width:380px;" arcsize="12%" strokecolor="#1a3a6b" fillcolor="#1a3a6b"><w:anchorlock/><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">Consulter et confirmer ma convocation</center></v:roundrect><![endif]-->
+<!--[if !mso]><!--><a href="{URL_CONVOCATION_JA}" target="_blank" style="display:inline-block;padding:14px 28px;min-height:20px;line-height:20px;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:6px;background-color:#1a3a6b;">Consulter et confirmer ma convocation</a><!--<![endif]-->
+</td>
+</tr>
+</table>
+<br>
+<span style="font-size:12px;line-height:18px;color:#6b7280;">Si le bouton ne fonctionne pas, copiez ce lien :<br><a href="{URL_CONVOCATION_JA}" style="color:#1a3a6b;word-break:break-all;">{URL_CONVOCATION_JA}</a></span>
+</div>
+</td>
+</tr>
+
+<!-- Consignes (reprises du message n°3 actuel) -->
+<tr>
+<td style="padding:16px 28px 6px 28px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#fff6e5" style="background-color:#fff6e5;border:1px solid #f0c36d;border-radius:4px;font-size:14px;line-height:21px;color:#5c3d00;">
+<tr><td style="padding:12px 16px;">
+<strong style="color:#8a5a00;">IMPORTANT :</strong><br>
+• Merci de m’accuser réception du présent envoi.<br>
+• Veuillez me retourner obligatoirement la Convocation complétée de vos kms, dans les 5 jours qui suivent la rencontre.
+</td></tr>
+</table>
+</td>
+</tr>
+
+<!-- Signature -->
+<tr>
+<td style="padding:18px 28px 24px 28px;font-size:15px;line-height:23px;color:#1f2937;">
+Veuillez agréer mes meilleurs sentiments.<br><br>
+<strong>{UTI_PRENOM} {UTI_NOM}</strong><br>
+<span style="font-size:13px;color:#4b5563;">Ligue de Normandie de Tennis de Table</span>
+</td>
+</tr>
+
+<!-- Pied de page -->
+<tr>
+<td bgcolor="#f3f4f6" style="background-color:#f3f4f6;padding:14px 28px;border-top:1px solid #e5e7eb;border-radius:0 0 8px 8px;font-size:11px;line-height:17px;color:#6b7280;">
+Message envoyé automatiquement par l'application de nomination des juges-arbitres de la Ligue. Pour toute question, répondez à ce message.<br>
+<a href="{URL_LIGUE}" style="color:#1a3a6b;">{URL_LIGUE}</a>
+</td>
+</tr>
+
+</table>
+<!--[if mso]></td></tr></table><![endif]-->
+</td>
+</tr>
+</table>
+</body>
+</html>
+
+NIJAC_CONVOCATION_HTML_V1,
+        // (b) « valider ce lien : », phrase « Ci-joint… » et bloc « IMPORTANT » sous le bouton
+        <<<'NIJAC_CONVOCATION_HTML_V2'
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -2131,76 +2381,8 @@ Message envoyé automatiquement par l'application de nomination des juges-arbitr
 </body>
 </html>
 
-NIJAC_CONVOCATION_HTML;
-}
-
-/**
- * Anciens corps par défaut (texte brut) du message n°3, toutes variantes
- * historiques des dumps SQL : seul un de ceux-là est remplacé par le modèle HTML.
- *
- * @return string[]
- */
-function ancienCorpsConvocationJa(): array
-{
-    $commun = <<<'NIJAC_CONVOCATION_TXT'
-Convocation
-
-Nom du JUGE ARBITRE : {PRENOM} {NOM}
-
-J'ai l'avantage de vous informer que vous êtes désigné(e) pour diriger la rencontre suivante du Championnat de France par Équipes {SEXE}.
-
-Journée n° {JOURNEE}      Division : {DIVISION}    Poule : {POULE}
-Opposant : {DOM} à {EXT}
-le {DATE} à {HEURE}
-
-Adresse : {SALLE_NOM} {SALLE_ADRESSE} {SALLE_CP} {SALLE_VILLE}
-
-Nom, PRÉNOM du CORRESPONDANT, {CORR_NOM}
-
- Tél : {CORR_TEL}                               Courriel : {CORR_EMAIL}
-
-Veuillez agréer mes meilleurs sentiments.
-{UTI_PRENOM} {UTI_NOM}
-
-
-NIJAC_CONVOCATION_TXT;
-
-    return [
-        $commun . <<<'NIJAC_CONVOCATION_TXT'
-Ci-joint le lien vers la convocation pour la saisie de vos frais d'arbitrages de cette rencontre.
-{URL_CONVOCATION_JA}
-
-IMPORTANT :
-
-Merci de m’accuser réception du présent envoi
-
-Veuillez me retourner obligatoirement la Convocation complétée de vos kms.
-Dans les 5 jours qui suivent la rencontre.
-NIJAC_CONVOCATION_TXT,
-        $commun . <<<'NIJAC_CONVOCATION_TXT'
-Ci-joint le lien pour la saisie de vos frais pour les arbitrages du Championnat.
-{URL_LIGUE}//nijac/Nominateur/convocation_ja.php?nomination={ID_CONVOCATION}
-NIJAC_CONVOCATION_TXT,
-        $commun . <<<'NIJAC_CONVOCATION_TXT'
-Ci-joint le lien pour la saisie de vos frais pour les arbitrages du Championnat.
-{URL_LIGUE}/nijac/Nominateur/convocation_ja.php?nomination={ID_CONVOCATION}
-NIJAC_CONVOCATION_TXT,
+NIJAC_CONVOCATION_HTML_V2,
     ];
-}
-
-/**
- * Versions HTML précédentes du modèle par défaut du message n°3 (déjà appliquées
- * à des bases par EA98) : le modèle actuel avec l'ancien libellé du lien de secours.
- *
- * @return string[]
- */
-function ancienneVersionHtmlConvocationJa(): array
-{
-    return [str_replace(
-        'Si le bouton ne fonctionne pas, valider ce lien :',
-        'Si le bouton ne fonctionne pas, copiez ce lien :',
-        modeleHtmlConvocationJa()
-    )];
 }
 
 /**
