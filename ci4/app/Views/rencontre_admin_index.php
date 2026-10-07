@@ -209,10 +209,19 @@
             </div>
 
             <div class="mb-2">
-                <label class="form-label" for="sel-frais">Frais</label>
+                <label class="form-label" for="sel-frais">Équipe qui supporte les frais du JA</label>
                 <select id="sel-frais" class="form-select form-select-sm">
-                    <option value="Dom">Dom</option>
-                    <option value="Ext">Ext</option>
+                    <option value="Dom">Dom — club recevant (par défaut)</option>
+                    <option value="Ext">Ext — Extérieur : club visiteur</option>
+                </select>
+            </div>
+
+            <div class="mb-2"<?= empty($forfaitDispo) ? ' title="Colonne rencontre.Forfait absente : chargez EA98"' : '' ?>>
+                <label class="form-label" for="sel-forfait">Forfait</label>
+                <select id="sel-forfait" class="form-select form-select-sm"<?= empty($forfaitDispo) ? ' disabled' : '' ?>>
+                    <option value="0">Non</option>
+                    <option value="1">Équipe domicile</option>
+                    <option value="2">Équipe extérieure</option>
                 </select>
             </div>
 
@@ -488,6 +497,7 @@ function selectionnerLigne($tr) {
     majSelectSalle(r.IdClubDom, r.id_Salle);
     $('#sel-arbitrage-obligatoire').val(r.ArbitrageCRA == 1 ? '1' : '0');
     $('#sel-frais').val(r.Frais || 'Dom');
+    $('#sel-forfait').val(['1', '2'].includes(String(r.Forfait)) ? String(r.Forfait) : '0');
     $('#txt-commentaire').val(r.Commentaire ?? '');
     setStatus('');
 }
@@ -514,6 +524,7 @@ $('#btn-enregistrer').on('click', function () {
         id_salle:               $('#sel-salle').val(),
         arbitrage_obligatoire:  $('#sel-arbitrage-obligatoire').val(),
         frais:                  $('#sel-frais').val(),
+        forfait:                $('#sel-forfait').val(),
         commentaire:            $('#txt-commentaire').val().trim(),
     };
 

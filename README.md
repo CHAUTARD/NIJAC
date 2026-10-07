@@ -15,7 +15,7 @@ Le détail complet de chaque écran (fonctionnalités, fichier source, règles m
 | Plage de code | Menu | Contenu |
 |---|---|---|
 | E001–E009 | Connexion / mots de passe | Connexion, menus (Admin, Nominateur, CSR, Défiscalisateur, CRA Convoc), changement et réinitialisation de mot de passe |
-| EN11–EN28 | Nominateur + pages publiques JA | Gestion des JA et des clubs, désidératas, disponibilités, nomination aux rencontres, centre d'envoi, convocation/frais, statistiques, suivi des nominations… |
+| EN11–EN30 | Nominateur + pages publiques JA | Gestion des JA et des clubs, désidératas, disponibilités, nomination aux rencontres, centre d'envoi, convocation/frais, statistiques, suivi des nominations, contrôle FFTT 131… |
 | ES31–ES33 | CSR (Commission Sportive Régionale) | Réengagement des clubs, souhaits des équipes |
 | ED51–ED55 | Défiscalisateur | Défiscalisation des JA, barème kilométrique, attestations, comptes EBP |
 | EA81–EA98 | Administrateur | Salles, imports FFTT, utilisateurs, communes, régions/départements, divisions, équipes, rencontres, configuration, messagerie, test API FFTT, administration base de données |
@@ -29,7 +29,8 @@ Quelques écrans marquants :
 | EN14 | Nomination | Affectation JA ↔ rencontres selon les règles métier (nomination valide d'office), envoi des convocations (+ copie sans lien aux correspondants/référents des 2 clubs), feuille de pointage PDF de la journée |
 | EN21 | Convocation et frais JA | Page publique tokenisée : consultation de la convocation, saisie des frais (péage, km, défiscalisation) et accusé de réception de la convocation par le JA |
 | EN27 | Clubs / Associations | Import et gestion des clubs affiliés (upsert depuis l'API FFTT) |
-| EN28 | Suivi des nominations | Suivi des frais saisis par les JA et des accusés de réception, correction et relance, mise à jour depuis l'édition FFTT 131 |
+| EN28 | Suivi des nominations | Suivi des frais saisis par les JA et des accusés de réception, correction et relance, chargement de l'édition FFTT 131 (analyse puis contrôle EN30) |
+| EN30 | Contrôle FFTT 131 | Lignes JA du fichier 131 chargé (ouvert après « Analyser » dans EN28), par département et journée (nombre de rencontres sans JA), comparées aux nominations ; validation ligne par ligne des créations / remplacements de JA |
 | EA91 | Configuration | Paramètres applicatifs (état logiciel, SMTP, phases, frais kilométriques…) |
 | EA98 | Administration BDD | Requêteur SQL libre, structure des tables, accès restreint (compte CHAUTARD) |
 
@@ -127,7 +128,7 @@ ja ─── disponible ─── nomination
 
 - **`ja`** : fiche JA (Grade, JA1 [ex-Actif : JA actif 1er degré] + JA2 / JA3 / JAN / JAI [TINYINT(1) NOT NULL DEFAULT 0, écho des codes de la table de référence `JugeArbitre`, sans FK], Defiscalisation, Nationale [DEFAULT 1 = Oui, saisie manuelle uniquement, jamais touchée par les imports], Id_Club, Id_LaPoste, Cp/Ville de repli)
 - **`disponible`** : réponse d'un JA pour une rencontre ou une journée entière (O/P/N)
-- **`nomination`** : affectation JA ↔ rencontre (via `disponible`) + frais (Peage, Kilometre, Defiscalisation, dates de nomination/saisie)
+- **`nomination`** : affectation JA ↔ rencontre (via `disponible`) + frais (Peage, Kilometre, Defiscalisation, dates de nomination/saisie) (pas de colonne `Forfait` : le forfait est dans `rencontre.Forfait`, l'ancienne `nomination.Forfait` est supprimée par EA98)
 - **`rencontre`** : matchs à arbitrer (Date, Heure, Poule, Journee, équipes domicile/extérieure, ArbitrageCRA)
 - **`equipe`** / **`equipe_nationale`** : équipes engagées, `Division` sous FK vers `division`
 - **`division`** : référentiel des divisions (PK `Division`, `Nom`, `Color`, `Ord`)

@@ -448,6 +448,25 @@ function initTableConfiguration(\PDO $pdo): void
         // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
     }
 
+    // rencontre.Forfait : 0 = Non, 1 = forfait équipe domicile, 2 = forfait équipe extérieure — EN23.
+    // Placée après Frais si présente, sinon en fin de table. Lue / écrite seulement si présente
+    // (rencontreAForfait(), tolérance avant passage EA98).
+    try {
+        $existe = $pdo->query(
+            "SELECT 1 FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rencontre' AND COLUMN_NAME = 'Forfait'"
+        )->fetchColumn();
+        if (!$existe) {
+            $apresFrais = $pdo->query(
+                "SELECT 1 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rencontre' AND COLUMN_NAME = 'Frais'"
+            )->fetchColumn();
+            $pdo->exec('ALTER TABLE rencontre ADD COLUMN Forfait TINYINT(1) NOT NULL DEFAULT 0' . ($apresFrais ? ' AFTER Frais' : ''));
+        }
+    } catch (\PDOException $e) {
+        // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
+    }
+
     // ja.Actif -> ja.JA1 (même type/défaut, données conservées) + degrés JA2/JA3/JAN/JAI
     // (codes de la table de référence JugeArbitre, sans FK). Index idx_ja_actif -> idx_ja_ja1.
     try {
@@ -535,6 +554,75 @@ function initTableConfiguration(\PDO $pdo): void
         )->fetchColumn();
         if (!$existe) {
             $pdo->exec('ALTER TABLE nomination ADD COLUMN F131 TINYINT(1) NOT NULL DEFAULT 0 AFTER EmailEnvoye');
+        }
+    } catch (\PDOException $e) {
+        // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
+    }
+
+    // nomination.Forfait : colonne brièvement ajoutée puis abandonnée — le forfait n'est porté
+    // que par rencontre.Forfait (EN23). Suppression volontaire et idempotente si elle existe encore.
+    try {
+        $existe = $pdo->query(
+            "SELECT 1 FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nomination' AND COLUMN_NAME = 'Forfait'"
+        )->fetchColumn();
+        if ($existe) {
+            $pdo->exec('ALTER TABLE nomination DROP COLUMN Forfait');
+            error_log('[NIJAC] colonne nomination.Forfait supprimée');
+        }
+    } catch (\PDOException $e) {
+        // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
+    }
+
+    // Table de travail du fichier FFTT 131 « Activités détaillées des arbitres » (EN28 « Mise à jour FFTT 131 ») :
+    // une ligne par ligne JA du fichier (colonne G = « JA », colonnes A → P), vidée (DELETE, dans la transaction de validation) puis rechargée à chaque import.
+    // Ligne = n° de ligne Excel source ; Licence = ja.Id_JA (sans FK : licences inconnues conservées),
+    // NULL si illisible — valeur d'origine dans LicenceBrute ; Date NULL si illisible — valeur d'origine dans DateBrute.
+    try {
+        $pdo->exec('
+            CREATE TABLE IF NOT EXISTS f131_travail (
+                Id_F131           INT AUTO_INCREMENT PRIMARY KEY,
+                Ligne             INT NOT NULL,
+                Licence           INT NULL,
+                LicenceBrute      VARCHAR(20) NULL,
+                Nom               VARCHAR(100) NULL,
+                Prenom            VARCHAR(100) NULL,
+                NumClub           VARCHAR(20) NULL,
+                Club              VARCHAR(150) NULL,
+                Fonction          VARCHAR(100) NULL,
+                ArbJA             VARCHAR(20) NULL,
+                TypeEpreuve       VARCHAR(100) NULL,
+                Date              DATE NULL,
+                DateBrute         VARCHAR(20) NULL,
+                Journee           VARCHAR(20) NULL,
+                Poule             VARCHAR(50) NULL,
+                Equipe1           VARCHAR(150) NULL,
+                Equipe2           VARCHAR(150) NULL,
+                OrganismeDivision VARCHAR(100) NULL,
+                Division          VARCHAR(150) NULL,
+                Epreuve           VARCHAR(255) NULL,
+                Traiter           TINYINT(1) NOT NULL DEFAULT 0,
+                KEY idx_f131_licence (Licence),
+                KEY idx_f131_date (Date)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ');
+    } catch (\PDOException $e) {
+        // best-effort
+    }
+
+    // f131_travail.Traiter : TINYINT(1) NOT NULL DEFAULT 0, après Epreuve (bases créées avant cette colonne).
+    // 0 = à traiter, 1 = traité (case « Traité » d'EN30, validation, annulation) ; l'INSERT incrémental de rechargerF131Travail() repose sur le DEFAULT 0.
+    try {
+        $tableExiste = $pdo->query(
+            "SELECT 1 FROM information_schema.TABLES
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'f131_travail'"
+        )->fetchColumn();
+        $existe = $pdo->query(
+            "SELECT 1 FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'f131_travail' AND COLUMN_NAME = 'Traiter'"
+        )->fetchColumn();
+        if ($tableExiste && !$existe) {
+            $pdo->exec('ALTER TABLE f131_travail ADD COLUMN Traiter TINYINT(1) NOT NULL DEFAULT 0 AFTER Epreuve');
         }
     } catch (\PDOException $e) {
         // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
@@ -853,6 +941,28 @@ function nominationAF131(\PDO $pdo): bool
             $existe = (bool) $pdo->query(
                 "SELECT 1 FROM information_schema.COLUMNS
                  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nomination' AND COLUMN_NAME = 'F131'"
+            )->fetchColumn();
+        } catch (\PDOException $e) {
+            $existe = false;
+        }
+    }
+
+    return $existe;
+}
+
+/**
+ * rencontre.Forfait existe-t-elle ? (ajoutée par EA98 — EN23 la lit / l'écrit seulement
+ * si présente ; sinon lecture = 0 et liste désactivée). Cache statique : une seule
+ * vérification par requête.
+ */
+function rencontreAForfait(\PDO $pdo): bool
+{
+    static $existe = null;
+    if ($existe === null) {
+        try {
+            $existe = (bool) $pdo->query(
+                "SELECT 1 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rencontre' AND COLUMN_NAME = 'Forfait'"
             )->fetchColumn();
         } catch (\PDOException $e) {
             $existe = false;

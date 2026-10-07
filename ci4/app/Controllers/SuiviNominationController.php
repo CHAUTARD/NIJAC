@@ -184,7 +184,7 @@ class SuiviNominationController extends BaseController
 
     /**
      * Correction d'une nomination depuis EN28 : Arbitrage (rencontre.ArbitrageCRA), JA,
-     * péage, kilomètres, défiscalisation. DateSaisie prend la date du jour (le compte EBP
+     * péage, kilomètres, défiscalisation, indicateur FFTT 131 (case de la popup, si colonne EA98). DateSaisie prend la date du jour (le compte EBP
      * se modifie dans la fiche JA, EN11). Le changement de JA garde la nomination (EmailEnvoye,
      * DateNomination inchangés ; Valide forcé à 1 — un JA nommé = nomination valide d'office) et applique la règle de 2 nominations max par JA et par jour.
      * Nouveau JA en arbitrage CRA (CRA→CRA, club→CRA) : règle stricte d'EN14 (controlerDispoCra()) ;
@@ -201,10 +201,16 @@ class SuiviNominationController extends BaseController
             $peageRaw = trim((string) $this->request->getPost('peage'));
             $kmRaw    = trim((string) $this->request->getPost('km'));
             $defisc   = $this->request->getPost('defisc') ? 1 : 0;
+            // Case « FFTT 131 » de la popup : null si absente de la requête (ancien comportement : remise à 0).
+            $f131Raw  = $this->request->getPost('f131');
 
             if ($idNom <= 0 || $idJa <= 0 || !$depts) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Paramètres invalides.']);
             }
+            if ($f131Raw !== null && !in_array((string) $f131Raw, ['0', '1'], true)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Indicateur FFTT 131 invalide (0 ou 1).']);
+            }
+            $f131 = $f131Raw === null ? 0 : (int) $f131Raw;
             $peage = str_replace(',', '.', $peageRaw === '' ? '0' : $peageRaw);
             if (!is_numeric($peage) || (float) $peage < 0) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Péage invalide.']);
@@ -271,10 +277,10 @@ class SuiviNominationController extends BaseController
                 }
 
                 $pdo->prepare('UPDATE rencontre SET ArbitrageCRA = ? WHERE Id_Rencontre = ?')->execute([$arbCra, $nom['Id_Rencontre']]);
-                // Modification manuelle : elle ne vient plus du fichier FFTT 131 (colonne EA98).
-                $razF131 = nominationAF131($pdo) ? ', F131 = 0' : '';
+                // FFTT 131 (colonne EA98) : la case de la popup fait foi ; absente de la requête → remise à 0.
+                $setF131 = nominationAF131($pdo) ? ', F131 = ' . $f131 : '';
                 $pdo->prepare("
-                    UPDATE nomination SET Id_Disponible = ?, Peage = ?, Kilometre = ?, Defiscalisation = ?, DateSaisie = CURDATE(), Valide = 1$razF131
+                    UPDATE nomination SET Id_Disponible = ?, Peage = ?, Kilometre = ?, Defiscalisation = ?, DateSaisie = CURDATE(), Valide = 1$setF131
                     WHERE Id_Nomination = ?
                 ")->execute([$idDispo, $peage, $km, $defisc, $idNom]);
 
@@ -473,13 +479,17 @@ class SuiviNominationController extends BaseController
      * Id_Disponible 'O' du JA pour la rencontre (garanti par controlerDispoCra()) : ligne rencontre 'O'
      * réutilisée, sinon matérialisée en 'O' datée de la réponse 'O' de la journée, comme EN14
      * (NominationController::resoudreDisponible()) ; une ligne rencontre existante ('P') est mise à jour.
+     * $trace (annulation EN30) : ['cree' => true] si ligne insérée, sinon ['cree' => false, 'avant' => valeurs
+     * Reponse / DateReponse / DateCompetition / Note avant mise à jour, ou null si ligne réutilisée telle quelle].
      */
-    private function disponibleOuiCra(\PDO $pdo, int $idJa, int $idRenc, string $date, string $note): int
+    private static function disponibleOuiCra(\PDO $pdo, int $idJa, int $idRenc, string $date, string $note, ?array &$trace = null): int
     {
-        $d = $pdo->prepare('SELECT Id_Disponible, Reponse FROM disponible WHERE Id_JA = ? AND Id_Rencontre = ?');
+        $d = $pdo->prepare('SELECT Id_Disponible, Reponse, DateReponse, DateCompetition, Note FROM disponible WHERE Id_JA = ? AND Id_Rencontre = ?');
         $d->execute([$idJa, $idRenc]);
-        $dispo = $d->fetch();
+        $dispo = $d->fetch(\PDO::FETCH_ASSOC);
         if ($dispo && $dispo['Reponse'] === 'O') {
+            $trace = ['cree' => false, 'avant' => null];
+
             return (int) $dispo['Id_Disponible'];
         }
 
@@ -489,29 +499,37 @@ class SuiviNominationController extends BaseController
         if ($dispo) {
             $pdo->prepare("UPDATE disponible SET Reponse = 'O', DateReponse = COALESCE(?, CURDATE()), DateCompetition = ?, Note = ? WHERE Id_Disponible = ?")
                 ->execute([$dRep, $date, $note, $dispo['Id_Disponible']]);
+            $trace = ['cree' => false, 'avant' => array_diff_key($dispo, ['Id_Disponible' => 0])];
 
             return (int) $dispo['Id_Disponible'];
         }
         $pdo->prepare("INSERT INTO disponible (Id_JA, Id_Rencontre, DateCompetition, Reponse, DateReponse, Note) VALUES (?, ?, ?, 'O', COALESCE(?, CURDATE()), ?)")
             ->execute([$idJa, $idRenc, $date, $dRep, $note]);
+        $trace = ['cree' => true, 'avant' => null];
 
         return (int) $pdo->lastInsertId();
     }
 
-    /** Arbitrage club : disponible (JA, rencontre) réutilisée si elle existe (comme EN25), mise en 'P' ; sinon créée en 'P'. */
-    private function disponibleClub(\PDO $pdo, int $idJa, int $idRenc, string $date, string $note): int
+    /**
+     * Arbitrage club : disponible (JA, rencontre) réutilisée si elle existe (comme EN25), mise en 'P' ; sinon créée en 'P'.
+     * $trace : voir disponibleOuiCra().
+     */
+    private static function disponibleClub(\PDO $pdo, int $idJa, int $idRenc, string $date, string $note, ?array &$trace = null): int
     {
-        $d = $pdo->prepare('SELECT Id_Disponible FROM disponible WHERE Id_JA = ? AND Id_Rencontre = ?');
+        $d = $pdo->prepare('SELECT Id_Disponible, Reponse, DateReponse, DateCompetition, Note FROM disponible WHERE Id_JA = ? AND Id_Rencontre = ?');
         $d->execute([$idJa, $idRenc]);
-        $idDispo = (int) $d->fetchColumn();
+        $dispo   = $d->fetch(\PDO::FETCH_ASSOC);
+        $idDispo = $dispo ? (int) $dispo['Id_Disponible'] : 0;
         if ($idDispo) {
             $pdo->prepare("UPDATE disponible SET Reponse = 'P', DateReponse = CURDATE(), DateCompetition = ?, Note = ? WHERE Id_Disponible = ?")
                 ->execute([$date, $note, $idDispo]);
+            $trace = ['cree' => false, 'avant' => array_diff_key($dispo, ['Id_Disponible' => 0])];
 
             return $idDispo;
         }
         $pdo->prepare("INSERT INTO disponible (Id_JA, Id_Rencontre, DateCompetition, Reponse, DateReponse, Note) VALUES (?, ?, ?, 'P', CURDATE(), ?)")
             ->execute([$idJa, $idRenc, $date, $note]);
+        $trace = ['cree' => true, 'avant' => null];
 
         return (int) $pdo->lastInsertId();
     }
@@ -521,26 +539,123 @@ class SuiviNominationController extends BaseController
     /** Écart toléré (jours) entre la date du fichier et celle de la rencontre en base (rencontre avancée / reportée). */
     private const F131_TOLERANCE_JOURS = 7;
 
-    /** POST suivi-nomination/f131/apercu : fichier `xlsx` (multipart) → compte rendu prévu, AUCUNE écriture. */
-    public function f131Apercu(): ResponseInterface
+    /** Seuls organismes retenus (colonne N « Organisme Division » de l'édition 131, égalité exacte après trim, sans casse). */
+    private const ORGANISMES_131 = ['L09', 'FEDE'];
+
+    /** Taille maximale d'une édition 131 téléversée (octets). */
+    private const F131_TAILLE_MAX = 5 * 1024 * 1024;
+
+    /** Nom accepté pour un fichier 131 du dépôt serveur (les temporaires Excel « ~$… » sont exclus par construction). */
+    private const F131_MOTIF_NOM = '/^131_[0-9A-Za-z_-]{1,64}\.xlsx$/';
+
+    /**
+     * Dossier de dépôt Importation/ (racine du projet, jamais servi en HTTP : .htaccess « RewriteRule ^Importation/ - [F,L] »),
+     * chemin canonique (realpath) ; créé s'il manque. null si inaccessible.
+     */
+    private static function dossierImportation(): ?string
     {
-        return $this->import131(false);
+        $dir = __DIR__ . '/../../../Importation';
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+            return null;
+        }
+        $reel = realpath($dir);
+
+        return $reel === false ? null : $reel;
     }
 
-    /** POST suivi-nomination/f131/valider : le navigateur renvoie le fichier → même analyse, puis écriture en transaction. */
-    public function f131Valider(): ResponseInterface
+    /**
+     * Fichiers 131_*.xlsx du dépôt Importation/ (nom, chemin canonique, taille, date de modification), du plus récent
+     * au plus ancien (date de modification). Chemins construits côté serveur uniquement : glob() sur un motif fixe,
+     * nom contrôlé (F131_MOTIF_NOM), fichier ordinaire (pas de lien symbolique) dont le realpath reste dans Importation/.
+     */
+    private static function fichiers131(): array
     {
-        return $this->import131(true);
+        $dir = self::dossierImportation();
+        if ($dir === null) {
+            return [];
+        }
+        $res = [];
+        foreach (glob($dir . DIRECTORY_SEPARATOR . '131_*.xlsx') ?: [] as $f) {
+            $nom  = basename($f);
+            $reel = realpath($f);
+            if (!preg_match(self::F131_MOTIF_NOM, $nom) || is_link($f) || $reel === false || !is_file($reel)
+                || dirname($reel) !== $dir) {
+                continue;
+            }
+            $res[] = ['nom' => $nom, 'chemin' => $reel, 'taille' => (int) filesize($reel), 'mtime' => (int) filemtime($reel)];
+        }
+        usort($res, fn ($a, $b) => [$b['mtime'], $b['nom']] <=> [$a['mtime'], $a['nom']]);
+
+        return $res;
     }
 
-    private function import131(bool $ecrire): ResponseInterface
+    /**
+     * Infos publiques (sans chemin) des fichiers 131 du dépôt, du plus récent au plus ancien : fichiers[] = {nom, taille,
+     * date} (le premier est celui qu'analyse f131Apercu()), fichier = le plus récent ou null.
+     */
+    private static function infoFichier131(): array
     {
-        // Le fichier reste dans le temporaire d'upload PHP (supprimé en fin de requête) : jamais déplacé ni conservé.
+        $liste = array_map(
+            fn ($f) => ['nom' => $f['nom'], 'taille' => $f['taille'], 'date' => date('d/m/Y H:i:s', $f['mtime'])],
+            self::fichiers131()
+        );
+
+        return ['fichiers' => $liste, 'fichier' => $liste[0] ?? null];
+    }
+
+    /** GET suivi-nomination/f131/fichier : tous les fichiers 131_*.xlsx d'Importation/, plus récent d'abord (étape 2 de la popup). */
+    public function f131Fichier(): ResponseInterface
+    {
+        return $this->response->setJSON(['ok' => true] + self::infoFichier131());
+    }
+
+    /**
+     * POST suivi-nomination/f131/supprimer (`nom`) : supprime UN fichier 131 d'Importation/. Le nom reçu n'est jamais
+     * utilisé comme chemin : il doit respecter F131_MOTIF_NOM puis être retrouvé à l'identique dans la liste calculée
+     * côté serveur (fichiers131() : motif fixe, pas de lien, realpath directement dans Importation/) ; c'est le chemin
+     * de cette liste qui est supprimé. Tout autre nom (~$*, autre motif, chemin, fichier absent) est refusé.
+     */
+    public function f131Supprimer(): ResponseInterface
+    {
+        $nom = (string) $this->request->getPost('nom');
+        if (!preg_match(self::F131_MOTIF_NOM, $nom)) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Nom de fichier 131 invalide.']);
+        }
+        $cible = null;
+        foreach (self::fichiers131() as $f) {
+            if ($f['nom'] === $nom) {
+                $cible = $f['chemin'];
+                break;
+            }
+        }
+        if ($cible === null) {
+            return $this->response->setJSON(['ok' => false, 'msg' => "Fichier introuvable dans Importation : $nom."] + self::infoFichier131());
+        }
+        if (!@unlink($cible)) {
+            clearstatcache();
+
+            return $this->response->setJSON(['ok' => false,
+                'msg' => "Suppression impossible de $nom : fichier verrouillé (ouvert dans Excel ?) ou droits insuffisants."] + self::infoFichier131());
+        }
+        clearstatcache();
+
+        return $this->response->setJSON(['ok' => true, 'msg' => "Fichier supprimé : $nom"] + self::infoFichier131());
+    }
+
+    /**
+     * POST suivi-nomination/f131/televerser : fichier `xlsx` (multipart) enregistré dans Importation/ sous un nom
+     * généré par le serveur, 131_<jjmmaaaaHHMMSS>.xlsx (jamais le nom client ; extension forcée .xlsx, donc jamais
+     * exécutable). Contrôles : upload valide, ≤ F131_TAILLE_MAX, extension client .xlsx, type MIME détecté (finfo)
+     * xlsx/zip et classeur reconnu par le lecteur Xlsx de PhpSpreadsheet. Aucune analyse ici (voir f131Apercu()).
+     * Les autres 131_*.xlsx ne sont pas touchés (suppression une à une : f131Supprimer()).
+     */
+    public function f131Televerser(): ResponseInterface
+    {
         $file = $this->request->getFile('xlsx');
         if (!$file || !$file->isValid()) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Aucun fichier reçu.']);
         }
-        if ($file->getSize() > 5 * 1024 * 1024) {
+        if ($file->getSize() > self::F131_TAILLE_MAX) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Fichier trop volumineux (5 Mo maximum).']);
         }
         if (strtolower($file->getClientExtension()) !== 'xlsx'
@@ -548,37 +663,86 @@ class SuiviNominationController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => 'Seul le format Excel .xlsx est accepté.']);
         }
         try {
+            if (!\PhpOffice\PhpSpreadsheet\IOFactory::createReader('Xlsx')->canRead($file->getTempName())) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Classeur Excel .xlsx illisible.']);
+            }
+            $dir = self::dossierImportation();
+            if ($dir === null || !is_writable($dir)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Dossier Importation inaccessible en écriture.']);
+            }
+            $nom = '131_' . date('dmYHis') . '.xlsx';
+            if (file_exists($dir . DIRECTORY_SEPARATOR . $nom)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Un fichier vient d\'être déposé à la même seconde : réessayez.']);
+            }
+            $file->move($dir, $nom, false);   // course à la même seconde : CI4 suffixe « _1 » (toujours 131_*.xlsx)
+            if (!$file->hasMoved()) {
+                throw new \RuntimeException('Enregistrement du fichier impossible.');
+            }
+            $nom = $file->getName();
+            @chmod($dir . DIRECTORY_SEPARATOR . $nom, 0640);
+
+            return $this->response->setJSON(['ok' => true, 'msg' => "Fichier déposé ($nom)"] + self::infoFichier131());
+        } catch (\Throwable $e) {
+            return $this->erreurTechnique($e, 'téléversement 131', 'Enregistrement du fichier impossible.');
+        }
+    }
+
+    /**
+     * POST suivi-nomination/f131/apercu (sans paramètre) : analyse du fichier 131_*.xlsx le PLUS RÉCENT d'Importation/
+     * (jamais un fichier ni un nom envoyé par le navigateur) + chargement incrémental de la table de travail f131_travail
+     * (nouvelles lignes seulement, jamais vidée ; seule table écrite, AUCUNE nomination) ; le navigateur ouvre ensuite EN30, où chaque ligne applicable se
+     * valide une à une (ControleF131Controller::valider()).
+     */
+    public function f131Apercu(): ResponseInterface
+    {
+        $tous = self::fichiers131();
+        if (!$tous) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Aucun fichier 131_*.xlsx dans Importation : déposez-le d\'abord (« Parcourir… »).']);
+        }
+        $serveur = $tous[0];
+        if ($serveur['taille'] > self::F131_TAILLE_MAX) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Fichier trop volumineux (5 Mo maximum).']);
+        }
+        try {
             $pdo = getPDO();
             if (!nominationAF131($pdo)) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Colonne nomination.F131 absente : chargez l\'écran EA98 (Administration BDD).']);
+            }
+            if (!self::f131TravailExiste($pdo)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Table f131_travail absente : chargez l\'écran EA98 (Administration BDD).']);
             }
             $depts = $this->deptsAutorises();
             if (!$depts) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Aucun département autorisé.']);
             }
             try {
-                $lu = self::lire131($file->getTempName());
+                $lu = self::lire131($serveur['chemin']);
             } catch (\Throwable $e) {
                 error_log('[NIJAC] EN28 import 131 : ' . get_class($e));   // jamais le contenu du fichier (données personnelles)
 
                 return $this->response->setJSON(['ok' => false, 'msg' => $e instanceof \RuntimeException ? $e->getMessage() : 'Classeur illisible.']);
             }
 
-            $res = $this->traiter131($pdo, $depts, $lu, $ecrire);
+            $res = $this->traiter131($pdo, $depts, $lu);
 
-            return $this->response->setJSON(['ok' => true, 'fichier' => $file->getClientName()] + $res);
+            return $this->response->setJSON(['ok' => true, 'fichier' => $serveur['nom']] + $res);
         } catch (\RuntimeException $e) {
             return $this->response->setJSON(['ok' => false, 'msg' => $e->getMessage()]);
         } catch (\Throwable $e) {
-            return $this->erreurTechnique($e, 'import 131', 'Mise à jour impossible : aucune modification enregistrée.');
+            return $this->erreurTechnique($e, 'import 131', 'Chargement impossible : table de travail inchangée.');
         }
     }
 
     /**
      * Lit l'édition 131 (sans base). Ligne d'en-tête repérée par A = « N° Licence » et G = « Arb/JA »
      * (ligne 2 dans l'export FFTT, la ligne 1 porte le titre). Colonnes utilisées : A licence, B nom, C prénom,
-     * G fonction (seul « JA » est retenu), I date JJ/MM/AAAA, L équipe 1 (recevante), M équipe 2, O division.
-     * Retourne nbLignes, vides, ignores[valeur de G] = n, dateMin/dateMax (AAAA-MM-JJ) et lignes[] (G = JA).
+     * G fonction (seul « JA » est retenu), I date JJ/MM/AAAA, L équipe 1 (recevante), M équipe 2,
+     * N organisme (seuls ORGANISMES_131 sont retenus, égalité exacte sans casse), O division.
+     * Retourne nbLignes, vides, ignores[valeur de G] = n, horsOrganisme (lignes JA dont N ∉ ORGANISMES_131),
+     * dateMin/dateMax (AAAA-MM-JJ, toutes lignes non vides), lignes[] (G = JA et N retenu) et
+     * toutes[] : chaque ligne retenue (même test que lignes[] ; ligne Excel — informative, stockée dans f131_travail.Ligne
+     * à l'insertion seulement —, date convertie, col[A..P] brutes
+     * normalisées) → table de travail f131_travail. nbLignes = Σ ignores + horsOrganisme + count(lignes).
      * Public static : testable hors CodeIgniter.
      */
     public static function lire131(string $chemin): array
@@ -601,7 +765,7 @@ class SuiviNominationController extends BaseController
             throw new \RuntimeException('Ce fichier n\'est pas une édition 131 : en-têtes « N° Licence » (colonne A) et « Arb/JA » (colonne G) introuvables.');
         }
 
-        $res = ['nbLignes' => 0, 'vides' => 0, 'ignores' => [], 'dateMin' => null, 'dateMax' => null, 'lignes' => []];
+        $res = ['nbLignes' => 0, 'vides' => 0, 'ignores' => [], 'horsOrganisme' => 0, 'dateMin' => null, 'dateMax' => null, 'lignes' => [], 'toutes' => []];
         foreach ($feuille->rangeToArray("A" . ($entete + 1) . ":P$maxR", null, false, false, true) as $r => $c) {
             $c = array_map($txt, $c);
             if (implode('', $c) === '') {
@@ -619,9 +783,14 @@ class SuiviNominationController extends BaseController
                 $res['ignores'][$g] = ($res['ignores'][$g] ?? 0) + 1;
                 continue;
             }
+            if (!in_array(strtoupper($c['N']), self::ORGANISMES_131, true)) {   // ni f131_travail, ni analyse, ni EN30
+                $res['horsOrganisme']++;
+                continue;
+            }
+            $res['toutes'][] = ['ligne' => $r, 'date' => $date, 'col' => $c];   // col['I'] = date brute
             $lic = preg_replace('/\s+/', '', $c['A']);
             $res['lignes'][] = [
-                'ligne'   => $r,
+                'id'      => count($res['lignes']),   // rang dans le fichier (identifiant d'analyse, pas la ligne Excel)
                 'licence' => ctype_digit($lic) && (int) $lic > 0 ? (int) $lic : null,   // ja.Id_JA = n° de licence (entier)
                 'brut'    => $c['A'],
                 'nom'     => trim($c['B'] . ' ' . $c['C']),
@@ -651,183 +820,328 @@ class SuiviNominationController extends BaseController
     }
 
     /**
-     * Analyse les lignes JA de l'édition 131 contre la base et, si $ecrire, applique les modifications sûres
-     * dans UNE transaction (analyse refaite dans la transaction : aperçu et validation donnent les mêmes chiffres).
+     * Analyse les lignes JA de l'édition 131 contre la base (compte rendu chiffré, voir analyser131()) puis recharge
+     * la table de travail f131_travail dans une transaction (chargement incrémental sans vidage, voir rechargerF131Travail() :
+     * table inchangée en cas d'erreur). Le compte rendu porte sur les lignes du fichier ; retenues = ajoutees + dejaPresentes.
+     * Aucune nomination n'est écrite ici : la validation se fait ligne par ligne dans EN30.
+     */
+    private function traiter131(\PDO $pdo, array $depts, array $lu): array
+    {
+        $an = self::analyser131($pdo, $depts, $lu['lignes'], $lu['dateMin'], $lu['dateMax']);
+
+        $pdo->beginTransaction();
+        try {
+            $charge = $this->rechargerF131Travail($pdo, $lu['toutes']);
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+
+        return [
+            'nbLignes' => $lu['nbLignes'], 'vides' => $lu['vides'], 'ignores' => $lu['ignores'],
+            'horsOrganisme' => $lu['horsOrganisme'], 'organismes' => self::ORGANISMES_131,
+            'dateMin'  => $lu['dateMin'], 'dateMax' => $lu['dateMax'],
+            'retenues' => count($lu['lignes']),
+            'ajoutees' => $charge['ajoutees'], 'dejaPresentes' => $charge['dejaPresentes'],
+            'parCategorie' => $an['parCat'],
+        ] + $an['nb'];
+    }
+
+    /**
+     * Écrit UNE opération de analyser131()['ops'] (validation d'une ligne dans EN30), DANS la transaction de l'appelant :
+     * 'creer' → disponible ('O' si arbitrage CRA, 'P' si club) + nomination (DateNomination du jour, Valide = 1,
+     * EmailEnvoye = 0, F131 = 1) ; 'remplacer' → nouveau JA (Valide = 1, F131 = 1, AccuseReception NULL, frais et DateSaisie conservés)
+     * seulement si la nomination n'a pas changé depuis l'analyse (WHERE Id_Disponible = ancien), sinon RuntimeException.
+     * Création seulement : Peage = 0, Kilometre = 0, Defiscalisation = 0, DateSaisie = CURDATE() (même convention
+     * qu'EN25 ArbitreClubController / EN28 modifier()).
+     * Création concurrente : PDOException 23000 (uq_nomination_rencontre), à traiter par l'appelant (rollback).
+     * Retourne le descripteur d'annulation (EN30 « Annuler la dernière validation », ControleF131Controller::annuler()) :
+     * ['op', 'idNomination', 'idDispo' (Id_Disponible posé), 'dispo' (trace de disponibleOuiCra() / disponibleClub()),
+     *  'avant' (remplacement : Id_Disponible, Valide, F131, EmailEnvoye [, AccuseReception] de la nomination avant l'UPDATE ; création : null)].
+     */
+    public static function ecrireOperation131(\PDO $pdo, string $op, array $rc, int $idJa): array
+    {
+        $note    = 'Juge-arbitre mis à jour depuis le fichier FFTT 131 le ' . date('d/m/Y');
+        $idRenc  = (int) $rc['Id_Rencontre'];
+        $trace   = null;
+        $idDispo = +$rc['ArbitrageCRA']
+            ? self::disponibleOuiCra($pdo, $idJa, $idRenc, $rc['Date'], $note, $trace)
+            : self::disponibleClub($pdo, $idJa, $idRenc, $rc['Date'], $note, $trace);
+        if ($op === 'creer') {
+            $pdo->prepare('INSERT INTO nomination (Id_Rencontre, Id_Disponible, Peage, Kilometre, Defiscalisation, DateSaisie, DateNomination, Valide, EmailEnvoye, F131)
+                           VALUES (?, ?, 0, 0, 0, CURDATE(), CURDATE(), 1, 0, 1)')
+                ->execute([$idRenc, $idDispo]);
+
+            return ['op' => 'creer', 'idNomination' => (int) $pdo->lastInsertId(), 'idDispo' => $idDispo, 'dispo' => $trace, 'avant' => null];
+        }
+        $aAccuse = nominationAAccuseReception($pdo);
+        $av = $pdo->prepare('SELECT Id_Disponible, Valide, F131, EmailEnvoye' . ($aAccuse ? ', AccuseReception' : '') . ' FROM nomination WHERE Id_Nomination = ? FOR UPDATE');
+        $av->execute([$rc['Id_Nomination']]);
+        $avant = $av->fetch(\PDO::FETCH_ASSOC) ?: null;
+        $razAccuse = $aAccuse ? ', AccuseReception = NULL' : '';
+        $upd = $pdo->prepare("UPDATE nomination SET Id_Disponible = ?, Valide = 1, F131 = 1$razAccuse
+                              WHERE Id_Nomination = ? AND Id_Disponible = ?");
+        $upd->execute([$idDispo, $rc['Id_Nomination'], $rc['Id_Disponible']]);
+        if ($upd->rowCount() !== 1) {
+            throw new \RuntimeException('La nomination a changé pendant la validation : aucune modification enregistrée, relancez l\'analyse.');
+        }
+
+        return ['op' => 'remplacer', 'idNomination' => (int) $rc['Id_Nomination'], 'idDispo' => $idDispo, 'dispo' => $trace, 'avant' => $avant];
+    }
+
+    /**
+     * Analyse SANS écriture des lignes JA de l'édition 131 (format de lire131()['lignes']) contre la base.
+     * Partagée par le chargement EN28 (traiter131 : compte rendu) et le contrôle EN30 (ControleF131Controller : rapport
+     * par ligne et validation ligne par ligne, qui n'applique que l'opération ops[id] de la ligne validée).
      * Clé de rapprochement ligne → rencontre : équipe 1 = équipe recevante, équipe 2 = équipe extérieure (noms
      * normalisés : casse, accents, ponctuation), date de la rencontre à ±F131_TOLERANCE_JOURS de celle du fichier
      * (date exacte prioritaire) ; 0 ou plusieurs candidates = incohérence.
      * Cas : A même JA → conforme ; B autre JA → remplacé si arbitrage club ou rencontre passée, sinon incohérence ;
      * C sans nomination → créée ; D plusieurs lignes JA pour une rencontre → incohérence ; E ligne illisible,
      * JA inconnu, rencontre introuvable / ambiguë → incohérence. Hors périmètre (club recevant) → compté, sans écriture.
+     * Retourne nb (compteurs), parCat (incohérences par catégorie), ops[id] = [op 'creer'|'remplacer', rencontre (dont DivisionDom = code division de l'équipe recevante), Id_JA]
+     * (écriture applicable, voir ecrireOperation131()), parLigne[id] = verdict de chaque ligne
+     * {action, rencontre, ja, motif, avertissements[]} (action : Conforme, Création, Remplacement, Incohérence,
+     * Hors périmètre), deptRecevant[id] = département du club recevant (lignes rapprochées d'une rencontre seulement)
+     * et jaInconnu[id] = « licence invalide » / « JA inconnu… » pour TOUTE ligne dont la licence n'est pas un JA connu
+     * (informatif, calculé avant le rapprochement : motifs des lignes non traitables d'EN30 ; aucun effet sur verdicts ni ops).
+     * id = identifiant unique de la ligne ($l['id']) : rang dans le fichier pour EN28, Id_F131 pour EN30 — jamais la ligne Excel.
      */
-    private function traiter131(\PDO $pdo, array $depts, array $lu, bool $ecrire): array
+    public static function analyser131(\PDO $pdo, array $depts, array $lignes, ?string $dateMin, ?string $dateMax): array
     {
-        $details = [];
-        $nb      = ['conformes' => 0, 'creees' => 0, 'modifiees' => 0, 'horsPerimetre' => 0, 'incoherences' => 0];
-        $parCat  = [];
-        $ajout   = function (string $action, array $l, string $rencontre, string $ja, string $motif) use (&$details) {
-            $details[] = ['action' => $action, 'ligne' => $l['ligne'], 'date' => $l['dateTxt'], 'rencontre' => $rencontre, 'ja' => $ja, 'motif' => $motif];
+        $parLigne = [];
+        $deptRecevant = [];   // id de ligne → département du club recevant de la rencontre rapprochée (positions 3-4 de Id_Club)
+        $nb       = ['conformes' => 0, 'creees' => 0, 'modifiees' => 0, 'horsPerimetre' => 0, 'incoherences' => 0];
+        $parCat   = [];
+        $verdict  = function (string $action, array $l, string $rencontre, string $ja, string $motif) use (&$parLigne) {
+            $k = $l['id'];
+            $parLigne[$k] ??= ['action' => '', 'rencontre' => '', 'ja' => '', 'motif' => '', 'avertissements' => []];
+            if ($action === 'Avertissement') {
+                $parLigne[$k]['avertissements'][] = $motif;
+            } else {
+                $parLigne[$k] = ['action' => $action, 'rencontre' => $rencontre, 'ja' => $ja, 'motif' => $motif] + $parLigne[$k];
+            }
         };
-        $incoherence = function (string $cat, array $l, string $rencontre, string $ja, string $motif = '') use (&$nb, &$parCat, $ajout) {
+        $incoherence = function (string $cat, array $l, string $rencontre, string $ja, string $motif = '') use (&$nb, &$parCat, $verdict) {
             $nb['incoherences']++;
             $parCat[$cat] = ($parCat[$cat] ?? 0) + 1;
-            $ajout('Incohérence', $l, $rencontre, $ja, $motif === '' ? $cat : "$cat : $motif");
+            $verdict('Incohérence', $l, $rencontre, $ja, $motif === '' ? $cat : "$cat : $motif");
         };
         $fr       = fn (string $d) => implode('/', array_reverse(explode('-', substr($d, 0, 10))));
         $fichierJa = fn (array $l) => trim($l['nom'] . ' (licence ' . ($l['licence'] ?? $l['brut']) . ')');
 
-        if ($ecrire) {
-            $pdo->beginTransaction();
+        // JA connus (Id_JA = licence)
+        $jas = [];
+        foreach ($pdo->query('SELECT Id_JA, Nom, Prenom FROM ja') as $j) {
+            $jas[(int) $j['Id_JA']] = trim($j['Nom'] . ' ' . $j['Prenom']);
         }
-        try {
-            // JA connus (Id_JA = licence)
-            $jas = [];
-            foreach ($pdo->query('SELECT Id_JA, Nom, Prenom FROM ja') as $j) {
-                $jas[(int) $j['Id_JA']] = trim($j['Nom'] . ' ' . $j['Prenom']);
-            }
-            $libJa = fn (int $id) => ($jas[$id] ?? '?') . " ($id)";
+        $libJa = fn (int $id) => ($jas[$id] ?? '?') . " ($id)";
 
-            // Rencontres candidates (toutes, pour distinguer « hors périmètre » d'« introuvable »), indexées par équipes normalisées.
-            $parEquipes = [];
-            if ($lu['dateMin'] !== null) {
-                $tol  = self::F131_TOLERANCE_JOURS;
-                $stmt = $pdo->prepare('
-                    SELECT r.Id_Rencontre, r.Date, r.ArbitrageCRA, ed.Nom AS NomDom, ee.Nom AS NomExt, ed.Id_Club AS IdClubDom,
-                           n.Id_Nomination, n.Id_Disponible, d.Id_JA AS IdJaActuel
-                    FROM rencontre r
-                    JOIN equipe ed      ON ed.Id_Equipe    = r.Id_EquipeDom
-                    LEFT JOIN equipe ee ON ee.Id_Equipe    = r.Id_EquipeExt
-                    LEFT JOIN nomination n ON n.Id_Rencontre = r.Id_Rencontre
-                    LEFT JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
-                    WHERE r.Date BETWEEN ? AND ?
-                ');
-                $stmt->execute([
-                    date('Y-m-d', strtotime($lu['dateMin'] . " -$tol days")),
-                    date('Y-m-d', strtotime($lu['dateMax'] . " +$tol days")),
-                ]);
-                foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $rc) {
-                    $parEquipes[CraDispoController::norm((string) $rc['NomDom']) . '|' . CraDispoController::norm((string) $rc['NomExt'])][] = $rc;
-                }
+        // Rencontres candidates (toutes, pour distinguer « hors périmètre » d'« introuvable »), indexées par équipes normalisées.
+        $parEquipes = [];
+        if ($dateMin !== null) {
+            $tol  = self::F131_TOLERANCE_JOURS;
+            $stmt = $pdo->prepare('
+                SELECT r.Id_Rencontre, r.Date, r.ArbitrageCRA, ed.Nom AS NomDom, ee.Nom AS NomExt, ed.Id_Club AS IdClubDom, ed.Division AS DivisionDom,
+                       n.Id_Nomination, n.Id_Disponible, d.Id_JA AS IdJaActuel
+                FROM rencontre r
+                JOIN equipe ed      ON ed.Id_Equipe    = r.Id_EquipeDom
+                LEFT JOIN equipe ee ON ee.Id_Equipe    = r.Id_EquipeExt
+                LEFT JOIN nomination n ON n.Id_Rencontre = r.Id_Rencontre
+                LEFT JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                WHERE r.Date BETWEEN ? AND ?
+            ');
+            $stmt->execute([
+                date('Y-m-d', strtotime($dateMin . " -$tol days")),
+                date('Y-m-d', strtotime($dateMax . " +$tol days")),
+            ]);
+            foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $rc) {
+                $parEquipes[CraDispoController::norm((string) $rc['NomDom']) . '|' . CraDispoController::norm((string) $rc['NomExt'])][] = $rc;
             }
-
-            // 1. Rapprochement de chaque ligne ; les lignes rapprochées sont regroupées par rencontre (cas D).
-            $parRenc = [];
-            $parJour = [];
-            foreach ($lu['lignes'] as $l) {
-                if ($l['licence'] !== null && $l['date'] !== null) {
-                    $parJour[$l['licence'] . '|' . $l['date']][] = $l;
-                }
-                $libFichier = trim($l['dom'] . ' – ' . $l['ext'], ' –');
-                if ($l['date'] === null) {
-                    $incoherence('Date illisible', $l, $libFichier, $fichierJa($l));
-                    continue;
-                }
-                if ($l['dom'] === '' || $l['ext'] === '') {
-                    $incoherence('Équipes absentes', $l, $libFichier ?: $l['division'], $fichierJa($l), 'épreuve sans rencontre par équipes');
-                    continue;
-                }
-                $cands = array_filter(
-                    $parEquipes[CraDispoController::norm($l['dom']) . '|' . CraDispoController::norm($l['ext'])] ?? [],
-                    fn ($rc) => (new \DateTime($rc['Date']))->diff(new \DateTime($l['date']))->days <= self::F131_TOLERANCE_JOURS
-                );
-                if (count($cands) > 1) {
-                    $cands = array_filter($cands, fn ($rc) => $rc['Date'] === $l['date']);
-                }
-                if (count($cands) !== 1) {
-                    $incoherence($cands ? 'Rencontre ambiguë' : 'Rencontre introuvable', $l, $libFichier, $fichierJa($l));
-                    continue;
-                }
-                $rc     = reset($cands);
-                $libRc  = $rc['NomDom'] . ' – ' . ($rc['NomExt'] ?? '?');
-                if (!in_array(substr((string) $rc['IdClubDom'], 2, 2), $depts, true)) {
-                    $nb['horsPerimetre']++;
-                    $ajout('Hors périmètre', $l, $libRc, $fichierJa($l), 'club recevant hors de vos départements');
-                    continue;
-                }
-                if ($l['licence'] === null || !isset($jas[$l['licence']])) {
-                    $incoherence('JA inconnu', $l, $libRc, $fichierJa($l), 'licence absente de la base');
-                    continue;
-                }
-                if ($rc['Date'] !== $l['date']) {
-                    $ajout('Avertissement', $l, $libRc, $libJa($l['licence']), 'date en base ' . $fr($rc['Date']) . ' différente du fichier');
-                }
-                $parRenc[$rc['Id_Rencontre']][] = [$l, $rc, $libRc];
-            }
-
-            // 2. Décision par rencontre.
-            $ops = [];
-            foreach ($parRenc as $groupe) {
-                if (count($groupe) > 1) {
-                    foreach ($groupe as [$l, , $libRc]) {
-                        $incoherence('Plusieurs JA pour une rencontre', $l, $libRc, $libJa($l['licence']), count($groupe) . ' lignes JA');
-                    }
-                    continue;
-                }
-                [$l, $rc, $libRc] = $groupe[0];
-                $idJa = $l['licence'];
-                if ($rc['Id_Nomination'] === null) {
-                    $nb['creees']++;
-                    $ajout('Création', $l, $libRc, $libJa($idJa), 'nomination créée (' . (+$rc['ArbitrageCRA'] ? 'arbitrage CRA' : 'arbitrage club') . ')');
-                    $ops[] = ['creer', $rc, $idJa];
-                } elseif ((int) $rc['IdJaActuel'] === $idJa) {
-                    $nb['conformes']++;
-                } elseif ((int) $rc['ArbitrageCRA'] === 0 || $rc['Date'] < date('Y-m-d')) {
-                    $nb['modifiees']++;
-                    $ajout('Remplacement', $l, $libRc, $libJa((int) $rc['IdJaActuel']) . ' → ' . $libJa($idJa), 'JA remplacé');
-                    $ops[] = ['remplacer', $rc, $idJa];
-                } else {
-                    $incoherence('Autre JA nommé (arbitrage CRA à venir)', $l, $libRc, $libJa($idJa), 'JA nommé : ' . $libJa((int) $rc['IdJaActuel']));
-                }
-            }
-
-            // Un JA plus de 2 fois le même jour : signalé seulement.
-            foreach ($parJour as $lignes) {
-                if (count($lignes) > 2) {
-                    $l = $lignes[0];
-                    $ajout('Avertissement', $l, '', isset($jas[$l['licence']]) ? $libJa($l['licence']) : $fichierJa($l), count($lignes) . ' arbitrages ce jour-là');
-                }
-            }
-
-            // 3. Écritures (validation seulement), mêmes contrôles d'intégrité : uq_nomination_rencontre, nomination inchangée.
-            if ($ecrire) {
-                $note = 'Juge-arbitre mis à jour depuis le fichier FFTT 131 le ' . date('d/m/Y');
-                $razAccuse = nominationAAccuseReception($pdo) ? ', AccuseReception = NULL' : '';
-                foreach ($ops as [$op, $rc, $idJa]) {
-                    $idRenc  = (int) $rc['Id_Rencontre'];
-                    $idDispo = +$rc['ArbitrageCRA']
-                        ? $this->disponibleOuiCra($pdo, $idJa, $idRenc, $rc['Date'], $note)
-                        : $this->disponibleClub($pdo, $idJa, $idRenc, $rc['Date'], $note);
-                    if ($op === 'creer') {
-                        $pdo->prepare('INSERT INTO nomination (Id_Rencontre, Id_Disponible, DateNomination, Valide, EmailEnvoye, F131) VALUES (?, ?, CURDATE(), 1, 0, 1)')
-                            ->execute([$idRenc, $idDispo]);
-                    } else {
-                        $upd = $pdo->prepare("UPDATE nomination SET Id_Disponible = ?, Valide = 1, F131 = 1$razAccuse WHERE Id_Nomination = ? AND Id_Disponible = ?");
-                        $upd->execute([$idDispo, $rc['Id_Nomination'], $rc['Id_Disponible']]);
-                        if ($upd->rowCount() !== 1) {
-                            throw new \RuntimeException('Une nomination a changé pendant la mise à jour : aucune modification enregistrée, relancez l\'analyse.');
-                        }
-                    }
-                }
-                $pdo->commit();
-            }
-        } catch (\Throwable $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            if ($e instanceof \PDOException && $e->getCode() === '23000') {
-                throw new \RuntimeException('Une nomination a été créée pendant la mise à jour : aucune modification enregistrée, relancez l\'analyse.');
-            }
-            throw $e;
         }
 
-        return [
-            'ecrit'    => $ecrire,
-            'nbLignes' => $lu['nbLignes'], 'vides' => $lu['vides'], 'ignores' => $lu['ignores'],
-            'dateMin'  => $lu['dateMin'], 'dateMax' => $lu['dateMax'],
-            'retenues' => count($lu['lignes']),
-            'parCategorie' => $parCat,
-            'details'  => $details,
-        ] + $nb;
+        // 1. Rapprochement de chaque ligne ; les lignes rapprochées sont regroupées par rencontre (cas D).
+        $parRenc = [];
+        $parJour = [];
+        $jaInconnu = [];   // id de ligne → motif JA (toutes les lignes, informatif : n'intervient dans aucun verdict)
+        foreach ($lignes as $l) {
+            if ($l['licence'] === null || !isset($jas[$l['licence']])) {
+                $jaInconnu[$l['id']] = $l['licence'] === null ? 'licence invalide' : 'JA inconnu (licence absente de la base)';
+            }
+            if ($l['licence'] !== null && $l['date'] !== null) {
+                $parJour[$l['licence'] . '|' . $l['date']][] = $l;
+            }
+            $libFichier = trim($l['dom'] . ' – ' . $l['ext'], ' –');
+            if ($l['date'] === null) {
+                $incoherence('Date illisible', $l, $libFichier, $fichierJa($l));
+                continue;
+            }
+            if ($l['dom'] === '' || $l['ext'] === '') {
+                $incoherence('Équipes absentes', $l, $libFichier ?: $l['division'], $fichierJa($l), 'épreuve sans rencontre par équipes');
+                continue;
+            }
+            $cands = array_filter(
+                $parEquipes[CraDispoController::norm($l['dom']) . '|' . CraDispoController::norm($l['ext'])] ?? [],
+                fn ($rc) => (new \DateTime($rc['Date']))->diff(new \DateTime($l['date']))->days <= self::F131_TOLERANCE_JOURS
+            );
+            if (count($cands) > 1) {
+                $cands = array_filter($cands, fn ($rc) => $rc['Date'] === $l['date']);
+            }
+            if (count($cands) !== 1) {
+                $incoherence($cands ? 'Rencontre ambiguë' : 'Rencontre introuvable', $l, $libFichier, $fichierJa($l));
+                continue;
+            }
+            $rc     = reset($cands);
+            $libRc  = $rc['NomDom'] . ' – ' . ($rc['NomExt'] ?? '?');
+            $deptRecevant[$l['id']] = substr((string) $rc['IdClubDom'], 2, 2);   // filtre par département d'EN30
+            if (!in_array(substr((string) $rc['IdClubDom'], 2, 2), $depts, true)) {
+                $nb['horsPerimetre']++;
+                $verdict('Hors périmètre', $l, $libRc, $fichierJa($l), 'club recevant hors de vos départements');
+                continue;
+            }
+            if ($l['licence'] === null || !isset($jas[$l['licence']])) {
+                $incoherence('JA inconnu', $l, $libRc, $fichierJa($l), 'licence absente de la base');
+                continue;
+            }
+            if ($rc['Date'] !== $l['date']) {
+                $verdict('Avertissement', $l, $libRc, $libJa($l['licence']), 'date en base ' . $fr($rc['Date']) . ' différente du fichier');
+            }
+            $parRenc[$rc['Id_Rencontre']][] = [$l, $rc, $libRc];
+        }
+
+        // 2. Décision par rencontre.
+        $ops = [];
+        foreach ($parRenc as $groupe) {
+            if (count($groupe) > 1) {
+                foreach ($groupe as [$l, , $libRc]) {
+                    $incoherence('Plusieurs JA pour une rencontre', $l, $libRc, $libJa($l['licence']), count($groupe) . ' lignes JA');
+                }
+                continue;
+            }
+            [$l, $rc, $libRc] = $groupe[0];
+            $idJa = $l['licence'];
+            if ($rc['Id_Nomination'] === null) {
+                $nb['creees']++;
+                $verdict('Création', $l, $libRc, $libJa($idJa), 'nomination à créer (' . (+$rc['ArbitrageCRA'] ? 'arbitrage CRA' : 'arbitrage club') . ')');
+                $ops[$l['id']] = ['creer', $rc, $idJa];
+            } elseif ((int) $rc['IdJaActuel'] === $idJa) {
+                $nb['conformes']++;
+                $verdict('Conforme', $l, $libRc, $libJa($idJa), 'même JA nommé');
+            } elseif ((int) $rc['ArbitrageCRA'] === 0 || $rc['Date'] < date('Y-m-d')) {
+                $nb['modifiees']++;
+                $verdict('Remplacement', $l, $libRc, $libJa((int) $rc['IdJaActuel']) . ' → ' . $libJa($idJa), 'JA à remplacer');
+                $ops[$l['id']] = ['remplacer', $rc, $idJa];
+            } else {
+                $incoherence('Autre JA nommé (arbitrage CRA à venir)', $l, $libRc, $libJa($idJa), 'JA nommé : ' . $libJa((int) $rc['IdJaActuel']));
+            }
+        }
+
+        // Un JA plus de 2 fois le même jour : signalé seulement.
+        foreach ($parJour as $duJour) {
+            if (count($duJour) > 2) {
+                foreach ($duJour as $l) {
+                    $verdict('Avertissement', $l, '', '', count($duJour) . ' arbitrages ce jour-là');
+                }
+            }
+        }
+
+        return ['nb' => $nb, 'parCat' => $parCat, 'ops' => $ops, 'parLigne' => $parLigne, 'deptRecevant' => $deptRecevant, 'jaInconnu' => $jaInconnu];
+    }
+
+    /** Colonnes de f131_travail alimentées par colonne du fichier (A → P) et longueur maximale (VARCHAR) ; Licence et Date sont dérivées. */
+    private const F131_TRAVAIL_COLS = [
+        'A' => ['LicenceBrute', 20], 'B' => ['Nom', 100], 'C' => ['Prenom', 100], 'D' => ['NumClub', 20],
+        'E' => ['Club', 150], 'F' => ['Fonction', 100], 'G' => ['ArbJA', 20], 'H' => ['TypeEpreuve', 100],
+        'I' => ['DateBrute', 20], 'J' => ['Journee', 20], 'K' => ['Poule', 50], 'L' => ['Equipe1', 150],
+        'M' => ['Equipe2', 150], 'N' => ['OrganismeDivision', 100], 'O' => ['Division', 150], 'P' => ['Epreuve', 255],
+    ];
+
+    /** f131_travail existe-t-elle ? (créée par EA98). Cache statique : une seule vérification par requête. Utilisée aussi par EN30. */
+    public static function f131TravailExiste(\PDO $pdo): bool
+    {
+        static $existe = null;
+        if ($existe === null) {
+            try {
+                $existe = (bool) $pdo->query(
+                    "SELECT 1 FROM information_schema.TABLES
+                     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'f131_travail'"
+                )->fetchColumn();
+            } catch (\PDOException $e) {
+                $existe = false;
+            }
+        }
+
+        return $existe;
+    }
+
+    /**
+     * Clé de dédoublonnage d'une ligne de f131_travail : LicenceBrute + Date (AAAA-MM-JJ, sinon DateBrute si date
+     * illisible) + Equipe1 + Equipe2, valeurs trimées, comparaison insensible à la casse. Les valeurs passées sont
+     * celles stockées (déjà tronquées à la taille de la colonne, '' → NULL), pour que fichier et table concordent.
+     */
+    private static function cleF131(?string $licBrute, ?string $date, ?string $dateBrute, ?string $eq1, ?string $eq2): string
+    {
+        $n = fn (?string $v) => mb_strtolower(trim((string) $v));
+
+        return implode("\x1F", [$n($licBrute), $date !== null ? $date : '#' . $n($dateBrute), $n($eq1), $n($eq2)]);
+    }
+
+    /**
+     * Chargement INCRÉMENTAL de f131_travail (plus aucun vidage) avec les lignes retenues ($lu['toutes'], colonne G = « JA »
+     * et colonne N dans ORGANISMES_131). Appelée DANS la transaction de traiter131() (f131Apercu, qui a vérifié
+     * l'existence de la table). Une ligne du fichier dont la clé cleF131() existe déjà dans la table (ou plus haut dans
+     * le même fichier) n'est pas réinsérée : sa ligne existante reçoit seulement les champs informatifs du fichier
+     * (jamais Ligne, n° de ligne Excel posé à l'insertion à titre informatif, sur lequel aucune logique ne repose),
+     * son Traiter (0 = à traiter, 1 = traité) est conservé. Les nouvelles lignes sont insérées par lots avec
+     * Traiter = 0 (DEFAULT). Valeurs texte trimées, '' → NULL, tronquées à la taille de la colonne ; Licence entière si
+     * chiffres seuls, sinon NULL. Retourne ['ajoutees' => n, 'dejaPresentes' => n] (somme = count($toutes)).
+     */
+    private function rechargerF131Travail(\PDO $pdo, array $toutes): array
+    {
+        $txt  = fn (string $v, int $max) => ($v = trim($v)) === '' ? null : mb_substr($v, 0, $max);
+        $cols = array_merge(['Ligne', 'Licence', 'Date'], array_column(self::F131_TRAVAIL_COLS, 0));
+
+        // Clés existantes (verrouillées : deux chargements simultanés ne peuvent pas insérer le même enregistrement).
+        $existantes = [];
+        foreach ($pdo->query('SELECT Id_F131, LicenceBrute, Date, DateBrute, Equipe1, Equipe2 FROM f131_travail FOR UPDATE') as $e) {
+            $existantes[self::cleF131($e['LicenceBrute'], $e['Date'], $e['DateBrute'], $e['Equipe1'], $e['Equipe2'])] ??= (int) $e['Id_F131'];
+        }
+
+        $nouvelles = [];   // valeurs dans l'ordre de $cols
+        $maj       = null; // UPDATE préparé des lignes déjà présentes (Traiter jamais modifié)
+        $deja      = 0;
+        foreach ($toutes as $t) {
+            $lic = preg_replace('/\s+/', '', $t['col']['A']);
+            $val = ['Ligne' => $t['ligne'], 'Licence' => ctype_digit($lic) && strlen($lic) <= 9 ? (int) $lic : null, 'Date' => $t['date']];
+            foreach (self::F131_TRAVAIL_COLS as $lettre => [$col, $max]) {
+                $val[$col] = $txt((string) ($t['col'][$lettre] ?? ''), $max);
+            }
+            $cle = self::cleF131($val['LicenceBrute'], $val['Date'], $val['DateBrute'], $val['Equipe1'], $val['Equipe2']);
+            if (isset($existantes[$cle])) {
+                $deja++;
+                if ($existantes[$cle] > 0) {   // ligne en base (≤ 0 : doublon d'une nouvelle ligne du même fichier)
+                    $info = $val;
+                    unset($info['Ligne']);     // n° de ligne Excel : informatif, posé à l'insertion seulement
+                    $maj ??= $pdo->prepare('UPDATE f131_travail SET ' . implode(', ', array_map(fn ($c) => "$c = ?", array_keys($info))) . ' WHERE Id_F131 = ?');
+                    $maj->execute(array_merge(array_values($info), [$existantes[$cle]]));
+                }
+                continue;
+            }
+            $existantes[$cle] = 0;
+            $nouvelles[]      = array_values($val);
+        }
+
+        $place = '(' . implode(', ', array_fill(0, count($cols), '?')) . ')';
+        $sql   = 'INSERT INTO f131_travail (' . implode(', ', $cols) . ') VALUES ';
+        $stmts = [];   // une requête préparée par taille de lot
+        foreach (array_chunk($nouvelles, 200) as $lot) {
+            $n = count($lot);
+            $stmts[$n] ??= $pdo->prepare($sql . implode(', ', array_fill(0, $n, $place)));
+            $stmts[$n]->execute(array_merge(...$lot));
+        }
+
+        return ['ajoutees' => count($nouvelles), 'dejaPresentes' => $deja];
     }
 
     /** Renvoie au JA de la nomination le modèle « Convocation » (lien EN21 vers ses frais). */

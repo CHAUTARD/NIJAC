@@ -58,6 +58,12 @@
 <div id="split-container">
     <div id="panel-liste">
         <div id="menu-strip">
+            <button type="button" class="btn btn-sm btn-outline-success" id="btn-f131" title="Mettre à jour les nominations depuis l'édition FFTT 131 « Activités détaillées des arbitres »">
+                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Mise à jour FFTT 131
+            </button>
+            <a href="<?= site_url('controle-f131') ?>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success" id="btn-comparaison-f131" title="Ouvrir EN30 « Contrôle FFTT 131 » (comparaison du fichier 131 avec les nominations) dans un nouvel onglet">
+                <i class="bi bi-arrow-left-right me-1"></i>Comparaison avec FFTT 131
+            </a>
             <span style="flex:1"></span>
             <span class="count-badge" id="lbl-count">0 / 0</span>
             <span style="flex:1"></span>
@@ -112,9 +118,6 @@
             </span>
             <button type="button" class="btn btn-sm btn-light" id="btn-reset-filtres" title="Réinitialiser les filtres">
                 <i class="bi bi-x-circle"></i>
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-success" id="btn-f131" title="Mettre à jour les nominations depuis l'édition FFTT 131 « Activités détaillées des arbitres »">
-                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Mise à jour FFTT 131
             </button>
         </div>
         <div id="table-wrapper">
@@ -182,6 +185,12 @@
                             <label class="form-check-label small" for="modif-defisc">Défiscalisation</label>
                         </div>
                     </div>
+                    <div class="col-12" id="modif-col-f131">
+                        <div class="form-check mb-1">
+                            <input type="checkbox" id="modif-f131" class="form-check-input">
+                            <label class="form-check-label small" for="modif-f131">FFTT 131</label>
+                        </div>
+                    </div>
                 </div>
                 <div class="small text-muted mt-3 modif-frais"><i class="bi bi-info-circle me-1"></i>La date de saisie sera mise à la date du jour.</div>
             </div>
@@ -193,7 +202,8 @@
     </div>
 </div>
 
-<!-- Popup « Mise à jour FFTT 131 » : aide → fichier + Analyser (aperçu sans écriture) → Mettre à jour -->
+<!-- Popup « Mise à jour FFTT 131 » : 1 aide → 2 fichiers 131 du serveur (Importation/, suppression une à une) → 3 dépôt « Parcourir… » → 4 Analyser
+     (chargement de f131_travail depuis le fichier du serveur, aucune nomination) → ouverture d'EN30 dans un nouvel onglet -->
 <div class="modal fade" id="modal-f131" tabindex="-1" aria-labelledby="f131-titre" aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
@@ -206,18 +216,26 @@
                     <strong>1.</strong> Générez l'édition <strong>131 - Activités détaillées des arbitres</strong> (format Excel) dans le logiciel fédéral.
                     <button type="button" class="btn btn-link btn-sm p-0 align-baseline" id="btn-f131-aide"><i class="bi bi-question-circle me-1"></i>Comment obtenir le fichier ?</button>
                 </p>
-                <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-                    <strong class="small">2.</strong>
-                    <input type="file" id="f131-fichier" class="form-control form-control-sm" style="max-width:420px" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
-                    <button type="button" class="btn btn-sm btn-outline-primary" id="btn-f131-analyser"><i class="bi bi-search me-1"></i>Analyser</button>
+                <div class="small mb-2">
+                    <strong>2.</strong> Fichiers 131 présents sur le serveur (dossier <code>Importation</code>, plus récent d'abord) :
+                    <div id="f131-serveur" class="mt-1"></div>
                 </div>
-                <p class="small text-muted mb-2">Seules les lignes dont la colonne G vaut « JA » sont utilisées ; aucune donnée n'est modifiée par l'analyse.</p>
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                    <strong class="small">3.</strong>
+                    <span class="small">Déposer un nouveau fichier sur le serveur :</span>
+                    <input type="file" id="f131-upload" class="d-none" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-f131-parcourir"><i class="bi bi-upload me-1"></i>Parcourir…</button>
+                </div>
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                    <strong class="small">4.</strong>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="btn-f131-analyser" disabled><i class="bi bi-search me-1"></i>Analyser</button>
+                    <span class="small text-muted">le fichier le plus récent du serveur (marqué à l'étape 2)</span>
+                </div>
+                <p class="small text-muted mb-2">Seules les lignes dont la colonne G vaut « JA » sont utilisées. L'analyse ajoute à la table de travail les seules lignes nouvelles du fichier du serveur (la table n'est jamais vidée : une ligne déjà chargée — même licence, date et équipes — garde son statut « traité » ; seule la table de travail est écrite, aucune nomination) puis ouvre le contrôle (EN30) dans un nouvel onglet, où chaque ligne se valide une à une.</p>
                 <div id="f131-resultat"></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-outline-secondary me-auto d-none" id="btn-f131-csv"><i class="bi bi-filetype-csv me-1"></i>Rapport complet (CSV)</button>
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fermer</button>
-                <button type="button" class="btn btn-sm btn-success" id="btn-f131-valider" disabled><i class="bi bi-check2 me-1"></i>Mettre à jour</button>
             </div>
         </div>
     </div>
@@ -501,6 +519,8 @@ function ouvrirModification(n) {
         $('#modif-peage').val(n.Peage ?? 0);
         $('#modif-km').val(n.Kilometre ?? 0);
         $('#modif-defisc').prop('checked', !!+n.Defiscalisation);
+        $('#modif-col-f131').toggle(!saisie);   // indicateur FFTT 131 : correction d'une nomination existante seulement
+        $('#modif-f131').prop('checked', !!+n.F131);
         bootstrap.Modal.getOrCreateInstance('#modal-modif').show();
     };
     if (jaListe) { ouvrir(); return; }
@@ -530,7 +550,7 @@ $('#btn-modif-enregistrer').on('click', function () {
     };
     $.post(saisie ? `${SUIVI_BASE}/saisir` : `${SUIVI_BASE}/modifier`, saisie
         ? { id_rencontre: modifNom.Id_Rencontre, ...frais }
-        : { id_nomination: modifNom.Id_Nomination, arbitrage: $('#modif-arbitrage').val(), ...frais }, function (r) {
+        : { id_nomination: modifNom.Id_Nomination, arbitrage: $('#modif-arbitrage').val(), f131: $('#modif-f131').is(':checked') ? 1 : 0, ...frais }, function (r) {
         $btn.prop('disabled', false);
         toast(escHtml(r.msg), !!r.ok);
         if (!r.ok) return;
@@ -612,117 +632,161 @@ $('#btn-reset-filtres').on('click', function () {
     renderListe();
 });
 
-// ── Mise à jour FFTT 131 (aperçu sans écriture, puis validation : le fichier est renvoyé, rien n'est conservé serveur) ──
-let fichier131 = null, rapport131 = null;
-const F131_MAX_LIGNES = 200;
+// ── Mise à jour FFTT 131 : étape 2 = tous les 131_*.xlsx du dossier serveur Importation/ (plus récent d'abord, Supprimer par ligne) ; étape 3 =
+//    dépôt « Parcourir… » (enregistré sous un nom généré par le serveur ; anciens fichiers supprimables un à un à
+//    l'étape 2) ; étape 4 Analyser = chargement du fichier
+//    DU SERVEUR dans f131_travail (incrémental : nouvelles lignes seulement, Traiter conservé ; aucune nomination), puis ouverture d'EN30 (nouvel onglet) où chaque ligne se valide une à une. ──
+const CONTROLE_F131_URL = '<?= site_url('controle-f131') ?>';
+let serveur131 = null;   // { nom, taille, date } ou null
 
 $('#btn-f131').on('click', function () {
-    fichier131 = rapport131 = null;
-    $('#f131-fichier').val('');
+    $('#f131-upload').val('');
     $('#f131-resultat').empty();
-    $('#btn-f131-valider').prop('disabled', true);
-    $('#btn-f131-csv').addClass('d-none');
+    charger131Serveur();
     bootstrap.Modal.getOrCreateInstance('#modal-f131').show();
 });
-// Aide « comme la 102 » : fenêtre asset/aide/import-131.html, qui peut aussi choisir le fichier (importerFichier131).
+// Aide « comme la 102 » : fenêtre asset/aide/import-131.html (explications seules ; le fichier se dépose dans la popup).
 $('#btn-f131-aide').on('click', function () {
     window.open('<?= base_url('asset/aide/import-131.html') ?>', 'aideImport131', 'width=640,height=680,resizable=yes,scrollbars=yes');
 });
-$('#f131-fichier').on('change', function () {
-    fichier131 = this.files[0] || null;
-    $('#btn-f131-valider').prop('disabled', true);
+$('#btn-f131-parcourir').on('click', () => $('#f131-upload').trigger('click'));
+$('#f131-upload').on('change', function () {
+    const f = this.files[0] || null;
+    this.value = '';   // re-sélection du même fichier possible
+    if (f) televerser131(f);
 });
-window.importerFichier131 = function (file) {
-    fichier131 = file;
-    $('#f131-fichier').val('');
-    envoyer131('apercu');
-};
-$('#btn-f131-analyser').on('click', () => envoyer131('apercu'));
-$('#btn-f131-valider').on('click', function () {
-    if (!rapport131) return;
-    nijacConfirm(`Appliquer ${rapport131.creees} création(s) et ${rapport131.modifiees} remplacement(s) de JA ?`, () => envoyer131('valider'));
-});
-$('#btn-f131-csv').on('click', function () {
-    if (!rapport131) return;
-    const blob = new Blob([csv131(rapport131)], { type: 'text/csv;charset=utf-8' });
-    const a = $('<a>').attr({ href: URL.createObjectURL(blob), download: 'rapport_131.csv' }).appendTo('body');
-    a[0].click();
-    URL.revokeObjectURL(a.attr('href'));
-    a.remove();
+$('#btn-f131-analyser').on('click', analyser131);
+
+const taille131 = o => o >= 1048576 ? (o / 1048576).toFixed(1).replace('.', ',') + ' Mo' : Math.max(1, Math.round(o / 1024)) + ' Ko';
+
+/**
+ * Étape 2 : liste de TOUS les fichiers 131 du serveur (plus récent d'abord, texte en .text()), le premier marqué
+ * « utilisé par Analyser », bouton Supprimer par ligne ; « Analyser » actif seulement s'il reste un fichier.
+ */
+function afficher131Serveur(r) {
+    const liste = r && Array.isArray(r.fichiers) ? r.fichiers : [];
+    serveur131 = liste[0] || null;
+    const $s = $('#f131-serveur').empty();
+    if (!liste.length) {
+        $s.append($('<span class="text-danger">').text('Aucun fichier 131_*.xlsx dans Importation'));
+    }
+    liste.forEach(function (f, i) {
+        const $l = $('<div class="d-flex flex-wrap align-items-center gap-2 py-1 border-bottom">');
+        $l.append($(i ? '<span>' : '<strong>').text(f.nom),
+            $('<span class="text-muted">').text(`${taille131(f.taille)}, modifié le ${f.date}`));
+        if (!i) $l.append($('<span class="badge text-bg-primary">').text('utilisé par Analyser'));
+        $('<button type="button" class="btn btn-sm btn-outline-danger py-0 ms-auto btn-f131-suppr" title="Supprimer ce fichier du serveur">')
+            .attr('data-nom', f.nom)
+            .append('<i class="bi bi-trash"></i>')
+            .appendTo($l);
+        $s.append($l);
+    });
+    $('#btn-f131-analyser').prop('disabled', !serveur131);
+}
+
+/** Suppression d'UN fichier 131 du serveur (confirmation), puis rafraîchissement de l'étape 2 avec la liste renvoyée. */
+$('#f131-serveur').on('click', '.btn-f131-suppr', function () {
+    const nom = String($(this).attr('data-nom') || '');
+    const $btn = $(this);
+    nijacConfirm(`Supprimer définitivement le fichier ${nom} du serveur (dossier Importation) ?`, function () {
+        $btn.prop('disabled', true);
+        $.post(`${SUIVI_BASE}/f131/supprimer`, { nom }, null, 'json')
+            .done(function (r) {
+                nijacToast(r.msg || (r.ok ? 'Fichier supprimé.' : 'Erreur.'), r.ok ? 'success' : 'danger');
+                if (r.fichiers) afficher131Serveur(r); else charger131Serveur();
+            })
+            .fail(() => { $btn.prop('disabled', false); nijacToast('Erreur réseau ou session expirée.', 'danger'); });
+    }, null, { type: 'danger' });
 });
 
-function envoyer131(etape) {
-    const f = fichier131;
-    if (!f) { nijacToast('Choisissez le fichier 131 (.xlsx).', 'warning'); return; }
+function charger131Serveur() {
+    serveur131 = null;
+    $('#btn-f131-analyser').prop('disabled', true);
+    $('#f131-serveur').html('<span class="text-muted"><span class="spinner-border spinner-border-sm me-1"></span>Recherche…</span>');
+    $.getJSON(`${SUIVI_BASE}/f131/fichier`)
+        .done(afficher131Serveur)
+        .fail(() => { $('#f131-serveur').empty(); nijacToast('Erreur réseau ou session expirée.', 'danger'); });
+}
+
+/** Étape 3 : dépôt du fichier local dans Importation/ (nom choisi par le serveur), puis rafraîchissement de l'étape 2. */
+function televerser131(f) {
     if (!/\.xlsx$/i.test(f.name) || f.size > 5 * 1024 * 1024) { nijacToast('Fichier .xlsx de 5 Mo maximum.', 'warning'); return; }
     const fd = new FormData();
     fd.append('xlsx', f);
-    const $btns = $('#btn-f131-analyser, #btn-f131-valider').prop('disabled', true);
-    $('#f131-resultat').html('<div class="text-muted small"><span class="spinner-border spinner-border-sm me-2"></span>' + (etape === 'apercu' ? 'Analyse…' : 'Mise à jour…') + '</div>');
-    $.ajax({ url: `${SUIVI_BASE}/f131/${etape}`, method: 'POST', data: fd, processData: false, contentType: false, dataType: 'json' })
+    const $btn = $('#btn-f131-parcourir').prop('disabled', true);
+    $('#f131-resultat').html('<div class="text-muted small"><span class="spinner-border spinner-border-sm me-2"></span>Dépôt du fichier sur le serveur…</div>');
+    $.ajax({ url: `${SUIVI_BASE}/f131/televerser`, method: 'POST', data: fd, processData: false, contentType: false, dataType: 'json' })
         .done(function (r) {
-            $('#btn-f131-analyser').prop('disabled', false);
+            $btn.prop('disabled', false);
+            $('#f131-resultat').empty();
             if (!r.ok) {
-                rapport131 = null;
-                $('#btn-f131-csv').addClass('d-none');
+                $('#f131-resultat').append($('<div class="alert alert-danger small mb-0">').text(r.msg || 'Erreur.'));
+                return;
+            }
+            nijacToast(r.msg, 'success');   // « Fichier déposé (131_….xlsx) »
+            afficher131Serveur(r);
+        })
+        .fail(() => { $btn.prop('disabled', false); $('#f131-resultat').empty(); nijacToast('Erreur réseau ou session expirée.', 'danger'); });
+}
+
+/** Étape 4 : analyse du fichier du serveur (aucun fichier ni nom envoyé : le serveur prend le plus récent d'Importation/). */
+function analyser131() {
+    if (!serveur131) { nijacToast('Aucun fichier 131_*.xlsx dans Importation : déposez-le d\'abord.', 'warning'); return; }
+    // EN30 s'ouvre dans un NOUVEL onglet (EN28 reste ouvert). L'onglet vierge est ouvert ICI, de façon synchrone dans le
+    // clic (sinon un window.open fait après la réponse AJAX est bloqué), puis dirigé vers EN30 en cas de succès ou fermé
+    // en cas d'échec. Pas de 'noopener' (window.open renverrait null) : opener coupé à la main. null = onglet bloqué → lien.
+    let onglet = null;
+    try { onglet = window.open('', '_blank'); if (onglet) onglet.opener = null; } catch (e) { onglet = null; }
+    const fermerOnglet = () => { try { if (onglet && !onglet.closed) onglet.close(); } catch (e) { /* ignoré */ } };
+    const $btn = $('#btn-f131-analyser').prop('disabled', true);
+    $('#f131-resultat').html('<div class="text-muted small"><span class="spinner-border spinner-border-sm me-2"></span>Analyse et chargement…</div>');
+    $.ajax({ url: `${SUIVI_BASE}/f131/apercu`, method: 'POST', dataType: 'json' })
+        .done(function (r) {
+            $btn.prop('disabled', false);
+            if (!r.ok) {
+                fermerOnglet();
                 $('#f131-resultat').empty().append($('<div class="alert alert-danger small mb-0">').text(r.msg || 'Erreur.'));
                 return;
             }
-            rapport131 = r;
-            afficher131(r);
-            $('#btn-f131-csv').removeClass('d-none');
-            if (!r.ecrit) {
-                $('#btn-f131-valider').prop('disabled', r.creees + r.modifiees === 0);
-                return;
-            }
-            nijacToast(`FFTT 131 : ${r.creees} nomination(s) créée(s), ${r.modifiees} modifiée(s), ${r.incoherences} incohérence(s).`, r.incoherences ? 'warning' : 'success');
-            chargerListe();
+            // table de travail complétée (nouvelles lignes) : validation ligne par ligne dans EN30 (nouvel onglet)
+            let ouvert = false;
+            try { if (onglet && !onglet.closed) { onglet.location.href = CONTROLE_F131_URL; ouvert = true; } } catch (e) { ouvert = false; }
+            afficher131(r, ouvert);
         })
-        .fail(() => { $btns.prop('disabled', false); $('#btn-f131-valider').prop('disabled', true); $('#f131-resultat').empty(); nijacToast('Erreur réseau ou session expirée.', 'danger'); });
+        .fail(() => { fermerOnglet(); $btn.prop('disabled', false); $('#f131-resultat').empty(); nijacToast('Erreur réseau ou session expirée.', 'danger'); });
 }
 
 const fr131 = d => d ? d.split('-').reverse().join('/') : '?';
 
-/** Compte rendu : chiffres puis détail (200 lignes max), tout le texte en .text() (aucun HTML venant du fichier). */
-function afficher131(r) {
+/**
+ * Compte rendu chiffré du chargement + lien vers EN30 (nouvel onglet), tout le texte en .text() (aucun HTML venant du
+ * fichier). ouvert = EN30 a pu être ouvert automatiquement ; sinon (onglet bloqué) message invitant à cliquer le lien.
+ */
+function afficher131(r, ouvert) {
     const ign = Object.entries(r.ignores).map(([g, n]) => `${g} : ${n}`).join(', ') || 'aucune';
     const cats = Object.entries(r.parCategorie).map(([c, n]) => `${c} : ${n}`).join(', ');
-    const fait = r.ecrit;
     const lignes = [
         `Fichier : ${r.fichier} — ${r.nbLignes} ligne(s), du ${fr131(r.dateMin)} au ${fr131(r.dateMax)}` + (r.vides ? ` (${r.vides} ligne(s) vide(s))` : ''),
         `Lignes ignorées (colonne G ≠ « JA ») : ${ign}`,
-        `Lignes JA retenues : ${r.retenues} = ${r.conformes} conforme(s) + ${r.creees} ${fait ? 'créée(s)' : 'à créer'} + ${r.modifiees} ${fait ? 'modifiée(s)' : 'à modifier'} + ${r.incoherences} incohérence(s) + ${r.horsPerimetre} hors périmètre`,
+        `Lignes JA ignorées (colonne N ≠ ${r.organismes.join('/')}) : ${r.horsOrganisme}`,
+        `Lignes JA retenues : ${r.retenues} = ${r.conformes} conforme(s) + ${r.creees} à créer + ${r.modifiees} à remplacer + ${r.incoherences} incohérence(s) + ${r.horsPerimetre} hors périmètre`,
+        `Table de travail (chargement cumulatif) : ${r.retenues} = ${r.ajoutees} nouvelle(s) ligne(s) ajoutée(s) + ${r.dejaPresentes} ligne(s) déjà présente(s) (ignorées, statut « traité » conservé)`,
     ];
     if (cats) lignes.push(`Incohérences : ${cats}`);
     const $res = $('#f131-resultat').empty();
-    $('<div class="alert small mb-2" style="white-space:pre-line">')
-        .addClass(fait ? 'alert-success' : (r.incoherences ? 'alert-warning' : 'alert-info'))
-        .text((fait ? 'Mise à jour effectuée.\n' : 'Aperçu — rien n\'a encore été modifié.\n') + lignes.join('\n')).appendTo($res);
-    if (!r.details.length) return;
-    const $tb = $('<tbody>');
-    r.details.slice(0, F131_MAX_LIGNES).forEach(d => $('<tr>').append(
-        $('<td>').text(d.action), $('<td class="text-end">').text(d.ligne), $('<td>').text(d.date),
-        $('<td>').text(d.rencontre), $('<td>').text(d.ja), $('<td>').text(d.motif)
-    ).appendTo($tb));
-    $('<table class="table table-sm table-striped small mb-1">')
-        .append($('<thead><tr><th>Action</th><th>Ligne</th><th>Date</th><th>Rencontre</th><th>JA</th><th>Motif</th></tr></thead>'), $tb).appendTo($res);
-    if (r.details.length > F131_MAX_LIGNES) {
-        $('<div class="small text-muted">').text(`… et ${r.details.length - F131_MAX_LIGNES} autre(s) : voir le rapport complet (CSV).`).appendTo($res);
+    $('<div class="alert alert-success small mb-2" style="white-space:pre-line">')
+        .text('Fichier chargé dans la table de travail (aucune nomination modifiée). '
+            + (ouvert ? 'Le contrôle (EN30) s\'est ouvert dans un nouvel onglet.' : '') + '\n' + lignes.join('\n'))
+        .appendTo($res);
+    if (!ouvert) {
+        $('<div class="alert alert-warning small mb-2">')
+            .text('Le navigateur a bloqué l\'ouverture automatique d\'un nouvel onglet : cliquez sur « Ouvrir le contrôle (EN30) » ci-dessous.')
+            .appendTo($res);
     }
-}
-
-/** Cellule CSV : anti-injection de formule (cf. EN26 csvCellule()), guillemets si nécessaire. */
-function csvCellule131(v) {
-    let s = String(v ?? '');
-    if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = "'" + s;
-    return /[;"\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-}
-
-/** Rapport complet : UTF-8 BOM, « ; », CRLF. */
-function csv131(r) {
-    const rows = [['Action', 'Ligne', 'Date', 'Rencontre', 'JA', 'Motif']]
-        .concat(r.details.map(d => [d.action, d.ligne, d.date, d.rencontre, d.ja, d.motif]));
-    return '﻿' + rows.map(l => l.map(csvCellule131).join(';')).join('\r\n') + '\r\n';
+    $('<a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">')
+        .attr('href', CONTROLE_F131_URL)
+        .append('<i class="bi bi-clipboard2-data me-1"></i>', document.createTextNode('Ouvrir le contrôle (EN30)'))
+        .appendTo($res);
 }
 
 $(function () {

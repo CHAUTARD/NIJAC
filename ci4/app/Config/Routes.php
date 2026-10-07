@@ -222,9 +222,27 @@ $routes->post('suivi-nomination/modifier', 'SuiviNominationController::modifier'
 $routes->post('suivi-nomination/saisir', 'SuiviNominationController::saisir', ['filter' => 'auth']);   // JA d'une rencontre sans nomination : arbitrage club (saisie) ou CRA (nomination, règles EN14)
 $routes->post('suivi-nomination/rappel', 'SuiviNominationController::rappel', ['filter' => 'auth']);
 $routes->post('suivi-nomination/relance-club', 'SuiviNominationController::relanceClub', ['filter' => 'auth']);
-// « Mise à jour FFTT 131 » : fichier xlsx multipart (édition 131, lignes G = JA) — apercu = analyse sans écriture, valider = même analyse + écriture en transaction (nomination.F131 = 1)
+// « Mise à jour FFTT 131 » (popup EN28) : le fichier analysé est TOUJOURS le 131_*.xlsx le plus récent d'Importation/
+// (jamais servi en HTTP). fichier = liste de l'étape 2 (tous les 131_*.xlsx, plus récent d'abord) ; televerser = dépôt
+// xlsx multipart sous un nom généré par le serveur (131_<jjmmaaaaHHMMSS>.xlsx) ; supprimer = UN fichier par appel (`nom`
+// validé par regex puis retrouvé dans la liste serveur, jamais de chemin client) ; apercu (sans paramètre) = analyse + ajout des seules lignes nouvelles à f131_travail (jamais vidée, Traiter conservé ; seule table écrite,
+// aucune nomination), puis le navigateur ouvre EN30 où la validation se fait ligne par ligne.
+$routes->get('suivi-nomination/f131/fichier', 'SuiviNominationController::f131Fichier', ['filter' => 'auth']);
+$routes->post('suivi-nomination/f131/televerser', 'SuiviNominationController::f131Televerser', ['filter' => 'auth']);
+$routes->post('suivi-nomination/f131/supprimer', 'SuiviNominationController::f131Supprimer', ['filter' => 'auth']);
 $routes->post('suivi-nomination/f131/apercu', 'SuiviNominationController::f131Apercu', ['filter' => 'auth']);
-$routes->post('suivi-nomination/f131/valider', 'SuiviNominationController::f131Valider', ['filter' => 'auth']);
+
+// ── EN30 Contrôle FFTT 131 ───────────────────────────────────────────────────
+// Ouvert automatiquement après « Analyser » (EN28, Mise à jour FFTT 131) :
+// lignes de f131_travail d'un département (groupes getDepartementsAutorises) et d'une date,
+// comparées aux nominations par SuiviNominationController::analyser131() (mêmes règles que l'import).
+$routes->get('controle-f131', 'ControleF131Controller::index', ['filter' => 'auth']);
+$routes->get('controle-f131/journees', 'ControleF131Controller::journees', ['filter' => 'auth']);   // ?dept=CLE[&traites=1] : dates des lignes + nb de rencontres sans JA
+$routes->get('controle-f131/data', 'ControleF131Controller::data', ['filter' => 'auth']);           // ?dept=CLE&date=AAAA-MM-JJ[&traites=1] : lignes + rapport (Traiter = 0 seules sans traites=1)
+$routes->post('controle-f131/valider', 'ControleF131Controller::valider', ['filter' => 'auth']);    // id_f131 : ré-analyse serveur, écrit la ligne seulement si création / remplacement (+ Traiter = 1)
+$routes->post('controle-f131/traiter', 'ControleF131Controller::traiter', ['filter' => 'auth']);    // id_f131, traiter 0/1 : case « Traité » (f131_travail.Traiter seul, ligne du périmètre, aucune nomination)
+$routes->post('controle-f131/valider-lot', 'ControleF131Controller::validerLot', ['filter' => 'auth']);   // dept, date : ré-analyse serveur, crée toutes les lignes « Création » R3M / R4M (une transaction)
+$routes->post('controle-f131/annuler', 'ControleF131Controller::annuler', ['filter' => 'auth']);        // défait la dernière validation (instantané $_SESSION['f131_annulation'], une transaction, garde-fous)
 
 // ── EN18 Désidératas club ────────────────────────────────────────────────────
 // Page PUBLIQUE (sans authentification), jeton signé ?club=<Id_Club>-<MAC> — lien

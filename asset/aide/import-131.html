@@ -16,7 +16,7 @@
 </head>
 <body>
 <header>
-    <h1><i class="bi bi-question-circle-fill me-2"></i>Où trouver le fichier 131 sur le site FFTT ?</h1>
+    <h1><i class="bi bi-question-circle-fill me-2"></i>Obtenir et importer le fichier 131 FFTT</h1>
 </header>
 <main>
     <ol style="padding-left:1.3rem;margin:0;">
@@ -47,35 +47,48 @@
             <strong>Générer et sauvegarder</strong><br>
             Cliquez sur <strong>Générer</strong>, puis enregistrez le fichier <code>131_….xlsx</code> sur votre poste.
         </li>
+        <li style="margin-bottom:1rem;">
+            <strong>Déposer le fichier sur le serveur</strong><br>
+            Revenez dans la fenêtre <strong>« Mise à jour FFTT 131 »</strong> de l'écran Suivi des nominations (EN28).
+            Son étape 2 liste les fichiers 131 déjà présents sur le serveur, du plus récent au plus ancien (nom, taille,
+            date de modification), ou affiche « Aucun fichier 131_*.xlsx dans Importation ». À l'étape 3, cliquez sur
+            <strong>Parcourir…</strong> et sélectionnez le fichier enregistré sur votre poste : il est aussitôt déposé sur le
+            serveur (dossier <code>Importation</code>), renommé <code>131_jjmmaaaaHHMMSS.xlsx</code> (format Excel
+            <code>.xlsx</code>, 5&nbsp;Mo au maximum), et la liste de l'étape 2 se met à jour. Les anciens fichiers ne sont
+            pas supprimés automatiquement : supprimez-les un à un avec le bouton <i class="bi bi-trash"></i>
+            <strong>Supprimer</strong> de leur ligne (après confirmation). Un fichier encore ouvert dans Excel ne peut pas
+            être supprimé : fermez-le puis recommencez.
+        </li>
+        <li style="margin-bottom:1rem;">
+            <strong>Analyser le fichier</strong><br>
+            À l'étape 4, cliquez sur <strong>Analyser</strong> (bouton inactif tant qu'aucun fichier n'est présent sur le
+            serveur). L'analyse porte toujours sur le fichier le plus récent du serveur, marqué « utilisé par Analyser » à
+            l'étape 2, jamais sur un fichier de votre poste. Seules les lignes dont la colonne G « Arb/JA » vaut <code>JA</code> <strong>et</strong> dont la colonne N
+            « Organisme Division » vaut <code>L09</code> ou <code>FEDE</code> sont retenues ; les autres sont seulement
+            comptées dans le compte rendu. La table de travail n'est <strong>jamais vidée</strong> : seules les lignes
+            <strong>nouvelles</strong> du fichier y sont ajoutées (à traiter) ; une ligne déjà chargée par un fichier
+            précédent (même licence, même date, mêmes équipes 1 et 2 — le numéro de ligne dans le fichier n'est pas pris en
+            compte) est ignorée et garde son statut « traité ». Le compte
+            rendu indique le nombre de nouvelles lignes ajoutées et de lignes déjà présentes.
+            <strong>Aucune nomination n'est modifiée</strong> à ce stade.
+        </li>
         <li>
-            <strong>Importer le fichier</strong><br>
-            Cliquez sur le bouton ci-dessous et sélectionnez le fichier téléchargé : il est analysé sans rien modifier
-            (seules les lignes dont la colonne G vaut « JA » sont utilisées), puis « Mettre à jour » applique les modifications.
+            <strong>Valider dans le contrôle (EN30)</strong><br>
+            Après l'analyse, l'écran <strong>« Contrôle FFTT 131 »</strong> (EN30) s'ouvre automatiquement dans un
+            <strong>nouvel onglet</strong> ; l'écran Suivi des nominations reste ouvert avec le compte rendu de l'analyse. Si
+            votre navigateur bloque l'ouverture du nouvel onglet, cliquez sur le lien « Ouvrir le contrôle (EN30) » affiché
+            dans la fenêtre. Choisissez le département et la journée : chaque création ou
+            remplacement de JA s'y valide une à une avec le bouton <strong>Valider</strong>.
+            La colonne <strong>Traité</strong> porte une case à cocher par ligne : cochée = ligne traitée (elle disparaît
+            de la liste), décochée = ligne à traiter. Une validation réussie coche automatiquement la ligne, « Annuler la
+            dernière validation » la décoche. Cochez aussi les lignes que vous avez examinées sans rien valider (anciens
+            fichiers, erreurs connues) pour ne plus les voir. La case <strong>Afficher les lignes traitées</strong> les
+            fait réapparaître (et permet de les décocher).
         </li>
     </ol>
 </main>
 <footer>
-    <input type="file" id="file-input-131" accept=".xlsx" style="display:none">
-    <button type="button" class="btn btn-primary btn-sm" id="btn-ouvrir-fichier">
-        <i class="bi bi-folder2-open me-1"></i>Choisir le fichier local
-    </button>
     <button type="button" class="btn btn-secondary btn-sm" onclick="window.close()">Fermer</button>
 </footer>
-<script>
-// Même mécanisme que l'aide 102 : le sélecteur s'ouvre dans CETTE fenêtre (geste utilisateur),
-// puis le fichier est transmis à la fenêtre parente (EN28) qui lance l'analyse.
-var fileInput131 = document.getElementById('file-input-131');
-document.getElementById('btn-ouvrir-fichier').addEventListener('click', function () {
-    fileInput131.value = '';
-    fileInput131.click();
-});
-fileInput131.addEventListener('change', function () {
-    var file = this.files[0];
-    if (file && window.opener && !window.opener.closed && window.opener.importerFichier131) {
-        window.opener.importerFichier131(file);
-    }
-    window.close();
-});
-</script>
 </body>
 </html>

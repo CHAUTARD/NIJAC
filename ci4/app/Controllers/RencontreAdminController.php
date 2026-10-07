@@ -50,6 +50,8 @@ class RencontreAdminController extends BaseController
             'changeLogin'  => !empty($moi['change_login']),
             'deptActifs'   => getDeptActifs(),
             'divisionNoms' => getDivisionNoms(),
+            // rencontre.Forfait absente (EA98 pas encore passé) : liste Forfait désactivée.
+            'forfaitDispo' => rencontreAForfait(getPDO()),
         ];
 
         return view('rencontre_admin_index', $data);
@@ -58,10 +60,12 @@ class RencontreAdminController extends BaseController
     public function data(): ResponseInterface
     {
         return $this->tryJson(function () {
+            // Forfait lu seulement si la colonne existe (tolérance avant EA98), sinon 0.
+            $colForfait = rencontreAForfait(getPDO()) ? 'r.Forfait' : '0 AS Forfait';
             $rows = getPDO()->query(
                 'SELECT r.Id_Rencontre, r.Date, r.Heure, r.Poule, r.Journee, r.Phase,
                         r.Id_EquipeDom, r.Id_EquipeExt, r.id_Salle, r.Commentaire,
-                        r.ArbitrageCRA, r.Frais,
+                        r.ArbitrageCRA, r.Frais, ' . $colForfait . ',
                         CASE WHEN r.ArbitrageCRA = 1 THEN 1
                              WHEN EXISTS (SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1) THEN 1
                              ELSE 0 END AS ArbitrageObligatoire,
@@ -135,6 +139,13 @@ class RencontreAdminController extends BaseController
             $arbitrageCra = !empty($input['arbitrage_obligatoire']) ? 1 : 0;
             $frais       = ($input['frais'] ?? 'Dom') === 'Ext' ? 'Ext' : 'Dom';
             $commentaire = trim($input['commentaire'] ?? '') ?: null;
+            // Forfait : 0 = Non, 1 = équipe domicile, 2 = équipe extérieure ; absent → 0.
+            $forfaitRaw  = trim((string) ($input['forfait'] ?? '0'));
+            if (!in_array($forfaitRaw, ['0', '1', '2'], true)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Forfait invalide (0, 1 ou 2).']);
+            }
+            $forfait     = (int) $forfaitRaw;
+            $avecForfait = rencontreAForfait($pdo);
 
             if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Date invalide.']);
@@ -188,11 +199,19 @@ class RencontreAdminController extends BaseController
             $dateHeureChangee = substr((string) $etatAvant['Date'], 0, 10) !== $date
                 || substr((string) $etatAvant['Heure'], 0, 8) !== $heure;
 
+            // Forfait écrit seulement si la colonne existe (tolérance avant EA98).
+            $params = [$date, $heure, $poule, $journee, $phase, $idEquipeDom, $idEquipeExt, $idSalle, $arbitrageCra, $frais];
+            if ($avecForfait) {
+                $params[] = $forfait;
+            }
+            $params[] = $commentaire;
+            $params[] = $idRencontre;
             $stmt = $pdo->prepare(
-                'UPDATE rencontre SET Date=?, Heure=?, Poule=?, Journee=?, Phase=?, Id_EquipeDom=?, Id_EquipeExt=?, id_Salle=?, ArbitrageCRA=?, Frais=?, Commentaire=?
+                'UPDATE rencontre SET Date=?, Heure=?, Poule=?, Journee=?, Phase=?, Id_EquipeDom=?, Id_EquipeExt=?, id_Salle=?, ArbitrageCRA=?, Frais=?, '
+                . ($avecForfait ? 'Forfait=?, ' : '') . 'Commentaire=?
                  WHERE Id_Rencontre=?'
             );
-            $stmt->execute([$date, $heure, $poule, $journee, $phase, $idEquipeDom, $idEquipeExt, $idSalle, $arbitrageCra, $frais, $commentaire, $idRencontre]);
+            $stmt->execute($params);
 
             $avertissement = '';
             if ($dateHeureChangee && $etatAvant['Id_Nomination']) {
