@@ -128,9 +128,6 @@ class ImportRencontresController extends BaseController
         $p1DbtMd = $toMd(getConfig('phase1_debut', '09-01'));
 
         $saison = getConfig('saison', date('Y') . '-' . (date('Y') + 1));
-        $parts  = explode('-', $saison);
-        $a1     = (int) ($parts[0] ?? date('Y'));
-        $a2     = (int) ($parts[1] ?? $a1 + 1);
 
         $phaseOptions = [
             ['key' => 'p1', 'label' => "Phase 1 · saison $saison"],

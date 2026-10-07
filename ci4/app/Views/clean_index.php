@@ -210,22 +210,6 @@
             margin-bottom: .9rem;
         }
 
-        /* ── Champ mot de passe ── */
-        .pwd-group { margin-bottom: 1.1rem; }
-        .pwd-group label { font-size: .82rem; font-weight: 600; color: #374151; margin-bottom: .25rem; display: block; }
-        .pwd-input {
-            flex: 1;
-            min-width: 0;
-            border: 2px solid #c8d4e8;
-            border-radius: 6px 0 0 6px;
-            padding: .4rem .7rem;
-            font-size: .88rem;
-            transition: border-color .2s;
-        }
-        .pwd-input:focus      { outline: none; border-color: #1a3a6b; }
-        .pwd-input.is-invalid { border-color: #dc2626; }
-        .pwd-msg { font-size: .8rem; margin-top: .3rem; min-height: 16px; }
-
         /* ── Sélecteur de fichier ── */
         #select-fichier {
             width: 100%;

@@ -444,8 +444,7 @@ class JugearbitreController extends BaseController
      * de lancer l'import/scan FFTT (voir importFfttClub()/importFfttSelected())
      * — chaque JA ensuite importé reçoit les qualifications lues dans l'API
      * (upsertJaFftt()), les JA non retrouvés n'ont plus aucune qualification.
-     * Département résolu comme
-     * dans liste() : Id_Club (positions 3-4) ou, à défaut, code postal du JA
+     * Département résolu comme dans liste() : Id_Club (positions 3-4) ou, à défaut, code postal du JA
      * — CodeDept n'est renseigné nulle part.
      */
     public function reinitialiserActifDept(): ResponseInterface

@@ -63,7 +63,6 @@
             cursor: pointer; user-select: none;
         }
         #tbl-competitions thead th:hover { background: #f6f8fb; }
-        #tbl-competitions thead th.th-pk { color: #e65100; }
         #tbl-competitions thead th.th-c, #tbl-competitions td.td-c { text-align: center; }
         #tbl-competitions thead th .sort-icon { margin-left: .3rem; opacity: .4; font-size: .75rem; }
         #tbl-competitions thead th.sort-asc  .sort-icon::after { content: '▲'; opacity: 1; }

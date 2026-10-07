@@ -6,23 +6,6 @@
  * Cache statique : la BDD n'est interrogée qu'une seule fois par requête.
  */
 
-/** Termine une action AJAX avec succès. */
-function jsonOk(array $data = []): never
-{
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['ok' => true] + $data);
-    exit;
-}
-
-/** Termine une action AJAX avec une erreur. */
-function jsonError(string $msg, int $httpCode = 200): never
-{
-    header('Content-Type: application/json; charset=utf-8');
-    if ($httpCode !== 200) http_response_code($httpCode);
-    echo json_encode(['ok' => false, 'msg' => $msg]);
-    exit;
-}
-
 /**
  * Migrations de schéma appliquées à l'ouverture de l'écran EA98 (seul appelant).
  * Chaque bloc est idempotent : on ne (re)crée que ce qui manque.
@@ -542,6 +525,21 @@ function initTableConfiguration(\PDO $pdo): void
         // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
     }
 
+    // nomination.F131 : 1 = la dernière modification de cette nomination vient du fichier
+    // FFTT 131 (EN28 « Mise à jour FFTT 131 ») ; remis à 0 par une modification manuelle (EN14/EN28).
+    // Lue / écrite seulement si présente (nominationAF131(), tolérance avant passage EA98).
+    try {
+        $existe = $pdo->query(
+            "SELECT 1 FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nomination' AND COLUMN_NAME = 'F131'"
+        )->fetchColumn();
+        if (!$existe) {
+            $pdo->exec('ALTER TABLE nomination ADD COLUMN F131 TINYINT(1) NOT NULL DEFAULT 0 AFTER EmailEnvoye');
+        }
+    } catch (\PDOException $e) {
+        // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
+    }
+
     // Colonnes "référent" du club : 2e contact, mis en copie (Cc) des emails
     // envoyés au correspondant. Mêmes types que CorNom / CorEmail / CorTelephone.
     try {
@@ -660,11 +658,11 @@ function initTableConfiguration(\PDO $pdo): void
         error_log('[NIJAC] messagerie.Message -> MEDIUMTEXT : ' . $e->getMessage());
     }
 
-    // EC73 : les 3 modèles de convocation CRA deviennent des messages système (voir assurerModelesConvocationCra()).
+    // EC73 : Types ENUM des 3 convocations CRA (messages de la table messagerie, créés/édités en EA93, plus de source fichier).
     try {
-        assurerModelesConvocationCra($pdo);
+        assurerTypesConvocationCra($pdo);
     } catch (\PDOException $e) {
-        error_log('[NIJAC] Amorçage des modèles de convocation CRA : ' . $e->getMessage());
+        error_log('[NIJAC] Types messagerie des convocations CRA : ' . $e->getMessage());
     }
 
     // Message n°3 « Convocation » (EN14) : ancien texte brut par défaut -> modèle HTML avec
@@ -844,6 +842,27 @@ function nominationAAccuseReception(\PDO $pdo): bool
 }
 
 /**
+ * nomination.F131 existe-t-elle ? (ajoutée par EA98 — EN14/EN28 la lisent / l'écrivent
+ * seulement si présente). Cache statique : une seule vérification par requête.
+ */
+function nominationAF131(\PDO $pdo): bool
+{
+    static $existe = null;
+    if ($existe === null) {
+        try {
+            $existe = (bool) $pdo->query(
+                "SELECT 1 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nomination' AND COLUMN_NAME = 'F131'"
+            )->fetchColumn();
+        } catch (\PDOException $e) {
+            $existe = false;
+        }
+    }
+
+    return $existe;
+}
+
+/**
  * Règle stricte de disponibilité pour nommer un JA en arbitrage CRA, identique à EN14
  * (NominationController::sqlDispoRencontre()) : une réponse 'O' sur la rencontre ou la journée
  * (Id_Rencontre NULL, même date) ET aucune réponse 'N' ni sur la rencontre ni sur la journée.
@@ -967,8 +986,8 @@ function assurerRoleDefiscalisateur(\PDO $pdo): void
 
 /**
  * Ajoute le rôle 'CRA Convoc' à l'ENUM utilisateur.Role s'il n'y est pas déjà — même principe
- * que assurerRoleCsr(). Pas encore de menu/route/filtre dédié : à la connexion, ce rôle tombe
- * dans le cas par défaut de AuthController::redirectForRole() (menu Nominateur).
+ * que assurerRoleCsr(). À la connexion, ce rôle est dirigé vers le menu E009
+ * (AuthController::redirectForRole(), filtre "craconvocauth").
  */
 function assurerRoleCraConvoc(\PDO $pdo): void
 {
@@ -1141,44 +1160,15 @@ function envoyerDemandeJaClub(\PDO $pdo, int $idRenc, array $moi, string $sujetE
 }
 
 /**
- * Modèles de convocation CRA (EC73) : Type messagerie => [fichier de Convocation/ (source
- * d'amorçage et repli à l'exécution), sujet par défaut]. Messages système identifiés par leur
- * Type (Id_Utilisateur NULL), pas par un Id_Messagerie fixe : les ids suivants sont déjà pris
- * par des copies personnelles sur certains environnements (AUTO_INCREMENT).
+ * Étend (initTableConfiguration(), EA98) l'ENUM messagerie.Type avec les 3 Types des convocations
+ * CRA (EC73), pour qu'ils existent même sur une base sans ces lignes. Les messages eux-mêmes sont
+ * des enregistrements de la table messagerie (identifiés par Type, pas par un Id fixe), créés/édités
+ * en EA93 : plus de source fichier. Aucune ligne n'est créée ni modifiée ici.
  */
-function modelesConvocationCra(): array
+function assurerTypesConvocationCra(\PDO $pdo): void
 {
-    return [
-        'CRA Convocation JA'           => ['Convocation_1JA.html',          'CRA – Convocation – {EPREUVE} – {DATE_LONGUE}'],
-        'CRA Convocation JA + adjoint' => ['Convocation_1JA_1Adjoint.html', 'CRA – Convocation – {EPREUVE} – {DATE_LONGUE}'],
-        'CRA Convocation adjoint'      => ['Convocation_Adjoint.html',      'CRA – Convocation adjoint – {EPREUVE} – {DATE_LONGUE}'],
-    ];
-}
-
-/**
- * Amorce (initTableConfiguration(), EA98) les 3 messages système de convocation CRA : Type ENUM
- * étendu, puis ligne créée seulement si aucun message système de ce Type n'existe (jamais
- * d'écrasement d'un contenu retouché via EA93), corps = fichier de Convocation/ tel quel,
- * Cc/ReplyTo = 1 comme le message n°3. Fichier introuvable : message ignoré + error_log.
- */
-function assurerModelesConvocationCra(\PDO $pdo): void
-{
-    foreach (array_keys(modelesConvocationCra()) as $type) {
+    foreach (['CRA Convocation JA', 'CRA Convocation JA + adjoint', 'CRA Convocation adjoint'] as $type) {
         ajouterTypeMessagerie($pdo, $type);
-    }
-    $existe = $pdo->prepare('SELECT COUNT(*) FROM messagerie WHERE Type = ? AND Id_Utilisateur IS NULL');
-    $ins    = $pdo->prepare('INSERT INTO messagerie (Type, Sujet, Message, Id_Utilisateur, Cc, ReplyTo) VALUES (?, ?, ?, NULL, 1, 1)');
-    foreach (modelesConvocationCra() as $type => [$fichier, $sujet]) {
-        $existe->execute([$type]);
-        if ((int) $existe->fetchColumn() > 0) {
-            continue;
-        }
-        $corps = @file_get_contents(__DIR__ . '/../Convocation/' . $fichier);
-        if ($corps === false) {
-            error_log("[NIJAC] Modèle Convocation/$fichier introuvable : message « $type » non créé.");
-            continue;
-        }
-        $ins->execute([$type, $sujet, $corps]);
     }
 }
 
@@ -1742,7 +1732,7 @@ function idClubDepuisTokenDesiderata(string $token): ?string
  *                    adjoints_valides + liste_adjoints_valides (EC73 : adjoints désignés, lignes Nom/Prenom/Telephone/Email/Rang ;
  *                    0/absent → texte et {LISTE_JA_DISPONIBLES} d'origine ; ≥ nb_adjoints → validés seuls, sans JA disponibles ;
  *                    entre les deux → validés puis restants à solliciter) → {ADJOINTS_INTRO}, {ADJOINTS_CONTACT}, {TITRE_LISTE_ADJOINTS},
- *                    ja_principaux (EC73, Convocation_Adjoint.html : liste de ['nom','prenom','telephone','email'] →
+ *                    ja_principaux (EC73, message « CRA Convocation adjoint » : liste de ['nom','prenom','telephone','email'] →
  *                    {NOM_JA_PRINCIPAL} « Prénom NOM », {TEL_JA_PRINCIPAL}, {EMAIL_JA_PRINCIPAL} ; plusieurs = « A, B et C »,
  *                    valeurs vides ignorées ; texte brut, échappé par l'appelant comme les autres marqueurs).
  * @return array<string,string> Table marqueur => valeur, prête pour remplacerMarqueursMessage().
@@ -1784,7 +1774,7 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
     $dateEdition = date('j') . ' ' . $mois[(int) date('n')] . ' ' . date('Y');
 
     // {LISTE_JA_DISPONIBLES} : lignes <tr> seules (l'en-tête "Nom et prénom /
-    // Coordonnées" reste dans le modèle), même style que Convocation_1JA_1Adjoint.html.
+    // Coordonnées" reste dans le modèle), même style que le message « CRA Convocation JA + adjoint ».
     $td     = 'border:1px solid #999;text-align:left;';
     $lignes = function (array $rows) use ($td): string {
         $html = '';
@@ -1803,7 +1793,7 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
         return $html;
     };
 
-    // Pluralisation de Convocation_1JA_1Adjoint.html (EC73) : nb_adjoints absent ou < 2 → forme singulière d'origine.
+    // Pluralisation du message « CRA Convocation JA + adjoint » (EC73) : nb_adjoints absent ou < 2 → forme singulière d'origine.
     $nbAdj  = max(1, (int) ($ctx['nb_adjoints'] ?? 1));
     $pluriel = $nbAdj > 1;
     $lettres = fn (int $n): string => [2 => 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix'][$n] ?? (string) $n;
@@ -1835,7 +1825,7 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
         $listeJaDispo = $lignes($ctx['ja_disponibles']) ?: $vide;
     }
 
-    // JA principaux présentés à l'adjoint (Convocation_Adjoint.html) : « A, B et C », valeurs vides ignorées.
+    // JA principaux présentés à l'adjoint (message « CRA Convocation adjoint ») : « A, B et C », valeurs vides ignorées.
     $principaux = (array) ($ctx['ja_principaux'] ?? []);
     $liste = function (callable $f) use ($principaux): string {
         $v = array_values(array_filter(array_map(fn ($p) => trim((string) $f((array) $p)), $principaux), 'strlen'));
@@ -1876,7 +1866,7 @@ function construireMarqueursMessage(array $ja, array $moi = [], array $ctx = [])
                 : 'le Juge-Arbitre adjoint désigné ; sa convocation lui est adressée directement par la CRA')
             : ($nbSol > 1 ? 'les noms et prénoms des Juges-Arbitres adjoints sollicités ainsi que la confirmation de leur accord. Après validation par la CRA, leur convocation leur sera adressée'
                           : 'le nom et le prénom du Juge-Arbitre adjoint sollicité ainsi que la confirmation de son accord. Après validation par la CRA, sa convocation lui sera adressée'),
-        // Phrases de Convocation_1JA_1Adjoint.html qui changent selon les adjoints validés (a / b / c ci-dessus).
+        // Phrases du message « CRA Convocation JA + adjoint » qui changent selon les adjoints validés (a / b / c ci-dessus).
         '{ADJOINTS_INTRO}'       => match (true) {
             $complet => $valPl ? 'Les Juges-Arbitres adjoints désignés par la CRA sont indiqués ci-dessous.'
                                : 'Le Juge-Arbitre adjoint désigné par la CRA est indiqué ci-dessous.',

@@ -23,7 +23,6 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 
 #barre-selection { --strip-bg:#fff; background:#fff; border-bottom:1px solid #dee2e6; padding:.5rem 1.25rem; display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; flex-shrink:0; }
 #barre-selection .combo-field > select { min-width:150px; }
-.badge-journee { font-size:.72rem; }
 
 /* ── Info journée ── */
 #info-journee { background:#e8f5e9; border-bottom:1px solid #c8e6c9; padding:.4rem 1.25rem; font-size:.82rem; color:#2e7d32; display:none; gap:1.5rem; align-items:center; flex-wrap:wrap; flex-shrink:0; }
@@ -1038,10 +1037,6 @@ function retirerJaAvecConfirmation(idRenc) {
 }
 
 // ── Mise à jour UI ────────────────────────────────────────────────────────────
-// R3M/R4M en arbitrage club sans nomination : pas de JA CRA à attribuer.
-const estArbClubSansJa = rc => !nominations[rc.Id_Rencontre]
-    && rc.SouhaitJADom === 'Club' && ['R3M', 'R4M'].includes(rc.DivisionCode || '');
-
 function mettreAJourBoutons() {
     const total    = rencontres.length;
     const attrib   = Object.keys(nominations).length;

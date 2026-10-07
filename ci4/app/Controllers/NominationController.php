@@ -309,6 +309,8 @@ class NominationController extends BaseController
 
         // Changement de JA : l'accusé de réception de l'ancien JA n'est pas hérité (colonne EA98).
         $razAccuse = nominationAAccuseReception($pdo) ? ', AccuseReception = NULL' : '';
+        // Modification manuelle : elle ne vient plus du fichier FFTT 131 (colonne EA98).
+        $razAccuse .= nominationAF131($pdo) ? ', F131 = 0' : '';
         $pdo->prepare("
             UPDATE nomination SET
                 Id_Disponible = ?, DateNomination = CURDATE(), Valide = 1, EmailEnvoye = 0,
@@ -373,7 +375,6 @@ class NominationController extends BaseController
             if ($journeeRaw === null || $journeeRaw === '' || $date === '') {
                 return $this->response->setJSON(['ok' => false, 'err' => 'Paramètres manquants']);
             }
-            $journee = (int) $journeeRaw;
 
             $deptsAutorises = $this->deptsAutorises();
             if (!$deptsAutorises) {

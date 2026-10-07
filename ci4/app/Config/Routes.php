@@ -222,6 +222,9 @@ $routes->post('suivi-nomination/modifier', 'SuiviNominationController::modifier'
 $routes->post('suivi-nomination/saisir', 'SuiviNominationController::saisir', ['filter' => 'auth']);   // JA d'une rencontre sans nomination : arbitrage club (saisie) ou CRA (nomination, règles EN14)
 $routes->post('suivi-nomination/rappel', 'SuiviNominationController::rappel', ['filter' => 'auth']);
 $routes->post('suivi-nomination/relance-club', 'SuiviNominationController::relanceClub', ['filter' => 'auth']);
+// « Mise à jour FFTT 131 » : fichier xlsx multipart (édition 131, lignes G = JA) — apercu = analyse sans écriture, valider = même analyse + écriture en transaction (nomination.F131 = 1)
+$routes->post('suivi-nomination/f131/apercu', 'SuiviNominationController::f131Apercu', ['filter' => 'auth']);
+$routes->post('suivi-nomination/f131/valider', 'SuiviNominationController::f131Valider', ['filter' => 'auth']);
 
 // ── EN18 Désidératas club ────────────────────────────────────────────────────
 // Page PUBLIQUE (sans authentification), jeton signé ?club=<Id_Club>-<MAC> — lien
@@ -475,7 +478,7 @@ $routes->get('cra-designation', 'CraDesignationController::index', ['filter' => 
 $routes->get('cra-designation/data', 'CraDesignationController::data', ['filter' => 'craconvocauth']);
 $routes->get('cra-designation/(:num)', 'CraDesignationController::show/$1', ['filter' => 'craconvocauth']);
 $routes->post('cra-designation/(:num)', 'CraDesignationController::save/$1', ['filter' => 'craconvocauth']);
-// Envoi des convocations (messages « CRA Convocation … » de la table messagerie, repli Convocation/*.html), un appel par compétition cochée ; journalisé dans CRA_Designation.DateConvocation.
+// Envoi des convocations (messages « CRA Convocation … » de la table messagerie, éditables en EA93), un appel par compétition cochée ; journalisé dans CRA_Designation.DateConvocation.
 $routes->post('cra-designation/convocations', 'CraDesignationController::convocations', ['filter' => 'craconvocauth']);
 $routes->delete('cra-designation/(:num)', 'CraDesignationController::delete/$1', ['filter' => 'craconvocauth']);
 

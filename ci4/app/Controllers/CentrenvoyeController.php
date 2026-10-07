@@ -119,9 +119,7 @@ class CentrenvoyeController extends BaseController
             }
 
             // Mêmes filtres JA que la liste de convocation (cas "Convocation" de ja()) :
-            // JA1 actifs, sans filtre sur nomination.Valide — sinon le combo affiche 0
-            // tant que la journée n'a pas été validée dans EN14 alors que la liste, elle,
-            // montre déjà le JA nominé.
+            // JA1 actifs, sans filtre sur nomination.Valide (toute nomination est valide d'office).
             $depts = $this->deptsAutorises();
             $ph    = implode(',', array_fill(0, count($depts), '?'));
             $stmt = $pdo->prepare("

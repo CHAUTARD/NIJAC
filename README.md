@@ -29,7 +29,7 @@ Quelques écrans marquants :
 | EN14 | Nomination | Affectation JA ↔ rencontres selon les règles métier (nomination valide d'office), envoi des convocations (+ copie sans lien aux correspondants/référents des 2 clubs), feuille de pointage PDF de la journée |
 | EN21 | Convocation et frais JA | Page publique tokenisée : consultation de la convocation, saisie des frais (péage, km, défiscalisation) et accusé de réception de la convocation par le JA |
 | EN27 | Clubs / Associations | Import et gestion des clubs affiliés (upsert depuis l'API FFTT) |
-| EN28 | Suivi des nominations | Suivi des frais saisis par les JA et des accusés de réception, correction et relance |
+| EN28 | Suivi des nominations | Suivi des frais saisis par les JA et des accusés de réception, correction et relance, mise à jour depuis l'édition FFTT 131 |
 | EA91 | Configuration | Paramètres applicatifs (état logiciel, SMTP, phases, frais kilométriques…) |
 | EA98 | Administration BDD | Requêteur SQL libre, structure des tables, accès restreint (compte CHAUTARD) |
 
@@ -95,7 +95,6 @@ NIJAC/
 ├── tools/rot47.php        # CLI pour pré-calculer une valeur ROT47 à coller dans .env
 ├── SQL/                   # Sauvegardes (EA85) — lues côté serveur uniquement
 ├── Importation/           # Dépôt de fichiers d'import — lu/écrit côté serveur uniquement
-├── Convocation/           # Source d'amorçage (EA98) des 3 messages « CRA Convocation … » de la table messagerie (EC73), repli si la ligne est absente
 ├── ci4/
 │   ├── app/
 │   │   ├── Config/Routes.php     # Toutes les routes, commentées par code EXXXX
