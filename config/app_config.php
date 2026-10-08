@@ -559,7 +559,6 @@ function initTableConfiguration(\PDO $pdo): void
         // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
     }
 
-<<<<<<< HEAD
     // nomination.Forfait : colonne brièvement ajoutée puis abandonnée — le forfait n'est porté
     // que par rencontre.Forfait (EN23). Suppression volontaire et idempotente si elle existe encore.
     try {
@@ -591,8 +590,6 @@ function initTableConfiguration(\PDO $pdo): void
         // best-effort — SQL manuel possible si le DROP échoue ici (droits…).
     }
 
-=======
->>>>>>> 0f29b12ebb182f55fdb263a7c55d79cdeb1e1bdc
     // Colonnes "référent" du club : 2e contact, mis en copie (Cc) des emails
     // envoyés au correspondant. Mêmes types que CorNom / CorEmail / CorTelephone.
     try {
@@ -916,7 +913,6 @@ function nominationAF131(\PDO $pdo): bool
 }
 
 /**
-<<<<<<< HEAD
  * rencontre.Forfait existe-t-elle ? (ajoutée par EA98 — EN23 la lit / l'écrit seulement
  * si présente ; sinon lecture = 0 et liste désactivée). Cache statique : une seule
  * vérification par requête.
@@ -939,8 +935,6 @@ function rencontreAForfait(\PDO $pdo): bool
 }
 
 /**
-=======
->>>>>>> 0f29b12ebb182f55fdb263a7c55d79cdeb1e1bdc
  * Règle stricte de disponibilité pour nommer un JA en arbitrage CRA, identique à EN14
  * (NominationController::sqlDispoRencontre()) : une réponse 'O' sur la rencontre ou la journée
  * (Id_Rencontre NULL, même date) ET aucune réponse 'N' ni sur la rencontre ni sur la journée.

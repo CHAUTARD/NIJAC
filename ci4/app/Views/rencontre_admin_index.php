@@ -40,6 +40,18 @@
             background: #eef2f9; border: 1.5px solid #d3dae6; border-radius: 999px;
             font-size: .82rem; font-weight: 700; color: var(--nijac-blue);
         }
+
+        /* Rencontre en forfait (rencontre.Forfait 1/2) : fond orange clair + liseré
+           gauche orange et pastille « FORFAIT », comme EN28. La ligne sélectionnée
+           garde son bleu (.selected en !important dans nijac-liste-edit.css). */
+        #table-wrapper #tbl-rencontres tbody tr.tr-forfait { background: #fff1e0; }
+        #table-wrapper #tbl-rencontres tbody tr.tr-forfait:hover { background: #ffe4c4; }
+        #table-wrapper #tbl-rencontres tbody tr.tr-forfait > td:first-child { box-shadow: inset 3px 0 0 #f0a050; }
+        #tbl-rencontres .badge-forfait { background: #c25e00; color: #fff; font-weight: 700; letter-spacing: .02em; }
+        @media print {
+            #table-wrapper #tbl-rencontres tbody tr.tr-forfait,
+            #tbl-rencontres .badge-forfait { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
     </style>
 </head>
 <body>
@@ -95,6 +107,14 @@
                 <label for="sel-date">Date</label>
                 <select id="sel-date" style="width:auto;">
                     <option value="">Toutes</option>
+                </select>
+            </span>
+            <span class="combo-field">
+                <label for="sel-forfait-filtre">Forfait</label>
+                <select id="sel-forfait-filtre" style="width:90px;">
+                    <option value="">Tous</option>
+                    <option value="oui">Oui</option>
+                    <option value="non">Non</option>
                 </select>
             </span>
             <span class="combo-field">
@@ -263,6 +283,7 @@ let divisionFiltre = '';
 let pouleFiltre   = '';
 let journeeFiltre = '';
 let dateFiltre    = '';
+let forfaitFiltre = '';     // '' = tous, 'oui' = Forfait 1/2, 'non' = Forfait 0
 let doublonsIds   = null;   // null = filtre inactif ; sinon tableau d'Id_Rencontre (chaînes)
 const sortState = { col: null, asc: true };
 
@@ -314,6 +335,23 @@ function infosSalle(r) {
     return adresse ? r.NomSalle + '\n' + adresse : r.NomSalle;
 }
 
+/** rencontre.Forfait normalisé : 1 = domicile, 2 = extérieur, sinon 0 (y compris avant EA98, où data() renvoie 0). */
+function codeForfait(r) {
+    const f = String(r.Forfait ?? '0');
+    return f === '1' || f === '2' ? +f : 0;
+}
+
+/**
+ * Cellule d'équipe (Domicile / Extérieur) : nom échappé (.text), suivi de la pastille
+ * « FORFAIT » si cette équipe est forfait. data-sort = nom seul, pour que le tri
+ * (trierLignes) ne soit pas faussé par la pastille.
+ */
+function celluleEquipe(nom, forfait) {
+    const $td = $('<td>').addClass('cell-equipe').attr('data-sort', nom).text(nom);
+    if (forfait) $td.append($('<span class="badge rounded-pill ms-1 badge-forfait">').text('FORFAIT'));
+    return $td;
+}
+
 function setStatus(msg, ok = true) {
     $('#form-status').text(msg).removeClass('text-danger text-success').addClass(ok ? 'text-success' : 'text-danger');
 }
@@ -332,6 +370,8 @@ function rencontresFiltrees() {
         if (pouleFiltre && String(r.Poule ?? '') !== pouleFiltre) return false;
         if (journeeFiltre && String(r.Journee ?? '') !== journeeFiltre) return false;
         if (dateFiltre && (r.Date ?? '').substring(0, 10) !== dateFiltre) return false;
+        if (forfaitFiltre === 'oui' && !codeForfait(r)) return false;
+        if (forfaitFiltre === 'non' && codeForfait(r)) return false;
         if (doublonsIds && !doublonsIds.includes(String(r.Id_Rencontre))) return false;
         return true;
     });
@@ -439,12 +479,13 @@ function renderListe() {
     affichees.forEach(r => {
         const date = formatDateAvecJour(r.Date);
         const heure = (r.Heure ?? '').substring(0, 5);
-        const $tdDom = $('<td>').addClass('cell-equipe').text(r.NomDom ?? '')
+        const forfait = codeForfait(r);
+        const $tdDom = celluleEquipe(r.NomDom ?? '', forfait === 1)
             .on('click', function (e) { e.stopPropagation(); filtrerParEquipe(r.NomDom, r.Id_Rencontre); });
-        const $tdExt = $('<td>').addClass('cell-equipe').attr('title', infosExterieur(r)).text(r.NomExt ?? '—')
+        const $tdExt = celluleEquipe(r.NomExt ?? '—', forfait === 2).attr('title', infosExterieur(r))
             .on('click', function (e) { e.stopPropagation(); filtrerParEquipe(r.NomExt, r.Id_Rencontre); });
         const $tdIdSalle = $('<td>').attr('title', infosSalle(r)).text(r.id_Salle ?? '');
-        $('<tr>').attr('data-id', r.Id_Rencontre).append(
+        $('<tr>').attr('data-id', r.Id_Rencontre).toggleClass('tr-forfait', forfait > 0).append(
             $('<td>').text(r.Id_Rencontre ?? ''),
             $('<td>').text(date),
             $('<td>').text(heure),
@@ -577,6 +618,7 @@ $('#sel-dept').on('change', function () { deptFiltre = $(this).val(); renderList
 $('#sel-poule').on('change', function () { pouleFiltre = $(this).val(); renderListe(); });
 $('#sel-journee').on('change', function () { journeeFiltre = $(this).val(); renderListe(); });
 $('#sel-date').on('change', function () { dateFiltre = $(this).val(); renderListe(); });
+$('#sel-forfait-filtre').on('change', function () { forfaitFiltre = $(this).val(); renderListe(); });
 
 // Champ <input type="time"> : saisie libre 00:00–23:59 ; les boutons -/+ décalent
 // de 15 min, bornés (pas de bascule minuit).
@@ -602,11 +644,11 @@ $('#btn-date-moins').on('click', function () { decalerDateChamp(-1); });
 $('#btn-date-plus').on('click', function () { decalerDateChamp(1); });
 
 $('#btn-reset-filtres').on('click', function () {
-    searchEquipe = deptFiltre = divisionFiltre = pouleFiltre = journeeFiltre = dateFiltre = '';
+    searchEquipe = deptFiltre = divisionFiltre = pouleFiltre = journeeFiltre = dateFiltre = forfaitFiltre = '';
     doublonsIds = null;
     $('#btn-doublons').removeClass('active btn-warning').addClass('btn-outline-warning');
     $('#search-equipe').val('');
-    $('#sel-dept, #sel-poule, #sel-journee, #sel-date').val('');
+    $('#sel-dept, #sel-poule, #sel-journee, #sel-date, #sel-forfait-filtre').val('');
     majPanelDivision();
     renderListe();
 });
@@ -628,12 +670,25 @@ $('#btn-doublons').on('click', function () {
     }, 'json').fail(() => toast('Erreur réseau.', false));
 });
 
+/**
+ * Tri des colonnes d'équipes (Domicile / Extérieur) sur data-sort (nom seul),
+ * pour ignorer la pastille « FORFAIT » ; les autres colonnes passent par nijacSortRows.
+ */
+function trierLignes(col, asc) {
+    if (col !== 7 && col !== 8) { nijacSortRows('#tbody-liste', col, asc); return; }
+    const tbody = document.querySelector('#tbody-liste');
+    const rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
+    const cle = tr => (tr.children[col]?.dataset.sort ?? '').trim();
+    rows.sort((a, b) => { const cmp = cle(a).localeCompare(cle(b), 'fr'); return asc ? cmp : -cmp; });
+    rows.forEach(tr => tbody.appendChild(tr));
+}
+
 // ── Tri sur clic en-tête ──────────────────────────────────────────────────────
 // Différé : nijac-sortable-table.js est chargé après ce script (voir plus bas),
 // donc pas encore défini si on l'appelait ici de façon synchrone.
 $(function () {
     nijacSortableTable('#tbl-rencontres thead th[data-col]', 'col', sortState,
-        () => nijacSortRows('#tbody-liste', parseInt(sortState.col, 10), sortState.asc));
+        () => trierLignes(parseInt(sortState.col, 10), sortState.asc));
     chargerListe();
 });
 </script>

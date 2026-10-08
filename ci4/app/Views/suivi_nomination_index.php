@@ -43,6 +43,18 @@
         #table-wrapper #tbl-suivi tbody tr.sans-ja { background: #FFE4E8; }
         #table-wrapper #tbl-suivi tbody tr.sans-ja:hover { background: #E9ECEF; }
         #tbl-suivi .aucun-ja { color: #9aa5b8; font-style: italic; }
+        /* rencontre en forfait (rencontre.Forfait ≠ 0) : orange clair + liseré gauche, même priorité que .sans-ja
+           (passe devant le zébrage ; la sélection .selected !important reste prioritaire) */
+        #table-wrapper #tbl-suivi tbody tr.tr-forfait { background: #fff1e0; }
+        #table-wrapper #tbl-suivi tbody tr.tr-forfait:hover { background: #ffe4c4; }
+        #table-wrapper #tbl-suivi tbody tr.tr-forfait > td:first-child { box-shadow: inset 3px 0 0 #f0a050; }
+        /* mot FORFAIT (pastille orange foncé) et repère « 131 » (pastille bleue) : lisibles sur fond orange, rose ou blanc */
+        #tbl-suivi .badge-forfait { background: #c25e00; color: #fff; font-weight: 700; letter-spacing: .02em; }
+        #tbl-suivi .badge-f131 { background: #0d6efd; color: #fff; }
+        @media print {
+            #table-wrapper #tbl-suivi tbody tr.tr-forfait,
+            #tbl-suivi .badge-forfait, #tbl-suivi .badge-f131 { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
 
         /* Compte rendu de la mise à jour FFTT 131 (même présentation que l'import des JA d'EN11) */
         #f131-log { max-height: 320px; overflow-y: auto; font-size: .78rem; background: #f8fafc; border: 1px solid #e0e8f0; border-radius: 4px; }
@@ -101,6 +113,7 @@
                     <option value="">Tous</option>
                     <option value="oui">Avec JA</option>
                     <option value="non">Sans JA</option>
+                    <option value="forfait">Forfait</option>
                 </select>
             </span>
             <span class="combo-field">
@@ -120,9 +133,6 @@
             </span>
             <button type="button" class="btn btn-sm btn-light" id="btn-reset-filtres" title="Réinitialiser les filtres">
                 <i class="bi bi-x-circle"></i>
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-success" id="btn-f131" title="Mettre à jour les nominations depuis l'édition FFTT 131 « Activités détaillées des arbitres »">
-                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Mise à jour FFTT 131
             </button>
         </div>
         <div id="table-wrapper">
@@ -207,13 +217,9 @@
     </div>
 </div>
 
-<<<<<<< HEAD
 <!-- Popup « Mise à jour FFTT 131 » : 1 aide → 2 fichiers 131 du serveur (Importation/, suppression une à une) → 3 dépôt « Parcourir… » → 4 Analyser
      (sans écriture : rencontres R3M / R4M sans JA nommé que le fichier permet de renseigner) → bouton « Renseigner les JA… » (seulement si N > 0)
      → compte rendu de tous les traitements + nom du journal CSV (_Suivi) -->
-=======
-<!-- Popup « Mise à jour FFTT 131 » : aide → fichier + Analyser (aperçu sans écriture) → Mettre à jour -->
->>>>>>> 0f29b12ebb182f55fdb263a7c55d79cdeb1e1bdc
 <div class="modal fade" id="modal-f131" tabindex="-1" aria-labelledby="f131-titre" aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
@@ -226,7 +232,6 @@
                     <strong>1.</strong> Générez l'édition <strong>131 - Activités détaillées des arbitres</strong> (format Excel) dans le logiciel fédéral.
                     <button type="button" class="btn btn-link btn-sm p-0 align-baseline" id="btn-f131-aide"><i class="bi bi-question-circle me-1"></i>Comment obtenir le fichier ?</button>
                 </p>
-<<<<<<< HEAD
                 <div class="small mb-2">
                     <strong>2.</strong> Fichiers 131 présents sur le serveur (dossier <code>Importation</code>, plus récent d'abord) :
                     <div id="f131-serveur" class="mt-1"></div>
@@ -252,20 +257,6 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fermer</button>
-=======
-                <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-                    <strong class="small">2.</strong>
-                    <input type="file" id="f131-fichier" class="form-control form-control-sm" style="max-width:420px" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
-                    <button type="button" class="btn btn-sm btn-outline-primary" id="btn-f131-analyser"><i class="bi bi-search me-1"></i>Analyser</button>
-                </div>
-                <p class="small text-muted mb-2">Seules les lignes dont la colonne G vaut « JA » sont utilisées ; aucune donnée n'est modifiée par l'analyse.</p>
-                <div id="f131-resultat"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-outline-secondary me-auto d-none" id="btn-f131-csv"><i class="bi bi-filetype-csv me-1"></i>Rapport complet (CSV)</button>
-                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fermer</button>
-                <button type="button" class="btn btn-sm btn-success" id="btn-f131-valider" disabled><i class="bi bi-check2 me-1"></i>Mettre à jour</button>
->>>>>>> 0f29b12ebb182f55fdb263a7c55d79cdeb1e1bdc
             </div>
         </div>
     </div>
@@ -339,12 +330,24 @@ function nominationsFiltrees() {
         if (filtres.saisie === 'oui' && !n.DateSaisie) return false;
         if (filtres.saisie === 'non' && n.DateSaisie) return false;   // inclut les rencontres sans JA
         if (filtres.avecJa === 'oui' && !n.Id_Nomination) return false;
-        if (filtres.avecJa === 'non' && n.Id_Nomination) return false;
+        if (filtres.avecJa === 'non' && (n.Id_Nomination || estForfait(n))) return false;   // un forfait n'est pas une absence de JA
+        if (filtres.avecJa === 'forfait' && !estForfait(n)) return false;
         if (filtres.accuse === 'oui' && !n.AccuseReception) return false;
         if (filtres.accuse === 'non' && (!n.Id_Nomination || n.AccuseReception)) return false;   // nominations sans accusé seulement
         if (filtres.f131 === 'oui' && !+n.F131) return false;
         return true;
     });
+}
+
+/** rencontre.Forfait : 0 = non, 1 = forfait de l'équipe recevante, 2 = de l'équipe extérieure (0 avant EA98). */
+const estForfait = n => +n.Forfait > 0;
+
+/** Cellule Domicile / Extérieur (comme EN23) : nom via .text() puis pastille FORFAIT séparée si l'équipe est forfait.
+ *  Le tri (CLES_TRI) porte sur le nom seul ; data-sort pour cohérence avec EN23. */
+function celluleEquipe(champ, nom, forfait) {
+    const $td = $('<td>').attr({ 'data-field': champ, 'data-sort': nom }).text(nom);
+    if (forfait) $td.append($('<span class="badge rounded-pill ms-1 badge-forfait">').text('FORFAIT'));
+    return $td;
 }
 
 /** rencontre.ArbitrageCRA : 1 = arbitrage fourni par la CRA, 0 = à la charge du club */
@@ -414,7 +417,8 @@ function renderListe() {
             .prop('disabled', !n.CorEmail)
             .html('<i class="bi bi-envelope"></i>')
             .on('click', function () { relancerClub(n, $(this)); });
-        const relancable = !nomme && n.ArbitrageCRA !== null && +n.ArbitrageCRA === 0;
+        const forfait = estForfait(n);     // forfait : pas une absence de JA (ni rose, ni relance du club)
+        const relancable = !nomme && !forfait && n.ArbitrageCRA !== null && +n.ArbitrageCRA === 0;
         // Sans JA : arbitrage club → le nominateur saisit lui-même le JA qui a officié ; arbitrage CRA → il nomme un JA (règles EN14)
         const nommable = !nomme && n.ArbitrageCRA !== null;
         const $saisir = $('<button type="button" class="btn btn-sm btn-outline-success">')
@@ -422,16 +426,18 @@ function renderListe() {
             .attr('aria-label', estCra(n) ? 'Nommer un JA' : 'Saisir le JA')
             .html('<i class="bi bi-person-plus"></i>')
             .on('click', function () { ouvrirModification(n); });
-        $('<tr>').toggleClass('sans-ja', !nomme).append(
+        // Colonne JA : le forfait n'y figure pas (pastille FORFAIT dans Domicile / Extérieur) ; même affichage que les autres lignes
+        const texteJa = nomme ? (n.NomJa ?? '') : '— Aucun JA';
+        $('<tr>').toggleClass('sans-ja', !nomme && !forfait).toggleClass('tr-forfait', forfait).append(
             $('<td>').attr('data-field', 'date').text(formatDateAvecJour(n.Date, true)),
             $('<td class="centre">').attr('data-field', 'division').append(macaronDivision(n.Division, n.DivisionColor)),
             $('<td class="centre">').attr('data-field', 'arbitrage').text(libArbitrage(n)),
-            $('<td>').attr('data-field', 'domicile').text(n.NomDom ?? ''),
-            $('<td>').attr('data-field', 'exterieur').text(n.NomExt ?? '—'),
+            celluleEquipe('domicile', n.NomDom ?? '', +n.Forfait === 1),
+            celluleEquipe('exterieur', n.NomExt ?? '—', +n.Forfait === 2),
             $('<td class="centre">').attr('data-field', 'licence').attr('title', n.Telephone || null).text(n.Id_JA ?? ''),
             $('<td>').attr('data-field', 'ja').attr('title', n.Telephone || null).toggleClass('aucun-ja', !nomme)
-                .text(nomme ? (n.NomJa ?? '') : '— Aucun JA')
-                .append(nomme && +n.F131 ? $('<span class="badge rounded-pill text-bg-light border ms-1 badge-f131">').text('131').attr('title', 'Mise à jour depuis le fichier FFTT 131') : ''),
+                .text(texteJa)
+                .append(nomme && +n.F131 ? $('<span class="badge rounded-pill ms-1 badge-f131">').text('131').attr('title', 'Mise à jour depuis le fichier FFTT 131') : ''),
             $('<td>').attr('data-field', 'ebp').text(n.NumCompteEBP ?? ''),
             $('<td class="num">').attr('data-field', 'peage').toggleClass('non-saisi', !saisi)
                 .toggleClass('deja-compte', nonCompte('Peage', peageNon)).attr('title', nonCompte('Peage', peageNon) ? titreNonCompte : null)
@@ -662,7 +668,6 @@ $('#btn-reset-filtres').on('click', function () {
     renderListe();
 });
 
-<<<<<<< HEAD
 // ── Mise à jour FFTT 131 : étape 2 = tous les 131_*.xlsx du dossier serveur Importation/ (plus récent d'abord, Supprimer par ligne) ; étape 3 =
 //    dépôt « Parcourir… » (enregistré sous un nom généré par le serveur ; anciens fichiers supprimables un à un à
 //    l'étape 2) ; étape 4 Analyser = analyse SANS ÉCRITURE du fichier DU SERVEUR (rencontres R3M / R4M sans JA nommé que
@@ -802,80 +807,10 @@ function analyser131() {
             charger131Serveur();   // bloc « Fichiers de suivi » : les anciens journaux viennent d'être effacés
         })
         .fail(() => { $btn.prop('disabled', false); $('#f131-resultat').empty(); nijacToast('Erreur réseau ou session expirée.', 'danger'); });
-=======
-// ── Mise à jour FFTT 131 (aperçu sans écriture, puis validation : le fichier est renvoyé, rien n'est conservé serveur) ──
-let fichier131 = null, rapport131 = null;
-const F131_MAX_LIGNES = 200;
-
-$('#btn-f131').on('click', function () {
-    fichier131 = rapport131 = null;
-    $('#f131-fichier').val('');
-    $('#f131-resultat').empty();
-    $('#btn-f131-valider').prop('disabled', true);
-    $('#btn-f131-csv').addClass('d-none');
-    bootstrap.Modal.getOrCreateInstance('#modal-f131').show();
-});
-// Aide « comme la 102 » : fenêtre asset/aide/import-131.html, qui peut aussi choisir le fichier (importerFichier131).
-$('#btn-f131-aide').on('click', function () {
-    window.open('<?= base_url('asset/aide/import-131.html') ?>', 'aideImport131', 'width=640,height=680,resizable=yes,scrollbars=yes');
-});
-$('#f131-fichier').on('change', function () {
-    fichier131 = this.files[0] || null;
-    $('#btn-f131-valider').prop('disabled', true);
-});
-window.importerFichier131 = function (file) {
-    fichier131 = file;
-    $('#f131-fichier').val('');
-    envoyer131('apercu');
-};
-$('#btn-f131-analyser').on('click', () => envoyer131('apercu'));
-$('#btn-f131-valider').on('click', function () {
-    if (!rapport131) return;
-    nijacConfirm(`Appliquer ${rapport131.creees} création(s) et ${rapport131.modifiees} remplacement(s) de JA ?`, () => envoyer131('valider'));
-});
-$('#btn-f131-csv').on('click', function () {
-    if (!rapport131) return;
-    const blob = new Blob([csv131(rapport131)], { type: 'text/csv;charset=utf-8' });
-    const a = $('<a>').attr({ href: URL.createObjectURL(blob), download: 'rapport_131.csv' }).appendTo('body');
-    a[0].click();
-    URL.revokeObjectURL(a.attr('href'));
-    a.remove();
-});
-
-function envoyer131(etape) {
-    const f = fichier131;
-    if (!f) { nijacToast('Choisissez le fichier 131 (.xlsx).', 'warning'); return; }
-    if (!/\.xlsx$/i.test(f.name) || f.size > 5 * 1024 * 1024) { nijacToast('Fichier .xlsx de 5 Mo maximum.', 'warning'); return; }
-    const fd = new FormData();
-    fd.append('xlsx', f);
-    const $btns = $('#btn-f131-analyser, #btn-f131-valider').prop('disabled', true);
-    $('#f131-resultat').html('<div class="text-muted small"><span class="spinner-border spinner-border-sm me-2"></span>' + (etape === 'apercu' ? 'Analyse…' : 'Mise à jour…') + '</div>');
-    $.ajax({ url: `${SUIVI_BASE}/f131/${etape}`, method: 'POST', data: fd, processData: false, contentType: false, dataType: 'json' })
-        .done(function (r) {
-            $('#btn-f131-analyser').prop('disabled', false);
-            if (!r.ok) {
-                rapport131 = null;
-                $('#btn-f131-csv').addClass('d-none');
-                $('#f131-resultat').empty().append($('<div class="alert alert-danger small mb-0">').text(r.msg || 'Erreur.'));
-                return;
-            }
-            rapport131 = r;
-            afficher131(r);
-            $('#btn-f131-csv').removeClass('d-none');
-            if (!r.ecrit) {
-                $('#btn-f131-valider').prop('disabled', r.creees + r.modifiees === 0);
-                return;
-            }
-            nijacToast(`FFTT 131 : ${r.creees} nomination(s) créée(s), ${r.modifiees} modifiée(s), ${r.incoherences} incohérence(s).`, r.incoherences ? 'warning' : 'success');
-            chargerListe();
-        })
-        .fail(() => { $btns.prop('disabled', false); $('#btn-f131-valider').prop('disabled', true); $('#f131-resultat').empty(); nijacToast('Erreur réseau ou session expirée.', 'danger'); });
->>>>>>> 0f29b12ebb182f55fdb263a7c55d79cdeb1e1bdc
 }
 
 const fr131 = d => d ? d.split('-').reverse().join('/') : '?';
 
-<<<<<<< HEAD
 /** Compteurs façon EN11 (import des JA) : [[valeur, libellé, classe couleur], …]. */
 function compteurs131(items) {
     const $row = $('<div class="row text-center mb-2">');
@@ -935,7 +870,7 @@ function afficher131(r) {
     }
     compteurs131([
         [r.aRenseigner, `Rencontres ${div} à renseigner`, 'text-success'],
-        [r.ignorees, 'Ignorées (JA non utilisable)', 'text-warning'],
+        [r.ignorees, 'Ignorées (JA non utilisable ou forfait)', 'text-warning'],
         [r.dejaNommees, `Rencontres ${div} déjà nommées`, 'text-secondary'],
     ]).appendTo($res);
     if (r.rencontres.length) tableau131(r.rencontres).appendTo($res);
@@ -988,49 +923,6 @@ $('#f131-resultat').on('click', '#btn-f131-appliquer', function () {
             });
     });
 });
-=======
-/** Compte rendu : chiffres puis détail (200 lignes max), tout le texte en .text() (aucun HTML venant du fichier). */
-function afficher131(r) {
-    const ign = Object.entries(r.ignores).map(([g, n]) => `${g} : ${n}`).join(', ') || 'aucune';
-    const cats = Object.entries(r.parCategorie).map(([c, n]) => `${c} : ${n}`).join(', ');
-    const fait = r.ecrit;
-    const lignes = [
-        `Fichier : ${r.fichier} — ${r.nbLignes} ligne(s), du ${fr131(r.dateMin)} au ${fr131(r.dateMax)}` + (r.vides ? ` (${r.vides} ligne(s) vide(s))` : ''),
-        `Lignes ignorées (colonne G ≠ « JA ») : ${ign}`,
-        `Lignes JA retenues : ${r.retenues} = ${r.conformes} conforme(s) + ${r.creees} ${fait ? 'créée(s)' : 'à créer'} + ${r.modifiees} ${fait ? 'modifiée(s)' : 'à modifier'} + ${r.incoherences} incohérence(s) + ${r.horsPerimetre} hors périmètre`,
-    ];
-    if (cats) lignes.push(`Incohérences : ${cats}`);
-    const $res = $('#f131-resultat').empty();
-    $('<div class="alert small mb-2" style="white-space:pre-line">')
-        .addClass(fait ? 'alert-success' : (r.incoherences ? 'alert-warning' : 'alert-info'))
-        .text((fait ? 'Mise à jour effectuée.\n' : 'Aperçu — rien n\'a encore été modifié.\n') + lignes.join('\n')).appendTo($res);
-    if (!r.details.length) return;
-    const $tb = $('<tbody>');
-    r.details.slice(0, F131_MAX_LIGNES).forEach(d => $('<tr>').append(
-        $('<td>').text(d.action), $('<td class="text-end">').text(d.ligne), $('<td>').text(d.date),
-        $('<td>').text(d.rencontre), $('<td>').text(d.ja), $('<td>').text(d.motif)
-    ).appendTo($tb));
-    $('<table class="table table-sm table-striped small mb-1">')
-        .append($('<thead><tr><th>Action</th><th>Ligne</th><th>Date</th><th>Rencontre</th><th>JA</th><th>Motif</th></tr></thead>'), $tb).appendTo($res);
-    if (r.details.length > F131_MAX_LIGNES) {
-        $('<div class="small text-muted">').text(`… et ${r.details.length - F131_MAX_LIGNES} autre(s) : voir le rapport complet (CSV).`).appendTo($res);
-    }
-}
-
-/** Cellule CSV : anti-injection de formule (cf. EN26 csvCellule()), guillemets si nécessaire. */
-function csvCellule131(v) {
-    let s = String(v ?? '');
-    if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = "'" + s;
-    return /[;"\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-}
-
-/** Rapport complet : UTF-8 BOM, « ; », CRLF. */
-function csv131(r) {
-    const rows = [['Action', 'Ligne', 'Date', 'Rencontre', 'JA', 'Motif']]
-        .concat(r.details.map(d => [d.action, d.ligne, d.date, d.rencontre, d.ja, d.motif]));
-    return '﻿' + rows.map(l => l.map(csvCellule131).join(';')).join('\r\n') + '\r\n';
-}
->>>>>>> 0f29b12ebb182f55fdb263a7c55d79cdeb1e1bdc
 
 $(function () {
     nijacSortableTable('#tbl-suivi thead th[data-field]', 'field', sortState, renderListe);
