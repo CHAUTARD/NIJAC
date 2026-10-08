@@ -1,0 +1,10 @@
+# Journaux CSV des mises à jour FFTT 131 (EN28) : données nominatives des JA,
+# écrits uniquement côté serveur — jamais servis en accès direct.
+# Doublé par la règle « RewriteRule ^_Suivi/ - [F,L] » du .htaccess racine.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

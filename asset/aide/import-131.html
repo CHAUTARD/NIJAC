@@ -65,25 +65,27 @@
             serveur). L'analyse porte toujours sur le fichier le plus récent du serveur, marqué « utilisé par Analyser » à
             l'étape 2, jamais sur un fichier de votre poste. Seules les lignes dont la colonne G « Arb/JA » vaut <code>JA</code> <strong>et</strong> dont la colonne N
             « Organisme Division » vaut <code>L09</code> ou <code>FEDE</code> sont retenues ; les autres sont seulement
-            comptées dans le compte rendu. La table de travail n'est <strong>jamais vidée</strong> : seules les lignes
-            <strong>nouvelles</strong> du fichier y sont ajoutées (à traiter) ; une ligne déjà chargée par un fichier
-            précédent (même licence, même date, mêmes équipes 1 et 2 — le numéro de ligne dans le fichier n'est pas pris en
-            compte) est ignorée et garde son statut « traité ». Le compte
-            rendu indique le nombre de nouvelles lignes ajoutées et de lignes déjà présentes.
-            <strong>Aucune nomination n'est modifiée</strong> à ce stade.
+            comptées dans le compte rendu. Chaque ligne est rapprochée d'une rencontre (équipe 1 = équipe recevante,
+            équipe 2 = équipe visiteuse, date à ±7 jours). L'analyse recherche les rencontres <strong>R3M / R4M</strong>
+            de votre périmètre <strong>sans JA nommé</strong> pour lesquelles le fichier indique un JA connu de NIJAC
+            (licence = n° du JA). Le compte rendu donne le nombre de rencontres à renseigner, ignorées (JA inconnu,
+            licence illisible, plusieurs JA différents pour la même rencontre) et déjà nommées, ainsi que le tableau de
+            ces rencontres. <strong>Aucune nomination n'est modifiée</strong> à ce stade ; une analyse réussie efface
+            seulement les anciens fichiers de suivi (voir ci-dessous).
         </li>
         <li>
-            <strong>Valider dans le contrôle (EN30)</strong><br>
-            Après l'analyse, l'écran <strong>« Contrôle FFTT 131 »</strong> (EN30) s'ouvre automatiquement dans un
-            <strong>nouvel onglet</strong> ; l'écran Suivi des nominations reste ouvert avec le compte rendu de l'analyse. Si
-            votre navigateur bloque l'ouverture du nouvel onglet, cliquez sur le lien « Ouvrir le contrôle (EN30) » affiché
-            dans la fenêtre. Choisissez le département et la journée : chaque création ou
-            remplacement de JA s'y valide une à une avec le bouton <strong>Valider</strong>.
-            La colonne <strong>Traité</strong> porte une case à cocher par ligne : cochée = ligne traitée (elle disparaît
-            de la liste), décochée = ligne à traiter. Une validation réussie coche automatiquement la ligne, « Annuler la
-            dernière validation » la décoche. Cochez aussi les lignes que vous avez examinées sans rien valider (anciens
-            fichiers, erreurs connues) pour ne plus les voir. La case <strong>Afficher les lignes traitées</strong> les
-            fait réapparaître (et permet de les décocher).
+            <strong>Renseigner les JA</strong><br>
+            S'il y a au moins une rencontre à renseigner, le bouton <strong>« Renseigner les JA des rencontres R3M / R4M (N) »</strong>
+            apparaît (sinon le message « Aucune rencontre R3M / R4M sans JA à renseigner » s'affiche, sans bouton).
+            Après confirmation, le serveur relit le fichier, refait l'analyse et crée en une seule fois la nomination de
+            chaque rencontre concernée (repère « 131 », frais à zéro, aucun email). Une rencontre qui a déjà un JA n'est
+            jamais modifiée ; si la situation a changé depuis l'analyse (nouveau fichier, JA nommé entre-temps), rien
+            n'est enregistré et il suffit de relancer l'analyse. Le tableau affiche alors le résultat de chaque rencontre
+            (« Renseigné » ou « Ignoré : motif ») et le nom du journal CSV des modifications enregistré sur le serveur
+            (dossier <code>_Suivi</code>), avec le lien <strong>Ouvrir le fichier de suivi</strong> (ouverture dans Excel).
+            Le bloc <strong>Fichiers de suivi</strong>, en bas de la fenêtre, liste les 10 derniers journaux avec un lien
+            d'ouverture pour chacun. <strong>Attention :</strong> ces journaux sont effacés automatiquement à la
+            prochaine analyse (étape 4) : consultez-les ou téléchargez-les avant de relancer une analyse.
         </li>
     </ol>
 </main>

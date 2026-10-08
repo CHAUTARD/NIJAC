@@ -15,7 +15,7 @@ Le détail complet de chaque écran (fonctionnalités, fichier source, règles m
 | Plage de code | Menu | Contenu |
 |---|---|---|
 | E001–E009 | Connexion / mots de passe | Connexion, menus (Admin, Nominateur, CSR, Défiscalisateur, CRA Convoc), changement et réinitialisation de mot de passe |
-| EN11–EN30 | Nominateur + pages publiques JA | Gestion des JA et des clubs, désidératas, disponibilités, nomination aux rencontres, centre d'envoi, convocation/frais, statistiques, suivi des nominations, contrôle FFTT 131… |
+| EN11–EN30 | Nominateur + pages publiques JA | Gestion des JA et des clubs, désidératas, disponibilités, nomination aux rencontres, centre d'envoi, convocation/frais, statistiques, suivi des nominations… |
 | ES31–ES33 | CSR (Commission Sportive Régionale) | Réengagement des clubs, souhaits des équipes |
 | ED51–ED55 | Défiscalisateur | Défiscalisation des JA, barème kilométrique, attestations, comptes EBP |
 | EA81–EA98 | Administrateur | Salles, imports FFTT, utilisateurs, communes, régions/départements, divisions, équipes, rencontres, configuration, messagerie, test API FFTT, administration base de données |
@@ -29,8 +29,7 @@ Quelques écrans marquants :
 | EN14 | Nomination | Affectation JA ↔ rencontres selon les règles métier (nomination valide d'office), envoi des convocations (+ copie sans lien aux correspondants/référents des 2 clubs), feuille de pointage PDF de la journée |
 | EN21 | Convocation et frais JA | Page publique tokenisée : consultation de la convocation, saisie des frais (péage, km, défiscalisation) et accusé de réception de la convocation par le JA |
 | EN27 | Clubs / Associations | Import et gestion des clubs affiliés (upsert depuis l'API FFTT) |
-| EN28 | Suivi des nominations | Suivi des frais saisis par les JA et des accusés de réception, correction et relance, chargement de l'édition FFTT 131 (analyse puis contrôle EN30) |
-| EN30 | Contrôle FFTT 131 | Lignes JA du fichier 131 chargé (ouvert après « Analyser » dans EN28), par département et journée (nombre de rencontres sans JA), comparées aux nominations ; validation ligne par ligne des créations / remplacements de JA |
+| EN28 | Suivi des nominations | Suivi des frais saisis par les JA et des accusés de réception, correction et relance, mise à jour FFTT 131 (analyse sans écriture, puis JA renseignés sur les rencontres R3M / R4M sans JA nommé, journal CSV dans `_Suivi/`) — l'ancien écran EN30 « Contrôle FFTT 131 » a été supprimé (numéro libre) |
 | EA91 | Configuration | Paramètres applicatifs (état logiciel, SMTP, phases, frais kilométriques…) |
 | EA98 | Administration BDD | Requêteur SQL libre, structure des tables, accès restreint (compte CHAUTARD) |
 
@@ -96,6 +95,7 @@ NIJAC/
 ├── tools/rot47.php        # CLI pour pré-calculer une valeur ROT47 à coller dans .env
 ├── SQL/                   # Sauvegardes (EA85) — lues côté serveur uniquement
 ├── Importation/           # Dépôt de fichiers d'import — lu/écrit côté serveur uniquement
+├── _Suivi/                # Journaux CSV de la mise à jour FFTT 131 (EN28) — écrits côté serveur uniquement
 ├── ci4/
 │   ├── app/
 │   │   ├── Config/Routes.php     # Toutes les routes, commentées par code EXXXX
@@ -159,7 +159,7 @@ Deux écrans (EA96, EA98) restent réservés en plus au compte `CHAUTARD`, véri
 - **Mots de passe** hashés via `Classes/SecurePasswordHasher.php` (bcrypt).
 - **Double authentification par email** : après le mot de passe (E001), un code de 6 chiffres (`random_int`) est envoyé à `utilisateur.Email` (obligatoire) et saisi en E010 — valable 10 min, usage unique, 5 essais, renvoi limité (60 s, 3 / 10 min), seul son hash est conservé en session, `$_SESSION['utilisateur']` n'existe qu'après validation. Coupe-circuit d'urgence (panne SMTP, adresse erronée) : `UPDATE configuration SET valeur = '0' WHERE cle = 'double_authentification';` (retour au mot de passe seul, journalisé ; remettre `'1'` ensuite).
 - **Rate limiting** sur l'envoi d'emails (fenêtre glissante, `config/app_config.php`).
-- **Secrets** : jamais dans le dépôt, ROT47-encodés dans `.env` (non versionné), explicitement refusés par `.htaccess` en dehors de tout appel applicatif — de même pour `SQL/` et `Importation/`.
+- **Secrets** : jamais dans le dépôt, ROT47-encodés dans `.env` (non versionné), explicitement refusés par `.htaccess` en dehors de tout appel applicatif — de même pour `SQL/`, `Importation/` et `_Suivi/`.
 
 ---
 

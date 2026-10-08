@@ -574,58 +574,20 @@ function initTableConfiguration(\PDO $pdo): void
         // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
     }
 
-    // Table de travail du fichier FFTT 131 « Activités détaillées des arbitres » (EN28 « Mise à jour FFTT 131 ») :
-    // une ligne par ligne JA du fichier (colonne G = « JA », colonnes A → P), vidée (DELETE, dans la transaction de validation) puis rechargée à chaque import.
-    // Ligne = n° de ligne Excel source ; Licence = ja.Id_JA (sans FK : licences inconnues conservées),
-    // NULL si illisible — valeur d'origine dans LicenceBrute ; Date NULL si illisible — valeur d'origine dans DateBrute.
+    // f131_travail : ancienne table de travail du fichier FFTT 131 (écran EN30, supprimé). Plus aucun code ne la lit
+    // ni ne l'écrit (la mise à jour FFTT 131 d'EN28 analyse directement le fichier du serveur) : suppression
+    // volontaire et idempotente si elle existe encore (même principe que nomination.Forfait).
     try {
-        $pdo->exec('
-            CREATE TABLE IF NOT EXISTS f131_travail (
-                Id_F131           INT AUTO_INCREMENT PRIMARY KEY,
-                Ligne             INT NOT NULL,
-                Licence           INT NULL,
-                LicenceBrute      VARCHAR(20) NULL,
-                Nom               VARCHAR(100) NULL,
-                Prenom            VARCHAR(100) NULL,
-                NumClub           VARCHAR(20) NULL,
-                Club              VARCHAR(150) NULL,
-                Fonction          VARCHAR(100) NULL,
-                ArbJA             VARCHAR(20) NULL,
-                TypeEpreuve       VARCHAR(100) NULL,
-                Date              DATE NULL,
-                DateBrute         VARCHAR(20) NULL,
-                Journee           VARCHAR(20) NULL,
-                Poule             VARCHAR(50) NULL,
-                Equipe1           VARCHAR(150) NULL,
-                Equipe2           VARCHAR(150) NULL,
-                OrganismeDivision VARCHAR(100) NULL,
-                Division          VARCHAR(150) NULL,
-                Epreuve           VARCHAR(255) NULL,
-                Traiter           TINYINT(1) NOT NULL DEFAULT 0,
-                KEY idx_f131_licence (Licence),
-                KEY idx_f131_date (Date)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        ');
-    } catch (\PDOException $e) {
-        // best-effort
-    }
-
-    // f131_travail.Traiter : TINYINT(1) NOT NULL DEFAULT 0, après Epreuve (bases créées avant cette colonne).
-    // 0 = à traiter, 1 = traité (case « Traité » d'EN30, validation, annulation) ; l'INSERT incrémental de rechargerF131Travail() repose sur le DEFAULT 0.
-    try {
-        $tableExiste = $pdo->query(
+        $existe = $pdo->query(
             "SELECT 1 FROM information_schema.TABLES
              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'f131_travail'"
         )->fetchColumn();
-        $existe = $pdo->query(
-            "SELECT 1 FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'f131_travail' AND COLUMN_NAME = 'Traiter'"
-        )->fetchColumn();
-        if ($tableExiste && !$existe) {
-            $pdo->exec('ALTER TABLE f131_travail ADD COLUMN Traiter TINYINT(1) NOT NULL DEFAULT 0 AFTER Epreuve');
+        if ($existe) {
+            $pdo->exec('DROP TABLE IF EXISTS f131_travail');
+            error_log('[NIJAC] table f131_travail supprimée');
         }
     } catch (\PDOException $e) {
-        // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
+        // best-effort — SQL manuel possible si le DROP échoue ici (droits…).
     }
 
     // Colonnes "référent" du club : 2e contact, mis en copie (Cc) des emails

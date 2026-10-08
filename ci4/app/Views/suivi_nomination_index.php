@@ -43,6 +43,11 @@
         #table-wrapper #tbl-suivi tbody tr.sans-ja { background: #FFE4E8; }
         #table-wrapper #tbl-suivi tbody tr.sans-ja:hover { background: #E9ECEF; }
         #tbl-suivi .aucun-ja { color: #9aa5b8; font-style: italic; }
+
+        /* Compte rendu de la mise à jour FFTT 131 (même présentation que l'import des JA d'EN11) */
+        #f131-log { max-height: 320px; overflow-y: auto; font-size: .78rem; background: #f8fafc; border: 1px solid #e0e8f0; border-radius: 4px; }
+        #f131-log table { margin-bottom: 0; }
+        #f131-log thead th { position: sticky; top: 0; background: #eef2f9; }
     </style>
 </head>
 <body>
@@ -61,9 +66,6 @@
             <button type="button" class="btn btn-sm btn-outline-success" id="btn-f131" title="Mettre à jour les nominations depuis l'édition FFTT 131 « Activités détaillées des arbitres »">
                 <i class="bi bi-file-earmark-spreadsheet me-1"></i>Mise à jour FFTT 131
             </button>
-            <a href="<?= site_url('controle-f131') ?>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success" id="btn-comparaison-f131" title="Ouvrir EN30 « Contrôle FFTT 131 » (comparaison du fichier 131 avec les nominations) dans un nouvel onglet">
-                <i class="bi bi-arrow-left-right me-1"></i>Comparaison avec FFTT 131
-            </a>
             <span style="flex:1"></span>
             <span class="count-badge" id="lbl-count">0 / 0</span>
             <span style="flex:1"></span>
@@ -203,7 +205,8 @@
 </div>
 
 <!-- Popup « Mise à jour FFTT 131 » : 1 aide → 2 fichiers 131 du serveur (Importation/, suppression une à une) → 3 dépôt « Parcourir… » → 4 Analyser
-     (chargement de f131_travail depuis le fichier du serveur, aucune nomination) → ouverture d'EN30 dans un nouvel onglet -->
+     (sans écriture : rencontres R3M / R4M sans JA nommé que le fichier permet de renseigner) → bouton « Renseigner les JA… » (seulement si N > 0)
+     → compte rendu de tous les traitements + nom du journal CSV (_Suivi) -->
 <div class="modal fade" id="modal-f131" tabindex="-1" aria-labelledby="f131-titre" aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
@@ -231,8 +234,13 @@
                     <button type="button" class="btn btn-sm btn-outline-primary" id="btn-f131-analyser" disabled><i class="bi bi-search me-1"></i>Analyser</button>
                     <span class="small text-muted">le fichier le plus récent du serveur (marqué à l'étape 2)</span>
                 </div>
-                <p class="small text-muted mb-2">Seules les lignes dont la colonne G vaut « JA » sont utilisées. L'analyse ajoute à la table de travail les seules lignes nouvelles du fichier du serveur (la table n'est jamais vidée : une ligne déjà chargée — même licence, date et équipes — garde son statut « traité » ; seule la table de travail est écrite, aucune nomination) puis ouvre le contrôle (EN30) dans un nouvel onglet, où chaque ligne se valide une à une.</p>
+                <p class="small text-muted mb-2">Seules les lignes dont la colonne G vaut « JA » et la colonne N « L09 » ou « FEDE » sont utilisées. L'analyse ne modifie aucune nomination (elle efface seulement les anciens fichiers de suivi : ouvrez-les avant si besoin) : elle recherche les rencontres R3M / R4M de votre périmètre <strong>sans JA nommé</strong> pour lesquelles le fichier indique un JA connu de NIJAC. S'il y en a, le bouton « Renseigner les JA » crée leurs nominations (repère FFTT 131, aucun email) et un journal CSV des modifications est enregistré dans le dossier <code>_Suivi</code> du serveur. Une rencontre qui a déjà un JA n'est jamais modifiée.</p>
                 <div id="f131-resultat"></div>
+                <div class="small mt-3">
+                    <strong><i class="bi bi-journal-text me-1"></i>Fichiers de suivi</strong>
+                    <span class="text-muted">(journaux CSV des mises à jour, dossier <code>_Suivi</code>, 10 derniers)</span>
+                    <div id="f131-suivis" class="mt-1"></div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fermer</button>
@@ -634,14 +642,16 @@ $('#btn-reset-filtres').on('click', function () {
 
 // ── Mise à jour FFTT 131 : étape 2 = tous les 131_*.xlsx du dossier serveur Importation/ (plus récent d'abord, Supprimer par ligne) ; étape 3 =
 //    dépôt « Parcourir… » (enregistré sous un nom généré par le serveur ; anciens fichiers supprimables un à un à
-//    l'étape 2) ; étape 4 Analyser = chargement du fichier
-//    DU SERVEUR dans f131_travail (incrémental : nouvelles lignes seulement, Traiter conservé ; aucune nomination), puis ouverture d'EN30 (nouvel onglet) où chaque ligne se valide une à une. ──
-const CONTROLE_F131_URL = '<?= site_url('controle-f131') ?>';
+//    l'étape 2) ; étape 4 Analyser = analyse SANS ÉCRITURE du fichier DU SERVEUR (rencontres R3M / R4M sans JA nommé que
+//    le fichier permet de renseigner), puis bouton « Renseigner les JA… » (seulement si N > 0) : le serveur recalcule tout,
+//    crée les nominations et écrit le journal CSV _Suivi ; compte rendu de tous les traitements (même patron qu'EN11). ──
 let serveur131 = null;   // { nom, taille, date } ou null
+let analyse131 = null;   // { fichier, nb } du dernier « Analyser » : contrôle de cohérence posté à l'application (jamais de ligne)
 
 $('#btn-f131').on('click', function () {
     $('#f131-upload').val('');
     $('#f131-resultat').empty();
+    analyse131 = null;
     charger131Serveur();
     bootstrap.Modal.getOrCreateInstance('#modal-f131').show();
 });
@@ -682,6 +692,28 @@ function afficher131Serveur(r) {
         $s.append($l);
     });
     $('#btn-f131-analyser').prop('disabled', !serveur131);
+    if (r && Array.isArray(r.suivis)) afficherSuivis131(r.suivis);   // fourni par f131/fichier seulement
+}
+
+/** Lien d'ouverture d'un journal CSV de _Suivi/ (route authentifiée, le serveur revalide le nom). */
+const lienSuivi131 = nom => $('<a target="_blank" rel="noopener">')
+    .attr('href', `${SUIVI_BASE}/f131/suivi?nom=${encodeURIComponent(nom)}`)
+    .append('<i class="bi bi-box-arrow-up-right me-1"></i>', document.createTextNode('Ouvrir le fichier de suivi'));
+
+/** Bloc « Fichiers de suivi » : 10 derniers CSV de _Suivi/ (plus récent d'abord), texte en .text(), aucune suppression. */
+function afficherSuivis131(liste) {
+    const $s = $('#f131-suivis').empty();
+    if (!liste.length) {
+        $s.append($('<span class="text-muted">').text('Aucun fichier de suivi.'));
+        return;
+    }
+    liste.forEach(function (f) {
+        $('<div class="d-flex flex-wrap align-items-center gap-2 py-1 border-bottom">').append(
+            $('<span>').text(f.nom),
+            $('<span class="text-muted">').text(`${taille131(f.taille)}, créé le ${f.date}`),
+            lienSuivi131(f.nom).addClass('ms-auto')
+        ).appendTo($s);
+    });
 }
 
 /** Suppression d'UN fichier 131 du serveur (confirmation), puis rafraîchissement de l'étape 2 avec la liste renvoyée. */
@@ -729,65 +761,140 @@ function televerser131(f) {
         .fail(() => { $btn.prop('disabled', false); $('#f131-resultat').empty(); nijacToast('Erreur réseau ou session expirée.', 'danger'); });
 }
 
-/** Étape 4 : analyse du fichier du serveur (aucun fichier ni nom envoyé : le serveur prend le plus récent d'Importation/). */
+/** Étape 4 : analyse SANS ÉCRITURE du fichier du serveur (aucun fichier ni nom envoyé : le serveur prend le plus récent d'Importation/). */
 function analyser131() {
     if (!serveur131) { nijacToast('Aucun fichier 131_*.xlsx dans Importation : déposez-le d\'abord.', 'warning'); return; }
-    // EN30 s'ouvre dans un NOUVEL onglet (EN28 reste ouvert). L'onglet vierge est ouvert ICI, de façon synchrone dans le
-    // clic (sinon un window.open fait après la réponse AJAX est bloqué), puis dirigé vers EN30 en cas de succès ou fermé
-    // en cas d'échec. Pas de 'noopener' (window.open renverrait null) : opener coupé à la main. null = onglet bloqué → lien.
-    let onglet = null;
-    try { onglet = window.open('', '_blank'); if (onglet) onglet.opener = null; } catch (e) { onglet = null; }
-    const fermerOnglet = () => { try { if (onglet && !onglet.closed) onglet.close(); } catch (e) { /* ignoré */ } };
+    analyse131 = null;
     const $btn = $('#btn-f131-analyser').prop('disabled', true);
-    $('#f131-resultat').html('<div class="text-muted small"><span class="spinner-border spinner-border-sm me-2"></span>Analyse et chargement…</div>');
+    $('#f131-resultat').html('<div class="text-muted small"><span class="spinner-border spinner-border-sm me-2"></span>Analyse du fichier…</div>');
     $.ajax({ url: `${SUIVI_BASE}/f131/apercu`, method: 'POST', dataType: 'json' })
         .done(function (r) {
             $btn.prop('disabled', false);
             if (!r.ok) {
-                fermerOnglet();
                 $('#f131-resultat').empty().append($('<div class="alert alert-danger small mb-0">').text(r.msg || 'Erreur.'));
                 return;
             }
-            // table de travail complétée (nouvelles lignes) : validation ligne par ligne dans EN30 (nouvel onglet)
-            let ouvert = false;
-            try { if (onglet && !onglet.closed) { onglet.location.href = CONTROLE_F131_URL; ouvert = true; } } catch (e) { ouvert = false; }
-            afficher131(r, ouvert);
+            analyse131 = { fichier: r.fichier, nb: r.nb };
+            afficher131(r);
+            charger131Serveur();   // bloc « Fichiers de suivi » : les anciens journaux viennent d'être effacés
         })
-        .fail(() => { fermerOnglet(); $btn.prop('disabled', false); $('#f131-resultat').empty(); nijacToast('Erreur réseau ou session expirée.', 'danger'); });
+        .fail(() => { $btn.prop('disabled', false); $('#f131-resultat').empty(); nijacToast('Erreur réseau ou session expirée.', 'danger'); });
 }
 
 const fr131 = d => d ? d.split('-').reverse().join('/') : '?';
 
+/** Compteurs façon EN11 (import des JA) : [[valeur, libellé, classe couleur], …]. */
+function compteurs131(items) {
+    const $row = $('<div class="row text-center mb-2">');
+    items.forEach(([n, lib, cls]) => $('<div class="col">').append(
+        $(`<div class="fw-bold fs-5 ${cls}">`).text(n),
+        $('<div class="small text-muted">').text(lib)
+    ).appendTo($row));
+    return $row;
+}
+
 /**
- * Compte rendu chiffré du chargement + lien vers EN30 (nouvel onglet), tout le texte en .text() (aucun HTML venant du
- * fichier). ouvert = EN30 a pu être ouvert automatiquement ; sinon (onglet bloqué) message invitant à cliquer le lien.
+ * Tableau de TOUS les traitements des rencontres R3M / R4M sans JA nommé (journal façon EN11), texte en .text() :
+ * date, division, rencontre, JA (Id_JA, Nom Prénom), club du JA, résultat (« À renseigner » / « Renseigné » / « Ignoré : motif »).
  */
-function afficher131(r, ouvert) {
+function tableau131(lignes) {
+    const $tb = $('<tbody>');
+    lignes.forEach(function (l) {
+        const res = String(l.resultat || '');
+        const cls = res === 'Renseigné' ? 'text-success fw-semibold' : (res === 'À renseigner' ? 'text-primary' : 'text-warning-emphasis');
+        $('<tr>').append(
+            $('<td class="text-nowrap">').text(fr131(l.date)),
+            $('<td>').text(libDivision(l.division)),
+            $('<td>').text(`${l.dom} – ${l.ext || '?'}`),
+            $('<td>').text(l.idJa ? `${l.idJa} — ${l.nomJa} ${l.prenomJa}` : (l.nomJa || '')),
+            $('<td>').text(l.club || ''),
+            $(`<td class="${cls}">`).text(res + (l.idNomination ? ` (nomination ${l.idNomination})` : '') + (l.note ? ` — ${l.note}` : ''))
+        ).appendTo($tb);
+    });
+    return $('<div id="f131-log">').append(
+        $('<table class="table table-sm table-striped align-middle">').append(
+            '<thead><tr><th>Date</th><th>Division</th><th>Rencontre</th><th>JA renseigné</th><th>Club</th><th>Résultat</th></tr></thead>', $tb));
+}
+
+/**
+ * Compte rendu d'« Analyser » (aucune écriture) : résumé chiffré, compteurs, tableau des rencontres R3M / R4M sans JA
+ * et bouton d'application UNIQUEMENT si au moins une rencontre est à renseigner (r.nb > 0).
+ */
+function afficher131(r) {
+    const div = r.divisions.join(' / ');
     const ign = Object.entries(r.ignores).map(([g, n]) => `${g} : ${n}`).join(', ') || 'aucune';
-    const cats = Object.entries(r.parCategorie).map(([c, n]) => `${c} : ${n}`).join(', ');
     const lignes = [
         `Fichier : ${r.fichier} — ${r.nbLignes} ligne(s), du ${fr131(r.dateMin)} au ${fr131(r.dateMax)}` + (r.vides ? ` (${r.vides} ligne(s) vide(s))` : ''),
         `Lignes ignorées (colonne G ≠ « JA ») : ${ign}`,
         `Lignes JA ignorées (colonne N ≠ ${r.organismes.join('/')}) : ${r.horsOrganisme}`,
-        `Lignes JA retenues : ${r.retenues} = ${r.conformes} conforme(s) + ${r.creees} à créer + ${r.modifiees} à remplacer + ${r.incoherences} incohérence(s) + ${r.horsPerimetre} hors périmètre`,
-        `Table de travail (chargement cumulatif) : ${r.retenues} = ${r.ajoutees} nouvelle(s) ligne(s) ajoutée(s) + ${r.dejaPresentes} ligne(s) déjà présente(s) (ignorées, statut « traité » conservé)`,
+        `Lignes JA retenues : ${r.retenues} = ${r.lignesDivisions} sur une rencontre ${div} + ${r.autresDivisions} autre(s) division(s) + ${r.horsPerimetre} hors périmètre + ${r.nonRapprochees} non rapprochée(s)`,
     ];
-    if (cats) lignes.push(`Incohérences : ${cats}`);
     const $res = $('#f131-resultat').empty();
-    $('<div class="alert alert-success small mb-2" style="white-space:pre-line">')
-        .text('Fichier chargé dans la table de travail (aucune nomination modifiée). '
-            + (ouvert ? 'Le contrôle (EN30) s\'est ouvert dans un nouvel onglet.' : '') + '\n' + lignes.join('\n'))
+    $('<div class="alert alert-info small mb-2" style="white-space:pre-line">')
+        .text('Analyse terminée (aucune nomination modifiée).\n' + lignes.join('\n'))
         .appendTo($res);
-    if (!ouvert) {
+    const nonSuppr = Array.isArray(r.suivisNonSupprimes) ? r.suivisNonSupprimes : [];
+    $('<div class="small text-muted mb-2">').text(`Anciens fichiers de suivi supprimés : ${+r.suivisSupprimes || 0}`).appendTo($res);
+    if (nonSuppr.length) {
         $('<div class="alert alert-warning small mb-2">')
-            .text('Le navigateur a bloqué l\'ouverture automatique d\'un nouvel onglet : cliquez sur « Ouvrir le contrôle (EN30) » ci-dessous.')
+            .text(`${nonSuppr.length} fichier(s) de suivi n'ont pas pu être supprimés (ouverts dans Excel ? droits ?) : ${nonSuppr.join(', ')}`)
             .appendTo($res);
     }
-    $('<a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">')
-        .attr('href', CONTROLE_F131_URL)
-        .append('<i class="bi bi-clipboard2-data me-1"></i>', document.createTextNode('Ouvrir le contrôle (EN30)'))
+    compteurs131([
+        [r.aRenseigner, `Rencontres ${div} à renseigner`, 'text-success'],
+        [r.ignorees, 'Ignorées (JA non utilisable)', 'text-warning'],
+        [r.dejaNommees, `Rencontres ${div} déjà nommées`, 'text-secondary'],
+    ]).appendTo($res);
+    if (r.rencontres.length) tableau131(r.rencontres).appendTo($res);
+    if (!(r.nb > 0)) {
+        $('<div class="alert alert-secondary small mt-2 mb-0">').text(`Aucune rencontre ${div} sans JA à renseigner.`).appendTo($res);
+        return;
+    }
+    $('<button type="button" class="btn btn-success btn-sm mt-2" id="btn-f131-appliquer">')
+        .append('<i class="bi bi-check-lg me-1"></i>', document.createTextNode(`Renseigner les JA des rencontres ${div} (${r.nb})`))
         .appendTo($res);
 }
+
+/**
+ * Application : seuls le nom du fichier analysé et N sont postés (contrôle de cohérence) — le serveur relit le fichier,
+ * recalcule tout, crée les nominations en une transaction et écrit le journal CSV dans _Suivi.
+ */
+$('#f131-resultat').on('click', '#btn-f131-appliquer', function () {
+    if (!analyse131 || !(analyse131.nb > 0)) { nijacToast('Relancez l\'analyse.', 'warning'); return; }
+    const a = analyse131;
+    nijacConfirm(`Créer la nomination du JA indiqué par le fichier pour ${a.nb} rencontre(s) R3M / R4M sans JA (repère FFTT 131, aucun email) ?`, function () {
+        const $btn = $('#btn-f131-appliquer').prop('disabled', true);
+        $('#btn-f131-analyser, #btn-f131-parcourir').prop('disabled', true);
+        $.post(`${SUIVI_BASE}/f131/appliquer`, { fichier: a.fichier, nb: a.nb }, null, 'json')
+            .done(function (r) {
+                $('#btn-f131-analyser').prop('disabled', !serveur131);
+                $('#btn-f131-parcourir').prop('disabled', false);
+                if (!r.ok) {
+                    $btn.prop('disabled', false);
+                    $('#f131-resultat').prepend($('<div class="alert alert-danger small mb-2">').text(r.msg || 'Erreur.'));
+                    return;
+                }
+                analyse131 = null;
+                const ign = r.lignes.filter(l => l.resultat !== 'Renseigné').length;
+                const $res = $('#f131-resultat').empty();
+                const $ok = $('<div class="alert alert-success small mb-2" style="white-space:pre-line">').text(r.msg).appendTo($res);
+                if (r.journal) {
+                    $ok.append(document.createTextNode(`\nJournal des modifications : _Suivi/${r.journal} — `), lienSuivi131(r.journal).addClass('alert-link'));
+                }
+                compteurs131([[r.nb, 'Rencontres renseignées', 'text-success'], [ign, 'Ignorées', 'text-warning']]).appendTo($res);
+                tableau131(r.lignes).appendTo($res);
+                nijacToast(r.msg, 'success');
+                chargerListe();   // la liste EN28 montre les nouvelles nominations (repère « 131 »)
+                charger131Serveur();   // rafraîchit l'étape 2 et le bloc « Fichiers de suivi » (nouveau CSV)
+            })
+            .fail(() => {
+                $btn.prop('disabled', false);
+                $('#btn-f131-analyser').prop('disabled', !serveur131);
+                $('#btn-f131-parcourir').prop('disabled', false);
+                nijacToast('Erreur réseau ou session expirée.', 'danger');
+            });
+    });
+});
 
 $(function () {
     nijacSortableTable('#tbl-suivi thead th[data-field]', 'field', sortState, renderListe);

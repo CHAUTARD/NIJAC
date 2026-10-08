@@ -59,6 +59,10 @@ php_value max_input_time 300
     # comptables JA, disponibilités, documents nominatifs).
     RewriteRule ^Importation/ - [F,L]
 
+    # _Suivi/ : journaux CSV des mises à jour FFTT 131 (EN28 — noms de JA, licences), écrits
+    # uniquement côté serveur, aucun lien de téléchargement direct dans l'appli.
+    RewriteRule ^_Suivi/ - [F,L]
+
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
