@@ -222,6 +222,7 @@ $routes->post('suivi-nomination/modifier', 'SuiviNominationController::modifier'
 $routes->post('suivi-nomination/saisir', 'SuiviNominationController::saisir', ['filter' => 'auth']);   // JA d'une rencontre sans nomination : arbitrage club (saisie) ou CRA (nomination, règles EN14)
 $routes->post('suivi-nomination/rappel', 'SuiviNominationController::rappel', ['filter' => 'auth']);
 $routes->post('suivi-nomination/relance-club', 'SuiviNominationController::relanceClub', ['filter' => 'auth']);
+<<<<<<< HEAD
 // « Mise à jour FFTT 131 » (popup EN28) : le fichier analysé est TOUJOURS le 131_*.xlsx le plus récent d'Importation/
 // (jamais servi en HTTP). fichier = liste de l'étape 2 (tous les 131_*.xlsx, plus récent d'abord) ; televerser = dépôt
 // xlsx multipart sous un nom généré par le serveur (131_<jjmmaaaaHHMMSS>.xlsx) ; supprimer = UN fichier par appel (`nom`
@@ -238,6 +239,11 @@ $routes->post('suivi-nomination/f131/appliquer', 'SuiviNominationController::f13
 // ?nom=suivi_131_<aaaammjj_HHMMSS>.csv : ouvre un journal de _Suivi/ (interdit en HTTP direct) — regex stricte + nom retrouvé
 // dans la liste serveur, jamais de chemin client ; 404 sinon. La liste des 10 derniers est fournie par f131/fichier (suivis[]).
 $routes->get('suivi-nomination/f131/suivi', 'SuiviNominationController::f131Suivi', ['filter' => 'auth']);
+=======
+// « Mise à jour FFTT 131 » : fichier xlsx multipart (édition 131, lignes G = JA) — apercu = analyse sans écriture, valider = même analyse + écriture en transaction (nomination.F131 = 1)
+$routes->post('suivi-nomination/f131/apercu', 'SuiviNominationController::f131Apercu', ['filter' => 'auth']);
+$routes->post('suivi-nomination/f131/valider', 'SuiviNominationController::f131Valider', ['filter' => 'auth']);
+>>>>>>> 0f29b12ebb182f55fdb263a7c55d79cdeb1e1bdc
 
 // ── EN18 Désidératas club ────────────────────────────────────────────────────
 // Page PUBLIQUE (sans authentification), jeton signé ?club=<Id_Club>-<MAC> — lien

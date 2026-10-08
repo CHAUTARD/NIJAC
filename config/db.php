@@ -50,7 +50,11 @@ if (!$isProduction) {
 
 // ── Constantes communes ───────────────────────────────────────────────────────
 define('DB_CHARSET',   'utf8mb4');
+<<<<<<< HEAD
 define('APP_VERSION', '1.3.23');
+=======
+define('APP_VERSION', '1.3.18');
+>>>>>>> 0f29b12ebb182f55fdb263a7c55d79cdeb1e1bdc
 
 // Seed secret pour l'obfuscation des identifiants JA dans les URL publiques
 // (doit rester identique entre génération et décodage)

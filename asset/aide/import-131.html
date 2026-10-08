@@ -16,7 +16,11 @@
 </head>
 <body>
 <header>
+<<<<<<< HEAD
     <h1><i class="bi bi-question-circle-fill me-2"></i>Obtenir et importer le fichier 131 FFTT</h1>
+=======
+    <h1><i class="bi bi-question-circle-fill me-2"></i>Où trouver le fichier 131 sur le site FFTT ?</h1>
+>>>>>>> 0f29b12ebb182f55fdb263a7c55d79cdeb1e1bdc
 </header>
 <main>
     <ol style="padding-left:1.3rem;margin:0;">
@@ -47,6 +51,7 @@
             <strong>Générer et sauvegarder</strong><br>
             Cliquez sur <strong>Générer</strong>, puis enregistrez le fichier <code>131_….xlsx</code> sur votre poste.
         </li>
+<<<<<<< HEAD
         <li style="margin-bottom:1rem;">
             <strong>Déposer le fichier sur le serveur</strong><br>
             Revenez dans la fenêtre <strong>« Mise à jour FFTT 131 »</strong> de l'écran Suivi des nominations (EN28).
@@ -86,11 +91,42 @@
             Le bloc <strong>Fichiers de suivi</strong>, en bas de la fenêtre, liste les 10 derniers journaux avec un lien
             d'ouverture pour chacun. <strong>Attention :</strong> ces journaux sont effacés automatiquement à la
             prochaine analyse (étape 4) : consultez-les ou téléchargez-les avant de relancer une analyse.
+=======
+        <li>
+            <strong>Importer le fichier</strong><br>
+            Cliquez sur le bouton ci-dessous et sélectionnez le fichier téléchargé : il est analysé sans rien modifier
+            (seules les lignes dont la colonne G vaut « JA » sont utilisées), puis « Mettre à jour » applique les modifications.
+>>>>>>> 0f29b12ebb182f55fdb263a7c55d79cdeb1e1bdc
         </li>
     </ol>
 </main>
 <footer>
+<<<<<<< HEAD
     <button type="button" class="btn btn-secondary btn-sm" onclick="window.close()">Fermer</button>
 </footer>
+=======
+    <input type="file" id="file-input-131" accept=".xlsx" style="display:none">
+    <button type="button" class="btn btn-primary btn-sm" id="btn-ouvrir-fichier">
+        <i class="bi bi-folder2-open me-1"></i>Choisir le fichier local
+    </button>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="window.close()">Fermer</button>
+</footer>
+<script>
+// Même mécanisme que l'aide 102 : le sélecteur s'ouvre dans CETTE fenêtre (geste utilisateur),
+// puis le fichier est transmis à la fenêtre parente (EN28) qui lance l'analyse.
+var fileInput131 = document.getElementById('file-input-131');
+document.getElementById('btn-ouvrir-fichier').addEventListener('click', function () {
+    fileInput131.value = '';
+    fileInput131.click();
+});
+fileInput131.addEventListener('change', function () {
+    var file = this.files[0];
+    if (file && window.opener && !window.opener.closed && window.opener.importerFichier131) {
+        window.opener.importerFichier131(file);
+    }
+    window.close();
+});
+</script>
+>>>>>>> 0f29b12ebb182f55fdb263a7c55d79cdeb1e1bdc
 </body>
 </html>
