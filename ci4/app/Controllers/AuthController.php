@@ -297,21 +297,7 @@ class AuthController extends BaseController
     /** Crée $_SESSION['utilisateur'] (format inchangé) et redirige selon le rôle. */
     private function ouvrirSession(array $row)
     {
-        $_SESSION['utilisateur'] = [
-            'id'             => $row['Id_Utilisateur'],
-            // Casse canonique de la base (Login a une collation *_ci,
-            // insensible à la casse) — pas la saisie brute de l'utilisateur,
-            // dont la casse peut différer et casser les comparaisons
-            // strictes === 'CHAUTARD' (EA96, EA98, isChautard E002/EA83).
-            'login'          => $row['Login'],
-            'nom'            => $row['Nom'],
-            'prenom'         => $row['Prenom'],
-            'role'           => $row['Role'],
-            'id_departement' => $row['Id_Departement'],
-            'change_login'   => (bool) $row['ChangeLogin'],
-            'is_admin'       => ($row['Role'] === 'Administrateur'),
-            'email'          => $row['Email'] ?? '',
-        ];
+        $_SESSION['utilisateur'] = construireSessionUtilisateur($row);
 
         // Pas de cron sur ce projet (déploiement FTP) : le rappel d'expiration des
         // identifiants API FFTT se déclenche à la connexion d'un administrateur

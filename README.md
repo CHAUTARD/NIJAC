@@ -72,7 +72,7 @@ Les paramètres métier sont stockés dans la table `configuration` (clé/valeur
 
 - `etat_logiciel` : `Opérationnel` ou `Developpement` (en développement, tous les emails sont redirigés vers `email_developpement`, toujours via `getEmailDestinataire()`)
 - `departements_actifs`, `regles_departements` (associations automatiques entre départements, ex. 76 → 27)
-- `smtp_*` (utilisé par `getNijacMailer()`, wrapper PHPMailer)
+- `smtp_*` (utilisé par `getNijacMailer()`, wrapper PHPMailer ; anti-spam : Return-Path et Message-ID alignés sur le domaine de `smtp_from`, X-Mailer masqué, AltBody via `altBodyDepuisHtml()`, 0,3 s entre deux envois — DKIM/DMARC à activer chez l’hébergeur)
 - `phase1_debut`/`phase1_fin`/`phase2_debut`/`phase2_fin`, `indemnite_forfaitaire`, `frais_kilometrique`, `frais_max_peages`, `frais_max_km`
 
 ---
@@ -122,6 +122,8 @@ ja ─── disponible ─── nomination
  └── club   rencontre ─────┘
               │    │
           equipe   salle ─── laposte
+              │      │
+             club ─ club_salle
               │
            division
 ```
@@ -133,6 +135,7 @@ ja ─── disponible ─── nomination
 - **`equipe`** / **`equipe_nationale`** : équipes engagées, `Division` sous FK vers `division`
 - **`division`** : référentiel des divisions (PK `Division`, `Nom`, `Color`, `Ord`)
 - **`club`** / **`salle`** / **`laposte`** : référentiels clubs, salles et communes INSEE (coordonnées GPS)
+- **`club_salle`** : liaison plusieurs-à-plusieurs club ↔ salle (une salle partagée par plusieurs clubs, plusieurs salles par club) avec `EstPrincipale` (au plus une salle principale par club) ; créée par EA98, qui y reprend les anciennes colonnes `salle.Id_Club` / `salle.EstPrincipale` (conservées mais obsolètes) et fusionne les fiches `salle` en double (même lieu)
 
 ---
 

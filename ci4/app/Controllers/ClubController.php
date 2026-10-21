@@ -70,10 +70,10 @@ class ClubController extends BaseController
                 'SELECT c.Id_Club, c.Nom, c.EquipeNom,
                         c.CorNom, c.CorEmail, c.CorTelephone,
                         c.RefNom, c.RefMail, c.RefTelephone,
-                        (SELECT COUNT(*) FROM Salle s2 WHERE s2.Id_Club = c.Id_Club) AS NbSalles,
+                        ' . sqlNbSallesClub('c.Id_Club') . ' AS NbSalles,
                         sp.Nom AS SallePrincipaleNom, sp.Cp AS SallePrincipaleCp, sp.Ville AS SallePrincipaleVille
                  FROM Club c
-                 LEFT JOIN Salle sp ON sp.Id_Club = c.Id_Club AND sp.EstPrincipale = 1
+                 ' . sqlJoinSallePrincipale('c.Id_Club', 'sp') . '
                  ORDER BY c.Nom'
             )->fetchAll();
 
@@ -229,18 +229,19 @@ class ClubController extends BaseController
                     }
                 }
 
-                $stmtSalleChk = $pdo->prepare('SELECT Id_Salle FROM Salle WHERE Id_Club=? AND EstPrincipale=1 LIMIT 1');
-                $stmtSalleChk->execute([$numClub]);
-                $idSalle = $stmtSalleChk->fetchColumn();
+                // Salle principale du club (club_salle) mise à jour ; sinon une salle existante au
+                // même lieu est réutilisée (trouverOuCreerSalle()), ou créée, puis liée en principale.
+                $principale = array_values(array_filter(sallesDuClub($pdo, $numClub), fn ($s) => (int) $s['EstPrincipale'] === 1));
+                $idSalle    = $principale ? (int) $principale[0]['Id_Salle'] : null;
 
                 if ($idSalle) {
-                    $pdo->prepare('UPDATE Salle SET Nom=?, Adresse=?, Id_Laposte=? WHERE Id_Salle=?')
+                    $pdo->prepare('UPDATE salle SET Nom=?, Adresse=?, Id_Laposte=? WHERE Id_Salle=?')
                         ->execute([$nomsalle, $adresse, $idLaPoste, $idSalle]);
                     $ops[] = "Salle mise à jour : $nomsalle";
                 } else {
-                    $pdo->prepare('INSERT INTO Salle (Nom, Adresse, Id_Laposte, Id_Club, EstPrincipale) VALUES (?,?,?,?,1)')
-                        ->execute([$nomsalle, $adresse, $idLaPoste, $numClub]);
-                    $ops[] = "Salle créée : $nomsalle";
+                    $salle = trouverOuCreerSalle($pdo, ['Nom' => $nomsalle, 'Adresse' => $adresse, 'Cp' => $cpSalle, 'Ville' => $villeSalle ?: null, 'Id_Laposte' => $idLaPoste], $numClub);
+                    lierClubSalle($pdo, $numClub, $salle['id'], true);
+                    $ops[] = $salle['cree'] ? "Salle créée : $nomsalle" : "Salle existante au même lieu liée : $nomsalle";
                 }
             }
 

@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Libraries\JustificatifPeage;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
@@ -45,10 +46,10 @@ class ConvocationJaController extends BaseController
      */
     public function index($nomSeg = null, $cnvSeg = null)
     {
-        // Page publique (JA via lien email) mais aussi ouverte depuis la session
-        // d'un nominateur/admin (ex. lien de la fenêtre d'envoi EN14) : bouton Retour +
-        // mode aperçu (actions du JA masquées, refusées côté serveur).
-        $estConnecte = $this->sessionUtilisateur();
+        // Page publique : le lien jetonné fait foi. Ouverte depuis une session NIJAC
+        // (ex. lien de la fenêtre d'envoi EN14), seul le bouton Retour est ajouté —
+        // accusé et saisie des frais restent possibles, mêmes règles que pour le JA.
+        $estConnecte = $this->loginSession() !== null;
 
         $pdo          = getPDO();
         $idNomination = (int) ($nomSeg ?? $this->request->getGet('nomination') ?? 0);
@@ -124,19 +125,30 @@ class ConvocationJaController extends BaseController
                            d.Division AS DivisionCode, d.Nom AS DivisionNom,
                            ed.Nom     AS NomDom,  ed.Id_Club AS IdClubDom,
                            ee.Nom     AS NomExt,
-                           COALESCE(s_r.Nom,  s_c.Nom)                        AS NomSalle,
-                           COALESCE(lp_r.CodePostal, lp_c.CodePostal)         AS CpSalle,
-                           COALESCE(lp_r.Nom, lp_c.Nom)                       AS VilleSalle,
-                           COALESCE(s_r.Adresse, s_c.Adresse)                 AS AdresseSalle,
-                           COALESCE(lp_r.Latitude,  lp_c.Latitude)            AS VenueLat,
-                           COALESCE(lp_r.Longitude, lp_c.Longitude)           AS VenueLon
+                           -- Salle de la rencontre (r.id_Salle) si elle existe, sinon salle
+                           -- principale du club recevant : tous les champs viennent de la
+                           -- MÊME salle (règle EN14) ; CP/Ville via laposte, repli salle.Cp/Ville.
+                           CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                                THEN s_r.Nom ELSE s_c.Nom END                  AS NomSalle,
+                           CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                                THEN COALESCE(lp_r.CodePostal, s_r.Cp)
+                                ELSE COALESCE(lp_c.CodePostal, s_c.Cp) END     AS CpSalle,
+                           CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                                THEN COALESCE(lp_r.Nom, s_r.Ville)
+                                ELSE COALESCE(lp_c.Nom, s_c.Ville) END         AS VilleSalle,
+                           CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                                THEN s_r.Adresse ELSE s_c.Adresse END          AS AdresseSalle,
+                           CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                                THEN lp_r.Latitude ELSE lp_c.Latitude END      AS VenueLat,
+                           CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                                THEN lp_r.Longitude ELSE lp_c.Longitude END    AS VenueLon
                     FROM rencontre r
                     JOIN  equipe   ed   ON ed.Id_Equipe   = r.Id_EquipeDom
                     JOIN  division d    ON d.Division  = ed.Division
                     LEFT JOIN equipe ee ON ee.Id_Equipe   = r.Id_EquipeExt
                     LEFT JOIN salle   s_r  ON s_r.Id_Salle  = r.id_Salle
                     LEFT JOIN laposte lp_r ON lp_r.Id_LaPoste = s_r.Id_Laposte
-                    LEFT JOIN salle   s_c  ON s_c.Id_Club = ed.Id_Club AND s_c.EstPrincipale = 1
+                    " . sqlJoinSallePrincipale('ed.Id_Club', 's_c') . "
                     LEFT JOIN laposte lp_c ON lp_c.Id_LaPoste = s_c.Id_Laposte
                     WHERE r.Id_Rencontre = ?
                 ");
@@ -226,11 +238,31 @@ class ConvocationJaController extends BaseController
                 $accuse = [
                     'date'      => $dt ? date('d/m/Y H:i', strtotime($dt)) : null,
                     'accusable' => convocationAccusable($pdo, $idNomination),
-                    'passee'    => $rencontre['Date'] && $rencontre['Date'] < date('Y-m-d'),
+                    'passee'    => $rencontre['Date'] && substr((string) $rencontre['Date'], 0, 10) < jourConvocation(),
                 ];
             } catch (\PDOException $e) {
                 error_log('[NIJAC] EN21 accusé : ' . $e->getMessage());
                 $accuse = null;
+            }
+        }
+        $etatFrais = $rencontre
+            ? fraisSaisissables($rencontre['Date'], $accuse !== null && !$accuse['date'] && $accuse['accusable'])
+            : ['ok' => false, 'err' => null, 'attendAccuse' => false];
+
+        // Justificatif de péage (colonne nomination.FichierPeage, EA98) : null = fonction indisponible (colonne absente,
+        // arbitrage club, erreur) → ni bouton ni popup. Seul le fait qu'un justificatif est joint (+ type/date lus dans
+        // le nom généré par le serveur) est exposé, jamais le chemin ni le contenu.
+        $justificatif = null;
+        if ($ja && $rencontre && !$erreur && !$arbitrageClub && nominationAFichierPeage($pdo)) {
+            try {
+                $st = $pdo->prepare('SELECT FichierPeage FROM nomination WHERE Id_Nomination = ?');
+                $st->execute([$idNomination]);
+                $rowJ = $st->fetch();
+                if ($rowJ) {
+                    $justificatif = ['libelle' => JustificatifPeage::libelle($rowJ['FichierPeage'] !== null ? (string) $rowJ['FichierPeage'] : null)];
+                }
+            } catch (\PDOException $e) {
+                error_log('[NIJAC] EN21 justificatif : ' . $e->getMessage());
             }
         }
 
@@ -256,63 +288,77 @@ class ConvocationJaController extends BaseController
             'dateFormatee'     => $dateFormatee,
             'heure'            => $heure,
             'accuse'           => $accuse,
-            // Même règle que fraisBloquesSansAccuse() : convocation accusable mais pas encore accusée.
-            'fraisBloques'     => $accuse !== null && !$accuse['date'] && $accuse['accusable'],
+            // Même règle que sauvegarderFrais() (fraisSaisissables()) : J >= D, et le jour même
+            // accusé de réception requis s'il manque (convocation accusable mais pas encore accusée).
+            'etatFrais'        => $etatFrais,
+            'fraisBloques'     => !$etatFrais['ok'],
+            'justificatif'     => $justificatif,
         ]);
     }
 
     /**
-     * Vrai si la page est ouverte dans une session NIJAC (Nominateur/Admin/CSR…) : un JA ne
-     * se connecte jamais, donc toute session = aperçu nominateur, sans action réservée au JA.
+     * Login de l'utilisateur NIJAC connecté (Nominateur/Admin/CSR…) si la page est ouverte dans
+     * une session, sinon null. N'autorise ni ne bloque rien (le lien jetonné fait foi) : sert au
+     * bouton Retour et à la trace error_log des actions faites via le lien par un connecté.
      */
-    private function sessionUtilisateur(): bool
+    private function loginSession(): ?string
     {
         demarrerSessionNijac();
-        $connecte = !empty($_SESSION['utilisateur']['role'] ?? null);
+        $login = !empty($_SESSION['utilisateur']['role'] ?? null)
+            ? (string) ($_SESSION['utilisateur']['login'] ?? '')
+            : null;
         session_write_close();
         unset($_SESSION); // évite que CI4 redémarre son service Session (cf. DisponibiliteJaController)
 
-        return $connecte;
+        return $login;
     }
 
-    private const ERR_APERCU = 'Aperçu nominateur : action réservée au JA.';
+    /** Trace (sans donnée du JA) d'un accusé/saisie fait via le lien par un utilisateur connecté. */
+    private function tracerActionConnecte(?string $login, string $action, int $idNomination): void
+    {
+        if ($login !== null) {
+            error_log("[NIJAC] EN21 : $action via lien par utilisateur connecté "
+                . preg_replace('/[^\w.@-]/u', '_', $login) . " (nomination $idNomination)");
+        }
+    }
 
     /**
-     * Saisie des frais bloquée tant que le JA n'a pas accusé réception (EN21) : vrai si la colonne
-     * nomination.AccuseReception existe (EA98), vaut NULL et que la convocation est encore accusable
-     * (Valide = 1, rencontre du jour ou à venir — mêmes critères que convocationAccusable()).
-     * Exceptions volontaires : rencontre passée sans accusé (le JA doit pouvoir saisir ses frais réels)
-     * et colonne absente avant EA98 → saisie autorisée.
+     * État de la saisie des frais (EN21) d'une nomination, règles de dates centralisées dans
+     * fraisSaisissables() (config/app_config.php) : refusée avant la date de la rencontre (J < D) ;
+     * le jour même (J = D), conditionnée à l'accusé de réception s'il manque (colonne
+     * nomination.AccuseReception présente (EA98), NULL, JA rattaché) ; après (J > D),
+     * libre. Colonne absente avant EA98 → pas de condition d'accusé.
+     * Retourne le tableau de fraisSaisissables() ['ok', 'err', 'attendAccuse'].
      */
-    public static function fraisBloquesSansAccuse(\PDO $pdo, int $idNomination, bool $colonneExiste): bool
+    public static function etatSaisieFrais(\PDO $pdo, int $idNomination): array
     {
-        if (!$colonneExiste) {
-            return false;
-        }
+        $colonne = nominationAAccuseReception($pdo);
         $st = $pdo->prepare(
-            'SELECT 1
+            'SELECT r.Date, '
+            . ($colonne
+                ? '(n.AccuseReception IS NULL AND d.Id_JA IS NOT NULL)'
+                : '0') . ' AS AccuseManquant
              FROM nomination n
-             JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+             LEFT JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
              JOIN rencontre  r ON r.Id_Rencontre  = n.Id_Rencontre
-             WHERE n.Id_Nomination = ? AND n.AccuseReception IS NULL
-               AND d.Id_JA IS NOT NULL AND n.Valide = 1 AND r.Date >= CURDATE()'
+             WHERE n.Id_Nomination = ?'
         );
         $st->execute([$idNomination]);
+        $row = $st->fetch();
 
-        return (bool) $st->fetchColumn();
+        return fraisSaisissables($row ? (string) $row['Date'] : null, $row && (int) $row['AccuseManquant']);
     }
 
     /**
      * Accusé de réception de la convocation par le JA (POST convocation-ja/accuse).
      * Jeton cnv vérifié comme sauvegarderFrais() ; seule la nomination du lien est accusable
-     * (`cible` vide ou égale à son id, sinon « Action non disponible »). Règles (Valide = 1,
-     * rencontre du jour ou à venir, idempotence) : accuserReceptionConvocation() (config/app_config.php). Aucun email.
+     * (`cible` vide ou égale à son id, sinon « Action non disponible »). Règles (nomination
+     * du lien existante, rencontre du jour ou à venir, idempotence) : accuserReceptionConvocation() (config/app_config.php). Aucun email.
+     * Le lien fait foi : accepté aussi depuis une session NIJAC (tracé dans error_log).
      */
     public function accuser(): ResponseInterface
     {
-        if ($this->sessionUtilisateur()) {
-            return $this->response->setJSON(['ok' => false, 'err' => self::ERR_APERCU]);
-        }
+        $login = $this->loginSession();
         try {
             $pdo      = getPDO();
             $idNomP   = (int) ($this->request->getPost('id_nomination') ?? 0);
@@ -332,7 +378,12 @@ class ConvocationJaController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => "L'accusé de réception n'est pas encore disponible. Merci de réessayer plus tard."]);
             }
 
-            return $this->response->setJSON(accuserReceptionConvocation($pdo, $idNomP, $cible));
+            $res = accuserReceptionConvocation($pdo, $idNomP, $cible);
+            if ($res['ok']) {
+                $this->tracerActionConnecte($login, 'accusé', $idNomP);
+            }
+
+            return $this->response->setJSON($res);
         } catch (\PDOException $e) {
             error_log('[NIJAC] EN21 accuser : ' . $e->getMessage());
 
@@ -340,12 +391,11 @@ class ConvocationJaController extends BaseController
         }
     }
 
-    // Frais saisis par le JA ; le nominateur les corrige via EN28 (route distincte, non concernée).
+    // Frais saisis via le lien (JA, ou tout détenteur du lien — le lien fait foi, session tracée) ;
+    // le nominateur peut aussi les corriger via EN28 (route distincte, non concernée).
     public function sauvegarderFrais(): ResponseInterface
     {
-        if ($this->sessionUtilisateur()) {
-            return $this->response->setJSON(['ok' => false, 'err' => self::ERR_APERCU]);
-        }
+        $login = $this->loginSession();
         try {
             $pdo      = getPDO();
             $idNomP   = (int) ($this->request->getPost('id_nomination') ?? 0);
@@ -372,8 +422,10 @@ class ConvocationJaController extends BaseController
             if (!$rowNom) {
                 return $this->response->setJSON(['ok' => false, 'err' => 'Nomination introuvable.']);
             }
-            if (self::fraisBloquesSansAccuse($pdo, $idNomP, nominationAAccuseReception($pdo))) {
-                return $this->response->setJSON(['ok' => false, 'err' => 'Accusez réception de la convocation avant de saisir vos frais.']);
+            // Règles de dates (J >= D) + accusé requis le jour même : fraisSaisissables().
+            $etatFrais = self::etatSaisieFrais($pdo, $idNomP);
+            if (!$etatFrais['ok']) {
+                return $this->response->setJSON(['ok' => false, 'err' => $etatFrais['err']]);
             }
 
             $peagesRaw = trim($this->request->getPost('peages') ?? '');
@@ -434,12 +486,158 @@ class ConvocationJaController extends BaseController
                 WHERE Id_Nomination = ?
             ');
             $stmt->execute($params);
+            $this->tracerActionConnecte($login, 'saisie', $idNomP);
 
-            return $this->response->setJSON(['ok' => true, 'affected' => $stmt->rowCount()]);
+            // Péage > 0 enregistré : la page propose de joindre le justificatif (popup), si la colonne existe (EA98).
+            return $this->response->setJSON([
+                'ok'           => true,
+                'affected'     => $stmt->rowCount(),
+                'justificatif' => $peages !== null && $peages > 0 && nominationAFichierPeage($pdo),
+            ]);
         } catch (\PDOException $e) {
             error_log('[NIJAC] EN21 sauvegarderFrais : ' . $e->getMessage());
 
             return $this->response->setJSON(['ok' => false, 'err' => messageErreur($e, "Erreur technique : les frais n'ont pas pu être enregistrés.")]);
         }
+    }
+
+    /**
+     * Justificatif de péage joint par le JA via le lien (POST convocation-ja/justificatif, multipart : id_nomination,
+     * cnv, fichier `justificatif`). Mêmes contrôles que sauvegarderFrais() : jeton cnv (Obfuscator + pepper) de la
+     * nomination du lien (aucun autre Id accepté, nomination existante), saisie des frais ouverte (fraisSaisissables(), J >= D),
+     * plus Peage > 0 enregistré. Stockage / contrôle (5 Mo, finfo, liste blanche, nom serveur) : JustificatifPeage,
+     * partagé avec EN28. Remplace le justificatif existant (l'ancien fichier n'est supprimé qu'après l'UPDATE réussi,
+     * motif strict + liste serveur) ; aucune suppression par le JA (consultation : voirJustificatif()). Colonne FichierPeage absente
+     * (pré-EA98) : refus sans erreur technique. Le lien fait foi : accepté aussi depuis une session NIJAC (tracé).
+     */
+    public function joindreJustificatif(): ResponseInterface
+    {
+        $login = $this->loginSession();
+        $nouveau = null;
+        try {
+            $pdo      = getPDO();
+            $idNomP   = (int) ($this->request->getPost('id_nomination') ?? 0);
+            $tokenCnv = trim((string) ($this->request->getPost('cnv') ?? ''));
+            $tokenValide = $idNomP > 0 && $tokenCnv !== '' && (
+                $this->obf->deobfuscate($tokenCnv) === $idNomP
+                || $this->obfSansPepper->deobfuscate($tokenCnv) === $idNomP
+            );
+            if (!$tokenValide) {
+                return $this->refusJustificatif("Lien de convocation invalide. Merci de redemander l'envoi de votre convocation.");
+            }
+            if (!nominationAFichierPeage($pdo)) {
+                return $this->refusJustificatif("Le dépôt du justificatif n'est pas encore disponible. Merci de réessayer plus tard.");
+            }
+
+            $st = $pdo->prepare('
+                SELECT n.Peage, n.FichierPeage, r.ArbitrageCRA
+                FROM nomination n
+                JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                JOIN rencontre  r ON r.Id_Rencontre  = n.Id_Rencontre
+                WHERE n.Id_Nomination = ?
+            ');
+            $st->execute([$idNomP]);
+            $row = $st->fetch();
+            if (!$row) {
+                return $this->refusJustificatif('Nomination introuvable.');
+            }
+            if (!(int) $row['ArbitrageCRA']) {
+                return $this->refusJustificatif('Action non disponible.');
+            }
+            $etatFrais = self::etatSaisieFrais($pdo, $idNomP);
+            if (!$etatFrais['ok']) {
+                return $this->refusJustificatif((string) $etatFrais['err']);
+            }
+            if ((float) $row['Peage'] <= 0) {
+                return $this->refusJustificatif('Enregistrez d\'abord un montant de péage avant de joindre le justificatif.');
+            }
+
+            $upload = $this->request->getFile('justificatif');
+            if ($upload === null || $upload->getError() === UPLOAD_ERR_NO_FILE) {
+                return $this->refusJustificatif('Choisissez le fichier du justificatif (image ou PDF).');
+            }
+            $refus = JustificatifPeage::controler($upload);
+            if ($refus !== null) {
+                return $this->refusJustificatif($refus);
+            }
+            try {
+                $nouveau = JustificatifPeage::enregistrer($upload, 'EN21');
+            } catch (\RuntimeException $e) {
+                return $this->refusJustificatif($e->getMessage());
+            }
+
+            $ancien = $row['FichierPeage'] !== null ? (string) $row['FichierPeage'] : null;
+            $pdo->prepare('UPDATE nomination SET FichierPeage = ? WHERE Id_Nomination = ?')
+                ->execute([$nouveau, $idNomP]);
+            $enregistre = $nouveau;
+            $nouveau = null;   // fichier désormais référencé : plus supprimé en cas d'erreur ci-dessous
+
+            // Ancien justificatif remplacé : supprimé seulement maintenant (motif strict + liste serveur).
+            if ($ancien !== null && $ancien !== $enregistre) {
+                JustificatifPeage::supprimer($ancien, 'EN21');
+            }
+            $this->tracerActionConnecte($login, 'justificatif péage', $idNomP);
+
+            return $this->response->setJSON([
+                'ok'      => true,
+                'msg'     => 'Justificatif de péage enregistré. Merci !',
+                'libelle' => JustificatifPeage::libelle($enregistre),
+            ]);
+        } catch (\Throwable $e) {
+            JustificatifPeage::supprimer($nouveau, 'EN21');   // fichier stocké mais nomination non mise à jour
+            error_log('[NIJAC] EN21 joindreJustificatif : ' . $e->getMessage());
+            $msg = messageErreur($e, "Erreur technique : le justificatif n'a pas pu être enregistré.");
+
+            return $this->response->setJSON(['ok' => false, 'msg' => $msg, 'err' => $msg]);
+        }
+    }
+
+    /**
+     * Consultation par le JA du justificatif de péage qu'il a déposé (GET convocation-ja/justificatif/voir?id_nomination=…&cnv=…).
+     * Mêmes contrôles que joindreJustificatif() : jeton cnv (Obfuscator + pepper) de la nomination du lien uniquement,
+     * nomination existante, colonne FichierPeage présente (EA98). Le nom du fichier vient UNIQUEMENT de nomination.FichierPeage de
+     * cette nomination (jamais du client), validé par JustificatifPeage::MOTIF_NOM puis retrouvé dans
+     * JustificatifPeage::fichiers() (liste serveur). Réponse inline (JustificatifPeage::reponse(), partagée avec EN28) sous
+     * un nom neutre (le nom stocké n'est pas exposé) ; sinon 404 texte neutre.
+     */
+    public function voirJustificatif(): ResponseInterface
+    {
+        $nom   = null;
+        $cible = null;
+        try {
+            $idNomP   = (int) ($this->request->getGet('id_nomination') ?? 0);
+            $tokenCnv = trim((string) ($this->request->getGet('cnv') ?? ''));
+            $tokenValide = $idNomP > 0 && $tokenCnv !== '' && (
+                $this->obf->deobfuscate($tokenCnv) === $idNomP
+                || $this->obfSansPepper->deobfuscate($tokenCnv) === $idNomP
+            );
+            $pdo = getPDO();
+            if ($tokenValide && nominationAFichierPeage($pdo)) {
+                $st = $pdo->prepare('SELECT FichierPeage FROM nomination WHERE Id_Nomination = ?');
+                $st->execute([$idNomP]);
+                $val = $st->fetchColumn();
+                if ($val !== false && $val !== null && preg_match(JustificatifPeage::MOTIF_NOM, (string) $val)) {
+                    $nom   = (string) $val;
+                    $cible = JustificatifPeage::fichiers()[$nom] ?? null;
+                    if ($cible === null) {
+                        error_log('[NIJAC] EN21 voirJustificatif : ' . $nom . ' absent de la liste serveur de _Peage/ (dossier : '
+                            . (JustificatifPeage::dossier() ?? 'inaccessible') . ", nomination $idNomP)");
+                    }
+                } elseif ($val !== false && $val !== null) {
+                    error_log("[NIJAC] EN21 voirJustificatif : nom stocké invalide (nomination $idNomP)");
+                }
+            }
+        } catch (\Throwable $e) {
+            error_log('[NIJAC] EN21 voirJustificatif : ' . $e->getMessage());
+        }
+        $ext = $nom !== null ? strtolower(pathinfo($nom, PATHINFO_EXTENSION)) : '';
+
+        return JustificatifPeage::reponse($this->response, $nom, $cible, 'EN21 voirJustificatif', 'justificatif-peage.' . $ext);
+    }
+
+    /** Refus (message affichable) de joindreJustificatif() : `msg` + `err` (clé lue par le reste de la page EN21). */
+    private function refusJustificatif(string $msg): ResponseInterface
+    {
+        return $this->response->setJSON(['ok' => false, 'msg' => $msg, 'err' => $msg]);
     }
 }

@@ -15,6 +15,8 @@
       "PowerShell(& \"F:\\\\wamp64\\\\bin\\\\mysql\\\\mysql8.4.7\\\\bin\\\\mysql.exe\" -h 127.0.0.1 -P 3307 -u root nijac -e \"SELECT Id_JA, Nom, Prenom, Id_Club, Actif FROM ja WHERE UPPER\\(TRIM\\(Nom\\)\\) = 'VAZARD'\")",
       "PowerShell(& \"F:\\\\wamp64\\\\bin\\\\mysql\\\\mysql8.4.7\\\\bin\\\\mysql.exe\" -h 127.0.0.1 -P 3307 -u root nijac -e \"SELECT Id_Utilisateur, Login, Role, Actif, ChangeLogin FROM Utilisateur WHERE UPPER\\(TRIM\\(Login\\)\\) = 'VAZARD'\")",
       "PowerShell(& \"F:\\\\wamp64\\\\bin\\\\mysql\\\\mysql8.4.7\\\\bin\\\\mysql.exe\" -h 127.0.0.1 -P 3307 -u root nijac -e \"SELECT r.Id_Rencontre, r.Date, r.Heure, r.Id_Division, dv.Division, dv.ArbitrageObligatoire, r.Id_EquipeDom, ed.Id_Club AS ClubDom, ed.Nom AS NomDom, ed.JAdemande, r.Id_EquipeExt, ev.Id_Club AS ClubExt, ev.Nom AS NomExt FROM rencontre r JOIN division dv ON dv.Id_Division=r.Id_Division JOIN equipe ed ON ed.Id_Equipe=r.Id_EquipeDom LEFT JOIN equipe ev ON ev.Id_Equipe=r.Id_EquipeExt WHERE r.Id_Rencontre=1180\" --table)",
+	  "PowerShell(& 'C:\\Program Files\\Git\\cmd\\git.exe' rm -r --cached --ignore-unmatch -- .dbeaver)",
+      "PowerShell(& 'C:\\Program Files\\Git\\cmd\\git.exe' rm --cached --ignore-unmatch -- '.env.production!')"
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost/NIJAC/index.php)",
       "PowerShell(& \"F:\\\\wamp64\\\\bin\\\\php\\\\php8.1.33\\\\php.exe\" -l \"F:\\\\wamp64\\\\www\\\\NIJAC\\\\JA\\\\info_rencontre.php\")",
       "PowerShell(& \"F:\\\\wamp64\\\\bin\\\\php\\\\php8.1.33\\\\php.exe\" -l \"F:\\\\wamp64\\\\www\\\\NIJAC\\\\index.php\")",

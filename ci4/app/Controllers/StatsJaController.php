@@ -26,7 +26,7 @@ class StatsJaController extends BaseController
             SELECT 1 FROM nomination n2
             JOIN disponible d2 ON d2.Id_Disponible = n2.Id_Disponible
             JOIN rencontre  r2 ON r2.Id_Rencontre  = n2.Id_Rencontre
-            WHERE d2.Id_JA = ja.Id_JA AND n2.Valide = 1 AND n2.DateSaisie IS NOT NULL AND n2.DateSaisie <> "0000-00-00"
+            WHERE d2.Id_JA = ja.Id_JA AND n2.DateSaisie IS NOT NULL AND n2.DateSaisie <> "0000-00-00"
               AND r2.ArbitrageCRA = 1 AND r2.Date = r.Date AND n2.';
     private const SQL_UNE_FOIS_PAR_JOUR_B = ' > 0
               AND n2.Id_Nomination <> n.Id_Nomination
@@ -37,6 +37,10 @@ class StatsJaController extends BaseController
     private const SQL_PEAGE   = self::SQL_UNE_FOIS_PAR_JOUR_A . 'Peage' . self::SQL_UNE_FOIS_PAR_JOUR_B . 'Peage END), 0)';
     private const SQL_NB_CRA  = 'SUM(r.ArbitrageCRA = 1)';
     private const SQL_NB_CLUB = 'SUM(r.ArbitrageCRA = 0)';
+    // Ordre de la liste (écran et export CSV) : alphabétique Nom puis Prénom, selon la
+    // collation MySQL des colonnes (insensible à la casse/aux accents) ; Id_JA départage
+    // les homonymes pour un ordre stable. Une ligne = un JA (agrégat), pas de détail par date.
+    private const SQL_ORDRE_JA = ' ORDER BY ja.Nom, ja.Prenom, ja.Id_JA';
 
     public function __construct()
     {
@@ -202,11 +206,11 @@ class StatsJaController extends BaseController
                     $selectSql
             FROM ja
             JOIN disponible dn   ON dn.Id_JA = ja.Id_JA
-            JOIN nomination n    ON n.Id_Disponible = dn.Id_Disponible AND n.Valide = 1
+            JOIN nomination n    ON n.Id_Disponible = dn.Id_Disponible
                                 AND n.DateSaisie IS NOT NULL AND n.DateSaisie <> '0000-00-00'
             JOIN rencontre  r    ON r.Id_Rencontre  = n.Id_Rencontre
             LEFT JOIN Club  cl   ON cl.Id_Club      = ja.Id_Club
-            LEFT JOIN salle s    ON s.Id_Club       = cl.Id_Club AND s.EstPrincipale = 1
+            " . sqlJoinSallePrincipale('cl.Id_Club', 's') . "
             LEFT JOIN laposte lp ON lp.Id_LaPoste   = s.Id_Laposte
             WHERE r.Date BETWEEN :debut AND :fin
         ";
@@ -270,8 +274,7 @@ class StatsJaController extends BaseController
                 '
                 GROUP BY ja.Id_JA, ja.Nom, ja.Prenom, ja.Grade, cl.Nom
                 HAVING nb_arbitrages > 0
-                ORDER BY nb_arbitrages DESC, ja.Nom, ja.Prenom
-                ',
+                ' . self::SQL_ORDRE_JA,
                 $dateDebut,
                 $dateFin,
                 $depts
@@ -317,14 +320,14 @@ class StatsJaController extends BaseController
      * "Obligatoire" effectif calculé à la volée : `rencontre.ArbitrageCRAForce=1`
      * fait foi en premier (forçage ponctuel manuel, EN23), sinon `equipe.ArbitrageCRA=1`
      * (pertinent seulement pour R3M/R4M — NOT NULL, initialisé depuis
-     * `division.ArbitrageCRA` à la création de l'équipe), sinon une nomination Valide
+     * `division.ArbitrageCRA` à la création de l'équipe), sinon une nomination
      * déjà posée sur cette rencontre précise (JA nommé par le nominateur ou via EN25,
      * même sans demande CRA du club), sinon 0.
-     * `nb_sans_arbitre` distingue le vrai manque (obligatoire sans nomination
-     * Valide) de `nb_arbitre_club` (non obligatoire, R3M/R4M sans demande CRA —
+     * `nb_sans_arbitre` distingue le vrai manque (obligatoire sans nomination)
+     * de `nb_arbitre_club` (non obligatoire, R3M/R4M sans demande CRA —
      * la CRA ne fournit pas de JA sur ces rencontres ; le club recevant n'en a
      * lui-même que s'il en a fait la demande via EN25, ce qui crée alors une
-     * nomination Valide, comptée dans `nb_avec_arbitre`). Sans demande du club,
+     * nomination, comptée dans `nb_avec_arbitre`). Sans demande du club,
      * ces rencontres n'ont donc réellement aucun JA, mais ce n'est pas un manque
      * imputable à la CRA : elles restent dans `nb_arbitre_club`, pas dans
      * `nb_sans_arbitre`.
@@ -369,7 +372,7 @@ class StatsJaController extends BaseController
             $paramsR           = $params;
             $paramsR[':debut'] = $dateDebut;
             $paramsR[':fin']   = $dateFin;
-            // Sans nomination "Valide" ne veut pas toujours dire sans arbitre : sur les divisions où
+            // Sans nomination ne veut pas toujours dire sans arbitre : sur les divisions où
             // la CRA ne fournit pas l'arbitrage (R3M/R4M sans demande CRA), c'est au club recevant
             // de désigner l'un de ses JA, sans passer par une nomination NIJAC.
             // "Obligatoire" effectif : rencontre.ArbitrageCRA fait foi directement — photo de
@@ -377,7 +380,7 @@ class StatsJaController extends BaseController
             // les rencontres à venir à chaque changement de souhait (EN18/ES33/EA92/EN29), pour
             // ne jamais réécrire l'historique d'une rencontre déjà jouée ; un forçage ponctuel
             // EN23 (ArbitrageCRAForce=1) fige la valeur et la protège de ces resynchronisations.
-            // Seule exception vivante : une nomination Valide déjà posée compte toujours comme
+            // Seule exception vivante : une nomination déjà posée compte toujours comme
             // obligatoire, même sur une rencontre restée à 0 (JA nommé malgré tout).
             $stmtR = $pdo->prepare("
                 SELECT LEFT(COALESCE(lp.CodePostal, s.Cp), 2) AS Dept,
@@ -395,10 +398,10 @@ class StatsJaController extends BaseController
                 FROM rencontre r
                 JOIN equipe        ed ON ed.Id_Equipe   = r.Id_EquipeDom
                 LEFT JOIN Club     cl ON cl.Id_Club      = ed.Id_Club
-                LEFT JOIN salle    s  ON s.Id_Club       = cl.Id_Club AND s.EstPrincipale = 1
+                " . sqlJoinSallePrincipale('cl.Id_Club', 's') . "
                 LEFT JOIN laposte  lp ON lp.Id_LaPoste   = s.Id_Laposte
-                -- 1 nomination Valide max par rencontre (uq_nomination_rencontre) : jointure unique au lieu de 5 sous-requêtes corrélées
-                LEFT JOIN (SELECT DISTINCT Id_Rencontre FROM nomination WHERE Valide = 1) nv ON nv.Id_Rencontre = r.Id_Rencontre
+                -- 1 nomination max par rencontre (uq_nomination_rencontre) : jointure unique au lieu de 5 sous-requêtes corrélées
+                LEFT JOIN (SELECT DISTINCT Id_Rencontre FROM nomination) nv ON nv.Id_Rencontre = r.Id_Rencontre
                 WHERE r.Date BETWEEN :debut AND :fin AND r.Journee IS NOT NULL
                       AND LEFT(COALESCE(lp.CodePostal, s.Cp), 2) IN ($inClause)
                 GROUP BY Dept, Journee
@@ -508,7 +511,7 @@ class StatsJaController extends BaseController
                     + ' . self::SQL_PEAGE . '
                     + ' . self::SQL_NB_CRA . ' * :indem2 AS Total',
             ],
-            ' GROUP BY ja.Id_JA, ja.Nom, ja.Prenom, ja.Grade, cl.Nom HAVING Arbitrages > 0 ORDER BY Arbitrages DESC, ja.Nom',
+            ' GROUP BY ja.Id_JA, ja.Nom, ja.Prenom, ja.Grade, cl.Nom HAVING Arbitrages > 0' . self::SQL_ORDRE_JA,
             $dateDebut,
             $dateFin,
             $depts

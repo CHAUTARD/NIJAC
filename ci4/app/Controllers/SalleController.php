@@ -68,14 +68,13 @@ class SalleController extends BaseController
         $isAdmin = $this->isAdmin();
         $pdo     = getPDO();
 
-        $sql = 'SELECT s.Id_Salle, COALESCE(s.Nom, cl.Nom) AS Nom, s.Adresse, s.Telephone, s.Id_Laposte, s.Id_Club,
-                       s.EstPrincipale, s.Cp, s.Ville, cl.Nom AS NomClub,
+        // Clubs liés : club_salle (liensClubsSalles(), repli salle.Id_Club avant EA98), assemblés ci-dessous.
+        $sql = 'SELECT s.Id_Salle, s.Nom, s.Adresse, s.Telephone, s.Id_Laposte, s.Cp, s.Ville,
                        COALESCE(
                            NULLIF(CONCAT(lp.CodePostal, \' \', lp.Nom), \' \'),
                            NULLIF(CONCAT(COALESCE(s.Cp,\'\'), \' \', COALESCE(s.Ville,\'\')), \' \')
                        ) AS CpVille
-                FROM Salle s
-                LEFT JOIN Club    cl ON cl.Id_Club    = s.Id_Club
+                FROM salle s
                 LEFT JOIN laposte lp ON lp.Id_LaPoste = s.Id_Laposte';
         $params = [];
 
@@ -93,12 +92,76 @@ class SalleController extends BaseController
             $sql   .= ' WHERE (LEFT(lp.CodePostal, 2) = ? OR LEFT(s.Cp, 2) = ?)';
             $params = [$cp2, $cp2];
         }
-        $sql .= ' ORDER BY cl.Nom, s.Nom';
+        $sql .= ' ORDER BY s.Nom';
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
+        $rows  = $stmt->fetchAll();
+        $liens = liensClubsSalles($pdo);
+        foreach ($rows as &$r) {
+            $l = $liens[(int) $r['Id_Salle']] ?? [];
+            $r['Clubs']         = $l;
+            $r['Id_Club']       = implode(', ', array_column($l, 'Id_Club'));
+            $r['NomClub']       = implode(', ', array_map(fn ($c) => $c['Nom'] . ($c['EstPrincipale'] ? ' ★' : ''), $l));
+            $r['EstPrincipale'] = (int) in_array(1, array_column($l, 'EstPrincipale'), true);
+        }
+        unset($r);
 
-        return $this->response->setJSON(['ok' => true, 'data' => $stmt->fetchAll()]);
+        return $this->response->setJSON(['ok' => true, 'data' => $rows, 'multiClubs' => clubSalleExiste($pdo)]);
+    }
+
+    /**
+     * Liaisons club ↔ salle envoyées par la modale (champ `liens`, JSON
+     * [{id_club, principale}]) : clubs inconnus refusés, une seule entrée par club.
+     * Renvoie [liens normalisés, message d'erreur|null].
+     */
+    private function lireLiens(\PDO $pdo, $brut): array
+    {
+        $liens = json_decode((string) $brut, true);
+        if (!is_array($liens)) {
+            return [[], 'Liste des clubs liés invalide.'];
+        }
+        $norm = [];
+        foreach ($liens as $l) {
+            $idClub = trim((string) ($l['id_club'] ?? ''));
+            if ($idClub === '') {
+                continue;
+            }
+            $norm[$idClub] = ['id_club' => $idClub, 'principale' => !empty($l['principale'])];
+        }
+        if ($norm) {
+            $ph = implode(',', array_fill(0, count($norm), '?'));
+            $st = $pdo->prepare("SELECT Id_Club FROM club WHERE Id_Club IN ($ph)");
+            $st->execute(array_keys($norm));
+            $connus = $st->fetchAll(\PDO::FETCH_COLUMN);
+            $inconnus = array_diff(array_keys($norm), $connus);
+            if ($inconnus) {
+                return [[], 'Id_Club inconnu : ' . implode(', ', $inconnus) . '.'];
+            }
+        }
+        if (count($norm) > 1 && !clubSalleExiste($pdo)) {
+            return [[], 'Une salle ne peut être liée qu\'à un seul club tant que la migration EA98 (table club_salle) n\'a pas été chargée.'];
+        }
+
+        return [array_values($norm), null];
+    }
+
+    /**
+     * Aligne les clubs liés à la salle $idSalle sur $liens : liens absents retirés (la salle
+     * reste), nouveaux liens ajoutés, salle principale posée/retirée par club (au plus une
+     * par club : definirSallePrincipale() retire l'ancienne principale du club).
+     */
+    private function enregistrerLiens(\PDO $pdo, int $idSalle, array $liens): void
+    {
+        $voulus = array_column($liens, null, 'id_club');
+        foreach (liensClubsSalles($pdo)[$idSalle] ?? [] as $actuel) {
+            if (!isset($voulus[$actuel['Id_Club']])) {
+                delierClubSalle($pdo, (string) $actuel['Id_Club'], $idSalle);
+            }
+        }
+        foreach ($liens as $l) {
+            lierClubSalle($pdo, $l['id_club'], $idSalle, $l['principale']);
+        }
     }
 
     public function clubs(): ResponseInterface
@@ -183,20 +246,27 @@ class SalleController extends BaseController
         $cp            = trim($this->request->getPost('cp') ?? '') ?: null;
         $ville         = trim($this->request->getPost('ville') ?? '') ?: null;
         $idLaposte     = ($this->request->getPost('id_laposte') ?? '') !== '' ? (int) $this->request->getPost('id_laposte') : null;
-        $idClub        = trim($this->request->getPost('id_club') ?? '');
-        $estPrincipale = $this->request->getPost('est_principale') ? 1 : 0;
 
-        if ($idClub === '') {
-            return $this->response->setJSON(['ok' => false, 'msg' => "L'Id_Club est obligatoire."]);
+        // Une salle peut être créée sans club ; ses clubs (club_salle) viennent du champ `liens`.
+        $pdo = getPDO();
+        [$liens, $err] = $this->lireLiens($pdo, $this->request->getPost('liens') ?? '[]');
+        if ($err) {
+            return $this->response->setJSON(['ok' => false, 'msg' => $err]);
         }
 
-        $pdo  = getPDO();
-        $stmt = $pdo->prepare(
-            'INSERT INTO Salle (Nom, Adresse, Telephone, Cp, Ville, Id_Laposte, Id_Club, EstPrincipale) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-        );
-        $stmt->execute([$nom, $adresse, $telephone, $cp, $ville, $idLaposte, $idClub, $estPrincipale]);
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare('INSERT INTO salle (Nom, Adresse, Telephone, Cp, Ville, Id_Laposte) VALUES (?, ?, ?, ?, ?, ?)')
+                ->execute([$nom, $adresse, $telephone, $cp, $ville, $idLaposte]);
+            $idSalle = (int) $pdo->lastInsertId();
+            $this->enregistrerLiens($pdo, $idSalle, $liens);
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
 
-        return $this->response->setJSON(['ok' => true, 'msg' => 'Salle créée.', 'id_salle' => (int) $pdo->lastInsertId()]);
+        return $this->response->setJSON(['ok' => true, 'msg' => 'Salle créée.', 'id_salle' => $idSalle]);
     }
 
     public function update($id = null): ResponseInterface
@@ -220,16 +290,29 @@ class SalleController extends BaseController
         $cp            = trim($input['cp'] ?? '') ?: null;
         $ville         = trim($input['ville'] ?? '') ?: null;
         $idLaposte     = ($input['id_laposte'] ?? '') !== '' ? (int) $input['id_laposte'] : null;
-        // Non bloquant ici (contrairement à store()) : la bascule « salle principale »
-        // de la grille passe par update() et peut concerner une salle héritée sans club.
-        $idClub        = ($input['id_club'] ?? '') !== '' ? trim($input['id_club']) : null;
-        $estPrincipale = !empty($input['est_principale']) ? 1 : 0;
 
-        $pdo  = getPDO();
-        $stmt = $pdo->prepare(
-            'UPDATE Salle SET Nom=?, Adresse=?, Telephone=?, Cp=?, Ville=?, Id_Laposte=?, Id_Club=?, EstPrincipale=? WHERE Id_Salle=?'
-        );
-        $stmt->execute([$nom, $adresse, $telephone, $cp, $ville, $idLaposte, $idClub, $estPrincipale, $id]);
+        // Clubs liés (club_salle) : modifiés seulement si la requête envoie `liens`.
+        $pdo   = getPDO();
+        $liens = null;
+        if (array_key_exists('liens', $input)) {
+            [$liens, $err] = $this->lireLiens($pdo, $input['liens']);
+            if ($err) {
+                return $this->response->setJSON(['ok' => false, 'msg' => $err]);
+            }
+        }
+
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare('UPDATE salle SET Nom=?, Adresse=?, Telephone=?, Cp=?, Ville=?, Id_Laposte=? WHERE Id_Salle=?')
+                ->execute([$nom, $adresse, $telephone, $cp, $ville, $idLaposte, $id]);
+            if ($liens !== null) {
+                $this->enregistrerLiens($pdo, $id, $liens);
+            }
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
 
         return $this->response->setJSON(['ok' => true, 'msg' => 'Salle mise à jour.']);
     }
@@ -246,7 +329,25 @@ class SalleController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => 'Id invalide.']);
         }
 
-        getPDO()->prepare('DELETE FROM Salle WHERE Id_Salle = ?')->execute([$id]);
+        // Suppression seulement si plus aucune ligne ne la référence (rencontre.id_Salle…) : la
+        // FK rencontre ON DELETE SET NULL ferait sinon perdre silencieusement le lieu. Les liens
+        // club_salle sont supprimés avec elle (ON DELETE CASCADE, ou explicitement sans FK).
+        $pdo = getPDO();
+        $nb  = nbReferencesSalle($pdo, $id);
+        if ($nb > 0) {
+            return $this->response->setJSON(['ok' => false, 'msg' => "Salle utilisée par $nb rencontre(s) : suppression impossible (déliez-la des clubs si besoin)."]);
+        }
+        $pdo->beginTransaction();
+        try {
+            if (clubSalleExiste($pdo)) {
+                $pdo->prepare('DELETE FROM club_salle WHERE Id_Salle = ?')->execute([$id]);
+            }
+            $pdo->prepare('DELETE FROM salle WHERE Id_Salle = ?')->execute([$id]);
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
 
         return $this->response->setJSON(['ok' => true, 'msg' => 'Salle supprimée.']);
     }
@@ -331,15 +432,22 @@ class SalleController extends BaseController
         $villes    = $toArr($detail['villesalle'] ?? '');
 
         $nbSalles = count($nomsalles);
+        // Salles du club (club_salle, principale d'abord) et nombre de clubs de chaque salle :
+        // une salle partagée avec d'autres clubs n'est jamais vidée ni réaffectée par position.
+        $sallesClub = sallesDuClub($pdo, $numClub);
+        $liens      = liensClubsSalles($pdo);
+        $partagee   = fn ($idS) => count($liens[(int) $idS] ?? []) > 1;
+
         if ($nbSalles === 0) {
-            $stmtChkP = $pdo->prepare('SELECT Id_Salle FROM Salle WHERE Id_Club=? AND EstPrincipale=1 LIMIT 1');
-            $stmtChkP->execute([$numClub]);
-            $idSalleExist = $stmtChkP->fetchColumn();
+            $idSalleExist = ($sallesClub && (int) $sallesClub[0]['EstPrincipale'] === 1) ? (int) $sallesClub[0]['Id_Salle'] : null;
+            if ($idSalleExist && $partagee($idSalleExist)) {
+                return $this->response->setJSON(['ok' => true, 'op' => null, 'msg' => "Club $numClub : aucune salle FFTT — salle principale partagée avec d'autres clubs, non modifiée"]);
+            }
             if ($idSalleExist) {
                 $nomClubRow = $pdo->prepare('SELECT Nom FROM Club WHERE Id_Club=?');
                 $nomClubRow->execute([$numClub]);
                 $nomClub = $nomClubRow->fetchColumn() ?: null;
-                $pdo->prepare('UPDATE Salle SET Nom=?, Adresse=NULL, Cp=NULL, Ville=NULL, Id_Laposte=NULL WHERE Id_Salle=?')
+                $pdo->prepare('UPDATE salle SET Nom=?, Adresse=NULL, Cp=NULL, Ville=NULL, Id_Laposte=NULL WHERE Id_Salle=?')
                     ->execute([$nomClub, $idSalleExist]);
 
                 return $this->response->setJSON(['ok' => true, 'op' => 'vide', 'msg' => "Club $numClub : aucune salle FFTT — champs vidés"]);
@@ -348,17 +456,15 @@ class SalleController extends BaseController
             return $this->response->setJSON(['ok' => true, 'op' => null, 'msg' => "Club $numClub : aucune salle dans FFTT"]);
         }
 
-        $stmtUpd = $pdo->prepare('UPDATE Salle SET Nom=?, Adresse=COALESCE(?,Adresse), Cp=COALESCE(?,Cp), Ville=COALESCE(?,Ville), Id_Laposte=COALESCE(?,Id_Laposte), EstPrincipale=? WHERE Id_Salle=?');
-        $stmtIns = $pdo->prepare('INSERT INTO Salle (Nom, Adresse, Cp, Ville, Id_Laposte, Id_Club, EstPrincipale) VALUES (?,?,?,?,?,?,?)');
+        $stmtUpd = $pdo->prepare('UPDATE salle SET Nom=?, Adresse=COALESCE(?,Adresse), Cp=COALESCE(?,Cp), Ville=COALESCE(?,Ville), Id_Laposte=COALESCE(?,Id_Laposte) WHERE Id_Salle=?');
 
-        $stmtExist = $pdo->prepare('SELECT Id_Salle, Nom FROM Salle WHERE Id_Club=? ORDER BY EstPrincipale DESC, Id_Salle ASC');
-        $stmtExist->execute([$numClub]);
-        // Pool des salles existantes non encore appariées à une entrée FFTT de
+        // Pool des salles existantes du club non encore appariées à une entrée FFTT de
         // cette synchronisation — appariées par nom en priorité (voir boucle
         // ci-dessous), avec repli sur l'ordre d'origine seulement si aucun nom
-        // ne correspond, pour ne pas écraser la mauvaise salle quand FFTT
-        // retourne ses salles dans un ordre différent de celui de la base.
-        $sallesRestantes = $stmtExist->fetchAll();
+        // ne correspond (et jamais sur une salle partagée avec d'autres clubs),
+        // pour ne pas écraser la mauvaise salle quand FFTT retourne ses salles
+        // dans un ordre différent de celui de la base.
+        $sallesRestantes = $sallesClub;
         $normaliserNomSalle = static fn (string $s): string => mb_strtoupper(trim(preg_replace('/\s+/', ' ', $s)), 'UTF-8');
 
         $ops    = [];
@@ -387,20 +493,32 @@ class SalleController extends BaseController
                     break;
                 }
             }
-            if ($idSalle === null && $sallesRestantes) {
-                $k       = array_key_first($sallesRestantes);
-                $idSalle = $sallesRestantes[$k]['Id_Salle'];
-                unset($sallesRestantes[$k]);
+            if ($idSalle === null) {
+                foreach ($sallesRestantes as $k => $se) {
+                    if (!$partagee($se['Id_Salle'])) {
+                        $idSalle = $se['Id_Salle'];
+                        unset($sallesRestantes[$k]);
+                        break;
+                    }
+                }
             }
 
             if ($idSalle) {
-                $stmtUpd->execute([$nom, $adresse, $cp ?: null, $ville ?: null, $idLaPoste, $estPrinc, $idSalle]);
+                $stmtUpd->execute([$nom, $adresse, $cp ?: null, $ville ?: null, $idLaPoste, $idSalle]);
+                lierClubSalle($pdo, $numClub, (int) $idSalle, $estPrinc ? true : null);
                 $ops[] = "Mise à jour : $nom ($cp $ville)" . ($estPrinc ? ' [principale]' : '');
                 $cntMaj++;
             } else {
-                $stmtIns->execute([$nom, $adresse, $cp ?: null, $ville ?: null, $idLaPoste, $numClub, $estPrinc]);
-                $ops[] = "Créée : $nom ($cp $ville)" . ($estPrinc ? ' [principale]' : '');
-                $cntNew++;
+                // Salle existante au même lieu (autre club, fiche sans club…) réutilisée plutôt que dupliquée.
+                $salle = trouverOuCreerSalle($pdo, ['Nom' => $nom, 'Adresse' => $adresse, 'Cp' => $cp ?: null, 'Ville' => $ville ?: null, 'Id_Laposte' => $idLaPoste], $numClub);
+                lierClubSalle($pdo, $numClub, $salle['id'], $estPrinc ? true : null);
+                if ($salle['cree']) {
+                    $ops[] = "Créée : $nom ($cp $ville)" . ($estPrinc ? ' [principale]' : '');
+                    $cntNew++;
+                } else {
+                    $ops[] = "Liée (salle n°{$salle['id']} existante au même lieu) : $nom ($cp $ville)" . ($estPrinc ? ' [principale]' : '');
+                    $cntMaj++;
+                }
             }
         }
 

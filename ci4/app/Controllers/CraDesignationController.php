@@ -231,8 +231,7 @@ class CraDesignationController extends BaseController
                 c.NbTablesMin, c.NbTablesMax, c.NbrJA, c.NbrAdjoint, c.NiveauJA,
                 s.Nom AS SalleNom, s.Adresse AS SalleAdresse, s.Cp AS SalleCp, s.Ville AS SalleVille
             FROM CRA_Competition c
-            LEFT JOIN salle s ON s.Id_Salle = (SELECT s2.Id_Salle FROM salle s2 WHERE s2.Id_Club = c.Id_Club
-                                               ORDER BY s2.EstPrincipale DESC, s2.Id_Salle LIMIT 1)
+            LEFT JOIN salle s ON s.Id_Salle = ' . sqlIdSallePrincipale('c.Id_Club', true) . '
             WHERE c.Id_CRA_Competition = ?');
         $stmt->execute([$id]);
         $c = $stmt->fetch(\PDO::FETCH_ASSOC);
@@ -318,7 +317,8 @@ class CraDesignationController extends BaseController
                     }
                 }
                 $mail->Subject = ($modeDev && $dest !== $d['Email']) ? "[DEV] $sujet" : $sujet;
-                $mail->msgHTML($corps); // images data:base64 du modèle → pièces jointes inline (CID), AltBody généré
+                $mail->msgHTML($corps); // images data:base64 du modèle → pièces jointes inline (CID)
+                $mail->AltBody = altBodyDepuisHtml($corps);
                 $mail->send();
                 enregistrerEnvois(1);
                 $maj->execute([(int) $d['Id_CRA_Designation']]);

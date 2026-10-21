@@ -219,7 +219,7 @@ class JugearbitreController extends BaseController
             $stmt    = $pdo->prepare(
                 'SELECT cl.Id_Club, cl.Nom
                  FROM Club cl
-                 JOIN Salle s  ON s.Id_Club   = cl.Id_Club AND s.EstPrincipale = 1
+                 ' . sqlJoinSallePrincipale('cl.Id_Club', 's', 'JOIN') . '
                  JOIN laposte lp ON lp.Id_LaPoste = s.Id_Laposte
                  WHERE LEFT(lp.CodePostal, 2) = ?
                  ORDER BY cl.Nom'

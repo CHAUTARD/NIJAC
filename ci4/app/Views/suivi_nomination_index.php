@@ -148,6 +148,7 @@
                         <th data-field="ja">JA<span class="sort-icon"></span></th>
                         <th style="width:110px" data-field="ebp">Compte EBP<span class="sort-icon"></span></th>
                         <th class="num" style="width:90px" data-field="peage">Péage<span class="sort-icon"></span></th>
+                        <th style="width:150px" data-field="justificatif" title="Justificatif de péage (ouverture dans un nouvel onglet)">Justificatif<span class="sort-icon"></span></th>
                         <th class="num" style="width:90px" data-field="km">Km<span class="sort-icon"></span></th>
                         <th class="centre" style="width:110px" data-field="defisc">Défisc.<span class="sort-icon"></span></th>
                         <th class="centre" style="width:110px" data-field="saisie">Date saisie<span class="sort-icon"></span></th>
@@ -157,7 +158,7 @@
                     </tr>
                 </thead>
                 <tbody id="tbody-liste">
-                    <tr><td colspan="15" class="text-center text-muted py-3">Chargement…</td></tr>
+                    <tr><td colspan="16" class="text-center text-muted py-3">Chargement…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -204,6 +205,17 @@
                         <div class="form-check mb-1">
                             <input type="checkbox" id="modif-f131" class="form-check-input">
                             <label class="form-check-label small" for="modif-f131">FFTT 131</label>
+                        </div>
+                    </div>
+                    <!-- Justificatif de péage (nomination.FichierPeage) : correction d'une nomination existante seulement.
+                         Colonne absente (EA98 non chargé) : champ désactivé. -->
+                    <div class="col-12" id="modif-col-justif"<?= empty($fichierPeageDispo) ? ' title="Colonne nomination.FichierPeage absente : chargez EA98"' : '' ?>>
+                        <label class="form-label small mb-1" for="modif-justif">Justificatif de péage <span class="text-muted">(image ou PDF, 5 Mo max.)</span></label>
+                        <input type="file" id="modif-justif" class="form-control form-control-sm" accept="image/*,.pdf,application/pdf"<?= empty($fichierPeageDispo) ? ' disabled' : '' ?>>
+                        <div class="small mt-1" id="modif-justif-actuel"></div>
+                        <div class="form-check mb-1" id="modif-justif-suppr-wrap">
+                            <input type="checkbox" id="modif-justif-suppr" class="form-check-input"<?= empty($fichierPeageDispo) ? ' disabled' : '' ?>>
+                            <label class="form-check-label small" for="modif-justif-suppr">Supprimer le justificatif</label>
                         </div>
                     </div>
                 </div>
@@ -270,6 +282,12 @@
 'use strict';
 const SUIVI_BASE = '<?= site_url('suivi-nomination') ?>';
 const DIVISION_NOMS = <?= json_encode($divisionNoms ?? [], JSON_UNESCAPED_UNICODE) ?>;
+/** nomination.FichierPeage présente (EA98) : sinon champ justificatif désactivé. */
+const FICHIER_PEAGE_DISPO = <?= !empty($fichierPeageDispo) ? 'true' : 'false' ?>;
+const JUSTIF_TAILLE_MAX = 5 * 1024 * 1024;
+/** Lien d'ouverture d'un justificatif de péage (route authentifiée, le serveur revalide le nom ; nouvel onglet). */
+const lienJustificatif = nom => $('<a target="_blank" rel="noopener">')
+    .attr('href', `${SUIVI_BASE}/peage/fichier?nom=${encodeURIComponent(nom)}`).text(nom);
 function libDivision(code) {
     const n = DIVISION_NOMS[code];
     return n ? code + ' — ' + n : code;
@@ -365,6 +383,7 @@ const CLES_TRI = {
     ja:        n => n.NomJa ?? '',
     ebp:       n => n.NumCompteEBP ?? '',
     peage:     n => n.DateSaisie ? +n.Peage : -1,
+    justificatif: n => n.FichierPeage ?? '',
     km:        n => n.DateSaisie ? +n.Kilometre : -1,
     defisc:    n => n.DateSaisie ? +n.Defiscalisation : -1,
     saisie:    n => n.DateSaisie ?? '',
@@ -391,7 +410,7 @@ function renderListe() {
     $('#lbl-count').text(`${affichees.length} / ${nominations.length}`);
 
     if (!affichees.length) {
-        $body.append('<tr><td colspan="15" class="text-center text-muted py-3">Aucune rencontre.</td></tr>');
+        $body.append('<tr><td colspan="16" class="text-center text-muted py-3">Aucune rencontre.</td></tr>');
         return;
     }
 
@@ -442,6 +461,8 @@ function renderListe() {
             $('<td class="num">').attr('data-field', 'peage').toggleClass('non-saisi', !saisi)
                 .toggleClass('deja-compte', nonCompte('Peage', peageNon)).attr('title', nonCompte('Peage', peageNon) ? titreNonCompte : null)
                 .text(saisi ? Number(n.Peage ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) + ' €' : '—'),
+            $('<td>').attr('data-field', 'justificatif').addClass('small text-nowrap')
+                .append(n.FichierPeage ? lienJustificatif(n.FichierPeage) : ''),
             $('<td class="num">').attr('data-field', 'km').toggleClass('non-saisi', !saisi)
                 .toggleClass('deja-compte', nonCompte('Kilometre', kmNon)).attr('title', nonCompte('Kilometre', kmNon) ? titreNonCompte : null)
                 .text(saisi ? (n.Kilometre ?? 0) : '—'),
@@ -454,7 +475,7 @@ function renderListe() {
                 : $('<span class="non-saisi">').text(nomme ? '—' : '')),
             $('<td class="centre">').append(nomme ? $modifier : (nommable ? $saisir : '')),
             $('<td class="centre">').append(relancable ? $relanceClub
-                : (!nomme || saisi || !+n.Valide ? '' : $rappel)) // sans JA, frais déjà saisis, ou arbitrage club non validé (refusé serveur) : pas de rappel
+                : (!nomme || saisi ? '' : $rappel)) // sans JA ou frais déjà saisis : pas de rappel
         ).on('dblclick', function () { if (nomme || nommable) ouvrirModification(n); }).appendTo($body);
     });
 }
@@ -557,6 +578,14 @@ function ouvrirModification(n) {
         $('#modif-defisc').prop('checked', !!+n.Defiscalisation);
         $('#modif-col-f131').toggle(!saisie);   // indicateur FFTT 131 : correction d'une nomination existante seulement
         $('#modif-f131').prop('checked', !!+n.F131);
+        // Justificatif de péage : correction d'une nomination existante seulement
+        $('#modif-col-justif').toggle(!saisie);
+        $('#modif-justif').val('');
+        $('#modif-justif-suppr').prop('checked', false);
+        $('#modif-justif-actuel').empty().append(n.FichierPeage
+            ? [document.createTextNode('Actuel : '), lienJustificatif(n.FichierPeage)]
+            : $('<span class="text-muted">').text(FICHIER_PEAGE_DISPO ? 'Aucun justificatif.' : 'Colonne absente : chargez EA98.'));
+        $('#modif-justif-suppr-wrap').toggle(!!n.FichierPeage);
         bootstrap.Modal.getOrCreateInstance('#modal-modif').show();
     };
     if (jaListe) { ouvrir(); return; }
@@ -577,6 +606,8 @@ $('#btn-modif-enregistrer').on('click', function () {
     if (!modifNom) return;
     const saisie = !modifNom.Id_Nomination;
     if (saisie && !$('#modif-ja').val()) { toast('Choisissez le juge-arbitre.', false); return; }
+    const justif = saisie || !FICHIER_PEAGE_DISPO ? null : ($('#modif-justif')[0].files[0] || null);
+    if (justif && justif.size > JUSTIF_TAILLE_MAX) { toast('Justificatif trop volumineux (5 Mo maximum).', false); return; }
     const $btn = $(this).prop('disabled', true);
     const frais = {
         id_ja:  $('#modif-ja').val(),
@@ -584,15 +615,27 @@ $('#btn-modif-enregistrer').on('click', function () {
         km:     $('#modif-km').val(),
         defisc: $('#modif-defisc').is(':checked') ? 1 : 0,
     };
-    $.post(saisie ? `${SUIVI_BASE}/saisir` : `${SUIVI_BASE}/modifier`, saisie
+    const donnees = saisie
         ? { id_rencontre: modifNom.Id_Rencontre, ...frais }
-        : { id_nomination: modifNom.Id_Nomination, arbitrage: $('#modif-arbitrage').val(), f131: $('#modif-f131').is(':checked') ? 1 : 0, ...frais }, function (r) {
+        : { id_nomination: modifNom.Id_Nomination, arbitrage: $('#modif-arbitrage').val(), f131: $('#modif-f131').is(':checked') ? 1 : 0, ...frais };
+    // « Modifier » : multipart (justificatif de péage facultatif) ; sans fichier, mêmes champs qu'avant.
+    let requete;
+    if (saisie) {
+        requete = $.post(`${SUIVI_BASE}/saisir`, donnees, null, 'json');
+    } else {
+        const fd = new FormData();
+        Object.entries(donnees).forEach(([k, v]) => fd.append(k, v ?? ''));
+        if (justif) fd.append('peage_fichier', justif);
+        else if (FICHIER_PEAGE_DISPO && $('#modif-justif-suppr').is(':checked')) fd.append('peage_supprimer', '1');
+        requete = $.ajax({ url: `${SUIVI_BASE}/modifier`, method: 'POST', data: fd, processData: false, contentType: false, dataType: 'json' });
+    }
+    requete.done(function (r) {
         $btn.prop('disabled', false);
         toast(escHtml(r.msg), !!r.ok);
         if (!r.ok) return;
         bootstrap.Modal.getInstance('#modal-modif').hide();
         chargerListe();
-    }, 'json').fail(function () {
+    }).fail(function () {
         $btn.prop('disabled', false);
         toast('Erreur réseau.', false);
     });

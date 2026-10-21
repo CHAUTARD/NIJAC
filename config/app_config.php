@@ -12,24 +12,6 @@
  */
 function initTableConfiguration(\PDO $pdo): void
 {
-    // Renommage departement.code -> departement.CodeDept : PK référencée par 2 FK,
-    // il faut les retirer, renommer, puis les recréer à l'identique.
-    try {
-        $ancienne = $pdo->query(
-            "SELECT 1 FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'departement' AND COLUMN_NAME = 'code'"
-        )->fetchColumn();
-        if ($ancienne) {
-            $pdo->exec('ALTER TABLE equipe_nationale DROP FOREIGN KEY fk_equipenat_dept');
-            $pdo->exec('ALTER TABLE utilisateur DROP FOREIGN KEY fk_utilisateur_departement_code');
-            $pdo->exec("ALTER TABLE departement CHANGE code CodeDept varchar(3) COLLATE utf8mb4_unicode_ci NOT NULL");
-            $pdo->exec("ALTER TABLE equipe_nationale ADD CONSTRAINT fk_equipenat_dept FOREIGN KEY (CodeDept) REFERENCES departement (CodeDept) ON DELETE SET NULL ON UPDATE CASCADE");
-            $pdo->exec("ALTER TABLE utilisateur ADD CONSTRAINT fk_utilisateur_departement_code FOREIGN KEY (Id_Departement) REFERENCES departement (CodeDept) ON DELETE SET NULL ON UPDATE CASCADE");
-        }
-    } catch (\PDOException $e) {
-        // best-effort — voir le SQL manuel dans la doc si l'ALTER échoue ici.
-    }
-
     // FK Division -> division.Division sur equipe et equipe_nationale (aucune
     // valeur orpheline en base). ON UPDATE CASCADE : renommage d'un code division
     // propagé ; ON DELETE RESTRICT : impossible de supprimer une division encore
@@ -217,18 +199,6 @@ function initTableConfiguration(\PDO $pdo): void
                 UNIQUE KEY uq_jugearbitre_code (Code)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ');
-        // Colonne Ordre supprimée : retire-la si la table a déjà été créée avec.
-        if ($pdo->query("SHOW COLUMNS FROM JugeArbitre LIKE 'Ordre'")->fetch()) {
-            $pdo->exec('ALTER TABLE JugeArbitre DROP COLUMN Ordre');
-        }
-        // Anciens types (VARCHAR(10)/(60)/(255)) : mise à niveau si la table a déjà été créée avec.
-        $typesJug = [];
-        foreach ($pdo->query('SHOW COLUMNS FROM JugeArbitre')->fetchAll(\PDO::FETCH_ASSOC) as $colJug) {
-            $typesJug[$colJug['Field']] = strtolower($colJug['Type']);
-        }
-        if (($typesJug['Code'] ?? '') !== 'char(3)' || ($typesJug['Libelle'] ?? '') !== 'varchar(26)' || ($typesJug['Description'] ?? '') !== 'text') {
-            $pdo->exec('ALTER TABLE JugeArbitre MODIFY Code CHAR(3) NOT NULL, MODIFY Libelle VARCHAR(26) NOT NULL, MODIFY Description TEXT NOT NULL');
-        }
         if (!(int) $pdo->query('SELECT COUNT(*) FROM JugeArbitre')->fetchColumn()) {
             $stmtJug = $pdo->prepare('INSERT INTO JugeArbitre (Code, Libelle, Description) VALUES (?, ?, ?)');
             foreach ([
@@ -315,39 +285,6 @@ function initTableConfiguration(\PDO $pdo): void
         ");
     } catch (\PDOException $e) {
         // best-effort
-    }
-    // Migration (10/2026) d'une table créée avec l'ancien Disponible TINYINT(1) NULL (NULL / 1 / 0) vers l'ENUM.
-    // Étapes séquentielles (DDL = commit implicite, pas de transaction possible) : la première qui échoue arrête
-    // la migration et la journalise. Reprise sûre au passage EA98 suivant : la colonne n'étant toujours pas un
-    // ENUM, les étapes sont rejouées (l'UPDATE ne touche que les anciennes valeurs).
-    try {
-        $type = $pdo->query(
-            "SELECT DATA_TYPE FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'cra_dispo' AND COLUMN_NAME = 'Disponible'"
-        )->fetchColumn();
-        if ($type !== false && strtolower((string) $type) !== 'enum') {
-            // (a) texte libre le temps de la conversion
-            $pdo->exec('ALTER TABLE CRA_Dispo MODIFY Disponible VARCHAR(30) NULL');
-            // (b) conversion : commentaires de substitution de l'ancien import d'abord (commentaire vidé), puis 1 / 0 / NULL
-            $pdo->exec("UPDATE CRA_Dispo SET Disponible = Commentaire, Commentaire = NULL
-                        WHERE Commentaire IN ('À confirmer', 'Disponible sous condition')");
-            $pdo->exec("UPDATE CRA_Dispo SET Disponible = CASE
-                            WHEN Disponible IS NULL THEN 'Non renseigné'
-                            WHEN Disponible = '1' THEN 'Disponible'
-                            WHEN Disponible = '0' THEN 'Indisponible'
-                            ELSE Disponible END");
-            // garde-fou : jamais d'ENUM posé sur une valeur hors liste (tronquée en '' en mode non strict)
-            $restant = (int) $pdo->query("SELECT COUNT(*) FROM CRA_Dispo WHERE Disponible NOT IN
-                ('Non renseigné','Indisponible','Disponible','À confirmer','Disponible sous condition')")->fetchColumn();
-            if ($restant > 0) {
-                throw new \RuntimeException("$restant valeur(s) de Disponible non convertible(s)");
-            }
-            // (c) type définitif
-            $pdo->exec("ALTER TABLE CRA_Dispo MODIFY Disponible $enumDispo");
-        }
-    } catch (\Throwable $e) {
-        // Arrêt de la migration de CRA_Dispo (colonne laissée en VARCHAR si (a) est passée) : rejouée au prochain EA98.
-        error_log('[NIJAC] Migration CRA_Dispo.Disponible -> ENUM interrompue : ' . $e->getMessage());
     }
     try {
         $existe = $pdo->query(
@@ -467,63 +404,33 @@ function initTableConfiguration(\PDO $pdo): void
         // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
     }
 
-    // ja.Actif -> ja.JA1 (même type/défaut, données conservées) + degrés JA2/JA3/JAN/JAI
-    // (codes de la table de référence JugeArbitre, sans FK). Index idx_ja_actif -> idx_ja_ja1.
+    // rencontre.DateDemandeClub : date/heure du dernier envoi (ou relance) de la demande
+    // d'arbitrage au club — envoyerDemandeJaClub() (EN14 / EN28). NULL = jamais envoyée.
+    // Lue / écrite seulement si présente (rencontreADateDemandeClub(), tolérance avant EA98).
+    try {
+        $existe = $pdo->query(
+            "SELECT 1 FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rencontre' AND COLUMN_NAME = 'DateDemandeClub'"
+        )->fetchColumn();
+        if (!$existe) {
+            $pdo->exec('ALTER TABLE rencontre ADD COLUMN DateDemandeClub DATETIME NULL DEFAULT NULL');
+        }
+    } catch (\PDOException $e) {
+        // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
+    }
+
+    // Degrés JA2/JA3/JAN/JAI après ja.JA1 (codes de la table de référence JugeArbitre, sans FK).
     try {
         $colsJa = $pdo->query(
             "SELECT COLUMN_NAME FROM information_schema.COLUMNS
              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ja'"
         )->fetchAll(\PDO::FETCH_COLUMN);
-        if (in_array('Actif', $colsJa, true) && !in_array('JA1', $colsJa, true)) {
-            $pdo->exec("ALTER TABLE ja CHANGE Actif JA1 TINYINT(1) DEFAULT '1'");
-            $colsJa[] = 'JA1';
-        }
         $apres = 'JA1';
         foreach (['JA2', 'JA3', 'JAN', 'JAI'] as $colJa) {
             if (!in_array($colJa, $colsJa, true)) {
                 $pdo->exec("ALTER TABLE ja ADD COLUMN $colJa TINYINT(1) NOT NULL DEFAULT 0 AFTER $apres");
             }
             $apres = $colJa;
-        }
-        if ($pdo->query("SHOW INDEX FROM ja WHERE Key_name = 'idx_ja_actif'")->fetch()) {
-            $pdo->exec('ALTER TABLE ja RENAME INDEX idx_ja_actif TO idx_ja_ja1');
-        }
-    } catch (\PDOException $e) {
-        // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
-    }
-
-    // ja.Nationale : défaut 1 (Oui) + passage unique de tous les JA existants à 1.
-    // Le défaut sert de garde : une fois à 1, l'UPDATE ne se rejoue plus (les JA
-    // remis ensuite à Non dans la modale EN11 sont préservés). Type et nullabilité
-    // existants conservés. Les imports n'écrivent jamais cette colonne.
-    try {
-        $col = $pdo->query(
-            "SELECT COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ja' AND COLUMN_NAME = 'Nationale'"
-        )->fetch(\PDO::FETCH_ASSOC);
-        if ($col && trim((string) $col['COLUMN_DEFAULT'], "'") !== '1') {
-            $null = $col['IS_NULLABLE'] === 'YES' ? 'NULL' : 'NOT NULL';
-            $pdo->exec("ALTER TABLE ja MODIFY Nationale {$col['COLUMN_TYPE']} $null DEFAULT 1");
-            $pdo->exec('UPDATE ja SET Nationale = 1');
-        }
-    } catch (\PDOException $e) {
-        // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
-    }
-
-    // nomination.Valide : défaut 1 — un JA nommé sur une rencontre la rend valide
-    // d'office (plus de validation manuelle depuis la suppression du bouton
-    // « Valider les nominations » d'EN14). Passage unique des nominations restées
-    // à 0 ; le défaut sert de garde (l'UPDATE ne se rejoue plus). Type et
-    // nullabilité existants conservés. EmailEnvoye non touché.
-    try {
-        $col = $pdo->query(
-            "SELECT COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nomination' AND COLUMN_NAME = 'Valide'"
-        )->fetch(\PDO::FETCH_ASSOC);
-        if ($col && trim((string) $col['COLUMN_DEFAULT'], "'") !== '1') {
-            $null = $col['IS_NULLABLE'] === 'YES' ? 'NULL' : 'NOT NULL';
-            $pdo->exec("ALTER TABLE nomination MODIFY Valide {$col['COLUMN_TYPE']} $null DEFAULT 1");
-            $pdo->exec('UPDATE nomination SET Valide = 1 WHERE Valide = 0');
         }
     } catch (\PDOException $e) {
         // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
@@ -559,35 +466,56 @@ function initTableConfiguration(\PDO $pdo): void
         // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
     }
 
-    // nomination.Forfait : colonne brièvement ajoutée puis abandonnée — le forfait n'est porté
-    // que par rencontre.Forfait (EN23). Suppression volontaire et idempotente si elle existe encore.
+    // nomination.FichierPeage : nom du fichier justificatif de péage, NULL = aucun.
+    // Format : YYYYMMJJHHMMSS + millisecondes (3 chiffres) + '.' + extension (4 car. max),
+    // soit 22 car. max (ex. 20261020143005123.jpeg), VARCHAR(25) pour la marge.
     try {
         $existe = $pdo->query(
             "SELECT 1 FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nomination' AND COLUMN_NAME = 'Forfait'"
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nomination' AND COLUMN_NAME = 'FichierPeage'"
         )->fetchColumn();
-        if ($existe) {
-            $pdo->exec('ALTER TABLE nomination DROP COLUMN Forfait');
-            error_log('[NIJAC] colonne nomination.Forfait supprimée');
+        if (!$existe) {
+            $aPeage = $pdo->query(
+                "SELECT 1 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nomination' AND COLUMN_NAME = 'Peage'"
+            )->fetchColumn();
+            $pdo->exec('ALTER TABLE nomination ADD COLUMN FichierPeage VARCHAR(25) NULL DEFAULT NULL'
+                . ($aPeage ? ' AFTER Peage' : ''));
         }
     } catch (\PDOException $e) {
         // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
     }
 
-    // f131_travail : ancienne table de travail du fichier FFTT 131 (écran EN30, supprimé). Plus aucun code ne la lit
-    // ni ne l'écrit (la mise à jour FFTT 131 d'EN28 analyse directement le fichier du serveur) : suppression
-    // volontaire et idempotente si elle existe encore (même principe que nomination.Forfait).
+    // nomination.Valide : colonne supprimée (plus de notion de validité, une nomination existante
+    // est toujours valide). Le code ne la lit ni ne l'écrit plus : il fonctionne avant et après ce
+    // bloc. Clés étrangères / index qui la référencent supprimés d'abord, puis la colonne.
     try {
         $existe = $pdo->query(
-            "SELECT 1 FROM information_schema.TABLES
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'f131_travail'"
+            "SELECT 1 FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nomination' AND COLUMN_NAME = 'Valide'"
         )->fetchColumn();
         if ($existe) {
-            $pdo->exec('DROP TABLE IF EXISTS f131_travail');
-            error_log('[NIJAC] table f131_travail supprimée');
+            $fks = $pdo->query(
+                "SELECT DISTINCT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nomination' AND COLUMN_NAME = 'Valide'
+                   AND REFERENCED_TABLE_NAME IS NOT NULL"
+            )->fetchAll(\PDO::FETCH_COLUMN);
+            foreach ($fks as $fk) {
+                $pdo->exec('ALTER TABLE nomination DROP FOREIGN KEY `' . str_replace('`', '``', $fk) . '`');
+            }
+            $index = $pdo->query(
+                "SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nomination' AND COLUMN_NAME = 'Valide'
+                   AND INDEX_NAME <> 'PRIMARY'"
+            )->fetchAll(\PDO::FETCH_COLUMN);
+            foreach ($index as $ix) {
+                $pdo->exec('ALTER TABLE nomination DROP INDEX `' . str_replace('`', '``', $ix) . '`');
+            }
+            $pdo->exec('ALTER TABLE nomination DROP COLUMN Valide');
         }
     } catch (\PDOException $e) {
-        // best-effort — SQL manuel possible si le DROP échoue ici (droits…).
+        // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…) : ALTER TABLE nomination DROP COLUMN Valide;
+        error_log('[NIJAC] Suppression de la colonne nomination.Valide : ' . $e->getMessage());
     }
 
     // Colonnes "référent" du club : 2e contact, mis en copie (Cc) des emails
@@ -614,119 +542,11 @@ function initTableConfiguration(\PDO $pdo): void
     // ja.VehiculeElectrique (ED51/ED52) sont déjà déployés en dev et en prod par
     // ALTER manuel — pas de bloc de migration ici (voir SPECIFICATION.md ED51/ED52).
 
-    // equipe.SouhaitJA : enum('CRA','Club') NULLABLE -> TINYINT(1) NOT NULL (1=CRA, 0=Club).
-    // Valeur redondante avec division.ArbitrageCRA pour tout ce qui n'est pas R3M/R4M —
-    // désormais un booléen toujours renseigné, initialisé à la création de l'équipe
-    // depuis division.ArbitrageCRA (même règle : 1 partout sauf R3M/R4M) et modifiable
-    // ensuite par le club (EN18) ou l'admin, en pratique seulement pour R3M/R4M.
-    // Les lignes NULL existantes (équipes hors R3M/R4M jamais concernées par le choix)
-    // sont backfillées avec le défaut de leur division avant de poser NOT NULL.
-    try {
-        $type = $pdo->query(
-            "SELECT DATA_TYPE FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'equipe' AND COLUMN_NAME = 'SouhaitJA'"
-        )->fetchColumn();
-        if ($type === 'enum') {
-            $pdo->exec(
-                "ALTER TABLE equipe ADD COLUMN SouhaitJaTmp TINYINT(1) NULL DEFAULT NULL AFTER SouhaitJA"
-            );
-            $pdo->exec("UPDATE equipe SET SouhaitJaTmp = CASE SouhaitJA WHEN 'CRA' THEN 1 WHEN 'Club' THEN 0 END");
-            $pdo->exec(
-                "UPDATE equipe e
-                 LEFT JOIN division d ON d.Division = e.Division
-                 SET e.SouhaitJaTmp = COALESCE(d.ArbitrageCRA, CASE WHEN e.Division IN ('R3M', 'R4M') THEN 0 ELSE 1 END)
-                 WHERE e.SouhaitJaTmp IS NULL"
-            );
-            $pdo->exec('ALTER TABLE equipe DROP COLUMN SouhaitJA');
-            $pdo->exec('ALTER TABLE equipe CHANGE SouhaitJaTmp SouhaitJA TINYINT(1) NOT NULL DEFAULT 1');
-        }
-    } catch (\PDOException $e) {
-        // best-effort — droits insuffisants ou colonne déjà migrée.
-    }
-
-    // Renommage/consolidation en ArbitrageCRA : equipe.SouhaitJA (enum 'CRA'/'Club' nullable)
-    // et rencontre.ArbitrageObligatoire représentent tous deux la même notion que
-    // division.ArbitrageCRA (1 = arbitrage fourni par la CRA, 0 = à la charge du club,
-    // R3M/R4M uniquement) — un seul nom, un seul type booléen NOT NULL, partout.
-    try {
-        $type = $pdo->query(
-            "SELECT DATA_TYPE FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'equipe' AND COLUMN_NAME = 'SouhaitJA'"
-        )->fetchColumn();
-        if ($type === 'enum') {
-            $pdo->exec('ALTER TABLE equipe ADD COLUMN ArbitrageCRA TINYINT(1) NULL DEFAULT NULL AFTER SouhaitJA');
-            $pdo->exec("UPDATE equipe SET ArbitrageCRA = CASE SouhaitJA WHEN 'CRA' THEN 1 WHEN 'Club' THEN 0 END");
-            // NULL restant = équipes hors R3M/R4M jamais concernées par le choix : backfill
-            // depuis division.ArbitrageCRA (repli sur le code division si la ligne division
-            // est absente).
-            $pdo->exec(
-                "UPDATE equipe e
-                 LEFT JOIN division d ON d.Division = e.Division
-                 SET e.ArbitrageCRA = COALESCE(d.ArbitrageCRA, CASE WHEN e.Division IN ('R3M', 'R4M') THEN 0 ELSE 1 END)
-                 WHERE e.ArbitrageCRA IS NULL"
-            );
-            $pdo->exec('ALTER TABLE equipe DROP COLUMN SouhaitJA');
-            $pdo->exec('ALTER TABLE equipe MODIFY ArbitrageCRA TINYINT(1) NOT NULL DEFAULT 1');
-        }
-    } catch (\PDOException $e) {
-        // best-effort — droits insuffisants ou colonne déjà migrée.
-    }
-    try {
-        $existe = $pdo->query(
-            "SELECT 1 FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rencontre' AND COLUMN_NAME = 'ArbitrageObligatoire'"
-        )->fetchColumn();
-        if ($existe) {
-            $pdo->exec('ALTER TABLE rencontre CHANGE ArbitrageObligatoire ArbitrageCRA TINYINT(1) NOT NULL DEFAULT 1');
-            // Corrige la désynchronisation historique : l'ancien mécanisme ne recopiait pas
-            // toujours le souhait CRA/Club de l'équipe sur ses rencontres (voir commit de
-            // suppression du bloc de sync dans DesiderataClubController, 09/2026). Photo unique
-            // au moment de ce renommage — au-delà, chaque écran qui modifie
-            // equipe.ArbitrageCRA resynchronise lui-même les rencontres à venir de l'équipe
-            // (EN18, ES33, EA92, EN29), jamais l'historique déjà joué.
-            $pdo->exec(
-                'UPDATE rencontre r
-                 JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
-                 SET r.ArbitrageCRA = ed.ArbitrageCRA'
-            );
-        }
-    } catch (\PDOException $e) {
-        // best-effort — droits insuffisants.
-    }
-
-    // messagerie.Message TEXT (64 Ko) -> MEDIUMTEXT : les convocations CRA (EC73) font ~53 Ko
-    // (images base64), une simple retouche les ferait dépasser TEXT.
-    try {
-        $type = $pdo->query(
-            "SELECT DATA_TYPE FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'messagerie' AND COLUMN_NAME = 'Message'"
-        )->fetchColumn();
-        if (in_array($type, ['tinytext', 'text'], true)) {
-            $pdo->exec('ALTER TABLE messagerie MODIFY Message MEDIUMTEXT COLLATE utf8mb4_unicode_ci NOT NULL');
-        }
-    } catch (\PDOException $e) {
-        error_log('[NIJAC] messagerie.Message -> MEDIUMTEXT : ' . $e->getMessage());
-    }
-
     // EC73 : Types ENUM des 3 convocations CRA (messages de la table messagerie, créés/édités en EA93, plus de source fichier).
     try {
         assurerTypesConvocationCra($pdo);
     } catch (\PDOException $e) {
         error_log('[NIJAC] Types messagerie des convocations CRA : ' . $e->getMessage());
-    }
-
-    // Message n°3 « Convocation » (EN14) : ancien texte brut par défaut -> modèle HTML avec
-    // bouton vers EN21 (modeleHtmlConvocationJa()). Jamais si le corps a été personnalisé via
-    // EA93 ou est déjà à jour (une version HTML précédente non modifiée est mise à niveau) ; Sujet, Cc/ReplyTo et copies perso des nominateurs intacts.
-    try {
-        $corps = $pdo->query('SELECT Message FROM messagerie WHERE Id_Messagerie = 3')->fetchColumn();
-        if ($corps !== false && corpsConvocationJaMigrable((string) $corps)) {
-            $pdo->prepare('UPDATE messagerie SET Message = ? WHERE Id_Messagerie = 3')->execute([modeleHtmlConvocationJa()]);
-        } elseif ($corps !== false && $corps !== modeleHtmlConvocationJa()) {
-            error_log('[NIJAC] message n°3 personnalisé : modèle HTML non appliqué');
-        }
-    } catch (\PDOException $e) {
-        error_log('[NIJAC] Message n°3 -> modèle HTML : ' . $e->getMessage());
     }
 
     // EN14 : message système dédié à la copie de convocation aux correspondants/référents des clubs.
@@ -751,24 +571,9 @@ function initTableConfiguration(\PDO $pdo): void
         error_log('[NIJAC] Clé double_authentification : ' . $e->getMessage());
     }
 
-    // utilisateur.Email obligatoire (code de sécurité E010) : NOT NULL, type/longueur/collation conservés,
-    // NULL -> '' (aucune adresse fabriquée ; ces comptes ne peuvent pas se connecter tant que la
-    // double authentification est active — à corriger en EA86). Ne s'exécute que si la colonne est NULL-able.
-    try {
-        $col = $pdo->query(
-            "SELECT COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME, COLLATION_NAME
-             FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'utilisateur' AND COLUMN_NAME = 'Email'"
-        )->fetch(\PDO::FETCH_ASSOC);
-        if ($col && (int) $col['CHARACTER_MAXIMUM_LENGTH'] < 100) {
-            error_log("[NIJAC] utilisateur.Email ({$col['COLUMN_TYPE']}) trop court pour une adresse réelle : à agrandir manuellement");
-        }
-        foreach ($col ? sqlEmailUtilisateurObligatoire($col, $pdo) : [] as $sql) {
-            $pdo->exec($sql);
-        }
-    } catch (\PDOException $e) {
-        error_log('[NIJAC] utilisateur.Email NOT NULL : ' . $e->getMessage());
-    }
+    // Salles ↔ clubs en plusieurs-à-plusieurs : table club_salle (salle.Id_Club / EstPrincipale
+    // obsolètes, conservées). Gère son propre try/catch (voir assurerTableClubSalle()).
+    assurerTableClubSalle($pdo);
 }
 
 /**
@@ -892,6 +697,496 @@ function nominationAAccuseReception(\PDO $pdo): bool
 }
 
 /**
+ * Expression SQL : salle effective de la rencontre $r (équipe domicile $e) — salle de la
+ * rencontre (r.id_Salle) si elle existe, sinon salle principale du club recevant (même règle
+ * que le lieu affiché/convoqué d'EN14). NULL si aucune.
+ */
+function sqlSalleEffective(string $r, string $e): string
+{
+    return "COALESCE(
+                (SELECT sx.Id_Salle FROM salle sx WHERE sx.Id_Salle = $r.id_Salle),
+                " . sqlIdSallePrincipale("$e.Id_Club") . ")";
+}
+
+/**
+ * Table de liaison club_salle (plusieurs-à-plusieurs club ↔ salle, créée par EA98) présente ?
+ * Source de vérité des salles d'un club et de SA salle principale. Avant EA98, tous les helpers
+ * ci-dessous retombent sur l'ancien modèle salle.Id_Club / salle.EstPrincipale (colonnes
+ * obsolètes conservées en base, plus lues ni écrites une fois club_salle créée).
+ * Cache statique ($rafraichir = true après création de la table par la migration).
+ */
+function clubSalleExiste(?\PDO $pdo = null, bool $rafraichir = false): bool
+{
+    static $existe = null;
+    if ($existe === null || $rafraichir) {
+        try {
+            $existe = (bool) ($pdo ?? getPDO())->query(
+                "SELECT 1 FROM information_schema.TABLES
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'club_salle'"
+            )->fetchColumn();
+        } catch (\PDOException $e) {
+            $existe = false;
+        }
+    }
+
+    return $existe;
+}
+
+/**
+ * Sous-requête SQL scalaire : Id_Salle de la salle principale du club $colClub (NULL si aucune) ;
+ * $repliPremiere : à défaut de principale, sa première salle (plus petit Id_Salle).
+ */
+function sqlIdSallePrincipale(string $colClub, bool $repliPremiere = false): string
+{
+    if ($repliPremiere) {
+        return clubSalleExiste()
+            ? "(SELECT csx.Id_Salle FROM club_salle csx WHERE csx.Id_Club = $colClub ORDER BY csx.EstPrincipale DESC, csx.Id_Salle LIMIT 1)"
+            : "(SELECT sx.Id_Salle FROM salle sx WHERE sx.Id_Club = $colClub ORDER BY sx.EstPrincipale DESC, sx.Id_Salle LIMIT 1)";
+    }
+
+    return clubSalleExiste()
+        ? "(SELECT MIN(csx.Id_Salle) FROM club_salle csx WHERE csx.Id_Club = $colClub AND csx.EstPrincipale = 1)"
+        : "(SELECT MIN(sx.Id_Salle) FROM salle sx WHERE sx.Id_Club = $colClub AND sx.EstPrincipale = 1)";
+}
+
+/**
+ * Jointure SQL « salle principale du club $colClub » sous l'alias $s ($jointure = 'LEFT JOIN' ou
+ * 'JOIN'). Au plus une principale par club (garde-fou definirSallePrincipale() + migration EA98) :
+ * la jointure ne duplique pas de ligne. Alias technique de la liaison : cs_<$s>.
+ */
+function sqlJoinSallePrincipale(string $colClub, string $s, string $jointure = 'LEFT JOIN'): string
+{
+    if (!clubSalleExiste()) {
+        return "$jointure salle $s ON $s.Id_Club = $colClub AND $s.EstPrincipale = 1";
+    }
+    $cs = 'cs_' . $s;
+
+    return "$jointure club_salle $cs ON $cs.Id_Club = $colClub AND $cs.EstPrincipale = 1
+            $jointure salle $s ON $s.Id_Salle = $cs.Id_Salle";
+}
+
+/**
+ * Jointure SQL « toutes les salles du club $colClub » sous l'alias $s (une ligne par salle) ;
+ * le drapeau principale de chaque ligne est sqlColPrincipale($s).
+ */
+function sqlJoinSallesClub(string $colClub, string $s, string $jointure = 'LEFT JOIN'): string
+{
+    if (!clubSalleExiste()) {
+        return "$jointure salle $s ON $s.Id_Club = $colClub";
+    }
+    $cs = 'cs_' . $s;
+
+    return "$jointure club_salle $cs ON $cs.Id_Club = $colClub
+            $jointure salle $s ON $s.Id_Salle = $cs.Id_Salle";
+}
+
+/** Colonne SQL « salle principale du club » d'une jointure sqlJoinSallesClub()/sqlJoinSallePrincipale() d'alias $s. */
+function sqlColPrincipale(string $s): string
+{
+    return clubSalleExiste() ? "cs_$s.EstPrincipale" : "$s.EstPrincipale";
+}
+
+/** Sous-requête SQL scalaire : nombre de salles liées au club $colClub. */
+function sqlNbSallesClub(string $colClub): string
+{
+    return clubSalleExiste()
+        ? "(SELECT COUNT(*) FROM club_salle csn WHERE csn.Id_Club = $colClub)"
+        : "(SELECT COUNT(*) FROM salle sn WHERE sn.Id_Club = $colClub)";
+}
+
+/** Sous-requête SQL (liste) : Id_Salle des salles liées au club $colClub — pour « IN (…) ». */
+function sqlIdsSallesClub(string $colClub): string
+{
+    return clubSalleExiste()
+        ? "SELECT csl.Id_Salle FROM club_salle csl WHERE csl.Id_Club = $colClub"
+        : "SELECT sl.Id_Salle FROM salle sl WHERE sl.Id_Club = $colClub";
+}
+
+/** Salles liées au club $idClub, principale d'abord : [['Id_Salle', 'Nom', 'EstPrincipale'], …]. */
+function sallesDuClub(\PDO $pdo, string $idClub): array
+{
+    $st = $pdo->prepare(clubSalleExiste($pdo)
+        ? 'SELECT s.Id_Salle, s.Nom, cs.EstPrincipale FROM club_salle cs JOIN salle s ON s.Id_Salle = cs.Id_Salle
+           WHERE cs.Id_Club = ? ORDER BY cs.EstPrincipale DESC, s.Id_Salle'
+        : 'SELECT s.Id_Salle, s.Nom, s.EstPrincipale FROM salle s WHERE s.Id_Club = ? ORDER BY s.EstPrincipale DESC, s.Id_Salle');
+    $st->execute([$idClub]);
+
+    return $st->fetchAll(\PDO::FETCH_ASSOC);
+}
+
+/** Clubs liés à chaque salle : [Id_Salle => [['Id_Club', 'Nom', 'EstPrincipale'], …]] (principale d'abord, puis nom). */
+function liensClubsSalles(\PDO $pdo): array
+{
+    $rows = $pdo->query(clubSalleExiste($pdo)
+        ? 'SELECT cs.Id_Salle, cs.Id_Club, c.Nom, cs.EstPrincipale FROM club_salle cs JOIN club c ON c.Id_Club = cs.Id_Club
+           ORDER BY cs.Id_Salle, cs.EstPrincipale DESC, c.Nom'
+        : 'SELECT s.Id_Salle, s.Id_Club, c.Nom, s.EstPrincipale FROM salle s JOIN club c ON c.Id_Club = s.Id_Club
+           ORDER BY s.Id_Salle')->fetchAll(\PDO::FETCH_ASSOC);
+    $liens = [];
+    foreach ($rows as $r) {
+        $liens[(int) $r['Id_Salle']][] = ['Id_Club' => $r['Id_Club'], 'Nom' => $r['Nom'], 'EstPrincipale' => (int) $r['EstPrincipale']];
+    }
+
+    return $liens;
+}
+
+/**
+ * Lie le club $idClub à la salle $idSalle (sans effet si déjà lié). $principale : true = devient
+ * LA salle principale du club (l'ancienne cesse de l'être), false = n'est pas/plus principale,
+ * null = drapeau inchangé (nouvelle liaison : non principale).
+ * Ancien modèle (avant EA98) : une salle n'a qu'un club, salle.Id_Club est remplacé.
+ */
+function lierClubSalle(\PDO $pdo, string $idClub, int $idSalle, ?bool $principale = null): void
+{
+    if (!clubSalleExiste($pdo)) {
+        // EstPrincipale évalué AVANT Id_Club (affectations MySQL de gauche à droite) : un
+        // changement de club ne garde pas le drapeau de l'ancien.
+        $pdo->prepare('UPDATE salle SET EstPrincipale = CASE WHEN Id_Club <=> ? THEN EstPrincipale ELSE 0 END, Id_Club = ? WHERE Id_Salle = ?')
+            ->execute([$idClub, $idClub, $idSalle]);
+    } else {
+        $pdo->prepare('INSERT IGNORE INTO club_salle (Id_Club, Id_Salle, EstPrincipale) VALUES (?, ?, 0)')
+            ->execute([$idClub, $idSalle]);
+    }
+    if ($principale === true) {
+        definirSallePrincipale($pdo, $idClub, $idSalle);
+    } elseif ($principale === false) {
+        $pdo->prepare(clubSalleExiste($pdo)
+            ? 'UPDATE club_salle SET EstPrincipale = 0 WHERE Id_Club = ? AND Id_Salle = ?'
+            : 'UPDATE salle SET EstPrincipale = 0 WHERE Id_Club = ? AND Id_Salle = ?')->execute([$idClub, $idSalle]);
+    }
+}
+
+/** Retire le lien club ↔ salle (la salle n'est jamais supprimée). */
+function delierClubSalle(\PDO $pdo, string $idClub, int $idSalle): void
+{
+    $pdo->prepare(clubSalleExiste($pdo)
+        ? 'DELETE FROM club_salle WHERE Id_Club = ? AND Id_Salle = ?'
+        : 'UPDATE salle SET Id_Club = NULL, EstPrincipale = 0 WHERE Id_Club = ? AND Id_Salle = ?')->execute([$idClub, $idSalle]);
+}
+
+/**
+ * Garde-fou « une seule salle principale par club » : $idSalle devient la principale du club
+ * (salle déjà liée), toutes ses autres salles cessent de l'être — en UNE requête, jamais deux
+ * principales même transitoirement. $idSalle null = le club n'a plus de salle principale.
+ */
+function definirSallePrincipale(\PDO $pdo, string $idClub, ?int $idSalle): void
+{
+    $pdo->prepare(clubSalleExiste($pdo)
+        ? 'UPDATE club_salle SET EstPrincipale = CASE WHEN Id_Salle = ? THEN 1 ELSE 0 END WHERE Id_Club = ?'
+        : 'UPDATE salle SET EstPrincipale = CASE WHEN Id_Salle = ? THEN 1 ELSE 0 END WHERE Id_Club = ?')->execute([$idSalle, $idClub]);
+}
+
+/**
+ * Crée une fiche salle, ou réutilise une fiche existante au MÊME LIEU (classesLieuxSalles() :
+ * même commune + même nom ou même adresse normalisés) plutôt que de la dupliquer.
+ * $champs : Nom (obligatoire), Adresse, Cp, Ville, Id_Laposte, Telephone. $idClub : fiche déjà
+ * liée à ce club préférée en cas de plusieurs candidates. Ne crée/modifie aucune liaison club.
+ * Renvoie ['id' => Id_Salle, 'cree' => bool].
+ */
+function trouverOuCreerSalle(\PDO $pdo, array $champs, ?string $idClub = null): array
+{
+    $cols = array_values(array_intersect(['Nom', 'Adresse', 'Cp', 'Ville', 'Id_Laposte', 'Telephone'], array_keys($champs)));
+    $pdo->prepare('INSERT INTO salle (' . implode(', ', $cols) . ') VALUES (' . implode(', ', array_fill(0, count($cols), '?')) . ')')
+        ->execute(array_map(fn ($c) => $champs[$c], $cols));
+    $id = (int) $pdo->lastInsertId();
+
+    // Même logique « même lieu » que la règle du jour EN14 : la fiche tout juste insérée est
+    // comparée aux autres, puis retirée si une fiche existante désigne le même lieu.
+    classesLieuxSalles($pdo, true);
+    $autres = array_values(array_diff(sallesMemeLieu($pdo, $id), [$id]));
+    if ($autres && !clubSalleExiste($pdo)) {
+        // Ancien modèle (avant EA98) : une fiche n'a qu'un club — jamais celle d'un autre club.
+        $st = $pdo->prepare('SELECT Id_Salle FROM salle WHERE Id_Salle IN (' . implode(',', array_map('intval', $autres)) . ')
+                             AND (Id_Club IS NULL OR Id_Club = ?)');
+        $st->execute([(string) $idClub]);
+        $autres = array_map('intval', $st->fetchAll(\PDO::FETCH_COLUMN));
+    }
+    if (!$autres) {
+        return ['id' => $id, 'cree' => true];
+    }
+    sort($autres);
+    $choix = $autres[0];
+    if ($idClub !== null) {
+        $duClub = array_map('intval', array_column(sallesDuClub($pdo, $idClub), 'Id_Salle'));
+        $communs = array_values(array_intersect($autres, $duClub));
+        $choix = $communs[0] ?? $choix;
+    }
+    $pdo->prepare('DELETE FROM salle WHERE Id_Salle = ?')->execute([$id]);
+    classesLieuxSalles($pdo, true);
+
+    return ['id' => $choix, 'cree' => false];
+}
+
+/**
+ * Colonnes qui référencent salle.Id_Salle (hors salle et club_salle) : FK déclarées
+ * (information_schema.KEY_COLUMN_USAGE) + toute colonne de table nommée « Id_Salle » (casse
+ * indifférente), + rencontre.id_Salle en dur. [[table, colonne], …].
+ */
+function colonnesReferencantSalle(\PDO $pdo): array
+{
+    $refs = ['rencontre|id_salle' => ['rencontre', 'id_Salle']];
+    try {
+        $rows = $pdo->query(
+            "SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE
+             WHERE TABLE_SCHEMA = DATABASE() AND LOWER(REFERENCED_TABLE_NAME) = 'salle'
+             UNION
+             SELECT c.TABLE_NAME, c.COLUMN_NAME FROM information_schema.COLUMNS c
+             JOIN information_schema.TABLES t ON t.TABLE_SCHEMA = c.TABLE_SCHEMA AND t.TABLE_NAME = c.TABLE_NAME
+             WHERE c.TABLE_SCHEMA = DATABASE() AND LOWER(c.COLUMN_NAME) = 'id_salle' AND t.TABLE_TYPE = 'BASE TABLE'"
+        )->fetchAll(\PDO::FETCH_NUM);
+        foreach ($rows as [$table, $col]) {
+            if (!in_array(strtolower($table), ['salle', 'club_salle'], true)) {
+                $refs[strtolower("$table|$col")] = [$table, $col];
+            }
+        }
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] Références à salle (information_schema) : ' . $e->getMessage());
+    }
+
+    return array_values($refs);
+}
+
+/** Nombre de lignes (toutes tables de colonnesReferencantSalle()) qui référencent la salle $idSalle. */
+function nbReferencesSalle(\PDO $pdo, int $idSalle, ?array $refs = null): int
+{
+    $n = 0;
+    foreach ($refs ?? colonnesReferencantSalle($pdo) as [$table, $col]) {
+        $st = $pdo->prepare("SELECT COUNT(*) FROM `$table` WHERE `$col` = ?");
+        $st->execute([$idSalle]);
+        $n += (int) $st->fetchColumn();
+    }
+
+    return $n;
+}
+
+/**
+ * Table de liaison club_salle « une salle ↔ plusieurs clubs, un club ↔ plusieurs salles » (appelée
+ * par initTableConfiguration(), EA98, idempotente) : créée seulement si absente (types/collation
+ * copiés de club.Id_Club et salle.Id_Salle, FK CASCADE si possible, sinon sans FK avec index —
+ * error_log). Colonnes salle.Id_Club / salle.EstPrincipale obsolètes (plus lues ni écrites).
+ */
+function assurerTableClubSalle(\PDO $pdo): void
+{
+    try {
+        if (clubSalleExiste($pdo, true)) {
+            return;
+        }
+        $typeClub = $pdo->query(
+            "SELECT COLUMN_TYPE, CHARACTER_SET_NAME, COLLATION_NAME FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'club' AND COLUMN_NAME = 'Id_Club'"
+        )->fetch(\PDO::FETCH_ASSOC);
+        $typeSalle = $pdo->query(
+            "SELECT COLUMN_TYPE FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'salle' AND COLUMN_NAME = 'Id_Salle'"
+        )->fetchColumn();
+        if (!$typeClub || !$typeSalle) {
+            throw new \PDOException('club.Id_Club ou salle.Id_Salle introuvable');
+        }
+        $defClub = $typeClub['COLUMN_TYPE']
+            . ($typeClub['COLLATION_NAME'] ? " CHARACTER SET {$typeClub['CHARACTER_SET_NAME']} COLLATE {$typeClub['COLLATION_NAME']}" : '');
+        $ddl = "CREATE TABLE club_salle (
+                    Id_Club       $defClub NOT NULL,
+                    Id_Salle      $typeSalle NOT NULL,
+                    EstPrincipale TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Salle principale du club (au plus une par club)',
+                    PRIMARY KEY (Id_Club, Id_Salle),
+                    KEY idx_club_salle_salle (Id_Salle),
+                    KEY idx_club_salle_principale (Id_Club, EstPrincipale)%s
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                  COMMENT='Salles des clubs (plusieurs-à-plusieurs) — remplace salle.Id_Club/EstPrincipale'";
+        try {
+            $pdo->exec(sprintf($ddl, ',
+                    CONSTRAINT fk_club_salle_club  FOREIGN KEY (Id_Club)  REFERENCES club (Id_Club)   ON DELETE CASCADE ON UPDATE CASCADE,
+                    CONSTRAINT fk_club_salle_salle FOREIGN KEY (Id_Salle) REFERENCES salle (Id_Salle) ON DELETE CASCADE ON UPDATE CASCADE'));
+        } catch (\PDOException $e) {
+            error_log('[NIJAC] club_salle créée SANS clés étrangères (index seuls) : ' . $e->getMessage());
+            $pdo->exec(sprintf($ddl, ''));
+        }
+        clubSalleExiste($pdo, true);
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] Création de club_salle : ' . $e->getMessage());
+    }
+}
+
+
+/**
+ * Texte de lieu normalisé (comparaison de salles) : sans accents, minuscules, ponctuation →
+ * espace, abréviations développées ($abrev), mots vides retirés ($vides), puis sans espaces.
+ */
+function normTexteLieu(?string $s, array $vides = [], array $abrev = []): string
+{
+    $s = (string) $s;
+    if (class_exists('Normalizer')) {
+        $s = (string) \Normalizer::normalize($s, \Normalizer::FORM_D);
+        $s = (string) preg_replace('/\p{Mn}+/u', '', $s);
+    }
+    $s = mb_strtolower($s, 'UTF-8');
+    $s = strtr($s, ['œ' => 'oe', 'æ' => 'ae', 'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e', 'à' => 'a', 'â' => 'a',
+                    'î' => 'i', 'ï' => 'i', 'ô' => 'o', 'ö' => 'o', 'ù' => 'u', 'û' => 'u', 'ü' => 'u', 'ç' => 'c']);
+    $mots = preg_split('/[^a-z0-9]+/', $s, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    $garde = [];
+    foreach ($mots as $m) {
+        $m = $abrev[$m] ?? $m;
+        if (!in_array($m, $vides, true)) {
+            $garde[] = $m;
+        }
+    }
+
+    return implode('', $garde);
+}
+
+/**
+ * Regroupe les fiches `salle` désignant le même lieu physique (règle « même salle » du jour,
+ * EN14/EN25/EN28). Deux fiches sont le même lieu si, dans la même commune (CP + ville
+ * normalisés, repli laposte si salle.Cp/Ville vides) :
+ *   - leur NOM normalisé est identique (sans accents/casse/ponctuation, sans les mots
+ *     « gymnase », « salle », « complexe », « sportif »… ni articles), ou
+ *   - leur ADRESSE normalisée est identique (abréviations av/bd/pl/st… développées).
+ * Renvoie ['classe' => [Id_Salle => Id_Salle représentant], 'libelle' => [Id_Salle => « Nom (Ville) »]].
+ * Cache statique : une seule lecture de la table salle par requête HTTP ($rafraichir = true
+ * relit la table : réutilisation d'une salle au même lieu en synchro FFTT).
+ */
+function classesLieuxSalles(\PDO $pdo, bool $rafraichir = false): array
+{
+    static $cache = null;
+    if ($cache !== null && !$rafraichir) {
+        return $cache;
+    }
+    $articles = ['de', 'du', 'des', 'la', 'le', 'les', 'l', 'd', 'et', 'a', 'au', 'aux'];
+    $videsNom = array_merge($articles, ['gymnase', 'gym', 'salle', 'salles', 'complexe', 'sportif', 'sportive',
+        'sportifs', 'sport', 'sports', 'omnisport', 'omnisports', 'espace', 'centre', 'tennis', 'table', 'tt', 'ping']);
+    $abrevAdr = ['av' => 'avenue', 'ave' => 'avenue', 'bd' => 'boulevard', 'bld' => 'boulevard', 'boul' => 'boulevard',
+        'pl' => 'place', 'r' => 'rue', 'ch' => 'chemin', 'che' => 'chemin', 'rte' => 'route', 'imp' => 'impasse',
+        'all' => 'allee', 'sq' => 'square', 'fbg' => 'faubourg', 'st' => 'saint', 'ste' => 'sainte', 'pt' => 'pont'];
+    $abrevVille = ['st' => 'saint', 'ste' => 'sainte'];
+
+    $rows = $pdo->query('
+        SELECT s.Id_Salle, s.Nom, s.Adresse,
+               COALESCE(NULLIF(TRIM(s.Cp), \'\'), lp.CodePostal) AS Cp,
+               COALESCE(NULLIF(TRIM(s.Ville), \'\'), lp.Nom)      AS Ville
+        FROM salle s LEFT JOIN laposte lp ON lp.Id_LaPoste = s.Id_Laposte
+        ORDER BY s.Id_Salle
+    ')->fetchAll(\PDO::FETCH_ASSOC);
+
+    $parent = [];
+    $racine = function (int $x) use (&$parent): int {
+        while ($parent[$x] !== $x) {
+            $x = $parent[$x] = $parent[$parent[$x]];
+        }
+
+        return $x;
+    };
+    $premier = [];
+    $libelle = [];
+    foreach ($rows as $s) {
+        $id = (int) $s['Id_Salle'];
+        $parent[$id] = $id;
+        $libelle[$id] = trim($s['Nom'] . ' (' . trim((string) $s['Ville']) . ')');
+        $commune = preg_replace('/\D/', '', (string) $s['Cp']) . '|' . normTexteLieu($s['Ville'], ['sur', 'en', 'les', 'le', 'la'], $abrevVille);
+        if ($commune === '|') {
+            continue;   // commune inconnue : seul l'Id_Salle identique vaut « même lieu »
+        }
+        foreach (['N' => normTexteLieu($s['Nom'], $videsNom, $abrevVille), 'A' => normTexteLieu($s['Adresse'], $articles, $abrevAdr)] as $t => $v) {
+            if ($v === '') {
+                continue;
+            }
+            $cle = "$t|$commune|$v";
+            if (isset($premier[$cle])) {
+                $a = $racine($premier[$cle]);
+                $b = $racine($id);
+                if ($a !== $b) {
+                    $parent[max($a, $b)] = min($a, $b);
+                }
+            } else {
+                $premier[$cle] = $id;
+            }
+        }
+    }
+    $classe = [];
+    foreach (array_keys($parent) as $id) {
+        $classe[$id] = $racine($id);
+    }
+
+    return $cache = ['classe' => $classe, 'libelle' => $libelle];
+}
+
+/** Ids des fiches salle au même lieu que $idSalle (lui compris) ; [] si salle inconnue. */
+function sallesMemeLieu(\PDO $pdo, ?int $idSalle): array
+{
+    $c = classesLieuxSalles($pdo)['classe'];
+    if (!$idSalle || !isset($c[$idSalle])) {
+        return [];
+    }
+
+    return array_keys($c, $c[$idSalle], true);
+}
+
+/** Salle effective (sqlSalleEffective()) de la rencontre $idRenc : ['salle' => ?int], ou null si rencontre inconnue. */
+function lieuRencontre(\PDO $pdo, int $idRenc): ?array
+{
+    $st = $pdo->prepare('SELECT ' . sqlSalleEffective('r', 'e') . ' AS Id_Salle
+        FROM rencontre r JOIN equipe e ON e.Id_Equipe = r.Id_EquipeDom WHERE r.Id_Rencontre = ?');
+    $st->execute([$idRenc]);
+    $row = $st->fetch(\PDO::FETCH_ASSOC);
+
+    return $row ? ['salle' => $row['Id_Salle'] !== null ? (int) $row['Id_Salle'] : null] : null;
+}
+
+/**
+ * Condition SQL « autre lieu » (règle du jour EN14/EN25/EN28) : la rencontre $r2 (équipe
+ * domicile $e2) n'est pas dans la même salle que la rencontre $idRencCible (sallesMemeLieu() de sa
+ * salle effective) — le club recevant n'intervient pas. Salle inconnue = différente.
+ * Id_Salle castés en int avant intégration.
+ */
+function sqlAutreLieu(\PDO $pdo, string $r2, string $e2, int $idRencCible): string
+{
+    $lieu = lieuRencontre($pdo, $idRencCible);
+    if (!$lieu) {
+        return '1';
+    }
+    $ids = array_map('intval', sallesMemeLieu($pdo, $lieu['salle']));
+    $memeSalle = $ids ? 'COALESCE(' . sqlSalleEffective($r2, $e2) . ' IN (' . implode(',', $ids) . '), 0)' : '0';
+
+    return "(NOT $memeSalle)";
+}
+
+/**
+ * Autres nominations de $idJa le jour de la rencontre $idRenc (hors celle-ci) :
+ * ['nb' => total, 'autres_lieux' => nb dans une autre salle (sallesMemeLieu() ; le club recevant
+ * n'intervient pas), 'autre_lieu' => « Nom de salle (Ville) » de la 1re d'entre elles, ou null].
+ * Règle partagée EN14/EN25/EN28 : refus si nb >= 2 ou autres_lieux > 0.
+ */
+function nominationsJourJa(\PDO $pdo, int $idJa, int $idRenc): array
+{
+    $res  = ['nb' => 0, 'autres_lieux' => 0, 'autre_lieu' => null];
+    $lieu = lieuRencontre($pdo, $idRenc);
+    if (!$lieu) {
+        return $res;
+    }
+    $st = $pdo->prepare('
+        SELECT ' . sqlSalleEffective('r2', 'ed2') . ' AS Id_Salle
+        FROM nomination n
+        JOIN disponible d  ON d.Id_Disponible = n.Id_Disponible
+        JOIN rencontre  r2 ON r2.Id_Rencontre = n.Id_Rencontre
+        JOIN equipe    ed2 ON ed2.Id_Equipe   = r2.Id_EquipeDom
+        JOIN rencontre  r  ON r.Id_Rencontre  = ?
+        WHERE d.Id_JA = ? AND n.Id_Rencontre != r.Id_Rencontre AND r2.Date = r.Date
+    ');
+    $st->execute([$idRenc, $idJa]);
+    $memes = sallesMemeLieu($pdo, $lieu['salle']);
+    $lib   = classesLieuxSalles($pdo)['libelle'];
+    foreach ($st->fetchAll(\PDO::FETCH_ASSOC) as $o) {
+        $res['nb']++;
+        $salle = $o['Id_Salle'] !== null ? (int) $o['Id_Salle'] : null;
+        if (!in_array($salle, $memes, true)) {
+            $res['autres_lieux']++;
+            $res['autre_lieu'] ??= $salle !== null ? ($lib[$salle] ?? null) : 'salle inconnue';
+        }
+    }
+
+    return $res;
+}
+
+/**
  * nomination.F131 existe-t-elle ? (ajoutée par EA98 — EN14/EN28 la lisent / l'écrivent
  * seulement si présente). Cache statique : une seule vérification par requête.
  */
@@ -903,6 +1198,28 @@ function nominationAF131(\PDO $pdo): bool
             $existe = (bool) $pdo->query(
                 "SELECT 1 FROM information_schema.COLUMNS
                  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nomination' AND COLUMN_NAME = 'F131'"
+            )->fetchColumn();
+        } catch (\PDOException $e) {
+            $existe = false;
+        }
+    }
+
+    return $existe;
+}
+
+/**
+ * nomination.FichierPeage existe-t-elle ? (ajoutée par EA98 — EN28 la lit / l'écrit seulement
+ * si présente ; sinon lecture = NULL et champ justificatif désactivé). Cache statique : une seule
+ * vérification par requête.
+ */
+function nominationAFichierPeage(\PDO $pdo): bool
+{
+    static $existe = null;
+    if ($existe === null) {
+        try {
+            $existe = (bool) $pdo->query(
+                "SELECT 1 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nomination' AND COLUMN_NAME = 'FichierPeage'"
             )->fetchColumn();
         } catch (\PDOException $e) {
             $existe = false;
@@ -935,6 +1252,28 @@ function rencontreAForfait(\PDO $pdo): bool
 }
 
 /**
+ * rencontre.DateDemandeClub existe-t-elle ? (ajoutée par EA98 — envoyerDemandeJaClub()
+ * l'écrit et EN14 la lit seulement si présente ; sinon lecture = NULL). Cache statique :
+ * une seule vérification par requête.
+ */
+function rencontreADateDemandeClub(\PDO $pdo): bool
+{
+    static $existe = null;
+    if ($existe === null) {
+        try {
+            $existe = (bool) $pdo->query(
+                "SELECT 1 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rencontre' AND COLUMN_NAME = 'DateDemandeClub'"
+            )->fetchColumn();
+        } catch (\PDOException $e) {
+            $existe = false;
+        }
+    }
+
+    return $existe;
+}
+
+/**
  * Règle stricte de disponibilité pour nommer un JA en arbitrage CRA, identique à EN14
  * (NominationController::sqlDispoRencontre()) : une réponse 'O' sur la rencontre ou la journée
  * (Id_Rencontre NULL, même date) ET aucune réponse 'N' ni sur la rencontre ni sur la journée.
@@ -957,21 +1296,83 @@ function jaDisponiblePourNomination(\PDO $pdo, int $idJa, int $idRenc, string $d
 }
 
 /**
+ * Date du jour (J) des règles de dates d'EN21, au format Y-m-d. Toujours l'heure PHP du serveur
+ * (fuseau de l'application), jamais CURDATE() MySQL : les deux règles (accusé / frais) comparent
+ * ainsi la même date J, sans décalage possible entre fuseau PHP et fuseau MySQL.
+ */
+function jourConvocation(): string
+{
+    return date('Y-m-d');
+}
+
+/**
+ * Normalise une date de rencontre (D) en Y-m-d ('2026-10-14' ou '2026-10-14 00:00:00'),
+ * null si vide ou invalide.
+ */
+function dateRencontreNormalisee(?string $date): ?string
+{
+    $d = substr(trim((string) $date), 0, 10);
+    if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $d, $m) || !checkdate((int) $m[2], (int) $m[3], (int) $m[1])) {
+        return null;
+    }
+
+    return $d;
+}
+
+/**
+ * Règle de date de l'accusé de réception (EN21) : possible seulement si J <= D (rencontre du jour
+ * ou à venir). Date invalide → false. Fonction pure ($jour par défaut = jourConvocation()).
+ */
+function dateConvocationAccusable(?string $dateRencontre, ?string $jour = null): bool
+{
+    $d = dateRencontreNormalisee($dateRencontre);
+
+    return $d !== null && ($jour ?? jourConvocation()) <= $d;
+}
+
+/**
+ * Règle de date de la saisie des frais (EN21) : possible seulement si J >= D. Le jour même (J = D),
+ * où l'accusé reste possible, la saisie reste en plus conditionnée à l'accusé de réception
+ * ($accuseManquant = colonne AccuseReception présente (EA98), NULL, nomination rattachée
+ * à un JA). Après D, saisie libre (l'accusé n'est plus possible). Fonction pure.
+ * Retourne ['ok' => bool, 'err' => ?string, 'attendAccuse' => bool (seul l'accusé bloque)].
+ */
+function fraisSaisissables(?string $dateRencontre, bool $accuseManquant, ?string $jour = null): array
+{
+    $d = dateRencontreNormalisee($dateRencontre);
+    $j = $jour ?? jourConvocation();
+    if ($d === null) {
+        return ['ok' => false, 'err' => 'Date de la rencontre inconnue : la saisie des frais est impossible.', 'attendAccuse' => false];
+    }
+    if ($j < $d) {
+        return ['ok' => false, 'err' => 'La saisie des frais sera possible à partir du '
+            . date('d/m/Y', strtotime($d)) . '.', 'attendAccuse' => false];
+    }
+    if ($j === $d && $accuseManquant) {
+        return ['ok' => false, 'err' => 'Pour saisir vos frais, accusez d\'abord réception de cette convocation.', 'attendAccuse' => true];
+    }
+
+    return ['ok' => true, 'err' => null, 'attendAccuse' => false];
+}
+
+/**
  * La convocation peut-elle recevoir un accusé de réception (EN21) ? Nomination existante,
- * rattachée à un JA, valide (Valide = 1) et dont la rencontre est aujourd'hui ou à venir.
+ * rattachée à un JA et dont la rencontre est aujourd'hui ou à venir
+ * (J <= D, dateConvocationAccusable() — date du jour PHP, pas CURDATE()).
  */
 function convocationAccusable(\PDO $pdo, int $idNomination): bool
 {
     $st = $pdo->prepare(
-        'SELECT 1
+        'SELECT r.Date
          FROM nomination n
          JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
          JOIN rencontre  r ON r.Id_Rencontre  = n.Id_Rencontre
-         WHERE n.Id_Nomination = ? AND d.Id_JA IS NOT NULL AND n.Valide = 1 AND r.Date >= CURDATE()'
+         WHERE n.Id_Nomination = ? AND d.Id_JA IS NOT NULL'
     );
     $st->execute([$idNomination]);
+    $date = $st->fetchColumn();
 
-    return (bool) $st->fetchColumn();
+    return $date !== false && dateConvocationAccusable((string) $date);
 }
 
 /**
@@ -1133,7 +1534,10 @@ function assurerTemplateArbitreClub(\PDO $pdo): void
  * Refus (rencontre introuvable, pas en arbitrage club, JA déjà désigné, club
  * sans email de correspondant) → ['ok' => false, 'msg' => ...], sans envoi ;
  * succès → ['ok' => true, 'msg' => ...]. Une erreur d'envoi lève l'exception
- * PHPMailer. Pas de rate limit ni de journalisation ici (laissés à l'appelant).
+ * PHPMailer. Pas de rate limit ici (laissé à l'appelant). Après un envoi réussi
+ * (demande EN14 ou relance EN28), rencontre.DateDemandeClub = NOW() si la colonne
+ * existe (EA98) ; un échec de cette mise à jour est seulement journalisé (error_log),
+ * l'envoi reste un succès.
  */
 function envoyerDemandeJaClub(\PDO $pdo, int $idRenc, array $moi, string $sujetEdit = '', string $msgEdit = ''): array
 {
@@ -1142,14 +1546,26 @@ function envoyerDemandeJaClub(\PDO $pdo, int $idRenc, array $moi, string $sujetE
                 ed.Division, CASE WHEN r.ArbitrageCRA = 1 THEN 'CRA' ELSE 'Club' END AS SouhaitJA,
                 ed.Nom AS NomDom, ev.Nom AS NomExt,
                 cl.CorNom, cl.CorEmail, cl.RefNom, cl.RefMail,
-                COALESCE(sr.Nom, sc.Nom) AS SalleNom, COALESCE(sr.Adresse, sc.Adresse) AS SalleAdresse,
-                COALESCE(sr.Cp, sc.Cp) AS SalleCp, COALESCE(sr.Ville, sc.Ville) AS SalleVille
+                -- Salle de la rencontre si elle existe, sinon salle principale du club
+                -- recevant : tous les champs viennent de la MÊME salle (règle EN14).
+                CASE WHEN r.id_Salle IS NOT NULL AND sr.Id_Salle IS NOT NULL
+                     THEN sr.Nom ELSE sc.Nom END AS SalleNom,
+                CASE WHEN r.id_Salle IS NOT NULL AND sr.Id_Salle IS NOT NULL
+                     THEN sr.Adresse ELSE sc.Adresse END AS SalleAdresse,
+                CASE WHEN r.id_Salle IS NOT NULL AND sr.Id_Salle IS NOT NULL
+                     THEN COALESCE(lpr.CodePostal, sr.Cp)
+                     ELSE COALESCE(lpc.CodePostal, sc.Cp) END AS SalleCp,
+                CASE WHEN r.id_Salle IS NOT NULL AND sr.Id_Salle IS NOT NULL
+                     THEN COALESCE(lpr.Nom, sr.Ville)
+                     ELSE COALESCE(lpc.Nom, sc.Ville) END AS SalleVille
          FROM rencontre r
          JOIN equipe ed ON ed.Id_Equipe = r.Id_EquipeDom
          LEFT JOIN equipe ev ON ev.Id_Equipe = r.Id_EquipeExt
          LEFT JOIN club cl ON cl.Id_Club = ed.Id_Club
          LEFT JOIN salle sr ON sr.Id_Salle = r.id_Salle
-         LEFT JOIN salle sc ON sc.Id_Club = ed.Id_Club AND sc.EstPrincipale = 1
+         LEFT JOIN laposte lpr ON lpr.Id_LaPoste = sr.Id_Laposte
+         " . sqlJoinSallePrincipale('ed.Id_Club', 'sc') . "
+         LEFT JOIN laposte lpc ON lpc.Id_LaPoste = sc.Id_Laposte
          WHERE r.Id_Rencontre = ?"
     );
     $stmt->execute([$idRenc]);
@@ -1222,13 +1638,28 @@ function envoyerDemandeJaClub(\PDO $pdo, int $idRenc, array $moi, string $sujetE
     $mail->Subject = ($modeDev && $dest !== $rc['CorEmail']) ? "[DEV → {$rc['CorEmail']}] {$rendu['sujet']}" : $rendu['sujet'];
     $mail->Body    = $corps;
     if ($isHtml) {
-        $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $corps));
+        $mail->AltBody = altBodyDepuisHtml($corps);
     }
     $mail->send();
 
+    // Trace de l'envoi (une relance écrase la date précédente). date_demande = date
+    // enregistrée (Y-m-d H:i:s), null si colonne absente ou UPDATE en échec.
+    $dateDemande = null;
+    if (rencontreADateDemandeClub($pdo)) {
+        try {
+            $pdo->prepare('UPDATE rencontre SET DateDemandeClub = NOW() WHERE Id_Rencontre = ?')
+                ->execute([$idRenc]);
+            $lue = $pdo->prepare('SELECT DateDemandeClub FROM rencontre WHERE Id_Rencontre = ?');
+            $lue->execute([$idRenc]);
+            $dateDemande = $lue->fetchColumn() ?: null;
+        } catch (\PDOException $e) {
+            error_log('[NIJAC] DateDemandeClub non mise à jour (rencontre ' . $idRenc . ') : ' . $e->getMessage());
+        }
+    }
+
     $nb = count($mail->getToAddresses()) + count($mail->getCcAddresses());
     return ['ok' => true, 'msg' => 'Demande envoyée à ' . ($rc['CorNom'] ?: $rc['CorEmail'])
-        . ($nb > 1 ? " ($nb destinataires)." : '.')];
+        . ($nb > 1 ? " ($nb destinataires)." : '.'), 'date_demande' => $dateDemande];
 }
 
 /**
@@ -1275,22 +1706,9 @@ function assurerModeleCopieConvocationClubs(\PDO $pdo): void
 {
     ajouterTypeMessagerie($pdo, TYPE_MESSAGE_COPIE_CONVOCATION_CLUBS);
 
-    $existe = $pdo->prepare('SELECT Id_Messagerie, Message FROM messagerie WHERE Type = ? AND Id_Utilisateur IS NULL');
+    $existe = $pdo->prepare('SELECT 1 FROM messagerie WHERE Type = ? AND Id_Utilisateur IS NULL LIMIT 1');
     $existe->execute([TYPE_MESSAGE_COPIE_CONVOCATION_CLUBS]);
-    $lignes = $existe->fetchAll(\PDO::FETCH_ASSOC);
-    if ($lignes) {
-        // Mise à niveau : corps système resté à une ancienne version par défaut → version courante
-        // (coordonnées du JA). Corps personnalisé en EA93 : laissé tel quel. Copies perso jamais touchées.
-        $norm    = fn ($s): string => trim(str_replace("\r\n", "\n", (string) $s));
-        $anciens = array_map($norm, ancienCorpsCopieConvocationClubs());
-        foreach ($lignes as $l) {
-            if (in_array($norm($l['Message']), $anciens, true)) {
-                $pdo->prepare('UPDATE messagerie SET Message = ? WHERE Id_Messagerie = ?')
-                    ->execute([modeleHtmlCopieConvocationClubs(), $l['Id_Messagerie']]);
-            } elseif (!str_contains((string) $l['Message'], '{COORDONNEES_JA}')) {
-                error_log('[NIJAC] message Convocation clubs personnalisé : coordonnées JA non ajoutées');
-            }
-        }
+    if ($existe->fetchColumn()) {
         return;
     }
     $pdo->prepare('INSERT INTO messagerie (Type, Sujet, Message, Id_Utilisateur, Cc, ReplyTo) VALUES (?, ?, ?, NULL, 0, 1)')
@@ -1308,97 +1726,30 @@ function sujetParDefautCopieConvocationClubs(): string
 }
 
 /**
- * Anciennes versions par défaut du corps « Convocation clubs », remplacées par
- * assurerModeleCopieConvocationClubs() si la base les contient encore à l'identique.
- * v1 = version courante sans {COORDONNEES_JA} (seule différence). ponytail: dérivée du modèle
- * courant ; à figer en dur avant toute autre modification de modeleHtmlCopieConvocationClubs().
- *
- * @return string[]
- */
-function ancienCorpsCopieConvocationClubs(): array
-{
-    return [str_replace('{COORDONNEES_JA}', '', modeleHtmlCopieConvocationClubs())];
-}
-
-/**
  * Corps par défaut du message « Convocation clubs » : même charte que modeleHtmlConvocationJa(),
  * destiné à un correspondant de club — aucun lien personnel du JA ni consigne qui lui est destinée.
  */
 function modeleHtmlCopieConvocationClubs(): string
 {
     return <<<'NIJAC_COPIE_CLUBS_HTML'
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="color-scheme" content="light">
-<meta name="supported-color-schemes" content="light">
-<title>Copie de convocation — Juge-Arbitre</title>
-</head>
-<body style="margin:0;padding:0;background-color:#eef1f6;color:#1f2937;">
-<span style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">Juge-arbitre désigné : {PRENOM} {NOM} — {DOM} – {EXT}, le {DATE_LONGUE} à {HEURE}.</span>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#eef1f6" style="background-color:#eef1f6;">
-<tr>
-<td align="center" style="padding:24px 12px;">
+<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>Copie de convocation — Juge-Arbitre</title></head><body style="margin:0;padding:0;background-color:#eef1f6;color:#1f2937;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#eef1f6" style="background-color:#eef1f6;"><tr><td align="center" style="padding:24px 12px;">
 <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#ffffff;border:1px solid #d5dbe5;border-radius:8px;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
-
-<!-- En-tête -->
-<tr>
-<td bgcolor="#1a3a6b" style="background-color:#1a3a6b;padding:22px 28px;border-radius:8px 8px 0 0;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#ffffff;border:1px solid #d5dbe5;border-radius:8px;font-family:Arial,Helvetica,sans-serif;color:#1f2937;"><tr><td bgcolor="#1a3a6b" style="background-color:#1a3a6b;padding:22px 28px;border-radius:8px 8px 0 0;">
 <span style="display:block;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#c9d6ea;">Ligue de Normandie de Tennis de Table</span>
 <span style="display:block;font-size:22px;font-weight:bold;line-height:30px;color:#ffffff;">Copie de convocation — Juge-Arbitre</span>
-</td>
-</tr>
-
-<!-- Introduction -->
-<tr>
-<td style="padding:26px 28px 6px 28px;font-size:15px;line-height:23px;color:#1f2937;">
+</td></tr><tr><td style="padding:26px 28px 6px 28px;font-size:15px;line-height:23px;color:#1f2937;">
 Bonjour,<br><br>
 Ceci est une copie, pour information, de la convocation adressée à <strong>{PRENOM} {NOM}</strong> (juge-arbitre), désigné(e) pour diriger la rencontre suivante du Championnat de France par Équipes {SEXE}.
-</td>
-</tr>
-
-<!-- Récapitulatif de la rencontre -->
-<tr>
-<td style="padding:16px 28px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f3f6fb" style="background-color:#f3f6fb;border-left:4px solid #1a3a6b;border-radius:4px;font-size:14px;line-height:21px;color:#1f2937;">
-<tr><td colspan="2" style="padding:14px 16px 4px 16px;font-size:17px;font-weight:bold;color:#1a3a6b;">{DOM} <span style="color:#6b7280;font-weight:normal;">à</span> {EXT}</td></tr>
-<tr><td width="34%" valign="top" style="padding:6px 16px;color:#4b5563;">Date</td><td valign="top" style="padding:6px 16px 6px 0;font-weight:bold;color:#1f2937;">{DATE_LONGUE} à {HEURE}</td></tr>
-<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Compétition</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">Journée n° {JOURNEE} — Division : {DIVISION} — Poule : {POULE}</td></tr>
-<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Club recevant</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{NOM_CLUB}</td></tr>
-<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Salle</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{SALLE_NOM}<br>{SALLE_ADRESSE}<br>{SALLE_CP} {SALLE_VILLE}</td></tr>
-<tr><td valign="top" style="padding:6px 16px 14px 16px;color:#4b5563;">Juge-arbitre</td><td valign="top" style="padding:6px 16px 14px 0;font-weight:bold;color:#1f2937;">{PRENOM} {NOM}{COORDONNEES_JA}</td></tr>
-</table>
-</td>
-</tr>
-
-<!-- Signature -->
-<tr>
-<td style="padding:18px 28px 24px 28px;font-size:15px;line-height:23px;color:#1f2937;">
+</td></tr><tr><td style="padding:16px 28px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f3f6fb" style="background-color:#f3f6fb;border-left:4px solid #1a3a6b;border-radius:4px;font-size:14px;line-height:21px;color:#1f2937;"><tr><td colspan="2" style="padding:14px 16px 4px 16px;font-size:17px;font-weight:bold;color:#1a3a6b;">{DOM} <span style="color:#6b7280;font-weight:normal;">à</span> {EXT}</td></tr><tr><td width="34%" valign="top" style="padding:6px 16px;color:#4b5563;">Date</td><td valign="top" style="padding:6px 16px 6px 0;font-weight:bold;color:#1f2937;">{DATE_LONGUE} à {HEURE}</td></tr><tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Compétition</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">Journée n° {JOURNEE} — Division : {DIVISION} — Poule : {POULE}</td></tr><tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Club recevant</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{NOM_CLUB}</td></tr><tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Salle</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{SALLE_NOM}<br>{SALLE_ADRESSE}<br>{SALLE_CP} {SALLE_VILLE}</td></tr><tr><td valign="top" style="padding:6px 16px 14px 16px;color:#4b5563;">Juge-arbitre</td><td valign="top" style="padding:6px 16px 14px 0;font-weight:bold;color:#1f2937;">{PRENOM} {NOM}{COORDONNEES_JA}</td></tr></table></td></tr><tr><td style="padding:18px 28px 24px 28px;font-size:15px;line-height:23px;color:#1f2937;">
 Sportivement,<br><br>
 <strong>{UTI_PRENOM} {UTI_NOM}</strong><br>
 <span style="font-size:13px;color:#4b5563;">Ligue de Normandie de Tennis de Table</span>
-</td>
-</tr>
-
-<!-- Pied de page -->
-<tr>
-<td bgcolor="#f3f4f6" style="background-color:#f3f4f6;padding:14px 28px;border-top:1px solid #e5e7eb;border-radius:0 0 8px 8px;font-size:11px;line-height:17px;color:#6b7280;">
+</td></tr><tr><td bgcolor="#f3f4f6" style="background-color:#f3f4f6;padding:14px 28px;border-top:1px solid #e5e7eb;border-radius:0 0 8px 8px;font-size:11px;line-height:17px;color:#6b7280;">
 Message envoyé automatiquement par l'application de nomination des juges-arbitres de la Ligue, pour information des correspondants et référents des clubs concernés. Pour toute question, répondez à ce message.<br>
 <a href="{URL_LIGUE}" style="color:#1a3a6b;">{URL_LIGUE}</a>
-</td>
-</tr>
-
-</table>
+</td></tr></table>
 <!--[if mso]></td></tr></table><![endif]-->
-</td>
-</tr>
-</table>
-</body>
-</html>
-
+</td></tr></table></body></html>
 NIJAC_COPIE_CLUBS_HTML;
 }
 
@@ -1552,67 +1903,22 @@ function peutRenvoyerCode(array $etat, int $maintenant): array
 function corpsParDefautCodeSecurite(): string
 {
     return <<<'NIJAC_CODE_SECURITE_HTML'
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-family:Arial,sans-serif;">
-<tr><td align="center">
-<table role="presentation" width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;max-width:100%;">
-  <tr><td style="background:#1f4e8c;color:#ffffff;padding:20px 28px;font-size:20px;font-weight:bold;">🔒 NIJAC – Code de sécurité</td></tr>
-  <tr><td style="padding:28px;color:#333333;font-size:14px;line-height:1.6;">
-    <p style="margin:0 0 16px;">Votre code de sécurité est le suivant :</p>
-    <p style="margin:0 0 20px;text-align:center;"><span style="display:inline-block;background:#e8f0fb;border:2px dashed #1f4e8c;color:#1f4e8c;font-size:32px;font-weight:bold;letter-spacing:8px;padding:14px 28px;border-radius:8px;">{CODE}</span></p>
-    <p style="margin:0 0 16px;">Il est valable <b>10 minutes</b>. Au-delà de ce délai, vous devrez demander un nouveau code.</p>
-    <p style="margin:0 0 16px;background:#fff4e5;border-left:4px solid #f0a020;padding:10px 14px;">Si vous n’êtes pas à l’origine de cette demande, veuillez-vous rapprocher de votre nominateur dans les plus brefs délais.</p>
-    <p style="margin:0;">Nous vous remercions de votre attention.</p>
-  </td></tr>
-  <tr><td style="background:#f0f3f8;color:#888888;font-size:12px;text-align:center;padding:12px;">Ce message est généré automatiquement, ne pas répondre.</td></tr>
-</table></td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-family:Arial,sans-serif;"><tr><td align="center"><table role="presentation" width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;max-width:100%;"><tr><td style="background:#1f4e8c;color:#ffffff;padding:20px 28px;font-size:20px;font-weight:bold;">🔒 NIJAC – Code de sécurité</td></tr><tr><td style="padding:28px;color:#333333;font-size:14px;line-height:1.6;"><p style="margin:0 0 16px;">Votre code de sécurité est le suivant :</p><p style="margin:0 0 20px;text-align:center;"><span style="display:inline-block;background:#e8f0fb;border:2px dashed #1f4e8c;color:#1f4e8c;font-size:32px;font-weight:bold;letter-spacing:8px;padding:14px 28px;border-radius:8px;">{CODE}</span></p><p style="margin:0 0 16px;">Il est valable <b>10 minutes</b>. Au-delà de ce délai, vous devrez demander un nouveau code.</p><p style="margin:0 0 16px;background:#fff4e5;border-left:4px solid #f0a020;padding:10px 14px;">Si vous n’êtes pas à l’origine de cette demande, veuillez-vous rapprocher de votre nominateur dans les plus brefs délais.</p><p style="margin:0;">Nous vous remercions de votre attention.</p></td></tr><tr><td style="background:#f0f3f8;color:#888888;font-size:12px;text-align:center;padding:12px;">Ce message est généré automatiquement, ne pas répondre.</td></tr></table></td></tr></table>
 NIJAC_CODE_SECURITE_HTML;
 }
 
 /**
- * Ancien corps par défaut (texte brut, LF) du message « Code de sécurité », figé : remplacé en place
- * par assurerModeleCodeSecurite() si la base le contient encore à l'identique. Ne pas modifier.
- *
- * @return string[]
- */
-function ancienCorpsCodeSecurite(): array
-{
-    return [<<<'NIJAC_CODE_SECURITE_V1'
-Bonjour,
-
-Votre code de sécurité est le suivant :
-{CODE}
-Il est valable 10 minutes. Au-delà de ce délai, vous devrez demander un nouveau code.
-
-Si vous n’êtes pas à l’origine de cette demande, veuillez-vous rapprocher de votre nominateur dans les plus brefs délais.
-
-Ce message est généré automatiquement, ne pas répondre.
-
-Nous vous remercions de votre attention.
-NIJAC_CODE_SECURITE_V1];
-}
-
-/**
  * Amorce (initTableConfiguration(), EA98) le message système « Code de sécurité » : Type ENUM étendu,
- * ligne créée seulement si aucun message système de ce Type n'existe. Mise à niveau : corps système
- * resté à l'ancien texte brut par défaut → version HTML courante ; corps personnalisé en EA93 jamais écrasé.
+ * ligne créée seulement si aucun message système de ce Type n'existe ; corps existant jamais écrasé.
  * Cc = 0, ReplyTo = 0 : envoyé au seul titulaire du compte.
  */
 function assurerModeleCodeSecurite(\PDO $pdo): void
 {
     ajouterTypeMessagerie($pdo, TYPE_MESSAGE_CODE_SECURITE);
 
-    $existe = $pdo->prepare('SELECT Id_Messagerie, Message FROM messagerie WHERE Type = ? AND Id_Utilisateur IS NULL');
+    $existe = $pdo->prepare('SELECT 1 FROM messagerie WHERE Type = ? AND Id_Utilisateur IS NULL LIMIT 1');
     $existe->execute([TYPE_MESSAGE_CODE_SECURITE]);
-    $lignes = $existe->fetchAll(\PDO::FETCH_ASSOC);
-    if ($lignes) {
-        $norm    = fn ($s): string => trim(str_replace("\r\n", "\n", (string) $s));
-        $anciens = array_map($norm, ancienCorpsCodeSecurite());
-        foreach ($lignes as $l) {
-            if (in_array($norm($l['Message']), $anciens, true)) {
-                $pdo->prepare('UPDATE messagerie SET Message = ? WHERE Id_Messagerie = ?')
-                    ->execute([corpsParDefautCodeSecurite(), $l['Id_Messagerie']]);
-            }
-        }
+    if ($existe->fetchColumn()) {
         return;
     }
     $pdo->prepare('INSERT INTO messagerie (Type, Sujet, Message, Id_Utilisateur, Cc, ReplyTo) VALUES (?, ?, ?, NULL, 0, 0)')
@@ -1634,38 +1940,10 @@ function rendreMessageCodeSecurite(?array $modele, string $code): array
     $rendu = remplacerMarqueursMessage($sujet, $corps, ['{CODE}' => htmlspecialchars($code, ENT_QUOTES, 'UTF-8')]);
     $html  = strip_tags($rendu['corps']) !== $rendu['corps'];
 
-    $texte = $rendu['corps'];
-    if ($html) {
-        // Texte brut propre : fins de bloc → retours ligne, balises retirées, entités décodées, blancs réduits.
-        $texte = preg_replace('#<br\s*/?>|</(p|tr|div|h[1-6])>#i', "\n", $texte);
-        $texte = html_entity_decode(strip_tags($texte), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        $texte = preg_replace(["/[ \t]+/", "/ *\n */", "/\n{3,}/"], [' ', "\n", "\n\n"], $texte);
-        $texte = trim($texte);
-    }
+    // Texte brut propre (AltBody) via le helper commun.
+    $texte = $html ? altBodyDepuisHtml($rendu['corps']) : $rendu['corps'];
 
     return $rendu + ['html' => $html, 'texte' => $texte];
-}
-
-/**
- * Requêtes rendant utilisateur.Email NOT NULL à partir de sa définition information_schema
- * (COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, CHARACTER_SET_NAME, COLLATION_NAME) : type, longueur,
- * jeu de caractères et défaut conservés ; NULL -> '' (aucune adresse fabriquée). [] si déjà NOT NULL.
- *
- * @return string[]
- */
-function sqlEmailUtilisateurObligatoire(array $col, \PDO $pdo): array
-{
-    if (($col['IS_NULLABLE'] ?? 'NO') !== 'YES') {
-        return [];
-    }
-    $charset = !empty($col['CHARACTER_SET_NAME']) ? " CHARACTER SET {$col['CHARACTER_SET_NAME']} COLLATE {$col['COLLATION_NAME']}" : '';
-    $defaut  = $col['COLUMN_DEFAULT'] ?? null;
-    $defaut  = ($defaut === null || strtoupper($defaut) === 'NULL') ? '' : ' DEFAULT ' . $pdo->quote(trim($defaut, "'"));
-
-    return [
-        "UPDATE utilisateur SET Email = '' WHERE Email IS NULL",
-        "ALTER TABLE utilisateur MODIFY Email {$col['COLUMN_TYPE']}{$charset} NOT NULL{$defaut}",
-    ];
 }
 
 /**
@@ -1796,10 +2074,14 @@ function verifierRappelExpirationFfttApi(): void
         foreach ($emails as $email) {
             try {
                 $mail = getNijacMailer();
-                $mail->isHTML(strip_tags($rendu['corps']) !== $rendu['corps']);
+                $estHtml = strip_tags($rendu['corps']) !== $rendu['corps'];
+                $mail->isHTML($estHtml);
                 $mail->addAddress(getEmailDestinataire($email));
                 $mail->Subject = $rendu['sujet'];
                 $mail->Body    = $rendu['corps'];
+                if ($estHtml) {
+                    $mail->AltBody = altBodyDepuisHtml($rendu['corps']);
+                }
                 $mail->send();
             } catch (\Throwable $e) {
             }
@@ -2103,416 +2385,42 @@ function destinatairesCopieClubs(array $clubs, ?string $emailJa): array
  * Corps par défaut du message système n°3 « Convocation » (EN14) : e-mail HTML
  * (tableaux + styles en ligne) avec le bouton « Consulter et confirmer ma
  * convocation » vers {URL_CONVOCATION_JA} (EN21). La copie aux clubs n'en
- * dérive pas (message dédié modeleHtmlCopieConvocationClubs()). Appliqué aux bases
- * existantes par initTableConfiguration() (EA98) seulement si le corps est
- * encore un ancien texte par défaut (corpsConvocationJaMigrable()).
+ * dérive pas (message dédié modeleHtmlCopieConvocationClubs()). Plus appelé par le
+ * code (la migration EA98 du message n°3 a été retirée) : conservé comme référence
+ * du corps par défaut.
  */
 function modeleHtmlConvocationJa(): string
 {
     return <<<'NIJAC_CONVOCATION_HTML'
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<!-- Sujet proposé (champ Sujet, inchangé : la version perso du nominateur est retrouvée par Sujet) : Convocation JA du {DATE} à {HEURE} à {NOM_CLUB} -->
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="color-scheme" content="light">
-<meta name="supported-color-schemes" content="light">
-<title>Convocation — Juge-Arbitre</title>
-</head>
-<body style="margin:0;padding:0;background-color:#eef1f6;color:#1f2937;">
-<span style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">Vous êtes désigné(e) juge-arbitre : {DOM} – {EXT}, le {DATE_LONGUE} à {HEURE}.</span>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#eef1f6" style="background-color:#eef1f6;">
-<tr>
-<td align="center" style="padding:24px 12px;">
+<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>Convocation — Juge-Arbitre</title></head><body style="margin:0;padding:0;background-color:#eef1f6;color:#1f2937;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#eef1f6" style="background-color:#eef1f6;"><tr><td align="center" style="padding:24px 12px;">
 <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#ffffff;border:1px solid #d5dbe5;border-radius:8px;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
-
-<!-- En-tête -->
-<tr>
-<td bgcolor="#1a3a6b" style="background-color:#1a3a6b;padding:22px 28px;border-radius:8px 8px 0 0;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#ffffff;border:1px solid #d5dbe5;border-radius:8px;font-family:Arial,Helvetica,sans-serif;color:#1f2937;"><tr><td bgcolor="#1a3a6b" style="background-color:#1a3a6b;padding:22px 28px;border-radius:8px 8px 0 0;">
 <span style="display:block;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#c9d6ea;">Ligue de Normandie de Tennis de Table</span>
 <span style="display:block;font-size:22px;font-weight:bold;line-height:30px;color:#ffffff;">Convocation — Juge-Arbitre</span>
-</td>
-</tr>
-
-<!-- Introduction -->
-<tr>
-<td style="padding:26px 28px 6px 28px;font-size:15px;line-height:23px;color:#1f2937;">
+</td></tr><tr><td style="padding:26px 28px 6px 28px;font-size:15px;line-height:23px;color:#1f2937;">
 Bonjour {PRENOM},<br><br>
 Nous avons l'avantage de vous informer que vous êtes désigné(e) pour diriger la rencontre suivante du Championnat de France par Équipes {SEXE}.
-</td>
-</tr>
-
-<!-- Récapitulatif de la rencontre -->
-<tr>
-<td style="padding:16px 28px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f3f6fb" style="background-color:#f3f6fb;border-left:4px solid #1a3a6b;border-radius:4px;font-size:14px;line-height:21px;color:#1f2937;">
-<tr><td colspan="2" style="padding:14px 16px 4px 16px;font-size:17px;font-weight:bold;color:#1a3a6b;">{DOM} <span style="color:#6b7280;font-weight:normal;">à</span> {EXT}</td></tr>
-<tr><td width="34%" valign="top" style="padding:6px 16px;color:#4b5563;">Date</td><td valign="top" style="padding:6px 16px 6px 0;font-weight:bold;color:#1f2937;">{DATE_LONGUE} à {HEURE}</td></tr>
-<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Compétition</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">Journée n° {JOURNEE} — Division : {DIVISION} — Poule : {POULE}</td></tr>
-<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Juge-arbitre</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{PRENOM} {NOM}</td></tr>
-<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Club recevant</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{NOM_CLUB}</td></tr>
-<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Adresse</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{SALLE_NOM}<br>{SALLE_ADRESSE}<br>{SALLE_CP} {SALLE_VILLE}</td></tr>
-<tr><td valign="top" style="padding:6px 16px 14px 16px;color:#4b5563;">Correspondant</td><td valign="top" style="padding:6px 16px 14px 0;color:#1f2937;">{CORR_NOM}<br>Tél : {CORR_TEL}<br>Courriel : <a href="mailto:{CORR_EMAIL}" style="color:#1a3a6b;">{CORR_EMAIL}</a></td></tr>
-</table>
-</td>
-</tr>
-
-<!-- Actions attendues -->
-<tr>
-<td style="padding:0 28px 6px 28px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#fff6e5" style="background-color:#fff6e5;border:1px solid #f0c36d;border-radius:4px;font-size:14px;line-height:21px;color:#5c3d00;">
-<tr><td style="padding:12px 16px;">
+</td></tr><tr><td style="padding:16px 28px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f3f6fb" style="background-color:#f3f6fb;border-left:4px solid #1a3a6b;border-radius:4px;font-size:14px;line-height:21px;color:#1f2937;"><tr><td colspan="2" style="padding:14px 16px 4px 16px;font-size:17px;font-weight:bold;color:#1a3a6b;">{DOM} <span style="color:#6b7280;font-weight:normal;">à</span> {EXT}</td></tr><tr><td width="34%" valign="top" style="padding:6px 16px;color:#4b5563;">Date</td><td valign="top" style="padding:6px 16px 6px 0;font-weight:bold;color:#1f2937;">{DATE_LONGUE} à {HEURE}</td></tr><tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Compétition</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">Journée n° {JOURNEE} — Division : {DIVISION} — Poule : {POULE}</td></tr><tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Juge-arbitre</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{PRENOM} {NOM}</td></tr><tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Club recevant</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{NOM_CLUB}</td></tr><tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Adresse</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{SALLE_NOM}<br>{SALLE_ADRESSE}<br>{SALLE_CP} {SALLE_VILLE}</td></tr><tr><td valign="top" style="padding:6px 16px 14px 16px;color:#4b5563;">Correspondant</td><td valign="top" style="padding:6px 16px 14px 0;color:#1f2937;">{CORR_NOM}<br>Tél : {CORR_TEL}<br>Courriel : <a href="mailto:{CORR_EMAIL}" style="color:#1a3a6b;">{CORR_EMAIL}</a></td></tr></table></td></tr><tr><td style="padding:0 28px 6px 28px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#fff6e5" style="background-color:#fff6e5;border:1px solid #f0c36d;border-radius:4px;font-size:14px;line-height:21px;color:#5c3d00;"><tr><td style="padding:12px 16px;">
 <strong style="color:#8a5a00;">Actions attendues :</strong><br>
 • Confirmer votre désignation en cliquant sur le bouton ci-dessous ou Signaler au plus vite toute indisponibilité ou difficulté particulière.<br>
 • Conserver les justificatifs nécessaires à l'établissement de vos frais et compléter votre convocation dans un délai de 5 jours après la rencontre.
-</td></tr>
-</table>
-</td>
-</tr>
-
-<!-- Bouton vers la convocation (EN21) + lien de secours -->
-<tr>
-<td style="padding:0;">
-<div style="padding:12px 28px 8px 28px;font-size:15px;line-height:23px;color:#1f2937;">
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
-<tr>
-<td align="center" bgcolor="#1a3a6b" style="background-color:#1a3a6b;border-radius:6px;">
+</td></tr></table></td></tr><tr><td style="padding:0;"><div style="padding:12px 28px 8px 28px;font-size:15px;line-height:23px;color:#1f2937;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;"><tr><td align="center" bgcolor="#1a3a6b" style="background-color:#1a3a6b;border-radius:6px;">
 <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{URL_CONVOCATION_JA}" style="height:48px;v-text-anchor:middle;width:380px;" arcsize="12%" strokecolor="#1a3a6b" fillcolor="#1a3a6b"><w:anchorlock/><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">Consulter et confirmer ma convocation</center></v:roundrect><![endif]-->
 <!--[if !mso]><!--><a href="{URL_CONVOCATION_JA}" target="_blank" style="display:inline-block;padding:14px 28px;min-height:20px;line-height:20px;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:6px;background-color:#1a3a6b;">Consulter et confirmer ma convocation</a><!--<![endif]-->
-</td>
-</tr>
-</table>
+</td></tr></table>
 <br>
 <span style="font-size:12px;line-height:18px;color:#6b7280;">Si le bouton ne fonctionne pas, valider ce lien :<br><a href="{URL_CONVOCATION_JA}" style="color:#1a3a6b;word-break:break-all;">{URL_CONVOCATION_JA}</a></span>
-</div>
-</td>
-</tr>
-
-<!-- Signature -->
-<tr>
-<td style="padding:18px 28px 24px 28px;font-size:15px;line-height:23px;color:#1f2937;">
+</div></td></tr><tr><td style="padding:18px 28px 24px 28px;font-size:15px;line-height:23px;color:#1f2937;">
 Nous vous remercions pour votre investissement au service du tennis de table normand et vous souhaitons une excellente rencontre.<br><br>
 <strong>{UTI_PRENOM} {UTI_NOM}</strong><br>
 <span style="font-size:13px;color:#4b5563;">Ligue de Normandie de Tennis de Table</span>
-</td>
-</tr>
-
-<!-- Pied de page -->
-<tr>
-<td bgcolor="#f3f4f6" style="background-color:#f3f4f6;padding:14px 28px;border-top:1px solid #e5e7eb;border-radius:0 0 8px 8px;font-size:11px;line-height:17px;color:#6b7280;">
+</td></tr><tr><td bgcolor="#f3f4f6" style="background-color:#f3f4f6;padding:14px 28px;border-top:1px solid #e5e7eb;border-radius:0 0 8px 8px;font-size:11px;line-height:17px;color:#6b7280;">
 Message envoyé automatiquement par l'application de nomination des juges-arbitres de la Ligue. Pour toute question, répondez à ce message.<br>
 <a href="{URL_LIGUE}" style="color:#1a3a6b;">{URL_LIGUE}</a>
-</td>
-</tr>
-
-</table>
+</td></tr></table>
 <!--[if mso]></td></tr></table><![endif]-->
-</td>
-</tr>
-</table>
-</body>
-</html>
-
+</td></tr></table></body></html>
 NIJAC_CONVOCATION_HTML;
-}
-
-/**
- * Anciens corps par défaut (texte brut) du message n°3, toutes variantes
- * historiques des dumps SQL : seul un de ceux-là est remplacé par le modèle HTML.
- *
- * @return string[]
- */
-function ancienCorpsConvocationJa(): array
-{
-    $commun = <<<'NIJAC_CONVOCATION_TXT'
-Convocation
-
-Nom du JUGE ARBITRE : {PRENOM} {NOM}
-
-J'ai l'avantage de vous informer que vous êtes désigné(e) pour diriger la rencontre suivante du Championnat de France par Équipes {SEXE}.
-
-Journée n° {JOURNEE}      Division : {DIVISION}    Poule : {POULE}
-Opposant : {DOM} à {EXT}
-le {DATE} à {HEURE}
-
-Adresse : {SALLE_NOM} {SALLE_ADRESSE} {SALLE_CP} {SALLE_VILLE}
-
-Nom, PRÉNOM du CORRESPONDANT, {CORR_NOM}
-
- Tél : {CORR_TEL}                               Courriel : {CORR_EMAIL}
-
-Veuillez agréer mes meilleurs sentiments.
-{UTI_PRENOM} {UTI_NOM}
-
-
-NIJAC_CONVOCATION_TXT;
-
-    return [
-        $commun . <<<'NIJAC_CONVOCATION_TXT'
-Ci-joint le lien vers la convocation pour la saisie de vos frais d'arbitrages de cette rencontre.
-{URL_CONVOCATION_JA}
-
-IMPORTANT :
-
-Merci de m’accuser réception du présent envoi
-
-Veuillez me retourner obligatoirement la Convocation complétée de vos kms.
-Dans les 5 jours qui suivent la rencontre.
-NIJAC_CONVOCATION_TXT,
-        $commun . <<<'NIJAC_CONVOCATION_TXT'
-Ci-joint le lien pour la saisie de vos frais pour les arbitrages du Championnat.
-{URL_LIGUE}//nijac/Nominateur/convocation_ja.php?nomination={ID_CONVOCATION}
-NIJAC_CONVOCATION_TXT,
-        $commun . <<<'NIJAC_CONVOCATION_TXT'
-Ci-joint le lien pour la saisie de vos frais pour les arbitrages du Championnat.
-{URL_LIGUE}/nijac/Nominateur/convocation_ja.php?nomination={ID_CONVOCATION}
-NIJAC_CONVOCATION_TXT,
-    ];
-}
-
-/**
- * Versions HTML précédentes du modèle par défaut du message n°3 (déjà appliquées
- * à des bases par EA98), figées en dur (jamais dérivées du modèle actuel, sinon elles
- * se désynchroniseraient à la moindre modification de modeleHtmlConvocationJa()).
- *
- * @return string[]
- */
-function ancienneVersionHtmlConvocationJa(): array
-{
-    return [
-        // (a) première version HTML : lien de secours « copiez ce lien : »
-        <<<'NIJAC_CONVOCATION_HTML_V1'
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<!-- Sujet proposé (champ Sujet, inchangé : la version perso du nominateur est retrouvée par Sujet) : Convocation JA du {DATE} à {HEURE} à {NOM_CLUB} -->
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="color-scheme" content="light">
-<meta name="supported-color-schemes" content="light">
-<title>Convocation — Juge-Arbitre</title>
-</head>
-<body style="margin:0;padding:0;background-color:#eef1f6;color:#1f2937;">
-<span style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">Vous êtes désigné(e) juge-arbitre : {DOM} – {EXT}, le {DATE_LONGUE} à {HEURE}.</span>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#eef1f6" style="background-color:#eef1f6;">
-<tr>
-<td align="center" style="padding:24px 12px;">
-<!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#ffffff;border:1px solid #d5dbe5;border-radius:8px;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
-
-<!-- En-tête -->
-<tr>
-<td bgcolor="#1a3a6b" style="background-color:#1a3a6b;padding:22px 28px;border-radius:8px 8px 0 0;">
-<span style="display:block;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#c9d6ea;">Ligue de Normandie de Tennis de Table</span>
-<span style="display:block;font-size:22px;font-weight:bold;line-height:30px;color:#ffffff;">Convocation — Juge-Arbitre</span>
-</td>
-</tr>
-
-<!-- Introduction -->
-<tr>
-<td style="padding:26px 28px 6px 28px;font-size:15px;line-height:23px;color:#1f2937;">
-Bonjour {PRENOM},<br><br>
-Nom du JUGE ARBITRE : <strong>{PRENOM} {NOM}</strong><br><br>
-J'ai l'avantage de vous informer que vous êtes désigné(e) pour diriger la rencontre suivante du Championnat de France par Équipes {SEXE}.
-</td>
-</tr>
-
-<!-- Récapitulatif de la rencontre -->
-<tr>
-<td style="padding:16px 28px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f3f6fb" style="background-color:#f3f6fb;border-left:4px solid #1a3a6b;border-radius:4px;font-size:14px;line-height:21px;color:#1f2937;">
-<tr><td colspan="2" style="padding:14px 16px 4px 16px;font-size:17px;font-weight:bold;color:#1a3a6b;">{DOM} <span style="color:#6b7280;font-weight:normal;">à</span> {EXT}</td></tr>
-<tr><td width="34%" valign="top" style="padding:6px 16px;color:#4b5563;">Date</td><td valign="top" style="padding:6px 16px 6px 0;font-weight:bold;color:#1f2937;">{DATE_LONGUE} à {HEURE}</td></tr>
-<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Compétition</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">Journée n° {JOURNEE} — Division : {DIVISION} — Poule : {POULE}</td></tr>
-<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Club recevant</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{NOM_CLUB}</td></tr>
-<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Adresse</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{SALLE_NOM}<br>{SALLE_ADRESSE}<br>{SALLE_CP} {SALLE_VILLE}</td></tr>
-<tr><td valign="top" style="padding:6px 16px 14px 16px;color:#4b5563;">Correspondant</td><td valign="top" style="padding:6px 16px 14px 0;color:#1f2937;">{CORR_NOM}<br>Tél : {CORR_TEL}<br>Courriel : <a href="mailto:{CORR_EMAIL}" style="color:#1a3a6b;">{CORR_EMAIL}</a></td></tr>
-</table>
-</td>
-</tr>
-
-<!-- Bouton : bloc <div> unique (sans <p>/<div>/<li> imbriqué) retiré en entier par retirerLiensPersonnelsModele() pour la copie aux clubs -->
-<tr>
-<td style="padding:0;">
-<div style="padding:12px 28px 8px 28px;font-size:15px;line-height:23px;color:#1f2937;">
-Ci-joint le lien vers la convocation pour la saisie de vos frais d'arbitrages de cette rencontre.<br><br>
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
-<tr>
-<td align="center" bgcolor="#1a3a6b" style="background-color:#1a3a6b;border-radius:6px;">
-<!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{URL_CONVOCATION_JA}" style="height:48px;v-text-anchor:middle;width:380px;" arcsize="12%" strokecolor="#1a3a6b" fillcolor="#1a3a6b"><w:anchorlock/><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">Consulter et confirmer ma convocation</center></v:roundrect><![endif]-->
-<!--[if !mso]><!--><a href="{URL_CONVOCATION_JA}" target="_blank" style="display:inline-block;padding:14px 28px;min-height:20px;line-height:20px;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:6px;background-color:#1a3a6b;">Consulter et confirmer ma convocation</a><!--<![endif]-->
-</td>
-</tr>
-</table>
-<br>
-<span style="font-size:12px;line-height:18px;color:#6b7280;">Si le bouton ne fonctionne pas, copiez ce lien :<br><a href="{URL_CONVOCATION_JA}" style="color:#1a3a6b;word-break:break-all;">{URL_CONVOCATION_JA}</a></span>
-</div>
-</td>
-</tr>
-
-<!-- Consignes (reprises du message n°3 actuel) -->
-<tr>
-<td style="padding:16px 28px 6px 28px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#fff6e5" style="background-color:#fff6e5;border:1px solid #f0c36d;border-radius:4px;font-size:14px;line-height:21px;color:#5c3d00;">
-<tr><td style="padding:12px 16px;">
-<strong style="color:#8a5a00;">IMPORTANT :</strong><br>
-• Merci de m’accuser réception du présent envoi.<br>
-• Veuillez me retourner obligatoirement la Convocation complétée de vos kms, dans les 5 jours qui suivent la rencontre.
-</td></tr>
-</table>
-</td>
-</tr>
-
-<!-- Signature -->
-<tr>
-<td style="padding:18px 28px 24px 28px;font-size:15px;line-height:23px;color:#1f2937;">
-Veuillez agréer mes meilleurs sentiments.<br><br>
-<strong>{UTI_PRENOM} {UTI_NOM}</strong><br>
-<span style="font-size:13px;color:#4b5563;">Ligue de Normandie de Tennis de Table</span>
-</td>
-</tr>
-
-<!-- Pied de page -->
-<tr>
-<td bgcolor="#f3f4f6" style="background-color:#f3f4f6;padding:14px 28px;border-top:1px solid #e5e7eb;border-radius:0 0 8px 8px;font-size:11px;line-height:17px;color:#6b7280;">
-Message envoyé automatiquement par l'application de nomination des juges-arbitres de la Ligue. Pour toute question, répondez à ce message.<br>
-<a href="{URL_LIGUE}" style="color:#1a3a6b;">{URL_LIGUE}</a>
-</td>
-</tr>
-
-</table>
-<!--[if mso]></td></tr></table><![endif]-->
-</td>
-</tr>
-</table>
-</body>
-</html>
-
-NIJAC_CONVOCATION_HTML_V1,
-        // (b) « valider ce lien : », phrase « Ci-joint… » et bloc « IMPORTANT » sous le bouton
-        <<<'NIJAC_CONVOCATION_HTML_V2'
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<!-- Sujet proposé (champ Sujet, inchangé : la version perso du nominateur est retrouvée par Sujet) : Convocation JA du {DATE} à {HEURE} à {NOM_CLUB} -->
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="color-scheme" content="light">
-<meta name="supported-color-schemes" content="light">
-<title>Convocation — Juge-Arbitre</title>
-</head>
-<body style="margin:0;padding:0;background-color:#eef1f6;color:#1f2937;">
-<span style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">Vous êtes désigné(e) juge-arbitre : {DOM} – {EXT}, le {DATE_LONGUE} à {HEURE}.</span>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#eef1f6" style="background-color:#eef1f6;">
-<tr>
-<td align="center" style="padding:24px 12px;">
-<!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#ffffff;border:1px solid #d5dbe5;border-radius:8px;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
-
-<!-- En-tête -->
-<tr>
-<td bgcolor="#1a3a6b" style="background-color:#1a3a6b;padding:22px 28px;border-radius:8px 8px 0 0;">
-<span style="display:block;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#c9d6ea;">Ligue de Normandie de Tennis de Table</span>
-<span style="display:block;font-size:22px;font-weight:bold;line-height:30px;color:#ffffff;">Convocation — Juge-Arbitre</span>
-</td>
-</tr>
-
-<!-- Introduction -->
-<tr>
-<td style="padding:26px 28px 6px 28px;font-size:15px;line-height:23px;color:#1f2937;">
-Bonjour {PRENOM},<br><br>
-Nom du JUGE ARBITRE : <strong>{PRENOM} {NOM}</strong><br><br>
-J'ai l'avantage de vous informer que vous êtes désigné(e) pour diriger la rencontre suivante du Championnat de France par Équipes {SEXE}.
-</td>
-</tr>
-
-<!-- Récapitulatif de la rencontre -->
-<tr>
-<td style="padding:16px 28px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f3f6fb" style="background-color:#f3f6fb;border-left:4px solid #1a3a6b;border-radius:4px;font-size:14px;line-height:21px;color:#1f2937;">
-<tr><td colspan="2" style="padding:14px 16px 4px 16px;font-size:17px;font-weight:bold;color:#1a3a6b;">{DOM} <span style="color:#6b7280;font-weight:normal;">à</span> {EXT}</td></tr>
-<tr><td width="34%" valign="top" style="padding:6px 16px;color:#4b5563;">Date</td><td valign="top" style="padding:6px 16px 6px 0;font-weight:bold;color:#1f2937;">{DATE_LONGUE} à {HEURE}</td></tr>
-<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Compétition</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">Journée n° {JOURNEE} — Division : {DIVISION} — Poule : {POULE}</td></tr>
-<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Club recevant</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{NOM_CLUB}</td></tr>
-<tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Adresse</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{SALLE_NOM}<br>{SALLE_ADRESSE}<br>{SALLE_CP} {SALLE_VILLE}</td></tr>
-<tr><td valign="top" style="padding:6px 16px 14px 16px;color:#4b5563;">Correspondant</td><td valign="top" style="padding:6px 16px 14px 0;color:#1f2937;">{CORR_NOM}<br>Tél : {CORR_TEL}<br>Courriel : <a href="mailto:{CORR_EMAIL}" style="color:#1a3a6b;">{CORR_EMAIL}</a></td></tr>
-</table>
-</td>
-</tr>
-
-<!-- Bouton : bloc <div> unique (sans <p>/<div>/<li> imbriqué) retiré en entier par retirerLiensPersonnelsModele() pour la copie aux clubs -->
-<tr>
-<td style="padding:0;">
-<div style="padding:12px 28px 8px 28px;font-size:15px;line-height:23px;color:#1f2937;">
-Ci-joint le lien vers la convocation pour la saisie de vos frais d'arbitrages de cette rencontre.<br><br>
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
-<tr>
-<td align="center" bgcolor="#1a3a6b" style="background-color:#1a3a6b;border-radius:6px;">
-<!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{URL_CONVOCATION_JA}" style="height:48px;v-text-anchor:middle;width:380px;" arcsize="12%" strokecolor="#1a3a6b" fillcolor="#1a3a6b"><w:anchorlock/><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">Consulter et confirmer ma convocation</center></v:roundrect><![endif]-->
-<!--[if !mso]><!--><a href="{URL_CONVOCATION_JA}" target="_blank" style="display:inline-block;padding:14px 28px;min-height:20px;line-height:20px;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:6px;background-color:#1a3a6b;">Consulter et confirmer ma convocation</a><!--<![endif]-->
-</td>
-</tr>
-</table>
-<br>
-<span style="font-size:12px;line-height:18px;color:#6b7280;">Si le bouton ne fonctionne pas, valider ce lien :<br><a href="{URL_CONVOCATION_JA}" style="color:#1a3a6b;word-break:break-all;">{URL_CONVOCATION_JA}</a></span>
-</div>
-</td>
-</tr>
-
-<!-- Consignes (reprises du message n°3 actuel) -->
-<tr>
-<td style="padding:16px 28px 6px 28px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#fff6e5" style="background-color:#fff6e5;border:1px solid #f0c36d;border-radius:4px;font-size:14px;line-height:21px;color:#5c3d00;">
-<tr><td style="padding:12px 16px;">
-<strong style="color:#8a5a00;">IMPORTANT :</strong><br>
-• Merci de m’accuser réception du présent envoi.<br>
-• Veuillez me retourner obligatoirement la Convocation complétée de vos kms, dans les 5 jours qui suivent la rencontre.
-</td></tr>
-</table>
-</td>
-</tr>
-
-<!-- Signature -->
-<tr>
-<td style="padding:18px 28px 24px 28px;font-size:15px;line-height:23px;color:#1f2937;">
-Veuillez agréer mes meilleurs sentiments.<br><br>
-<strong>{UTI_PRENOM} {UTI_NOM}</strong><br>
-<span style="font-size:13px;color:#4b5563;">Ligue de Normandie de Tennis de Table</span>
-</td>
-</tr>
-
-<!-- Pied de page -->
-<tr>
-<td bgcolor="#f3f4f6" style="background-color:#f3f4f6;padding:14px 28px;border-top:1px solid #e5e7eb;border-radius:0 0 8px 8px;font-size:11px;line-height:17px;color:#6b7280;">
-Message envoyé automatiquement par l'application de nomination des juges-arbitres de la Ligue. Pour toute question, répondez à ce message.<br>
-<a href="{URL_LIGUE}" style="color:#1a3a6b;">{URL_LIGUE}</a>
-</td>
-</tr>
-
-</table>
-<!--[if mso]></td></tr></table><![endif]-->
-</td>
-</tr>
-</table>
-</body>
-</html>
-
-NIJAC_CONVOCATION_HTML_V2,
-    ];
-}
-
-/**
- * Vrai si $corps (message n°3) est encore un ancien texte par défaut ou une version
- * HTML précédente non modifiée — comparaison tolérante (trim + fins de ligne \r\n → \n).
- * Faux s'il a été personnalisé (EA93) ou s'il est déjà à jour : il ne doit alors pas être écrasé.
- */
-function corpsConvocationJaMigrable(string $corps): bool
-{
-    $norm = fn (string $s): string => trim(str_replace("\r\n", "\n", $s));
-
-    return in_array($norm($corps), array_map($norm, [...ancienCorpsConvocationJa(), ...ancienneVersionHtmlConvocationJa()]), true);
 }
 
 /**
@@ -2717,6 +2625,29 @@ function verifierMotDePasseUtilisateur(int $idUtilisateur, string $password): bo
 }
 
 /**
+ * Construit le tableau $_SESSION['utilisateur'] à partir d'une ligne de la table
+ * utilisateur (Id_Utilisateur, Login, Nom, Prenom, Role, Id_Departement, ChangeLogin, Email).
+ * Source unique du format de session : connexion (AuthController) et rafraîchissement du
+ * profil de l'administrateur qui modifie son propre compte (UtilisateurController, EA86).
+ */
+function construireSessionUtilisateur(array $row): array
+{
+    return [
+        'id'             => $row['Id_Utilisateur'],
+        // Casse canonique de la base (Login a une collation *_ci, insensible à la casse) :
+        // pas la saisie brute, qui casserait les comparaisons strictes === 'CHAUTARD'.
+        'login'          => $row['Login'],
+        'nom'            => $row['Nom'],
+        'prenom'         => $row['Prenom'],
+        'role'           => $row['Role'],
+        'id_departement' => $row['Id_Departement'],
+        'change_login'   => (bool) $row['ChangeLogin'],
+        'is_admin'       => ($row['Role'] === 'Administrateur'),
+        'email'          => $row['Email'] ?? '',
+    ];
+}
+
+/**
  * Retourne la liste des départements qu'un utilisateur est autorisé à voir,
  * en appliquant les règles d'association définies dans configuration.php
  * (paramètre 'regles_departements', ex: {"76":["27"]} → un utilisateur du 76
@@ -2895,7 +2826,7 @@ function isModeDeveloppement(): bool
  * et le mot de passe viennent de .env (SMTP_USER / SMTP_PASSWORD, encodés ROT47).
  * Lance une exception en cas d'erreur de configuration.
  */
-function getNijacMailer(string $forcedPrefix = null): \PHPMailer\PHPMailer\PHPMailer
+function getNijacMailer(?string $forcedPrefix = null): \PHPMailer\PHPMailer\PHPMailer
 {
     require_once __DIR__ . '/../vendor/autoload.php';
     require_once __DIR__ . '/../Classes/NijacMailer.php';
@@ -2918,9 +2849,7 @@ function getNijacMailer(string $forcedPrefix = null): \PHPMailer\PHPMailer\PHPMa
             file_put_contents($logFile, date('[Y-m-d H:i:s] ') . $str . PHP_EOL, FILE_APPEND);
         };
     }
-    $mail->Hostname  = gethostname() ?: 'nijac.ligue-normandie-tt.fr';
-
-    $host   = getConfig($p . 'host', '');
+    $host  = getConfig($p . 'host', '');
     $secure = getConfig($p . 'secure', 'tls');
     $port   = (int)getConfig($p . 'port', '587');
     $auth   = getConfig($p . 'auth', '1') === '1';
@@ -2937,14 +2866,109 @@ function getNijacMailer(string $forcedPrefix = null): \PHPMailer\PHPMailer\PHPMa
             $mail->Username = getSmtpUser();
             $mail->Password = getSmtpPassword();
         }
+        // Envois en boucle : connexion SMTP réutilisée (KeepAlive) + pause 0,3 s entre deux envois (NijacMailer).
+        $mail->activerConnexionPartagee();
     } else {
         throw new \RuntimeException('SMTP non configuré. Veuillez renseigner les paramètres SMTP dans la configuration.');
     }
 
-    $mail->setFrom(
-        getConfig($p . 'from', 'patrick.chautard@free.fr'),
-        getConfig($p . 'from_name', 'NIJAC')
-    );
+    // Délivrabilité : expéditeur du domaine de la ligue (jamais d'adresse d'un autre domaine en repli),
+    // Return-Path (Sender) aligné sur le From, EHLO/Message-ID sur le domaine du From, X-Mailer masqué.
+    $from = trim((string) getConfig($p . 'from', ''));
+    if ($from === '' || !filter_var($from, FILTER_VALIDATE_EMAIL)) {
+        $from = 'nijac@ligue-normandie-tt.fr';
+    }
+    $mail->setFrom($from, getConfig($p . 'from_name', 'NIJAC'));
+    $mail->Sender   = $from;
+    $domaineFrom    = strtolower(substr(strrchr($from, '@'), 1));
+    $mail->Hostname = $domaineFrom !== '' ? $domaineFrom : 'ligue-normandie-tt.fr';
+    $mail->XMailer  = ' ';
 
     return $mail;
+}
+
+/**
+ * Version texte brut (AltBody) d'un corps HTML, propre pour les filtres anti-spam :
+ * - <head>/<style>/<script>/<title> et commentaires (dont conditionnels mso) exclus ;
+ * - espaces du source HTML non significatifs (comme au rendu) : seuls <br>, blocs et lignes
+ *   de tableau produisent des sauts de ligne ;
+ * - ligne de tableau à plusieurs cellules = une ligne « libellé : valeur » (lignes consécutives
+ *   sans ligne vide) ; cellule seule (mise en page), <p>, <h*>, <table>, listes = paragraphe ;
+ * - liens http(s) : « texte : url » (url seule si le texte est vide ou est déjà l'url) ;
+ *   mailto/tel/ancres : texte seul (adresse si texte vide) ;
+ * - au plus UNE ligne vide consécutive, aucune en tête/fin, ni espace/tab/insécable en fin de ligne.
+ * Fins de ligne en \n : PHPMailer (quoted-printable) les normalise lui-même en CRLF.
+ * À utiliser pour tout AltBody.
+ */
+function altBodyDepuisHtml(string $html): string
+{
+    $P = "\x1D"; // saut de paragraphe (une ligne vide)
+    $S = "\x1E"; // saut de ligne simple
+
+    $t = preg_replace('#<(head|style|script|title)\b[^>]*>.*?</\1\s*>#is', '', $html) ?? $html;
+    $t = preg_replace('#<!--.*?-->#s', '', $t) ?? $t; // y compris <!--[if mso]>…<![endif]-->
+    $t = str_replace([$P, $S], '', $t);
+    $t = preg_replace('/[ \t\r\n\f]+/', ' ', $t) ?? $t; // blancs du source : non significatifs en HTML
+
+    // Liens : l'URL reste lisible en texte brut.
+    $t = preg_replace_callback('#<a\b([^>]*)>(.*?)</a\s*>#is', static function (array $m): string {
+        $texte = trim(html_entity_decode(strip_tags($m[2]), ENT_QUOTES | ENT_HTML5, 'UTF-8'), " \u{00A0}");
+        $href  = preg_match('#\bhref\s*=\s*(["\'])(.*?)\1#is', $m[1], $h)
+            ? trim(html_entity_decode($h[2], ENT_QUOTES | ENT_HTML5, 'UTF-8')) : '';
+        if (preg_match('#^mailto:([^?]*)#i', $href, $mt)) {
+            $href = rawurldecode($mt[1]);
+        } elseif (!preg_match('#^https?://#i', $href)) {
+            $href = ''; // tel:, #ancre, javascript:… : texte seul
+        }
+        if ($href === '' || $texte === $href || str_contains($texte, $href)) {
+            $res = $texte !== '' ? $texte : $href;
+        } elseif ($texte === '' || rtrim($texte, '/') === rtrim(preg_replace('#^https?://#i', '', $href), '/')) {
+            $res = $href;
+        } else {
+            $res = str_starts_with($href, 'http') ? "$texte : $href" : $texte;
+        }
+        return htmlspecialchars($res, ENT_QUOTES, 'UTF-8');
+    }, $t) ?? $t;
+
+    // Lignes de tableau les plus internes : plusieurs cellules → « a : b » sur une ligne,
+    // une seule cellule → paragraphe.
+    $t = preg_replace_callback('#<tr\b[^>]*>((?:(?!<tr\b|</tr\s*>|<table\b).)*)</tr\s*>#is', static function (array $m) use ($P, $S): string {
+        $cellules = [];
+        foreach (preg_split('#</t[dh]\s*>#i', $m[1]) as $c) {
+            $c = trim(preg_replace('#<t[dh]\b[^>]*>#i', '', $c) ?? $c);
+            if (trim(html_entity_decode(strip_tags($c), ENT_QUOTES | ENT_HTML5, 'UTF-8'), " \u{00A0}") !== '') {
+                $cellules[] = $c;
+            }
+        }
+        if (count($cellules) <= 1) {
+            return $P . ($cellules[0] ?? '') . $P;
+        }
+        $ligne = '';
+        foreach ($cellules as $i => $c) {
+            $prec  = rtrim(html_entity_decode(strip_tags($ligne), ENT_QUOTES | ENT_HTML5, 'UTF-8'), " \u{00A0}");
+            $ligne .= $i === 0 ? $c : (str_ends_with($prec, ':') ? ' ' : ' : ') . $c;
+        }
+        return $S . $ligne . $S;
+    }, $t) ?? $t;
+
+    $t = preg_replace('#<br\s*/?>#i', "\n", $t) ?? $t;
+    $t = preg_replace('#<li\b[^>]*>#i', $S . '- ', $t) ?? $t;
+    $t = preg_replace('#</?(p|h[1-6]|table|tbody|thead|tfoot|tr|t[dh]|ul|ol|blockquote|hr|center)\b[^>]*>#i', $P, $t) ?? $t;
+    $t = preg_replace('#</?(div|li|dd|dt|dl|address)\b[^>]*>#i', $S, $t) ?? $t;
+    $t = preg_replace('#<span\b[^>]*display\s*:\s*block[^>]*>(.*?)</span\s*>#is', $S . '$1' . $S, $t) ?? $t;
+
+    $t = html_entity_decode(strip_tags($t), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $t = str_replace(["\u{00A0}", "\u{202F}", "\u{2007}", "\t", "\r"], ' ', $t);
+
+    // Chaque suite de blancs/sauts → espace, saut simple ou UNE ligne vide (jamais plus).
+    $t = preg_replace_callback('/[ \n\x1D\x1E]+/', static function (array $m) use ($P, $S): string {
+        $s  = $m[0];
+        $nb = substr_count($s, "\n");
+        if (str_contains($s, $P) || $nb >= 2) {
+            return "\n\n";
+        }
+        return ($nb === 1 || str_contains($s, $S)) ? "\n" : ' ';
+    }, $t) ?? $t;
+
+    return trim($t, " \n");
 }

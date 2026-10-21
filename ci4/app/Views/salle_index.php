@@ -213,14 +213,14 @@
             <tr>
                 <th style="width:70px"  data-field="id_salle">Id_Salle<span class="sort-icon"></span></th>
                 <th style="width:80px"  data-field="id_club">Id_Club<span class="sort-icon"></span></th>
-                <th style="width:210px" data-field="nom_club">Nom du club<span class="sort-icon"></span></th>
+                <th style="width:210px" data-field="nom_club" title="Clubs liés à la salle (★ = salle principale du club)">Clubs liés<span class="sort-icon"></span></th>
                 <th style="width:200px" data-field="nom">Nom<span class="sort-icon"></span></th>
                 <th style="width:230px" data-field="adresse">Adresse<span class="sort-icon"></span></th>
                 <th style="width:120px" data-field="telephone">Téléphone<span class="sort-icon"></span></th>
                 <th style="width:90px"  data-field="cp">Code postal<span class="sort-icon"></span></th>
                 <th style="width:170px" data-field="ville">Ville<span class="sort-icon"></span></th>
                 <th style="width:80px"  data-field="la_poste">La Poste<span class="sort-icon"></span></th>
-                <th style="width:90px"  data-field="est_principale">Principale<span class="sort-icon"></span></th>
+                <th style="width:90px"  data-field="est_principale" title="Salle principale d'au moins un de ses clubs (à modifier dans la fiche)">Principale<span class="sort-icon"></span></th>
                 <?php if ($isAdmin): ?>
                 <th style="width:96px"></th>
                 <?php endif; ?>
@@ -247,8 +247,12 @@
           <input type="text" id="mms-numero" class="form-control form-control-sm" readonly>
         </div>
         <div class="mb-2">
-          <label class="form-label fw-semibold" style="font-size:.82rem;">Id_Club <span class="text-danger">*</span></label>
-          <input type="text" id="mms-club" class="form-control form-control-sm" list="mms-club-list" placeholder="identifiant, ex. 07640001" autocomplete="off">
+          <label class="form-label fw-semibold" style="font-size:.82rem;">Clubs liés</label>
+          <div id="mms-liens" class="mb-1"></div>
+          <div class="input-group input-group-sm">
+            <input type="text" id="mms-club" class="form-control" list="mms-club-list" placeholder="Id_Club à lier, ex. 07640001" autocomplete="off">
+            <button type="button" class="btn btn-outline-success" id="mms-btn-lier"><i class="bi bi-link-45deg me-1"></i>Lier</button>
+          </div>
           <datalist id="mms-club-list"></datalist>
           <div id="mms-club-nom" class="form-text" style="min-height:1.1em;"></div>
         </div>
@@ -276,10 +280,6 @@
           <div class="fw-semibold text-primary small mb-1">Plusieurs communes — choisissez :</div>
           <div id="mms-suggestions-list" class="d-flex flex-wrap gap-1"></div>
         </div>
-        <div class="form-check mt-2">
-          <input type="checkbox" class="form-check-input" id="mms-principale">
-          <label class="form-check-label" for="mms-principale" style="font-size:.85rem;">Salle principale</label>
-        </div>
         <div id="mms-msg" style="font-size:.8rem;min-height:18px;margin-top:.4rem;"></div>
       </div>
       <div class="modal-footer py-2">
@@ -303,7 +303,8 @@
         <div id="sync-fftt-step1">
           <p class="text-muted small mb-3">
             Seuls les clubs <strong>déjà présents dans votre base</strong> et appartenant au département choisi
-            sont traités. Pour chaque club, la salle principale est créée ou mise à jour via <code>xml_club_detail</code>.
+            sont traités. Pour chaque club, ses salles sont créées ou mises à jour via <code>xml_club_detail</code> et liées
+            au club (la première devient sa salle principale) ; une salle déjà enregistrée au même lieu est réutilisée, pas dupliquée.
           </p>
           <div class="input-group mb-3" style="max-width:420px">
             <label class="input-group-text" for="sync-fftt-dept"><i class="bi bi-map me-1"></i>Département</label>
@@ -492,15 +493,10 @@ function makeActionsTd(idx) {
     return $td;
 }
 
+// Lecture seule : la salle principale se choisit par club dans la fiche (club_salle, une par club).
 function makePrincipaleTd(l, idx) {
     const $td  = $('<td class="col-principale">').attr('data-idx', idx).attr('data-field', 'est_principale');
-    const $cb  = $('<input type="checkbox">').prop('checked', !!l.est_principale).prop('disabled', !IS_ADMIN);
-    $cb.on('change', function () {
-        const checked = this.checked;
-        persisterSalle(idx, { est_principale: checked ? 1 : 0 },
-            (res) => toast(res.msg, true),
-            (res) => { $cb.prop('checked', !checked); toast(res.msg ?? 'Erreur réseau.', false); });
-    });
+    const $cb  = $('<input type="checkbox">').prop('checked', !!l.est_principale).prop('disabled', true);
     $td.append($cb);
     return $td;
 }
@@ -519,7 +515,7 @@ function persisterSalle(idx, overrides, onSuccess, onError) {
     if (!l) return;
     const payload = {
         nom: l.nom, adresse: l.adresse, telephone: l.telephone, cp: l.cp, ville: l.ville,
-        id_laposte: l.id_laposte, id_club: l.id_club, est_principale: l.est_principale ? 1 : 0,
+        id_laposte: l.id_laposte,
         ...overrides,
     };
     spinner(true);
@@ -553,6 +549,45 @@ function majClubNom() {
 }
 $('#mms-club').on('input', majClubNom);
 
+// Clubs liés à la salle en cours d'édition (club_salle) : [{id_club, nom, principale}].
+// Envoyés en JSON (champ `liens`) à l'enregistrement ; « Principale » = salle principale
+// de CE club (cocher la remplace pour le club, une seule par club côté serveur).
+let mmsLiens   = [];
+let multiClubs = true;   // false tant que EA98 n'a pas créé club_salle : un seul club par salle
+
+function renderLiens() {
+    const $box = $('#mms-liens').empty();
+    if (!mmsLiens.length) {
+        $box.append('<div class="text-muted small fst-italic">Aucun club lié.</div>');
+        return;
+    }
+    mmsLiens.forEach((c, i) => {
+        const $row = $('<div class="d-flex align-items-center gap-2 small mb-1">');
+        $row.append($('<span class="flex-grow-1">').text(`${c.id_club} — ${c.nom}`));
+        const $cb = $('<input type="checkbox" class="form-check-input mt-0">').prop('checked', c.principale)
+            .attr('title', 'Salle principale de ce club')
+            .on('change', function () { c.principale = this.checked; });
+        $row.append($('<label class="d-flex align-items-center gap-1 mb-0">').append($cb).append('Principale'));
+        $row.append($('<button type="button" class="btn btn-sm btn-outline-danger py-0" title="Délier (la salle est conservée)">')
+            .html('<i class="bi bi-x-lg"></i>')
+            .on('click', function () { mmsLiens.splice(i, 1); renderLiens(); }));
+        $box.append($row);
+    });
+}
+
+$('#mms-btn-lier').on('click', function () {
+    const v = $('#mms-club').val().trim();
+    const c = clubs.find(c => String(c.id_club) === v);
+    if (!c) { $('#mms-club-nom').text('Id_Club inconnu').css('color', '#c00'); return; }
+    if (mmsLiens.some(l => l.id_club === String(c.id_club))) { $('#mms-club-nom').text('Club déjà lié.').css('color', '#c00'); return; }
+    if (!multiClubs && mmsLiens.length) { $('#mms-club-nom').text('Un seul club par salle tant que EA98 n\'a pas été chargé.').css('color', '#c00'); return; }
+    mmsLiens.push({ id_club: String(c.id_club), nom: c.nom, principale: false });
+    $('#mms-club').val('');
+    majClubNom();
+    renderLiens();
+});
+$('#mms-club').on('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); $('#mms-btn-lier').trigger('click'); } });
+
 function chargerListe() {
     spinner(true);
     chargerClubs().then(() => {
@@ -569,10 +604,12 @@ function chargerListe() {
                 cp:             r.Cp    ?? '',
                 ville:          r.Ville ?? '',
                 cp_ville:       r.CpVille ?? '',
-                id_club:        r.Id_Club,
+                id_club:        r.Id_Club ?? '',
                 nom_club:       r.NomClub ?? '',
                 est_principale: r.EstPrincipale,
+                clubs:          (r.Clubs ?? []).map(c => ({ id_club: String(c.Id_Club), nom: c.Nom, principale: c.EstPrincipale == 1 })),
             }));
+            multiClubs = !!res.multiClubs;
             renderGrille();
         }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
     });
@@ -599,13 +636,14 @@ function ouvrirModalModifierSalle(idx) {
     $('#mms-numero-wrap').toggle(!!l);
     $('#mms-numero').val(l ? l.id_salle : '');
     $('#mms-nom').val(l ? (l.nom ?? '') : '');
-    $('#mms-club').val(l ? (l.id_club ?? '') : '');
+    $('#mms-club').val('');
     majClubNom();
+    mmsLiens = l ? l.clubs.map(c => ({ ...c })) : [];
+    renderLiens();
     $('#mms-adresse').val(l ? (l.adresse ?? '') : '');
     $('#mms-telephone').val(formaterTelephone(l ? (l.telephone ?? '') : ''));
     $('#mms-cp').val(l ? (l.cp ?? '') : '');
     $('#mms-ville').val(l ? (l.ville ?? '') : '');
-    $('#mms-principale').prop('checked', l ? !!l.est_principale : false);
     mmsIdLaposteVerifie = l ? (l.id_laposte ?? null) : null;
     $('#mms-cp-msg').text('').css('color', '');
     $('#mms-suggestions').hide();
@@ -616,7 +654,7 @@ function ouvrirModalModifierSalle(idx) {
     if (!modal) modal = new bootstrap.Modal(el);
     modal.show();
     el.addEventListener('shown.bs.modal', () => {
-        $(l ? '#mms-nom' : '#mms-club').trigger('focus').trigger('select');
+        $('#mms-nom').trigger('focus').trigger('select');
     }, { once: true });
 }
 
@@ -688,12 +726,10 @@ $('#mms-ville').on('keydown', function (e) { if (e.key === 'Enter') { e.preventD
 $('#mms-btn-ok').on('click', function () {
     const idxVal        = $('#mms-idx').val();
     const nom           = $('#mms-nom').val().trim();
-    const idClub        = $('#mms-club').val().trim() || null;
     const adresse       = $('#mms-adresse').val().trim() || null;
     const telephone     = $('#mms-telephone').val().trim() || null;
     const cp            = $('#mms-cp').val().trim() || null;
     const ville         = $('#mms-ville').val().trim().toUpperCase() || null;
-    const estPrincipale = $('#mms-principale').is(':checked') ? 1 : 0;
 
     if (!nom) {
         $('#mms-msg').html('<span class="text-danger">Le nom est obligatoire.</span>');
@@ -703,18 +739,15 @@ $('#mms-btn-ok').on('click', function () {
         $('#mms-msg').html('<span class="text-danger">Le téléphone doit être saisi sous la forme 00.00.00.00.00.</span>');
         return;
     }
-    if (!idClub) {
-        $('#mms-msg').html('<span class="text-danger">L\'Id_Club est obligatoire.</span>');
-        return;
-    }
-    if (!clubs.some(c => String(c.id_club) === idClub)) {
-        $('#mms-msg').html('<span class="text-danger">Id_Club inconnu.</span>');
+    if ($('#mms-club').val().trim() !== '') {
+        $('#mms-msg').html('<span class="text-danger">Cliquez sur « Lier » pour ajouter le club saisi, ou videz le champ.</span>');
         return;
     }
 
     const champs = {
-        nom, adresse, telephone, cp, ville, id_club: idClub,
-        id_laposte: mmsIdLaposteVerifie, est_principale: estPrincipale,
+        nom, adresse, telephone, cp, ville,
+        id_laposte: mmsIdLaposteVerifie,
+        liens: JSON.stringify(mmsLiens.map(c => ({ id_club: c.id_club, principale: c.principale ? 1 : 0 }))),
     };
 
     if (idxVal === '') {
@@ -734,11 +767,10 @@ $('#mms-btn-ok').on('click', function () {
 
     persisterSalle(+idxVal, champs,
         (res) => {
-            const l = lignes[+idxVal];
-            if (l) l.nom_club = (clubs.find(c => String(c.id_club) === String(l.id_club)) || {}).nom || '';
+            // Rechargement : les liens d'autres salles du club peuvent avoir changé (principale unique).
             bootstrap.Modal.getInstance(document.getElementById('modal-modifier-salle')).hide();
-            renderGrille();
             toast(res.msg, true);
+            chargerListe();
         },
         (res) => $('#mms-msg').html('<span class="text-danger">✖ ' + escHtml(res.msg ?? 'Erreur réseau.') + '</span>'));
 });

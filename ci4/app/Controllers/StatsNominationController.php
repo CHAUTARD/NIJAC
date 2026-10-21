@@ -57,7 +57,7 @@ class StatsNominationController extends BaseController
                     ed.Nom AS NomDom, ee.Nom AS NomExt,
                     d_n.Id_JA AS IdJaAffecte,
                     CONCAT(ja_n.Prenom, ' ', ja_n.Nom) AS NomJaAffecte,
-                    n.Valide, n.EmailEnvoye
+                    n.EmailEnvoye
                 FROM rencontre r
                 JOIN  equipe   ed  ON ed.Id_Equipe = r.Id_EquipeDom
                 JOIN  division dv  ON dv.Division  = ed.Division
@@ -92,7 +92,7 @@ class StatsNominationController extends BaseController
             // (clés `configuration`, amorcées par EA98), et prestations faites par ses JA (ja.Id_Club).
             // Régionales = table `equipe` (Division NOT LIKE 'N%' : PN, R1…R4), club porteur
             // principal (Id_Club) ; nationales = table `equipe_nationale` (N1…N3).
-            // Faites (NbNom) = toutes les nominations Valide sur une rencontre déjà jouée (r.Date <= CURDATE()),
+            // Faites (NbNom) = toutes les nominations sur une rencontre déjà jouée (r.Date <= CURDATE()),
             // arbitrage CRA ET arbitrage club, servant à l'écart et aux totaux ; NbClub = part en arbitrage
             // club (r.ArbitrageCRA = 0, colonne NOT NULL DEFAULT 1), détail informatif déjà inclus dans NbNom.
             // La table `rencontre` ne contient que la saison en cours.
@@ -160,7 +160,7 @@ class StatsNominationController extends BaseController
                     JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
                     JOIN ja           ON ja.Id_JA        = d.Id_JA
                     JOIN rencontre r  ON r.Id_Rencontre  = n.Id_Rencontre
-                    WHERE n.Valide = 1 AND r.Date <= CURDATE()
+                    WHERE r.Date <= CURDATE()
                     GROUP BY ja.Id_Club
                 ) nm ON nm.Id_Club = c.Id_Club
                 WHERE SUBSTRING(c.Id_Club, 3, 2) IN ($ph)

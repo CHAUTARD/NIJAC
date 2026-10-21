@@ -31,7 +31,6 @@ table.recap tr:hover td { background:#f4f9f4; }
 .statut-badge { font-size:.66rem; font-weight:700; padding:.1rem .45rem; border-radius:10px; }
 .statut-badge.valide { background:#e8f5e9; color:#2e7d32; }
 .statut-badge.envoye { background:#e3f2fd; color:#1565c0; }
-.statut-badge.attente { background:#fff3e0; color:#e65100; }
 
 #tbl-compteurs { width:100%; border-collapse:collapse; font-size:.85rem; background:#fff; }
 #tbl-compteurs th, #tbl-compteurs td { padding:.4rem .7rem; border-bottom:1px solid #eee; text-align:left; }
@@ -200,7 +199,7 @@ details.club-accent { border-left-color:#e65100; } .club-accent .sect-ico { back
             <span class="sect-txt">
                 <span class="sect-titre">Prestations par club</span>
                 <span class="sect-desc">Prestations dues (Nationale × <span id="coef-nat"></span> · Régionale × <span id="coef-reg"></span>)
-                    et prestations faites par les JA du club (nominations validées, rencontres jouées, toutes prestations)</span>
+                    et prestations faites par les JA du club (nominations des rencontres jouées, toutes prestations)</span>
             </span>
             <i class="bi bi-chevron-right sect-chev"></i>
         </summary>
@@ -262,8 +261,7 @@ function fmtDate(d) {
 function statutBadge(r) {
     if (!r.IdJaAffecte) return '';
     if (parseInt(r.EmailEnvoye) === 1) return '<span class="statut-badge envoye">Convoqué</span>';
-    if (parseInt(r.Valide) === 1)      return '<span class="statut-badge valide">Validé</span>';
-    return '<span class="statut-badge attente">En attente</span>';
+    return '<span class="statut-badge valide">Validé</span>';   // une nomination existante est toujours valide
 }
 
 // ── Calendrier de sélection (repris d'EN22) ──────────────────────────────────

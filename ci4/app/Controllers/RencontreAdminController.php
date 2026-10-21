@@ -67,7 +67,7 @@ class RencontreAdminController extends BaseController
                         r.Id_EquipeDom, r.Id_EquipeExt, r.id_Salle, r.Commentaire,
                         r.ArbitrageCRA, r.Frais, ' . $colForfait . ',
                         CASE WHEN r.ArbitrageCRA = 1 THEN 1
-                             WHEN EXISTS (SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1) THEN 1
+                             WHEN EXISTS (SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre) THEN 1
                              ELSE 0 END AS ArbitrageObligatoire,
                         ed.Division, dv.Color AS DivisionColor, ed.Nom AS NomDom, ed.Id_Club AS IdClubDom,
                         ev.Nom AS NomExt, ev.Id_Club AS IdClubExt,
@@ -85,7 +85,12 @@ class RencontreAdminController extends BaseController
             // Catalogues pour le formulaire d'édition : équipe domicile/extérieure
             // (recherche par nom) et salles du club domicile sélectionné.
             $equipes = getPDO()->query('SELECT Id_Equipe, Nom, Division, Id_Club FROM equipe ORDER BY Nom')->fetchAll();
-            $salles  = getPDO()->query('SELECT Id_Salle, Nom, Id_Club, EstPrincipale FROM salle ORDER BY Nom')->fetchAll();
+            // Une ligne par lien club ↔ salle (club_salle) : une salle partagée apparaît pour chacun de ses clubs.
+            $salles  = getPDO()->query(
+                'SELECT s.Id_Salle, s.Nom, c.Id_Club, ' . sqlColPrincipale('s') . ' AS EstPrincipale
+                 FROM club c ' . sqlJoinSallesClub('c.Id_Club', 's', 'JOIN') . '
+                 ORDER BY s.Nom'
+            )->fetchAll();
 
             return $this->response->setJSON(['ok' => true, 'rencontres' => $rows, 'equipes' => $equipes, 'salles' => $salles]);
         });

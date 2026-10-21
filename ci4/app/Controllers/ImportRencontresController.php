@@ -540,7 +540,7 @@ class ImportRencontresController extends BaseController
                         dv.Division AS DivisionCode, dv.Nom AS DivisionNom, dv.Color AS DivisionColor,
                         ed.Nom AS NomDom, ev.Nom AS NomExt,
                         CASE WHEN r.ArbitrageCRA = 1 THEN 1
-                             WHEN EXISTS (SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre AND n.Valide = 1) THEN 1
+                             WHEN EXISTS (SELECT 1 FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre) THEN 1
                              ELSE 0 END AS ArbitrageObligatoire,
                         (SELECT COUNT(*) FROM nomination n WHERE n.Id_Rencontre = r.Id_Rencontre) AS NbNominations
                  FROM rencontre r
@@ -615,14 +615,25 @@ class ImportRencontresController extends BaseController
                 'SELECT r.Id_Rencontre, r.Date, r.Heure, r.Journee, r.Poule,
                         ed.Division, RIGHT(ed.Division, 1) AS SexeCode,
                         ed.Nom AS NomDom, ev.Nom AS NomExt,
-                        s.Nom AS SalleNom, s.Adresse AS SalleAdresse,
-                        lps.CodePostal AS SalleCP, lps.Nom AS SalleVille,
+                        -- Même salle que la convocation EN14 : salle de la rencontre, sinon salle principale du club recevant.
+                        CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                             THEN s_r.Nom ELSE s_c.Nom END                         AS SalleNom,
+                        CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                             THEN s_r.Adresse ELSE s_c.Adresse END                 AS SalleAdresse,
+                        CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                             THEN COALESCE(lp_r.CodePostal, s_r.Cp)
+                             ELSE COALESCE(lp_c.CodePostal, s_c.Cp) END            AS SalleCP,
+                        CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                             THEN COALESCE(lp_r.Nom, s_r.Ville)
+                             ELSE COALESCE(lp_c.Nom, s_c.Ville) END                AS SalleVille,
                         cl.CorNom AS CorrNom, cl.CorEmail AS CorrEmail, cl.CorTelephone AS CorrTel
                  FROM rencontre r
                  JOIN equipe   ed   ON ed.Id_Equipe   = r.Id_EquipeDom
                  LEFT JOIN equipe ev  ON ev.Id_Equipe   = r.Id_EquipeExt
-                 LEFT JOIN salle s    ON s.Id_Salle     = r.Id_Salle
-                 LEFT JOIN laposte lps ON lps.Id_LaPoste = s.Id_Laposte
+                 LEFT JOIN salle   s_r  ON s_r.Id_Salle    = r.id_Salle
+                 LEFT JOIN laposte lp_r ON lp_r.Id_LaPoste = s_r.Id_Laposte
+                 ' . sqlJoinSallePrincipale('ed.Id_Club', 's_c') . '
+                 LEFT JOIN laposte lp_c ON lp_c.Id_LaPoste = s_c.Id_Laposte
                  LEFT JOIN club cl    ON cl.Id_Club     = ed.Id_Club
                  WHERE r.Id_Rencontre = ? AND ed.Id_Club = ?'
             );
@@ -647,7 +658,7 @@ class ImportRencontresController extends BaseController
                 $idDispo = (int) $pdo->lastInsertId();
             }
 
-            $pdo->prepare('INSERT INTO nomination (Id_Rencontre, Id_Disponible, DateNomination, Valide, EmailEnvoye) VALUES (?, ?, CURDATE(), 1, 0)')
+            $pdo->prepare('INSERT INTO nomination (Id_Rencontre, Id_Disponible, DateNomination, EmailEnvoye) VALUES (?, ?, CURDATE(), 0)')
                 ->execute([$idRenc, $idDispo]);
             $idNomination = (int) $pdo->lastInsertId();
 
@@ -686,7 +697,7 @@ class ImportRencontresController extends BaseController
                     $mail->Subject = ($modeDev && $dest !== $ja['Email']) ? "[DEV] $sujet" : $sujet;
                     $mail->Body    = $corps;
                     if ($isHtml) {
-                        $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $corps));
+                        $mail->AltBody = altBodyDepuisHtml($corps);
                     }
                     $mail->send();
                     enregistrerEnvois(1);

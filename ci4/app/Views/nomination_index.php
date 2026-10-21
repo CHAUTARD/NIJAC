@@ -479,12 +479,12 @@ function chargerRencontres(idGarder) {
                     nominations[rc.Id_Rencontre] = { Id_JA: rc.IdJaAffecte, Nom: rc.NomJaAffecte || '', Prenom: '' };
                 }
             });
-            // Présélection : convocations déjà validées et pas encore envoyées
+            // Présélection : nominations (toujours valides) pas encore envoyées
             selectionEnvoi = new Set(
-                rencontres.filter(rc => rc.Valide == 1 && rc.EmailEnvoye != 1).map(rc => rc.Id_Rencontre)
+                rencontres.filter(rc => nominations[rc.Id_Rencontre] && rc.EmailEnvoye != 1).map(rc => rc.Id_Rencontre)
             );
             selectionEnvoiInitiale = new Set(selectionEnvoi);
-            if (envoiAvant) selectionEnvoi = new Set(rencontres.filter(rc => rc.Valide == 1 && envoiAvant.has(rc.Id_Rencontre)).map(rc => rc.Id_Rencontre));
+            if (envoiAvant) selectionEnvoi = new Set(rencontres.filter(rc => nominations[rc.Id_Rencontre] && envoiAvant.has(rc.Id_Rencontre)).map(rc => rc.Id_Rencontre));
             if (j.ok) jaList = j.data;
             // Rechargement : les cases « autre dépt » cochées sont reportées après reconstruction
             const hdAvant = idGarder ? $('.hd-chk:checked').map(function () { return this.value; }).get() : [];
@@ -530,7 +530,7 @@ let triPriorite = false;
 
 function rangPriorite(rc) {
     if (!nominations[rc.Id_Rencontre]) return 0;
-    if (rc.Valide == 1 && rc.EmailEnvoye == 1) return 2;
+    if (rc.EmailEnvoye == 1) return 2;
     return 1;
 }
 
@@ -551,7 +551,7 @@ function etatAccuse(rc, aJa) {
 function passeFiltreAccuse(rc, aJa, filtre) {
     return !filtre || etatAccuse(rc, aJa) === filtre;
 }
-// Convocation validée = le JA a accusé réception (même base que etatAccuse, Valide n'intervient pas) :
+// Convocation validée = le JA a accusé réception (même base que etatAccuse) :
 // '' sans JA, 'valide' (AccuseReception renseigné), 'nonvalide' (envoyée sans accusé ou pas encore envoyée).
 function etatValidation(rc, aJa) {
     const e = etatAccuse(rc, aJa);
@@ -638,7 +638,7 @@ function renderRencontres() {
         const poule    = rc.Poule ? `Poule ${escHtml(rc.Poule)}` : '';
         const salle    = rc.NomSalle ? escHtml(rc.NomSalle) + ' — ' : '';
         const lieu     = salle + [rc.CpSalle, rc.VilleSalle].filter(Boolean).map(escHtml).join(' ');
-        const valide   = rc.Valide == 1;
+        const valide   = attr;   // une nomination existante est toujours valide
         const envoye   = rc.EmailEnvoye == 1;
         const checkbox = valide
             ? `<input type="checkbox" class="renc-check" data-id="${rc.Id_Rencontre}" ${selectionEnvoi.has(rc.Id_Rencontre) ? 'checked' : ''} title="Sélectionner pour l'envoi de la convocation">`
@@ -651,8 +651,12 @@ function renderRencontres() {
         // Arbitrage club (R3M/R4M, club recevant en SouhaitJA='Club', pas encore de JA) :
         // la demande au correspondant se fait dans le panneau de droite.
         const arbClub  = !attr && rc.SouhaitJADom === 'Club' && ['R3M', 'R4M'].includes(rc.DivisionCode || '');
+        // DateDemandeClub (EA98) : dernier envoi / relance de la demande au club, NULL = jamais.
+        const dDemande = rc.DateDemandeClub ? String(rc.DateDemandeClub).substring(0, 10).split('-').reverse().join('/') : '';
         const btnAsk   = arbClub
-            ? '<div class="renc-arbclub"><i class="bi bi-envelope me-1"></i>Arbitrage club — demande à envoyer</div>'
+            ? (dDemande
+                ? `<div class="renc-arbclub"><i class="bi bi-envelope-check me-1"></i>Arbitrage club — demande envoyée le ${escHtml(dDemande)}</div>`
+                : '<div class="renc-arbclub"><i class="bi bi-envelope me-1"></i>Arbitrage club — demande à envoyer</div>')
             : '';
         $liste.append(`
             <div class="renc-item ${attr ? 'attribue' : ''}" data-id="${rc.Id_Rencontre}">
@@ -793,9 +797,16 @@ function afficherCandidatsPourRencontre(idRenc) {
             ([rid, nom]) => parseInt(rid) !== idRenc && nom.Id_JA == ja.Id_JA
         );
         if (autresNoms.length >= 2) return;
-        // Une 2ᵉ nomination le même jour n'est possible que sur le même club recevant :
-        // on masque le JA déjà nommé sur une rencontre d'un autre club.
-        if (autresNoms.some(([rid]) => rencontres.find(r => r.Id_Rencontre == rid)?.IdClubDom !== clubDom)) return;
+        // Une 2ᵉ nomination le même jour n'est possible que dans la MÊME SALLE (le club
+        // recevant n'intervient pas) : LieuSalle, calculé côté serveur (classesLieuxSalles() :
+        // même Id, ou même nom / même adresse normalisés dans la même commune), identique ;
+        // salle inconnue = différente. Revérifié par verifierEtNommer() (nominationsJourJa()).
+        const memeSalle = rid => {
+            const r2 = rencontres.find(r => r.Id_Rencontre == rid);
+            return !!r2 && r2.LieuSalle != null && rc.LieuSalle != null
+                && String(r2.LieuSalle) === String(rc.LieuSalle);
+        };
+        if (autresNoms.some(([rid]) => !memeSalle(rid))) return;
 
         const dist  = haversineKm(ja.JaLat, ja.JaLon, venueLat, venueLon);
         const score = (prefereRenc ? 300 : 0)
@@ -808,6 +819,7 @@ function afficherCandidatsPourRencontre(idRenc) {
             DistanceKm:    dist,
             PrefereRenc:   prefereRenc ? 1 : 0,
             SonClub:       sonClub ? 1 : 0,
+            DejaIci:       autresNoms.length,   // déjà nommé ce jour sur une rencontre de la même salle
             Disponibilite: dispoJournee ? 'O' : 'P',
             Score:         score
         });
@@ -848,6 +860,7 @@ function afficherCandidatsPourRencontre(idRenc) {
             let badges = '';
             if (ja.HorsDept == 1) badges += '<span class="badge rounded-pill me-1" style="background:#6c757d;color:#fff;"><i class="bi bi-signpost-2 me-1"></i>Autre dépt</span>';
             if (ja.PrefereRenc == 1) badges += '<span class="badge badge-pref rounded-pill me-1"><i class="bi bi-star-fill me-1"></i>Choix JA</span>';
+            if (ja.DejaIci > 0) badges += '<span class="badge rounded-pill me-1" style="background:#0277bd;color:#fff;" title="Déjà nommé ce jour sur 1 autre rencontre de cette salle (max 2 par jour)"><i class="bi bi-pin-map-fill me-1"></i>Déjà nommé ici (1 compét.)</span>';
             if (ja.SonClub == 1) badges += '<span class="badge rounded-pill me-1" style="background:#8e24aa;color:#fff;"><i class="bi bi-house-fill me-1"></i>Son club</span>';
             if (ja.DistanceKm != null && ja.DistanceKm <= 20) badges += '<span class="badge badge-prox rounded-pill me-1"><i class="bi bi-geo-alt-fill me-1"></i>Proche</span>';
             badges += `<span class="badge ${ja.Disponibilite === 'O' ? 'badge-dispo-O' : 'badge-dispo-P'} rounded-pill">${ja.Disponibilite === 'O' ? 'Disponible' : 'Partiel'}</span>`;
@@ -908,17 +921,27 @@ function afficherCandidatsPourRencontre(idRenc) {
 }
 
 // ── Panneau arbitrage club : éditeur du message n°7 + envoi ──────────────────
+// EN14 : un seul envoi par rencontre (DateDemandeClub renseignée → bouton bloqué,
+// refus aussi côté serveur) ; EN28 « Relancer le club » peut toujours renvoyer.
+function texteDemandeDejaEnvoyee(dateDemande) {
+    return 'Demande déjà envoyée le ' + String(dateDemande).substring(0, 10).split('-').reverse().join('/');
+}
+
 function chargerPanelArbitreClub(idRenc) {
     $('#panel-arbitre-club').show();
     $('#ac-status').text('').removeClass('text-danger text-success');
     $('#ac-envoyer').prop('disabled', true).data('id', idRenc);
+    const rcPanel     = rencontres.find(r => r.Id_Rencontre == idRenc);
+    const dejaDemande = rcPanel && rcPanel.DateDemandeClub ? rcPanel.DateDemandeClub : '';
     $('#ac-sujet, #ac-message').prop('disabled', true).val('Chargement…');
 
     $.get('<?= site_url('nomination/message-arbitre-club') ?>', { id_rencontre: idRenc }, function (res) {
         if (!res.ok) { $('#ac-status').addClass('text-danger').text(res.err || 'Erreur.'); return; }
         $('#ac-sujet').val(res.sujet || '').prop('disabled', false);
         $('#ac-message').val(res.message || '').prop('disabled', false);
-        if (!res.corr_email) {
+        if (dejaDemande) {
+            $('#ac-status').text(texteDemandeDejaEnvoyee(dejaDemande));
+        } else if (!res.corr_email) {
             $('#ac-status').addClass('text-danger').text('Aucun email de correspondant pour ce club (à compléter en EN27).');
         } else {
             $('#ac-envoyer').prop('disabled', false);
@@ -946,8 +969,17 @@ $('#ac-envoyer').on('click', function () {
         message:      $('#ac-message').val(),
     }, function (res) {
         if (res.ok) {
-            $('#ac-status').addClass('text-success').text(res.msg);
+            // Bouton laissé désactivé : un nouvel envoi depuis EN14 est refusé.
+            $('#ac-status').addClass('text-success').text(res.date_demande ? texteDemandeDejaEnvoyee(res.date_demande) : res.msg);
             toast(escHtml(res.msg));
+            // Date d'envoi enregistrée côté serveur (DateDemandeClub, null avant EA98) :
+            // répercutée sur la liste sans tout recharger, pour garder panneau et sélection.
+            const rcDem = rencontres.find(r => r.Id_Rencontre == id);
+            if (rcDem && res.date_demande) {
+                rcDem.DateDemandeClub = res.date_demande;
+                renderRencontres();
+                $(`#liste-rencontres .renc-item[data-id="${id}"]`).addClass('selected');
+            }
         } else {
             $('#ac-status').addClass('text-danger').text(res.err || res.msg || 'Erreur.');
             $b.prop('disabled', false);
@@ -965,19 +997,18 @@ function viderCandidats() {
 }
 
 // ── Affecter / Retirer ────────────────────────────────────────────────────────
-// Affecter un JA valide directement la nomination (Valide = 1, côté serveur dans
-// affecterNomination()) ; retirer supprime la nomination — et donc sa validation
-// avec elle. Répercuté ici pour garder le badge et la case à cocher de chaque
+// Affecter un JA crée la nomination (toujours valide) ; retirer la supprime.
+// EmailEnvoye repart à 0 côté serveur (affecterNomination()). Répercuté ici pour garder le badge et la case à cocher de chaque
 // rencontre cohérents sans recharger toute la page.
 function appliquerValidation(idRenc) {
     const rc = rencontres.find(r => r.Id_Rencontre === idRenc);
-    if (rc) { rc.Valide = 1; rc.EmailEnvoye = 0; }
+    if (rc) { rc.EmailEnvoye = 0; }
     selectionEnvoi.add(idRenc);
 }
 
 function reinitialiserValidation(idRenc) {
     const rc = rencontres.find(r => r.Id_Rencontre === idRenc);
-    if (rc) { rc.Valide = 0; rc.EmailEnvoye = 0; rc.AccuseReception = null; }   // nomination supprimée
+    if (rc) { rc.EmailEnvoye = 0; rc.AccuseReception = null; }   // nomination supprimée
     selectionEnvoi.delete(idRenc);
 }
 
@@ -1040,9 +1071,9 @@ function retirerJaAvecConfirmation(idRenc) {
 function mettreAJourBoutons() {
     const total    = rencontres.length;
     const attrib   = Object.keys(nominations).length;
-    const validees = rencontres.filter(rc => rc.Valide == 1).length;
+    const validees = rencontres.filter(rc => nominations[rc.Id_Rencontre]).length;
 
-    // Envoyer visible dès qu'au moins une nomination est validée — persiste au rechargement de la page
+    // Envoyer visible dès qu'au moins une nomination existe — persiste au rechargement de la page
     $('#btn-envoyer').toggle(validees > 0).prop('disabled', idsEnvoiAffiches().length === 0);
     $('#btn-pointage').prop('disabled', total === 0);
     $('#wrap-pointage').attr('title', total ? 'Feuille de pointage PDF de toutes les rencontres de la journée' : 'Aucune rencontre à imprimer');

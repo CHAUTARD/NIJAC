@@ -50,7 +50,7 @@ if (!$isProduction) {
 
 // ── Constantes communes ───────────────────────────────────────────────────────
 define('DB_CHARSET',   'utf8mb4');
-define('APP_VERSION', '1.3.26');
+define('APP_VERSION', '1.3.37');
 
 // Seed secret pour l'obfuscation des identifiants JA dans les URL publiques
 // (doit rester identique entre génération et décodage)
@@ -155,6 +155,9 @@ function getPDO(): PDO
             // explicites avant binding).
             PDO::ATTR_EMULATE_PREPARES   => true,
         ]);
+        // NOW() suit le fuseau du serveur MySQL (UTC sur l'hébergement) : on l'aligne sur Europe/Paris
+        // (heure d'été incluse) pour que les horodatages (ex. accusé de réception) soient à l'heure locale.
+        $pdo->exec("SET time_zone = '" . (new DateTime('now', new DateTimeZone('Europe/Paris')))->format('P') . "'");
     }
 
     return $pdo;

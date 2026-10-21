@@ -163,7 +163,8 @@
         .dc-clickable:hover { box-shadow: 0 3px 10px rgba(0,0,0,.16); transform: translateY(-1px); }
 
         #modal-convocations .conv-row,
-        #modal-rencontres-sans-ja .conv-row {
+        #modal-rencontres-sans-ja .conv-row,
+        #modal-club-sans-saisie .conv-row {
             display: flex;
             align-items: center;
             gap: .6rem;
@@ -172,10 +173,13 @@
             font-size: .85rem;
         }
         #modal-convocations .conv-date,
-        #modal-rencontres-sans-ja .conv-date { font-weight: 700; color: #1a3a6b; min-width: 90px; }
-        #modal-convocations .conv-ja   { font-weight: 600; flex: 1; }
+        #modal-rencontres-sans-ja .conv-date,
+        #modal-club-sans-saisie .conv-date { font-weight: 700; color: #1a3a6b; min-width: 90px; }
+        #modal-convocations .conv-ja,
+        #modal-club-sans-saisie .conv-ja { font-weight: 600; flex: 1; }
         #modal-convocations .conv-renc,
-        #modal-rencontres-sans-ja .conv-renc { color: #666; font-size: .78rem; }
+        #modal-rencontres-sans-ja .conv-renc,
+        #modal-club-sans-saisie .conv-renc { color: #666; font-size: .78rem; }
         #modal-rencontres-sans-ja .conv-equipes { font-weight: 600; flex: 1; }
 
         /* ── Grille de boutons ── */
@@ -281,21 +285,6 @@
             pointer-events: none;
         }
 
-        /* Badge sur bouton */
-        .btn-badge {
-            position: absolute;
-            top: -8px;
-            right: -8px;
-            background: #c62828;
-            color: #fff;
-            font-size: .65rem;
-            font-weight: 800;
-            border-radius: 50px;
-            padding: 2px 7px;
-            min-width: 22px;
-            text-align: center;
-            box-shadow: 0 1px 4px rgba(0,0,0,.25);
-        }
         .menu-btn-wrap { position: relative; }
 
         .dc-clickable:focus-visible { outline: 3px solid #6a1b9a; outline-offset: 2px; }
@@ -365,20 +354,12 @@
             <div class="dc-sub">juges-arbitres en activité</div>
         </div>
 
-        <!-- Nominations à valider -->
-        <div class="dash-card dc-orange<?= $stats['nominations_valider'] > 0 ? ' dc-alert' : '' ?>">
-            <div class="dc-icon"><i class="bi bi-hourglass-split"></i></div>
-            <div class="dc-label">Nominations à valider</div>
-            <div class="dc-value"><?= (int) $stats['nominations_valider'] ?></div>
-            <div class="dc-sub">en attente de validation</div>
-        </div>
-
         <!-- Convocations à envoyer -->
         <div class="dash-card dc-purple dc-clickable<?= $stats['convocations_envoyer'] > 0 ? ' dc-alert' : '' ?>" id="card-convocations-envoyer" role="button" tabindex="0">
             <div class="dc-icon"><i class="bi bi-envelope-exclamation"></i></div>
             <div class="dc-label">Convocations à envoyer</div>
             <div class="dc-value"><?= (int) $stats['convocations_envoyer'] ?></div>
-            <div class="dc-sub">validées, email non envoyé</div>
+            <div class="dc-sub">à venir, email non envoyé</div>
         </div>
 
         <!-- Rencontres sans JA -->
@@ -387,6 +368,14 @@
             <div class="dc-label">Rencontres sans JA</div>
             <div class="dc-value"><?= (int) $stats['rencontres_sans_ja'] ?></div>
             <div class="dc-sub">à venir, aucun JA nominé</div>
+        </div>
+
+        <!-- Arbitrages club sans date de saisie -->
+        <div class="dash-card dc-orange dc-clickable<?= $stats['club_sans_saisie'] > 0 ? ' dc-alert' : '' ?>" id="card-club-sans-saisie" role="button" tabindex="0">
+            <div class="dc-icon"><i class="bi bi-calendar-x"></i></div>
+            <div class="dc-label">Arbitrages club sans date de saisie</div>
+            <div class="dc-value"><?= (int) $stats['club_sans_saisie'] ?></div>
+            <div class="dc-sub">rencontres jouées, frais non saisis</div>
         </div>
 
     </div>
@@ -430,9 +419,6 @@
             <span>Nomination JA</span>
             <span class="btn-desc">Affecter les JA aux rencontres</span>
         </a>
-        <?php if ($stats['nominations_valider'] > 0): ?>
-            <span class="btn-badge"><?= (int) $stats['nominations_valider'] ?></span>
-        <?php endif; ?>
     </div>
 
     <div class="menu-btn-wrap">
@@ -551,6 +537,27 @@
     </div>
 </div>
 
+<!-- Modale détail « Arbitrages club sans date de saisie » -->
+<div class="modal fade" id="modal-club-sans-saisie" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2" style="background:#e65100;color:#fff;">
+                <h6 class="modal-title mb-0"><i class="bi bi-calendar-x me-2"></i>Arbitrages club sans date de saisie</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modal-club-sans-saisie-body">
+                <div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div></div>
+            </div>
+            <div class="modal-footer py-2">
+                <a href="<?= site_url('suivi-nomination') ?>" class="btn btn-sm btn-primary">
+                    <i class="bi bi-list-check me-1"></i>Aller au Suivi des nominations (EN28)
+                </a>
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fermer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Pied de page : recopié de includes/footer.php -->
 <?= view('partials/page_footer', ['pfStatusAlign' => 'left']) ?>
 
@@ -605,6 +612,12 @@ brancherDetail('#card-rencontres-sans-ja', '#modal-rencontres-sans-ja',
     'Toutes les rencontres à venir ont un JA nominé.',
     c => `<span class="conv-equipes">${escHtml(c.NomDom)} vs ${escHtml(c.NomExt || '?')}</span>
           <span class="conv-renc">J${escHtml(c.Journee)} — ${escHtml(c.Division)}</span>`);
+
+brancherDetail('#card-club-sans-saisie', '#modal-club-sans-saisie',
+    '<?= site_url('nominateur-menu/club-sans-saisie') ?>',
+    'Aucun arbitrage club sans date de saisie.',
+    c => `<span class="conv-ja"><i class="bi bi-person-fill me-1"></i>${escHtml(c.Prenom)} ${escHtml(c.Nom)}</span>
+          <span class="conv-renc">${escHtml(c.NomDom)} vs ${escHtml(c.NomExt || '?')} — ${escHtml(c.Division)} — ${escHtml(c.NomClub || '')}</span>`);
 </script>
 </body>
 </html>

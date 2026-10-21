@@ -206,7 +206,7 @@ class CraDispoController extends BaseController
             }
             $mail->Subject = ($modeDev && $dest !== $ja['Email']) ? "[DEV] $sujet" : $sujet;
             $mail->Body    = $corps;
-            $mail->AltBody = html_entity_decode(strip_tags(str_replace(['<br>', '</p>', '</tr>'], "\n", $corps)), ENT_QUOTES, 'UTF-8');
+            $mail->AltBody = altBodyDepuisHtml($corps);
             $mail->send();
             enregistrerEnvois(1);
             session_write_close();

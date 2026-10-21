@@ -207,26 +207,18 @@ class NominationController extends BaseController
                 : 'Ce JA n\'est pas disponible pour cette rencontre (aucune réponse « oui »).';
         }
 
-        // Règle : au maximum 2 nominations par JA sur une même journée, et uniquement sur
-        // des rencontres du même club recevant (même lieu). Le nominateur décide lui-même
-        // de la 2ᵉ (aucune affectation automatique).
-        $st = $pdo->prepare('
-            SELECT COUNT(*) AS nb, COALESCE(SUM(ed2.Id_Club <> ed.Id_Club), 0) AS autres_clubs
-            FROM nomination n
-            JOIN disponible d  ON d.Id_Disponible = n.Id_Disponible
-            JOIN rencontre  r2 ON r2.Id_Rencontre = n.Id_Rencontre
-            JOIN equipe    ed2 ON ed2.Id_Equipe   = r2.Id_EquipeDom
-            JOIN rencontre  r  ON r.Id_Rencontre  = ?
-            JOIN equipe     ed ON ed.Id_Equipe    = r.Id_EquipeDom
-            WHERE d.Id_JA = ? AND n.Id_Rencontre != r.Id_Rencontre AND r2.Date = r.Date
-        ');
-        $st->execute([$idRenc, $idJa]);
-        $deja = $st->fetch();
-        if ((int) $deja['nb'] >= 2) {
+        // Règle : au maximum 2 nominations par JA sur une même journée, et uniquement sur des
+        // rencontres de la MÊME SALLE (le club recevant n'intervient pas) : salle effective
+        // (r.id_Salle, sinon salle principale du club recevant) identique ou du même lieu
+        // (classesLieuxSalles()) — nominationsJourJa(), partagée avec EN25/EN28 et la vue.
+        // Le nominateur décide lui-même de la 2ᵉ.
+        $deja = nominationsJourJa($pdo, $idJa, $idRenc);
+        if ($deja['nb'] >= 2) {
             return 'Ce JA a déjà 2 nominations ce jour.';
         }
-        if ((int) $deja['autres_clubs'] > 0) {
-            return 'Ce JA est déjà nommé ce jour-là sur une rencontre d\'un autre club.';
+        if ($deja['autres_lieux'] > 0) {
+            return 'Ce JA est déjà nommé ce jour-là sur une rencontre d\'une autre salle'
+                . ($deja['autre_lieu'] ? ' (' . $deja['autre_lieu'] . ')' : '') . '.';
         }
 
         $idDispo = $this->resoudreDisponible($pdo, $idJa, $idRenc, $date);
@@ -291,8 +283,8 @@ class NominationController extends BaseController
 
         if (!$existant) {
             $pdo->prepare('
-                INSERT INTO nomination (Id_Rencontre, Id_Disponible, DateNomination, Valide, EmailEnvoye)
-                VALUES (?, ?, CURDATE(), 1, 0)
+                INSERT INTO nomination (Id_Rencontre, Id_Disponible, DateNomination, EmailEnvoye)
+                VALUES (?, ?, CURDATE(), 0)
             ')->execute([$idRenc, $idDispo]);
 
             return;
@@ -300,7 +292,7 @@ class NominationController extends BaseController
 
         if ((int) $existant['Id_Disponible'] === $idDispo) {
             $pdo->prepare('
-                UPDATE nomination SET DateNomination = CURDATE(), Valide = 1, EmailEnvoye = 0
+                UPDATE nomination SET DateNomination = CURDATE(), EmailEnvoye = 0
                 WHERE Id_Nomination = ?
             ')->execute([$existant['Id_Nomination']]);
 
@@ -313,7 +305,7 @@ class NominationController extends BaseController
         $razAccuse .= nominationAF131($pdo) ? ', F131 = 0' : '';
         $pdo->prepare("
             UPDATE nomination SET
-                Id_Disponible = ?, DateNomination = CURDATE(), Valide = 1, EmailEnvoye = 0,
+                Id_Disponible = ?, DateNomination = CURDATE(), EmailEnvoye = 0,
                 Peage = 0, Kilometre = 0, RapportAccueil = NULL, RapportEquipements = NULL, DateSaisie = NULL$razAccuse
             WHERE Id_Nomination = ?
         ")->execute([$idDispo, $existant['Id_Nomination']]);
@@ -385,6 +377,7 @@ class NominationController extends BaseController
             $deptPh = implode(',', array_fill(0, count($deptsAutorises), '?'));
             // Colonne ajoutée par EA98 : EN14 reste fonctionnel avant la migration.
             $colAccuse = nominationAAccuseReception($pdo) ? 'n.AccuseReception' : 'NULL AS AccuseReception';
+            $colDemandeClub = rencontreADateDemandeClub($pdo) ? 'r.DateDemandeClub' : 'NULL AS DateDemandeClub';
 
             $stmt = $pdo->prepare("
                 SELECT
@@ -403,9 +396,22 @@ class NominationController extends BaseController
                     CASE WHEN r.ArbitrageCRA = 1 THEN 'CRA' ELSE 'Club' END AS SouhaitJADom,
                     cl.CorEmail  AS CorEmailDom,
                     ee.Nom       AS NomExt,
-                    s_c.Cp    AS CpSalle,
-                    s_c.Ville AS VilleSalle,
-                    s_c.Nom    AS NomSalle,
+                    -- Lieu affiché : triplet d'UNE SEULE salle — salle propre à la
+                    -- rencontre (r.id_Salle) si elle existe, sinon salle principale
+                    -- du club recevant (même règle que la convocation). CP/Ville
+                    -- issus de laposte, repli sur salle.Cp/Ville si non rattachée.
+                    CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                         THEN s_r.Nom ELSE s_c.Nom END AS NomSalle,
+                    CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                         THEN COALESCE(lp_r.CodePostal, s_r.Cp)
+                         ELSE COALESCE(lp_c.CodePostal, s_c.Cp) END AS CpSalle,
+                    CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                         THEN COALESCE(lp_r.Nom, s_r.Ville)
+                         ELSE COALESCE(lp_c.Nom, s_c.Ville) END AS VilleSalle,
+                    -- Salle effective (sqlSalleEffective(), même calcul que la revérification
+                    -- serveur) : son lieu LieuSalle (ajouté ci-dessous) sert à la règle « même
+                    -- salle » des candidats (2ᵉ nomination du jour, verifierEtNommer()).
+                    " . sqlSalleEffective('r', 'ed') . " AS IdSalleEff,
                     -- Coordonnées du lieu : salle propre à la rencontre si renseignée,
                     -- sinon salle principale du club recevant (r.id_Salle est NULL
                     -- pour la majorité des rencontres, comme l'adresse affichée qui
@@ -419,16 +425,17 @@ class NominationController extends BaseController
                     ja_n.Prenom    AS PrenomJa,
                     ja_n.Telephone AS TelJa,
                     ja_n.Email     AS EmailJa,
-                    n.Valide,
                     n.EmailEnvoye,
-                    $colAccuse
+                    $colAccuse,
+                    -- Dernier envoi / relance de la demande d'arbitrage au club (EA98).
+                    $colDemandeClub
                 FROM rencontre r
                 JOIN  equipe   ed   ON ed.Id_Equipe    = r.Id_EquipeDom
                 JOIN  division dv   ON dv.Division  = ed.Division
                 LEFT JOIN equipe ee ON ee.Id_Equipe    = r.Id_EquipeExt
                 LEFT JOIN salle   s_r  ON s_r.Id_Salle   = r.id_Salle
                 LEFT JOIN laposte lp_r ON lp_r.Id_LaPoste = s_r.Id_Laposte
-                LEFT JOIN salle   s_c  ON s_c.Id_Club     = ed.Id_Club AND s_c.EstPrincipale = 1
+                " . sqlJoinSallePrincipale('ed.Id_Club', 's_c') . "
                 LEFT JOIN laposte lp_c ON lp_c.Id_LaPoste = s_c.Id_Laposte
                 LEFT JOIN club    cl   ON cl.Id_Club      = ed.Id_Club
                 LEFT JOIN nomination n  ON n.Id_Rencontre  = r.Id_Rencontre
@@ -439,8 +446,19 @@ class NominationController extends BaseController
                 ORDER BY dv.Ord, r.Poule, r.Id_Rencontre
             ");
             $stmt->execute(array_merge([$date], $deptsAutorises));
+            $rencontres = $stmt->fetchAll();
 
-            return $this->response->setJSON(['ok' => true, 'data' => $stmt->fetchAll()]);
+            // LieuSalle = représentant du groupe de fiches salle « même salle » (classesLieuxSalles() :
+            // même Id, ou même nom / même adresse normalisés dans la même commune), null si salle
+            // inconnue — comparé tel quel par la vue, même règle que nominationsJourJa().
+            $classes = classesLieuxSalles($pdo)['classe'];
+            foreach ($rencontres as &$rc) {
+                $sid = $rc['IdSalleEff'] !== null ? (int) $rc['IdSalleEff'] : null;
+                $rc['LieuSalle'] = $sid !== null ? ($classes[$sid] ?? null) : null;
+            }
+            unset($rc);
+
+            return $this->response->setJSON(['ok' => true, 'data' => $rencontres]);
         });
     }
 
@@ -609,11 +627,19 @@ class NominationController extends BaseController
                        ed.Nom AS NomDom, ee.Nom AS NomExt, cl.Nom AS NomClub,
                        r.Date, r.Heure, r.Journee, r.Poule, ed.Division, RIGHT(ed.Division, 1) AS SexeCode,
                        -- Salle propre à la rencontre si renseignée, sinon salle principale du club recevant
-                       -- (r.id_Salle est NULL pour la majorité des rencontres).
-                       COALESCE(s_r.Nom, s_c.Nom)                 AS SalleNom,
-                       COALESCE(s_r.Adresse, s_c.Adresse)         AS SalleAdresse,
-                       COALESCE(lp_r.CodePostal, lp_c.CodePostal) AS SalleCP,
-                       COALESCE(lp_r.Nom, lp_c.Nom)               AS SalleVille,
+                       -- (r.id_Salle est NULL pour la majorité des rencontres). Tous les champs
+                       -- viennent de la MÊME salle (pas de mélange) ; CP/Ville via laposte,
+                       -- repli sur salle.Cp/Ville si la salle n'est pas rattachée à laposte.
+                       CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                            THEN s_r.Nom ELSE s_c.Nom END                         AS SalleNom,
+                       CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                            THEN s_r.Adresse ELSE s_c.Adresse END                 AS SalleAdresse,
+                       CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                            THEN COALESCE(lp_r.CodePostal, s_r.Cp)
+                            ELSE COALESCE(lp_c.CodePostal, s_c.Cp) END            AS SalleCP,
+                       CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                            THEN COALESCE(lp_r.Nom, s_r.Ville)
+                            ELSE COALESCE(lp_c.Nom, s_c.Ville) END                AS SalleVille,
                        cl.CorNom AS CorrNom, cl.CorEmail AS CorrEmail, cl.CorTelephone AS CorrTel,
                        -- Destinataires de la copie sans lien : correspondant + référent des 2 clubs.
                        cl.RefNom AS DomRefNom, cl.RefMail AS DomRefMail,
@@ -628,10 +654,9 @@ class NominationController extends BaseController
                 LEFT JOIN Club cx ON cx.Id_Club       = ee.Id_Club
                 LEFT JOIN salle   s_r  ON s_r.Id_Salle    = r.id_Salle
                 LEFT JOIN laposte lp_r ON lp_r.Id_LaPoste = s_r.Id_Laposte
-                LEFT JOIN salle   s_c  ON s_c.Id_Club     = ed.Id_Club AND s_c.EstPrincipale = 1
+                " . sqlJoinSallePrincipale('ed.Id_Club', 's_c') . "
                 LEFT JOIN laposte lp_c ON lp_c.Id_LaPoste = s_c.Id_Laposte
                 WHERE r.Journee = ? AND r.Date = ?
-                  AND n.Valide = 1
                   AND r.Id_Rencontre IN ($placeholders)
                   AND SUBSTRING(ed.Id_Club, 3, 2) IN ($deptPh)
             ");
@@ -717,7 +742,7 @@ class NominationController extends BaseController
                             ? "[DEV → {$nom['Email']}] $sujet" : $sujet;
                         $mail->Body = $corps;
                         if ($isHtml) {
-                            $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $corps));
+                            $mail->AltBody = altBodyDepuisHtml($corps);
                         }
                         $mail->send();
                         $envoyes++;
@@ -806,7 +831,7 @@ class NominationController extends BaseController
             $mail->Subject = isModeDeveloppement() ? '[DEV → ' . implode(', ', array_keys($dest)) . "] $sujet" : $sujet;
             $mail->Body    = $corps;
             if ($isHtml) {
-                $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $corps));
+                $mail->AltBody = altBodyDepuisHtml($corps);
             }
             $mail->send();
             enregistrerEnvois(count($dest));
@@ -872,6 +897,19 @@ class NominationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'err' => 'Rencontre non autorisée.']);
             }
 
+            // EN14 : un seul envoi par rencontre (EN28 « Relancer le club » peut toujours renvoyer).
+            if (rencontreADateDemandeClub($pdo)) {
+                $st = $pdo->prepare('SELECT DateDemandeClub FROM rencontre WHERE Id_Rencontre = ?');
+                $st->execute([$idRenc]);
+                $dejaDemande = $st->fetchColumn();
+                if ($dejaDemande !== false && $dejaDemande !== null && $dejaDemande !== '') {
+                    return $this->response->setJSON([
+                        'ok'  => false,
+                        'err' => 'Une demande a déjà été envoyée le ' . date('d/m/Y', strtotime((string) $dejaDemande)) . ' pour cette rencontre.',
+                    ]);
+                }
+            }
+
             // Cœur d'envoi partagé avec EN28 (« Relancer le club ») : config/app_config.php.
             $res = envoyerDemandeJaClub(
                 $pdo, $idRenc, $moi,
@@ -880,7 +918,7 @@ class NominationController extends BaseController
             );
 
             return $this->response->setJSON($res['ok']
-                ? ['ok' => true, 'msg' => $res['msg']]
+                ? ['ok' => true, 'msg' => $res['msg'], 'date_demande' => $res['date_demande'] ?? null]
                 : ['ok' => false, 'err' => $res['msg']]);
         });
     }

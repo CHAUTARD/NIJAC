@@ -175,10 +175,10 @@
         <table class="stats-table" id="stats-table">
             <thead>
                 <tr>
-                    <th data-col="Nom">Juge-Arbitre</th>
+                    <th data-col="Nom" class="sort-asc">Juge-Arbitre</th>
                     <th data-col="Grade">Grade</th>
                     <th data-col="Club">Club</th>
-                    <th data-col="nb_arbitrages" class="sort-desc">Arbitrages</th>
+                    <th data-col="nb_arbitrages">Arbitrages</th>
                     <th data-col="nb_arbitrages_club">Arbitrages Club</th>
                     <th data-col="total_km" title="Un seul déplacement compté par jour : les rencontres suivantes du même jour n'ajoutent pas de km ni de péage">Km</th>
                     <th data-col="montant_km">Montant km (€)</th>
@@ -207,7 +207,9 @@ const BASE = '<?= site_url('stats-ja') ?>';
 const DEPT_USER = <?= json_encode($departement) ?>;
 
 let _rows = [];
-const sortState = { col: 'nb_arbitrages', asc: false };
+// Ordre initial : alphabétique des JA (Nom puis Prénom), tel que renvoyé par le serveur
+// (collation MySQL, insensible à la casse/aux accents) — cf. StatsJaController::SQL_ORDRE_JA.
+const sortState = { col: 'Nom', asc: true };
 
 function fmt2(v) { return parseFloat(v || 0).toFixed(2).replace('.', ','); }
 function esc(s)  { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -223,6 +225,9 @@ function gradeBadge(g) {
 
 function renderTable() {
     const sorted = [..._rows].sort((a, b) => {
+        // Colonne Juge-Arbitre : rang serveur (Nom puis Prénom, collation MySQL) plutôt
+        // qu'une comparaison JS sensible aux accents et ignorant le prénom.
+        if (sortState.col === 'Nom') return sortState.asc ? a._rang - b._rang : b._rang - a._rang;
         let va = a[sortState.col], vb = b[sortState.col];
         if (!isNaN(va) && !isNaN(vb)) { va = parseFloat(va); vb = parseFloat(vb); }
         else { va = String(va || '').toLowerCase(); vb = String(vb || '').toLowerCase(); }
@@ -253,10 +258,10 @@ function chargerTableau(phase, annee) {
     $('#table-wrap').hide();
     $.getJSON(`${BASE}/donnees`, { phase, annee }).done(r => {
         if (!r.ok) { nijacToast(r.msg || 'Erreur serveur.', 'danger'); return; }
-        _rows = r.rows;
+        _rows = r.rows.map((row, i) => ({ ...row, _rang: i }));
         if (!_rows.length) { nijacToast('Aucun arbitrage sur cette période.', 'info'); return; }
 
-        $('#table-section-title').text(`Arbitrages et frais par Juge-Arbitre — Phase ${phase}, saison ${annee}‑${+annee + 1}`);
+        $('#table-section-title').text(`6. Arbitrages et frais par Juge-Arbitre — Phase ${phase}, saison ${annee}‑${+annee + 1}`);
         renderTable();
         const t = r.totaux;
         $('#stats-tfoot').html(`<tr>

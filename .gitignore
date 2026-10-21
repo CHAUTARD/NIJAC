@@ -13,8 +13,13 @@ ci4/writable/
 ci4/.env
 
 # Fichiers de déploiement
-.env.production
+# .env.production et ses variantes (ex. « .env.production! »)
+.env.production*
 Serveur/
+# Identifiants FTP de production : ne jamais versionner
+/deploy.lftp
+# Outil local : ne pas versionner ni envoyer en production
+/increment_version.bat
 
 # Logs
 logs/
@@ -23,6 +28,13 @@ logs/
 .DS_Store
 Thumbs.db
 *.swp
+# Projet DBeaver (connexions et identifiants BDD) : ne jamais versionner
+/.dbeaver/
 
 # Modèle de .env de production (à remplir puis renommer en .env sur le serveur)
 .env_Production
+
+# Sauvegardes BDD et paramètres locaux (lus seulement côté serveur)
+/SQL/*.sql
+/SQL/dev_params.json
+!/SQL/.gitkeep

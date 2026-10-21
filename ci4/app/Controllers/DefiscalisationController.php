@@ -103,7 +103,6 @@ class DefiscalisationController extends BaseController
             FROM ja j
             LEFT JOIN disponible d ON d.Id_JA = j.Id_JA
             LEFT JOIN nomination n ON n.Id_Disponible = d.Id_Disponible
-                AND (n.Valide = 1 OR n.Peage IS NOT NULL OR n.Kilometre IS NOT NULL OR n.Defiscalisation = 1)
             LEFT JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
                 AND r.Date BETWEEN :debut AND :fin
             WHERE (
@@ -247,7 +246,7 @@ class DefiscalisationController extends BaseController
                     $mail->Subject = ($modeDev && $dest !== $ja['Email']) ? '[DEV] ' . $rendu['sujet'] : $rendu['sujet'];
                     $mail->Body    = $rendu['corps'];
                     if ($isHtml) {
-                        $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $rendu['corps']));
+                        $mail->AltBody = altBodyDepuisHtml($rendu['corps']);
                     }
                     $mail->send();
                     $envoyes++;

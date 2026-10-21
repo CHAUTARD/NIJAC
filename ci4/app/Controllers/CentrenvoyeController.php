@@ -119,7 +119,7 @@ class CentrenvoyeController extends BaseController
             }
 
             // Mêmes filtres JA que la liste de convocation (cas "Convocation" de ja()) :
-            // JA1 actifs, sans filtre sur nomination.Valide (toute nomination est valide d'office).
+            // JA1 actifs (toute nomination existante est valide).
             $depts = $this->deptsAutorises();
             $ph    = implode(',', array_fill(0, count($depts), '?'));
             $stmt = $pdo->prepare("
@@ -221,7 +221,7 @@ class CentrenvoyeController extends BaseController
                         LEFT JOIN salle s       ON s.Id_Salle     = r.id_Salle
                         LEFT JOIN laposte lps   ON lps.Id_LaPoste = s.Id_Laposte
                         -- Repli : salle principale du club recevant (r.id_Salle est NULL pour la majorité des rencontres)
-                        LEFT JOIN salle   s_c   ON s_c.Id_Club    = ed.Id_Club AND s_c.EstPrincipale = 1
+                        " . sqlJoinSallePrincipale('ed.Id_Club', 's_c') . "
                         LEFT JOIN laposte lp_c  ON lp_c.Id_LaPoste = s_c.Id_Laposte
                         LEFT JOIN Club co ON co.Id_Club = ed.Id_Club
                         WHERE r.Journee = ? AND r.Date = ? AND j.JA1 = 1
@@ -531,12 +531,12 @@ class CentrenvoyeController extends BaseController
             $mail->Subject = ($modeDev && $dest !== $ja['Email']) ? "[DEV] $sujetRendu" : $sujetRendu;
             $mail->Body    = $corps;
             if ($isHtml) {
-                $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $corps));
+                $mail->AltBody = altBodyDepuisHtml($corps);
             }
             $mail->send();
             enregistrerEnvois(1);
             if ($type === 'Convocation' && $idNomination) {
-                $pdo->prepare('UPDATE nomination SET Valide = 1, EmailEnvoye = 1 WHERE Id_Nomination = ?')
+                $pdo->prepare('UPDATE nomination SET EmailEnvoye = 1 WHERE Id_Nomination = ?')
                     ->execute([$idNomination]);
             }
 
@@ -604,7 +604,7 @@ class CentrenvoyeController extends BaseController
             $mail->Subject = $modeDev ? "[DEV] $sujetCopie" : $sujetCopie;
             $mail->Body    = $corpsCopie;
             if ($isHtml) {
-                $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $corpsCopie));
+                $mail->AltBody = altBodyDepuisHtml($corpsCopie);
             }
             $mail->send();
             enregistrerEnvois(count($destinataires)); // ponytail: hors du checkRateLimit initial, dérive mineure acceptée
@@ -642,7 +642,7 @@ class CentrenvoyeController extends BaseController
             LEFT JOIN equipe ee     ON ee.Id_Equipe   = r.Id_EquipeExt
             LEFT JOIN salle s       ON s.Id_Salle     = r.id_Salle
             LEFT JOIN laposte lps   ON lps.Id_LaPoste = s.Id_Laposte
-            LEFT JOIN salle   s_c   ON s_c.Id_Club    = ed.Id_Club AND s_c.EstPrincipale = 1
+            ' . sqlJoinSallePrincipale('ed.Id_Club', 's_c') . '
             LEFT JOIN laposte lp_c  ON lp_c.Id_LaPoste = s_c.Id_Laposte
             LEFT JOIN Club co       ON co.Id_Club     = ed.Id_Club
             WHERE n.Id_Nomination = ?

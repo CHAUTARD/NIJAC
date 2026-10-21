@@ -1,0 +1,10 @@
+# Justificatifs de péage des JA (EN28, nomination.FichierPeage) : écrits uniquement côté
+# serveur, affichés seulement via la route authentifiée suivi-nomination/peage/fichier.
+# Doublé par la règle « RewriteRule ^_Peage/ - [F,L] » du .htaccess racine.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

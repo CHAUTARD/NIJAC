@@ -26,6 +26,7 @@ $routes->get('admin-menu', 'AdminMenuController::index', ['filter' => 'adminauth
 $routes->get('nominateur-menu', 'NominateurMenuController::index', ['filter' => 'auth']);
 $routes->get('nominateur-menu/convocations-a-envoyer', 'NominateurMenuController::convocationsAEnvoyer', ['filter' => 'auth']);
 $routes->get('nominateur-menu/rencontres-sans-ja', 'NominateurMenuController::rencontresSansJa', ['filter' => 'auth']);
+$routes->get('nominateur-menu/club-sans-saisie', 'NominateurMenuController::clubSansSaisie', ['filter' => 'auth']);
 
 // ── EA88 Régions (pilote migration CI4) ────────────────────────────────────
 $routes->get('region', 'RegionController::index', ['filter' => 'adminauth']);
@@ -212,7 +213,7 @@ $routes->get('stats-nomination', 'StatsNominationController::index', ['filter' =
 $routes->get('stats-nomination/data', 'StatsNominationController::data', ['filter' => 'auth']);
 
 // ── EN28 Suivi des nominations ───────────────────────────────────────────────
-// Menu nominateur (E003), après EN14. Nominations validées du périmètre + frais saisis
+// Menu nominateur (E003), après EN14. Nominations du périmètre + frais saisis
 // par le JA (EN21) ; « rappel » renvoie le modèle messagerie n°3 (Convocation) au JA.
 $routes->get('suivi-nomination', 'SuiviNominationController::index', ['filter' => 'auth']);
 $routes->get('suivi-nomination/data', 'SuiviNominationController::data', ['filter' => 'auth']);
@@ -238,6 +239,10 @@ $routes->post('suivi-nomination/f131/appliquer', 'SuiviNominationController::f13
 // ?nom=suivi_131_<aaaammjj_HHMMSS>.csv : ouvre un journal de _Suivi/ (interdit en HTTP direct) — regex stricte + nom retrouvé
 // dans la liste serveur, jamais de chemin client ; 404 sinon. La liste des 10 derniers est fournie par f131/fichier (suivis[]).
 $routes->get('suivi-nomination/f131/suivi', 'SuiviNominationController::f131Suivi', ['filter' => 'auth']);
+// Justificatif de péage (nomination.FichierPeage, téléversé par la popup « Modifier » via suivi-nomination/modifier) :
+// ?nom=<17 chiffres>.<jpg|jpeg|png|gif|webp|pdf> affiche (inline) un fichier de _Peage/ (interdit en HTTP direct) — regex
+// stricte + nom porté par une nomination du périmètre + retrouvé dans la liste serveur, jamais de chemin client ; 404 sinon.
+$routes->get('suivi-nomination/peage/fichier', 'SuiviNominationController::peageFichier', ['filter' => 'auth']);
 
 // ── EN18 Désidératas club ────────────────────────────────────────────────────
 // Page PUBLIQUE (sans authentification), jeton signé ?club=<Id_Club>-<MAC> — lien
@@ -429,6 +434,12 @@ $routes->get('convocation-ja/(:num)/(:alphanum)', 'ConvocationJaController::inde
 $routes->post('convocation-ja/sauvegarder-frais', 'ConvocationJaController::sauvegarderFrais');
 // Accusé de réception par le JA (jeton cnv, nomination.AccuseReception — colonne ajoutée par EA98).
 $routes->post('convocation-ja/accuse', 'ConvocationJaController::accuser');
+// Justificatif de péage joint par le JA (jeton cnv, multipart `justificatif`, nomination.FichierPeage — colonne EA98) :
+// dépôt / remplacement (frais saisissables, Peage > 0) ; aucune suppression par le JA.
+$routes->post('convocation-ja/justificatif', 'ConvocationJaController::joindreJustificatif');
+// Consultation (inline) par le JA de SON justificatif : ?id_nomination=&cnv= (jeton de la nomination du lien,
+// colonne présente) ; nom lu UNIQUEMENT en base (nomination.FichierPeage), jamais du client ; 404 texte neutre sinon.
+$routes->get('convocation-ja/justificatif/voir', 'ConvocationJaController::voirJustificatif');
 
 // ── EN22 Disponibilité JA ────────────────────────────────────────────────────
 // Page PUBLIQUE (sans authentification) — accessible via ?ja=TOKEN ou ?id_ja=N.

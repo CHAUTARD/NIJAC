@@ -306,7 +306,7 @@ class DesiderataClubsController extends BaseController
                     $mail->Subject = ($modeDev && $dest !== $c['CorEmail']) ? "[DEV] $sujet" : $sujet;
                     $mail->Body    = $corps;
                     if ($isHtml) {
-                        $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $corps));
+                        $mail->AltBody = altBodyDepuisHtml($corps);
                     }
                     $mail->send();
                     enregistrerEnvois(1);

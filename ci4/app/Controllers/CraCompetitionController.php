@@ -64,10 +64,10 @@ class CraCompetitionController extends BaseController
         $like  = '%' . addcslashes($q, '%_\\') . '%';
         $stmt  = getPDO()->prepare("
             SELECT c.Id_Club, c.Nom,
-                   COALESCE(MAX(CASE WHEN s.EstPrincipale = 1 THEN s.Ville END), MAX(s.Ville)) AS Ville,
+                   COALESCE(MAX(CASE WHEN " . sqlColPrincipale('s') . " = 1 THEN s.Ville END), MAX(s.Ville)) AS Ville,
                    MAX($nom = :q1 OR $ville = :q2) AS exact
             FROM Club c
-            LEFT JOIN Salle s ON s.Id_Club = c.Id_Club
+            " . sqlJoinSallesClub('c.Id_Club', 's') . "
             GROUP BY c.Id_Club, c.Nom
             HAVING MAX($nom LIKE :l1 OR $ville LIKE :l2) = 1
             ORDER BY exact DESC, c.Nom

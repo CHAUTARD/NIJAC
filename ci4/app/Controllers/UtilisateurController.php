@@ -126,7 +126,44 @@ class UtilisateurController extends BaseController
 
         $this->utilisateurModel->update($id, $fields);
 
+        // Modification de son propre compte : le profil de session (département surtout) est
+        // relu en base, sans reconnexion. Jamais touché pour un autre utilisateur. Rôle et
+        // statut Actif ne peuvent pas changer ici (garde-fou ci-dessus) : pas d'état incohérent.
+        if ($id === (int) ($_SESSION['utilisateur']['id'] ?? 0)) {
+            $this->rafraichirSessionPropre($id);
+        }
+
         return $this->response->setJSON(['ok' => true, 'msg' => 'Utilisateur mis à jour.', 'id' => $id, 'mdp' => $mdpGenere]);
+    }
+
+    /**
+     * Réécrit $_SESSION['utilisateur'] depuis la base (même format qu'à la connexion, voir
+     * construireSessionUtilisateur()). Le filtre adminauth a déjà refermé la session : reprise
+     * par un session_start() BRUT, pas demarrerSessionNijac() (voir ChangerMotDePasseController).
+     * Aucun cache de périmètre en session ou fichier : getDepartementsAutorises() relit la
+     * configuration à chaque appel, le nouveau département est donc vu dès la requête suivante.
+     */
+    private function rafraichirSessionPropre(int $id): void
+    {
+        try {
+            $stmt = getPDO()->prepare(
+                'SELECT Id_Utilisateur, Login, Nom, Prenom, Role, Id_Departement, ChangeLogin, Email
+                 FROM utilisateur WHERE Id_Utilisateur = ? AND Actif = 1 LIMIT 1'
+            );
+            $stmt->execute([$id]);
+            $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+            if (!$row) {
+                return; // compte introuvable/inactif : on laisse la session telle quelle
+            }
+
+            if (session_status() === PHP_SESSION_NONE) {
+                session_start();
+            }
+            $_SESSION['utilisateur'] = construireSessionUtilisateur($row);
+            session_write_close();
+        } catch (\Throwable $e) {
+            error_log('[NIJAC] EA86 : rafraîchissement de la session impossible : ' . $e->getMessage());
+        }
     }
 
     public function delete($id = null): ResponseInterface

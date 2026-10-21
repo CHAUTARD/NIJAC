@@ -102,7 +102,9 @@ class DesiderataClubController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Club introuvable.']);
             }
 
-            $stmtS = $pdo->prepare('SELECT Nom, Adresse, Cp, Ville, Telephone FROM salle WHERE Id_Club = ? AND EstPrincipale = 1 LIMIT 1');
+            $stmtS = $pdo->prepare('SELECT sp.Nom, sp.Adresse, sp.Cp, sp.Ville, sp.Telephone FROM club c
+                ' . sqlJoinSallePrincipale('c.Id_Club', 'sp', 'JOIN') . '
+                WHERE c.Id_Club = ? LIMIT 1');
             $stmtS->execute([$club]);
             $salle = $stmtS->fetch() ?: ['Nom' => '', 'Adresse' => '', 'Cp' => '', 'Ville' => '', 'Telephone' => ''];
 
@@ -171,7 +173,9 @@ class DesiderataClubController extends BaseController
                 $salleVille = $texte('salle_ville');
                 $salleTel   = $texte('salle_tel', 30);
 
-                $stmtSalleChk = $pdo->prepare('SELECT Id_Salle FROM salle WHERE Id_Club=? AND EstPrincipale=1 LIMIT 1');
+                // Salle principale du club (club_salle) ; une salle partagée avec d'autres clubs est
+                // la même salle physique : sa fiche est mise à jour pour tous.
+                $stmtSalleChk = $pdo->prepare('SELECT ' . sqlIdSallePrincipale('?'));
                 $stmtSalleChk->execute([$club]);
                 $idSalle = $stmtSalleChk->fetchColumn();
                 if ($idSalle) {
@@ -179,8 +183,9 @@ class DesiderataClubController extends BaseController
                     $pdo->prepare('UPDATE salle SET Nom=COALESCE(?, Nom), Adresse=?, Cp=?, Ville=?, Telephone=? WHERE Id_Salle=?')
                         ->execute([$salleNom, $salleAdr, $salleCp, $salleVille, $salleTel, $idSalle]);
                 } elseif ($salleNom !== null) {
-                    $pdo->prepare('INSERT INTO salle (Nom, Adresse, Cp, Ville, Telephone, Id_Club, EstPrincipale) VALUES (?,?,?,?,?,?,1)')
-                        ->execute([$salleNom, $salleAdr, $salleCp, $salleVille, $salleTel, $club]);
+                    $pdo->prepare('INSERT INTO salle (Nom, Adresse, Cp, Ville, Telephone) VALUES (?,?,?,?,?)')
+                        ->execute([$salleNom, $salleAdr, $salleCp, $salleVille, $salleTel]);
+                    lierClubSalle($pdo, $club, (int) $pdo->lastInsertId(), true);
                 }
 
                 $equipes = json_decode($this->request->getPost('equipes') ?? '[]', true);

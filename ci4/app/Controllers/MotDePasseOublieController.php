@@ -99,10 +99,14 @@ class MotDePasseOublieController extends BaseController
         $rendu = remplacerMarqueursMessage($tpl['Sujet'], $tpl['Message'], $marqueurs);
 
         $mail = getNijacMailer();
-        $mail->isHTML(strip_tags($rendu['corps']) !== $rendu['corps']);
+        $estHtml = strip_tags($rendu['corps']) !== $rendu['corps'];
+        $mail->isHTML($estHtml);
         $mail->addAddress(getEmailDestinataire($u['Email']));
         $mail->Subject = $rendu['sujet'];
         $mail->Body    = $rendu['corps'];
+        if ($estHtml) {
+            $mail->AltBody = altBodyDepuisHtml($rendu['corps']);
+        }
         $mail->send();
     }
 

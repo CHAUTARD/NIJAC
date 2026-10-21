@@ -63,6 +63,10 @@ php_value max_input_time 300
     # uniquement côté serveur, aucun lien de téléchargement direct dans l'appli.
     RewriteRule ^_Suivi/ - [F,L]
 
+    # _Peage/ : justificatifs de péage des JA (EN28, nomination.FichierPeage), écrits et lus
+    # uniquement côté serveur (route authentifiée suivi-nomination/peage/fichier).
+    RewriteRule ^_Peage/ - [F,L]
+
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]

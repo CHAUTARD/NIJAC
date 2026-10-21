@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Libraries\JustificatifPeage;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
@@ -46,6 +47,8 @@ class SuiviNominationController extends BaseController
             'nomComplet'  => trim(($u['nom'] ?? '') . ' ' . ($u['prenom'] ?? '')),
             'departement' => $u['id_departement'] ?? '',
             'divisionNoms' => getDivisionNoms(),
+            // Justificatif de péage (nomination.FichierPeage, EA98) : champ de la popup désactivé si la colonne manque.
+            'fichierPeageDispo' => nominationAFichierPeage(getPDO()),
         ]);
     }
 
@@ -62,6 +65,8 @@ class SuiviNominationController extends BaseController
             $colAccuse = nominationAAccuseReception($pdo) ? 'n.AccuseReception' : 'NULL AS AccuseReception';
             // Repère « 131 » : colonne ajoutée par EA98, lue seulement si présente.
             $colAccuse .= nominationAF131($pdo) ? ', n.F131' : ', 0 AS F131';
+            // Justificatif de péage (nom du fichier de _Peage/) : colonne ajoutée par EA98, lue seulement si présente.
+            $colAccuse .= nominationAFichierPeage($pdo) ? ', n.FichierPeage' : ', NULL AS FichierPeage';
             // Forfait (rencontre.Forfait, EA98) : 1 = équipe recevante, 2 = équipe extérieure ; NomForfait = nom de
             // l'équipe forfait tel qu'affiché dans les colonnes Domicile / Extérieur. Colonne absente → 0 / NULL.
             $colAccuse .= rencontreAForfait($pdo)
@@ -74,16 +79,14 @@ class SuiviNominationController extends BaseController
                 SELECT r.Id_Rencontre, n.Id_Nomination, ja.Id_JA, r.Date, r.Heure, r.ArbitrageCRA,
                        ed.Division, dv.Color AS DivisionColor, ed.Id_Club AS IdClubDom, ed.Nom AS NomDom, ee.Nom AS NomExt,
                        CONCAT(ja.Prenom, \' \', ja.Nom) AS NomJa, ja.Email AS EmailJa, ja.NumCompteEBP, ja.Telephone,
-                       n.Peage, n.Kilometre, n.Defiscalisation, n.DateSaisie, n.Valide, ' . $colAccuse . ',
+                       n.Peage, n.Kilometre, n.Defiscalisation, n.DateSaisie, ' . $colAccuse . ',
                        cl.Nom AS NomClub, cl.CorNom, cl.CorEmail, cl.RefNom, cl.RefMail
                 FROM rencontre r
                 JOIN equipe ed     ON ed.Id_Equipe    = r.Id_EquipeDom
                 JOIN division dv   ON dv.Division     = ed.Division
                 LEFT JOIN equipe ee ON ee.Id_Equipe   = r.Id_EquipeExt
                 LEFT JOIN club cl   ON cl.Id_Club     = ed.Id_Club   -- destinataires de « Relancer le club »
-                -- Toute nomination est valide par défaut (Valide = 1) ; le OR couvre les
-                -- arbitrages club restés à 0 avant la migration EA98.
-                LEFT JOIN nomination n ON n.Id_Rencontre = r.Id_Rencontre AND (n.Valide = 1 OR r.ArbitrageCRA = 0)
+                LEFT JOIN nomination n ON n.Id_Rencontre = r.Id_Rencontre
                 LEFT JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
                 LEFT JOIN ja           ON ja.Id_JA        = d.Id_JA
                 WHERE SUBSTRING(ed.Id_Club, 3, 2) IN (' . implode(',', array_fill(0, count($depts), '?')) . ')
@@ -170,6 +173,8 @@ class SuiviNominationController extends BaseController
                  JOIN rencontre  r2 ON r2.Id_Rencontre  = n2.Id_Rencontre
                  JOIN equipe    ed2 ON ed2.Id_Equipe    = r2.Id_EquipeDom
                  WHERE d2.Id_JA = j.Id_JA AND n2.Id_Rencontre <> ? AND r2.Date = ?';
+        // Autre salle que celle de la rencontre $idRenc (sqlAutreLieu(), même règle qu'EN14).
+        $autreLieu = sqlAutreLieu($pdo, 'r2', 'ed2', $idRenc);
         $stmt = $pdo->prepare("
             SELECT j.Id_JA, j.Nom, j.Prenom, j.Id_Club
             FROM ja j
@@ -177,12 +182,12 @@ class SuiviNominationController extends BaseController
                 j.JA1 = 1 AND j.CodeDept IN ($in)
                 AND {$rep('O')} AND NOT {$rep('N')}
                 AND (SELECT COUNT(*) $jour) < 2
-                AND NOT EXISTS (SELECT 1 $jour AND ed2.Id_Club <> ?)
+                AND NOT EXISTS (SELECT 1 $jour AND $autreLieu)
             )
             ORDER BY j.Nom, j.Prenom
         ");
         $d = $rc['Date'];
-        $stmt->execute([$actuel, ...$depts, $idRenc, $d, $idRenc, $d, $idRenc, $d, $idRenc, $d, $rc['IdClubDom']]);
+        $stmt->execute([$actuel, ...$depts, $idRenc, $d, $idRenc, $d, $idRenc, $d, $idRenc, $d]);
 
         return array_map(fn($j) => $j + ['actuel' => (int) $j['Id_JA'] === $actuel], $stmt->fetchAll());
     }
@@ -191,7 +196,7 @@ class SuiviNominationController extends BaseController
      * Correction d'une nomination depuis EN28 : Arbitrage (rencontre.ArbitrageCRA), JA,
      * péage, kilomètres, défiscalisation, indicateur FFTT 131 (case de la popup, si colonne EA98). DateSaisie prend la date du jour (le compte EBP
      * se modifie dans la fiche JA, EN11). Le changement de JA garde la nomination (EmailEnvoye,
-     * DateNomination inchangés ; Valide forcé à 1 — un JA nommé = nomination valide d'office) et applique la règle de 2 nominations max par JA et par jour.
+     * DateNomination inchangés) et applique la règle de 2 nominations max par JA et par jour.
      * Nouveau JA en arbitrage CRA (CRA→CRA, club→CRA) : règle stricte d'EN14 (controlerDispoCra()) ;
      * vers un arbitrage club (CRA→club, club→club) : souple (JA actif, disponible en 'P').
      */
@@ -225,8 +230,26 @@ class SuiviNominationController extends BaseController
             }
             $km = (int) $kmRaw;
 
+            // Justificatif de péage (colonne EA98) : fichier `peage_fichier` (multipart) facultatif, ou case
+            // `peage_supprimer` = 1 pour le retirer. Ni l'un ni l'autre → justificatif inchangé (comportement antérieur).
+            $colPeage = nominationAFichierPeage($pdo);
+            $upload   = $this->request->getFile('peage_fichier');
+            $avecFichier = $upload !== null && $upload->getError() !== UPLOAD_ERR_NO_FILE;
+            $retirer  = (string) $this->request->getPost('peage_supprimer') === '1';
+            if (($avecFichier || $retirer) && !$colPeage) {
+                return $this->response->setJSON(['ok' => false,
+                    'msg' => 'Colonne nomination.FichierPeage absente : chargez l\'écran EA98 (Administration BDD).']);
+            }
+            if ($avecFichier) {
+                $refus = JustificatifPeage::controler($upload);
+                if ($refus !== null) {
+                    return $this->response->setJSON(['ok' => false, 'msg' => $refus]);
+                }
+            }
+
             $stmt = $pdo->prepare('
-                SELECT n.Id_Nomination, n.Id_Rencontre, n.Id_Disponible, d.Id_JA AS IdJaActuel, r.Date, ed.Id_Club AS IdClubDom
+                SELECT n.Id_Nomination, n.Id_Rencontre, n.Id_Disponible, d.Id_JA AS IdJaActuel, r.Date, ed.Id_Club AS IdClubDom'
+                . ($colPeage ? ', n.FichierPeage' : ', NULL AS FichierPeage') . '
                 FROM nomination n
                 JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
                 JOIN rencontre r  ON r.Id_Rencontre  = n.Id_Rencontre
@@ -239,6 +262,24 @@ class SuiviNominationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Nomination introuvable.']);
             }
 
+            // Nouveau justificatif enregistré AVANT la transaction (supprimé si elle échoue) ; l'ancien n'est supprimé
+            // qu'après le commit. $setPeage / $paramsPeage : rien si le justificatif ne change pas.
+            $ancienPeage = $nom['FichierPeage'] !== null ? (string) $nom['FichierPeage'] : null;
+            $nouveauPeage = null;
+            $setPeage = '';
+            $paramsPeage = [];
+            if ($avecFichier) {
+                try {
+                    $nouveauPeage = JustificatifPeage::enregistrer($upload);
+                } catch (\RuntimeException $e) {
+                    return $this->response->setJSON(['ok' => false, 'msg' => $e->getMessage()]);
+                }
+                $setPeage = ', FichierPeage = ?';
+                $paramsPeage = [$nouveauPeage];
+            } elseif ($retirer) {
+                $setPeage = ', FichierPeage = NULL';
+            }
+
             $pdo->beginTransaction();
             try {
                 $idDispo = (int) $nom['Id_Disponible'];
@@ -247,7 +288,7 @@ class SuiviNominationController extends BaseController
                     if ($arbCra === 1) {
                         // Arbitrage CRA demandé (CRA→CRA, club→CRA) : règle stricte d'EN14, ligne 'O' réutilisée.
                         $this->controlerDispoCra($pdo, $depts, $idJa, (int) $nom['Id_Rencontre'], $nom['Date']);
-                        $this->controlerJourJa($pdo, $idJa, (int) $nom['Id_Rencontre'], $nom['Date'], $nom['IdClubDom']);
+                        $this->controlerJourJa($pdo, $idJa, (int) $nom['Id_Rencontre']);
                         $idDispo = $this->disponibleOuiCra($pdo, $idJa, (int) $nom['Id_Rencontre'], $nom['Date'], $note);
                     } else {
                         $ja = $pdo->prepare('SELECT JA1 FROM ja WHERE Id_JA = ?');
@@ -255,7 +296,7 @@ class SuiviNominationController extends BaseController
                         if ((int) $ja->fetchColumn() !== 1) {
                             throw new \RuntimeException('Juge-arbitre introuvable ou inactif.');
                         }
-                        $this->controlerJourJa($pdo, $idJa, (int) $nom['Id_Rencontre'], $nom['Date'], $nom['IdClubDom']);
+                        $this->controlerJourJa($pdo, $idJa, (int) $nom['Id_Rencontre']);
 
                         // Arbitrage club (CRA→club, club→club) : disponible (JA, rencontre) réutilisée si le JA a répondu O/P,
                         // rouverte en P s'il avait répondu N, créée en P sinon.
@@ -285,18 +326,25 @@ class SuiviNominationController extends BaseController
                 // FFTT 131 (colonne EA98) : la case de la popup fait foi ; absente de la requête → remise à 0.
                 $setF131 = nominationAF131($pdo) ? ', F131 = ' . $f131 : '';
                 $pdo->prepare("
-                    UPDATE nomination SET Id_Disponible = ?, Peage = ?, Kilometre = ?, Defiscalisation = ?, DateSaisie = CURDATE(), Valide = 1$setF131
+                    UPDATE nomination SET Id_Disponible = ?, Peage = ?, Kilometre = ?, Defiscalisation = ?, DateSaisie = CURDATE()$setF131$setPeage
                     WHERE Id_Nomination = ?
-                ")->execute([$idDispo, $peage, $km, $defisc, $idNom]);
+                ")->execute([$idDispo, $peage, $km, $defisc, ...$paramsPeage, $idNom]);
 
                 $pdo->commit();
             } catch (\RuntimeException $e) {
                 $pdo->rollBack();
+                JustificatifPeage::supprimer($nouveauPeage);
 
                 return $this->response->setJSON(['ok' => false, 'msg' => $e->getMessage()]);
             } catch (\Throwable $e) {
                 $pdo->rollBack();
+                JustificatifPeage::supprimer($nouveauPeage);
                 throw $e;
+            }
+
+            // Justificatif remplacé ou retiré : l'ancien fichier est supprimé (motif strict + liste serveur seulement).
+            if ($setPeage !== '' && $ancienPeage !== null && $ancienPeage !== $nouveauPeage) {
+                JustificatifPeage::supprimer($ancienPeage);
             }
 
             return $this->response->setJSON(['ok' => true, 'msg' => 'Nomination modifiée.']);
@@ -306,26 +354,19 @@ class SuiviNominationController extends BaseController
     }
 
     /**
-     * Règle EN14/EN25 : 2 nominations max par JA et par date, et uniquement sur le même club
-     * recevant. Lève une RuntimeException (message affichable) si $idJa ne peut pas être nommé.
+     * Règle EN14/EN25 (nominationsJourJa()) : 2 nominations max par JA et par date (celle de la
+     * rencontre), et uniquement dans la même salle (le club recevant n'intervient pas).
+     * Lève une RuntimeException (message affichable) si $idJa ne peut pas être nommé.
      */
-    private function controlerJourJa(\PDO $pdo, int $idJa, int $idRencontre, string $date, string $idClubDom): void
+    private function controlerJourJa(\PDO $pdo, int $idJa, int $idRencontre): void
     {
-        $nb = $pdo->prepare('
-            SELECT COUNT(*) AS nb, COALESCE(SUM(ed2.Id_Club <> ?), 0) AS autres_clubs
-            FROM nomination n
-            JOIN disponible d  ON d.Id_Disponible = n.Id_Disponible
-            JOIN rencontre r2  ON r2.Id_Rencontre = n.Id_Rencontre
-            JOIN equipe   ed2  ON ed2.Id_Equipe   = r2.Id_EquipeDom
-            WHERE d.Id_JA = ? AND n.Id_Rencontre != ? AND r2.Date = ?
-        ');
-        $nb->execute([$idClubDom, $idJa, $idRencontre, $date]);
-        $deja = $nb->fetch();
-        if ((int) $deja['nb'] >= 2) {
+        $deja = nominationsJourJa($pdo, $idJa, $idRencontre);
+        if ($deja['nb'] >= 2) {
             throw new \RuntimeException('Ce JA a déjà 2 nominations ce jour-là (maximum).');
         }
-        if ((int) $deja['autres_clubs'] > 0) {
-            throw new \RuntimeException('Ce JA est déjà nommé ce jour-là sur une rencontre d\'un autre club.');
+        if ($deja['autres_lieux'] > 0) {
+            throw new \RuntimeException('Ce JA est déjà nommé ce jour-là sur une rencontre d\'une autre salle'
+                . ($deja['autre_lieu'] ? ' (' . $deja['autre_lieu'] . ')' : '') . '.');
         }
     }
 
@@ -333,7 +374,7 @@ class SuiviNominationController extends BaseController
      * Rencontre sans nomination :
      *  - arbitrage club (ArbitrageCRA = 0), « Saisir le JA » : le nominateur enregistre le JA qui a
      *    officié, restée sans réponse du club. Même création qu'EN25 (ArbitreClubController::enregistrer) :
-     *    disponible 'P' + nomination Valide = 1, EmailEnvoye = 0, frais + DateSaisie du jour ;
+     *    disponible 'P' + nomination EmailEnvoye = 0, frais + DateSaisie du jour ;
      *  - arbitrage CRA (ArbitrageCRA = 1), « Nommer un JA » : mêmes règles qu'EN14 (affecterJa), dont la
      *    disponibilité stricte — voir creerNominationCra(). Frais ignorés (saisis par le JA en EN21).
      * Aucun email envoyé.
@@ -411,7 +452,7 @@ class SuiviNominationController extends BaseController
             if ($cra) {
                 $this->controlerDispoCra($pdo, $depts, $idJa, $idRenc, $rc['Date']);
             }
-            $this->controlerJourJa($pdo, $idJa, $idRenc, $rc['Date'], $rc['IdClubDom']);
+            $this->controlerJourJa($pdo, $idJa, $idRenc);
 
             if ($cra) {
                 $this->creerNominationCra($pdo, $idJa, $idRenc, $rc['Date']);
@@ -424,8 +465,8 @@ class SuiviNominationController extends BaseController
 
             // uq_nomination_rencontre bloque une saisie concurrente (club via EN25, autre nominateur).
             $pdo->prepare(
-                'INSERT INTO nomination (Id_Rencontre, Id_Disponible, Peage, Kilometre, Defiscalisation, DateSaisie, Valide, EmailEnvoye)
-                 VALUES (?, ?, ?, ?, ?, CURDATE(), 1, 0)'
+                'INSERT INTO nomination (Id_Rencontre, Id_Disponible, Peage, Kilometre, Defiscalisation, DateSaisie, EmailEnvoye)
+                 VALUES (?, ?, ?, ?, ?, CURDATE(), 0)'
             )->execute([$idRenc, $idDispo, $peage, $km, $defisc]);
 
             $pdo->commit();
@@ -449,7 +490,7 @@ class SuiviNominationController extends BaseController
         $idDispo = $this->disponibleOuiCra($pdo, $idJa, $idRenc, $date, 'Juge-arbitre nommé depuis EN28 (arbitrage CRA) le ' . date('d/m/Y'));
 
         // Même insertion qu'EN14 (affecterNomination) : frais/DateSaisie laissés au JA (EN21).
-        $pdo->prepare('INSERT INTO nomination (Id_Rencontre, Id_Disponible, DateNomination, Valide, EmailEnvoye) VALUES (?, ?, CURDATE(), 1, 0)')
+        $pdo->prepare('INSERT INTO nomination (Id_Rencontre, Id_Disponible, DateNomination, EmailEnvoye) VALUES (?, ?, CURDATE(), 0)')
             ->execute([$idRenc, $idDispo]);
     }
 
@@ -778,6 +819,60 @@ class SuiviNominationController extends BaseController
         }
     }
 
+    // ── Justificatif de péage (nomination.FichierPeage, dossier _Peage/) : stockage/contrôle dans JustificatifPeage (partagé avec EN21) ──
+
+    /**
+     * GET suivi-nomination/peage/fichier?nom=… : affiche (inline) un justificatif de péage de _Peage/ — dossier interdit
+     * en accès HTTP direct. Le nom reçu n'est jamais utilisé comme chemin : regex stricte JustificatifPeage::MOTIF_NOM, nom porté par
+     * une nomination du périmètre de l'utilisateur, puis retrouvé à l'identique dans JustificatifPeage::fichiers() (liste serveur).
+     * Sinon 404.
+     */
+    public function peageFichier(): ResponseInterface
+    {
+        $nom   = (string) $this->request->getGet('nom');
+        $cible = null;
+        try {
+            $pdo   = getPDO();
+            $depts = $this->deptsAutorises();
+            if (preg_match(JustificatifPeage::MOTIF_NOM, $nom) && $depts && nominationAFichierPeage($pdo)) {
+                // Département du club recevant de la rencontre qui porte ce justificatif (même critère que la liste EN28).
+                $stmt = $pdo->prepare('
+                    SELECT SUBSTRING(ed.Id_Club, 3, 2) FROM nomination n
+                    JOIN rencontre r ON r.Id_Rencontre = n.Id_Rencontre
+                    JOIN equipe ed   ON ed.Id_Equipe   = r.Id_EquipeDom
+                    WHERE n.FichierPeage = ?
+                    LIMIT 1
+                ');
+                $stmt->execute([$nom]);
+                $deptRencontre = $stmt->fetchColumn();
+                if ($deptRencontre !== false && !in_array((string) $deptRencontre, array_map('strval', $depts), true)) {
+                    error_log('[NIJAC] EN28 peageFichier : ' . $nom . ' hors périmètre (département ' . $deptRencontre . ')');
+
+                    return $this->response->setStatusCode(403)
+                        ->setHeader('X-Content-Type-Options', 'nosniff')
+                        ->setContentType('text/plain', 'UTF-8')
+                        ->setBody('Ce justificatif concerne une rencontre du département ' . $deptRencontre
+                            . ', hors de votre périmètre : vous ne pouvez pas le consulter.');
+                }
+                if ($deptRencontre !== false) {
+                    $cible = JustificatifPeage::fichiers()[$nom] ?? null;
+                    if ($cible === null) {
+                        error_log('[NIJAC] EN28 peageFichier : ' . $nom . ' absent de la liste serveur de _Peage/ (dossier : '
+                            . (JustificatifPeage::dossier() ?? 'inaccessible') . ')');
+                    }
+                } else {
+                    error_log('[NIJAC] EN28 peageFichier : ' . $nom . ' non rattaché à une nomination');
+                }
+            } else {
+                error_log('[NIJAC] EN28 peageFichier : nom invalide, périmètre vide ou colonne FichierPeage absente (nom : ' . $nom . ')');
+            }
+        } catch (\Throwable $e) {
+            error_log('[NIJAC] EN28 peageFichier : ' . $e->getMessage());
+        }
+        // Envoi (inline, Content-Type de la liste blanche, nosniff, no-store) ou 404 : partagé avec EN21.
+        return JustificatifPeage::reponse($this->response, $nom, $cible, 'EN28 peageFichier', $nom);
+    }
+
     /** Périmètre de la mise à jour 131 : tous les départements actifs pour un administrateur, sinon getDepartementsAutorises(). */
     private function perimetre131(): array
     {
@@ -903,7 +998,7 @@ class SuiviNominationController extends BaseController
                     $csv[] = [
                         $horodatage, $moi, (int) $rc['Id_Rencontre'], date('d/m/Y', strtotime($rc['Date'])), $rc['DivisionDom'],
                         $rc['NomDom'], $rc['NomExt'] ?? '', $cree['idNomination'], $cree['idDispo'], $idJa,
-                        $r['nomJa'] ?? '', $r['prenomJa'] ?? '', 1, 1, 0, 0, 0, $jour,
+                        $r['nomJa'] ?? '', $r['prenomJa'] ?? '', 1, 0, 0, 0, $jour,
                     ];
                 }
                 [$journal, $cheminJournal] = self::ecrireJournal131($csv);
@@ -1161,8 +1256,8 @@ class SuiviNominationController extends BaseController
 
     /**
      * Crée, DANS la transaction de l'appelant, la nomination d'une rencontre sans JA à partir du fichier 131 :
-     * disponible ('O' si arbitrage CRA, 'P' sinon : disponibleOuiCra() / disponibleClub()) + nomination (Valide = 1,
-     * F131 = 1, Peage = 0, Kilometre = 0, Defiscalisation = 0, DateSaisie et DateNomination = CURDATE(), EmailEnvoye = 0,
+     * disponible ('O' si arbitrage CRA, 'P' sinon : disponibleOuiCra() / disponibleClub()) + nomination
+     * (F131 = 1, Peage = 0, Kilometre = 0, Defiscalisation = 0, DateSaisie et DateNomination = CURDATE(), EmailEnvoye = 0,
      * AccuseReception NULL par défaut). Aucun email. Création concurrente : PDOException 23000 (uq_nomination_rencontre),
      * à traiter par l'appelant (rollback complet). Retourne ['idNomination' => n, 'idDispo' => n].
      */
@@ -1173,8 +1268,8 @@ class SuiviNominationController extends BaseController
         $idDispo = +$rc['ArbitrageCRA']
             ? self::disponibleOuiCra($pdo, $idJa, $idRenc, $rc['Date'], $note)
             : self::disponibleClub($pdo, $idJa, $idRenc, $rc['Date'], $note);
-        $pdo->prepare('INSERT INTO nomination (Id_Rencontre, Id_Disponible, Peage, Kilometre, Defiscalisation, DateSaisie, DateNomination, Valide, EmailEnvoye, F131)
-                       VALUES (?, ?, 0, 0, 0, CURDATE(), CURDATE(), 1, 0, 1)')
+        $pdo->prepare('INSERT INTO nomination (Id_Rencontre, Id_Disponible, Peage, Kilometre, Defiscalisation, DateSaisie, DateNomination, EmailEnvoye, F131)
+                       VALUES (?, ?, 0, 0, 0, CURDATE(), CURDATE(), 0, 1)')
             ->execute([$idRenc, $idDispo]);
 
         return ['idNomination' => (int) $pdo->lastInsertId(), 'idDispo' => $idDispo];
@@ -1198,7 +1293,7 @@ class SuiviNominationController extends BaseController
     /** En-tête du journal CSV de la mise à jour FFTT 131 (une ligne par nomination créée). */
     private const SUIVI_131_COLONNES = [
         'Horodatage', 'Utilisateur', 'Id_Rencontre', 'Date rencontre', 'Division', 'Equipe recevante', 'Equipe visiteuse',
-        'Id_Nomination', 'Id_Disponible', 'Id_JA', 'Nom', 'Prenom', 'Valide', 'F131', 'Peage', 'Kilometre', 'Defiscalisation', 'DateSaisie',
+        'Id_Nomination', 'Id_Disponible', 'Id_JA', 'Nom', 'Prenom', 'F131', 'Peage', 'Kilometre', 'Defiscalisation', 'DateSaisie',
     ];
 
     /**
@@ -1252,7 +1347,19 @@ class SuiviNominationController extends BaseController
             $stmt = $pdo->prepare('
                 SELECT n.Id_Nomination, ja.Id_JA, ja.Nom, ja.Prenom, ja.Email,
                        ed.Nom AS NomDom, ee.Nom AS NomExt, cl.Nom AS NomClub,
-                       r.Date, r.Heure, r.Journee, r.Poule, ed.Division, RIGHT(ed.Division, 1) AS SexeCode
+                       r.Date, r.Heure, r.Journee, r.Poule, ed.Division, RIGHT(ed.Division, 1) AS SexeCode,
+                       -- Même salle que la convocation EN14 : salle de la rencontre, sinon salle principale du club recevant.
+                       CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                            THEN s_r.Nom ELSE s_c.Nom END                         AS SalleNom,
+                       CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                            THEN s_r.Adresse ELSE s_c.Adresse END                 AS SalleAdresse,
+                       CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                            THEN COALESCE(lp_r.CodePostal, s_r.Cp)
+                            ELSE COALESCE(lp_c.CodePostal, s_c.Cp) END            AS SalleCP,
+                       CASE WHEN r.id_Salle IS NOT NULL AND s_r.Id_Salle IS NOT NULL
+                            THEN COALESCE(lp_r.Nom, s_r.Ville)
+                            ELSE COALESCE(lp_c.Nom, s_c.Ville) END                AS SalleVille,
+                       cl.CorNom AS CorrNom, cl.CorEmail AS CorrEmail, cl.CorTelephone AS CorrTel
                 FROM nomination n
                 JOIN disponible d  ON d.Id_Disponible = n.Id_Disponible
                 JOIN ja            ON ja.Id_JA        = d.Id_JA
@@ -1260,7 +1367,11 @@ class SuiviNominationController extends BaseController
                 JOIN equipe ed     ON ed.Id_Equipe    = r.Id_EquipeDom
                 LEFT JOIN equipe ee ON ee.Id_Equipe   = r.Id_EquipeExt
                 LEFT JOIN Club cl  ON cl.Id_Club      = ed.Id_Club
-                WHERE n.Id_Nomination = ? AND n.Valide = 1 AND n.DateSaisie IS NULL
+                LEFT JOIN salle   s_r  ON s_r.Id_Salle    = r.id_Salle
+                LEFT JOIN laposte lp_r ON lp_r.Id_LaPoste = s_r.Id_Laposte
+                ' . sqlJoinSallePrincipale('ed.Id_Club', 's_c') . '
+                LEFT JOIN laposte lp_c ON lp_c.Id_LaPoste = s_c.Id_Laposte
+                WHERE n.Id_Nomination = ? AND n.DateSaisie IS NULL
                   AND SUBSTRING(ed.Id_Club, 3, 2) IN (' . implode(',', array_fill(0, count($depts), '?')) . ')
             ');
             $stmt->execute([$idNom, ...$depts]);
@@ -1294,6 +1405,13 @@ class SuiviNominationController extends BaseController
                 'dom'           => $nom['NomDom'],
                 'ext'           => $nom['NomExt'],
                 'nom_club'      => $nom['NomClub'],
+                'salle_nom'     => $nom['SalleNom']     ?? null,
+                'salle_adresse' => $nom['SalleAdresse'] ?? null,
+                'salle_cp'      => $nom['SalleCP']      ?? null,
+                'salle_ville'   => $nom['SalleVille']   ?? null,
+                'corr_nom'      => $nom['CorrNom']      ?? null,
+                'corr_email'    => $nom['CorrEmail']    ?? null,
+                'corr_tel'      => $nom['CorrTel']      ?? null,
             ]);
             $rendu = remplacerMarqueursMessage($tpl['Sujet'], $tpl['Message'], $marqueurs);
             $corps = $rendu['corps'];
@@ -1317,7 +1435,7 @@ class SuiviNominationController extends BaseController
                 ? "[DEV → {$nom['Email']}] {$rendu['sujet']}" : $rendu['sujet'];
             $mail->Body = $corps;
             if ($isHtml) {
-                $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $corps));
+                $mail->AltBody = altBodyDepuisHtml($corps);
             }
             $mail->send();
             enregistrerEnvois(1);
