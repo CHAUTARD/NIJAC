@@ -26,6 +26,12 @@ class SuiviNominationController extends BaseController
         require_once __DIR__ . '/../../../vendor/autoload.php'; // PhpSpreadsheet (import de l'édition FFTT 131)
     }
 
+    /** Administrateur connecté (is_admin de la session) : suppression des fichiers 131 et purge des journaux de suivi. */
+    private static function estAdmin(): bool
+    {
+        return !empty($_SESSION['utilisateur']['is_admin']);
+    }
+
     private function deptsAutorises(): array
     {
         return getDepartementsAutorises($_SESSION['utilisateur']['id_departement'] ?? null);
@@ -49,6 +55,8 @@ class SuiviNominationController extends BaseController
             'divisionNoms' => getDivisionNoms(),
             // Justificatif de péage (nomination.FichierPeage, EA98) : champ de la popup désactivé si la colonne manque.
             'fichierPeageDispo' => nominationAFichierPeage(getPDO()),
+            // Popup 131 : bouton « Supprimer » des fichiers serveur affiché aux administrateurs seulement.
+            'estAdmin' => self::estAdmin(),
         ]);
     }
 
@@ -221,14 +229,11 @@ class SuiviNominationController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Indicateur FFTT 131 invalide (0 ou 1).']);
             }
             $f131 = $f131Raw === null ? 0 : (int) $f131Raw;
-            $peage = str_replace(',', '.', $peageRaw === '' ? '0' : $peageRaw);
-            if (!is_numeric($peage) || (float) $peage < 0) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Péage invalide.']);
+            $frais = self::controlerFrais($peageRaw, $kmRaw);
+            if (is_string($frais)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => $frais]);
             }
-            if (!ctype_digit($kmRaw === '' ? '0' : $kmRaw)) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Kilomètres invalides (entier positif).']);
-            }
-            $km = (int) $kmRaw;
+            [$peage, $km] = $frais;
 
             // Justificatif de péage (colonne EA98) : fichier `peage_fichier` (multipart) facultatif, ou case
             // `peage_supprimer` = 1 pour le retirer. Ni l'un ni l'autre → justificatif inchangé (comportement antérieur).
@@ -353,6 +358,38 @@ class SuiviNominationController extends BaseController
         }
     }
 
+    /** Plafonds des frais saisis dans EN28 (modifier() / saisir()). */
+    private const PEAGE_MAX = 500;
+    private const KM_MAX    = 2000;
+
+    /**
+     * Contrôle strict des frais saisis (modifier() / saisir()) : péage = décimal positif (virgule ou point,
+     * 2 décimales max) ≤ PEAGE_MAX, kilomètres = entier positif ≤ KM_MAX ; champ vide → 0.
+     * Renvoie [péage (chaîne normalisée), km (int)] ou le message d'erreur affichable.
+     */
+    private static function controlerFrais(string $peageRaw, string $kmRaw): array|string
+    {
+        $peage = str_replace(',', '.', trim($peageRaw));
+        $km    = trim($kmRaw);
+        $peage = $peage === '' ? '0' : $peage;
+        $km    = $km === '' ? '0' : $km;
+
+        if (!preg_match('/^\d{1,6}(\.\d{1,2})?$/', $peage)) {
+            return 'Péage invalide : montant positif en euros, 2 décimales au maximum.';
+        }
+        if ((float) $peage > self::PEAGE_MAX) {
+            return 'Le péage ne peut pas dépasser ' . self::PEAGE_MAX . ' €.';
+        }
+        if (!preg_match('/^\d{1,6}$/', $km)) {
+            return 'Kilomètres invalides : nombre entier positif attendu.';
+        }
+        if ((int) $km > self::KM_MAX) {
+            return 'Les kilomètres ne peuvent pas dépasser ' . self::KM_MAX . ' km.';
+        }
+
+        return [$peage, (int) $km];
+    }
+
     /**
      * Règle EN14/EN25 (nominationsJourJa()) : 2 nominations max par JA et par date (celle de la
      * rencontre), et uniquement dans la même salle (le club recevant n'intervient pas).
@@ -382,14 +419,11 @@ class SuiviNominationController extends BaseController
     public function saisir(): ResponseInterface
     {
         try {
-            $peage = str_replace(',', '.', trim((string) $this->request->getPost('peage')) ?: '0');
-            $kmRaw = trim((string) $this->request->getPost('km')) ?: '0';
-            if (!is_numeric($peage) || (float) $peage < 0) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Péage invalide.']);
+            $frais = self::controlerFrais((string) $this->request->getPost('peage'), (string) $this->request->getPost('km'));
+            if (is_string($frais)) {
+                return $this->response->setJSON(['ok' => false, 'msg' => $frais]);
             }
-            if (!ctype_digit($kmRaw)) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Kilomètres invalides (entier positif).']);
-            }
+            [$peage, $km] = $frais;
 
             $cra = $this->creerNomination(
                 getPDO(),
@@ -397,7 +431,7 @@ class SuiviNominationController extends BaseController
                 (int) $this->request->getPost('id_rencontre'),
                 (int) $this->request->getPost('id_ja'),
                 $peage,
-                (int) $kmRaw,
+                $km,
                 $this->request->getPost('defisc') ? 1 : 0
             );
 
@@ -687,7 +721,7 @@ class SuiviNominationController extends BaseController
     }
 
     /**
-     * Supprime tous les journaux CSV de _Suivi/ (appelée par f131Apercu() après une analyse RÉUSSIE uniquement ; jamais à
+     * Supprime tous les journaux CSV de _Suivi/ (appelée par f131Apercu() après une analyse RÉUSSIE d'un administrateur uniquement ; jamais à
      * l'application ni au dépôt). Seuls les fichiers de fichiersSuivi() sont visés (motif SUIVI_131_MOTIF_NOM, pas de lien,
      * realpath directement dans _Suivi/) : jamais .htaccess, .gitignore ni autre fichier. Un fichier non supprimable
      * (verrouillé, droits) n'interrompt rien. Aucun contenu lu ni journalisé. Retourne [nb supprimés, noms non supprimés].
@@ -749,6 +783,10 @@ class SuiviNominationController extends BaseController
      */
     public function f131Supprimer(): ResponseInterface
     {
+        // Suppression réservée aux administrateurs (bouton masqué aux autres dans la popup, refus ici en tout cas).
+        if (!self::estAdmin()) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Action réservée aux administrateurs.']);
+        }
         $nom = (string) $this->request->getPost('nom');
         if (!preg_match(self::F131_MOTIF_NOM, $nom)) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Nom de fichier 131 invalide.']);
@@ -846,25 +884,22 @@ class SuiviNominationController extends BaseController
                 $stmt->execute([$nom]);
                 $deptRencontre = $stmt->fetchColumn();
                 if ($deptRencontre !== false && !in_array((string) $deptRencontre, array_map('strval', $depts), true)) {
-                    error_log('[NIJAC] EN28 peageFichier : ' . $nom . ' hors périmètre (département ' . $deptRencontre . ')');
-
-                    return $this->response->setStatusCode(403)
-                        ->setHeader('X-Content-Type-Options', 'nosniff')
-                        ->setContentType('text/plain', 'UTF-8')
-                        ->setBody('Ce justificatif concerne une rencontre du département ' . $deptRencontre
-                            . ', hors de votre périmètre : vous ne pouvez pas le consulter.');
-                }
-                if ($deptRencontre !== false) {
+                    // Hors périmètre : même 404 neutre que l'absence (ni existence ni département révélés au navigateur) ;
+                    // journal interne sans le nom du fichier.
+                    error_log('[NIJAC] EN28 peageFichier : justificatif hors périmètre (département ' . $deptRencontre
+                        . ', utilisateur ' . json_encode((string) ($_SESSION['utilisateur']['login'] ?? '')) . ')');
+                } elseif ($deptRencontre !== false) {
                     $cible = JustificatifPeage::fichiers()[$nom] ?? null;
                     if ($cible === null) {
-                        error_log('[NIJAC] EN28 peageFichier : ' . $nom . ' absent de la liste serveur de _Peage/ (dossier : '
+                        error_log('[NIJAC] EN28 peageFichier : ' . json_encode($nom) . ' absent de la liste serveur de _Peage/ (dossier : '
                             . (JustificatifPeage::dossier() ?? 'inaccessible') . ')');
                     }
                 } else {
-                    error_log('[NIJAC] EN28 peageFichier : ' . $nom . ' non rattaché à une nomination');
+                    error_log('[NIJAC] EN28 peageFichier : ' . json_encode($nom) . ' non rattaché à une nomination');
                 }
             } else {
-                error_log('[NIJAC] EN28 peageFichier : nom invalide, périmètre vide ou colonne FichierPeage absente (nom : ' . $nom . ')');
+                error_log('[NIJAC] EN28 peageFichier : nom invalide, périmètre vide ou colonne FichierPeage absente (nom : '
+                    . json_encode(mb_substr($nom, 0, 100)) . ')');
             }
         } catch (\Throwable $e) {
             error_log('[NIJAC] EN28 peageFichier : ' . $e->getMessage());
@@ -932,19 +967,22 @@ class SuiviNominationController extends BaseController
      * POST suivi-nomination/f131/apercu (sans paramètre) : analyse SANS AUCUNE ÉCRITURE du fichier le plus récent
      * d'Importation/ (analyserFichier131()). Réponse : compte rendu chiffré + nb = N rencontres R3M / R4M sans JA nommé
      * auxquelles le fichier donne un JA connu + rencontres[] (« À renseigner » / « Ignoré : motif »). Le bouton
-     * d'application n'est affiché que si N > 0. Seule écriture : une analyse réussie efface les anciens journaux CSV de
-     * _Suivi/ (purgerSuivis131() → suivisSupprimes = n, suivisNonSupprimes = noms non supprimables).
+     * d'application n'est affiché que si N > 0. Seule écriture : une analyse réussie PAR UN ADMINISTRATEUR efface les anciens
+     * journaux CSV de _Suivi/ (purgerSuivis131() → suivisPurge = true, suivisSupprimes = n, suivisNonSupprimes = noms non
+     * supprimables) ; pour un non-admin, rien n'est effacé (suivisPurge = false).
      */
     public function f131Apercu(): ResponseInterface
     {
         try {
             [$fichier, $lu, $an] = $this->analyserFichier131(getPDO());
-            // Analyse réussie seulement (toute erreur ci-dessus sort avant) : purge des anciens journaux de suivi.
-            [$supprimes, $nonSupprimes] = self::purgerSuivis131();
+            // Analyse réussie seulement (toute erreur ci-dessus sort avant) : purge des anciens journaux de suivi,
+            // par un administrateur uniquement (un non-admin n'efface jamais les journaux ; suivisPurge = false).
+            $purge = self::estAdmin();
+            [$supprimes, $nonSupprimes] = $purge ? self::purgerSuivis131() : [0, []];
 
             return $this->response->setJSON([
                 'ok' => true, 'rencontres' => $an['rencontres'],
-                'suivisSupprimes' => $supprimes, 'suivisNonSupprimes' => $nonSupprimes,
+                'suivisPurge' => $purge, 'suivisSupprimes' => $supprimes, 'suivisNonSupprimes' => $nonSupprimes,
             ] + self::compteRendu131($fichier, $lu, $an));
         } catch (\RuntimeException $e) {
             return $this->response->setJSON(['ok' => false, 'msg' => $e->getMessage()]);
@@ -1057,11 +1095,27 @@ class SuiviNominationController extends BaseController
      */
     public static function lire131(string $chemin): array
     {
+        self::controlerArchive131($chemin);   // bombe zip : taille décompressée plafonnée AVANT le chargement
         $lecteur = \PhpOffice\PhpSpreadsheet\IOFactory::createReader('Xlsx');   // format imposé, pas de détection
         $lecteur->setReadDataOnly(true);
+        // Rien n'est chargé au-delà de F131_LIGNES_MAX + 1 (la ligne en trop sert seulement à détecter le dépassement).
+        $lecteur->setReadFilter(new class (self::F131_LIGNES_MAX + 1) implements \PhpOffice\PhpSpreadsheet\Reader\IReadFilter {
+            public function __construct(private int $max)
+            {
+            }
+
+            public function readCell(string $columnAddress, int $row, string $worksheetName = ''): bool
+            {
+                return $row <= $this->max;
+            }
+        });
         $feuille = $lecteur->load($chemin)->getSheet(0);
         $txt     = fn ($v) => trim(preg_replace('/\s+/u', ' ', (string) $v));
         $maxR    = $feuille->getHighestDataRow();
+        if ($maxR > self::F131_LIGNES_MAX) {
+            throw new \RuntimeException('Fichier 131 trop long : plus de ' . number_format(self::F131_LIGNES_MAX, 0, ',', ' ')
+                . ' lignes. Aucune ligne n\'a été analysée.');
+        }
 
         $entete = 0;
         for ($r = 1; $r <= min(10, $maxR); $r++) {
@@ -1110,6 +1164,35 @@ class SuiviNominationController extends BaseController
         ksort($res['ignores']);
 
         return $res;
+    }
+
+    /** Plafonds de lecture de l'édition 131 : taille décompressée de l'archive xlsx et nombre de lignes de la feuille. */
+    private const F131_DECOMPRESSE_MAX = 50 * 1024 * 1024;
+    private const F131_LIGNES_MAX      = 20000;
+
+    /**
+     * Contrôle anti « bombe zip » d'un xlsx AVANT tout chargement par PhpSpreadsheet : somme des tailles décompressées
+     * déclarées (ZipArchive::statIndex()['size']) ≤ F131_DECOMPRESSE_MAX. RuntimeException (message affichable) sinon,
+     * ou si l'archive est illisible. Aucun contenu lu.
+     */
+    private static function controlerArchive131(string $chemin): void
+    {
+        $zip = new \ZipArchive();
+        if ($zip->open($chemin, \ZipArchive::RDONLY) !== true) {
+            throw new \RuntimeException('Classeur Excel .xlsx illisible.');
+        }
+        try {
+            $total = 0;
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $st = $zip->statIndex($i);
+                $total += $st === false ? 0 : (int) $st['size'];
+                if ($total > self::F131_DECOMPRESSE_MAX) {
+                    throw new \RuntimeException('Fichier 131 trop volumineux une fois décompressé (50 Mo maximum).');
+                }
+            }
+        } finally {
+            $zip->close();
+        }
     }
 
     /** Date de l'édition 131 : texte JJ/MM/AAAA (export FFTT) ou date Excel numérique → AAAA-MM-JJ, null si illisible. */

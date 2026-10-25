@@ -16,6 +16,15 @@ class SecurePasswordHasher
     private const ALGO       = 'sha256';
 
     /**
+     * Hash factice constant (même format, mêmes paramètres : PBKDF2 600 000 itérations), produit
+     * une fois par hash() d'un mot de passe aléatoire jeté. Sert uniquement à égaliser le temps de
+     * réponse de E001 quand le login est inconnu ou inactif : verify($saisie, HASH_FACTICE) coûte
+     * autant qu'une vraie vérification (~0,6 s), résultat ignoré — aucun mot de passe connu ne
+     * lui correspond.
+     */
+    public const HASH_FACTICE = 'Lfe07p4BDFGe91TE/rjLIWrERXszuMDuYC8LVW7WdgHcVBxjytNJbg0bVZEWc5kY';
+
+    /**
      * Vérifie qu'un mot de passe en clair correspond au hash Base64 stocké en BDD.
      * Comparaison en temps constant (protection timing-attack).
      */

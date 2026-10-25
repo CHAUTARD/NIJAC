@@ -20,6 +20,12 @@ namespace App\Controllers;
  * vide et "Undefined array key utilisateur". Pour persister ChangeLogin=0 dans la
  * session vivante, on rouvre avec un session_start() BRUT (sans re-réglage), qui
  * lui recharge bien le fichier, puis on referme.
+ *
+ * Après un changement réussi : PwdVersion + 1 (si présente, EA98 — les autres sessions du compte
+ * sont détruites à leur prochaine revalidation), session_regenerate_id(true), et la session
+ * courante reçoit la nouvelle version + change_login = false (elle reste valide). Essais du
+ * mot de passe actuel limités par compte (clé mdp_actuel:<id>). Changement forcé (change_login) :
+ * les filtres n'autorisent que cet écran et logout (voir revaliderSessionUtilisateur()).
  */
 class ChangerMotDePasseController extends BaseController
 {
@@ -37,8 +43,10 @@ class ChangerMotDePasseController extends BaseController
             return redirect()->to(site_url('login'));
         }
 
+        // Menu de retour selon le rôle : nominateur-menu est refusé aux rôles CSR, Defiscalisateur et CRA Convoc (filtre "auth").
+        $menus  = ['CRA Convoc' => 'cra-convoc-menu', 'CSR' => 'csr-menu', 'Defiscalisateur' => 'defiscalisateur-menu'];
         $retour = !empty($moi['is_admin']) ? site_url('admin-menu')
-            : (($moi['role'] ?? '') === 'CRA Convoc' ? site_url('cra-convoc-menu') : site_url('nominateur-menu'));
+            : site_url($menus[$moi['role'] ?? ''] ?? 'nominateur-menu');
         $isAjax = strtolower($this->request->getHeaderLine('X-Requested-With')) === 'xmlhttprequest';
 
         $status      = !empty($moi['change_login'])
@@ -61,6 +69,15 @@ class ChangerMotDePasseController extends BaseController
             } elseif ($nouveau !== $confirme) {
                 $status      = 'Les deux saisies du nouveau mot de passe ne correspondent pas.';
                 $statutClass = 'text-warning';
+            } elseif ($limite = checkTentativesRateLimit(
+                'mdp_actuel:' . (int) $moi['id'],
+                (int) getConfig('login_rate_limit_max', '5'),
+                (int) getConfig('login_rate_limit_fenetre', '15')
+            )) {
+                // Anti brute-force du mot de passe actuel (session volée) : verrou par compte,
+                // même motif que CleanController::verifierMdpRequete().
+                $status      = $limite;
+                $statutClass = 'text-danger';
             } else {
                 try {
                     $pdo  = getPDO();
@@ -69,17 +86,28 @@ class ChangerMotDePasseController extends BaseController
                     $row = $stmt->fetch();
 
                     if (!$row || !\SecurePasswordHasher::verify($actuel, $row['Password'])) {
+                        enregistrerTentative('mdp_actuel:' . (int) $moi['id'], (int) getConfig('login_rate_limit_fenetre', '15'));
                         $status      = 'Mot de passe actuel incorrect.';
                         $statutClass = 'text-danger';
                     } else {
+                        // PwdVersion + 1 (si la colonne existe, EA98) : invalide les AUTRES sessions
+                        // ouvertes sur ce compte à leur prochaine revalidation (revaliderSessionUtilisateur()).
                         $hash = \SecurePasswordHasher::hash($nouveau);
-                        $pdo->prepare('UPDATE Utilisateur SET Password = ?, ChangeLogin = 0 WHERE Id_Utilisateur = ?')
+                        $pdo->prepare('UPDATE Utilisateur SET Password = ?, ChangeLogin = 0' . sqlIncrementPwdVersion($pdo)
+                                . ' WHERE Id_Utilisateur = ?')
                             ->execute([$hash, $moi['id']]);
 
                         $moi['change_login'] = false;
+                        $moi['verifie_le']   = time();
+                        if (utilisateurAPwdVersion($pdo)) {
+                            $v = $pdo->prepare('SELECT PwdVersion FROM Utilisateur WHERE Id_Utilisateur = ? LIMIT 1');
+                            $v->execute([$moi['id']]);
+                            $moi['pwd_version'] = (int) $v->fetchColumn(); // la session courante reste valide
+                        }
                         if (session_status() === PHP_SESSION_NONE) {
                             session_start(); // reprise brute : PAS demarrerSessionNijac() (voir docblock)
                         }
+                        session_regenerate_id(true); // nouvel identifiant de session après changement de mot de passe
                         $_SESSION['utilisateur'] = $moi; // réécrit le tableau complet
                         session_write_close();
 

@@ -52,6 +52,7 @@
 - [EA93 – Gestion des messages](#ea93--gestion-des-messages)
 - [EA96 – Test API FFTT](#ea96--test-api-fftt)
 - [EA98 – Administration base de données](#ea98--administration-base-de-données)
+- [EA99 – Sécurité TOTP](#ea99--sécurité-totp)
 
 ---
 
@@ -89,6 +90,16 @@ Point d'entrée unique de l'application. Authentifie l'utilisateur et initialise
 | Connexion réussie + rôle Nominateur ou CSR | Redirection vers `Nominateur/menu.php` (E003) ou menu CSR (E004) |
 | Erreur base de données | Message système, log PHP |
 
+**Périmètre des rôles (filtres) :** le filtre "auth" sans argument (écrans du menu nominateur E003 et routes partagées : EN11, EN12, EN13, EN15, EN17, EN23, EN24, EN27, EN29, EA81, EA93, `laposte/*`, variantes « token » d'EN19/EN22…) et le filtre "nominauth" (EN14, EN26, EN28) n'acceptent que les rôles Nominateur et Administrateur (ou `is_admin`). Chaque autre rôle n'a accès qu'aux écrans de son menu : CSR → E004, ES31, ES32, ES33 ("csrauth") ; Défiscalisateur → E005, ED51 à ED55 ("defiscauth", ED53 contrôlé dans le contrôleur) ; CRA Convoc → E009, EC71 à EC75 ("craconvocauth"). Les routes partagées dont dépend un de ces menus listent les rôles supplémentaires en argument du filtre :
+
+| Route | Filtre | Utilisée par |
+|-------|--------|--------------|
+| `changer-mot-de-passe` (GET/POST) | `auth:CSR,Defiscalisateur,CRA Convoc` | modale E006 / lien de la barre sur tous les menus ; retour vers le menu du rôle |
+| `messagerie/data/(:segment)` (GET), `messagerie/(:segment)` (PUT) | `auth:CSR,CRA Convoc` | ES32 (message n°6 seul, contrôlé par `MessagerieController`) ; EA93 depuis E009 |
+| `messagerie`, `messagerie/data` (GET), `messagerie/(:segment)/dupliquer` (POST), `messagerie/(:segment)` (DELETE) | `auth:CRA Convoc` | EA93 depuis E009 (messages « CRA Convocation … » seulement, contrôlé par `MessagerieController`) |
+
+Toute autre route "auth" renvoie ces rôles vers la connexion. Les variantes « token » d'EN19/EN22 (`adresse-ja/token`, `adresse-ja/envoyer-demande-adresse`, `disponibilite-ja/token`) ne sont appelées que depuis EN11 : les pages publiques du JA n'en dépendent pas.
+
 ### Session créée
 ```php
 $_SESSION['utilisateur'] = [
@@ -100,14 +111,22 @@ $_SESSION['utilisateur'] = [
     'id_departement' => string,
     'change_login'   => bool,
     'is_admin'       => bool,
+    'email'          => string,
+    'pwd_version'    => ?int,   // utilisateur.PwdVersion à la connexion (null avant EA98)
+    'verifie_le'     => int,    // horodatage de la dernière revalidation en base
 ]
 ```
 
 ### Sécurité
-- Protection CSRF sur le formulaire POST (`csrfVerify(false)`)
-- Mot de passe vérifié via `SecurePasswordHasher::verify()` (bcrypt)
+- Protection CSRF sur le formulaire POST (filtre `csrf` global CI4)
+- Mot de passe vérifié via `SecurePasswordHasher::verify()` (PBKDF2-SHA256, 600 000 itérations) ; login inconnu ou inactif : vérification sur `SecurePasswordHasher::HASH_FACTICE` (hash factice constant, même coût, résultat ignoré) pour un temps de réponse identique
+- Limites anti brute-force (fichier `logs/login_attempts.json`, verrou `flock`) : par IP (`login:<ip>`, `login_rate_limit_max` / `login_rate_limit_fenetre`, 5 / 15 min) puis par login saisi (`login_compte:<login>` : minuscules, sans espaces, tronqué à 64 caractères ; 10 échecs / 60 min ; logins inconnus compris, donc aucun oracle d'existence ; même message « Trop de tentatives… », vérifié avant le mot de passe ; blocage limité à la fenêtre glissante) ; codes E010 faux plafonnés par compte (`mfa_essai:<id>`, 20 / 24 h : au-delà, aucun nouveau code n'est envoyé)
 - `session_regenerate_id(true)` après le mot de passe valide, puis à nouveau après validation du code (E010)
 - Double authentification par email (E010) ; la session `$_SESSION['utilisateur']` n'est créée qu'après validation du code (le changement de mot de passe forcé `change_login` intervient donc après la double authentification)
+- Un simple GET sur E001 n'annule plus une double authentification en cours (`mfa_attente`) : seuls une nouvelle saisie (POST) ou la déconnexion l'abandonnent
+- **Revalidation de session** : tous les filtres d'authentification (`auth`, `adminauth`, `nominauth`, `csrauth`, `defiscauth`, `craconvocauth`) appellent `controlerSessionFiltre()` → `revaliderSessionUtilisateur()` (`config/app_config.php`) : au plus une fois par minute (`verifie_le`), relecture en base de `Actif`, `Role`, `ChangeLogin` et `PwdVersion` (si la colonne existe) ; compte supprimé, désactivé, rôle modifié ou version du mot de passe différente → session détruite (données, fichier et cookie, `detruireSessionNijac()`) et retour à E001. Session sans `pwd_version` (ouverte avant EA98 ou avant cette version) : adopte la version courante. Base injoignable : pas de destruction (journalisé)
+- **Changement forcé** (`change_login` vrai, y compris `ChangeLogin = 1` posé en base) : seules les routes `changer-mot-de-passe` et `logout` restent accessibles, toute autre route filtrée redirige vers E006
+- **Déconnexion** : `POST logout` (CSRF) détruit la session et efface le cookie ; `GET logout` (anciens favoris) redirige seulement vers E001 sans rien détruire
 
 ---
 
@@ -117,7 +136,7 @@ $_SESSION['utilisateur'] = [
 **Accès :** Public, mais utilisable seulement avec un état `$_SESSION['mfa_attente']` posé par E001 (sinon redirection vers E001) ; une session déjà authentifiée est redirigée vers son menu.
 
 ### Interface
-Charte de E001 (bandeau FFTT, carte bleue, sans menu) : champ **Code de sécurité** (`inputmode="numeric"`, `maxlength="6"`, `pattern="[0-9]{6}"`, `autocomplete="one-time-code"`, chiffres seuls, espaces retirés), bouton **Valider**, lien **Recevoir un nouveau code** (désactivé avec compte à rebours tant que le délai court), lien **Annuler** (→ `logout`). Message d'introduction : « Un code de sécurité à 6 chiffres vient d'être envoyé à l'adresse email **<adresse masquée>** enregistrée sur votre compte. Il est valable 10 minutes. » (réaffiché à l'identique après un renvoi). Masquage `masquerEmailAffichage()` (fonction pure, UTF-8, `config/app_config.php`) : 2 premiers caractères de la partie locale, puis un astérisque par caractère restant plafonné à 6 (`***` si la partie locale fait 2 caractères ou moins), puis `@` et le domaine complet (dernier `@`) — `patrick.chautard@free.fr` → `pa******@free.fr`, `ab@x.fr` → `ab***@x.fr`, `a@x.fr` → `a***@x.fr` ; vide ou sans `@` → « (adresse non renseignée) ». Calculé à l'envoi depuis `utilisateur.Email` et conservé seul dans `mfa_attente['email_masque']` (jamais l'adresse complète en session ni dans le HTML), échappé par la vue (`esc()`, en gras) ; en mode Développement c'est l'adresse masquée du compte qui s'affiche, jamais `email_developpement`. Le code n'est jamais affiché (y compris en mode Développement, où il part vers `email_developpement` via `NijacMailer`).
+Charte de E001 (bandeau FFTT, carte bleue, sans menu) : champ **Code de sécurité** (`inputmode="numeric"`, `maxlength="6"`, `pattern="[0-9]{6}"`, `autocomplete="one-time-code"`, chiffres seuls, espaces retirés), bouton **Valider**, lien **Recevoir un nouveau code** (désactivé avec compte à rebours tant que le délai court), lien **Annuler** (bouton `formaction` → `POST logout` avec le jeton CSRF du formulaire de renvoi : session et cookie détruits). Message d'introduction : « Un code de sécurité à 6 chiffres vient d'être envoyé à l'adresse email **<adresse masquée>** enregistrée sur votre compte. Il est valable 10 minutes. » (réaffiché à l'identique après un renvoi). Masquage `masquerEmailAffichage()` (fonction pure, UTF-8, `config/app_config.php`) : 2 premiers caractères de la partie locale, puis un astérisque par caractère restant plafonné à 6 (`***` si la partie locale fait 2 caractères ou moins), puis `@` et le domaine complet (dernier `@`) — `patrick.chautard@free.fr` → `pa******@free.fr`, `ab@x.fr` → `ab***@x.fr`, `a@x.fr` → `a***@x.fr` ; vide ou sans `@` → « (adresse non renseignée) ». Calculé à l'envoi depuis `utilisateur.Email` et conservé seul dans `mfa_attente['email_masque']` (jamais l'adresse complète en session ni dans le HTML), échappé par la vue (`esc()`, en gras) ; en mode Développement c'est l'adresse masquée du compte qui s'affiche, jamais `email_developpement`. Le code n'est jamais affiché (y compris en mode Développement, où il part vers `email_developpement` via `NijacMailer`).
 
 ### Règles du code (fonctions pures de `config/app_config.php`)
 | Règle | Détail |
@@ -153,6 +172,7 @@ Page d'accueil de l'espace administrateur. Donne accès à tous les écrans de p
 - Barre utilisateur : nom, département, alerte changement de mot de passe
 - Bouton **Menu nominateur** (bascule vers E003)
 - Bouton **Menu CRA Convoc** (bascule vers E009, route `cra-convoc-menu`), à côté de Menu CSR / Menu Défiscalisateur
+- Bouton **Version PHP** (bandeau de titre, à droite) : modale Bootstrap affichant un tableau calculé côté serveur par `AdminMenuController::infosPhp()` (sans route dédiée, valeurs échappées par `esc()`) — `PHP_VERSION`, `PHP_SAPI`, `memory_limit`, `upload_max_filesize`, `post_max_size`, `max_execution_time` et présence oui/non des extensions bcmath, mbstring, zip, openssl, curl, pdo_mysql, gd, intl, fileinfo ; pas de `phpinfo()`, aucun chemin serveur
 - Grille de boutons (5 colonnes) avec code écran en haut à droite de chaque bouton :
 
 | Bouton | Code | Destination |
@@ -170,10 +190,11 @@ Page d'accueil de l'espace administrateur. Donne accès à tous les écrans de p
 | Configuration | EA91 | `configuration.php` |
 | Test API FFTT *(CHAUTARD seulement)* | EA96 | `fftt_test.php` |
 | Base de données *(CHAUTARD seulement)* | EA98 | `db-admin.php` |
+| Sécurité TOTP *(CHAUTARD seulement)* | EA99 | route `securite-totp` |
 | Se déconnecter | — | `logout.php` |
 
 ### Règles
-- Les boutons **Test API FFTT** (EA96) et **Base de données** (EA98) ne sont visibles que si `$_SESSION['utilisateur']['login'] === 'CHAUTARD'`
+- Les boutons **Test API FFTT** (EA96), **BugSpid** (EA97), **Base de données** (EA98) et **Sécurité TOTP** (EA99), regroupés dans l'onglet **DBA**, ne sont visibles que si `$_SESSION['utilisateur']['login'] === 'CHAUTARD'`
 - Le bouton **Se déconnecter** demande une confirmation JavaScript
 
 > **Note :** l'ancien écran Correspondants de clubs (`correspondant.php`) a été supprimé. La gestion des correspondants est désormais intégrée à l'écran EN27 (Clubs / Associations), sous forme de colonnes directement sur la fiche club.
@@ -241,6 +262,9 @@ Permet à l'utilisateur connecté de changer son propre mot de passe : saisie du
 - Nouveau mot de passe : règle commune `validerRobustesseMotDePasse()` (10 caractères min, minuscule + majuscule + chiffre + caractère spécial — voir E008), doit être confirmé à l'identique
 - Le mot de passe actuel est vérifié via `SecurePasswordHasher::verify()` avant tout changement
 - Le lien de retour (`retour`) pointe vers E002 (menu admin) si `is_admin`, E009 (menu CRA Convoc) pour le rôle « CRA Convoc », sinon E003 (menu nominateur)
+- Essais du mot de passe actuel limités par compte (clé `mdp_actuel:<id>`, `login_rate_limit_max` / `login_rate_limit_fenetre`, même motif que EA95 `CleanController`) : au-delà, « Trop de tentatives… » sans vérification
+- Après un changement réussi : `PwdVersion = PwdVersion + 1` (si la colonne existe, EA98) → les **autres** sessions ouvertes sur le compte sont détruites à leur prochaine revalidation (≤ 1 min) ; `session_regenerate_id(true)` ; la session courante reçoit la nouvelle version et `change_login = false` (elle reste valide)
+- **Changement forcé** (`change_login` vrai) : tous les filtres d'authentification redirigent toute autre route vers cet écran (page complète) ; seul `logout` reste accessible, via le bouton **Se déconnecter** (POST) affiché à la place de « Retour au menu »
 
 ---
 
@@ -265,8 +289,10 @@ L'utilisateur non connecté demande un lien de réinitialisation en saisissant s
 
 ### Sécurité
 - Jeton = `"<Id_Utilisateur>-<expiration>-<HMAC-SHA256>"` produit par `genererJetonResetMdp()`
-- Clé HMAC = hash du mot de passe **actuel** `+ OBFUSCATOR_SEED` → le jeton devient invalide dès que le mot de passe change (usage unique), **sans aucune colonne en base**
+- Clé HMAC (`cleJetonResetMdp()`) = hash du mot de passe **actuel** `+ OBFUSCATOR_SEED` `+ '|reset-mdp|' +` pepper secret `getObfuscatorPepper()` (`.env`, `OBFUSCATOR_PEPPER`) → le jeton devient invalide dès que le mot de passe change (usage unique), **sans aucune colonne en base**, et ne peut pas être forgé à partir des seuls hash (fuite de sauvegarde SQL) sans le `.env`. Pepper vide : la clé est exactement l'ancienne (hash + seed, liens déjà émis toujours valables) — **aucun gain** dans ce cas. Pepper renseigné : seule la nouvelle clé est acceptée (les liens émis dans l'heure précédant sa mise en place sont perdus)
 - Durée de validité : 1 heure
+- Limite par IP : `mdpreset_ip:<ip>`, 5 demandes / 15 min (au-delà, même réponse neutre, aucun envoi) ; limite par compte : `mdpreset:<id>`, 3 envois / 15 min
+- Temps de réponse égalisé : la recherche du compte et l'envoi de l'email sont différés **après** la réponse HTTP (`register_shutdown_function` + `fastcgi_finish_request()` si disponible, sinon `Connection: close` + `Content-Length` + vidage des tampons, `ignore_user_abort(true)`) ; mode Développement (`NijacMailer`) inchangé, erreurs d'envoi toujours journalisées (`[NIJAC] reset mdp : …`)
 
 ---
 
@@ -279,7 +305,7 @@ L'utilisateur non connecté demande un lien de réinitialisation en saisissant s
 | Action | Méthode | Description |
 |--------|---------|-------------|
 | `reinitialiser` | GET | Valide le jeton (`verifierJetonResetMdp`) ; si KO, page d'erreur + lien vers E007 ; sinon formulaire de double saisie |
-| `reinitialiser` | POST | Re-valide le jeton, puis les deux saisies (non vides, identiques, robustesse) ; `UPDATE Utilisateur SET Password = <hash>, ChangeLogin = 0` ; page de succès + lien vers E001 |
+| `reinitialiser` | POST | Re-valide le jeton, puis les deux saisies (non vides, identiques, robustesse) ; `UPDATE Utilisateur SET Password = <hash>, ChangeLogin = 0, PwdVersion = PwdVersion + 1` (incrément seulement si la colonne existe, EA98 — toute session ouverte sur le compte est détruite à sa prochaine revalidation) ; page de succès + lien vers E001 |
 
 ### Règles métier
 - `verifierJetonResetMdp()` : format `^\d+-\d+-[0-9a-f]{64}$`, non expiré, HMAC recalculé avec le hash de mot de passe **courant** (`hash_equals`) — un jeton déjà utilisé (mot de passe changé) ne repasse pas
@@ -304,7 +330,7 @@ Page d'accueil du rôle « CRA Convoc », atteinte automatiquement après connex
 | Désignation CRA | EC73 | `cra-designation` |
 | Statistiques CRA | EC75 | `cra-stats` |
 | Degrés Juge-Arbitre | EC72 | `cra-juge-arbitre` |
-| Se déconnecter | — | `logout` |
+| Se déconnecter | — | `POST logout` (formulaire caché `#form-logout` + CSRF, comme tous les menus) |
 
 ### Règles
 - Bandeau utilisateur standard (alerte « Mot de passe à modifier », bouton **Menu administrateur** visible seulement pour un Administrateur en prévisualisation)
@@ -695,7 +721,7 @@ Le lien généré depuis cet écran vers `disponibilite-ja` (EN22) porte l'`Id_J
 ## EN14 – Nomination JA
 
 **Fichier :** `Nominateur/nomination.php`  
-**Accès :** Administrateur et Nominateur
+**Accès :** Nominateur ou Administrateur — filtre "nominauth" (`NominateurAuth.php`) sur toutes les routes `nomination*` ; les rôles CSR, Defiscalisateur et CRA Convoc sont redirigés vers la connexion
 
 ### Objectif
 Affecter les JA disponibles aux rencontres de la saison en appliquant les règles métier de nomination.
@@ -1060,7 +1086,9 @@ Si `update()` change `Date` ou `Heure` sur une rencontre qui porte déjà une no
 
 ## EN26 – Statistiques des nominations
 
-`StatsNominationController` — GET `stats-nomination` (vue) et GET `stats-nomination/data` (JSON unique : `rencontres`, `compteurs`, `clubsRegionale`, `clubs`, `deptsClubs`, `coefNat`, `coefReg`). Filtre `auth`, lecture seule. Voir `ECRANS.md` pour le calendrier, les journées et le tableau des JA nominés.
+`StatsNominationController` — GET `stats-nomination` (vue) et GET `stats-nomination/data` (JSON unique : `rencontres`, `compteurs`, `clubsRegionale`, `clubs`, `deptsClubs`, `coefNat`, `coefReg`). Lecture seule (la vue n'appelle que `stats-nomination/data`, export CSV généré côté navigateur), ouvert depuis EN14 uniquement.
+
+**Accès :** Nominateur ou Administrateur — filtre "nominauth" (`NominateurAuth.php`) sur les deux routes `stats-nomination*`, comme EN14/EN28 ; les rôles CSR, Defiscalisateur et CRA Convoc sont redirigés vers la connexion. Voir `ECRANS.md` pour le calendrier, les journées et le tableau des JA nominés.
 
 ### Cartouche « Clubs avec équipes en régionale » (restauré, avant « Prestations par club »)
 - **Périmètre** : clubs dont `SUBSTRING(Id_Club, 3, 2)` ∈ `getDepartementsAutorises()` ayant **au moins une** équipe `equipe` hors `Division LIKE 'N%'` (jointure interne). JSON `clubsRegionale`, trié par `c.Nom`.
@@ -1126,7 +1154,7 @@ Pas de Model, `getPDO()` direct comme le reste de cette famille d'écrans. Aucun
 ## EN28 – Suivi des nominations
 
 **Fichier :** `SuiviNominationController` (CI4) — vue `suivi_nomination_index.php`
-**Accès :** Nominateur ou Administrateur (filtre "auth") — bouton du menu nominateur (E003), après EN14
+**Accès :** Nominateur ou Administrateur (filtre "nominauth", `NominateurAuth.php`, sur toutes les routes `suivi-nomination*` ; CSR, Defiscalisateur et CRA Convoc redirigés vers la connexion) — bouton du menu nominateur (E003), après EN14. Suppression des fichiers 131 et purge des journaux de suivi réservées aux administrateurs (`is_admin`)
 
 ### Objectif
 Afficher **toutes les rencontres prévues** du périmètre du nominateur (toutes dates, nommées ou non) et, pour les nominations (arbitrages club désignés via EN25 compris), suivre les frais saisis par le JA dans EN21 et relancer les JA.
@@ -1154,18 +1182,23 @@ Les valeurs de péage et de kilomètres saisies mais **non comptées** sont gris
 | `suivi-nomination/ja-disponibles` | GET | `rencontre` → liste des popups en **arbitrage CRA** (Nommer un JA, Modifier d'une rencontre CRA, et Modifier dont le champ Arbitrage est basculé de Club vers CRA ; retour vers Club = `ja-liste` complète). Refus si rencontre hors périmètre (club recevant, comme `saisir`/`modifier`). Une seule requête (`listerJaDisponibles()`) : JA `JA1 = 1` du périmètre (`Id_JA`, `Nom`, `Prenom`, `Id_Club`) ayant un 'O' (rencontre ou journée) et aucun 'N' (rencontre ou journée) — même condition `EXISTS`/`NOT EXISTS` que `jaDisponiblePourNomination()` — et passant `controlerJourJa()` (moins de 2 autres nominations ce jour, aucune dans une autre salle, même club recevant compris, `sqlAutreLieu()` — même règle qu'EN14, règle 3). Le JA actuellement nommé est toujours inclus (`actuel: true`, libellé « — actuel »), même s'il ne passe plus la règle. Réponse `{ok, ja}`. Vue : « Chargement… » pendant l'appel, toast d'erreur échappé, « Aucun JA disponible pour cette rencontre » et bouton Enregistrer désactivé si la liste est vide. Le contrôle serveur de `saisir`/`modifier` reste la protection finale |
 | `suivi-nomination/saisir` | POST | `id_rencontre`, `id_ja`, `peage`, `km`, `defisc` → « Saisir le JA » d'un arbitrage club ou « Nommer un JA » d'un arbitrage CRA (`creerNomination()`). Refus communs : rencontre hors périmètre (club recevant, même critère que `data`), arbitrage non renseigné (`ArbitrageCRA` NULL), nomination déjà existante (« utilisez Modifier »), JA inexistant / `JA1 ≠ 1` / `CodeDept` hors départements autorisés, règle 2 nominations max par JA et par date dans la même salle — règle 3 d'EN14, le club recevant n'intervient pas (`controlerJourJa()` → `nominationsJourJa()`, partagée avec `modifier`, EN14 et EN25). **Arbitrage club** — en transaction, même création qu'EN25 (`ArbitreClubController::enregistrer`, logique dupliquée dans `creerNomination()`) : `disponible` (JA, rencontre) réutilisée ou créée avec `Reponse = 'P'`, `DateReponse = CURDATE()`, note « Juge-arbitre saisi depuis EN28 (arbitrage club) », puis `nomination` (`Peage`/`Kilometre`/`Defiscalisation` saisis, `DateSaisie = CURDATE()`, `EmailEnvoye = 0`). **Arbitrage CRA** — mêmes règles qu'EN14 (`verifierEtNommer` / `resoudreDisponible` / `affecterNomination`), **disponibilité stricte comprise** : dans la transaction, `controlerDispoCra()` pose les verrous `FOR UPDATE` (rencontre, JA, lignes `disponible` du JA pour la rencontre/journée), revérifie JA actif + `CodeDept` autorisé, puis applique `jaDisponiblePourNomination()` (`config/app_config.php`, même règle que `sqlDispoRencontre()` d'EN14) : une réponse 'O' sur la rencontre ou la journée exigée ET aucune réponse 'N' ni sur la rencontre ni sur la journée — sans réponse ou 'P' seul : refus « Ce JA n'est pas disponible pour cette rencontre (aucune réponse « oui »). », un 'N' (même avec un 'O') : refus « Ce JA n'est plus disponible pour cette rencontre/journée (il a répondu « non »). » (messages d'EN14) ; ensuite `controlerJourJa()`. La ligne 'O' est réutilisée (`disponibleOuiCra()`) : 'O' rencontre telle quelle, sinon la ligne rencontre est matérialisée en 'O' (DateReponse de la réponse 'O' journée, note « Juge-arbitre nommé depuis EN28 (arbitrage CRA) ») — aucune ligne 'P' n'est créée en CRA ; puis `nomination` comme EN14 (`DateNomination = CURDATE()`, `EmailEnvoye = 0`, frais et `DateSaisie` non renseignés — le JA les saisit en EN21 ; « Rappel » reste disponible). La convocation s'envoie ensuite depuis EN14 (`EmailEnvoye = 0`). Saisie concurrente bloquée par `uq_nomination_rencontre`. **Aucun email envoyé** ; la liste est rechargée. Une nomination CRA existante se corrige par `modifier` (JA, frais) |
 | `suivi-nomination/modifier` | POST | `id_nomination`, `id_ja`, `arbitrage` (1 = CRA, 0 = Club), `peage`, `km`, `defisc`, `f131` (case « FFTT 131 » de la popup, 0/1, facultatif) → en transaction : met à jour `rencontre.ArbitrageCRA` et `nomination` (`Peage`, `Kilometre`, `Defiscalisation`, `DateSaisie = CURDATE()`). Si le JA change : 2 nominations max par JA et par date ; **vers un arbitrage CRA** (`arbitrage` = 1 : CRA→CRA ou club→CRA), même règle stricte qu'à la nomination CRA de `saisir` et qu'EN14 (`controlerDispoCra()` : verrous, JA actif et `CodeDept` autorisé, `jaDisponiblePourNomination()`, mêmes messages), puis la ligne 'O' est réutilisée / matérialisée (`disponibleOuiCra()`, note « Juge-arbitre modifié depuis EN28 ») ; **vers un arbitrage club** (CRA→club, club→club) : souple, inchangé — JA actif exigé, `disponible` (JA, rencontre) réutilisée (rouverte en `P` si `N`) ou créée en `P` avec la note « Juge-arbitre modifié depuis EN28 » ; aucun contrôle de disponibilité si le JA ne change pas (simple modification des frais / de l'arbitrage) ; `EmailEnvoye`, `DateNomination` inchangés ; `AccuseReception = NULL` (l'accusé de l'ancien JA n'est pas hérité, seulement si la colonne existe — accusé conservé si le JA ne change pas) ; `F131` = valeur de la case « FFTT 131 » de la popup (préremplie par `data`, autre valeur que 0/1 refusée ; `f131` absent de la requête → `F131 = 0` comme avant), seulement si la colonne existe. Envoi **multipart** : `peage_fichier` (facultatif) = nouveau justificatif de péage, ou `peage_supprimer` = 1 pour le retirer (`FichierPeage = NULL` + fichier supprimé) ; ni l'un ni l'autre → justificatif inchangé (voir « Justificatif de péage »). Refus hors périmètre du nominateur |
-| `suivi-nomination/peage/fichier` | GET | `nom` → affiche un justificatif de `_Peage/` (`inline`, Content-Type réel, `nosniff`, `Cache-Control: private, no-store`) si le nom respecte `^\d{17}\.(jpg|jpeg|png|gif|webp|pdf)$`, est porté par une nomination du périmètre (club recevant) et est retrouvé dans la liste serveur ; 404 « Justificatif introuvable. » sinon |
+| `suivi-nomination/peage/fichier` | GET | `nom` → affiche un justificatif de `_Peage/` (`inline`, Content-Type réel, `nosniff`, `Cache-Control: private, no-store`) si le nom respecte `^\d{17}\.(jpg|jpeg|png|gif|webp|pdf)$`, est porté par une nomination du périmètre (club recevant) et est retrouvé dans la liste serveur ; 404 « Justificatif introuvable. » sinon — y compris pour un justificatif existant **hors périmètre** (même 404 neutre que l'absence, ni existence ni département révélés ; journal interne `error_log` sans le nom du fichier) |
 | `suivi-nomination/rappel` | POST | `id_nomination` → envoie au JA le modèle messagerie n°3 (Convocation, `resoudreModeleMessagerie()` : modèle personnalisé du nominateur si présent), marqueurs de `construireMarqueursMessage()` ; Cc/Reply-To selon le modèle ; passe par `getEmailDestinataire()` (mode Développement). Refus si nomination hors périmètre, frais déjà saisis (`DateSaisie` renseignée), ou JA sans email |
 | `suivi-nomination/f131/fichier` | GET | → `{ok, fichiers: [{nom, taille, date}], fichier, suivis: [{nom, taille, date}]}` (`suivis` = 10 derniers journaux CSV de `_Suivi/`, bloc « Fichiers de suivi ») : tous les `131_*.xlsx` du dossier serveur `Importation/`, du plus récent au plus ancien (date de modification ; temporaires Excel `~$*` exclus), `fichier` = le plus récent ou null — étape 2 de la popup |
-| `suivi-nomination/f131/supprimer` | POST | `nom` → supprime **un seul** fichier 131 : nom validé par la regex `131_[0-9A-Za-z_-]+.xlsx` puis retrouvé à l'identique dans la liste calculée côté serveur (motif fixe, pas de lien, `realpath` directement dans `Importation/`) ; jamais de chemin client, `~$*` et autres motifs refusés ; fichier verrouillé → message clair → `{ok, msg, fichiers, fichier}` |
+| `suivi-nomination/f131/supprimer` | POST | **Administrateurs seulement** (`is_admin` ; sinon `{ok: false, msg: « Action réservée aux administrateurs. »}`, et le bouton est masqué dans la popup) · `nom` → supprime **un seul** fichier 131 : nom validé par la regex `131_[0-9A-Za-z_-]+.xlsx` puis retrouvé à l'identique dans la liste calculée côté serveur (motif fixe, pas de lien, `realpath` directement dans `Importation/`) ; jamais de chemin client, `~$*` et autres motifs refusés ; fichier verrouillé → message clair → `{ok, msg, fichiers, fichier}` |
 | `suivi-nomination/f131/televerser` | POST | Multipart `xlsx` → enregistré dans `Importation/` sous un nom **généré par le serveur** `131_<jjmmaaaaHHMMSS>.xlsx` (jamais le nom client, extension forcée `.xlsx`) après contrôles (extension, MIME xlsx/zip, 5 Mo max, classeur reconnu par le lecteur Xlsx) ; les autres fichiers 131 ne sont pas touchés → `{ok, msg, fichiers, fichier}` (étape 3) |
 | `suivi-nomination/f131/apercu` | POST | Sans paramètre : le fichier `131_*.xlsx` le plus récent d'`Importation/` (chemin construit côté serveur, jamais fourni par le client) → analyse **sans aucune écriture** → `{ok, fichier, nbLignes, vides, ignores, horsOrganisme, organismes, divisions, dateMin, dateMax, retenues, nonRapprochees, horsPerimetre, autresDivisions, lignesDivisions, dejaNommees, aRenseigner, ignorees, nb, rencontres[]}` (voir « Mise à jour FFTT 131 ») |
 | `suivi-nomination/f131/suivi` | GET | `nom` → sert un journal CSV de `_Suivi/` en téléchargement (`text/csv; charset=UTF-8`, `attachment`, `nosniff`) après regex stricte + nom retrouvé dans la liste serveur ; 404 sinon (voir « Journal CSV ») |
 | `suivi-nomination/f131/appliquer` | POST | `fichier`, `nb` (contrôle de cohérence seulement, aucune donnée de ligne) → le serveur relit et recalcule tout, crée en une transaction les nominations des rencontres R3M / R4M sans JA (`F131 = 1`), écrit le journal `_Suivi/suivi_131_<aaaammjj_HHMMSS>.csv` → `{ok, msg, nb, lignes[], journal}` (voir « Mise à jour FFTT 131 ») |
 | `suivi-nomination/relance-club` | POST | `id_rencontre` → « Relancer le club » (bouton enveloppe orange de la colonne Rappel, affiché seulement si `ArbitrageCRA = 0` et aucune nomination, désactivé sans `Club.CorEmail` — fourni par `data`, `LEFT JOIN club`) : **envoi immédiat au correspondant du club, sans confirmation** ; bouton désactivé pendant l'appel puis toast du résultat (« Demande envoyée à … (N destinataires) » ou message d'erreur du serveur, échappé par `escHtml()` comme tous les `msg` serveur affichés en toast sur EN28). Envoie le message n°7 « JA Club » (lien public EN25) via `envoyerDemandeJaClub()` (`config/app_config.php`), le même cœur d'envoi que `nomination/demander-ja-club` (EN14) : modèle perso du nominateur sinon système (`resoudreModeleMessagerie()`), marqueurs `construireMarqueursMessage()`, référent en Cc, Cc/Reply-To du modèle, `getEmailDestinataire()` (mode Développement). En plus d'EN14 : `checkRateLimit(1)` / `enregistrerEnvois(1)`. Refus si hors périmètre (club recevant), JA déjà désigné (« le club a déjà répondu »), rencontre pas en arbitrage club, ou club sans email de correspondant. Aucun suivi d'envoi en base (pas de colonne « demande envoyée le ») |
 
+### Plafonds des frais (`saisir` / `modifier`)
+Contrôle serveur strict (`controlerFrais()`), avant toute lecture ou écriture en base : **péage** = décimal positif (virgule ou point acceptés, 2 décimales au maximum) **≤ 500 €** ; **kilomètres** = entier positif **≤ 2000** ; champ vide = 0. Messages : « Péage invalide : montant positif en euros, 2 décimales au maximum. », « Le péage ne peut pas dépasser 500 €. », « Kilomètres invalides : nombre entier positif attendu. », « Les kilomètres ne peuvent pas dépasser 2000 km. ». Les champs de la popup portent les mêmes bornes (`min=0`, `max=500` / `max=2000`).
+
 ### Mise à jour FFTT 131
-Bouton **Mise à jour FFTT 131** (bandeau de filtres, premier élément à gauche) → popup, même patron d'interface que l'import des JA depuis l'API FFTT d'EN11 (analyse, compteurs, journal des traitements, résumé final) : (1) explications + lien « Comment obtenir le fichier ? » ouvrant l'aide `asset/aide/import-131.html` (même mécanisme que l'aide 102 d'EN11 : fenêtre séparée, étapes SPID → Éditions → « 131 - Activités détaillées des arbitres », Organismes = départements concernés / Normandie / Tous, N° club et N° licence vides, Format Excel, Générer, enregistrer `131_JJMMAAAAhhmmss.xlsx` ; aide explicative seule, sans sélection de fichier) ; (2) **fichiers présents sur le serveur** (GET `f131/fichier`, à chaque ouverture de la popup) : liste de tous les `131_*.xlsx` du dossier `Importation/` (temporaires Excel `~$*` ignorés), du plus récent au plus ancien, avec nom, taille et date de modification, le plus récent marqué « utilisé par Analyser », et un bouton **Supprimer** (poubelle) par ligne : confirmation `nijacConfirm` (type danger) puis POST `f131/supprimer` (un fichier par appel) et rafraîchissement de la liste ; sinon « Aucun fichier 131_*.xlsx dans Importation » ; (3) bouton **Parcourir…** : choix du `.xlsx` sur le poste puis dépôt immédiat sur le serveur (POST `f131/televerser`, enregistré sous `Importation/131_<jjmmaaaaHHMMSS>.xlsx`, nom généré par le serveur ; aucun ancien fichier supprimé automatiquement), toast « Fichier déposé », puis rafraîchissement de l'étape 2 ; (4) **Analyser** (POST `f131/apercu`, sans paramètre ; désactivé s'il n'y a aucun fichier serveur) : analyse **toujours le fichier du serveur** (le plus récent), aucun fichier n'est posté par le navigateur, **aucune écriture en base** (ni nomination, ni table) ; une analyse **réussie** efface les anciens journaux CSV de `_Suivi/` (voir « Journal CSV »). Contrôles au dépôt : `.xlsx`, MIME xlsx/zip (finfo), 5 Mo max, classeur reconnu par le lecteur Xlsx ; à l'analyse : nom `131_[0-9A-Za-z_-]+.xlsx`, fichier ordinaire (pas de lien) dont le `realpath` est dans `Importation/`, 5 Mo max, ouverture réelle par PhpSpreadsheet (lecteur Xlsx imposé), en-têtes obligatoires. `Importation/` n'est jamais servi en HTTP (`.htaccess` : `RewriteRule ^Importation/ - [F,L]`). Refus « Colonne nomination.F131 absente : chargez l'écran EA98 » tant que la colonne n'existe pas (le bouton reste affiché).
+Bouton **Mise à jour FFTT 131** (bandeau de filtres, premier élément à gauche) → popup, même patron d'interface que l'import des JA depuis l'API FFTT d'EN11 (analyse, compteurs, journal des traitements, résumé final) : (1) explications + lien « Comment obtenir le fichier ? » ouvrant l'aide `asset/aide/import-131.html` (même mécanisme que l'aide 102 d'EN11 : fenêtre séparée, étapes SPID → Éditions → « 131 - Activités détaillées des arbitres », Organismes = départements concernés / Normandie / Tous, N° club et N° licence vides, Format Excel, Générer, enregistrer `131_JJMMAAAAhhmmss.xlsx` ; aide explicative seule, sans sélection de fichier) ; (2) **fichiers présents sur le serveur** (GET `f131/fichier`, à chaque ouverture de la popup) : liste de tous les `131_*.xlsx` du dossier `Importation/` (temporaires Excel `~$*` ignorés), du plus récent au plus ancien, avec nom, taille et date de modification, le plus récent marqué « utilisé par Analyser », et, **pour un administrateur seulement**, un bouton **Supprimer** (poubelle) par ligne : confirmation `nijacConfirm` (type danger) puis POST `f131/supprimer` (un fichier par appel) et rafraîchissement de la liste ; sinon « Aucun fichier 131_*.xlsx dans Importation » ; (3) bouton **Parcourir…** : choix du `.xlsx` sur le poste puis dépôt immédiat sur le serveur (POST `f131/televerser`, enregistré sous `Importation/131_<jjmmaaaaHHMMSS>.xlsx`, nom généré par le serveur ; aucun ancien fichier supprimé automatiquement), toast « Fichier déposé », puis rafraîchissement de l'étape 2 ; (4) **Analyser** (POST `f131/apercu`, sans paramètre ; désactivé s'il n'y a aucun fichier serveur) : analyse **toujours le fichier du serveur** (le plus récent), aucun fichier n'est posté par le navigateur, **aucune écriture en base** (ni nomination, ni table) ; une analyse **réussie** efface les anciens journaux CSV de `_Suivi/` (voir « Journal CSV »). Contrôles au dépôt : `.xlsx`, MIME xlsx/zip (finfo), 5 Mo max, classeur reconnu par le lecteur Xlsx ; à l'analyse : nom `131_[0-9A-Za-z_-]+.xlsx`, fichier ordinaire (pas de lien) dont le `realpath` est dans `Importation/`, 5 Mo max, ouverture réelle par PhpSpreadsheet (lecteur Xlsx imposé), en-têtes obligatoires. `Importation/` n'est jamais servi en HTTP (`.htaccess` : `RewriteRule ^Importation/ - [F,L]`). Refus « Colonne nomination.F131 absente : chargez l'écran EA98 » tant que la colonne n'existe pas (le bouton reste affiché).
+
+**Limites de lecture** (`lire131()`, avant analyse) : taille **décompressée** de l'archive xlsx contrôlée par `ZipArchive` AVANT tout chargement (somme des `size` des entrées ≤ 50 Mo, sinon « Fichier 131 trop volumineux une fois décompressé (50 Mo maximum). ») ; au plus **20 000 lignes** chargées (filtre de lecture PhpSpreadsheet, rien n'est lu au-delà) — au-delà : « Fichier 131 trop long : plus de 20 000 lignes. Aucune ligne n'a été analysée. » Un fichier 131 normal n'est pas concerné.
 
 **Fichier 131** (une feuille ; ligne 1 = titre, ligne 2 = en-têtes, repérée par A = « N° Licence » et G = « Arb/JA » dans les 10 premières lignes) : A N° Licence · B Nom · C Prénom · D N Club · E Club · F Fonction · G Arb/JA · H Type épreuve · I Date (texte JJ/MM/AAAA, date Excel numérique acceptée) · J N° Journée / Tour · K Poule · L Equipe 1 · M Equipe 2 · N Organisme Division · O Division · P Epreuve. Seules les lignes **G = « JA »** (après trim, insensible à la casse) sont retenues ; les autres (Arb, JAA, Arb/JA…) sont ignorées et comptées par valeur, les lignes vides comptées à part. Parmi les lignes JA, seules celles dont la colonne **N (Organisme Division) vaut exactement `L09` ou `FEDE`** (après trim, insensible à la casse ; constante `SuiviNominationController::ORGANISMES_131`) sont conservées ; les autres sont seulement comptées (`horsOrganisme`). Colonne A = `ja.Id_JA` (licence, espaces retirés, entier). Lecture : `lire131()` (public static, sans base). La division retenue est celle de la base (`equipe.Division` de l'équipe recevante), pas la colonne O (libellé long).
 
@@ -1177,7 +1210,7 @@ Bouton **Mise à jour FFTT 131** (bandeau de filtres, premier élément à gauch
 
 **Application** (bouton ci-dessus, confirmation `nijacConfirm`) : POST `f131/appliquer` avec seulement `fichier` (nom du fichier analysé, regex `F131_MOTIF_NOM`) et `nb` (N affiché) — **aucune donnée de ligne** ; ils ne servent qu'au contrôle de cohérence. `f131Appliquer()` relit le fichier le plus récent du serveur et **recalcule tout** (`analyserFichier131()`) : autre fichier → refus « Le fichier le plus récent du serveur a changé… relancez l'analyse » ; N différent → refus « La situation a changé depuis l'analyse… » ; N = 0 → refus sans écriture. Puis, dans **une** transaction, pour chaque rencontre « À renseigner » (`ecrireCreation131()`) : `disponible` réutilisée/matérialisée en 'O' (arbitrage CRA, `disponibleOuiCra()`) ou 'P' (club, `disponibleClub()`), note « Juge-arbitre renseigné depuis le fichier FFTT 131 le jj/mm/aaaa », et `nomination` avec `F131 = 1`, `Peage = 0`, `Kilometre = 0`, `Defiscalisation = 0`, `DateSaisie = CURDATE()`, `DateNomination = CURDATE()`, `EmailEnvoye = 0`, `AccuseReception` NULL. Jamais de remplacement. Création concurrente (`uq_nomination_rencontre`) → **rollback complet**, « Un JA a été nommé entre-temps sur une de ces rencontres : aucune modification enregistrée, relancez l'analyse ». **Aucun email.** Réponse `{ok, msg, nb, lignes[], journal}` : la popup affiche le message, le nom du journal CSV, les compteurs (renseignées / ignorées) et le tableau de **tous les traitements** (« Renseigné (nomination n) » / « Ignoré : motif ») ; la liste EN28 est rechargée (repère « 131 »).
 
-**Journal CSV** (`ecrireJournal131()`) : à chaque application réussie, un fichier `_Suivi/suivi_131_<aaaammjj_HHMMSS>.csv` (dossier à la racine du projet, créé par le serveur s'il manque ; nom généré par le serveur, création exclusive `fopen('x')`, suffixe `_2`… si la seconde est déjà prise), UTF-8 avec BOM, séparateur `;`, fin de ligne CRLF, guillemets échappés par `fputcsv()`, chaque champ neutralisé contre l'injection de formule (`csvSafe()`). En-tête puis une ligne par nomination créée : Horodatage, Utilisateur (login), Id_Rencontre, Date rencontre, Division, Equipe recevante, Equipe visiteuse, Id_Nomination, Id_Disponible, Id_JA, Nom, Prenom, F131, Peage, Kilometre, Defiscalisation, DateSaisie. Écrit **avant** le commit : journal impossible → rollback (« aucune modification enregistrée ») ; commit en échec → journal supprimé. `_Suivi/` n'est jamais servi en HTTP (`.htaccess` racine : `RewriteRule ^_Suivi/ - [F,L]`, plus `_Suivi/.htaccess` « Require all denied » ; `_Suivi/.gitignore` exclut les `*.csv`) . **Ouverture** : uniquement par la route authentifiée GET `f131/suivi?nom=…` (`f131Suivi()`, filtre `auth`) : nom validé par la regex `suivi_131_\d{8}_\d{6}(_\d{1,2})?.csv` puis retrouvé à l'identique dans la liste calculée côté serveur (`fichiersSuivi()` : glob fixe, pas de lien symbolique, `realpath` directement dans `_Suivi/`), jamais de chemin client ; réponse `text/csv; charset=UTF-8`, `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`, `Cache-Control: private, no-store` ; sinon 404 « Fichier de suivi introuvable. ». Après une application réussie, le nom du journal est suivi d'un lien **Ouvrir le fichier de suivi** ; la popup affiche aussi, sous le compte rendu, un bloc **Fichiers de suivi** (10 derniers CSV de `_Suivi/`, nom, taille, date, plus récent d'abord, fournis par `f131/fichier` → `suivis[]`) avec un lien d'ouverture par ligne. **Purge automatique** : chaque analyse **réussie** (`f131Apercu()`, après lecture et analyse du fichier, avant la réponse ; jamais en cas d'erreur, jamais à l'application ni au dépôt) supprime tous les journaux de `_Suivi/` listés par `fichiersSuivi()` (même regex stricte, pas de lien, `realpath` dans `_Suivi/` — jamais `.htaccess`, `.gitignore` ni autre fichier) via `purgerSuivis131()` ; un fichier non supprimable (verrouillé, droits) n'interrompt pas l'analyse. Réponse : `suivisSupprimes` (nombre) et `suivisNonSupprimes` (noms) → ligne « Anciens fichiers de suivi supprimés : n » + avertissement le cas échéant ; le bloc « Fichiers de suivi » est rafraîchi. Un journal créé par une application reste donc disponible jusqu'à la prochaine analyse. Aucun contenu de CSV lu ni journalisé. Aucune autre suppression de CSV. Journal serveur (`error_log`) : classe / code d'exception seulement, jamais de donnée du fichier.
+**Journal CSV** (`ecrireJournal131()`) : à chaque application réussie, un fichier `_Suivi/suivi_131_<aaaammjj_HHMMSS>.csv` (dossier à la racine du projet, créé par le serveur s'il manque ; nom généré par le serveur, création exclusive `fopen('x')`, suffixe `_2`… si la seconde est déjà prise), UTF-8 avec BOM, séparateur `;`, fin de ligne CRLF, guillemets échappés par `fputcsv()`, chaque champ neutralisé contre l'injection de formule (`csvSafe()`). En-tête puis une ligne par nomination créée : Horodatage, Utilisateur (login), Id_Rencontre, Date rencontre, Division, Equipe recevante, Equipe visiteuse, Id_Nomination, Id_Disponible, Id_JA, Nom, Prenom, F131, Peage, Kilometre, Defiscalisation, DateSaisie. Écrit **avant** le commit : journal impossible → rollback (« aucune modification enregistrée ») ; commit en échec → journal supprimé. `_Suivi/` n'est jamais servi en HTTP (`.htaccess` racine : `RewriteRule ^_Suivi/ - [F,L]`, plus `_Suivi/.htaccess` « Require all denied » ; `_Suivi/.gitignore` exclut les `*.csv`) . **Ouverture** : uniquement par la route authentifiée GET `f131/suivi?nom=…` (`f131Suivi()`, filtre `auth`) : nom validé par la regex `suivi_131_\d{8}_\d{6}(_\d{1,2})?.csv` puis retrouvé à l'identique dans la liste calculée côté serveur (`fichiersSuivi()` : glob fixe, pas de lien symbolique, `realpath` directement dans `_Suivi/`), jamais de chemin client ; réponse `text/csv; charset=UTF-8`, `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`, `Cache-Control: private, no-store` ; sinon 404 « Fichier de suivi introuvable. ». Après une application réussie, le nom du journal est suivi d'un lien **Ouvrir le fichier de suivi** ; la popup affiche aussi, sous le compte rendu, un bloc **Fichiers de suivi** (10 derniers CSV de `_Suivi/`, nom, taille, date, plus récent d'abord, fournis par `f131/fichier` → `suivis[]`) avec un lien d'ouverture par ligne. **Purge automatique** (administrateur seulement : l'analyse d'un non-admin n'efface aucun journal, réponse `suivisPurge = false` et pas de ligne « Anciens fichiers… ») : chaque analyse **réussie** d'un administrateur (`f131Apercu()`, après lecture et analyse du fichier, avant la réponse ; jamais en cas d'erreur, jamais à l'application ni au dépôt) supprime tous les journaux de `_Suivi/` listés par `fichiersSuivi()` (même regex stricte, pas de lien, `realpath` dans `_Suivi/` — jamais `.htaccess`, `.gitignore` ni autre fichier) via `purgerSuivis131()` ; un fichier non supprimable (verrouillé, droits) n'interrompt pas l'analyse. Réponse : `suivisPurge` (true si la purge a eu lieu), `suivisSupprimes` (nombre) et `suivisNonSupprimes` (noms) → ligne « Anciens fichiers de suivi supprimés : n » (affichée seulement si `suivisPurge`) + avertissement le cas échéant ; le bloc « Fichiers de suivi » est rafraîchi. Un journal créé par une application reste donc disponible jusqu'à la prochaine analyse. Aucun contenu de CSV lu ni journalisé. Aucune autre suppression de CSV. Journal serveur (`error_log`) : classe / code d'exception seulement, jamais de donnée du fichier.
 
 **Colonne `nomination.F131`** (`TINYINT(1) NOT NULL DEFAULT 0`, après `EmailEnvoye`, créée par `initTableConfiguration()` — EA98) : 1 = la nomination a été renseignée depuis le fichier 131. Modifiable à la main dans la popup « Modifier » d'EN28 (case **FFTT 131**, même style que Défiscalisation, préremplie, absente de « Saisir le JA »/« Nommer un JA ») : `modifier` enregistre la valeur de la case (sans case dans la requête : remise à 0). EN14 `affecterNomination()` la remet à 0 lors d'un changement de JA. Le repère « 131 » et le filtre FFTT 131 suivent la valeur enregistrée (grille rechargée). Lue/écrite seulement si présente (`nominationAF131()`, cache par requête).
 
@@ -1672,6 +1705,7 @@ Gérer les comptes utilisateurs de l'application (création, modification, suppr
 | Département | Entier (ex : 76) | Oui |
 | Actif | Booléen | Oui |
 | `ChangeLogin` | Booléen | Forcé à 1 quand un mot de passe est généré |
+| `PwdVersion` | `INT UNSIGNED NOT NULL DEFAULT 0` (créée par EA98) — version du mot de passe, non affichée | Incrémentée à chaque changement de mot de passe (E006, E008, case Écraser) |
 
 ### Actions AJAX
 | Action | Méthode | Description |
@@ -1687,6 +1721,7 @@ Gérer les comptes utilisateurs de l'application (création, modification, suppr
 - Rôles valides : lus dynamiquement dans l'ENUM `utilisateur.Role`
 - Un utilisateur ne peut pas supprimer son propre compte
 - Un utilisateur ne peut ni se désactiver ni modifier son propre rôle (refus `update`) : aucun état de session incohérent possible
+- Effet sur les sessions ouvertes d'un **autre** compte : désactivation, suppression ou changement de rôle → session détruite à sa prochaine revalidation par les filtres (au plus 1 minute, `revaliderSessionUtilisateur()`) ; case **Écraser** → `PwdVersion + 1` (si la colonne existe) → idem. Rien d'autre à faire dans EA86. Écraser son **propre** mot de passe : la session est relue en base (nouvelle version) et passe en changement forcé (E006)
 - **Rafraîchissement du profil** : quand l'administrateur modifie son propre compte (même `Id_Utilisateur` que la session), `update()` relit la ligne en base et réécrit `$_SESSION['utilisateur']` (id_departement, login, nom, prenom, role, is_admin, email, change_login) via `construireSessionUtilisateur()` (`config/app_config.php`, partagée avec la connexion `AuthController::ouvrirSession()`), par un `session_start()` brut puis `session_write_close()`. Jamais appliqué à un autre compte. Aucun cache de périmètre : `getDepartementsAutorises()` relit la configuration à chaque appel, le nouveau département est actif dès la requête suivante, sans reconnexion
 
 ---
@@ -1922,7 +1957,7 @@ Créer et gérer les modèles de messages utilisés pour les convocations, rappe
 ## EA96 – Test API FFTT
 
 **Fichier :** `fftt_test.php`  
-**Accès :** Administrateur (uniquement utilisateur `CHAUTARD`, même restriction que EA98)
+**Accès :** Administrateur (uniquement utilisateur `CHAUTARD`, même restriction que EA98) + double authentification TOTP (EA99) : `guardChautard()` appelle `TotpChautard::controlerAcces('fftt-test')` — sans session déverrouillée, la page renvoie vers EA99 et les appels AJAX/POST reçoivent `{ok:false, totp:true, url, msg}`
 
 ### Objectif
 Interface de diagnostic/débogage de l'intégration API FFTT (Smartping v2) : vérifier les identifiants, appeler manuellement chaque endpoint FFTT et inspecter la réponse brute (XML/JSON) sans écrire en base. Réutilise la même classe partagée `Classes/FfttApi.php` (factory `getFfttApi()`) que les écrans d'import réels (EN11, EN27, EA81, EA82, EA83) — il n'existe qu'un seul client FFTT dans l'application.
@@ -1959,7 +1994,14 @@ Interface de diagnostic/débogage de l'intégration API FFTT (Smartping v2) : v�
 ## EA98 – Administration base de données
 
 **Fichier :** `DbAdminController` (CI4)  
-**Accès :** Administrateur (uniquement utilisateur `CHAUTARD`)
+**Accès :** Administrateur (uniquement utilisateur `CHAUTARD`) + double authentification TOTP (EA99, `TotpChautard::controlerAcces('db-admin')` dans `guardChautard()`)
+
+> **2FA TOTP** — l'accès à EA98 est déverrouillé par EA99 (code TOTP ou code de secours, session
+> valide 30 min glissantes) : aucun code TOTP n'est redemandé ensuite par action. Les actions `sql`,
+> `charger-fichier-sql` et `supprimer-fichier-sql` exigent seulement le mot de passe
+> (`verifierMdpRequete()`). Réponse `res.totp` (session TOTP expirée) → retour vers EA99. `initTableConfiguration()` crée les colonnes
+> `utilisateur.TotpSecret` / `TotpDernierPas` / `TotpSecours` ; avant ce passage, pas de contrôle
+> TOTP (accès journalisé `[NIJAC][SEC]`).
 
 > **Portage CI4** — la section ci-dessous décrit l'ancien `db-admin.php` (3 onglets
 > Données/Structure/Requêteur, ~16 actions AJAX) et n'est plus à jour. La version CI4
@@ -1975,6 +2017,10 @@ Interface de diagnostic/débogage de l'intégration API FFTT (Smartping v2) : v�
 >   Double-clic sur une cellule → génère un `UPDATE` ciblé (SELECT mono-table, PK
 >   détectée via `SHOW KEYS`).
 > - `initTableConfiguration()` est rejoué à chaque ouverture de l'écran (best-effort).
+>   Il crée notamment `utilisateur.PwdVersion` (`INT UNSIGNED NOT NULL DEFAULT 0`, après
+>   `ChangeLogin`, idempotent) : version du mot de passe, incrémentée par E006 / E008 / EA86
+>   « Écraser » et comparée à la session par la revalidation des filtres. Avant ce passage,
+>   l'application fonctionne sans contrôle de version (`utilisateurAPwdVersion()`).
 > - Bandeau avec lien vers EA97 (BugSpid).
 
 ### Objectif
@@ -2051,4 +2097,51 @@ Interface d'administration directe de la base de données MySQL : consultation, 
 - CSRF vérifié sur toutes les actions POST
 - Tous les noms de tables et colonnes sont validés par regex `^\w+$` avant injection dans les requêtes
 - Les noms de colonnes dans `insert` / `update` sont comparés à la liste réelle de `DESCRIBE` avant utilisation
+- Accès soumis en plus à la double authentification TOTP (session déverrouillée par EA99) ; `sql` / charger / supprimer : mot de passe redemandé, pas de code TOTP par action (voir l'encadré en tête de section)
+
+---
+
+## EA99 – Sécurité TOTP
+
+**Fichier :** `TotpController` (CI4), vue `ci4/app/Views/totp_index.php`, bibliothèque `App\Libraries\TotpChautard`  
+**Accès :** Administrateur (filtre `adminauth`) + login `CHAUTARD` vérifié dans le contrôleur (même règle que EA96/EA97/EA98 ; autre login → redirection vers E002 en GET, `{ok:false, msg:'Accès refusé.'}` en POST). Bouton EA99 dans l'onglet **DBA** de E002.
+
+### Objectif
+Double authentification TOTP (RFC 6238 — SHA-1, 6 chiffres, pas de 30 s, tolérance ±1 pas, compatible Google Authenticator) exigée par les écrans réservés à CHAUTARD : **EA96** (Test API FFTT), **EA97** (BugSpid) et **EA98** (Administration BDD). Leurs `guardChautard()` appellent `TotpChautard::controlerAcces('fftt-test' | 'bug-spid' | 'db-admin')` après la vérification du login : session non déverrouillée ou 2FA non activée → redirection vers `securite-totp?retour=…` (page GET) ou réponse JSON `{ok:false, totp:true, url, msg}` (AJAX / POST). Le paramètre `retour` est filtré par liste blanche (`TotpChautard::RETOURS`, défaut `db-admin`), jamais une URL client.
+
+### Routes
+| Route | Méthode | Description |
+|-------|---------|-------------|
+| `securite-totp` | GET | Page selon l'état : **absent** (colonnes non créées → « chargez EA98 »), **activation** (2FA non activée), **saisie** (code à saisir), **déverrouillé** (session valide, nombre de codes de secours restants), **erreur** |
+| `securite-totp/activer` | POST | `password` + `code` : mot de passe redemandé (une session volée ne peut pas enrôler son propre téléphone) + premier code valide du secret proposé → secret enregistré chiffré, 8 codes de secours renvoyés **une seule fois** ; `session_regenerate_id(true)`, session déverrouillée |
+| `securite-totp/verifier` | POST | `code` à 6 chiffres (espaces retirés), anti-rejeu → session déverrouillée, réponse `{ok, msg, url}` (écran de retour) |
+| `securite-totp/secours` | POST | `code` de secours au format `XXXXX-XXXXX` (usage unique) → session déverrouillée |
+
+CSRF global (filtre `csrf`). Toutes les réponses POST sont du JSON `{ok, msg, …}`.
+
+### Activation
+- Secret de 20 octets aléatoires (base32), proposé à l'ouverture de la page et gardé en session **chiffré** (`$_SESSION['totp_activation']`) 15 minutes le temps de scanner ; expiré → « Secret expiré : rechargez la page… ».
+- Affichage : QR code de l'URI `otpauth://totp/NIJAC:<login>?secret=…&issuer=NIJAC` généré côté navigateur par `asset/js/nijac-qrcode.js` (encodeur QR maison, SVG, sans dépendance ni CDN) + secret en clair pour une saisie manuelle.
+- Validation = mot de passe **et** premier code ; `UPDATE … WHERE TotpSecret IS NULL` (pas d'écrasement d'une 2FA déjà active). Les 8 codes de secours s'affichent alors une seule fois, à conserver hors ligne.
+- À côté de « Imprimer », le bouton « Enregistrer dans un fichier texte » (masqué à l'impression) télécharge `nijac-codes-secours-AAAAMMJJ.txt` généré dans le navigateur (Blob, aucun appel serveur ; UTF-8 avec BOM, CRLF pour le Bloc-notes) : titre, login, date/heure, les 8 codes et le rappel d'usage unique / conservation en lieu sûr, puis toast de confirmation.
+
+### Session déverrouillée
+- `$_SESSION['totp_ok_ts']` (+ `totp_ok_id`) : validité **glissante de 30 min** (`TOTP_SESSION_DUREE`), prolongée à chaque accès à EA96/97/98 ; effacée avec la session (déconnexion, `detruireSessionNijac()`).
+- Une fois la session déverrouillée, EA96/97/98 ne redemandent plus de code TOTP (EA98 redemande seulement le mot de passe pour `sql` / charger / supprimer).
+
+### Stockage (colonnes `utilisateur`, créées par EA98 — `initTableConfiguration()`)
+| Colonne | Type | Rôle |
+|---------|------|------|
+| `TotpSecret` | `VARCHAR(255) NULL` | Secret base32 chiffré AES-256-GCM, clé = SHA-256(sel constant `TOTP_SEL_CLE` + pepper `getObfuscatorPepper()`) ; NULL = 2FA non activée |
+| `TotpDernierPas` | `BIGINT NULL` | Dernier pas accepté (anti-rejeu : un pas n'est accepté que s'il est strictement supérieur, `UPDATE` conditionnel — deux requêtes concurrentes avec le même code ne passent pas toutes les deux) |
+| `TotpSecours` | `TEXT NULL` | JSON des 8 codes de secours hachés (`password_hash`), chacun retiré à son utilisation |
+
+### Règles
+- Colonnes absentes (avant EA98, `utilisateurATotp()`) : EA96/97/98 restent accessibles **sans TOTP** (sinon EA98 ne pourrait pas les créer), journalisé `[NIJAC][SEC]` une fois par session.
+- Limitation brute-force : clé `totp:<id>` dans `logs/login_attempts.json` (réglages `login_rate_limit_max` / `login_rate_limit_fenetre`) — échecs de code, de code de secours, de mot de passe ou de code à l'activation.
+- Journal `[NIJAC][SEC] TOTP …` : activation, échecs, code de secours utilisé, secret illisible — jamais un code ni le secret.
+- Changer le pepper (`OBFUSCATOR_PEPPER`) rend le secret **indéchiffrable** : déverrouillage par un code de secours, puis réinitialisation.
+- **Procédure d'urgence** (téléphone perdu, pepper changé, codes de secours épuisés) — console SQL de l'hébergeur (phpMyAdmin), ou EA98 après avoir déverrouillé la session sur EA99 avec un code de secours (puis mot de passe dans EA98) :
+  `UPDATE utilisateur SET TotpSecret=NULL, TotpDernierPas=NULL, TotpSecours=NULL WHERE Login='CHAUTARD';`
+  La prochaine ouverture d'EA96/97/98 renvoie alors vers l'activation EA99.
 

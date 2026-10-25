@@ -263,7 +263,8 @@
 
 <!-- Déconnexion : ligne à part, centrée -->
 <div id="zone-deconnexion">
-    <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;">
+    <form method="post" action="<?= site_url('logout') ?>" id="form-logout" class="d-none"><?= csrf_field() ?></form>
+    <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;" onclick="document.getElementById('form-logout').submit(); return false;">
         <div class="btn-icon"><img src="<?= base_url('img/Quitter.webp') ?>" alt="Se déconnecter"></div>
         <span style="color:#842029;">Se déconnecter</span>
         <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>

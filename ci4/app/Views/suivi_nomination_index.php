@@ -189,11 +189,11 @@
                     </div>
                     <div class="col-4 modif-frais">
                         <label class="form-label small mb-1" for="modif-peage">Péage (€)</label>
-                        <input type="number" id="modif-peage" class="form-control form-control-sm" min="0" step="0.01">
+                        <input type="number" id="modif-peage" class="form-control form-control-sm" min="0" max="500" step="0.01">
                     </div>
                     <div class="col-4 modif-frais">
                         <label class="form-label small mb-1" for="modif-km">Kilomètres</label>
-                        <input type="number" id="modif-km" class="form-control form-control-sm" min="0" step="1">
+                        <input type="number" id="modif-km" class="form-control form-control-sm" min="0" max="2000" step="1">
                     </div>
                     <div class="col-4 d-flex align-items-end modif-frais">
                         <div class="form-check mb-1">
@@ -284,6 +284,8 @@ const SUIVI_BASE = '<?= site_url('suivi-nomination') ?>';
 const DIVISION_NOMS = <?= json_encode($divisionNoms ?? [], JSON_UNESCAPED_UNICODE) ?>;
 /** nomination.FichierPeage présente (EA98) : sinon champ justificatif désactivé. */
 const FICHIER_PEAGE_DISPO = <?= !empty($fichierPeageDispo) ? 'true' : 'false' ?>;
+// Administrateur : bouton « Supprimer » des fichiers 131 du serveur (refusé côté serveur aux autres de toute façon).
+const EST_ADMIN = <?= !empty($estAdmin) ? 'true' : 'false' ?>;
 const JUSTIF_TAILLE_MAX = 5 * 1024 * 1024;
 /** Lien d'ouverture d'un justificatif de péage (route authentifiée, le serveur revalide le nom ; nouvel onglet). */
 const lienJustificatif = nom => $('<a target="_blank" rel="noopener">')
@@ -756,7 +758,7 @@ function afficher131Serveur(r) {
         $l.append($(i ? '<span>' : '<strong>').text(f.nom),
             $('<span class="text-muted">').text(`${taille131(f.taille)}, modifié le ${f.date}`));
         if (!i) $l.append($('<span class="badge text-bg-primary">').text('utilisé par Analyser'));
-        $('<button type="button" class="btn btn-sm btn-outline-danger py-0 ms-auto btn-f131-suppr" title="Supprimer ce fichier du serveur">')
+        if (EST_ADMIN) $('<button type="button" class="btn btn-sm btn-outline-danger py-0 ms-auto btn-f131-suppr" title="Supprimer ce fichier du serveur">')
             .attr('data-nom', f.nom)
             .append('<i class="bi bi-trash"></i>')
             .appendTo($l);
@@ -904,8 +906,11 @@ function afficher131(r) {
     $('<div class="alert alert-info small mb-2" style="white-space:pre-line">')
         .text('Analyse terminée (aucune nomination modifiée).\n' + lignes.join('\n'))
         .appendTo($res);
-    const nonSuppr = Array.isArray(r.suivisNonSupprimes) ? r.suivisNonSupprimes : [];
-    $('<div class="small text-muted mb-2">').text(`Anciens fichiers de suivi supprimés : ${+r.suivisSupprimes || 0}`).appendTo($res);
+    // Purge des anciens journaux faite par le serveur pour un administrateur seulement (suivisPurge).
+    const nonSuppr = r.suivisPurge && Array.isArray(r.suivisNonSupprimes) ? r.suivisNonSupprimes : [];
+    if (r.suivisPurge) {
+        $('<div class="small text-muted mb-2">').text(`Anciens fichiers de suivi supprimés : ${+r.suivisSupprimes || 0}`).appendTo($res);
+    }
     if (nonSuppr.length) {
         $('<div class="alert alert-warning small mb-2">')
             .text(`${nonSuppr.length} fichier(s) de suivi n'ont pas pu être supprimés (ouverts dans Excel ? droits ?) : ${nonSuppr.join(', ')}`)

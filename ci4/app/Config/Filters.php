@@ -37,6 +37,7 @@ class Filters extends BaseFilters
         'adminauth'     => \App\Filters\AdminAuth::class,
         'auth'          => \App\Filters\Auth::class,
         'csrauth'       => \App\Filters\CsrAuth::class,
+        'nominauth'     => \App\Filters\NominateurAuth::class,
         'defiscauth'    => \App\Filters\DefiscalisateurAuth::class,
         'craconvocauth' => \App\Filters\CraConvocAuth::class,
         'canonicalhost' => \App\Filters\CanonicalHost::class,

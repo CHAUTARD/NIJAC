@@ -168,9 +168,19 @@
 
     <div class="pwd-footer">
         <span>NIJAC</span>
+        <?php if (!$succes && !empty($moi['change_login'])): ?>
+        <?php /* Changement forcé : seuls cet écran et la déconnexion sont accessibles (revaliderSessionUtilisateur()). */ ?>
+        <form method="POST" action="<?= site_url('logout') ?>" class="m-0">
+            <?= csrf_field() ?>
+            <button type="submit" class="btn btn-link btn-sm p-0 text-decoration-none" style="font-size:.75rem;">
+                <i class="bi bi-box-arrow-right me-1"></i>Se déconnecter
+            </button>
+        </form>
+        <?php else: ?>
         <a href="<?= esc($retour) ?>" class="text-decoration-none">
             <i class="bi bi-arrow-left me-1"></i>Retour au menu
         </a>
+        <?php endif; ?>
     </div>
 
 </div>

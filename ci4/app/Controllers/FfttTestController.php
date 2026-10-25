@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Libraries\TotpChautard;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
@@ -35,7 +36,8 @@ class FfttTestController extends BaseController
             return redirect()->to(site_url('admin-menu'));
         }
 
-        return null;
+        // 2FA TOTP (EA99) : session déverrouillée par un code récent, sinon redirection / JSON.
+        return TotpChautard::controlerAcces('fftt-test');
     }
 
     // json_encode avec substitution des octets UTF-8 invalides — ne retourne jamais false

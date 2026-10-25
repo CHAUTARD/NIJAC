@@ -23,6 +23,9 @@ $routes->post('login/code/renvoi', 'AuthController::renvoyerCode');
 $routes->get('admin-menu', 'AdminMenuController::index', ['filter' => 'adminauth']);
 
 // ── E003 Menu nominateur ─────────────────────────────────────────────────────
+// Filtre "auth" sans argument = Administrateur ou Nominateur (ou is_admin) seulement ;
+// les rôles CSR, Defiscalisateur et CRA Convoc ne passent que sur les routes dont
+// l'argument les nomme (ex. "auth:CRA Convoc") — voir Filters/Auth.php.
 $routes->get('nominateur-menu', 'NominateurMenuController::index', ['filter' => 'auth']);
 $routes->get('nominateur-menu/convocations-a-envoyer', 'NominateurMenuController::convocationsAEnvoyer', ['filter' => 'auth']);
 $routes->get('nominateur-menu/rencontres-sans-ja', 'NominateurMenuController::rencontresSansJa', ['filter' => 'auth']);
@@ -94,13 +97,17 @@ $routes->put('commune/(:segment)', 'CommuneController::updateCoords/$1', ['filte
 // Filtre "auth" (pas "adminauth") : accessible aux Nominateurs (leurs messages
 // + les systèmes), modification/suppression des messages système restreinte à
 // l'admin dans le contrôleur, comme le fait messagerie.php.
-$routes->get('messagerie', 'MessagerieController::index', ['filter' => 'auth']);
-$routes->get('messagerie/data', 'MessagerieController::data', ['filter' => 'auth']);
-$routes->get('messagerie/data/(:segment)', 'MessagerieController::show/$1', ['filter' => 'auth']);
+// Rôles supplémentaires déclarés en argument d'"auth" (filtrage fin dans le contrôleur) :
+// - CRA Convoc (lien EA93 du menu E009) : écran + lecture + modification/duplication/
+//   suppression, limitées aux messages « CRA Convocation … » (création refusée par le contrôleur) ;
+// - CSR (ES32) : lecture + mise à jour du message n°6 seulement (restreint au n°6 dans le contrôleur).
+$routes->get('messagerie', 'MessagerieController::index', ['filter' => 'auth:CRA Convoc']);
+$routes->get('messagerie/data', 'MessagerieController::data', ['filter' => 'auth:CRA Convoc']);
+$routes->get('messagerie/data/(:segment)', 'MessagerieController::show/$1', ['filter' => 'auth:CSR,CRA Convoc']);
 $routes->post('messagerie', 'MessagerieController::store', ['filter' => 'auth']);
-$routes->put('messagerie/(:segment)', 'MessagerieController::update/$1', ['filter' => 'auth']);
-$routes->post('messagerie/(:segment)/dupliquer', 'MessagerieController::duplicate/$1', ['filter' => 'auth']);
-$routes->delete('messagerie/(:segment)', 'MessagerieController::delete/$1', ['filter' => 'auth']);
+$routes->put('messagerie/(:segment)', 'MessagerieController::update/$1', ['filter' => 'auth:CSR,CRA Convoc']);
+$routes->post('messagerie/(:segment)/dupliquer', 'MessagerieController::duplicate/$1', ['filter' => 'auth:CRA Convoc']);
+$routes->delete('messagerie/(:segment)', 'MessagerieController::delete/$1', ['filter' => 'auth:CRA Convoc']);
 
 // ── EN15 Centre d'envoi ──────────────────────────────────────────────────────
 $routes->get('centrenvoye', 'CentrenvoyeController::index', ['filter' => 'auth']);
@@ -196,33 +203,34 @@ $routes->get('disponibilites', 'DisponibilitesController::index', ['filter' => '
 $routes->get('disponibilites/ja-dept', 'DisponibilitesController::jaDept', ['filter' => 'auth']);
 
 // ── EN14 Nomination des Juges-Arbitres ───────────────────────────────────────
-$routes->get('nomination', 'NominationController::index', ['filter' => 'auth']);
-$routes->get('nomination/journees', 'NominationController::journees', ['filter' => 'auth']);
-$routes->get('nomination/rencontres-journee', 'NominationController::rencontresJournee', ['filter' => 'auth']);
-$routes->get('nomination/candidats-journee', 'NominationController::candidatsJournee', ['filter' => 'auth']);
-$routes->post('nomination/affecter-ja', 'NominationController::affecterJa', ['filter' => 'auth']);
-$routes->post('nomination/retirer-ja', 'NominationController::retirerJa', ['filter' => 'auth']);
-$routes->post('nomination/envoyer-convocations', 'NominationController::envoyerConvocations', ['filter' => 'auth']);
-$routes->get('nomination/message-arbitre-club', 'NominationController::messageArbitreClub', ['filter' => 'auth']);
-$routes->post('nomination/demander-ja-club', 'NominationController::demanderJaClub', ['filter' => 'auth']);
+$routes->get('nomination', 'NominationController::index', ['filter' => 'nominauth']);
+$routes->get('nomination/journees', 'NominationController::journees', ['filter' => 'nominauth']);
+$routes->get('nomination/rencontres-journee', 'NominationController::rencontresJournee', ['filter' => 'nominauth']);
+$routes->get('nomination/candidats-journee', 'NominationController::candidatsJournee', ['filter' => 'nominauth']);
+$routes->post('nomination/affecter-ja', 'NominationController::affecterJa', ['filter' => 'nominauth']);
+$routes->post('nomination/retirer-ja', 'NominationController::retirerJa', ['filter' => 'nominauth']);
+$routes->post('nomination/envoyer-convocations', 'NominationController::envoyerConvocations', ['filter' => 'nominauth']);
+$routes->get('nomination/message-arbitre-club', 'NominationController::messageArbitreClub', ['filter' => 'nominauth']);
+$routes->post('nomination/demander-ja-club', 'NominationController::demanderJaClub', ['filter' => 'nominauth']);
 
 // ── EN26 Statistiques des nominations ────────────────────────────────────────
-// Ouvert dans une nouvelle fenêtre depuis EN14. Récapitulatif journées/rencontres
-// + JA nominés ; la modification du JA réutilise nomination/affecter-ja|retirer-ja.
-$routes->get('stats-nomination', 'StatsNominationController::index', ['filter' => 'auth']);
-$routes->get('stats-nomination/data', 'StatsNominationController::data', ['filter' => 'auth']);
+// Ouvert dans une nouvelle fenêtre depuis EN14 (seul lien). Lecture seule : la vue
+// n'appelle que stats-nomination/data (export CSV généré côté navigateur).
+// Mêmes rôles qu'EN14/EN28 : Nominateur, Administrateur (filtre nominauth, CSR exclu).
+$routes->get('stats-nomination', 'StatsNominationController::index', ['filter' => 'nominauth']);
+$routes->get('stats-nomination/data', 'StatsNominationController::data', ['filter' => 'nominauth']);
 
 // ── EN28 Suivi des nominations ───────────────────────────────────────────────
 // Menu nominateur (E003), après EN14. Nominations du périmètre + frais saisis
 // par le JA (EN21) ; « rappel » renvoie le modèle messagerie n°3 (Convocation) au JA.
-$routes->get('suivi-nomination', 'SuiviNominationController::index', ['filter' => 'auth']);
-$routes->get('suivi-nomination/data', 'SuiviNominationController::data', ['filter' => 'auth']);
-$routes->get('suivi-nomination/ja-liste', 'SuiviNominationController::jaListe', ['filter' => 'auth']);
-$routes->get('suivi-nomination/ja-disponibles', 'SuiviNominationController::jaDisponibles', ['filter' => 'auth']);   // ?rencontre=ID : JA nommables en arbitrage CRA (règle stricte EN14 + 2/jour), JA actuel toujours inclus
-$routes->post('suivi-nomination/modifier', 'SuiviNominationController::modifier', ['filter' => 'auth']);
-$routes->post('suivi-nomination/saisir', 'SuiviNominationController::saisir', ['filter' => 'auth']);   // JA d'une rencontre sans nomination : arbitrage club (saisie) ou CRA (nomination, règles EN14)
-$routes->post('suivi-nomination/rappel', 'SuiviNominationController::rappel', ['filter' => 'auth']);
-$routes->post('suivi-nomination/relance-club', 'SuiviNominationController::relanceClub', ['filter' => 'auth']);
+$routes->get('suivi-nomination', 'SuiviNominationController::index', ['filter' => 'nominauth']);
+$routes->get('suivi-nomination/data', 'SuiviNominationController::data', ['filter' => 'nominauth']);
+$routes->get('suivi-nomination/ja-liste', 'SuiviNominationController::jaListe', ['filter' => 'nominauth']);
+$routes->get('suivi-nomination/ja-disponibles', 'SuiviNominationController::jaDisponibles', ['filter' => 'nominauth']);   // ?rencontre=ID : JA nommables en arbitrage CRA (règle stricte EN14 + 2/jour), JA actuel toujours inclus
+$routes->post('suivi-nomination/modifier', 'SuiviNominationController::modifier', ['filter' => 'nominauth']);
+$routes->post('suivi-nomination/saisir', 'SuiviNominationController::saisir', ['filter' => 'nominauth']);   // JA d'une rencontre sans nomination : arbitrage club (saisie) ou CRA (nomination, règles EN14)
+$routes->post('suivi-nomination/rappel', 'SuiviNominationController::rappel', ['filter' => 'nominauth']);
+$routes->post('suivi-nomination/relance-club', 'SuiviNominationController::relanceClub', ['filter' => 'nominauth']);
 // « Mise à jour FFTT 131 » (popup EN28) : le fichier analysé est TOUJOURS le 131_*.xlsx le plus récent d'Importation/
 // (jamais servi en HTTP). fichier = liste de l'étape 2 (tous les 131_*.xlsx, plus récent d'abord) ; televerser = dépôt
 // xlsx multipart sous un nom généré par le serveur (131_<jjmmaaaaHHMMSS>.xlsx) ; supprimer = UN fichier par appel (`nom`
@@ -231,18 +239,18 @@ $routes->post('suivi-nomination/relance-club', 'SuiviNominationController::relan
 // `nb` attendus, contrôle de cohérence seulement) = le serveur relit et recalcule tout, crée ces nominations (F131 = 1)
 // dans UNE transaction et écrit le journal CSV _Suivi/suivi_131_<aaaammjj_HHMMSS>.csv. (L'ancien écran EN30 « Contrôle
 // FFTT 131 », routes controle-f131*, a été supprimé.)
-$routes->get('suivi-nomination/f131/fichier', 'SuiviNominationController::f131Fichier', ['filter' => 'auth']);
-$routes->post('suivi-nomination/f131/televerser', 'SuiviNominationController::f131Televerser', ['filter' => 'auth']);
-$routes->post('suivi-nomination/f131/supprimer', 'SuiviNominationController::f131Supprimer', ['filter' => 'auth']);
-$routes->post('suivi-nomination/f131/apercu', 'SuiviNominationController::f131Apercu', ['filter' => 'auth']);
-$routes->post('suivi-nomination/f131/appliquer', 'SuiviNominationController::f131Appliquer', ['filter' => 'auth']);
+$routes->get('suivi-nomination/f131/fichier', 'SuiviNominationController::f131Fichier', ['filter' => 'nominauth']);
+$routes->post('suivi-nomination/f131/televerser', 'SuiviNominationController::f131Televerser', ['filter' => 'nominauth']);
+$routes->post('suivi-nomination/f131/supprimer', 'SuiviNominationController::f131Supprimer', ['filter' => 'nominauth']);
+$routes->post('suivi-nomination/f131/apercu', 'SuiviNominationController::f131Apercu', ['filter' => 'nominauth']);
+$routes->post('suivi-nomination/f131/appliquer', 'SuiviNominationController::f131Appliquer', ['filter' => 'nominauth']);
 // ?nom=suivi_131_<aaaammjj_HHMMSS>.csv : ouvre un journal de _Suivi/ (interdit en HTTP direct) — regex stricte + nom retrouvé
 // dans la liste serveur, jamais de chemin client ; 404 sinon. La liste des 10 derniers est fournie par f131/fichier (suivis[]).
-$routes->get('suivi-nomination/f131/suivi', 'SuiviNominationController::f131Suivi', ['filter' => 'auth']);
+$routes->get('suivi-nomination/f131/suivi', 'SuiviNominationController::f131Suivi', ['filter' => 'nominauth']);
 // Justificatif de péage (nomination.FichierPeage, téléversé par la popup « Modifier » via suivi-nomination/modifier) :
 // ?nom=<17 chiffres>.<jpg|jpeg|png|gif|webp|pdf> affiche (inline) un fichier de _Peage/ (interdit en HTTP direct) — regex
 // stricte + nom porté par une nomination du périmètre + retrouvé dans la liste serveur, jamais de chemin client ; 404 sinon.
-$routes->get('suivi-nomination/peage/fichier', 'SuiviNominationController::peageFichier', ['filter' => 'auth']);
+$routes->get('suivi-nomination/peage/fichier', 'SuiviNominationController::peageFichier', ['filter' => 'nominauth']);
 
 // ── EN18 Désidératas club ────────────────────────────────────────────────────
 // Page PUBLIQUE (sans authentification), jeton signé ?club=<Id_Club>-<MAC> — lien
@@ -260,8 +268,7 @@ $routes->post('arbitre-club/enregistrer', 'ArbitreClubController::enregistrer');
 
 // ── EN12 Désidératas clubs ───────────────────────────────────────────────────
 // Nominateur ou Administrateur — retiré du menu CSR (E004), remis dans le menu
-// nominateur (E003). Rôle CSR toujours techniquement autorisé par le filtre
-// "auth" (comme partout ailleurs), mais sans lien de menu vers cet écran.
+// nominateur (E003). Rôle CSR refusé par le filtre "auth" (sans argument "CSR").
 $routes->get('desiderata-clubs', 'DesiderataClubsController::index', ['filter' => 'auth']);
 $routes->get('desiderata-clubs/liste', 'DesiderataClubsController::liste', ['filter' => 'auth']);
 $routes->get('desiderata-clubs/departements', 'DesiderataClubsController::departements', ['filter' => 'auth']);
@@ -382,6 +389,16 @@ $routes->post('db-admin/charger-fichier-sql', 'DbAdminController::chargerFichier
 $routes->post('db-admin/supprimer-fichier-sql', 'DbAdminController::supprimerFichierSql', ['filter' => 'adminauth']);
 $routes->post('db-admin/sql', 'DbAdminController::sql', ['filter' => 'adminauth']);
 
+// ── EA99 Sécurité TOTP (double authentification des écrans EA96 / EA97 / EA98) ─
+// Filtre "adminauth" + login === 'CHAUTARD' vérifié dans TotpController (même règle que
+// EA96/97/98), CSRF global. Page d'activation (QR + secret + mot de passe + 1er code, codes de
+// secours affichés une fois) ou de saisie du code ; les guardChautard() d'EA96/97/98 y renvoient
+// (App\Libraries\TotpChautard) tant que la session n'est pas déverrouillée (30 min glissantes).
+$routes->get('securite-totp', 'TotpController::index', ['filter' => 'adminauth']);
+$routes->post('securite-totp/activer', 'TotpController::activer', ['filter' => 'adminauth']);
+$routes->post('securite-totp/verifier', 'TotpController::verifier', ['filter' => 'adminauth']);
+$routes->post('securite-totp/secours', 'TotpController::secours', ['filter' => 'adminauth']);
+
 // ── EA97 BugSpid (file de corrections Id_Club dupliqué) ─────────────────────
 // Même restriction que EA98 : filtre "adminauth" + login === 'CHAUTARD'
 // vérifié manuellement dans le contrôleur — outil de correction de données,
@@ -398,14 +415,22 @@ $routes->get('bug-spid/nom-club/(:num)', 'BugSpidController::nomClub/$1', ['filt
 $routes->post('bug-spid/(:num)/xml-club-b', 'BugSpidController::testXmlClubB/$1', ['filter' => 'adminauth']);
 
 // ── Déconnexion ──────────────────────────────────────────────────────────────
-$routes->get('logout', 'LogoutController::index');
+// POST (filtre csrf global) : détruit la session + son cookie. GET (anciens favoris) :
+// simple redirection vers E001, la session n'est PAS détruite (pas de déconnexion par
+// lien/image tiers). Seule route accessible, avec changer-mot-de-passe, tant que
+// change_login est vrai (voir revaliderSessionUtilisateur()).
+$routes->post('logout', 'LogoutController::index');
+$routes->get('logout', 'LogoutController::rediriger');
 
 // ── E006 Changement du mot de passe ─────────────────────────────────────────
 // Ouverte depuis la modale toolbar (_modal_mdp.php) sur toute page CI4
-// authentifiée. Filtre "auth" : redirige déjà le rôle JA ailleurs, comme le
-// fait includes/auth_required.php côté legacy pour ce fichier.
-$routes->get('changer-mot-de-passe', 'ChangerMotDePasseController::index', ['filter' => 'auth']);
-$routes->post('changer-mot-de-passe', 'ChangerMotDePasseController::index', ['filter' => 'auth']);
+// authentifiée. Filtre "auth:CSR,Defiscalisateur,CRA Convoc" : tout rôle connecté
+// (la modale / le lien est présent sur les menus E004, E005, E009 et leurs écrans).
+// Changement forcé (change_login) : tous les filtres d'authentification redirigent
+// ici toute autre route que changer-mot-de-passe / logout. Essais du mot de passe
+// actuel limités par compte (mdp_actuel:<id>).
+$routes->get('changer-mot-de-passe', 'ChangerMotDePasseController::index', ['filter' => 'auth:CSR,Defiscalisateur,CRA Convoc']);
+$routes->post('changer-mot-de-passe', 'ChangerMotDePasseController::index', ['filter' => 'auth:CSR,Defiscalisateur,CRA Convoc']);
 
 // ── E007 Mot de passe oublié (demande) + E008 Réinitialisation (lien email) ──
 // Pages PUBLIQUES (aucun filtre auth) : l'utilisateur n'est pas connecté. Le
@@ -458,6 +483,10 @@ $routes->post('disponibilite-ja/sauvegarder-arbitrage-voisins', 'DisponibiliteJa
 
 // ── E004 Menu CSR ────────────────────────────────────────────────────────────
 // Rôle CSR (Commission Sportive Régionale) ou Administrateur — voir CsrAuth.php.
+// Le rôle CSR n'a accès qu'aux écrans de ce menu (E004, ES31, ES32, ES33 :
+// "csrauth") + routes partagées dont l'argument "auth:…" contient CSR
+// (changer-mot-de-passe, messagerie/data/(:segment) et PUT messagerie/(:segment)
+// pour ES32). Le filtre "auth" sans argument et "nominauth" le refusent.
 $routes->get('csr-menu', 'CsrMenuController::index', ['filter' => 'csrauth']);
 
 // ── ES32 Message Réengagement CSR ────────────────────────────────────────────
@@ -481,10 +510,14 @@ $routes->post('club-csr/envoyer', 'ClubCsrController::envoyer', ['filter' => 'cs
 
 // ── E005 Menu Défiscalisateur ────────────────────────────────────────────────
 // Rôle Defiscalisateur ou Administrateur — voir DefiscalisateurAuth.php.
+// Le rôle Defiscalisateur n'a accès qu'aux écrans de ce menu (E005, ED51-ED55 :
+// "defiscauth", ED53 sans filtre) + changer-mot-de-passe ("auth:…,Defiscalisateur,…").
 $routes->get('defiscalisateur-menu', 'DefiscalisateurMenuController::index', ['filter' => 'defiscauth']);
 
 // ── E009 Menu CRA Convoc ─────────────────────────────────────────────────────
 // Rôle « CRA Convoc » ou Administrateur — voir CraConvocAuth.php. Compétitions CRA (EC71), Disponibilités CRA (EC74), Désignation CRA (EC73), Statistiques CRA (EC75), Degrés Juge-Arbitre (EC72) + déconnexion.
+// Le rôle CRA Convoc n'a accès qu'aux écrans de ce menu ("craconvocauth") + EA93 messagerie (routes
+// "auth:…CRA Convoc", messages CRA filtrés par MessagerieController) + changer-mot-de-passe.
 $routes->get('cra-convoc-menu', 'CraConvocMenuController::index', ['filter' => 'craconvocauth']);
 
 // ── EC71 Compétitions CRA — CRUD de la table CRA_Competition ─────────────────

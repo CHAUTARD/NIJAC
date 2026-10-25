@@ -23,11 +23,16 @@ class AdminAuth implements FilterInterface
     public function before(RequestInterface $request, $arguments = null)
     {
         require_once __DIR__ . '/../../../config/db.php';
-        demarrerSessionNijac();
+        require_once __DIR__ . '/../../../config/app_config.php';
 
-        $utilisateur = $_SESSION['utilisateur'] ?? null;
+        // Session + revalidation en base (1 fois / minute, voir revaliderSessionUtilisateur())
+        // + changement de mot de passe forcé (change_login).
+        if ($cible = controlerSessionFiltre(method_exists($request, 'getPath') ? $request->getPath() : '')) {
+            return redirect()->to(site_url($cible));
+        }
+        $utilisateur = $_SESSION['utilisateur'];
 
-        if (!$utilisateur || empty($utilisateur['is_admin'])) {
+        if (empty($utilisateur['is_admin'])) {
             return redirect()->to(site_url('login'));
         }
 

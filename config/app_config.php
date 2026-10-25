@@ -571,6 +571,45 @@ function initTableConfiguration(\PDO $pdo): void
         error_log('[NIJAC] Clé double_authentification : ' . $e->getMessage());
     }
 
+    // utilisateur.PwdVersion : version du mot de passe, incrémentée à chaque changement (E006, E008,
+    // EA86 « Écraser ») et copiée en session à la connexion — une session dont la version diffère est
+    // détruite par revaliderSessionUtilisateur(). Lue / écrite seulement si présente
+    // (utilisateurAPwdVersion(), tolérance avant passage EA98 : pas de contrôle de version).
+    try {
+        $existe = $pdo->query(
+            "SELECT 1 FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'PwdVersion'"
+        )->fetchColumn();
+        if (!$existe) {
+            $pdo->exec('ALTER TABLE utilisateur ADD COLUMN PwdVersion INT UNSIGNED NOT NULL DEFAULT 0 AFTER ChangeLogin');
+        }
+    } catch (\PDOException $e) {
+        // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
+        error_log('[NIJAC] Ajout de la colonne utilisateur.PwdVersion : ' . $e->getMessage());
+    }
+
+    // 2FA TOTP des écrans CHAUTARD (EA96/97/98, activation EA99) : secret base32 chiffré
+    // (AES-256-GCM, chiffrerSecretTotp()), dernier pas accepté (anti-rejeu), JSON des codes de
+    // secours hachés. NULL = 2FA non activée. Lues seulement si présentes (utilisateurATotp()).
+    // Réinitialisation d'urgence : voir la procédure en tête des fonctions TOTP (fin de fichier).
+    foreach ([
+        'TotpSecret'     => 'VARCHAR(255) NULL',
+        'TotpDernierPas' => 'BIGINT NULL',
+        'TotpSecours'    => 'TEXT NULL',
+    ] as $colonne => $definition) {
+        try {
+            $existe = $pdo->query(
+                "SELECT 1 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = " . $pdo->quote($colonne)
+            )->fetchColumn();
+            if (!$existe) {
+                $pdo->exec('ALTER TABLE utilisateur ADD COLUMN ' . $colonne . ' ' . $definition);
+            }
+        } catch (\PDOException $e) {
+            error_log('[NIJAC] Ajout de la colonne utilisateur.' . $colonne . ' : ' . $e->getMessage());
+        }
+    }
+
     // Salles ↔ clubs en plusieurs-à-plusieurs : table club_salle (salle.Id_Club / EstPrincipale
     // obsolètes, conservées). Gère son propre try/catch (voir assurerTableClubSalle()).
     assurerTableClubSalle($pdo);
@@ -1184,6 +1223,44 @@ function nominationsJourJa(\PDO $pdo, int $idJa, int $idRenc): array
     }
 
     return $res;
+}
+
+/**
+ * utilisateur.PwdVersion existe-t-elle ? (ajoutée par EA98 — connexion, revalidation de session,
+ * E006/E008/EA86 la lisent / l'incrémentent seulement si présente ; absente = pas de contrôle de
+ * version). Cache statique : une seule vérification par requête.
+ */
+function utilisateurAPwdVersion(\PDO $pdo): bool
+{
+    static $existe = null;
+    if ($existe === null) {
+        try {
+            $existe = (bool) $pdo->query(
+                "SELECT 1 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'PwdVersion'"
+            )->fetchColumn();
+        } catch (\PDOException $e) {
+            $existe = false;
+        }
+    }
+
+    return $existe;
+}
+
+/** Fragment SET à ajouter à un UPDATE utilisateur qui change le mot de passe ('' avant EA98). */
+function sqlIncrementPwdVersion(\PDO $pdo): string
+{
+    return utilisateurAPwdVersion($pdo) ? ', PwdVersion = PwdVersion + 1' : '';
+}
+
+/**
+ * Colonnes de la table utilisateur lues pour construire / revalider $_SESSION['utilisateur']
+ * (voir construireSessionUtilisateur()) — PwdVersion seulement si présente.
+ */
+function colonnesSessionUtilisateur(\PDO $pdo): string
+{
+    return 'Id_Utilisateur, Login, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin, Email'
+        . (utilisateurAPwdVersion($pdo) ? ', PwdVersion' : '');
 }
 
 /**
@@ -2001,8 +2078,23 @@ function genererMotDePasseAleatoire(int $longueur = 12): string
 function genererJetonResetMdp(int $idUtilisateur, string $hashMdpActuel, int $dureeSecondes = 3600): string
 {
     $exp = time() + $dureeSecondes;
-    $sig = hash_hmac('sha256', $idUtilisateur . '.' . $exp, $hashMdpActuel . OBFUSCATOR_SEED);
+    $sig = hash_hmac('sha256', $idUtilisateur . '.' . $exp, cleJetonResetMdp($hashMdpActuel));
     return $idUtilisateur . '-' . $exp . '-' . $sig;
+}
+
+/**
+ * Clé HMAC du jeton E008 : hash du mot de passe courant + OBFUSCATOR_SEED (public, documenté)
+ * + pepper secret getObfuscatorPepper() (.env, OBFUSCATOR_PEPPER). Le pepper rend le jeton
+ * infalsifiable par qui lirait les hash en base (fuite de sauvegarde SQL…) sans le .env.
+ * Pepper vide : la clé est EXACTEMENT l'ancienne (hash . seed), donc les liens déjà émis restent
+ * valables, mais le gain est nul (seule protection = secret du hash). Pepper renseigné : seule la
+ * nouvelle clé est acceptée — les liens émis avant sa mise en place (valables 1 h) sont perdus.
+ */
+function cleJetonResetMdp(string $hashMdpActuel): string
+{
+    $pepper = getObfuscatorPepper();
+
+    return $hashMdpActuel . OBFUSCATOR_SEED . ($pepper !== '' ? '|reset-mdp|' . $pepper : '');
 }
 
 /**
@@ -2024,7 +2116,7 @@ function verifierJetonResetMdp(string $jeton, callable $lookupHash): ?int
     if (!$hash) {
         return null;
     }
-    $attendu = hash_hmac('sha256', $id . '.' . $exp, $hash . OBFUSCATOR_SEED);
+    $attendu = hash_hmac('sha256', $id . '.' . $exp, cleJetonResetMdp($hash));
     return hash_equals($attendu, $sig) ? (int) $id : null;
 }
 
@@ -2516,13 +2608,30 @@ function checkTentativesRateLimit(string $cle, int $max, int $fenetreMinutes): ?
     return null;
 }
 
+/**
+ * Durée de conservation (minutes) des horodatages du fichier de tentatives, toutes clés
+ * confondues : au moins la plus longue fenêtre utilisée (plafond journalier mfa_essai:<id>).
+ * Avant, la purge utilisait la fenêtre de la clé en cours d'écriture (15 min), ce qui effaçait
+ * les compteurs à fenêtre plus longue (login_compte 60 min) à chaque échec par IP.
+ */
+const TENTATIVES_RETENTION_MINUTES = 1440;
+
+/**
+ * Chemin du fichier JSON des tentatives (verrou flock, partagé par toutes les clés).
+ * Constante NIJAC_FICHIER_TENTATIVES : surcharge réservée aux tests CLI (fichier temporaire).
+ */
+function tentativesFichier(): string
+{
+    return defined('NIJAC_FICHIER_TENTATIVES') ? NIJAC_FICHIER_TENTATIVES : __DIR__ . '/../logs/login_attempts.json';
+}
+
 /** Enregistre une tentative pour la clé donnée. */
 function enregistrerTentative(string $cle, int $fenetreMinutes): void
 {
     $now   = time();
-    $debut = $now - $fenetreMinutes * 60;
+    $debut = $now - max($fenetreMinutes, TENTATIVES_RETENTION_MINUTES) * 60;
 
-    $fp = fopen(__DIR__ . '/../logs/login_attempts.json', 'c+');
+    $fp = fopen(tentativesFichier(), 'c+');
     if (!$fp) return;
 
     flock($fp, LOCK_EX);
@@ -2545,7 +2654,7 @@ function enregistrerTentative(string $cle, int $fenetreMinutes): void
 /** Lecture brute du fichier de tentatives (séparée pour rester appelable sans écrire). */
 function tentativesLire(): array
 {
-    $fichier = __DIR__ . '/../logs/login_attempts.json';
+    $fichier = tentativesFichier();
     if (!is_file($fichier)) return [];
     return json_decode(file_get_contents($fichier) ?: '', true) ?: [];
 }
@@ -2571,6 +2680,159 @@ function enregistrerEchecLogin(): void
     $fenetre = (int) getConfig('login_rate_limit_fenetre', '15');
 
     enregistrerTentative('login:' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'), $fenetre);
+}
+
+// Limite par compte (E001) : complète la limite par IP contre une attaque distribuée sur UN login.
+// Appliquée aussi aux logins inconnus (clé = login SAISI) : jamais d'oracle d'existence. Le blocage
+// ne dure que la fenêtre glissante (pas de verrouillage permanent du compte légitime).
+const LOGIN_COMPTE_MAX     = 10;  // échecs de mot de passe…
+const LOGIN_COMPTE_FENETRE = 60;  // …par fenêtre glissante (minutes)
+// Plafond journalier des codes de sécurité faux (E010) par compte, toutes sessions/IP confondues.
+const MFA_ESSAIS_MAX       = 20;
+const MFA_ESSAIS_FENETRE   = 1440;
+// E007 : demandes de lien de réinitialisation par IP (réponse neutre identique au-delà).
+const MDPRESET_IP_MAX      = 5;
+const MDPRESET_IP_FENETRE  = 15;
+
+/** Clé de limitation par compte : login saisi normalisé (trim, minuscules), tronqué à 64 caractères. */
+function cleLoginCompte(string $login): string
+{
+    return 'login_compte:' . mb_substr(mb_strtolower(trim($login)), 0, 64);
+}
+
+/** Limite par compte (E001) : null si autorisé, sinon le même message « Trop de tentatives » que par IP. */
+function checkLoginCompteRateLimit(string $login): ?string
+{
+    return checkTentativesRateLimit(cleLoginCompte($login), LOGIN_COMPTE_MAX, LOGIN_COMPTE_FENETRE);
+}
+
+/** Enregistre un échec de mot de passe pour le login saisi (existant ou non). */
+function enregistrerEchecLoginCompte(string $login): void
+{
+    enregistrerTentative(cleLoginCompte($login), LOGIN_COMPTE_FENETRE);
+}
+
+/** Plafond journalier des codes de sécurité faux pour un compte (E010). */
+function checkMfaEssaisRateLimit(int $idUtilisateur): ?string
+{
+    return checkTentativesRateLimit('mfa_essai:' . $idUtilisateur, MFA_ESSAIS_MAX, MFA_ESSAIS_FENETRE);
+}
+
+/** Enregistre un code de sécurité faux pour le compte. */
+function enregistrerEchecMfa(int $idUtilisateur): void
+{
+    enregistrerTentative('mfa_essai:' . $idUtilisateur, MFA_ESSAIS_FENETRE);
+}
+
+/** E007 : la demande de lien depuis cette IP est-elle encore autorisée ? (compte chaque demande) */
+function autoriserDemandeResetMdpIp(): bool
+{
+    $cle = 'mdpreset_ip:' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+    if (checkTentativesRateLimit($cle, MDPRESET_IP_MAX, MDPRESET_IP_FENETRE) !== null) {
+        return false;
+    }
+    enregistrerTentative($cle, MDPRESET_IP_FENETRE);
+
+    return true;
+}
+
+/** Durée (s) entre deux relectures en base de la session (revaliderSessionUtilisateur()). */
+const SESSION_REVALIDATION_DELAI = 60;
+
+/** Routes accessibles tant que $_SESSION['utilisateur']['change_login'] est vrai (changement forcé). */
+const ROUTES_CHANGE_LOGIN = ['changer-mot-de-passe', 'logout'];
+
+/**
+ * Revalidation de $_SESSION['utilisateur'] par les filtres d'authentification (auth, adminauth,
+ * nominauth, csrauth, defiscauth, craconvocauth), session ACTIVE (avant session_write_close()).
+ *
+ * Au plus une fois par SESSION_REVALIDATION_DELAI (horodatage 'verifie_le' ; absent = session
+ * ouverte avant cette version, revalidée tout de suite) relit Actif, Role, ChangeLogin et
+ * PwdVersion (si la colonne existe) du compte, ainsi que Login : ligne absente, Actif = 0, rôle
+ * changé, login changé ou version du mot de passe différente → session détruite (cookie compris, detruireSessionNijac())
+ * et retour à E001. Une session sans 'pwd_version' (ouverte avant EA98 / cette version) adopte
+ * la version courante. ChangeLogin passé à 1 en base (EA86 « Écraser » avant EA98) est reporté.
+ * Base injoignable : pas de destruction (journalisé), nouvel essai à la requête suivante.
+ *
+ * Puis, si 'change_login' est vrai, seules ROUTES_CHANGE_LOGIN restent accessibles.
+ *
+ * Retourne la route (pour site_url()) vers laquelle rediriger, ou null si l'accès continue.
+ */
+function revaliderSessionUtilisateur(string $chemin = ''): ?string
+{
+    $u = $_SESSION['utilisateur'] ?? null;
+    if (!is_array($u) || empty($u['id'])) {
+        return 'login';
+    }
+
+    if (time() - (int) ($u['verifie_le'] ?? 0) >= SESSION_REVALIDATION_DELAI) {
+        try {
+            $pdo  = getPDO();
+            $stmt = $pdo->prepare(
+                'SELECT Login, Actif, Role, ChangeLogin' . (utilisateurAPwdVersion($pdo) ? ', PwdVersion' : '')
+                . ' FROM utilisateur WHERE Id_Utilisateur = ? LIMIT 1'
+            );
+            $stmt->execute([(int) $u['id']]);
+            $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+            $motif = null;
+            if (!$row) {
+                $motif = 'compte supprimé';
+            } elseif (!(int) $row['Actif']) {
+                $motif = 'compte désactivé';
+            } elseif ((string) $row['Role'] !== (string) ($u['role'] ?? '')) {
+                $motif = 'rôle modifié';
+            } elseif ((string) $row['Login'] !== (string) ($u['login'] ?? '')) {
+                // Login renommé (EA86) : la session ne doit pas garder un login (ex. 'CHAUTARD',
+                // accès EA96/EA97/EA98) que le compte n'a plus. Son propre renommage via EA86
+                // réécrit déjà la session depuis la base (rafraichirSessionPropre()).
+                $motif = 'login modifié';
+            } elseif (array_key_exists('PwdVersion', $row) && isset($u['pwd_version'])
+                && (int) $row['PwdVersion'] !== (int) $u['pwd_version']) {
+                $motif = 'mot de passe modifié';
+            }
+            if ($motif !== null) {
+                error_log('[NIJAC][SEC] session invalidée (' . $motif . ', Id_Utilisateur ' . (int) $u['id'] . ')');
+                detruireSessionNijac();
+                return 'login';
+            }
+
+            if (array_key_exists('PwdVersion', $row) && !isset($u['pwd_version'])) {
+                $_SESSION['utilisateur']['pwd_version'] = (int) $row['PwdVersion'];
+            }
+            if ((int) $row['ChangeLogin'] === 1) {
+                $_SESSION['utilisateur']['change_login'] = true;
+            }
+            $_SESSION['utilisateur']['is_admin']   = ($row['Role'] === 'Administrateur');
+            $_SESSION['utilisateur']['verifie_le'] = time();
+        } catch (\Throwable $e) {
+            error_log('[NIJAC] revalidation de session impossible : ' . $e->getMessage());
+        }
+    }
+
+    if (!empty($_SESSION['utilisateur']['change_login'])
+        && !in_array(trim($chemin, '/'), ROUTES_CHANGE_LOGIN, true)) {
+        return 'changer-mot-de-passe';
+    }
+
+    return null;
+}
+
+/**
+ * Cœur commun des filtres d'authentification : démarre la session native, vérifie qu'un
+ * utilisateur est connecté puis le revalide (revaliderSessionUtilisateur()). Retourne null si
+ * l'accès continue (session TOUJOURS active : le filtre teste ensuite le rôle puis appelle
+ * session_write_close()), sinon la route de redirection (session déjà refermée).
+ */
+function controlerSessionFiltre(string $chemin): ?string
+{
+    demarrerSessionNijac();
+    $cible = empty($_SESSION['utilisateur']) ? 'login' : revaliderSessionUtilisateur($chemin);
+    if ($cible !== null && session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
+    }
+
+    return $cible;
 }
 
 /**
@@ -2644,6 +2906,10 @@ function construireSessionUtilisateur(array $row): array
         'change_login'   => (bool) $row['ChangeLogin'],
         'is_admin'       => ($row['Role'] === 'Administrateur'),
         'email'          => $row['Email'] ?? '',
+        // Version du mot de passe (null si la colonne n'existe pas encore, avant EA98) et
+        // horodatage de la dernière relecture en base — voir revaliderSessionUtilisateur().
+        'pwd_version'    => array_key_exists('PwdVersion', $row) ? (int) $row['PwdVersion'] : null,
+        'verifie_le'     => time(),
     ];
 }
 
@@ -2971,4 +3237,264 @@ function altBodyDepuisHtml(string $html): string
     }, $t) ?? $t;
 
     return trim($t, " \n");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2FA TOTP (RFC 6238 — SHA-1, 6 chiffres, pas de 30 s, compatible Google Authenticator) des
+// écrans réservés au login CHAUTARD (EA96 / EA97 / EA98), activée / saisie sur EA99
+// (TotpController, App\Libraries\TotpChautard). Fonctions pures ci-dessous (PHP natif, aucune
+// dépendance) ; stockage : utilisateur.TotpSecret (secret base32 chiffré AES-256-GCM),
+// utilisateur.TotpDernierPas (anti-rejeu), utilisateur.TotpSecours (JSON des codes de secours
+// hachés) — colonnes créées par initTableConfiguration() (EA98).
+//
+// PROCÉDURE D'URGENCE (téléphone perdu, pepper changé, codes de secours épuisés) — via la
+// console SQL de l'hébergeur (phpMyAdmin), ou EA98 après déverrouillage sur EA99 par un code de
+// secours (puis mot de passe dans EA98) :
+//   UPDATE utilisateur SET TotpSecret=NULL, TotpDernierPas=NULL, TotpSecours=NULL WHERE Login='CHAUTARD';
+// (réinitialise la 2FA : la prochaine ouverture d'EA96/97/98 renvoie vers l'activation EA99).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TOTP_PAS_SECONDES  = 30;
+const TOTP_CHIFFRES      = 6;
+const TOTP_TOLERANCE_PAS = 1;     // ±1 pas (décalage d'horloge du téléphone)
+const TOTP_SESSION_DUREE = 1800;  // validité glissante (s) du déverrouillage EA96/97/98 en session
+const TOTP_NB_SECOURS    = 8;     // codes de secours à usage unique générés à l'activation
+const TOTP_EMETTEUR      = 'NIJAC';
+// Sel constant de la clé de chiffrement du secret TOTP : clé = SHA-256(sel + pepper
+// getObfuscatorPepper(), .env non versionné). Pepper vide : clé dérivée du SEUL sel constant,
+// présent dans le dépôt — le chiffrement ne protège alors plus le secret d'un lecteur de la base
+// ayant aussi le code source. Changer le pepper rend le secret indéchiffrable (procédure d'urgence
+// ci-dessus, ou déverrouillage par code de secours).
+const TOTP_SEL_CLE       = 'NIJAC|totp-secret|v1|';
+
+/** Encodage base32 RFC 4648 (A-Z2-7), sans padding « = » (format attendu par Google Authenticator). */
+function base32Encoder(string $binaire): string
+{
+    $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    $bits     = '';
+    foreach (str_split($binaire) as $c) {
+        if ($c !== '') {
+            $bits .= str_pad(decbin(ord($c)), 8, '0', STR_PAD_LEFT);
+        }
+    }
+    if ($bits === '') {
+        return '';
+    }
+    $sortie = '';
+    foreach (str_split($bits, 5) as $bloc) {
+        $sortie .= $alphabet[bindec(str_pad($bloc, 5, '0', STR_PAD_RIGHT))];
+    }
+
+    return $sortie;
+}
+
+/** Décodage base32 (casse, espaces, tirets et padding ignorés) ; false si caractère invalide. */
+function base32Decoder(string $texte): string|false
+{
+    $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    $texte    = strtoupper(str_replace([' ', '-', '='], '', $texte));
+    $bits     = '';
+    foreach (str_split($texte) as $c) {
+        if ($c === '') {
+            continue;
+        }
+        $v = strpos($alphabet, $c);
+        if ($v === false) {
+            return false;
+        }
+        $bits .= str_pad(decbin($v), 5, '0', STR_PAD_LEFT);
+    }
+    $sortie = '';
+    foreach (str_split($bits, 8) as $octet) {
+        if (strlen($octet) === 8) {
+            $sortie .= chr(bindec($octet));
+        }
+    }
+
+    return $sortie;
+}
+
+/** Nouveau secret TOTP : 20 octets aléatoires (160 bits, taille recommandée pour HMAC-SHA1), en base32. */
+function genererSecretTotp(): string
+{
+    return base32Encoder(random_bytes(20));
+}
+
+/** Pas TOTP courant (ou de l'instant $t). */
+function totpPasCourant(?int $t = null): int
+{
+    return intdiv($t ?? time(), TOTP_PAS_SECONDES);
+}
+
+/**
+ * Code TOTP/HOTP (RFC 4226 §5.3 + RFC 6238) pour le secret BINAIRE $secret (base32 décodé) et le
+ * pas $pas, sur $chiffres chiffres (zéros de tête conservés).
+ */
+function totpCode(string $secret, int $pas, int $chiffres = TOTP_CHIFFRES): string
+{
+    $compteur = pack('N2', ($pas >> 32) & 0xFFFFFFFF, $pas & 0xFFFFFFFF);
+    $hmac     = hash_hmac('sha1', $compteur, $secret, true);
+    $offset   = ord($hmac[19]) & 0x0F;
+    $valeur   = ((ord($hmac[$offset]) & 0x7F) << 24)
+              | (ord($hmac[$offset + 1]) << 16)
+              | (ord($hmac[$offset + 2]) << 8)
+              | ord($hmac[$offset + 3]);
+
+    return str_pad((string) ($valeur % (10 ** $chiffres)), $chiffres, '0', STR_PAD_LEFT);
+}
+
+/**
+ * Pas (dans la tolérance ±TOTP_TOLERANCE_PAS autour de $t) pour lequel $code est valide, ou null.
+ * Comparaison hash_equals sur chaque pas (pas de sortie anticipée) ; le pas le plus récent gagne.
+ */
+function totpPasCorrespondant(string $secret, string $code, ?int $t = null): ?int
+{
+    $code = preg_replace('/\s+/', '', $code) ?? '';
+    if (!preg_match('/^\d{' . TOTP_CHIFFRES . '}$/', $code)) {
+        return null;
+    }
+    $courant = totpPasCourant($t);
+    $trouve  = null;
+    for ($d = -TOTP_TOLERANCE_PAS; $d <= TOTP_TOLERANCE_PAS; $d++) {
+        if (hash_equals(totpCode($secret, $courant + $d), $code)) {
+            $trouve = $courant + $d;
+        }
+    }
+
+    return $trouve;
+}
+
+/**
+ * Vérifie un code TOTP avec anti-rejeu : le pas accepté doit être STRICTEMENT supérieur à
+ * $dernierPas (dernier pas déjà utilisé, null = aucun). En cas de succès $dernierPas reçoit le
+ * pas accepté (à enregistrer en base par l'appelant) ; inchangé sinon.
+ */
+function verifierTotp(string $secret, string $code, ?int &$dernierPas, ?int $t = null): bool
+{
+    $pas = totpPasCorrespondant($secret, $code, $t);
+    if ($pas === null || ($dernierPas !== null && $pas <= $dernierPas)) {
+        return false;
+    }
+    $dernierPas = $pas;
+
+    return true;
+}
+
+/** URI otpauth:// à encoder dans le QR code (libellé NIJAC:<login>, émetteur NIJAC). */
+function uriOtpauth(string $secretBase32, string $login): string
+{
+    return 'otpauth://totp/' . rawurlencode(TOTP_EMETTEUR) . ':' . rawurlencode($login)
+        . '?secret=' . $secretBase32 . '&issuer=' . rawurlencode(TOTP_EMETTEUR);
+}
+
+/** Clé AES-256 du secret TOTP : SHA-256(sel constant + pepper) — voir TOTP_SEL_CLE. */
+function cleChiffrementTotp(string $pepper): string
+{
+    return hash('sha256', TOTP_SEL_CLE . $pepper, true);
+}
+
+/** Chiffre le secret (base32) en AES-256-GCM : « v1: » + base64(iv 12 o + tag 16 o + chiffré). */
+function chiffrerSecretTotp(string $secretBase32, string $pepper): string
+{
+    $iv      = random_bytes(12);
+    $tag     = '';
+    $chiffre = openssl_encrypt($secretBase32, 'aes-256-gcm', cleChiffrementTotp($pepper), OPENSSL_RAW_DATA, $iv, $tag, '', 16);
+    if ($chiffre === false) {
+        throw new \RuntimeException('Chiffrement du secret TOTP impossible.');
+    }
+
+    return 'v1:' . base64_encode($iv . $tag . $chiffre);
+}
+
+/** Déchiffre le secret (base32) ; null si format inconnu, données altérées ou mauvaise clé (pepper changé). */
+function dechiffrerSecretTotp(string $stocke, string $pepper): ?string
+{
+    if (!str_starts_with($stocke, 'v1:')) {
+        return null;
+    }
+    $brut = base64_decode(substr($stocke, 3), true);
+    if ($brut === false || strlen($brut) <= 28) {
+        return null;
+    }
+    $clair = openssl_decrypt(substr($brut, 28), 'aes-256-gcm', cleChiffrementTotp($pepper), OPENSSL_RAW_DATA, substr($brut, 0, 12), substr($brut, 12, 16));
+
+    return $clair === false ? null : $clair;
+}
+
+/** Normalise un code de secours saisi (majuscules, sans espaces ni tirets). */
+function normaliserCodeSecours(string $code): string
+{
+    return strtoupper(str_replace([' ', '-'], '', trim($code)));
+}
+
+/** La saisie a-t-elle la forme d'un code de secours (10 caractères base32) ? */
+function estFormatCodeSecours(string $code): bool
+{
+    return (bool) preg_match('/^[A-Z2-7]{10}$/', normaliserCodeSecours($code));
+}
+
+/**
+ * Génère TOTP_NB_SECOURS codes de secours (10 caractères base32 = 50 bits, affichés « XXXXX-XXXXX »).
+ * Hachés par password_hash() (bcrypt) : SecurePasswordHasher (PBKDF2 600 000 itérations) rendrait
+ * la vérification des 8 codes beaucoup trop lente, et ces codes aléatoires n'en ont pas besoin.
+ *
+ * @return array{codes: string[], haches: string[]} codes en clair (affichés UNE fois) + hachés (stockés)
+ */
+function genererCodesSecours(): array
+{
+    $codes  = [];
+    $haches = [];
+    for ($i = 0; $i < TOTP_NB_SECOURS; $i++) {
+        $c        = substr(base32Encoder(random_bytes(7)), 0, 10);
+        $codes[]  = substr($c, 0, 5) . '-' . substr($c, 5);
+        $haches[] = password_hash($c, PASSWORD_DEFAULT);
+    }
+
+    return ['codes' => $codes, 'haches' => $haches];
+}
+
+/**
+ * Consomme un code de secours : retourne la liste des hachés restants (sans celui utilisé),
+ * ou null si le code ne correspond à aucun.
+ *
+ * @param string[] $haches
+ * @return string[]|null
+ */
+function consommerCodeSecours(array $haches, string $code): ?array
+{
+    if (!estFormatCodeSecours($code)) {
+        return null;
+    }
+    $code = normaliserCodeSecours($code);
+    foreach ($haches as $i => $h) {
+        if (is_string($h) && password_verify($code, $h)) {
+            unset($haches[$i]);
+
+            return array_values($haches);
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Colonnes utilisateur.TotpSecret / TotpDernierPas / TotpSecours présentes ? (ajoutées par EA98 —
+ * absentes : EA96/97/98 restent accessibles sans TOTP, journalisé). Cache statique par requête.
+ */
+function utilisateurATotp(\PDO $pdo): bool
+{
+    static $existe = null;
+    if ($existe === null) {
+        try {
+            $existe = (int) $pdo->query(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'utilisateur'
+                   AND COLUMN_NAME IN ('TotpSecret', 'TotpDernierPas', 'TotpSecours')"
+            )->fetchColumn() === 3;
+        } catch (\PDOException $e) {
+            $existe = false;
+        }
+    }
+
+    return $existe;
 }

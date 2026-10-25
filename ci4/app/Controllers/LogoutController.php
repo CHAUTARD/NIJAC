@@ -5,9 +5,14 @@ namespace App\Controllers;
 /**
  * NIJAC – Déconnexion, portage CI4 de logout.php.
  *
- * Détruit la session en cours et redirige vers la page de connexion (E001).
- * Pas de filtre "auth" : appelable même si la session est déjà expirée, comme
- * le fait le fichier legacy (aucun garde, juste démarrage + destroy).
+ * POST logout (filtre csrf global) : détruit la session en cours — données, fichier et cookie
+ * (detruireSessionNijac()) — puis redirige vers la page de connexion (E001). Les liens « Se
+ * déconnecter » des menus et le bouton « Annuler » d'E010 soumettent un petit formulaire POST.
+ * Pas de filtre "auth" : appelable même si la session est déjà expirée.
+ *
+ * GET logout (anciens favoris) : ne détruit RIEN (une déconnexion par simple GET serait
+ * déclenchable par un lien ou une image tiers) et redirige vers E001, qui renvoie une session
+ * encore ouverte vers son menu.
  */
 class LogoutController extends BaseController
 {
@@ -23,10 +28,14 @@ class LogoutController extends BaseController
         // correctement) voit l'utilisateur toujours connecté et le renvoie
         // vers son menu au lieu du formulaire de connexion.
         demarrerSessionNijac();
+        detruireSessionNijac();
 
-        session_unset();
-        session_destroy();
+        return redirect()->to(site_url('login'));
+    }
 
+    /** GET logout : redirection simple vers E001, la session n'est pas touchée. */
+    public function rediriger()
+    {
         return redirect()->to(site_url('login'));
     }
 }

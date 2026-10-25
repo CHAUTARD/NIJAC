@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Libraries\TotpChautard;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
@@ -12,7 +13,9 @@ use CodeIgniter\HTTP\ResponseInterface;
  * accès SQL total, sans restriction, pour cet unique compte. Chaque appel à
  * sql() revérifie en plus le mot de passe (verifierMdpRequete(), verrouillé
  * après échecs répétés) : la session CHAUTARD seule ne suffit pas, pour
- * limiter l'impact d'un vol de cookie de session.
+ * limiter l'impact d'un vol de cookie de session. Accès soumis à la 2FA TOTP (EA99,
+ * App\Libraries\TotpChautard) : une fois la session déverrouillée sur EA99 (30 min glissantes),
+ * aucun code TOTP n'est redemandé par action — seul le mot de passe l'est.
  */
 class DbAdminController extends BaseController
 {
@@ -28,7 +31,8 @@ class DbAdminController extends BaseController
             return redirect()->to(site_url('admin-menu'));
         }
 
-        return null;
+        // 2FA TOTP (EA99) : session déverrouillée par un code récent, sinon redirection / JSON.
+        return TotpChautard::controlerAcces('db-admin');
     }
 
     /**

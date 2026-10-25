@@ -18,7 +18,7 @@ Le détail complet de chaque écran (fonctionnalités, fichier source, règles m
 | EN11–EN30 | Nominateur + pages publiques JA | Gestion des JA et des clubs, désidératas, disponibilités, nomination aux rencontres, centre d'envoi, convocation/frais, statistiques, suivi des nominations… |
 | ES31–ES33 | CSR (Commission Sportive Régionale) | Réengagement des clubs, souhaits des équipes |
 | ED51–ED55 | Défiscalisateur | Défiscalisation des JA, barème kilométrique, attestations, comptes EBP |
-| EA81–EA98 | Administrateur | Salles, imports FFTT, utilisateurs, communes, régions/départements, divisions, équipes, rencontres, configuration, messagerie, test API FFTT, administration base de données |
+| EA81–EA99 | Administrateur | Salles, imports FFTT, utilisateurs, communes, régions/départements, divisions, équipes, rencontres, configuration, messagerie, test API FFTT, administration base de données, sécurité TOTP |
 
 Quelques écrans marquants :
 
@@ -31,7 +31,8 @@ Quelques écrans marquants :
 | EN27 | Clubs / Associations | Import et gestion des clubs affiliés (upsert depuis l'API FFTT) |
 | EN28 | Suivi des nominations | Suivi des frais saisis par les JA et des accusés de réception, correction et relance, mise à jour FFTT 131 (analyse sans écriture, puis JA renseignés sur les rencontres R3M / R4M sans JA nommé, journal CSV dans `_Suivi/`) — l'ancien écran EN30 « Contrôle FFTT 131 » a été supprimé (numéro libre) |
 | EA91 | Configuration | Paramètres applicatifs (état logiciel, SMTP, phases, frais kilométriques…) |
-| EA98 | Administration BDD | Requêteur SQL libre, structure des tables, accès restreint (compte CHAUTARD) |
+| EA98 | Administration BDD | Requêteur SQL libre, structure des tables, accès restreint (compte CHAUTARD + 2FA TOTP déverrouillée sur EA99 ; mot de passe redemandé pour exécuter) |
+| EA99 | Sécurité TOTP | Activation (QR code, codes de secours) et saisie du code TOTP exigé par EA96 / EA97 / EA98 (compte CHAUTARD) |
 
 ---
 
@@ -151,7 +152,7 @@ ja ─── disponible ─── nomination
 
 La session (native PHP, pas le service Session de CI4) stocke `$_SESSION['utilisateur']` avec les clés `id`, `login`, `nom`, `prenom`, `role`, `is_admin`, `id_departement`, `change_login`, `email`. Un JA ne se connecte jamais : ses écrans (EN19, EN21, EN22, EN25) sont publics, identifiés par un lien tokenisé (Obfuscator) envoyé par email.
 
-Deux écrans (EA96, EA98) restent réservés en plus au compte `CHAUTARD`, vérifié explicitement dans le contrôleur.
+Quatre écrans (EA96, EA97, EA98, EA99) restent réservés en plus au compte `CHAUTARD`, vérifié explicitement dans le contrôleur ; EA96 / EA97 / EA98 exigent en outre la double authentification TOTP (EA99).
 
 ---
 
@@ -161,6 +162,7 @@ Deux écrans (EA96, EA98) restent réservés en plus au compte `CHAUTARD`, véri
 - **Obfuscation des IDs JA** dans les URL publiques via `Classes/Obfuscator.php` (bcmath + hash de Knuth), avec un pepper secret optionnel (`.env`) qui rend les tokens non forgeables sans lui.
 - **Mots de passe** hashés via `Classes/SecurePasswordHasher.php` (bcrypt).
 - **Double authentification par email** : après le mot de passe (E001), un code de 6 chiffres (`random_int`) est envoyé à `utilisateur.Email` (obligatoire) et saisi en E010 — valable 10 min, usage unique, 5 essais, renvoi limité (60 s, 3 / 10 min), seul son hash est conservé en session, `$_SESSION['utilisateur']` n'existe qu'après validation. Coupe-circuit d'urgence (panne SMTP, adresse erronée) : `UPDATE configuration SET valeur = '0' WHERE cle = 'double_authentification';` (retour au mot de passe seul, journalisé ; remettre `'1'` ensuite).
+- **2FA TOTP des écrans CHAUTARD** (EA96 / EA97 / EA98) : code d'une application d'authentification (RFC 6238, Google Authenticator), activé et saisi sur EA99 (mot de passe + premier code ; 8 codes de secours à usage unique, hachés) ; session déverrouillée 30 min glissantes ; une fois la session déverrouillée, aucun code TOTP n'est redemandé ; les actions d'EA98 (requête SQL, chargement / suppression d'un fichier SQL) redemandent le mot de passe ; secret chiffré AES-256-GCM (clé dérivée du pepper — changer le pepper le rend illisible), anti-rejeu, tentatives limitées. Réinitialisation d'urgence : `UPDATE utilisateur SET TotpSecret=NULL, TotpDernierPas=NULL, TotpSecours=NULL WHERE Login='CHAUTARD';`.
 - **Rate limiting** sur l'envoi d'emails (fenêtre glissante, `config/app_config.php`).
 - **Secrets** : jamais dans le dépôt, ROT47-encodés dans `.env` (non versionné), explicitement refusés par `.htaccess` en dehors de tout appel applicatif — de même pour `SQL/`, `Importation/` et `_Suivi/`.
 

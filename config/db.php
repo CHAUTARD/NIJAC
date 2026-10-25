@@ -50,7 +50,7 @@ if (!$isProduction) {
 
 // ── Constantes communes ───────────────────────────────────────────────────────
 define('DB_CHARSET',   'utf8mb4');
-define('APP_VERSION', '1.3.37');
+define('APP_VERSION', '1.3.43');
 
 // Seed secret pour l'obfuscation des identifiants JA dans les URL publiques
 // (doit rester identique entre génération et décodage)
@@ -127,6 +127,34 @@ function demarrerSessionNijac(): void
         'samesite' => 'Lax',
     ]);
     session_start();
+}
+
+/**
+ * Détruit la session NIJAC courante (données, fichier ET cookie) : déconnexion (POST logout)
+ * et invalidation par revaliderSessionUtilisateur() (compte désactivé/supprimé, rôle ou version
+ * du mot de passe changés). Le cookie est expiré avec les mêmes paramètres (path, domain, secure,
+ * httponly, samesite) que ceux posés par demarrerSessionNijac(), sinon le navigateur le garde.
+ * À appeler session active (après demarrerSessionNijac()).
+ */
+function detruireSessionNijac(): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        return;
+    }
+    $p = session_get_cookie_params();
+    $_SESSION = [];
+    session_unset();
+    session_destroy();
+    if (!headers_sent()) {
+        setcookie(session_name(), '', [
+            'expires'  => time() - 3600,
+            'path'     => $p['path'] ?: '/',
+            'domain'   => $p['domain'] ?? '',
+            'secure'   => (bool) ($p['secure'] ?? false),
+            'httponly' => (bool) ($p['httponly'] ?? true),
+            'samesite' => $p['samesite'] ?: 'Lax',
+        ]);
+    }
 }
 
 /**

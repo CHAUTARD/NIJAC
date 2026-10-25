@@ -19,12 +19,15 @@ class DefiscalisateurAuth implements FilterInterface
     public function before(RequestInterface $request, $arguments = null)
     {
         require_once __DIR__ . '/../../../config/db.php';
-        demarrerSessionNijac();
+        require_once __DIR__ . '/../../../config/app_config.php';
 
-        $utilisateur = $_SESSION['utilisateur'] ?? null;
-        $role        = $utilisateur['role'] ?? '';
+        // Session + revalidation en base + changement de mot de passe forcé (voir Auth.php).
+        if ($cible = controlerSessionFiltre(method_exists($request, 'getPath') ? $request->getPath() : '')) {
+            return redirect()->to(site_url($cible));
+        }
+        $role = $_SESSION['utilisateur']['role'] ?? '';
 
-        if (!$utilisateur || !in_array($role, ['Defiscalisateur', 'Administrateur'], true)) {
+        if (!in_array($role, ['Defiscalisateur', 'Administrateur'], true)) {
             return redirect()->to(site_url('login'));
         }
 

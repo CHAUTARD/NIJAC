@@ -107,7 +107,8 @@ $alerte = match ($statutClass ?? '') {
                 Recevoir un nouveau code<span id="lbl-attente"></span>
             </button>
             <span class="mx-1 text-muted">·</span>
-            <a href="<?= site_url('logout') ?>" class="text-decoration-none small">Annuler</a>
+            <?php /* POST logout (CSRF du formulaire) : abandonne la connexion en cours, session et cookie détruits. */ ?>
+            <button type="submit" formaction="<?= site_url('logout') ?>" class="btn btn-link btn-sm text-decoration-none p-0 align-baseline small">Annuler</button>
         </form>
     </div>
 

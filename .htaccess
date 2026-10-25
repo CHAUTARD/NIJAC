@@ -22,6 +22,17 @@ php_value max_input_time 300
     </IfModule>
 </FilesMatch>
 
+# ── En-têtes de sécurité ─────────────────────────────────────────────────────
+# Anti-clickjacking : aucune page NIJAC ne peut être affichée dans un cadre
+# (iframe) d'un autre site (X-Frame-Options pour les anciens navigateurs,
+# CSP frame-ancestors pour les récents) ; nosniff empêche le navigateur de
+# deviner un type MIME différent de celui annoncé (justificatifs, CSV...).
+<IfModule mod_headers.c>
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Content-Security-Policy "frame-ancestors 'self'"
+</IfModule>
+
 # ── Front controller CI4 exposé à la racine de ce dossier ────────────────────
 # Ce dossier peut être le docroot du vhost (WAMP local, "nijac") ou un
 # sous-dossier du site (production, ".../nijac/") : pas de RewriteBase codée

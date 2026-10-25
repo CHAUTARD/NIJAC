@@ -12,6 +12,13 @@ class UtilisateurController extends BaseController
 {
     protected UtilisateurModel $utilisateurModel;
 
+    /**
+     * Login du compte réservé (accès EA96 / EA97 / EA98, contrôle `login === 'CHAUTARD'`).
+     * Ce compte ne peut être modifié ni supprimé que par lui-même, son login ne peut pas
+     * changer et ce login ne peut être attribué à aucun autre compte (création ou renommage).
+     */
+    private const LOGIN_RESERVE = 'CHAUTARD';
+
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/app_config.php';
@@ -105,6 +112,13 @@ class UtilisateurController extends BaseController
     {
 
         $id     = (int) $id;
+
+        // Compte réservé : seul son titulaire peut le modifier (Login lu en base, jamais du client).
+        $refus = $this->refusCompteReserve($id);
+        if ($refus !== null) {
+            return $refus;
+        }
+
         $mdpGenere = null;
         $fields = $this->extractFields($this->request->getRawInput(), false, $mdpGenere, $id);
 
@@ -112,9 +126,16 @@ class UtilisateurController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => $fields]);
         }
 
-        $existant = $this->utilisateurModel->select('Role, Actif')->find($id);
+        $existant = $this->utilisateurModel->select('Login, Role, Actif')->find($id);
         if (!$existant) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Utilisateur introuvable.']);
+        }
+
+        // Le login du compte réservé ne change jamais (sinon l'accès EA96/EA97/EA98 serait perdu
+        // et le login réservé redeviendrait attribuable à un autre compte).
+        if ($this->estLoginReserve((string) $existant['Login'])
+            && (string) $fields['Login'] !== (string) $existant['Login']) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Le login de ce compte ne peut pas être modifié.']);
         }
 
         // Garde-fou anti-verrouillage : on ne se désactive pas soi-même et on ne quitte pas son propre rôle
@@ -125,6 +146,17 @@ class UtilisateurController extends BaseController
         }
 
         $this->utilisateurModel->update($id, $fields);
+
+        // « Écraser » : nouveau mot de passe → PwdVersion + 1 (si présente, EA98), les sessions
+        // ouvertes sur ce compte sont détruites à leur prochaine revalidation (1 fois / minute).
+        // Désactivation, suppression, changement de rôle : rien à faire ici, la revalidation
+        // (revaliderSessionUtilisateur()) relit Actif / Role.
+        if (isset($fields['Password'])) {
+            $pdo = getPDO();
+            if (utilisateurAPwdVersion($pdo)) {
+                $pdo->prepare('UPDATE utilisateur SET PwdVersion = PwdVersion + 1 WHERE Id_Utilisateur = ?')->execute([$id]);
+            }
+        }
 
         // Modification de son propre compte : le profil de session (département surtout) est
         // relu en base, sans reconnexion. Jamais touché pour un autre utilisateur. Rôle et
@@ -146,8 +178,9 @@ class UtilisateurController extends BaseController
     private function rafraichirSessionPropre(int $id): void
     {
         try {
-            $stmt = getPDO()->prepare(
-                'SELECT Id_Utilisateur, Login, Nom, Prenom, Role, Id_Departement, ChangeLogin, Email
+            $pdo  = getPDO();
+            $stmt = $pdo->prepare(
+                'SELECT ' . colonnesSessionUtilisateur($pdo) . '
                  FROM utilisateur WHERE Id_Utilisateur = ? AND Actif = 1 LIMIT 1'
             );
             $stmt->execute([$id]);
@@ -176,12 +209,39 @@ class UtilisateurController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => 'Vous ne pouvez pas supprimer votre propre compte.']);
         }
 
+        // Compte réservé : jamais supprimé par un autre compte (et pas par lui-même, garde ci-dessus).
+        $refus = $this->refusCompteReserve($id);
+        if ($refus !== null) {
+            return $refus;
+        }
+
         $db = \Config\Database::connect();
         $db->table('Messagerie')->where('Id_Utilisateur', $id)->delete();
 
         $this->utilisateurModel->delete($id);
 
         return $this->response->setJSON(['ok' => true, 'msg' => 'Utilisateur supprimé.']);
+    }
+
+    /** Le login donné est-il le login réservé ? (trim, insensible à la casse) */
+    private function estLoginReserve(string $login): bool
+    {
+        return strcasecmp(trim($login), self::LOGIN_RESERVE) === 0;
+    }
+
+    /**
+     * Refus si le compte $id porte en base le login réservé et que l'utilisateur connecté n'est
+     * pas ce compte (Id de session). Login relu en base, jamais pris du client. null = autorisé.
+     */
+    private function refusCompteReserve(int $id): ?ResponseInterface
+    {
+        $row = $this->utilisateurModel->select('Login')->find($id);
+        if ($row && $this->estLoginReserve((string) $row['Login'])
+            && $id !== (int) ($_SESSION['utilisateur']['id'] ?? 0)) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Ce compte est réservé.']);
+        }
+
+        return null;
     }
 
     /**
@@ -210,6 +270,14 @@ class UtilisateurController extends BaseController
 
         if ($login === '') {
             return 'Le login ne peut pas être vide.';
+        }
+        // Login réservé : jamais attribué à un autre compte (création ou renommage). Le compte
+        // qui le porte déjà en base le conserve (update() interdit d'en changer).
+        if ($this->estLoginReserve($login)) {
+            $actuel = $idCourant > 0 ? $this->utilisateurModel->select('Login')->find($idCourant) : null;
+            if (!$actuel || !$this->estLoginReserve((string) $actuel['Login'])) {
+                return 'Ce login est réservé.';
+            }
         }
         $doublon = getPDO()->prepare('SELECT 1 FROM utilisateur WHERE Login = ? AND Id_Utilisateur <> ? LIMIT 1');
         $doublon->execute([$login, $idCourant]);

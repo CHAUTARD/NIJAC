@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Libraries\TotpChautard;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
@@ -36,7 +37,8 @@ class BugSpidController extends BaseController
             return redirect()->to(site_url('admin-menu'));
         }
 
-        return null;
+        // 2FA TOTP (EA99) : session déverrouillée par un code récent, sinon redirection / JSON.
+        return TotpChautard::controlerAcces('bug-spid');
     }
 
     private function assurerTable(\PDO $pdo): void

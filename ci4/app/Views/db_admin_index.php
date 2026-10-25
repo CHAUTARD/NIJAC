@@ -310,6 +310,16 @@ function escHtml(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// Session TOTP expirée côté serveur (res.totp) : retour vers EA99 pour revalider le code.
+function verifierRetourTotp(res) {
+    if (res && res.totp && res.url) {
+        toast(res.msg, false);
+        setTimeout(() => { window.location.href = res.url; }, 1500);
+        return true;
+    }
+    return false;
+}
+
 // ── Mot de passe (revérifié avant toute requête SQL) ─────────────────────────
 let pwdOk    = false;
 let pwdTimer = null;
@@ -403,6 +413,7 @@ $('#btn-charger-fichier').on('click', function () {
     spinner(true);
     $.post(`${DB_ADMIN_BASE}/charger-fichier-sql`, { fichier, password: $('#pwd-global').val() }, function (res) {
         spinner(false);
+        if (verifierRetourTotp(res)) return;
         if (!res.ok) { toast(res.msg, false); return; }
         $('#sql-input').val(res.contenu).trigger('focus');
         toast(`« ${fichier} » chargé — vérifiez le contenu avant d'exécuter.`);
@@ -420,6 +431,7 @@ $('#btn-supprimer-fichier').on('click', function () {
             spinner(true);
             $.post(`${DB_ADMIN_BASE}/supprimer-fichier-sql`, { fichier, password: $('#pwd-global').val() }, function (res) {
                 spinner(false);
+                if (verifierRetourTotp(res)) return;
                 if (!res.ok) { toast(res.msg, false); return; }
                 toast(res.msg);
                 chargerFichiersSql();
@@ -445,6 +457,7 @@ function executerRequete(sqlOverride) {
     setStatus('Exécution en cours…');
     $.post(`${DB_ADMIN_BASE}/sql`, { sql, password: $('#pwd-global').val() }, function (res) {
         spinner(false);
+        if (verifierRetourTotp(res)) return;
         if (!res.ok) {
             const succes = (res.results || []).filter(r => r.ok);
             if (succes.length) {

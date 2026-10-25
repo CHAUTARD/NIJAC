@@ -263,6 +263,44 @@
             <i class="bi bi-grid-3x3-gap-fill me-2"></i>Menu pour les paramètres
             <small class="opacity-75 ms-2">(E002)</small>
         </div>
+        <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#modal-version-php" title="Version de PHP du serveur">
+            <i class="bi bi-filetype-php me-1"></i>Version PHP
+        </button>
+    </div>
+
+    <!-- Modale « Version PHP » : tableau calculé côté serveur (AdminMenuController::infosPhp()) -->
+    <div class="modal fade" id="modal-version-php" tabindex="-1" aria-labelledby="modal-version-php-titre" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modal-version-php-titre"><i class="bi bi-filetype-php me-2"></i>Version PHP du serveur</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                </div>
+                <div class="modal-body">
+                    <table class="table table-sm table-striped mb-3">
+                        <tbody>
+                        <?php foreach ($infosPhp['parametres'] as $libelle => $valeur): ?>
+                            <tr><th class="fw-semibold"><?= esc($libelle) ?></th><td><?= esc($valeur) ?></td></tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                    <table class="table table-sm table-striped mb-0">
+                        <thead><tr><th>Extension</th><th>Présente</th></tr></thead>
+                        <tbody>
+                        <?php foreach ($infosPhp['extensions'] as $ext => $presente): ?>
+                            <tr>
+                                <td><?= esc($ext) ?></td>
+                                <td><?= $presente ? '<span class="badge bg-success">oui</span>' : '<span class="badge bg-danger">non</span>' ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowCsr' => true, 'tbShowDefisc' => true, 'tbShowCraConvoc' => true, 'tbSwitchTo' => 'nominateur']) ?>
@@ -433,6 +471,13 @@
                     <span class="btn-desc">Administration directe de la base de données</span>
                 </a>
 
+                <a href="<?= site_url('securite-totp') ?>" class="menu-btn btn-configuration">
+                    <span class="btn-code">EA99</span>
+                    <div class="btn-icon"><i class="bi bi-shield-lock-fill" style="color: #1f3a5f;" aria-hidden="true"></i></div>
+                    <span>Sécurité TOTP</span>
+                    <span class="btn-desc">Double authentification des écrans EA96 / EA97 / EA98</span>
+                </a>
+
             </div>
         </div>
         <?php endif; ?>
@@ -441,7 +486,8 @@
 
     <!-- ── Commun, sous les onglets : Quitter ── -->
     <div id="zone-deconnexion">
-        <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;">
+        <form method="post" action="<?= site_url('logout') ?>" id="form-logout" class="d-none"><?= csrf_field() ?></form>
+        <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;" onclick="document.getElementById('form-logout').submit(); return false;">
             <div class="btn-icon"><img src="<?= base_url('img/Quitter.webp') ?>" alt="Se déconnecter"></div>
             <span style="color:#842029;">Se déconnecter</span>
             <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>

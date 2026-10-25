@@ -11,6 +11,9 @@ namespace App\Controllers;
  * E010 (login/code) -> $_SESSION['utilisateur'] créé seulement après validation du code. Coupe-circuit :
  * configuration.double_authentification = '0' (mot de passe seul). Règles : fonctions pures
  * *CodeSecurite* de config/app_config.php.
+ * Anti brute-force : limite par IP (login:<ip>) + par login saisi (login_compte:<login>, 10 échecs /
+ * 60 min, logins inconnus compris) + plafond journalier de codes faux par compte (mfa_essai:<id>).
+ * Login inconnu/inactif : vérification PBKDF2 sur SecurePasswordHasher::HASH_FACTICE (même durée).
  * Le rôle JA n'a plus de login : ses écrans (EN19/EN21/EN22) sont tous
  * publics, identifiés par un lien tokenisé (Obfuscator) envoyé par email.
  * Session native (jamais le service Session de CI4) — voir AdminAuth.php
@@ -37,13 +40,15 @@ class AuthController extends BaseController
         }
 
         // Vide au premier affichage : le bandeau n'apparaît que pour un avertissement ou une erreur
-        // Message transmis par E010 (essais épuisés, attente expirée) ; une connexion
-        // inachevée est abandonnée dès qu'on revient sur E001.
+        // Message transmis par E010 (essais épuisés, attente expirée). Une connexion inachevée
+        // (mfa_attente) n'est abandonnée que par une nouvelle saisie (POST) ou la déconnexion
+        // (POST logout, bouton « Annuler » d'E010) — jamais par un simple GET (lien/image tiers).
         $status      = $_SESSION['login_message'] ?? '';
         $statutClass = $status !== '' ? 'text-danger' : '';
-        unset($_SESSION['login_message'], $_SESSION['mfa_attente']);
+        unset($_SESSION['login_message']);
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            unset($_SESSION['mfa_attente']);
 
             $login    = trim($this->request->getPost('login')    ?? '');
             $password = trim($this->request->getPost('password') ?? '');
@@ -51,7 +56,8 @@ class AuthController extends BaseController
             if ($login === '' || $password === '') {
                 $status      = 'Veuillez remplir tous les champs.';
                 $statutClass = 'text-warning';
-            } elseif ($limite = checkLoginRateLimit()) {
+            } elseif ($limite = checkLoginRateLimit() ?? checkLoginCompteRateLimit($login)) {
+                // Limite par IP puis par login saisi (existant ou non : pas d'oracle), même message.
                 $status      = $limite;
                 $statutClass = 'text-danger';
             } else {
@@ -59,7 +65,7 @@ class AuthController extends BaseController
                     $pdo = getPDO();
 
                     $stmt = $pdo->prepare(
-                        'SELECT Id_Utilisateur, Login, Password, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin, Email
+                        'SELECT ' . colonnesSessionUtilisateur($pdo) . ', Password
                          FROM Utilisateur
                          WHERE Login = :login
                          LIMIT 1'
@@ -67,7 +73,20 @@ class AuthController extends BaseController
                     $stmt->execute([':login' => $login]);
                     $row = $stmt->fetch();
 
-                    if ($row && (bool) $row['Actif'] && \SecurePasswordHasher::verify($password, $row['Password'])) {
+                    if ($row && (bool) $row['Actif']) {
+                        $motDePasseOk = \SecurePasswordHasher::verify($password, (string) $row['Password']);
+                    } else {
+                        // Login inconnu ou inactif : même coût PBKDF2 qu'une vraie vérification
+                        // (temps de réponse égalisé, pas d'énumération des comptes), résultat ignoré.
+                        \SecurePasswordHasher::verify($password, \SecurePasswordHasher::HASH_FACTICE);
+                        $motDePasseOk = false;
+                    }
+
+                    if ($motDePasseOk && ($limite = checkMfaEssaisRateLimit((int) $row['Id_Utilisateur']))) {
+                        // Plafond journalier de codes faux atteint : aucun nouveau code envoyé.
+                        $status      = $limite;
+                        $statutClass = 'text-danger';
+                    } elseif ($motDePasseOk) {
                         session_unset();
                         session_regenerate_id(true);
 
@@ -96,6 +115,7 @@ class AuthController extends BaseController
                         }
                     } else {
                         enregistrerEchecLogin();
+                        enregistrerEchecLoginCompte($login);
                         $status      = 'Échec : Identifiants invalides.';
                         $statutClass = 'text-danger';
                     }
@@ -149,6 +169,9 @@ class AuthController extends BaseController
             if ($limite = checkLoginRateLimit()) {
                 $status      = $limite;
                 $statutClass = 'text-danger';
+            } elseif ($limite = checkMfaEssaisRateLimit((int) $etat['id'])) {
+                // Plafond journalier de codes faux pour CE compte (toutes sessions / IP) : reconnexion exigée.
+                return $this->retourLogin($limite);
             } else {
                 $saisie = $this->request->getPost('code');
                 $res    = verifierCodeSecurite($etat, is_string($saisie) ? $saisie : '', time());
@@ -163,6 +186,7 @@ class AuthController extends BaseController
                 }
 
                 enregistrerEchecLogin(); // même verrou par IP que les échecs de mot de passe (E001)
+                enregistrerEchecMfa((int) $etat['id']); // + plafond journalier par compte
                 error_log('[NIJAC][SEC] code de sécurité incorrect ou expiré (Id_Utilisateur ' . (int) $etat['id'] . ')');
                 if ($res['erreur'] === 'epuise') {
                     return $this->retourLogin("Nombre maximal d'essais atteint : veuillez vous reconnecter.");
@@ -285,8 +309,9 @@ class AuthController extends BaseController
     /** Relit un compte actif (les données de session viennent de la base au moment de la validation du code). */
     private function chargerUtilisateur(int $id): ?array
     {
-        $stmt = getPDO()->prepare(
-            'SELECT Id_Utilisateur, Login, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin, Email
+        $pdo  = getPDO();
+        $stmt = $pdo->prepare(
+            'SELECT ' . colonnesSessionUtilisateur($pdo) . '
              FROM Utilisateur WHERE Id_Utilisateur = ? AND Actif = 1 LIMIT 1'
         );
         $stmt->execute([$id]);
