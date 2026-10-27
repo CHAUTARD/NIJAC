@@ -1731,8 +1731,8 @@ function creerCompteJa(\PDO $pdo, int $idJa, string $email, string $nom, ?string
         throw new \RuntimeException('Création du compte JA impossible avant migration : chargez EA98.', 0, $e);
     }
     if (tableRolesExiste($pdo)) {
-        $pdo->prepare("INSERT INTO utilisateur_role (Id_Utilisateur, Role, estPrincipal) VALUES (?, 'JA', 1)")
-            ->execute([$idJa]);
+        // Nom 'JA' converti en Id_Role (schéma Id_Role) ; rôle absent de la table role → exception.
+        insererRoleUtilisateur($pdo, $idJa, 'JA', true);
     }
 }
 
@@ -2003,12 +2003,16 @@ function ajouterTypeMessagerie(\PDO $pdo, string $type): void
  * (assurerRolesUtilisateurs()). Avant EA98 : repli sur cette colonne si elle existe encore.
  * ──────────────────────────────────────────────────────────────────────────── */
 
-/** Rôles de référence (amorçage de la table `role`, repli de menuDuRole() / rolesValides()) : Code => [Libelle, Priorite, RouteMenu]. */
+/**
+ * Rôles de référence (amorçage de la table `role`, repli de menuDuRole() / rolesValides()) :
+ * Nom => [Libelle, Priorite, RouteMenu]. L'Id_Role (AUTO_INCREMENT) n'est jamais utilisé hors SQL.
+ * Priorités de CRA Convoc (3) et CSR (4) réappliquées par assurerRolesUtilisateurs() (PRIORITES_ROLES_FORCEES).
+ */
 const ROLES_REFERENCE = [
     'Administrateur'  => ['Administrateur', 1, 'admin-menu'],
     'Nominateur'      => ['Nominateur', 2, 'nominateur-menu'],
-    'CSR'             => ['Commission Sportive Régionale', 3, 'csr-menu'],
-    'CRA Convoc'      => ['CRA Convocation', 4, 'cra-convoc-menu'],
+    'CRA Convoc'      => ['CRA Convocation', 3, 'cra-convoc-menu'],
+    'CSR'             => ['Commission Sportive Régionale', 4, 'csr-menu'],
     'Defiscalisateur' => ['Défiscalisateur', 5, 'defiscalisateur-menu'],
     'JA'              => ['Juge-arbitre', 6, 'ja-menu'],
 ];
@@ -2053,6 +2057,57 @@ function utilisateurAColonneRole(\PDO $pdo, bool $rafraichir = false): bool
 }
 
 /**
+ * Forme du schéma des rôles (cache statique, $rafraichir = true après migration) :
+ *  - 'nom'  : colonne du nom du rôle dans `role` — 'Nom' (schéma Id_Role) ou 'Code' (ancien schéma) ;
+ *  - 'roleId' / 'urIdCol' / 'urRole' : présence de role.Id_Role, utilisateur_role.Id_Role, utilisateur_role.Role ;
+ *  - 'urId' : utilisateur_role référence role.Id_Role (colonne Id_Role présente ET ancienne colonne Role
+ *             supprimée) ; false = ancien schéma (ou migration interrompue) : ur.Role = nom du rôle.
+ * Le reste du code manipule toujours des NOMS de rôles ; seules les requêtes SQL dépendent de ce schéma.
+ */
+function schemaRoles(\PDO $pdo, bool $rafraichir = false): array
+{
+    static $schema = null;
+    if ($schema === null || $rafraichir) {
+        $schema = ['nom' => 'Code', 'roleId' => false, 'urIdCol' => false, 'urRole' => true, 'urId' => false];
+        try {
+            $cols = $pdo->query(
+                "SELECT LOWER(TABLE_NAME) AS t, COLUMN_NAME AS c FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) IN ('role', 'utilisateur_role')
+                   AND COLUMN_NAME IN ('Nom', 'Code', 'Id_Role', 'Role')"
+            )->fetchAll(\PDO::FETCH_ASSOC);
+            $a = [];
+            foreach ($cols as $c) {
+                $a[$c['t'] . '.' . $c['c']] = true;
+            }
+            $schema['nom']     = isset($a['role.Nom']) ? 'Nom' : 'Code';
+            $schema['roleId']  = isset($a['role.Id_Role']);
+            $schema['urIdCol'] = isset($a['utilisateur_role.Id_Role']);
+            $schema['urRole']  = isset($a['utilisateur_role.Role']);
+            $schema['urId']    = $schema['roleId'] && $schema['urIdCol'] && !$schema['urRole'];
+        } catch (\PDOException $e) {
+            error_log('[NIJAC] schemaRoles : ' . $e->getMessage());
+        }
+    }
+
+    return $schema;
+}
+
+/**
+ * Jointure de utilisateur_role (alias $ur) vers le nom du rôle : [clause JOIN, expression du nom].
+ * Schéma Id_Role : ["JOIN role $r ON $r.Id_Role = $ur.Id_Role", "$r.Nom"] ; ancien schéma : ['', "$ur.Role"].
+ * $ur / $r : alias SQL fixés par le code appelant (jamais une saisie).
+ */
+function sqlNomRoleUr(\PDO $pdo, string $ur = 'ur', string $r = 'r'): array
+{
+    $s = schemaRoles($pdo);
+    if ($s['urId']) {
+        return ["JOIN role $r ON $r.Id_Role = $ur.Id_Role", "$r.{$s['nom']}"];
+    }
+
+    return ['', "$ur.Role"];
+}
+
+/**
  * Rôles d'un utilisateur : rôle principal d'abord, puis par priorité (table role). Avant EA98
  * (utilisateur_role absente) : la colonne utilisateur.Role si elle existe encore, sinon aucun rôle.
  */
@@ -2062,12 +2117,20 @@ function rolesUtilisateur(\PDO $pdo, int $idUtilisateur): array
         return [];
     }
     if (tableRolesExiste($pdo)) {
-        $st = $pdo->prepare(
-            'SELECT ur.Role FROM utilisateur_role ur
-             LEFT JOIN role r ON r.Code = ur.Role
-             WHERE ur.Id_Utilisateur = ?
-             ORDER BY ur.estPrincipal DESC, COALESCE(r.Priorite, 99), ur.Role'
-        );
+        // Schéma Id_Role : nom lu dans role.Nom ; ancien schéma : ur.Role = nom (role.Code ou role.Nom).
+        $s = schemaRoles($pdo);
+        if ($s['urId']) {
+            $sql = "SELECT r.{$s['nom']} FROM utilisateur_role ur
+                    JOIN role r ON r.Id_Role = ur.Id_Role
+                    WHERE ur.Id_Utilisateur = ?
+                    ORDER BY ur.estPrincipal DESC, r.Priorite, r.{$s['nom']}";
+        } else {
+            $sql = "SELECT ur.Role FROM utilisateur_role ur
+                    LEFT JOIN role r ON r.{$s['nom']} = ur.Role
+                    WHERE ur.Id_Utilisateur = ?
+                    ORDER BY ur.estPrincipal DESC, COALESCE(r.Priorite, 99), ur.Role";
+        }
+        $st = $pdo->prepare($sql);
         $st->execute([$idUtilisateur]);
 
         return array_values(array_map('strval', $st->fetchAll(\PDO::FETCH_COLUMN)));
@@ -2151,9 +2214,10 @@ function menuDuRole(string $role): string
         try {
             $pdo = getPDO();
             if (tableRolesExiste($pdo)) {
-                foreach ($pdo->query('SELECT Code, RouteMenu FROM role')->fetchAll(\PDO::FETCH_ASSOC) as $r) {
+                $nom = schemaRoles($pdo)['nom'];
+                foreach ($pdo->query("SELECT $nom AS Nom, RouteMenu FROM role")->fetchAll(\PDO::FETCH_ASSOC) as $r) {
                     if (trim((string) $r['RouteMenu']) !== '') {
-                        $routes[(string) $r['Code']] = trim((string) $r['RouteMenu']);
+                        $routes[(string) $r['Nom']] = trim((string) $r['RouteMenu']);
                     }
                 }
             }
@@ -2165,12 +2229,13 @@ function menuDuRole(string $role): string
     return $routes[$role] ?? 'nominateur-menu';
 }
 
-/** Codes des rôles valides (table role, par priorité ; repli ROLES_REFERENCE avant EA98). */
+/** Noms des rôles valides (table role, par priorité ; repli ROLES_REFERENCE avant EA98). */
 function rolesValides(\PDO $pdo): array
 {
     if (tableRolesExiste($pdo)) {
         try {
-            $codes = $pdo->query('SELECT Code FROM role ORDER BY Priorite, Code')->fetchAll(\PDO::FETCH_COLUMN);
+            $nom   = schemaRoles($pdo)['nom'];
+            $codes = $pdo->query("SELECT $nom FROM role ORDER BY Priorite, $nom")->fetchAll(\PDO::FETCH_COLUMN);
             if ($codes) {
                 return array_values(array_map('strval', $codes));
             }
@@ -2182,14 +2247,15 @@ function rolesValides(\PDO $pdo): array
     return array_keys(ROLES_REFERENCE);
 }
 
-/** Libellés des rôles [Code => Libelle] (table role, par priorité ; repli ROLES_REFERENCE avant EA98) — EA86. */
+/** Libellés des rôles [Nom => Libelle] (table role, par priorité ; repli ROLES_REFERENCE avant EA98) — EA86. */
 function libellesRoles(\PDO $pdo): array
 {
     if (tableRolesExiste($pdo)) {
         try {
             $libelles = [];
-            foreach ($pdo->query('SELECT Code, Libelle FROM role ORDER BY Priorite, Code')->fetchAll(\PDO::FETCH_ASSOC) as $r) {
-                $code = (string) $r['Code'];
+            $nom      = schemaRoles($pdo)['nom'];
+            foreach ($pdo->query("SELECT $nom AS Nom, Libelle FROM role ORDER BY Priorite, $nom")->fetchAll(\PDO::FETCH_ASSOC) as $r) {
+                $code = (string) $r['Nom'];
                 $lib  = trim((string) ($r['Libelle'] ?? ''));
                 $libelles[$code] = $lib !== '' ? $lib : (ROLES_REFERENCE[$code][0] ?? $code);
             }
@@ -2208,7 +2274,8 @@ function libellesRoles(\PDO $pdo): array
  * Remplace les rôles d'un utilisateur (DELETE + INSERT, SANS transaction propre : à l'appelant d'en
  * ouvrir une). $principal absent de $roles y est ajouté ; vide → premier rôle de la liste. Un seul
  * estPrincipal = 1 par utilisateur. Avant EA98 (utilisateur_role absente) : repli sur la colonne
- * utilisateur.Role (rôle principal seul) si elle existe encore.
+ * utilisateur.Role (rôle principal seul) si elle existe encore. Noms convertis en Id_Role (idsRoles()) :
+ * un rôle absent de la table role lève une RuntimeException avant toute suppression.
  */
 function enregistrerRolesUtilisateur(\PDO $pdo, int $idUtilisateur, array $roles, string $principal): void
 {
@@ -2231,10 +2298,64 @@ function enregistrerRolesUtilisateur(\PDO $pdo, int $idUtilisateur, array $roles
         return;
     }
 
+    // Conversion nom → Id_Role AVANT toute écriture : un rôle inconnu lève une exception, rien n'est supprimé.
+    $ids = idsRoles($pdo, $roles);
     $pdo->prepare('DELETE FROM utilisateur_role WHERE Id_Utilisateur = ?')->execute([$idUtilisateur]);
-    $ins = $pdo->prepare('INSERT INTO utilisateur_role (Id_Utilisateur, Role, estPrincipal) VALUES (?, ?, ?)');
     foreach ($roles as $role) {
-        $ins->execute([$idUtilisateur, $role, $role === $principal ? 1 : 0]);
+        insererRoleUtilisateur($pdo, $idUtilisateur, $role, $role === $principal, $ids);
+    }
+}
+
+/**
+ * Noms de rôles → [Nom => Id_Role] (table role). Rôle inconnu → RuntimeException. Ancien schéma
+ * (role sans Id_Role) : [Nom => null], l'existence du nom étant tout de même vérifiée.
+ */
+function idsRoles(\PDO $pdo, array $noms): array
+{
+    $noms = array_values(array_unique(array_map('strval', $noms)));
+    if (!$noms) {
+        return [];
+    }
+    $s     = schemaRoles($pdo);
+    $col   = $s['nom'];
+    $id    = $s['roleId'] ? 'Id_Role' : 'NULL';
+    $st    = $pdo->prepare("SELECT $col AS Nom, $id AS Id_Role FROM role WHERE $col IN (" . implode(',', array_fill(0, count($noms), '?')) . ')');
+    $st->execute($noms);
+    $trouves = [];
+    foreach ($st->fetchAll(\PDO::FETCH_ASSOC) as $r) {
+        $trouves[(string) $r['Nom']] = $r['Id_Role'] !== null ? (int) $r['Id_Role'] : null;
+    }
+    $res = [];
+    foreach ($noms as $n) {
+        if (!array_key_exists($n, $trouves)) {
+            throw new \RuntimeException('Rôle inconnu : « ' . $n . ' ».');
+        }
+        $res[$n] = $trouves[$n];
+    }
+
+    return $res;
+}
+
+/**
+ * Insère une ligne utilisateur_role pour le rôle $nom (schéma Id_Role : Id_Role seul ; ancien schéma :
+ * Role = nom, plus Id_Role si la colonne existe déjà — migration interrompue). $ids = idsRoles() déjà calculé.
+ */
+function insererRoleUtilisateur(\PDO $pdo, int $idUtilisateur, string $nom, bool $principal, ?array $ids = null): void
+{
+    $ids ??= idsRoles($pdo, [$nom]);
+    if (!array_key_exists($nom, $ids)) {
+        $ids += idsRoles($pdo, [$nom]);
+    }
+    $s = schemaRoles($pdo);
+    if ($s['urId']) {
+        $pdo->prepare('INSERT INTO utilisateur_role (Id_Utilisateur, Id_Role, estPrincipal) VALUES (?, ?, ?)')
+            ->execute([$idUtilisateur, $ids[$nom], $principal ? 1 : 0]);
+    } elseif ($s['urIdCol'] && $ids[$nom] !== null) {
+        $pdo->prepare('INSERT INTO utilisateur_role (Id_Utilisateur, Role, Id_Role, estPrincipal) VALUES (?, ?, ?, ?)')
+            ->execute([$idUtilisateur, $nom, $ids[$nom], $principal ? 1 : 0]);
+    } else {
+        $pdo->prepare('INSERT INTO utilisateur_role (Id_Utilisateur, Role, estPrincipal) VALUES (?, ?, ?)')
+            ->execute([$idUtilisateur, $nom, $principal ? 1 : 0]);
     }
 }
 
@@ -2262,96 +2383,278 @@ function sqlARole(string $colId, string $placeholder): string
                 ? "($colId IS NOT NULL AND $table.Role = $placeholder)"
                 : "(0 = 1 AND $placeholder IS NULL)";
         }
+        // Schéma Id_Role : jointure sur role pour comparer le nom (alias distincts de ceux de l'appelant).
+        [$join, $nom] = sqlNomRoleUr($pdo, 'ur_ar', 'r_ar');
+
+        return "EXISTS(SELECT 1 FROM utilisateur_role ur_ar $join WHERE ur_ar.Id_Utilisateur = $colId AND $nom = $placeholder)";
     } catch (\Throwable $e) {
         error_log('[NIJAC] sqlARole : ' . $e->getMessage());
+        // Repli selon le schéma connu (cache de schemaRoles()) : ur.Role n'existe plus sur le schéma Id_Role.
+        try {
+            $s = schemaRoles(getPDO());
+            if ($s['urId']) {
+                return "EXISTS(SELECT 1 FROM utilisateur_role ur_ar JOIN role r_ar ON r_ar.Id_Role = ur_ar.Id_Role WHERE ur_ar.Id_Utilisateur = $colId AND r_ar.{$s['nom']} = $placeholder)";
+            }
+        } catch (\Throwable $e2) {
+            error_log('[NIJAC] sqlARole (repli) : ' . $e2->getMessage());
+        }
     }
 
     return "EXISTS(SELECT 1 FROM utilisateur_role ur WHERE ur.Id_Utilisateur = $colId AND ur.Role = $placeholder)";
 }
 
+/** Priorités réappliquées à chaque passage d'EA98 (l'amorçage ne modifie pas une base déjà amorcée) : Nom => Priorite. */
+const PRIORITES_ROLES_FORCEES = [
+    'CRA Convoc' => 3,
+    'CSR'        => 4,
+];
+
+/**
+ * Clés étrangères existantes (information_schema) : [[table, contrainte], …]. $condition = filtre SQL
+ * sur KEY_COLUMN_USAGE (texte fixé par le code, jamais une saisie).
+ */
+function clesEtrangeresRoles(\PDO $pdo, string $condition): array
+{
+    return $pdo->query(
+        "SELECT DISTINCT TABLE_NAME, CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+         WHERE TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME IS NOT NULL AND $condition"
+    )->fetchAll(\PDO::FETCH_NUM);
+}
+
+/** Supprime les clés étrangères listées par clesEtrangeresRoles(). */
+function supprimerClesEtrangeresRoles(\PDO $pdo, array $fks): void
+{
+    foreach ($fks as [$table, $fk]) {
+        $pdo->exec('ALTER TABLE `' . str_replace('`', '', (string) $table) . '` DROP FOREIGN KEY `' . str_replace('`', '', (string) $fk) . '`');
+    }
+}
+
+/**
+ * (Re)crée les FK de utilisateur_role si absentes (idempotent, chaque FK dans son try/catch) :
+ * Id_Utilisateur → utilisateur (CASCADE) ; schéma Id_Role : Id_Role → role.Id_Role, sinon (ancien schéma
+ * ou migration interrompue) Role → role.Nom/Code (ON UPDATE CASCADE) — restaure l'état précédent.
+ */
+function assurerClesEtrangeresRoles(\PDO $pdo): void
+{
+    if (!tableRolesExiste($pdo, true)) {
+        return;
+    }
+    $s = schemaRoles($pdo, true);
+    [$col, $ref, $nomFk] = $s['urId']
+        ? ['Id_Role', 'Id_Role', 'fk_utilisateur_role_role']
+        : ['Role', $s['nom'], 'fk_utilisateur_role_role'];
+    $cles = [
+        'Id_Utilisateur' => "CONSTRAINT fk_utilisateur_role_utilisateur FOREIGN KEY (Id_Utilisateur) REFERENCES utilisateur (Id_Utilisateur) ON DELETE CASCADE ON UPDATE CASCADE",
+        $col             => "CONSTRAINT $nomFk FOREIGN KEY ($col) REFERENCES role ($ref) ON DELETE RESTRICT ON UPDATE CASCADE",
+    ];
+    foreach ($cles as $colonne => $ddl) {
+        try {
+            if (clesEtrangeresRoles($pdo, "LOWER(TABLE_NAME) = 'utilisateur_role' AND COLUMN_NAME = '$colonne'")) {
+                continue;
+            }
+            $pdo->exec("ALTER TABLE utilisateur_role ADD $ddl");
+        } catch (\PDOException $e) {
+            error_log("[NIJAC] FK utilisateur_role.$colonne non créée (index seuls) : " . $e->getMessage());
+        }
+    }
+}
+
 /**
  * Migration EA98 (appelée par initTableConfiguration(), idempotente, chaque étape isolée dans son
- * try/catch + error_log) :
- *  1. table `role` + amorçage INSERT IGNORE (ROLES_REFERENCE) ;
- *  2. table `utilisateur_role` (type/collation copiés de utilisateur.Id_Utilisateur et role.Code ;
- *     FK utilisateur ON DELETE CASCADE, FK role ON UPDATE CASCADE — repli sans FK, index seuls) ;
- *  3. si utilisateur.Role existe encore : INSERT IGNORE (Id, Role, estPrincipal = 1) pour chaque
- *     utilisateur sans ligne, puis, SEULEMENT si plus aucun utilisateur n'a de rôle non migré,
- *     suppression des FK / index portant sur Role et DROP COLUMN Role.
+ * try/catch + error_log ; une étape en échec laisse l'état précédent, lu par les replis de schemaRoles()) :
+ *  1. table `role` (Id_Role INT UNSIGNED AUTO_INCREMENT PK, Nom VARCHAR(30) UNIQUE, Libelle, Priorite,
+ *     RouteMenu) pour une base neuve ;
+ *  2. ancien schéma (PK Code) : FK pointant vers role supprimées, Id_Role ajouté (lignes conservées,
+ *     numérotées), Code renommé Nom (UNIQUE) ;
+ *  3. amorçage INSERT … WHERE NOT EXISTS (ROLES_REFERENCE) + priorités forcées (PRIORITES_ROLES_FORCEES) ;
+ *  4. table `utilisateur_role` (Id_Utilisateur, Id_Role INT UNSIGNED, estPrincipal, PK (Id_Utilisateur, Id_Role)) ;
+ *     ancien schéma (colonne Role = nom) : Id_Role ajouté puis rempli par jointure sur role.Nom ; SEULEMENT si
+ *     toutes les lignes sont résolues : FK supprimées, PK / index refaits et colonne Role supprimée (un seul ALTER) ;
+ *  5. FK de utilisateur_role (re)créées selon le schéma obtenu (repli : index seuls) ;
+ *  6. si utilisateur.Role existe encore : INSERT IGNORE (rôle principal) pour chaque utilisateur sans ligne,
+ *     puis, SEULEMENT si plus aucun utilisateur n'a de rôle non migré, suppression des FK / index portant
+ *     sur Role et DROP COLUMN Role.
  */
 function assurerRolesUtilisateurs(\PDO $pdo): void
 {
-    // 1. Table de référence des rôles.
+    // Comparaison de noms insensible aux collations différentes (anciennes colonnes ENUM / VARCHAR).
+    $cmp = static fn (string $a, string $b): string =>
+        "CONVERT($a USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT($b USING utf8mb4) COLLATE utf8mb4_unicode_ci";
+
+    // 1. Table de référence des rôles (base neuve : schéma Id_Role directement).
     try {
         $pdo->exec(
             "CREATE TABLE IF NOT EXISTS role (
-                Code      VARCHAR(30) NOT NULL,
+                Id_Role   INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                Nom       VARCHAR(30) NOT NULL COMMENT 'Nom du rôle (valeur manipulée par le code)',
                 Libelle   VARCHAR(60) NOT NULL DEFAULT '',
                 Priorite  TINYINT     NOT NULL DEFAULT 99 COMMENT 'Ordre d''affichage / choix du rôle principal (1 = premier)',
                 RouteMenu VARCHAR(50) NOT NULL DEFAULT 'nominateur-menu' COMMENT 'Route du menu d''accueil du rôle',
-                PRIMARY KEY (Code)
+                PRIMARY KEY (Id_Role),
+                UNIQUE KEY uq_role_nom (Nom)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Rôles des utilisateurs (référence)'"
         );
-        $ins = $pdo->prepare('INSERT IGNORE INTO role (Code, Libelle, Priorite, RouteMenu) VALUES (?, ?, ?, ?)');
-        foreach (ROLES_REFERENCE as $code => [$libelle, $priorite, $route]) {
-            $ins->execute([$code, $libelle, $priorite, $route]);
-        }
     } catch (\PDOException $e) {
-        error_log('[NIJAC] Création / amorçage de la table role : ' . $e->getMessage());
+        error_log('[NIJAC] Création de la table role : ' . $e->getMessage());
+    }
+    $s = schemaRoles($pdo, true);
+
+    // 2. Ancien schéma de role (PK Code) → Id_Role + Nom, lignes conservées.
+    if (!$s['roleId'] || $s['nom'] === 'Code') {
+        try {
+            // Les FK de utilisateur_role pointant vers role (utilisateur_role.Role → role.Code) bloqueraient le
+            // changement de PK : supprimées ici, recréées à l'étape 5 selon le schéma obtenu. Une FK d'une AUTRE
+            // table vers role n'est jamais supprimée : journalisée ; si elle bloque l'ALTER, son échec est
+            // journalisé par le catch ci-dessous et role garde son schéma précédent (ALTER atomique).
+            supprimerClesEtrangeresRoles($pdo, clesEtrangeresRoles(
+                $pdo,
+                "LOWER(REFERENCED_TABLE_NAME) = 'role' AND LOWER(TABLE_NAME) = 'utilisateur_role'"
+            ));
+            foreach (clesEtrangeresRoles($pdo, "LOWER(REFERENCED_TABLE_NAME) = 'role' AND LOWER(TABLE_NAME) <> 'utilisateur_role'") as [$tableFk, $nomFk]) {
+                error_log("[NIJAC] Migration de la table role : FK $tableFk.$nomFk vers role conservée (non gérée par NIJAC) — elle peut bloquer la migration");
+            }
+            if (!$s['roleId']) {
+                // Un seul ALTER (atomique) : en cas d'échec, role reste intacte.
+                $pdo->exec(
+                    "ALTER TABLE role DROP PRIMARY KEY,
+                         ADD COLUMN Id_Role INT UNSIGNED NOT NULL AUTO_INCREMENT FIRST,
+                         ADD PRIMARY KEY (Id_Role),
+                         ADD UNIQUE KEY uq_role_nom (`{$s['nom']}`)"
+                );
+                error_log('[NIJAC] role : colonne Id_Role ajoutée (clé primaire)');
+            }
+            if ($s['nom'] === 'Code') {
+                $c = $pdo->query(
+                    "SELECT CHARACTER_SET_NAME, COLLATION_NAME FROM information_schema.COLUMNS
+                     WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'role' AND COLUMN_NAME = 'Code'"
+                )->fetch(\PDO::FETCH_ASSOC);
+                $coll = ($c && $c['COLLATION_NAME']) ? " CHARACTER SET {$c['CHARACTER_SET_NAME']} COLLATE {$c['COLLATION_NAME']}" : '';
+                $pdo->exec("ALTER TABLE role CHANGE Code Nom VARCHAR(30)$coll NOT NULL COMMENT 'Nom du rôle (valeur manipulée par le code)'");
+                error_log('[NIJAC] role : colonne Code renommée Nom');
+            }
+        } catch (\PDOException $e) {
+            error_log('[NIJAC] Migration de la table role vers Id_Role : ' . $e->getMessage() . ' — schéma précédent conservé');
+        }
+        $s = schemaRoles($pdo, true);
+    }
+    // Index unique sur le nom (FK de l'ancien schéma / INSERT IGNORE) : ajouté s'il manque.
+    if ($s['roleId']) {
+        try {
+            $unique = (bool) $pdo->query(
+                "SELECT 1 FROM information_schema.STATISTICS
+                 WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'role' AND COLUMN_NAME = '{$s['nom']}'
+                   AND NON_UNIQUE = 0 AND SEQ_IN_INDEX = 1"
+            )->fetchColumn();
+            if (!$unique) {
+                $pdo->exec("ALTER TABLE role ADD UNIQUE KEY uq_role_nom (`{$s['nom']}`)");
+            }
+        } catch (\PDOException $e) {
+            error_log('[NIJAC] Index unique role.' . $s['nom'] . ' : ' . $e->getMessage());
+        }
     }
 
-    // 2. Table de liaison utilisateur ↔ rôles.
+    // 3. Amorçage (INSERT … WHERE NOT EXISTS : jamais d'écrasement, aucun AUTO_INCREMENT consommé
+    //    pour un rôle déjà présent, contrairement à INSERT IGNORE) puis priorités forcées.
+    try {
+        $nom = $s['nom'];
+        $ins = $pdo->prepare(
+            "INSERT INTO role ($nom, Libelle, Priorite, RouteMenu)
+             SELECT ?, ?, ?, ? FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM role WHERE $nom = ?)"
+        );
+        foreach (ROLES_REFERENCE as $code => [$libelle, $priorite, $route]) {
+            try {
+                $ins->execute([$code, $libelle, $priorite, $route, $code]);
+            } catch (\PDOException $e) {
+                error_log("[NIJAC] Amorçage du rôle $code : " . $e->getMessage());
+            }
+        }
+        $maj = $pdo->prepare("UPDATE role SET Priorite = ? WHERE $nom = ?");
+        foreach (PRIORITES_ROLES_FORCEES as $code => $priorite) {
+            $maj->execute([$priorite, $code]);
+        }
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] Amorçage de la table role : ' . $e->getMessage());
+    }
+
+    // 4. Table de liaison utilisateur ↔ rôles.
     try {
         if (!tableRolesExiste($pdo, true)) {
             $typeUtil = $pdo->query(
                 "SELECT COLUMN_TYPE, CHARACTER_SET_NAME, COLLATION_NAME FROM information_schema.COLUMNS
                  WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'utilisateur' AND COLUMN_NAME = 'Id_Utilisateur'"
             )->fetch(\PDO::FETCH_ASSOC);
-            $typeRole = $pdo->query(
-                "SELECT COLUMN_TYPE, CHARACTER_SET_NAME, COLLATION_NAME FROM information_schema.COLUMNS
-                 WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'role' AND COLUMN_NAME = 'Code'"
-            )->fetch(\PDO::FETCH_ASSOC);
-            if (!$typeUtil || !$typeRole) {
-                throw new \PDOException('utilisateur.Id_Utilisateur ou role.Code introuvable');
+            if (!$typeUtil || !$s['roleId']) {
+                throw new \PDOException('utilisateur.Id_Utilisateur ou role.Id_Role introuvable');
             }
             $defUtil = $typeUtil['COLUMN_TYPE']
                 . ($typeUtil['COLLATION_NAME'] ? " CHARACTER SET {$typeUtil['CHARACTER_SET_NAME']} COLLATE {$typeUtil['COLLATION_NAME']}" : '');
-            $defRole = $typeRole['COLUMN_TYPE']
-                . ($typeRole['COLLATION_NAME'] ? " CHARACTER SET {$typeRole['CHARACTER_SET_NAME']} COLLATE {$typeRole['COLLATION_NAME']}" : '');
-            $ddl = "CREATE TABLE utilisateur_role (
-                        Id_Utilisateur $defUtil NOT NULL,
-                        Role           $defRole NOT NULL,
-                        estPrincipal   TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Rôle principal (un seul par utilisateur, garanti par le code)',
-                        PRIMARY KEY (Id_Utilisateur, Role),
-                        KEY idx_utilisateur_role_role (Role)%s
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-                      COMMENT='Rôles des utilisateurs (plusieurs-à-plusieurs) — remplace utilisateur.Role'";
-            try {
-                $pdo->exec(sprintf($ddl, ',
-                        CONSTRAINT fk_utilisateur_role_utilisateur FOREIGN KEY (Id_Utilisateur) REFERENCES utilisateur (Id_Utilisateur) ON DELETE CASCADE ON UPDATE CASCADE,
-                        CONSTRAINT fk_utilisateur_role_role        FOREIGN KEY (Role)           REFERENCES role (Code)                  ON DELETE RESTRICT ON UPDATE CASCADE'));
-            } catch (\PDOException $e) {
-                error_log('[NIJAC] utilisateur_role créée SANS clés étrangères (index seuls) : ' . $e->getMessage());
-                $pdo->exec(sprintf($ddl, ''));
-            }
+            $pdo->exec(
+                "CREATE TABLE utilisateur_role (
+                    Id_Utilisateur $defUtil NOT NULL,
+                    Id_Role        INT UNSIGNED NOT NULL,
+                    estPrincipal   TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Rôle principal (un seul par utilisateur, garanti par le code)',
+                    PRIMARY KEY (Id_Utilisateur, Id_Role),
+                    KEY idx_utilisateur_role_role (Id_Role)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                  COMMENT='Rôles des utilisateurs (plusieurs-à-plusieurs) — remplace utilisateur.Role'"
+            );
             tableRolesExiste($pdo, true);
+        } elseif ($s['urRole'] && $s['roleId']) {
+            // Ancien schéma : ajout de Id_Role (nullable), remplissage par jointure sur le nom.
+            if (!$s['urIdCol']) {
+                $pdo->exec('ALTER TABLE utilisateur_role ADD COLUMN Id_Role INT UNSIGNED NULL AFTER Id_Utilisateur');
+            }
+            $pdo->exec(
+                'UPDATE utilisateur_role ur JOIN role r ON ' . $cmp('ur.Role', 'r.' . $s['nom']) . ' SET ur.Id_Role = r.Id_Role'
+            );
+            $orphelins = (int) $pdo->query('SELECT COUNT(*) FROM utilisateur_role WHERE Id_Role IS NULL')->fetchColumn();
+            if ($orphelins > 0) {
+                error_log('[NIJAC] Migration utilisateur_role.Role → Id_Role incomplète (' . $orphelins
+                    . ' ligne(s) au rôle inconnu de la table role) : colonne Role conservée');
+            } else {
+                // FK de utilisateur_role supprimées (celle sur Id_Utilisateur s'appuie sur la PK), recréées à l'étape 5.
+                supprimerClesEtrangeresRoles($pdo, clesEtrangeresRoles($pdo, "LOWER(TABLE_NAME) = 'utilisateur_role'"));
+                $index = $pdo->query(
+                    "SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS
+                     WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'utilisateur_role'
+                       AND COLUMN_NAME = 'Role' AND INDEX_NAME <> 'PRIMARY'"
+                )->fetchAll(\PDO::FETCH_COLUMN);
+                $dropIndex = '';
+                foreach ($index as $ix) {
+                    $dropIndex .= ', DROP INDEX `' . str_replace('`', '', (string) $ix) . '`';
+                }
+                // Un seul ALTER (atomique) : PK refaite sur Id_Role, index refait, colonne Role supprimée.
+                $pdo->exec(
+                    'ALTER TABLE utilisateur_role
+                         MODIFY Id_Role INT UNSIGNED NOT NULL,
+                         DROP PRIMARY KEY,
+                         ADD PRIMARY KEY (Id_Utilisateur, Id_Role)' . $dropIndex . ',
+                         DROP COLUMN Role,
+                         ADD KEY idx_utilisateur_role_role (Id_Role)'
+                );
+                error_log('[NIJAC] utilisateur_role : colonne Role remplacée par Id_Role');
+            }
         }
     } catch (\PDOException $e) {
-        error_log('[NIJAC] Création de utilisateur_role : ' . $e->getMessage());
+        error_log('[NIJAC] Création / migration de utilisateur_role : ' . $e->getMessage() . ' — schéma précédent conservé');
     }
+
+    // 5. Clés étrangères selon le schéma obtenu (restaure aussi celles supprimées par une étape en échec).
+    assurerClesEtrangeresRoles($pdo);
+    $s = schemaRoles($pdo, true);
 
     if (!tableRolesExiste($pdo, true) || !utilisateurAColonneRole($pdo, true)) {
         return;
     }
 
-    // 3a. Migration de utilisateur.Role → utilisateur_role (rôle principal), utilisateurs sans ligne seulement.
-    $cmp = 'CONVERT(u.Role USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(r.Code USING utf8mb4) COLLATE utf8mb4_unicode_ci';
+    // 6a. Migration de utilisateur.Role → utilisateur_role (rôle principal), utilisateurs sans ligne seulement.
     try {
+        [$colIns, $valIns] = $s['urId'] ? ['Id_Role', 'r.Id_Role'] : ['Role', 'r.' . $s['nom']];
         $pdo->exec(
-            "INSERT IGNORE INTO utilisateur_role (Id_Utilisateur, Role, estPrincipal)
-             SELECT u.Id_Utilisateur, r.Code, 1
+            "INSERT IGNORE INTO utilisateur_role (Id_Utilisateur, $colIns, estPrincipal)
+             SELECT u.Id_Utilisateur, $valIns, 1
              FROM utilisateur u
-             JOIN role r ON $cmp
+             JOIN role r ON " . $cmp('u.Role', 'r.' . $s['nom']) . "
              WHERE NOT EXISTS (SELECT 1 FROM utilisateur_role ur WHERE ur.Id_Utilisateur = u.Id_Utilisateur)"
         );
         $restants = (int) $pdo->query(
@@ -2371,16 +2674,9 @@ function assurerRolesUtilisateurs(\PDO $pdo): void
         return;
     }
 
-    // 3b. Suppression des FK puis des index portant sur utilisateur.Role, puis de la colonne.
+    // 6b. Suppression des FK puis des index portant sur utilisateur.Role, puis de la colonne.
     try {
-        $fks = $pdo->query(
-            "SELECT DISTINCT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
-             WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'utilisateur' AND COLUMN_NAME = 'Role'
-               AND REFERENCED_TABLE_NAME IS NOT NULL"
-        )->fetchAll(\PDO::FETCH_COLUMN);
-        foreach ($fks as $fk) {
-            $pdo->exec('ALTER TABLE utilisateur DROP FOREIGN KEY `' . str_replace('`', '', (string) $fk) . '`');
-        }
+        supprimerClesEtrangeresRoles($pdo, clesEtrangeresRoles($pdo, "LOWER(TABLE_NAME) = 'utilisateur' AND COLUMN_NAME = 'Role'"));
         $index = $pdo->query(
             "SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS
              WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'utilisateur' AND COLUMN_NAME = 'Role'

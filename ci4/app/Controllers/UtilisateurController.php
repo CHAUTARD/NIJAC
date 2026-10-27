@@ -139,8 +139,10 @@ class UtilisateurController extends BaseController
         $prefix = addcslashes($q, '%_\\') . '%';
         // Avant EA98 (utilisateur_role absente) : repli sur l'ancienne colonne utilisateur.Role.
         if (tableRolesExiste($pdo)) {
-            $compteRole = '(SELECT GROUP_CONCAT(ur.Role ORDER BY ur.estPrincipal DESC, ur.Role SEPARATOR \',\')
-                      FROM utilisateur_role ur WHERE ur.Id_Utilisateur = u.Id_Utilisateur)';
+            // Nom du rôle : role.Nom (schéma Id_Role) ou ur.Role (ancien schéma) — sqlNomRoleUr().
+            [$joinRole, $nomRole] = sqlNomRoleUr($pdo);
+            $compteRole = '(SELECT GROUP_CONCAT(' . $nomRole . ' ORDER BY ur.estPrincipal DESC, ' . $nomRole . ' SEPARATOR \',\')
+                      FROM utilisateur_role ur ' . $joinRole . ' WHERE ur.Id_Utilisateur = u.Id_Utilisateur)';
         } else {
             $compteRole = utilisateurAColonneRole($pdo) ? 'u.Role' : 'NULL';
         }
@@ -171,8 +173,9 @@ class UtilisateurController extends BaseController
         $pdo     = getPDO();
         $colonne = utilisateurAColonneLie($pdo);
         if (tableRolesExiste($pdo)) {
-            $critere = "EXISTS (SELECT 1 FROM utilisateur_role ur WHERE ur.Id_Utilisateur = u.Id_Utilisateur AND ur.Role = 'JA')
-                    AND NOT EXISTS (SELECT 1 FROM utilisateur_role ur WHERE ur.Id_Utilisateur = u.Id_Utilisateur AND ur.Role <> 'JA')";
+            [$joinRole, $nomRole] = sqlNomRoleUr($pdo);
+            $critere = "EXISTS (SELECT 1 FROM utilisateur_role ur $joinRole WHERE ur.Id_Utilisateur = u.Id_Utilisateur AND $nomRole = 'JA')
+                    AND NOT EXISTS (SELECT 1 FROM utilisateur_role ur $joinRole WHERE ur.Id_Utilisateur = u.Id_Utilisateur AND $nomRole <> 'JA')";
         } elseif (utilisateurAColonneRole($pdo)) {
             $critere = "u.Role = 'JA'";
         } else {
@@ -248,15 +251,17 @@ class UtilisateurController extends BaseController
         $pdo     = getPDO();
         $colonnes = 'u.Id_Utilisateur, u.Login, u.Nom, u.Prenom, u.Id_Departement, u.Actif, u.ChangeLogin, u.Email';
         if (tableRolesExiste($pdo)) {
+            // Nom du rôle : role.Nom (schéma Id_Role, alias rr) ou ur.Role (ancien schéma).
+            [$joinRole, $nomRole] = sqlNomRoleUr($pdo, 'ur', 'rr');
             $sql = '
             SELECT ' . $colonnes . ', r.Roles, r.RolePrincipal
             FROM utilisateur u
             LEFT JOIN (
-                SELECT Id_Utilisateur,
-                       GROUP_CONCAT(Role ORDER BY estPrincipal DESC, Role SEPARATOR \',\') AS Roles,
-                       MAX(CASE WHEN estPrincipal = 1 THEN Role END) AS RolePrincipal
-                FROM utilisateur_role
-                GROUP BY Id_Utilisateur
+                SELECT ur.Id_Utilisateur,
+                       GROUP_CONCAT(' . $nomRole . ' ORDER BY ur.estPrincipal DESC, ' . $nomRole . ' SEPARATOR \',\') AS Roles,
+                       MAX(CASE WHEN ur.estPrincipal = 1 THEN ' . $nomRole . ' END) AS RolePrincipal
+                FROM utilisateur_role ur ' . $joinRole . '
+                GROUP BY ur.Id_Utilisateur
             ) r ON r.Id_Utilisateur = u.Id_Utilisateur
             ORDER BY u.Nom, u.Prenom';
         } else {
