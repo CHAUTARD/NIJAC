@@ -28,11 +28,7 @@ class NominateurAuth implements FilterInterface
         if ($cible = controlerSessionFiltre(method_exists($request, 'getPath') ? $request->getPath() : '')) {
             return redirect()->to(site_url($cible));
         }
-        $utilisateur = $_SESSION['utilisateur'];
-        $role        = $utilisateur['role'] ?? '';
-        $estAdmin    = !empty($utilisateur['is_admin']) || $role === 'Administrateur';
-
-        if (!$estAdmin && $role !== 'Nominateur') {
+        if (!estAdmin() && !aRole('Nominateur')) {
             return redirect()->to(site_url('login'));
         }
 

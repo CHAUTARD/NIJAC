@@ -23,6 +23,7 @@ class CentrenvoyeController extends BaseController
         require_once __DIR__ . '/../../../config/db.php';
         require_once __DIR__ . '/../../../config/app_config.php';
         require_once __DIR__ . '/../../../Classes/Obfuscator.php';
+        require_once __DIR__ . '/../../../Classes/SecurePasswordHasher.php';
     }
 
     private function moi(): array
@@ -85,9 +86,10 @@ class CentrenvoyeController extends BaseController
         $pdo = getPDO();
 
         $modeles = [];
-        // Le code de sécurité (E010) n'est jamais un modèle d'envoi d'EN15.
-        $rows    = $pdo->prepare('SELECT Type, Sujet, Message, Cc, ReplyTo FROM messagerie WHERE Type <> ? ORDER BY Id_Messagerie');
-        $rows->execute([TYPE_MESSAGE_CODE_SECURITE]);
+        // Le code de sécurité (E010) et l'invitation JA ne sont jamais des modèles génériques d'EN15
+        // (l'onglet « Invitation JA » a son propre aperçu / édition admin : invitationJaModele()).
+        $rows    = $pdo->prepare('SELECT Type, Sujet, Message, Cc, ReplyTo FROM messagerie WHERE Type NOT IN (?, ?) ORDER BY Id_Messagerie');
+        $rows->execute(typesMessagesReservesAdmin());
         $rows    = $rows->fetchAll();
         foreach ($rows as $r) {
             if (!isset($modeles[$r['Type']])) {
@@ -103,6 +105,7 @@ class CentrenvoyeController extends BaseController
             'deptsAff'    => implode('/', $this->deptsAutorises()), // ex. "76/27" (règle région) — utilisé pour l'onglet Convocation
             'modeles'     => $modeles,
             'monEmail'    => $moi['email'] ?? '',
+            'modeDev'     => isModeDeveloppement(),
         ];
 
         return view('centrenvoye_index', $data);
@@ -727,5 +730,275 @@ class CentrenvoyeController extends BaseController
         $stmt->execute([$idJa, $idRencontre, $date]);
 
         return (int) $stmt->fetchColumn() > 0;
+    }
+
+    // ── Onglet « Invitation JA » : création des comptes de rôle JA (menu E011) ───────────────────
+    //
+    // Destinataires : JA1 actifs (ja.JA1 = 1) des départements de getDepartementsAutorises(). À l'envoi,
+    // compte utilisateur créé (convention Id_Utilisateur = Id_JA, Login = Email = adresse du JA, Prenom
+    // vide, Nom = nom de la fiche, rôle JA (utilisateur_role), Actif 1, ChangeLogin 1 ; l'Id est le seul lien avec la fiche) avec un mot de passe
+    // provisoire aléatoire, envoyé dans le message système « Invitation JA » (EA93, admin). JA déjà doté
+    // d'un compte : ignoré (« compte déjà existant ») sauf case « Régénérer » (nouveau mot de passe,
+    // ChangeLogin 1, PwdVersion + 1). Conflits (Id ou login déjà pris, adresse invalide…) : ignorés avec
+    // motif, aucun compte écrasé — voir etatCompteJa(). Le mot de passe n'existe en clair que dans le
+    // corps de l'email : jamais journalisé, jamais renvoyé au navigateur.
+
+    /** Modèle système « Invitation JA » (Id_Utilisateur 0 = jamais de copie personnelle). */
+    private function modeleInvitationJa(\PDO $pdo): ?array
+    {
+        return resoudreModeleMessagerieParType($pdo, TYPE_MESSAGE_INVITATION_JA, 0);
+    }
+
+    /** Administrateur ? (mêmes droits d'édition des messages système qu'EA93, MessagerieController::isAdmin()). */
+    private function estAdmin(): bool
+    {
+        return !empty($this->moi()['is_admin']);
+    }
+
+    /**
+     * GET centrenvoye/invitation-ja/modele : aperçu du message « Invitation JA » tel qu'il sera envoyé
+     * (message système retrouvé par Type — même ligne que resoudreModeleMessagerieParType(…, 0) —, sinon
+     * corps par défaut), rendu côté serveur avec des valeurs d'exemple (apercuMessageInvitationJa()).
+     * Tout rôle d'EN15 : `apercu` + `modele` (Sujet, Message bruts — ce Type seulement, affichés en lecture
+     * seule). Administrateur : en plus Id, Cc, ReplyTo pour l'édition, enregistrée par PUT messagerie/{Id}
+     * (contrôles d'EA93 inchangés).
+     * `absent` = aucune ligne système (avant EA98) : aperçu du corps par défaut, édition impossible.
+     */
+    public function invitationJaModele(): ResponseInterface
+    {
+        try {
+            $pdo = getPDO();
+            $st  = $pdo->prepare('SELECT Id_Messagerie, Sujet, Message, Cc, ReplyTo FROM messagerie
+                WHERE Type = ? AND Id_Utilisateur IS NULL ORDER BY Id_Messagerie LIMIT 1');
+            $st->execute([TYPE_MESSAGE_INVITATION_JA]);
+            $ligne  = $st->fetch(\PDO::FETCH_ASSOC) ?: null;
+            $modele = $this->modeleInvitationJa($pdo);
+
+            $rep = [
+                'ok'            => true,
+                'apercu'        => apercuMessageInvitationJa($modele),
+                'absent'        => $ligne === null,
+                'erreur_modele' => controlerModeleInvitationJa($modele),
+                'peut_editer'   => $this->estAdmin() && $ligne !== null,
+            ];
+            // Code source (Sujet / Message) fourni à tout rôle d'EN15 pour CE Type seulement (champ Message en
+            // lecture seule hors administrateur) : le corps ne contient que des marqueurs, aucune donnée
+            // personnelle. Id / Cc / ReplyTo (nécessaires à l'enregistrement) : administrateur seulement.
+            $rep['modele'] = [
+                'sujet'   => $ligne ? (string) $ligne['Sujet'] : SUJET_INVITATION_JA,
+                'message' => $ligne ? (string) $ligne['Message'] : corpsParDefautInvitationJa(),
+            ];
+            if ($rep['peut_editer']) {
+                $rep['modele'] += [
+                    'id'      => (int) $ligne['Id_Messagerie'],
+                    'cc'      => (int) $ligne['Cc'],
+                    'replyto' => (int) $ligne['ReplyTo'],
+                ];
+            }
+
+            return $this->response->setJSON($rep);
+        } catch (\Throwable $e) {
+            return $this->repondreErreur($e);
+        }
+    }
+
+    /**
+     * POST centrenvoye/invitation-ja/apercu (sujet, message) : aperçu d'un BROUILLON (administrateur
+     * seulement, rien n'est enregistré) — même rendu serveur que invitationJaModele(), plus `erreur`
+     * (controlerModeleInvitationJa(), bloquant à l'enregistrement) et `avertissement`
+     * (avertissementsHtmlEmail(), non bloquant).
+     */
+    public function invitationJaApercu(): ResponseInterface
+    {
+        if (!$this->estAdmin()) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Action réservée aux administrateurs.']);
+        }
+        $brouillon = [
+            'Sujet'   => trim((string) ($this->request->getPost('sujet') ?? '')),
+            'Message' => trim((string) ($this->request->getPost('message') ?? '')),
+        ];
+
+        return $this->response->setJSON([
+            'ok'            => true,
+            'apercu'        => apercuMessageInvitationJa($brouillon),
+            'erreur'        => controlerModeleInvitationJa($brouillon),
+            'avertissement' => avertissementsHtmlEmail($brouillon['Message']),
+        ]);
+    }
+
+    /**
+     * GET centrenvoye/invitation-ja : JA1 actifs du périmètre + état de leur compte (etatCompteJa()).
+     * `erreur_modele` = modèle EA93 inutilisable.
+     */
+    public function invitationJa(): ResponseInterface
+    {
+        try {
+            $pdo   = getPDO();
+            $depts = $this->deptsAutorises();
+            $ph    = implode(',', array_fill(0, count($depts), '?'));
+            $stmt  = $pdo->prepare("
+                SELECT j.Id_JA, j.Nom, j.Prenom, j.Email
+                FROM ja j
+                WHERE j.JA1 = 1 AND j.CodeDept IN ($ph)
+                ORDER BY j.Nom, j.Prenom
+            ");
+            $stmt->execute($depts);
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            foreach ($rows as &$row) {
+                $etat           = etatCompteJa($pdo, (int) $row['Id_JA'], (string) ($row['Email'] ?? ''));
+                $row['Statut']  = $etat['statut'];
+                $row['Motif']   = $etat['motif'];
+                $row['LoginCompte'] = $etat['compte']['Login'] ?? null;
+            }
+            unset($row);
+
+            return $this->response->setJSON([
+                'ok'            => true,
+                'data'          => $rows,
+                'erreur_modele' => controlerModeleInvitationJa($this->modeleInvitationJa($pdo)),
+                'mode_dev'      => isModeDeveloppement(),
+            ]);
+        } catch (\Throwable $e) {
+            return $this->repondreErreur($e);
+        }
+    }
+
+    /**
+     * POST centrenvoye/invitation-ja/verifier (ids JSON) : garde-fous avant l'envoi en masse — même
+     * limitation de débit que les autres envois (checkRateLimit()), modèle valide.
+     */
+    public function invitationJaVerifier(): ResponseInterface
+    {
+        $ids = json_decode((string) ($this->request->getPost('ids') ?? '[]'), true);
+        if (!is_array($ids) || !$ids) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Aucun destinataire sélectionné.']);
+        }
+        $pdo = getPDO();
+        if ($err = controlerModeleInvitationJa($this->modeleInvitationJa($pdo))) {
+            return $this->response->setJSON(['ok' => false, 'msg' => $err]);
+        }
+        if ($errRl = checkRateLimit(count($ids))) {
+            return $this->response->setJSON(['ok' => false, 'msg' => $errRl]);
+        }
+
+        return $this->response->setJSON(['ok' => true, 'mode_dev' => isModeDeveloppement()]);
+    }
+
+    /**
+     * POST centrenvoye/invitation-ja/envoyer-un (id_ja, regenerer 0/1) : un JA. Compte créé / mis à jour
+     * dans une transaction, email envoyé, COMMIT seulement si l'envoi a réussi (sinon ROLLBACK : aucun
+     * compte ni mot de passe ne subsiste). Réponse {ok, nom, statut 'cree'|'regenere'} ou
+     * {ok:false, skip:true, nom, msg: motif} (ignoré) ou {ok:false, nom, msg} (échec) — jamais le mot de passe.
+     */
+    public function invitationJaEnvoyerUn(): ResponseInterface
+    {
+        $pdo       = getPDO();
+        $moi       = $this->moi();
+        $idJa      = (int) ($this->request->getPost('id_ja') ?? 0);
+        $regenerer = $this->request->getPost('regenerer') === '1';
+
+        if ($idJa <= 0) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Paramètres manquants.']);
+        }
+        $modele = $this->modeleInvitationJa($pdo);
+        if ($err = controlerModeleInvitationJa($modele)) {
+            return $this->response->setJSON(['ok' => false, 'msg' => $err]);
+        }
+        if ($errRl = checkRateLimit(1)) {
+            return $this->response->setJSON(['ok' => false, 'msg' => $errRl]);
+        }
+
+        // Fiche : JA1 actif du périmètre (mêmes règles que la liste, revérifiées ici — id client non sûr).
+        $st = $pdo->prepare('SELECT Id_JA, Nom, Prenom, Email, CodeDept FROM ja WHERE Id_JA = ? AND JA1 = 1');
+        $st->execute([$idJa]);
+        $ja = $st->fetch(\PDO::FETCH_ASSOC);
+        if (!$ja) {
+            return $this->response->setJSON(['ok' => false, 'skip' => true, 'nom' => "JA #$idJa", 'msg' => 'fiche introuvable ou JA inactif']);
+        }
+        $nomJa = trim($ja['Prenom'] . ' ' . $ja['Nom']);
+        if (!in_array(str_pad((string) $ja['CodeDept'], 2, '0', STR_PAD_LEFT), $this->deptsAutorises(), true)) {
+            return $this->response->setJSON(['ok' => false, 'skip' => true, 'nom' => $nomJa, 'msg' => 'hors de votre périmètre']);
+        }
+
+        $etat = etatCompteJa($pdo, $idJa, (string) ($ja['Email'] ?? ''));
+        if ($etat['statut'] === 'ignore') {
+            return $this->response->setJSON(['ok' => false, 'skip' => true, 'nom' => $nomJa, 'msg' => $etat['motif']]);
+        }
+        if ($etat['statut'] === 'existant' && !$regenerer) {
+            return $this->response->setJSON(['ok' => false, 'skip' => true, 'nom' => $nomJa, 'msg' => 'compte déjà existant']);
+        }
+
+        // Rôle JA exclusif : un compte 'existant' est un compte JA seul (etatCompteJa() ignore tout cumul hérité).
+        $nouveau = $etat['statut'] === 'nouveau';
+        $login  = $nouveau ? trim((string) $ja['Email']) : (string) $etat['compte']['Login'];
+        $adresse = $nouveau ? $login : (string) $etat['compte']['Email'];
+        if (!filter_var($adresse, FILTER_VALIDATE_EMAIL)) {
+            return $this->response->setJSON(['ok' => false, 'skip' => true, 'nom' => $nomJa, 'msg' => 'adresse email du compte invalide']);
+        }
+
+        $mdp   = genererMotDePasseAleatoire(INVITATION_JA_LONGUEUR_MDP);
+        $rendu = rendreMessageInvitationJa($modele, [
+            'prenom' => $ja['Prenom'], 'nom' => $ja['Nom'], 'login' => $login,
+            'mot_de_passe' => $mdp, 'lien' => site_url('login'),
+        ]);
+
+        $envoye = false;
+        try {
+            $pdo->beginTransaction();
+            if ($nouveau) {
+                creerCompteJa(
+                    $pdo, $idJa, $login, (string) $ja['Nom'],
+                    departementCompteJa($pdo, (string) $ja['CodeDept'], (string) ($moi['id_departement'] ?? '')),
+                    \SecurePasswordHasher::hash($mdp)
+                );
+            } else {
+                $up = $pdo->prepare("UPDATE utilisateur SET Password = ?, ChangeLogin = 1" . sqlIncrementPwdVersion($pdo)
+                    . " WHERE Id_Utilisateur = ? AND " . sqlARole('utilisateur.Id_Utilisateur', '?') . " AND Actif = 1");
+                $up->execute([\SecurePasswordHasher::hash($mdp), $idJa, 'JA']);
+                if ($up->rowCount() !== 1) {
+                    $pdo->rollBack();
+
+                    return $this->response->setJSON(['ok' => false, 'skip' => true, 'nom' => $nomJa, 'msg' => 'compte modifié entre-temps, rechargez la liste']);
+                }
+            }
+
+            // Mode Développement : getEmailDestinataire() + NijacMailer redirigent vers email_developpement ;
+            // le Login enregistré reste l'adresse réelle du JA.
+            $mail = getNijacMailer();
+            $mail->isHTML($rendu['html']);
+            $mail->addAddress(getEmailDestinataire($adresse), $nomJa);
+            $mail->Subject = $rendu['sujet'];
+            $mail->Body    = $rendu['corps'];
+            if ($rendu['html']) {
+                $mail->AltBody = $rendu['texte'];
+            }
+            $mail->send();
+            $envoye = true;
+
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            unset($mdp, $rendu);
+            // Journal : message d'erreur seul (jamais le corps : il contient le mot de passe).
+            error_log('[NIJAC] EN15 invitation JA (Id_JA ' . $idJa . ') : ' . get_class($e) . ' : ' . $e->getMessage());
+            $msg = $envoye
+                ? "email envoyé mais enregistrement du compte impossible : son mot de passe n'est pas valable, renvoyez l'invitation"
+                : ($e instanceof \PDOException
+                    ? 'création du compte impossible (identifiant ou login déjà pris ?) — aucun email envoyé'
+                    : ($e instanceof \RuntimeException && str_contains($e->getMessage(), 'EA98')
+                        ? $e->getMessage() . ' — aucun email envoyé'
+                        : "échec de l'envoi de l'email — aucun compte créé ni modifié"));
+
+            return $this->response->setJSON(['ok' => false, 'nom' => $nomJa, 'msg' => $msg]);
+        }
+        unset($mdp, $rendu);
+        enregistrerEnvois(1);
+        error_log('[NIJAC][SEC] EN15 invitation JA : compte ' . ($nouveau ? 'créé' : 'mot de passe régénéré')
+            . ' (Id_Utilisateur ' . $idJa . ') par ' . preg_replace('/[^\w.@-]/u', '_', (string) ($moi['login'] ?? '?')));
+
+        return $this->response->setJSON(['ok' => true, 'nom' => $nomJa, 'statut' => $nouveau ? 'cree' : 'regenere']);
     }
 }

@@ -25,6 +25,9 @@
         }
         .cadre-form .form-label { margin-bottom: .1rem; }
         #mdp-genere-box code { user-select: all; font-weight: 700; }
+        #roles-box .role-ligne + .role-ligne { border-top: 1px dashed #e3e9f3; }
+        #roles-box .role-ligne { padding: .1rem 0; }
+        .role-principal { font-weight: 700; }
     </style>
 </head>
 <body>
@@ -78,7 +81,7 @@
                 </div>
                 <div class="col">
                     <label class="form-label" for="txt-login">Login (*) :</label>
-                    <input type="text" id="txt-login" class="form-control form-control-sm" maxlength="50" autocomplete="off">
+                    <input type="text" id="txt-login" class="form-control form-control-sm" maxlength="150" autocomplete="off">
                 </div>
             </div>
         </fieldset>
@@ -103,15 +106,25 @@
                 <div class="form-text small">Le code de sécurité de connexion (E010) est envoyé à cette adresse.</div>
             </div>
 
-            <div class="row g-2 mb-2">
-                <div class="col">
-                    <label class="form-label" for="cbo-role">Rôle (*) :</label>
-                    <select id="cbo-role" class="form-select form-select-sm">
-                        <?php foreach ($roles as $r): ?>
-                        <option value="<?= esc($r) ?>" <?= $r === 'Nominateur' ? 'selected' : '' ?>><?= esc($r) ?></option>
-                        <?php endforeach; ?>
-                    </select>
+            <div class="mb-2">
+                <label class="form-label">Rôles (*) <span class="small text-muted fw-normal">— cochez au moins un rôle, puis choisissez le principal (menu d'arrivée) ; le rôle JA est exclusif (aucun autre rôle)</span> :</label>
+                <div id="roles-box" class="border rounded px-2 py-1">
+                    <?php foreach ($roles as $code => $libelle): $idr = 'role-' . preg_replace('/[^A-Za-z0-9]/', '_', (string) $code); ?>
+                    <div class="role-ligne d-flex align-items-center justify-content-between">
+                        <div class="form-check mb-0">
+                            <input class="form-check-input chk-role" type="checkbox" id="chk-<?= esc($idr, 'attr') ?>" value="<?= esc((string) $code, 'attr') ?>">
+                            <label class="form-check-label" for="chk-<?= esc($idr, 'attr') ?>"><?= esc($libelle) ?></label>
+                        </div>
+                        <div class="form-check mb-0 small">
+                            <input class="form-check-input rad-principal" type="radio" name="role-principal" id="rad-<?= esc($idr, 'attr') ?>" value="<?= esc((string) $code, 'attr') ?>">
+                            <label class="form-check-label text-muted" for="rad-<?= esc($idr, 'attr') ?>">principal</label>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
                 </div>
+            </div>
+
+            <div class="row g-2 mb-2">
                 <div class="col">
                     <label class="form-label" for="cbo-dept">Département (*) :</label>
                     <select id="cbo-dept" class="form-select form-select-sm">
@@ -122,6 +135,19 @@
                     </select>
                 </div>
             </div>
+
+            <!-- Fiche juge-arbitre (rôle JA uniquement : l'identifiant du compte = n° de la fiche, menu E011) -->
+            <div id="bloc-fiche-ja" class="mb-2 p-2 border rounded bg-light d-none">
+                <label class="form-label" for="txt-fiche-ja">Fiche juge-arbitre (*) :</label>
+                <input type="hidden" id="hid-id-ja" value="">
+                <div id="lbl-fiche-ja" class="small fw-bold mb-1 text-secondary">Aucune fiche sélectionnée.</div>
+                <input type="search" id="txt-fiche-ja" class="form-control form-control-sm" autocomplete="off"
+                       placeholder="Rechercher par nom, prénom ou n° de licence (2 caractères min.)">
+                <div id="res-fiche-ja" class="list-group small mt-1" style="max-height:180px;overflow:auto;"></div>
+                <div class="form-text small">Obligatoire pour le rôle JA (JA actifs JA1 proposés en premier) ; l'identifiant du compte sera le n° de la fiche (une fiche = un seul compte).</div>
+            </div>
+            <!-- Compte de rôle JA : convention Id_Utilisateur = n° de fiche, Login = Email, seul l'email modifiable -->
+            <div id="info-compte-ja" class="alert alert-warning py-1 px-2 small mb-2 d-none"></div>
 
             <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="chk-actif" checked>
@@ -174,13 +200,67 @@
 'use strict';
 const UTILISATEUR_BASE = '<?= site_url('utilisateur') ?>';
 const MOI_ID = <?= (int) $moiId ?>;
+const ROLES  = <?= json_encode((object) $roles, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?>; // Code => Libellé
 let   currentId = null; // null = nouvel utilisateur
 let   loginCharge = ''; // login chargé dans le formulaire (détection renommage vs création oubliée)
+let   rolesCharges = []; // rôles du compte chargé ([] = nouveau) — ['JA'] (exclusif) : tout verrouillé sauf l'email
 const sortState = { col: null, asc: true };
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
 function setStatus(msg, ok = true) {
     $('#form-status').text(msg).removeClass('text-danger text-success').addClass(ok ? 'text-success' : 'text-danger');
+}
+
+// ── Rôles (cases à cocher + rôle principal) ──────────────────────────────────
+function rolesCoches()  { return $('.chk-role:checked').map((_, e) => e.value).get(); }
+function rolePrincipal() { return $('.rad-principal:checked').val() || ''; }
+function definirRoles(roles, principal) {
+    $('.chk-role').each(function () { this.checked = roles.includes(this.value); });
+    $('.rad-principal').each(function () { this.checked = this.value === principal; });
+    majRoles();
+}
+// Compte JA existant (JA seul) : rôles verrouillés. Compte hérité cumulant JA et d'autres rôles
+// (antérieur à la règle JA exclusif) : à régulariser (JA seul, ou sans JA).
+function estCompteJa()   { return currentId !== null && rolesCharges.length === 1 && rolesCharges[0] === 'JA'; }
+function estJaCumule()   { return currentId !== null && rolesCharges.includes('JA') && rolesCharges.length > 1; }
+// Rôle JA EXCLUSIF : JA coché → les autres rôles décochés et désactivés (sauf compte hérité cumulé, dont
+// les rôles cochés restent décochables) ; compte existant non-JA : JA non cochable (Id_Utilisateur = n° de
+// fiche) ; compte JA existant : tout verrouillé. Principal ⊂ cochés (JA seul → JA principal) ; son propre
+// compte : Administrateur non retirable, Actif verrouillé. Tout est revérifié côté serveur.
+function majRoles() {
+    const coches = rolesCoches();
+    const jaCoche = coches.includes('JA');
+    const compteJa = estCompteJa();
+    $('.chk-role').each(function () {
+        let off;
+        if (compteJa) {
+            off = true;
+        } else if (this.value === 'JA') {
+            off = currentId !== null && !rolesCharges.includes('JA');
+        } else {
+            off = jaCoche && !this.checked;
+        }
+        if (this.value === 'Administrateur' && currentId !== null && currentId === MOI_ID && rolesCharges.includes('Administrateur')) off = true;
+        $(this).prop('disabled', off);
+    });
+    $('.rad-principal').each(function () {
+        const possible = !compteJa && coches.includes(this.value) && (!jaCoche || coches.length === 1);
+        $(this).prop('disabled', !possible);
+        if (!possible && !(compteJa && this.value === 'JA')) this.checked = false;
+    });
+    if (jaCoche && coches.length === 1) $('.rad-principal').filter(function () { return this.value === 'JA'; }).prop('checked', true);
+    if (!rolePrincipal() && coches.length) {
+        $('.rad-principal').filter(function () { return this.value === coches[0]; }).prop('checked', true);
+    }
+}
+function celluleRoles(u) {
+    const $td = $('<td>');
+    (u.Roles || '').split(',').filter(Boolean).forEach((r, i) => {
+        if (i) $td.append(', ');
+        $td.append($('<span>').toggleClass('role-principal', r === u.RolePrincipal)
+            .attr('title', r === u.RolePrincipal ? 'Rôle principal' : '').text(ROLES[r] || r));
+    });
+    return $td;
 }
 
 // ── Liste ─────────────────────────────────────────────────────────────────────
@@ -200,7 +280,7 @@ function chargerListe(selectId = null) {
                     $('<td>').text(u.Login),
                     $('<td>').text(u.Nom),
                     $('<td>').text(u.Prenom),
-                    $('<td>').text(u.Role),
+                    celluleRoles(u),
                     $('<td class="text-center">').text(u.Id_Departement),
                     $('<td class="text-center">').text(actif ? '✔' : ''),
                     $('<td>').text(u.Email || '')
@@ -225,18 +305,23 @@ function selectionnerLigne($tr) {
         const u = res.data;
         currentId = parseInt(u.Id_Utilisateur);
         loginCharge = u.Login || '';
+        rolesCharges = Array.isArray(u.Roles) ? u.Roles : [];
         $('#txt-id').val(currentId);
         $('#txt-login').val(u.Login);
         $('#txt-nom').val(u.Nom);
         $('#txt-prenom').val(u.Prenom);
         $('#txt-email').val(u.Email || '');
-        $('#cbo-role').val(u.Role);
+        definirRoles(rolesCharges, u.RolePrincipal || '');
+        definirFicheJa(rolesCharges.includes('JA') ? u.Id_Utilisateur : '', u.FicheJa || ''); // compte JA : fiche de même Id
+        majBlocFicheJa();
         $('#cbo-dept').val(u.Id_Departement);
         $('#chk-actif').prop('checked', parseInt(u.Actif) === 1);
         $('#chk-ecraser').prop('checked', false).prop('disabled', false);
         $('#ecraser-force').addClass('d-none');
         $('#mdp-genere-box').addClass('d-none');
         $('#btn-supprimer').prop('disabled', currentId === MOI_ID);
+        majRoles();
+        majVerrousJa();
         setStatus('');
     }, 'json');
 }
@@ -245,13 +330,16 @@ function selectionnerLigne($tr) {
 $('#btn-nouveau').on('click', function () {
     currentId = null;
     loginCharge = '';
+    rolesCharges = [];
     $('#tbody-liste tr').removeClass('selected');
     $('#txt-id').val('');
     $('#txt-login').val('').trigger('focus');
     $('#txt-nom').val('');
     $('#txt-prenom').val('');
     $('#txt-email').val('');
-    $('#cbo-role').val('Nominateur');
+    definirRoles(['Nominateur'], 'Nominateur');
+    definirFicheJa('', '');
+    majBlocFicheJa();
     $('#cbo-dept').val('');
     $('#chk-actif').prop('checked', true);
     // À la création, le mot de passe aléatoire est toujours généré : case forcée.
@@ -259,18 +347,24 @@ $('#btn-nouveau').on('click', function () {
     $('#ecraser-force').removeClass('d-none');
     $('#mdp-genere-box').addClass('d-none');
     $('#btn-supprimer').prop('disabled', true);
+    majVerrousJa();
     setStatus('');
 });
 
 // ── Enregistrer ───────────────────────────────────────────────────────────────
 $('#btn-enregistrer').on('click', function () {
     const isNew = currentId === null;
+    const roles = rolesCoches();
+    const jaCreation = isNew && roles.includes('JA');
+    if (jaCreation || estCompteJa()) $('#txt-login').val($('#txt-email').val().trim()); // Login = Email
     const payload = {
-        login:   $('#txt-login').val().trim(),
-        nom:     $('#txt-nom').val().trim(),
-        prenom:  $('#txt-prenom').val().trim(),
-        email:   $('#txt-email').val().trim(),
-        role:    $('#cbo-role').val(),
+        login:     $('#txt-login').val().trim(),
+        nom:       $('#txt-nom').val().trim(),
+        prenom:    $('#txt-prenom').val().trim(),
+        email:     $('#txt-email').val().trim(),
+        roles:     roles,
+        principal: rolePrincipal(),
+        id_ja:     jaCreation ? $('#hid-id-ja').val() : '',
         dept:    $('#cbo-dept').val(),
         actif:   $('#chk-actif').is(':checked') ? '1' : '0',
         ecraser: (isNew || $('#chk-ecraser').is(':checked')) ? '1' : '0',
@@ -279,6 +373,24 @@ $('#btn-enregistrer').on('click', function () {
     if (payload.email === '' || !document.getElementById('txt-email').checkValidity()) {
         const msg = payload.email === '' ? "L'adresse email est obligatoire." : 'Adresse email invalide.';
         toast(msg, false); setStatus(msg, false); $('#txt-email').trigger('focus');
+        return;
+    }
+    // Rôle JA exclusif — revérifié côté serveur.
+    if (roles.includes('JA') && roles.length > 1) {
+        const msg = 'Le rôle JA est exclusif : décochez JA ou les autres rôles.';
+        toast(msg, false); setStatus(msg, false);
+        return;
+    }
+    // Au moins un rôle + rôle principal parmi les cochés — revérifié côté serveur.
+    if (!roles.length || !roles.includes(payload.principal)) {
+        const msg = !roles.length ? 'Cochez au moins un rôle.' : 'Choisissez le rôle principal parmi les rôles cochés.';
+        toast(msg, false); setStatus(msg, false);
+        return;
+    }
+    // Création d'un compte JA : fiche juge-arbitre obligatoire — revérifié côté serveur.
+    if (jaCreation && !payload.id_ja) {
+        const msg = 'La fiche juge-arbitre est obligatoire pour le rôle JA.';
+        toast(msg, false); setStatus(msg, false); $('#txt-fiche-ja').trigger('focus');
         return;
     }
     const url    = isNew ? UTILISATEUR_BASE : `${UTILISATEUR_BASE}/${currentId}`;
@@ -290,9 +402,13 @@ $('#btn-enregistrer').on('click', function () {
         toast(res.msg);
         currentId = res.id;
         loginCharge = payload.login;
+        rolesCharges = payload.roles.slice();
         $('#txt-id').val(res.id);
         $('#chk-ecraser').prop('checked', false).prop('disabled', false);
         $('#ecraser-force').addClass('d-none');
+        majRoles();
+        majBlocFicheJa();
+        majVerrousJa();
         if (res.mdp) {
             $('#mdp-genere-code').text(res.mdp);
             $('#mdp-genere-box').removeClass('d-none');
@@ -330,6 +446,91 @@ $('#btn-supprimer').on('click', function () {
             else toast(res.msg, false);
         });
     }, null, {type: 'danger'});
+});
+
+// ── Fiche juge-arbitre (rôle JA) ──────────────────────────────────────────────
+function definirFicheJa(id, libelle) {
+    $('#hid-id-ja').val(id);
+    $('#lbl-fiche-ja').text(id ? libelle || String(id) : 'Aucune fiche sélectionnée.')
+        .toggleClass('text-success', !!id).toggleClass('text-secondary', !id);
+    $('#txt-fiche-ja').val('');
+    $('#res-fiche-ja').empty();
+}
+function majBlocFicheJa() {
+    $('#bloc-fiche-ja').toggleClass('d-none', !rolesCoches().includes('JA'));
+}
+$('.chk-role').on('change', function () {
+    // Rôle JA exclusif : cocher JA décoche les autres rôles ; cocher un autre rôle décoche JA.
+    if (this.checked) {
+        const ja = this.value === 'JA';
+        $('.chk-role').filter(function () { return ja ? this.value !== 'JA' : this.value === 'JA'; }).prop('checked', false);
+    }
+    majRoles();
+    majBlocFicheJa();
+    majVerrousJa();
+});
+
+// Compte JA (EA86, rôle JA exclusif) : création = login, nom, prénom déduits (Login = Email, Nom = fiche,
+// Prénom vide, Id = n° de fiche, JA seul) ; modification = SEUL l'email est modifiable (le login suit),
+// tout le reste est verrouillé. Compte hérité cumulant JA et d'autres rôles : avertissement, champs libres
+// (à régulariser : JA seul, ou sans JA). Revérifié côté serveur.
+function majVerrousJa() {
+    const jaExistant = estCompteJa();
+    const jaCreation = currentId === null && rolesCoches().includes('JA');
+    const cumule     = estJaCumule();
+    const ja = jaExistant || jaCreation;
+    $('#txt-login').prop('disabled', ja);
+    $('#txt-nom, #txt-prenom').prop('disabled', ja);
+    $('#cbo-dept').prop('disabled', jaExistant);
+    $('#chk-actif').prop('disabled', jaExistant || (currentId !== null && currentId === MOI_ID));
+    if (jaExistant) $('#chk-ecraser').prop('checked', false).prop('disabled', true);
+    $('#txt-fiche-ja').prop('disabled', currentId !== null);
+    if (ja) $('#txt-login').val($('#txt-email').val().trim());
+    if (jaCreation) $('#txt-prenom').val('');
+    $('#info-compte-ja').toggleClass('d-none', !ja && !cumule).text(cumule
+        ? 'Compte cumulant JA et d\'autres rôles (antérieur à la règle « JA exclusif ») : décochez JA, ou gardez JA seul (fiche de même identifiant requise).'
+        : jaExistant
+        ? 'Compte JA (rôle exclusif) : seule l\'adresse email est modifiable, le login la suit ; nouveau mot de passe depuis l\'onglet « Invitation JA » d\'EN15.'
+        : 'Compte JA : identifiant = n° de la fiche, login = adresse email, nom repris de la fiche, prénom vide, JA seul rôle (exclusif). Mot de passe provisoire affiché après création.');
+}
+$('#txt-email').on('input', function () {
+    if (estCompteJa() || (currentId === null && rolesCoches().includes('JA'))) {
+        $('#txt-login').val($(this).val().trim());
+    }
+});
+
+let rechercheJaTimer = null;
+$('#txt-fiche-ja').on('input', function () {
+    clearTimeout(rechercheJaTimer);
+    const q = $(this).val().trim();
+    const $res = $('#res-fiche-ja').empty();
+    if (q.length < 2) return;
+    rechercheJaTimer = setTimeout(function () {
+        $.getJSON(`${UTILISATEUR_BASE}/fiches-ja`, { q }, function (r) {
+            $res.empty();
+            if (!r.ok) return;
+            if (!r.data.length) { $res.append($('<div class="list-group-item text-muted">').text('Aucune fiche trouvée.')); return; }
+            r.data.forEach(j => {
+                const lib = j.Id_JA + ' — ' + ((j.Nom || '') + ' ' + (j.Prenom || '')).trim();
+                // Identifiant du compte = n° de fiche : déjà porté par un compte (JA ou autre rôle) → indisponible.
+                const prise = !!j.compte_login && parseInt(j.Id_JA, 10) !== currentId;
+                const $it = $('<button type="button" class="list-group-item list-group-item-action py-1">')
+                    .text(lib + (parseInt(j.JA1, 10) === 1 ? '' : ' (inactif JA1)')
+                        + (prise ? ((j.compte_role || '').split(',').includes('JA') ? ' — compte JA déjà créé (« ' + j.compte_login + ' »)'
+                                                           : ' — identifiant déjà pris par « ' + j.compte_login + ' » (' + j.compte_role + ')') : ''))
+                    .prop('disabled', prise)
+                    .on('click', function () {
+                        definirFicheJa(j.Id_JA, lib);
+                        // Compte JA : nom de la fiche, prénom vide, login = email (déduits, revérifiés côté serveur).
+                        $('#txt-nom').val(j.Nom || '');
+                        $('#txt-prenom').val('');
+                        if (!$('#txt-email').val().trim()) $('#txt-email').val(j.Email || '');
+                        majVerrousJa();
+                    });
+                $res.append($it);
+            });
+        });
+    }, 300);
 });
 
 // ── Tri sur clic en-tête ──────────────────────────────────────────────────────

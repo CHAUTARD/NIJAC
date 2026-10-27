@@ -249,6 +249,12 @@ if ($isCsr) {
                 <span class="badge me-1 fw-normal" style="background:#495057;">Code de sécurité (E010, admin)</span>
                 <code data-marqueur="{CODE}" class="me-2" title="Code de 6 chiffres envoyé au titulaire du compte — seul marqueur de ce message">{CODE}</code>
             </div>
+            <div>
+                <span class="badge me-1 fw-normal" style="background:#8d6e00;">Invitation JA (EN15, admin)</span>
+                <code data-marqueur="{LOGIN}" class="me-2" title="Login du compte JA (= adresse email du JA) — obligatoire">{LOGIN}</code>
+                <code data-marqueur="{MOT_DE_PASSE}" class="me-2" title="Mot de passe provisoire généré à l'envoi — obligatoire, corps uniquement (jamais dans le sujet)">{MOT_DE_PASSE}</code>
+                <code data-marqueur="{LIEN_CONNEXION}" class="me-2" title="Lien vers la page de connexion E001">{LIEN_CONNEXION}</code>
+            </div>
             <!-- Convocations CRA (EC73) : affiché seulement pour un Type « CRA Convocation … », voir majMarqueursCra(). -->
             <div id="marqueurs-cra" class="mt-1 d-none">
                 <span class="badge me-1 fw-normal" style="background:#00796b;">Convocation CRA (EC73)</span>
@@ -383,7 +389,11 @@ const MARQUEURS_EXEMPLE = {
     '{NOM_CLUB}':          'ASSUN TT',
     '{URL_DESIDERATA}':     <?= json_encode(site_url('desiderata-club') . '?club=' . tokenDesiderataClub('09760136')) ?>,
     '{URL_RESET_MDP}':      <?= json_encode(site_url('reinitialiser-mot-de-passe') . '?t=12-1893456000-abcdef') ?>,
-    '{CODE}':               '042917'
+    '{CODE}':               '042917',
+    // Invitation JA (EN15) : identifiants du compte JA créé à l'envoi (mot de passe fictif ici).
+    '{LOGIN}':              'jean.dupont@mail.fr',
+    '{MOT_DE_PASSE}':       'Exemple-Mdp7k',
+    '{LIEN_CONNEXION}':     <?= json_encode(site_url('login')) ?>
 };
 
 function resoudreMarqueurs(txt) {

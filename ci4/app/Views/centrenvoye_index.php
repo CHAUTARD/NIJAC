@@ -251,6 +251,9 @@
             <button class="type-tab" data-type="Demande adresse">
                 <i class="bi bi-geo-alt me-1"></i>Demande adresse
             </button>
+            <button class="type-tab" data-type="Invitation JA">
+                <i class="bi bi-person-badge me-1"></i>Invitation JA
+            </button>
         </div>
 
         <!-- Corps -->
@@ -273,6 +276,33 @@
                 </div>
             </div>
 
+            <!-- Invitation JA : message système (EA93 ; aperçu pour tous, édition admin ci-dessous), comptes créés à l'envoi -->
+            <div id="invit-bar" class="mb-2" style="display:none;background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:.6rem .75rem;font-size:.84rem;">
+                <div class="fw-semibold mb-1" style="color:#8d6e00;">
+                    <i class="bi bi-person-badge me-1"></i>Annoncer aux JA qu'ils peuvent consulter leurs informations sur NIJAC
+                </div>
+                <ul class="mb-2 ps-3">
+                    <li>Pour chaque JA coché, un <strong>compte NIJAC de rôle JA</strong> est créé à l'envoi : identifiant = son adresse email,
+                        <strong>mot de passe provisoire</strong> généré par le serveur et envoyé uniquement dans l'email (jamais affiché ici),
+                        changement obligatoire à la première connexion, puis menu E011.</li>
+                    <li>Le compte n'est enregistré que si l'email part ; en cas d'échec d'envoi, rien n'est créé.</li>
+                    <li><strong>JA ayant déjà un compte</strong> : ignoré par défaut (« compte déjà existant »). Cochez la case ci-dessous pour leur
+                        envoyer un <strong>nouveau mot de passe</strong> (l'ancien cesse de fonctionner et leurs sessions ouvertes sont fermées).</li>
+                    <li>Ignorés avec motif : JA sans email valide, adresse déjà utilisée comme login par un autre compte, identifiant
+                        (= n° de fiche JA) déjà pris par un autre compte, compte désactivé — aucun compte existant n'est jamais écrasé.</li>
+                    <li>Texte du message : message système « Invitation JA » affiché dans le champ Message ci-dessous (bouton « Aperçu HTML »), modifiable par un administrateur ici ou en EA93 ; l'envoi utilise le message enregistré.</li>
+                </ul>
+                <div class="form-check mb-1">
+                    <input class="form-check-input" type="checkbox" id="chk-regenerer">
+                    <label class="form-check-label fw-semibold" for="chk-regenerer">Régénérer le mot de passe des JA ayant déjà un compte</label>
+                </div>
+                <?php if ($modeDev): ?>
+                <div class="text-danger small"><i class="bi bi-exclamation-triangle me-1"></i>Mode Développement : les emails partent vers l'adresse de développement,
+                    mais les comptes sont créés avec l'adresse réelle du JA comme identifiant.</div>
+                <?php endif; ?>
+                <div id="invit-erreur" class="text-danger small fw-semibold"></div>
+            </div>
+
             <div class="mb-2 d-flex align-items-center gap-2" id="grp-cc">
                 <div class="form-check mb-0">
                     <input class="form-check-input" type="checkbox" id="chk-cc">
@@ -289,12 +319,12 @@
                 <input type="email" id="txt-replyto" class="form-control form-control-sm" style="max-width:280px;" readonly tabindex="-1">
             </div>
 
-            <div class="mb-2">
+            <div class="mb-2" id="grp-sujet">
                 <label class="form-label" for="txt-sujet">Sujet :</label>
                 <input type="text" id="txt-sujet" class="form-control form-control-sm" maxlength="150">
             </div>
 
-            <div class="mb-1 d-flex flex-column flex-grow-1">
+            <div class="mb-1 d-flex flex-column flex-grow-1" id="grp-message">
                 <label class="form-label d-flex align-items-center gap-2" for="txt-message">
                     Message :
                     <button type="button" id="btn-apercu-html" class="btn btn-sm btn-outline-primary py-0"
@@ -303,6 +333,14 @@
                     </button>
                 </label>
                 <textarea id="txt-message" class="form-control form-control-sm flex-grow-1"></textarea>
+                <!-- Invitation JA : message système retrouvé par Type ; lecture seule hors administrateur -->
+                <div id="invit-message-pied" class="mt-1 d-flex align-items-center gap-2 flex-wrap" style="display:none !important;font-size:.78rem;">
+                    <span id="invit-lecture-seule" class="text-muted"><i class="bi bi-lock me-1"></i>Lecture seule — modifiable par un administrateur (ici ou en EA93).</span>
+                    <span id="invit-absent" class="text-muted" style="display:none;">Message système « Invitation JA » pas encore créé (chargez EA98) : texte par défaut affiché.</span>
+                    <button type="button" id="btn-invit-enregistrer" class="btn btn-sm btn-primary py-0 ms-auto" style="display:none;">
+                        <i class="bi bi-floppy me-1"></i>Enregistrer le message
+                    </button>
+                </div>
             </div>
 
             <!-- Cartouche marqueurs (mis à jour selon l'onglet actif) -->
@@ -350,6 +388,14 @@
                 <div id="cart-liste-nom" style="display:none;margin-top:.2rem;">
                     <span class="badge me-1 fw-normal" style="font-size:.68rem;background:#6f42c1;">Liste nomination</span>
                     <code data-cible="message" data-marqueur="{LISTE_NOMINATIONS}">{LISTE_NOMINATIONS}</code>
+                </div>
+                <div id="cart-invitation" style="display:none;margin-top:.2rem;">
+                    <span class="badge me-1 fw-normal" style="font-size:.68rem;background:#8d6e00;">Invitation JA</span>
+                    <code data-cible="message" data-marqueur="{PRENOM}">{PRENOM}</code>
+                    <code data-cible="message" data-marqueur="{NOM}">{NOM}</code>
+                    <code data-cible="message" data-marqueur="{LOGIN}" title="Obligatoire">{LOGIN}</code>
+                    <code data-cible="message" data-marqueur="{MOT_DE_PASSE}" title="Obligatoire, corps seulement">{MOT_DE_PASSE}</code>
+                    <code data-cible="message" data-marqueur="{LIEN_CONNEXION}">{LIEN_CONNEXION}</code>
                 </div>
                 <div id="cart-demande-adresse" style="display:none;margin-top:.2rem;">
                     <span class="badge me-1 fw-normal" style="font-size:.68rem;background:#e06c00;">Demande adresse</span>
@@ -454,6 +500,27 @@
     </div>
 </div>
 
+<!-- Modale aperçu HTML (Invitation JA) — reprise d'EA93 (messagerie_index.php), iframe sandbox sans script -->
+<div class="modal fade" id="modal-apercu-invit" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2" style="background:var(--nijac-blue);color:#fff;">
+                <h6 class="modal-title mb-0"><i class="bi bi-eye me-1"></i>Aperçu HTML du message</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="px-3 py-2 border-bottom bg-light" style="font-size:.82rem;">
+                    <span class="text-muted me-1">Sujet :</span><strong id="apercu-invit-sujet"></strong>
+                </div>
+                <iframe id="iframe-apercu-invit" sandbox="" referrerpolicy="no-referrer" title="Aperçu HTML du message" style="width:100%;height:60vh;border:0;"></iframe>
+                <p class="text-muted px-3 py-2 mb-0 border-top" style="font-size:.75rem;">
+                    <i class="bi bi-info-circle me-1"></i>Marqueurs remplacés par des valeurs d'exemple — le vrai mot de passe n'est généré qu'à l'envoi.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal aperçu HTML du message (Liste nomination) -->
 <div class="modal fade" id="modal-apercu-html" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -484,6 +551,7 @@
 'use strict';
 
 const CENTRENVOYE_BASE = '<?= site_url('centrenvoye') ?>';
+const MESSAGERIE_BASE  = <?= json_encode(site_url('messagerie')) ?>;
 const MODELES  = <?= json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS) ?>;
 const MON_EMAIL = <?= json_encode($monEmail, JSON_HEX_TAG | JSON_HEX_APOS) ?>;
 
@@ -493,7 +561,9 @@ const TITRES_JA = {
     'Convocation':     'JA1 nominés — journée sélectionnée',
     'Liste nomination':'JA1 avec nominations dans la phase',
     'Demande adresse': 'JA1 actifs ou sans adresse domicile',
+    'Invitation JA':   'JA1 actifs — compte NIJAC',
 };
+const INVITATION = 'Invitation JA';
 
 let typeActif  = 'Disponibilites';
 let saisonCourante = null;
@@ -541,7 +611,22 @@ function chargerModele(type) {
     $('#cart-convocation').toggle(type === 'Convocation');
     $('#cart-liste-nom').toggle(type === 'Liste nomination');
     $('#btn-apercu-html').toggle(type === 'Liste nomination');
+    $('#cart-invitation').hide();
+    $('#txt-sujet, #txt-message').prop('readonly', false);
     $('#cart-demande-adresse').toggle(type === 'Demande adresse');
+    // Invitation JA : ni Cc ni Reply-To ; Sujet / Message = message système « Invitation JA » (comme EA93),
+    // modifiables par un administrateur seulement — voir chargerModeleInvitation().
+    const inv = type === INVITATION;
+    $('#invit-bar').toggle(inv);
+    $('#invit-message-pied').attr('style', inv ? 'font-size:.78rem;' : 'display:none !important;font-size:.78rem;');
+    $('#grp-cc, #grp-replyto').toggle(!inv);
+    $('#cart-communs').toggle(!inv);
+    $('#cartouche-marqueurs').show();
+    if (inv) {
+        $('#chk-cc, #chk-replyto').prop('checked', false);
+        $('#txt-sujet, #txt-message').val('').prop('readonly', true);
+        chargerModeleInvitation();
+    }
     $('#ja-header-titre').text(TITRES_JA[type] || 'JA');
     $('#result-envoi').html('');
 }
@@ -557,6 +642,8 @@ function majColonnesJA(type) {
         $thead.append('<th class="text-center">Nominations</th>');
     } else if (type === 'Demande adresse') {
         $thead.append('<th>CP / Ville actuelle</th>');
+    } else if (type === INVITATION) {
+        $thead.append('<th>Compte NIJAC</th>');
     }
 }
 
@@ -604,8 +691,220 @@ $('#cbo-journee').on('change', function () {
     else $('#tbody-ja').html('<tr><td colspan="8" class="text-center text-muted py-2">Sélectionner une journée</td></tr>');
 });
 
+// ── Invitation JA : liste + état des comptes ────────────────────────────────
+let lignesInvitation = [];
+const LIB_STATUT = { nouveau: 'À créer', existant: 'Compte existant', ignore: 'Ignoré' };
+
+function chargerInvitation() {
+    $('#invit-erreur').text('');
+    $('#tbody-ja').html('<tr><td colspan="5" class="text-center text-muted py-2"><i class="bi bi-hourglass-split me-1"></i>Chargement…</td></tr>');
+    $.get(`${CENTRENVOYE_BASE}/invitation-ja`, function (res) {
+        if (!res || !res.ok) {
+            const detail = erreurChargement({ status: 200, responseJSON: res || { ok: false } }, 'JA');
+            $('#tbody-ja').html(`<tr><td colspan="5" class="text-center text-danger py-3">Erreur de chargement : ${detail}</td></tr>`);
+            $('#nb-ja').text('');
+            return;
+        }
+        lignesInvitation = res.data || [];
+        const erreurs = [];
+        if (res.erreur_modele) erreurs.push(res.erreur_modele);
+        $('#invit-erreur').text(erreurs.join(' '));
+        afficherInvitation();
+    }, 'json').fail(function (xhr) {
+        const detail = erreurChargement(xhr, 'JA');
+        $('#tbody-ja').html(`<tr><td colspan="5" class="text-center text-danger py-3">Erreur de chargement : ${detail}</td></tr>`);
+        $('#nb-ja').text('');
+    });
+}
+
+function afficherInvitation() {
+    const $body = $('#tbody-ja').empty();
+    if (!lignesInvitation.length) {
+        $body.append('<tr><td colspan="5" class="text-center text-muted py-3">Aucun JA.</td></tr>');
+        $('#nb-ja').text('');
+        return;
+    }
+    const regen = $('#chk-regenerer').is(':checked');
+    let nbNouveaux = 0, nbExistants = 0, nbIgnores = 0;
+    lignesInvitation.forEach(ja => {
+        const st = ja.Statut;
+        if (st === 'nouveau') nbNouveaux++; else if (st === 'existant') nbExistants++; else nbIgnores++;
+        const envoyable = st === 'nouveau' || (st === 'existant' && regen);
+        const $statut = $('<td style="font-size:.78rem;">').append(
+            $('<span class="badge me-1">').addClass(st === 'nouveau' ? 'bg-success' : (st === 'existant' ? 'bg-primary' : 'bg-secondary'))
+                .text(LIB_STATUT[st] || st)
+        );
+        if (st === 'existant') $statut.append($('<span class="text-muted">').text(regen ? 'nouveau mot de passe' : 'ignoré — compte déjà existant'));
+        else if (ja.Motif) $statut.append($('<span class="text-muted">').text(ja.Motif));
+        $body.append($('<tr>').attr('data-id', ja.Id_JA).append(
+            $('<td>').append($('<input type="checkbox">').addClass('chk-ja').prop('checked', envoyable).prop('disabled', !envoyable)),
+            $('<td>').text(ja.Nom || ''),
+            $('<td>').text(ja.Prenom || ''),
+            $('<td>').html(ja.Email ? `<span>${escHtml(ja.Email)}</span>` : `<span class="no-email"><i class="bi bi-exclamation-triangle me-1"></i>Pas d'email</span>`),
+            $statut
+        ));
+    });
+    $('#nb-ja').text(`${lignesInvitation.length} JA — ${nbNouveaux} à créer, ${nbExistants} avec compte, ${nbIgnores} ignoré(s)`);
+    filtrerJA();
+}
+
+$('#chk-regenerer').on('change', function () { if (typeActif === INVITATION) afficherInvitation(); });
+
+function envoyerInvitations() {
+    const ids = [], noms = [];
+    $('#tbody-ja tr:not(.masque)').each(function () {
+        if ($(this).find('.chk-ja').is(':checked')) {
+            ids.push($(this).data('id'));
+            const tds = $(this).find('td');
+            noms.push(`${tds.eq(2).text().trim()} ${tds.eq(1).text().trim()}`);
+        }
+    });
+    if (!ids.length) { toast('Aucun destinataire sélectionné.', false); return; }
+    const regen = $('#chk-regenerer').is(':checked');
+    nijacConfirm(
+        `Créer les comptes NIJAC et envoyer l'invitation (mot de passe provisoire) à ${ids.length} JA ?`
+        + (regen ? "\n\nLes JA ayant déjà un compte recevront un NOUVEAU mot de passe (l'ancien ne fonctionnera plus)." : '')
+        + `\n\n${noms.join('\n')}`,
+        function () { lancerInvitations(ids, regen); },
+        null,
+        { type: 'warning', title: 'Invitation JA', confirmLabel: 'Créer et envoyer' }
+    );
+}
+
+function lancerInvitations(ids, regen) {
+    const total = ids.length;
+    let crees = 0, regeneres = 0, ignores = 0, echecs = 0, idx = 0;
+    const details = [];
+    $.post(`${CENTRENVOYE_BASE}/invitation-ja/verifier`, { ids: JSON.stringify(ids) }, function (res) {
+        if (!res.ok) { toast(res.msg, false); return; }
+        $('#btn-envoyer').prop('disabled', true).html('<i class="bi bi-hourglass-split me-1"></i>Envoi en cours…');
+        $('#result-envoi').html('');
+        $('#envoi-progress').show();
+        $('#progress-bar').css('width', '0%').removeClass('bg-danger').addClass('bg-success progress-bar-animated');
+        $('#progress-erreurs').html('');
+        function maj() {
+            $('#progress-bar').css('width', Math.round(idx / total * 100) + '%');
+            $('#progress-label').text(`Invitation ${idx} / ${total}…`);
+            $('#progress-counts').text(`${crees} créé(s), ${regeneres} régénéré(s), ${ignores} ignoré(s), ${echecs} échec(s)`);
+        }
+        function suivant() {
+            if (idx >= total) {
+                $('#progress-bar').css('width', '100%').removeClass('progress-bar-animated');
+                if (echecs) $('#progress-bar').removeClass('bg-success').addClass('bg-danger');
+                $('#progress-label').text('Invitations terminées');
+                $('#progress-erreurs').html(details.map(d => `<i class="bi bi-x-circle me-1"></i>${escHtml(d.nom)} — ${escHtml(d.msg)}`).join('<br>'));
+                $('#btn-envoyer').prop('disabled', false).html('<i class="bi bi-send me-1"></i>Envoyer');
+                toast(`${crees} compte(s) créé(s), ${regeneres} mot(s) de passe régénéré(s), ${ignores} ignoré(s), ${echecs} échec(s).`, echecs === 0);
+                chargerInvitation();
+                return;
+            }
+            const id = ids[idx++];
+            $.post(`${CENTRENVOYE_BASE}/invitation-ja/envoyer-un`, { id_ja: id, regenerer: regen ? '1' : '0' }, function (r) {
+                if (r.ok) { if (r.statut === 'regenere') regeneres++; else crees++; }
+                else if (r.skip) { ignores++; details.push({ nom: r.nom || `JA #${id}`, msg: 'ignoré : ' + (r.msg || '') }); }
+                else { echecs++; details.push({ nom: r.nom || `JA #${id}`, msg: r.msg || 'Erreur inconnue' }); }
+                maj(); suivant();
+            }, 'json').fail(function () {
+                echecs++; details.push({ nom: `JA #${id}`, msg: 'Erreur réseau' }); maj(); suivant();
+            });
+        }
+        maj(); suivant();
+    }, 'json').fail(function () { toast('Erreur réseau lors de la vérification.', false); });
+}
+
+// ── Invitation JA : Sujet / Message = message système (comme EA93) ──────────
+// Champ Message modifiable par un administrateur seulement (sinon lecture seule) ; bouton « Aperçu HTML »
+// (EA93) : rendu par le serveur avec des valeurs d'exemple échappées, modale + iframe sandbox (aucun
+// script). Enregistrement : PUT messagerie/{Id}, mêmes contrôles qu'EA93.
+let modeleInvitation = null, apercuEnregistre = null;
+
+// Comme EA93 : bouton Aperçu HTML masqué pour un message en texte brut.
+function estMessageHtml(texte) {
+    return /<\/?[a-z][\s\S]*?>/i.test(String(texte ?? ''));
+}
+function majBoutonApercu() {
+    if (typeActif === INVITATION) $('#btn-apercu-html').toggle(estMessageHtml($('#txt-message').val()));
+}
+$('#txt-message').on('input', majBoutonApercu);
+
+function chargerModeleInvitation() {
+    $.get(`${CENTRENVOYE_BASE}/invitation-ja/modele`, function (r) {
+        if (typeActif !== INVITATION) return;
+        if (!r || !r.ok) { erreurChargement({ status: 200, responseJSON: r || { ok: false } }, 'message'); return; }
+        modeleInvitation = r.modele || null;
+        apercuEnregistre = r.apercu || null;
+        const editable = !!r.peut_editer;
+        $('#txt-sujet').val(modeleInvitation ? modeleInvitation.sujet : '').prop('readonly', !editable);
+        $('#txt-message').val(modeleInvitation ? modeleInvitation.message : '').prop('readonly', !editable);
+        $('#invit-lecture-seule').toggle(!editable && !r.absent);
+        $('#invit-absent').toggle(!!r.absent);
+        $('#btn-invit-enregistrer').toggle(editable);
+        $('#cart-invitation').toggle(editable);
+        $('#cartouche-marqueurs').toggle(editable);
+        majBoutonApercu();
+    }, 'json').fail(xhr => erreurChargement(xhr, 'message'));
+}
+
+function montrerApercuInvitation(apercu) {
+    $('#apercu-invit-sujet').text(apercu.sujet || '');
+    document.getElementById('iframe-apercu-invit').srcdoc = apercu.html || '';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-apercu-invit')).show();
+}
+
+// Administrateur : aperçu du contenu du champ (brouillon, rendu serveur) ; autres rôles : message enregistré.
+function apercuInvitation() {
+    if (!(modeleInvitation && modeleInvitation.id)) {
+        if (apercuEnregistre) montrerApercuInvitation(apercuEnregistre);
+        return;
+    }
+    $.post(`${CENTRENVOYE_BASE}/invitation-ja/apercu`, { sujet: $('#txt-sujet').val(), message: $('#txt-message').val() }, function (r) {
+        if (!r.ok) { toast(r.msg || 'Aperçu impossible.', false); return; }
+        montrerApercuInvitation(r.apercu);
+        if (r.erreur) nijacToast(r.erreur, 'danger', 8000);
+        else if (r.avertissement) nijacToast(r.avertissement, 'warning', 8000);
+    }, 'json').fail(() => toast('Erreur réseau.', false));
+}
+
+// Contrôles client (revérifiés côté serveur) : marqueurs obligatoires, signaux anti-spam.
+function controleInvitationClient(sujet, corps) {
+    const erreurs = [], avert = [];
+    if (!sujet || !corps) erreurs.push('Le sujet et le message sont obligatoires.');
+    if (!corps.includes('{LOGIN}') || !corps.includes('{MOT_DE_PASSE}')) erreurs.push('Le message doit contenir {LOGIN} et {MOT_DE_PASSE}.');
+    if (sujet.includes('{MOT_DE_PASSE}')) erreurs.push('Le sujet ne doit pas contenir {MOT_DE_PASSE}.');
+    const sansMso = corps.replace(/<!--<!\[endif\]-->|<!--\[if[^\]]*\]><!-->|<!--\[if[^\]]*\]>|<!\[endif\]-->/gi, '');
+    if (sansMso.includes('<!--')) avert.push('commentaire HTML');
+    if (/display\s*:\s*none|visibility\s*:\s*hidden|mso-hide\s*:\s*all|font-size\s*:\s*0(?![.\d])|max-height\s*:\s*0(?![.\d])|opacity\s*:\s*0(?![.\d])/i.test(corps)) avert.push('texte caché');
+    return { erreurs, avert };
+}
+
+$('#btn-invit-enregistrer').on('click', function () {
+    if (!(modeleInvitation && modeleInvitation.id)) return;
+    const sujet = $('#txt-sujet').val().trim(), corps = $('#txt-message').val().trim();
+    const c = controleInvitationClient(sujet, corps);
+    if (c.erreurs.length) { toast(c.erreurs.join(' '), false); return; }
+    nijacConfirm(
+        'Enregistrer le message système « Invitation JA » ? Il sera utilisé pour toutes les prochaines invitations.'
+        + (c.avert.length ? `\n\nAttention (anti-spam) : ${c.avert.join(', ')} détecté(s) — il vaut mieux les retirer.` : ''),
+        function () {
+            $.ajax({
+                url: `${MESSAGERIE_BASE}/${encodeURIComponent(modeleInvitation.id)}`, method: 'PUT', dataType: 'json',
+                data: { type: INVITATION, sujet, message: corps, cc: String(modeleInvitation.cc), replyto: String(modeleInvitation.replyto) },
+            }).done(function (r) {
+                if (!r.ok) { toast(r.msg || 'Enregistrement impossible.', false); return; }
+                toast(r.msg || 'Message mis à jour.');
+                if (r.avertissement) nijacToast(r.avertissement, 'warning', 8000);
+                chargerModeleInvitation();
+                chargerInvitation(); // erreur_modele éventuelle levée
+            }).fail(() => toast("Erreur réseau lors de l'enregistrement.", false));
+        },
+        null,
+        { type: 'question', title: 'Message « Invitation JA »', confirmLabel: 'Enregistrer' }
+    );
+});
+
 // ── Chargement JA ─────────────────────────────────────────────────────────────
 function chargerJA() {
+    if (typeActif === INVITATION) { chargerInvitation(); return; }
     const data = { type: typeActif };
     if (typeActif === 'Convocation') {
         const val = $('#cbo-journee').val();
@@ -694,6 +993,7 @@ $(document).on('click', '#tbody-ja tr', function (e) {
 
 // ── Aperçu HTML du message (Liste nomination) ────────────────────────────────
 $('#btn-apercu-html').on('click', function () {
+    if (typeActif === INVITATION) { apercuInvitation(); return; }
     const sujet = $('#txt-sujet').val().trim();
     let message = $('#txt-message').val();
     if (!message.trim()) { toast('Saisissez un message avant de prévisualiser.', false); return; }
@@ -777,6 +1077,7 @@ $('#tbody-ja').on('change', '.chk-ja', function () {
 
 // ── Envoi ─────────────────────────────────────────────────────────────────────
 $('#btn-envoyer').on('click', function () {
+    if (typeActif === INVITATION) { envoyerInvitations(); return; }
     const sujet   = $('#txt-sujet').val().trim();
     const message = $('#txt-message').val().trim();
     const ids = [], noms = [];

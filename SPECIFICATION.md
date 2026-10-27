@@ -78,7 +78,7 @@ Point d'entrée unique de l'application. Authentifie l'utilisateur et initialise
 ### Comportement
 | Situation | Résultat |
 |-----------|----------|
-| Déjà connecté | Redirige immédiatement vers E002 (Admin), E003 (Nominateur) ou E004 (CSR) |
+| Déjà connecté | Redirige immédiatement vers le menu du rôle principal (`menuDuRole()`) |
 | Login ou MDP vide | Message d'avertissement, pas d'appel base |
 | Identifiants invalides ou compte inactif | Message `Échec : Identifiants invalides.` |
 | Mot de passe valide, double authentification active (défaut) | **1re étape seulement** : `session_regenerate_id(true)`, état `$_SESSION['mfa_attente']` (id utilisateur, `debut`, hash du code, `essais`, `envois`) — **aucun** `$_SESSION['utilisateur']` —, code de 6 chiffres envoyé à `utilisateur.Email`, redirection vers E010 (`login/code`) |
@@ -86,11 +86,10 @@ Point d'entrée unique de l'application. Authentifie l'utilisateur et initialise
 | Mot de passe valide, envoi de l'email impossible | Refus : « Impossible d'envoyer le code, réessayez ou contactez l'administrateur. » (erreur technique journalisée, sans le code ; aucun état d'attente conservé) |
 | Mot de passe valide, `configuration.double_authentification = '0'` (coupe-circuit) | Connexion par mot de passe seul, comme avant (journal `[NIJAC][SEC] double authentification désactivée par configuration` à chaque connexion) |
 | Retour sur E001 | Toute connexion inachevée (`mfa_attente`) est abandonnée ; affiche le message transmis par E010 (essais épuisés, délai dépassé) |
-| Connexion réussie (après E010) + rôle Admin | Redirection vers `admin_menu.php` (E002) |
-| Connexion réussie + rôle Nominateur ou CSR | Redirection vers `Nominateur/menu.php` (E003) ou menu CSR (E004) |
+| Connexion réussie (après E010) | Redirection **directe** vers le menu du **rôle principal** (`AuthController::redirectForRole()` → `menuDuRole()`, colonne `role.RouteMenu` : Administrateur → E002, Nominateur → E003, CSR → E004, Défiscalisateur → E005, CRA Convoc → E009, JA → E011), sans page de choix ; les droits sont l'union de tous les rôles du compte |
 | Erreur base de données | Message système, log PHP |
 
-**Périmètre des rôles (filtres) :** le filtre "auth" sans argument (écrans du menu nominateur E003 et routes partagées : EN11, EN12, EN13, EN15, EN17, EN23, EN24, EN27, EN29, EA81, EA93, `laposte/*`, variantes « token » d'EN19/EN22…) et le filtre "nominauth" (EN14, EN26, EN28) n'acceptent que les rôles Nominateur et Administrateur (ou `is_admin`). Chaque autre rôle n'a accès qu'aux écrans de son menu : CSR → E004, ES31, ES32, ES33 ("csrauth") ; Défiscalisateur → E005, ED51 à ED55 ("defiscauth", ED53 contrôlé dans le contrôleur) ; CRA Convoc → E009, EC71 à EC75 ("craconvocauth"). Les routes partagées dont dépend un de ces menus listent les rôles supplémentaires en argument du filtre :
+**Périmètre des rôles (filtres) :** le filtre "auth" sans argument (écrans du menu nominateur E003 et routes partagées : EN11, EN12, EN13, EN15, EN17, EN23, EN24, EN27, EN29, EA81, EA93, `laposte/*`, variantes « token » d'EN19/EN22…) et le filtre "nominauth" (EN14, EN26, EN28) n'acceptent que les comptes ayant le rôle Nominateur ou Administrateur (ou `is_admin`). **Multi-rôles** : un compte peut cumuler plusieurs rôles, sauf le rôle JA qui est **exclusif** (un compte JA n'a aucun autre rôle) ; ses droits sont l'**union** de ses rôles — chaque filtre teste `aRole([...])` / `estAdmin()` sur `$_SESSION['utilisateur']['roles']`, jamais le seul rôle principal. Chaque autre rôle n'a accès qu'aux écrans de son menu : CSR → E004, ES31, ES32, ES33 ("csrauth") ; Défiscalisateur → E005, ED51 à ED55 ("defiscauth", ED53 contrôlé dans le contrôleur) ; CRA Convoc → E009, EC71 à EC75 ("craconvocauth"). Les routes partagées dont dépend un de ces menus listent les rôles supplémentaires en argument du filtre :
 
 | Route | Filtre | Utilisée par |
 |-------|--------|--------------|
@@ -107,10 +106,11 @@ $_SESSION['utilisateur'] = [
     'login'          => string,
     'nom'            => string,
     'prenom'         => string,
-    'role'           => 'Administrateur' | 'Nominateur' | 'CSR' | 'Defiscalisateur' | 'CRA Convoc',
+    'role'           => 'Administrateur' | 'Nominateur' | 'CSR' | 'Defiscalisateur' | 'CRA Convoc' | 'JA', // rôle principal
+    'roles'          => string[], // tous les rôles (principal en tête), rolesEffectifsCompte()
     'id_departement' => string,
     'change_login'   => bool,
-    'is_admin'       => bool,
+    'is_admin'       => bool,   // 'Administrateur' ∈ roles
     'email'          => string,
     'pwd_version'    => ?int,   // utilisateur.PwdVersion à la connexion (null avant EA98)
     'verifie_le'     => int,    // horodatage de la dernière revalidation en base
@@ -124,7 +124,7 @@ $_SESSION['utilisateur'] = [
 - `session_regenerate_id(true)` après le mot de passe valide, puis à nouveau après validation du code (E010)
 - Double authentification par email (E010) ; la session `$_SESSION['utilisateur']` n'est créée qu'après validation du code (le changement de mot de passe forcé `change_login` intervient donc après la double authentification)
 - Un simple GET sur E001 n'annule plus une double authentification en cours (`mfa_attente`) : seuls une nouvelle saisie (POST) ou la déconnexion l'abandonnent
-- **Revalidation de session** : tous les filtres d'authentification (`auth`, `adminauth`, `nominauth`, `csrauth`, `defiscauth`, `craconvocauth`) appellent `controlerSessionFiltre()` → `revaliderSessionUtilisateur()` (`config/app_config.php`) : au plus une fois par minute (`verifie_le`), relecture en base de `Actif`, `Role`, `ChangeLogin` et `PwdVersion` (si la colonne existe) ; compte supprimé, désactivé, rôle modifié ou version du mot de passe différente → session détruite (données, fichier et cookie, `detruireSessionNijac()`) et retour à E001. Session sans `pwd_version` (ouverte avant EA98 ou avant cette version) : adopte la version courante. Base injoignable : pas de destruction (journalisé)
+- **Revalidation de session** : tous les filtres d'authentification (`auth`, `adminauth`, `nominauth`, `csrauth`, `defiscauth`, `craconvocauth`, `jaauth`) appellent `controlerSessionFiltre()` → `revaliderSessionUtilisateur()` (`config/app_config.php`) : au plus une fois par minute (`verifie_le`), relecture en base de `Login`, `Actif`, `ChangeLogin`, `PwdVersion` (si la colonne existe) et des rôles (`rolesUtilisateur()`, table `utilisateur_role`) ; compte supprimé, désactivé, ensemble des rôles modifié, login modifié, version du mot de passe différente, ou compte JA (rôle exclusif) sans fiche → session détruite (données, fichier et cookie, `detruireSessionNijac()`) et retour à E001. Session sans `pwd_version` (ouverte avant EA98 ou avant cette version) : adopte la version courante ; session sans `roles` (ouverte avant le multi-rôles) : complétée ; `is_admin` recalculé depuis les rôles. Base injoignable : pas de destruction (journalisé)
 - **Changement forcé** (`change_login` vrai, y compris `ChangeLogin = 1` posé en base) : seules les routes `changer-mot-de-passe` et `logout` restent accessibles, toute autre route filtrée redirige vers E006
 - **Déconnexion** : `POST logout` (CSRF) détruit la session et efface le cookie ; `GET logout` (anciens favoris) redirige seulement vers E001 sans rien détruire
 
@@ -153,7 +153,7 @@ Charte de E001 (bandeau FFTT, carte bleue, sans menu) : champ **Code de sécurit
 | CSRF | Formulaires POST avec `csrf_field()` (filtre `csrf` global) |
 
 ### Après validation
-`session_regenerate_id(true)`, suppression de `mfa_attente`, relecture du compte en base (`Actif = 1`), création de `$_SESSION['utilisateur']` (format inchangé), rappel d'expiration FFTT pour un administrateur, redirection selon le rôle (`redirectForRole()`).
+`session_regenerate_id(true)`, suppression de `mfa_attente`, relecture du compte en base (`Actif = 1`), création de `$_SESSION['utilisateur']` (`construireSessionUtilisateur()` : `role` = rôle principal, `roles` = tous), rappel d'expiration FFTT pour un administrateur, redirection directe vers le menu du rôle principal (`redirectForRole()` → `menuDuRole()`), sans page de choix.
 
 ### Email envoyé
 Message système `messagerie` de Type `Code de sécurité` (constante `TYPE_MESSAGE_CODE_SECURITE`), Sujet « Votre code de sécurité NIJAC », corps HTML (« Proposition A – Bleu institutionnel », tableaux + styles en ligne) avec le marqueur `{CODE}`, Cc = 0, ReplyTo = 0, envoyé au seul titulaire du compte (`utilisateur.Email`) en HTML avec une version texte brut (`AltBody`) ; un corps texte brut (personnalisé en EA93) reste accepté et part en texte. Amorcé par `assurerModeleCodeSecurite()` dans `initTableConfiguration()` (EA98) (création de la ligne système seulement si absente, jamais d'écrasement) ; lu via `resoudreModeleMessagerieParType()` (message système uniquement) ; repli sur `corpsParDefautCodeSecurite()` si la ligne n'existe pas encore (avant EA98). Éditable en EA93 par un administrateur uniquement (pas de copie personnelle, invisible des autres rôles, absent des modèles d'EN15).
@@ -335,6 +335,91 @@ Page d'accueil du rôle « CRA Convoc », atteinte automatiquement après connex
 ### Règles
 - Bandeau utilisateur standard (alerte « Mot de passe à modifier », bouton **Menu administrateur** visible seulement pour un Administrateur en prévisualisation)
 - Le lien de retour d'E006 ramène ce rôle vers E009
+
+---
+
+## E011 – Menu JA
+
+**Fichier :** `JaMenuController` (CI4), vue `ja_menu_index.php`, route `ja-menu`
+**Accès :** rôle « JA » requis parmi les rôles du compte (filtre `jaauth`, `aRole('JA')`, voir `JaAuth.php`) — l'Administrateur seul n'y a pas accès : ces écrans portent sur les données d'un JA précis, celui de la session.
+
+### Objectif
+Page d'accueil d'un juge-arbitre disposant d'un compte utilisateur (rôle `JA`, créé par EN15 « Invitation JA » ou EA86), atteinte après connexion E001 + code E010 (`AuthController::redirectForRole()`). Le compte n'a pas de colonne de lien : son `Id_Utilisateur` est le `ja.Id_JA` de sa fiche (convention ci-dessous), et la fiche de la session est `$_SESSION['utilisateur']['id']`.
+
+### Boutons de menu
+| Bouton | Code | Destination |
+|--------|------|-------------|
+| Mes disponibilités | EJA2 | `ja/disponibilites` |
+| Mes nominations | EJA3 | `ja/nominations` |
+| Mes frais | EJA4 | `ja/frais` |
+| Mot de passe | E006 | `changer-mot-de-passe` (filtre `auth:CSR,Defiscalisateur,CRA Convoc,JA`) |
+| Se déconnecter | — | `POST logout` (formulaire caché `#form-logout` + CSRF) |
+
+### Règles
+- Compte JA sans fiche `ja` de même Id (fiche supprimée, compte créé hors convention) : refusé à E001 avant l'envoi du code (`compteJaRefuse()`, message « Votre compte juge-arbitre n'est rattaché à aucune fiche JA… »), revérifié à l'ouverture de session après E010 et à chaque requête par `jaauth` (session vidée + retour à E001 avec ce message).
+- `revaliderSessionUtilisateur()` revérifie aussi la fiche d'un compte JA : fiche de même Id supprimée → session détruite (`fiche JA supprimée`).
+- **JA exclusif** : un compte JA a le seul rôle JA (aucun autre rôle), et un compte d'un autre rôle ne peut jamais recevoir JA (EA86 et EN15) ; il arrive toujours sur E011. Compte hérité cumulant déjà JA et d'autres rôles en base (antérieur à la règle) : rien n'est cassé ni supprimé (lignes `utilisateur_role` conservées, connexion avec tous ses rôles, journalisé par `rolesEffectifsCompte()`), ignoré par EN15 (`etatCompteJa()`), régularisable en EA86 (JA seul — fiche de même Id requise — ou sans JA).
+- Un compte n'ayant que le rôle JA est refusé par `auth` sans argument, `nominauth`, `csrauth`, `defiscauth`, `craconvocauth`, `adminauth`.
+- La fiche vient TOUJOURS de `idJaCompteSession()` (`$_SESSION['utilisateur']['id']` si rôle JA ET fiche existante, sinon 0 = refus), revérifiée par le filtre ET par chaque contrôleur JA (E011, EJA2–EJA4), jamais du client ; toute nomination visée par un id client est vérifiée comme appartenant à ce JA.
+- Les liens publics tokenisés EN19 / EN21 / EN22 restent valables (JA sans compte). Une session de rôle JA ne peut pas utiliser `?id_ja=N` en clair sur EN22 (réservé aux sessions du personnel).
+- Le lien de retour d'E006 ramène ce rôle vers E011.
+
+### Convention des comptes JA (Id_Utilisateur = Id_JA)
+- Un compte de rôle `JA` a **`utilisateur.Id_Utilisateur` = `ja.Id_JA`** de sa fiche : INSERT avec Id explicite (`creerCompteJa()`), par EN15 « Invitation JA » ou EA86 « Nouveau ». Login = Email = adresse du JA, Prénom vide, Nom = nom de la fiche, `ChangeLogin = 1`, rôle `JA` principal dans `utilisateur_role`.
+- Collision : si cet Id existe déjà pour un compte d'un autre rôle (Administrateur, Nominateur, CSR…), la création est **refusée avec motif** (« identifiant n° X déjà utilisé par le compte … ») — jamais d'écrasement ni de réattribution. Dans la sauvegarde du 24/10/2026, aucune collision (comptes 1–25, fiches ja à partir de 276).
+- InnoDB / MariaDB : un Id explicite supérieur à l'`AUTO_INCREMENT` courant le porte à Id + 1 ; les comptes non JA créés ensuite sont numérotés après le plus grand n° de fiche utilisé (un tel Id pourrait coïncider plus tard avec une nouvelle fiche ja : ce JA serait alors refusé avec motif). `AUTO_INCREMENT` ne peut pas redescendre sous MAX(Id) + 1. Seule FK vers `utilisateur.Id_Utilisateur` : `messagerie.Id_Utilisateur` (ON DELETE SET NULL / ON UPDATE CASCADE) — non concernée.
+- **Aucune colonne de lien** : `Id_Utilisateur = Id_JA` suffit (refus de connexion si aucune fiche de cet Id : `compteJaRefuse()`, `jaauth`, `revaliderSessionUtilisateur()`). Une colonne `utilisateur.Id_JA` résiduelle (essai antérieur passé par EA98) n'est ni lue ni écrite ni supprimée automatiquement ; nullable, elle ne gêne pas les INSERT. Suppression manuelle facultative : `ALTER TABLE utilisateur DROP FOREIGN KEY fk_utilisateur_ja; ALTER TABLE utilisateur DROP INDEX uq_utilisateur_ja; ALTER TABLE utilisateur DROP COLUMN Id_JA;` (FK d'abord, chaque instruction seulement si l'objet existe).
+- Un compte existant non JA ne reçoit jamais le rôle JA (EA86 le refuse : son Id n'est pas celui de la fiche) ; en EA86, un compte JA garde Login = Email liés, ses autres champs et rôles restent modifiables.
+
+---
+
+## EJA2 – Mes disponibilités
+
+En-tête : bouton Retour (vers E011) à droite, même style que `partials/page_header.php` (EN22 public n'a pas de bouton Retour).
+
+**Fichier :** `JaDisponibiliteController` (CI4, hérite de `DisponibiliteJaController`), vue `disponibilite_ja_index.php` (partagée avec EN22 : variables `baseUrl`, `codeEcran`, `titreEcran`, `retourUrl`)
+**Accès :** rôle « JA » (filtre `jaauth`), lien depuis E011, retour vers `ja-menu`
+
+### Routes
+`GET ja/disponibilites`, `GET ja/disponibilites/ja`, `GET ja/disponibilites/journees`, `POST ja/disponibilites/sauvegarder-dispo-journee`, `GET ja/disponibilites/lire-note`, `POST ja/disponibilites/sauvegarder-note`, `POST ja/disponibilites/sauvegarder-defiscalisation`, `POST ja/disponibilites/sauvegarder-arbitrage-voisins` — mêmes actions qu'EN22.
+
+### Règles
+Identiques à EN22 (seule `resolveIdJaAutorise()` est redéfinie : `idJaCompteSession()`, paramètres `ja` / `id_ja` ignorés). Pas de fabrication de jeton (`token()` refusé).
+
+---
+
+## EJA3 – Mes nominations
+
+**Fichier :** `JaNominationsController` (CI4), vue `ja_nominations_index.php`
+**Accès :** rôle « JA » (filtre `jaauth`), lien depuis E011, retour vers `ja-menu`
+
+### Routes
+`GET ja/nominations` (écran), `GET ja/nominations/data` → `{ok, data[]}`.
+
+### Règles
+- Lecture seule. `nominationsDuJa()` (partagée avec EJA4) : toutes les nominations dont `disponible.Id_JA` = JA de la session, triées par date croissante côté serveur (plus ancienne → plus future) — tri cliquable sur toutes les colonnes (`nijac-sortable-table.js`, valeurs `data-sort` : date ISO, nombres) ; même tri par défaut et même tri cliquable sur le tableau d'EJA4 (sauf colonne Actions) — date, heure, journée, compétition (`division.Nom`), division, équipes, club recevant, arbitrage CRA/Club, forfait (`rencontre.Forfait` si présente), accusé de réception, péage, km, défiscalisation, rapports, justificatif.
+- Colonnes EA98 lues seulement si présentes (`AccuseReception`, `FichierPeage`, `Forfait`). Le nom stocké du justificatif n'est jamais renvoyé : seulement `JustificatifPeage::libelle()`.
+
+---
+
+## EJA4 – Mes frais / péages / défiscalisation
+
+**Fichier :** `JaFraisController` (CI4, hérite de `ConvocationJaController`), vue `ja_frais_index.php`
+**Accès :** rôle « JA » (filtre `jaauth`), lien depuis E011, retour vers `ja-menu`
+
+### Routes
+| Méthode | Route | Action (héritée d'EN21 sauf index/data) |
+|---------|-------|------------------------------------------|
+| GET | `ja/frais` | écran |
+| GET | `ja/frais/data` | nominations + `Accusable` (`convocationAccusable()`), `EtatFrais` (`etatSaisieFrais()`), `UrlConvocation` (lien EN21 jetonné), `accuseDispo`, `justificatifDispo` |
+| POST | `ja/frais/accuse` | `accuser()` — `id_nomination` |
+| POST | `ja/frais/sauvegarder` | `sauvegarderFrais()` — `id_nomination`, `peages`, `km`, `defiscalisation`, `rapport_accueil`, `rapport_equipements` |
+| POST | `ja/frais/justificatif` | `joindreJustificatif()` — multipart `id_nomination` + `justificatif` |
+| GET | `ja/frais/justificatif/voir?id_nomination=` | `voirJustificatif()` (inline, nom neutre) |
+
+### Règles
+- Mêmes règles qu'EN21, sans duplication : J <= D pour l'accusé, J >= D pour les frais (le jour même, accusé requis s'il manque), plafonds `frais_max_peages` / `frais_max_km`, arbitrage club = aucun frais, justificatif seulement si Peage > 0 enregistré (contrôles, stockage et suppression de l'ancien fichier par `JustificatifPeage`).
+- Seule l'autorisation diffère (`nominationAutorisee()` redéfinie) : la nomination doit appartenir au JA de la session (jeton `cnv` ignoré) ; refus neutre « Nomination introuvable. ». Actions journalisées `[NIJAC] EJA4 : … par le compte JA <login> (nomination N)`.
 
 ---
 
@@ -829,6 +914,28 @@ Erreurs de chargement explicites (`erreurChargement()`) : si `journees` ou `ja` 
 - `EmailEnvoye` passe à `1` après envoi réussi
 - En mode `Developpement`, tous les emails sont redirigés vers `email_developpement`
 - Le lien dans l'email vers la convocation officielle est tokenisé (Obfuscator)
+
+### Onglet « Invitation JA » (création des comptes JA)
+Annonce aux JA qu'ils peuvent consulter leurs informations sur NIJAC (menu E011) et crée leur compte.
+
+- **Destinataires** : JA1 actifs (`ja.JA1 = 1`) dont `ja.CodeDept` est dans `getDepartementsAutorises()` ; liste avec l'état du compte calculé par `etatCompteJa()` (`config/app_config.php`) : « À créer », « Compte existant », « Ignoré » + motif. Aucun jeton, aucun mot de passe dans la réponse.
+- **Message** : message système `messagerie` de Type `Invitation JA` (constante `TYPE_MESSAGE_INVITATION_JA`), envoyé tel quel (sujet / corps modifiables dans l'onglet par un administrateur seulement, voir « Aperçu / édition » ; champs Cc / Reply-To / sujet / message masqués) ; résolu par `resoudreModeleMessagerieParType($pdo, TYPE_MESSAGE_INVITATION_JA, 0)` (message système seul) avec repli `corpsParDefautInvitationJa()` / `SUJET_INVITATION_JA` avant EA98. Marqueurs : `{PRENOM}` `{NOM}` (fiche ja), `{LOGIN}`, `{MOT_DE_PASSE}`, `{LIEN_CONNEXION}` (`site_url('login')`) — `rendreMessageInvitationJa()` : valeurs HTML-échappées si le corps est HTML, `{MOT_DE_PASSE}` remplacé dans le corps seulement (retiré du sujet), `AltBody` par `altBodyDepuisHtml()`. Corps sans `{LOGIN}` ou `{MOT_DE_PASSE}`, ou sujet contenant `{MOT_DE_PASSE}` → envoi refusé (`controlerModeleInvitationJa()`, enregistrement aussi refusé en EA93 / depuis l'onglet). Le message rappelle de changer le mot de passe à la première connexion.
+- **Compte créé à l'envoi** (statut « À créer ») : `Id_Utilisateur = Id_JA` (convention, voir E011), `Login` = `Email` = adresse de la fiche, `Prenom` vide, `Nom` = nom de la fiche (50 car.), rôle `JA` principal (`utilisateur_role`, `estPrincipal = 1`), `Actif = 1`, `ChangeLogin = 1`, `Id_Departement` = `ja.CodeDept` s'il existe dans `departement` (FK), sinon le département de l'utilisateur connecté (`departementCompteJa()`).
+- **JA ayant déjà un compte** (compte de rôle JA d'Id = n° de fiche, actif) : **ignoré par défaut** avec le motif « compte déjà existant ». Case explicite « Régénérer le mot de passe des JA ayant déjà un compte » : nouveau mot de passe, `ChangeLogin = 1`, `PwdVersion + 1` (`sqlIncrementPwdVersion()` : sessions ouvertes fermées à la revalidation), envoyé à l'Email et au Login du compte (inchangés). Le comportement est expliqué dans l'encadré de l'onglet.
+- **Ignorés avec motif, jamais écrasés** : adresse absente / invalide (`FILTER_VALIDATE_EMAIL`) ou plus longue que `utilisateur.Login` (`longueurMaxLoginUtilisateur()` : 150 après EA98, 50 avant), login réservé, adresse déjà **login** d'un autre compte (insensible à la casse), adresse déjà **email d'un autre compte JA**, `Id_Utilisateur` = n° de fiche déjà pris par un compte sans le rôle JA, compte JA existant désactivé, JA inactif ou hors périmètre (revérifiés à l'envoi, l'id client n'est jamais cru).
+- **Sécurité** : mot de passe `genererMotDePasseAleatoire(INVITATION_JA_LONGUEUR_MDP)` (14 caractères, `random_int`, alphabet sans caractères ambigus, minuscule + majuscule + chiffre + spécial), haché `SecurePasswordHasher::hash()`, présent en clair **uniquement** dans le corps de l'email : jamais journalisé (le journal d'erreur ne contient que le message d'exception, jamais le corps), jamais renvoyé au navigateur, jamais stocké. Transaction : INSERT / UPDATE, envoi (`getNijacMailer()` + `getEmailDestinataire()`), COMMIT seulement si l'envoi a réussi, sinon ROLLBACK (aucun compte ni mot de passe ne subsiste). Mode Développement : l'email part vers `email_developpement`, le Login enregistré reste l'adresse réelle du JA (avertissement dans l'onglet). Confirmation `nijacConfirm` avant l'envoi en masse ; pré-contrôle `checkRateLimit(n)` puis `checkRateLimit(1)` / `enregistrerEnvois(1)` par JA (même limitation que les autres envois d'EN15). Journal `[NIJAC][SEC] EN15 invitation JA : compte créé | mot de passe régénéré (Id_Utilisateur N) par <login>`.
+- **Aperçu / édition du message** (même fonctionnement qu'EA93) : l'onglet affiche dans ses champs **Sujet** et **Message** (zone de texte du code HTML) le message « Invitation JA » tel qu'il partira, retrouvé par Type (ligne système `Id_Utilisateur IS NULL` la plus ancienne, même ligne que `resoudreModeleMessagerieParType(…, 0)` — chez Patrick, `Id_Messagerie` 13 une fois amorcé par EA98 après les 12 messages existants ; aucun Id en dur). Aperçu rendu **côté serveur** par `apercuMessageInvitationJa()` (`rendreMessageInvitationJa()` avec des valeurs d'exemple factices : Jean DUPONT, `jean.dupont@exemple.fr`, mot de passe « Exemple-MdP-Provisoire », lien `site_url('login')`, échappées) et affiché par le bouton **« Aperçu HTML »** (masqué pour un corps texte brut, comme EA93) dans la modale d'EA93 « Aperçu HTML du message », iframe `sandbox=""` (`srcdoc`, ni script ni navigation) + sujet rendu. Corps texte brut : affiché échappé dans un `<pre>`. Ligne absente (avant EA98) : corps par défaut affiché, mention « chargez EA98 », pas d'édition. L'envoi utilise toujours le message ENREGISTRÉ (une modification non enregistrée du champ n'est pas envoyée).
+- **Édition (administrateur seulement, comme EA93)** : champs Sujet / Message modifiables, cartouche des marqueurs `{PRENOM}` `{NOM}` `{LOGIN}` `{MOT_DE_PASSE}` `{LIEN_CONNEXION}` (clic = insertion), « Aperçu HTML » du contenu du champ (`POST centrenvoye/invitation-ja/apercu`, rien n'est enregistré), bouton « Enregistrer le message » : contrôles client puis `nijacConfirm`, enregistrement par la route existante `PUT messagerie/{Id}` (`MessagerieController::update()`, droits inchangés : message système modifiable par un administrateur seulement), toasts succès / erreur. Refus serveur bloquant (`MessagerieController::extractFields()` → `controlerModeleInvitationJa()`) si `{LOGIN}` ou `{MOT_DE_PASSE}` manque dans le corps ou si le sujet contient `{MOT_DE_PASSE}` ; avertissement non bloquant (`avertissementsHtmlEmail()`, toast orange) si commentaire HTML (hors conditionnels Outlook) ou texte caché (`display:none`, `visibility:hidden`, `mso-hide:all`, taille / hauteur / opacité nulle). Les autres rôles d'EN15 voient Sujet / Message en **lecture seule** + « Aperçu HTML » (aperçu du message enregistré, déjà rendu par le serveur) : ils reçoivent le code source de CE Type seulement (le corps ne contient que des marqueurs), jamais l'Id / Cc / ReplyTo ; aucune route ni droit de `MessagerieController` élargi.
+- **Corps par défaut** (`corpsParDefautInvitationJa()`, nowdoc, version validée) : en-tête bleu `#1f4e8c` « NIJAC – Votre espace juge-arbitre », « Bonjour {PRENOM} {NOM} », liste des informations consultables (disponibilités, nominations, frais de péage et justificatifs, défiscalisation), encadré des identifiants (`{LOGIN}`, `{MOT_DE_PASSE}`), bouton « Me connecter à NIJAC » + lien de secours en clair (`{LIEN_CONNEXION}`), encadré orange « mot de passe provisoire » (changement obligatoire, code de sécurité à chaque connexion), rappel de sécurité, signature « La Commission Régionale d'Arbitrage (CRA) — Ligue de Normandie de Tennis de Table ». Ni commentaire HTML, ni texte caché, ni ligne « message généré automatiquement ». L'amorçage EA98 n'écrase jamais une ligne existante : une base déjà amorcée garde son corps (le mettre à jour en EA93 ou depuis EN15).
+- **Accès** : mêmes routes filtrées que le reste d'EN15 (`auth` : Administrateur / Nominateur), CSRF global.
+
+| Route | Méthode | Description |
+|-------|---------|-------------|
+| `centrenvoye/invitation-ja` | GET | JA1 du périmètre + `Statut` / `Motif` / `LoginCompte`, `erreur_modele`, `mode_dev` |
+| `centrenvoye/invitation-ja/modele` | GET | `{ok, apercu: {sujet, html}, absent, erreur_modele, peut_editer, modele: {sujet, message[, id, cc, replyto]}}` (`id` / `cc` / `replyto` pour l'administrateur seulement) |
+| `centrenvoye/invitation-ja/apercu` | POST | Administrateur : `sujet`, `message` (brouillon) → `{ok, apercu, erreur, avertissement}` |
+| `centrenvoye/invitation-ja/verifier` | POST | `ids` (JSON) : modèle, `checkRateLimit(n)` |
+| `centrenvoye/invitation-ja/envoyer-un` | POST | `id_ja`, `regenerer` (0/1) → `{ok, nom, statut: cree|regenere}` · `{ok:false, skip:true, nom, msg}` (ignoré) · `{ok:false, nom, msg}` (échec) |
 
 ---
 
@@ -1690,7 +1797,7 @@ Gérer les comptes utilisateurs de l'application (création, modification, suppr
 
 ### Formulaire — 3 cadres
 - **Identifiant** : Id (lecture seule) + Login sur la même ligne
-- **Information personnelle** : Prénom + Nom sur la même ligne, Adresse email, Rôle + Département sur la même ligne, case Actif
+- **Information personnelle** : Prénom + Nom sur la même ligne, Adresse email, **Rôles** (une case à cocher par ligne de la table `role`, au moins une) + **Rôle principal** (liste limitée aux rôles cochés : menu d'arrivée à la connexion), Département, case Actif
 - **Écraser mot de passe** : une seule case **Écraser**. Cochée (ou création — case forcée), le serveur **génère un mot de passe aléatoire** conforme à `validerRobustesseMotDePasse()` (`genererMotDePasseAleatoire()`, 12 caractères) et passe le compte en `ChangeLogin = 1`. Le mot de passe en clair est renvoyé dans la réponse (`mdp`) et affiché à l'admin dans un encadré « Mot de passe provisoire à communiquer ». Case décochée en modification : ni `Password` ni `ChangeLogin` ne sont réécrits.
 
 ### Champs d'un utilisateur
@@ -1701,28 +1808,35 @@ Gérer les comptes utilisateurs de l'application (création, modification, suppr
 | Nom | Texte | Oui |
 | Prénom | Texte | Oui |
 | Email | `utilisateur.Email` varchar(150) `NOT NULL` — destinataire du code de sécurité de connexion (E010) | Oui |
-| Rôle | ENUM `utilisateur.Role` (lu en base) | Oui |
+| Rôles | Table `utilisateur_role` (`Role` → `role.Code`, `estPrincipal`) — POST `roles[]` + `principal` | Oui (au moins un, principal parmi les cochés) |
 | Département | Entier (ex : 76) | Oui |
 | Actif | Booléen | Oui |
 | `ChangeLogin` | Booléen | Forcé à 1 quand un mot de passe est généré |
 | `PwdVersion` | `INT UNSIGNED NOT NULL DEFAULT 0` (créée par EA98) — version du mot de passe, non affichée | Incrémentée à chaque changement de mot de passe (E006, E008, case Écraser) |
+| Fiche juge-arbitre | Pas de colonne : pour le rôle `JA`, l'Id du compte EST le n° de la fiche (`Id_Utilisateur = ja.Id_JA`). Bloc affiché seulement quand la case `JA` est cochée à la création : recherche par nom / prénom / n° (`GET utilisateur/fiches-ja?q=`, 20 résultats, JA1 actifs d'abord, fiches dont l'Id est déjà porté par un compte grisées) | Oui à la création d'un compte JA (non modifiable ensuite) |
 
 ### Actions AJAX
 | Action | Méthode | Description |
 |--------|---------|-------------|
-| `data` | GET | Retourne tous les utilisateurs (`data/{id}` pour un seul) |
+| `data` | GET | Retourne tous les utilisateurs avec `Roles` (codes, principal en tête) et `RolePrincipal` (`data/{id}` pour un seul, avec `FicheJa` = libellé de la fiche de même Id pour un compte JA) |
+| `fiches-ja` | GET | Recherche de fiches `ja` (`q` ≥ 2 caractères) : `Id_JA`, `Nom`, `Prenom`, `JA1`, `Email`, `compte_login` / `compte_role` (compte portant déjà l'Id = n° de fiche) |
 | `store` | POST | Créer un utilisateur (mot de passe aléatoire généré, renvoyé dans `mdp`) |
 | `update` | PUT | Modifier ; régénère le mot de passe si `ecraser=1` (renvoyé dans `mdp`) |
 | `delete` | DELETE | Supprimer un utilisateur |
 
 ### Validations
-- Login, Nom, Prénom, **Email**, Rôle, Département obligatoires — email requis côté client (`required`, `checkValidity()`) et serveur (non vide, 150 caractères max, `FILTER_VALIDATE_EMAIL`), en création comme en modification ; pas de contrôle d'unicité (des comptes partagent déjà une adresse)
+- Login, Nom, Prénom, **Email**, au moins un rôle, rôle principal, Département obligatoires — email requis côté client (`required`, `checkValidity()`) et serveur (non vide, 150 caractères max, `FILTER_VALIDATE_EMAIL`), en création comme en modification ; pas de contrôle d'unicité (des comptes partagent déjà une adresse)
 - Un compte sans email valide ne peut pas se connecter tant que la double authentification est active (E001) : le corriger ici
-- Rôles valides : lus dynamiquement dans l'ENUM `utilisateur.Role`
+- Rôles valides : `rolesValides()` = codes de la table `role` (par `Priorite` ; repli `ROLES_REFERENCE` avant EA98). Enregistrement par `enregistrerRolesUtilisateur()` (DELETE + INSERT dans `utilisateur_role`, dans la transaction de `store`/`update`), un seul `estPrincipal = 1` par utilisateur. Plus d'ENUM `utilisateur.Role` : colonne migrée puis supprimée par EA98 (`assurerRolesUtilisateurs()`), les anciens `assurerRoleCsr()` / `assurerRoleDefiscalisateur()` / `assurerRoleCraConvoc()` / `assurerRoleJa()` n'existent plus ; un nouveau rôle = une ligne dans `role`
+- Rôle `JA` **exclusif** (non cumulable) : tout jeu de rôles mêlant JA et un autre rôle est refusé côté serveur (`extraireRoles()`, « Le rôle JA est exclusif… ») ; côté client, cocher JA décoche et désactive les autres rôles, cocher un autre rôle décoche JA ; un compte existant non-JA ne peut jamais recevoir JA, un compte JA jamais un autre rôle. Compte hérité cumulant JA et d'autres rôles : avertissement, régularisable (JA seul — fiche de même Id requise, puis mêmes verrous qu'un compte JA — ou sans JA), journalisé.
+- Rôle `JA` — **création** (`creerCompteJaEa86()`, « Nouveau » + case JA cochée) : JA seul rôle (principal) ; fiche obligatoire et existante, mêmes règles qu'EN15 « Invitation JA » (`etatCompteJa()`, `creerCompteJa()`) : `Id_Utilisateur` = n° de fiche (INSERT avec Id explicite, refus si cet Id est déjà pris par un autre compte), Login = Email = adresse saisie, Nom = nom de la fiche, Prénom vide (champs login / nom / prénom désactivés côté client, ignorés côté serveur), département de la fiche (sinon celui choisi), refus si la fiche a déjà un compte ou si l'adresse est déjà le login d'un autre compte / l'email d'un autre compte JA ; mot de passe provisoire affiché comme pour les autres créations. La recherche de fiches grise celles dont l'identifiant est déjà porté par un compte (`compte_login`)
+- Compte JA — **modification** (`majEmailCompteJa()`) : SEULE l'adresse email est modifiable, le login la suit (Login = Email) ; email validé client + serveur (`FILTER_VALIDATE_EMAIL`, longueur max de `Login`), unicité insensible à la casse : ni le login d'un autre compte, ni (si elle change) l'email d'un autre compte ; login réservé refusé. Login, nom, prénom, rôles, département, Actif et « Écraser » sont verrouillés côté client et refusés côté serveur s'ils diffèrent de la base (nouveau mot de passe : EN15 « Invitation JA », case « Régénérer »). Changer l'adresse change le login : les sessions du JA sont fermées à la revalidation suivante (« login modifié »)
+- Un compte existant non JA ne peut jamais **gagner** le rôle JA (refus serveur : son Id n'est pas le n° d'une fiche — créer le compte JA par « Nouveau » ou EN15 « Invitation JA »)
+- `utilisateur.Login` élargi à `VARCHAR(150)` par EA98 (`initTableConfiguration()`) pour les logins = email
 - Un utilisateur ne peut pas supprimer son propre compte
-- Un utilisateur ne peut ni se désactiver ni modifier son propre rôle (refus `update`) : aucun état de session incohérent possible
-- Effet sur les sessions ouvertes d'un **autre** compte : désactivation, suppression ou changement de rôle → session détruite à sa prochaine revalidation par les filtres (au plus 1 minute, `revaliderSessionUtilisateur()`) ; case **Écraser** → `PwdVersion + 1` (si la colonne existe) → idem. Rien d'autre à faire dans EA86. Écraser son **propre** mot de passe : la session est relue en base (nouvelle version) et passe en changement forcé (E006)
-- **Rafraîchissement du profil** : quand l'administrateur modifie son propre compte (même `Id_Utilisateur` que la session), `update()` relit la ligne en base et réécrit `$_SESSION['utilisateur']` (id_departement, login, nom, prenom, role, is_admin, email, change_login) via `construireSessionUtilisateur()` (`config/app_config.php`, partagée avec la connexion `AuthController::ouvrirSession()`), par un `session_start()` brut puis `session_write_close()`. Jamais appliqué à un autre compte. Aucun cache de périmètre : `getDepartementsAutorises()` relit la configuration à chaque appel, le nouveau département est actif dès la requête suivante, sans reconnexion
+- Un utilisateur ne peut ni se désactiver ni se retirer son propre rôle Administrateur (refus `update`) : aucun état de session incohérent possible
+- Effet sur les sessions ouvertes d'un **autre** compte : désactivation, suppression ou changement de rôles (ajout, retrait, principal) → session détruite à sa prochaine revalidation par les filtres (au plus 1 minute, `revaliderSessionUtilisateur()`) ; case **Écraser** → `PwdVersion + 1` (si la colonne existe) → idem. Rien d'autre à faire dans EA86. Écraser son **propre** mot de passe : la session est relue en base (nouvelle version) et passe en changement forcé (E006)
+- **Rafraîchissement du profil** : quand l'administrateur modifie son propre compte (même `Id_Utilisateur` que la session), `update()` relit la ligne en base et réécrit `$_SESSION['utilisateur']` (id_departement, login, nom, prenom, role (principal), roles, is_admin, email, change_login) via `construireSessionUtilisateur()` (`config/app_config.php`, partagée avec la connexion `AuthController::ouvrirSession()`), par un `session_start()` brut puis `session_write_close()`. Jamais appliqué à un autre compte. Aucun cache de périmètre : `getDepartementsAutorises()` relit la configuration à chaque appel, le nouveau département est actif dès la requête suivante, sans reconnexion
 
 ---
 
@@ -1950,6 +2064,7 @@ Créer et gérer les modèles de messages utilisés pour les convocations, rappe
 - **Message n°3 « Convocation » (EN14)** : corps par défaut en HTML (`modeleHtmlConvocationJa()`), édité dans le même textarea + « Aperçu HTML » ; mis à niveau par EA98 seulement s'il n'a pas été personnalisé (voir EN14 « Modèle de convocation »)
 - **Message système « Convocation clubs » (EN14)** : copie de la convocation aux correspondants/référents des deux clubs (voir EN14 « Copie de la convocation aux clubs »), HTML (`modeleHtmlCopieConvocationClubs()`, coordonnées du JA via `{COORDONNEES_JA}` / `{TEL_JA}` / `{EMAIL_JA}`), amorcé par EA98 (`assurerModeleCopieConvocationClubs()`, qui met aussi à niveau un corps système resté à l'ancienne version par défaut). Édité/copié comme les autres messages système (admin ; nominateur : copie perso prioritaire à l'envoi) ; non proposé par EN15 (onglets à Types fixes) ni au rôle « CRA Convoc ». Absent ou vide → EN14 utilise le modèle codé en dur (`modeleHtmlCopieConvocationClubs()` + `sujetParDefautCopieConvocationClubs()`). EA93 : à l'enregistrement d'un message de ce Type contenant `{URL_CONVOCATION_JA}` ou `{LIEN_CONVOCATION}` (sujet ou corps), avertissement non bloquant (toast orange « Ce message est envoyé aux clubs : n'y mettez pas le lien personnel du JA »), aucun nettoyage
 - **Message système « Code de sécurité » (E010)** : email du code de double authentification (Sujet « Votre code de sécurité NIJAC », corps HTML, seul marqueur `{CODE}`, Cc = 0, ReplyTo = 0), amorcé par EA98 (`assurerModeleCodeSecurite()` : ligne créée seulement si absente, jamais écrasée). Réservé aux administrateurs : invisible des autres rôles (liste et chargement), ni copie personnelle (« dupliquer » refusé pour tous), ni création/modification de ce Type par un non-administrateur ; absent des modèles d'EN15. Absent → repli sur le texte par défaut codé en dur (`corpsParDefautCodeSecurite()`)
+- **Message système « Invitation JA » (EN15)** : email de création des comptes JA (Sujet `SUJET_INVITATION_JA`, corps HTML sans commentaire ni texte caché, marqueurs `{PRENOM}` `{NOM}` `{LOGIN}` `{MOT_DE_PASSE}` `{LIEN_CONNEXION}`, Cc = 0, ReplyTo = 0), amorcé par EA98 (`assurerModeleInvitationJa()` : Type ajouté à l'ENUM, ligne créée seulement si absente, jamais écrasée). Mêmes restrictions que « Code de sécurité » (`typesMessagesReservesAdmin()`) : administrateurs seulement, pas de copie personnelle, absent des modèles génériques d'EN15. Enregistrement **refusé** sans `{LOGIN}` / `{MOT_DE_PASSE}` dans le corps ou avec `{MOT_DE_PASSE}` dans le sujet ; avertissement non bloquant si commentaire HTML ou texte caché (`avertissementsHtmlEmail()`). Aussi éditable depuis l'onglet « Invitation JA » d'EN15 (administrateur, même route `PUT messagerie/{id}`). Absent → repli `corpsParDefautInvitationJa()`
 - **Rôle « CRA Convoc »** (bouton EA93 « Modèles de convocation » du menu E009, route sous filtre `auth`) : ne voit que les messages `CRA Convocation …` (système en lecture seule + ses copies), peut les copier, modifier/supprimer ses copies (Type restant `CRA Convocation …`), ne peut pas créer de message ; retour vers E009
 
 ---

@@ -5,7 +5,7 @@ namespace App\Controllers;
 /**
  * NIJAC – Page de connexion (E001), portage CI4 de index.php, et saisie du code de sécurité (E010).
  *
- * Recherche Utilisateur par Login/Password (Administrateur, Nominateur, CSR).
+ * Recherche Utilisateur par Login/Password (Administrateur, Nominateur, CSR, Defiscalisateur, CRA Convoc, JA).
  * Double authentification : mot de passe valide -> état $_SESSION['mfa_attente'] (id, horodatages,
  * hash du code, essais, envois ; jamais le code en clair) + code de 6 chiffres envoyé par email ->
  * E010 (login/code) -> $_SESSION['utilisateur'] créé seulement après validation du code. Coupe-circuit :
@@ -14,13 +14,17 @@ namespace App\Controllers;
  * Anti brute-force : limite par IP (login:<ip>) + par login saisi (login_compte:<login>, 10 échecs /
  * 60 min, logins inconnus compris) + plafond journalier de codes faux par compte (mfa_essai:<id>).
  * Login inconnu/inactif : vérification PBKDF2 sur SecurePasswordHasher::HASH_FACTICE (même durée).
- * Le rôle JA n'a plus de login : ses écrans (EN19/EN21/EN22) sont tous
- * publics, identifiés par un lien tokenisé (Obfuscator) envoyé par email.
+ * Rôle JA : un juge-arbitre peut avoir un compte (EN15 « Invitation JA » ou EA86, Id_Utilisateur = Id_JA
+ * de sa fiche) — même 2FA, puis menu E011 ; un compte JA sans fiche valide est refusé (compteJaRefuse()).
+ * Les écrans publics EN19/EN21/EN22 restent accessibles par lien tokenisé (Obfuscator) aux JA sans compte.
  * Session native (jamais le service Session de CI4) — voir AdminAuth.php
  * pour l'explication complète de l'incompatibilité des deux mécanismes.
  */
 class AuthController extends BaseController
 {
+    /** Compte sans aucun rôle (utilisateur_role vide) : connexion refusée. */
+    private const MSG_AUCUN_ROLE = "Aucun rôle attribué, contactez l'administrateur";
+
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
@@ -32,9 +36,17 @@ class AuthController extends BaseController
     {
         demarrerSessionNijac();
 
+        // Session sans aucun rôle : détruite (sinon boucle login <-> menu refusé par le filtre).
+        if (isset($_SESSION['utilisateur']) && rolesSession() === []) {
+            detruireSessionNijac();
+            session_id(session_create_id()); // nouvel identifiant (l'ancien cookie est expiré)
+            demarrerSessionNijac();
+            $_SESSION['login_message'] = self::MSG_AUCUN_ROLE;
+        }
+
         // Déjà connecté : redirection selon le rôle (comme index.php legacy)
         if (isset($_SESSION['utilisateur'])) {
-            $redirect = $this->redirectForRole($_SESSION['utilisateur']['role']);
+            $redirect = $this->redirectForRole($_SESSION['utilisateur']['role'] ?? '');
             session_write_close();
             return redirect()->to($redirect);
         }
@@ -82,7 +94,17 @@ class AuthController extends BaseController
                         $motDePasseOk = false;
                     }
 
-                    if ($motDePasseOk && ($limite = checkMfaEssaisRateLimit((int) $row['Id_Utilisateur']))) {
+                    if ($motDePasseOk && rolesEffectifsCompte($pdo, (int) $row['Id_Utilisateur']) === []) {
+                        // Aucun rôle (utilisateur_role vide) : refus avant tout envoi de code.
+                        error_log('[NIJAC][SEC] connexion refusée : aucun rôle attribué (Id_Utilisateur ' . (int) $row['Id_Utilisateur'] . ')');
+                        $status      = self::MSG_AUCUN_ROLE;
+                        $statutClass = 'text-danger';
+                    } elseif ($motDePasseOk && ($refusJa = compteJaRefuse($pdo, $row))) {
+                        // Compte JA sans fiche ja valide : refus clair, aucun code envoyé.
+                        error_log('[NIJAC][SEC] connexion refusée : compte JA sans fiche valide (Id_Utilisateur ' . (int) $row['Id_Utilisateur'] . ')');
+                        $status      = $refusJa;
+                        $statutClass = 'text-danger';
+                    } elseif ($motDePasseOk && ($limite = checkMfaEssaisRateLimit((int) $row['Id_Utilisateur']))) {
                         // Plafond journalier de codes faux atteint : aucun nouveau code envoyé.
                         $status      = $limite;
                         $statutClass = 'text-danger';
@@ -151,8 +173,15 @@ class AuthController extends BaseController
     {
         demarrerSessionNijac();
 
+        if (isset($_SESSION['utilisateur']) && rolesSession() === []) {
+            // Session sans aucun rôle : détruite, retour à E001 (pas de boucle vers un menu).
+            detruireSessionNijac();
+            session_id(session_create_id()); // nouvel identifiant (l'ancien cookie est expiré)
+            demarrerSessionNijac();
+            return $this->retourLogin(self::MSG_AUCUN_ROLE);
+        }
         if (isset($_SESSION['utilisateur'])) {
-            $redirect = $this->redirectForRole($_SESSION['utilisateur']['role']);
+            $redirect = $this->redirectForRole($_SESSION['utilisateur']['role'] ?? '');
             session_write_close();
             return redirect()->to($redirect);
         }
@@ -322,28 +351,39 @@ class AuthController extends BaseController
     /** Crée $_SESSION['utilisateur'] (format inchangé) et redirige selon le rôle. */
     private function ouvrirSession(array $row)
     {
-        $_SESSION['utilisateur'] = construireSessionUtilisateur($row);
+        // Compte JA : la fiche ja est revérifiée au moment d'ouvrir la session (elle a pu être
+        // retirée entre E001 et E010).
+        $pdo = getPDO();
+        if (rolesEffectifsCompte($pdo, (int) $row['Id_Utilisateur']) === []) {
+            error_log('[NIJAC][SEC] ouverture de session refusée : aucun rôle attribué (Id_Utilisateur ' . (int) $row['Id_Utilisateur'] . ')');
+            return $this->retourLogin(self::MSG_AUCUN_ROLE);
+        }
+        if ($refusJa = compteJaRefuse($pdo, $row)) {
+            return $this->retourLogin($refusJa);
+        }
+
+        $_SESSION['utilisateur'] = construireSessionUtilisateur($row, $pdo);
+        if (rolesSession() === []) {
+            // Garde-fou : jamais de session sans rôle (redirection vers un menu refusé = boucle).
+            unset($_SESSION['utilisateur']);
+            return $this->retourLogin(self::MSG_AUCUN_ROLE);
+        }
 
         // Pas de cron sur ce projet (déploiement FTP) : le rappel d'expiration des
         // identifiants API FFTT se déclenche à la connexion d'un administrateur
         // plutôt qu'à chaque chargement du menu admin (voir verifierRappelExpirationFfttApi()).
-        if ($row['Role'] === 'Administrateur') {
+        if (estAdmin()) {
             verifierRappelExpirationFfttApi();
         }
 
-        $redirect = $this->redirectForRole($row['Role']);
+        $redirect = $this->redirectForRole($_SESSION['utilisateur']['role'] ?? '');
         session_write_close();
         return redirect()->to($redirect);
     }
 
+    /** Menu du rôle principal : connexion directe, sans page de choix (menuDuRole(), app_config.php). */
     private function redirectForRole(string $role): string
     {
-        return match ($role) {
-            'Administrateur'  => site_url('admin-menu'),
-            'CSR'             => site_url('csr-menu'),
-            'Defiscalisateur' => site_url('defiscalisateur-menu'),
-            'CRA Convoc'      => site_url('cra-convoc-menu'),
-            default          => site_url('nominateur-menu'),
-        };
+        return site_url(menuDuRole($role));
     }
 }

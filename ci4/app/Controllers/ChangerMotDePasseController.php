@@ -43,10 +43,8 @@ class ChangerMotDePasseController extends BaseController
             return redirect()->to(site_url('login'));
         }
 
-        // Menu de retour selon le rôle : nominateur-menu est refusé aux rôles CSR, Defiscalisateur et CRA Convoc (filtre "auth").
-        $menus  = ['CRA Convoc' => 'cra-convoc-menu', 'CSR' => 'csr-menu', 'Defiscalisateur' => 'defiscalisateur-menu'];
-        $retour = !empty($moi['is_admin']) ? site_url('admin-menu')
-            : site_url($menus[$moi['role'] ?? ''] ?? 'nominateur-menu');
+        // Menu de retour = menu du rôle principal de la session (menuDuRole(), app_config.php).
+        $retour = site_url(menuDuRole($moi['role'] ?? ''));
         $isAjax = strtolower($this->request->getHeaderLine('X-Requested-With')) === 'xmlhttprequest';
 
         $status      = !empty($moi['change_login'])

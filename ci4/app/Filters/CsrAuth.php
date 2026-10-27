@@ -25,9 +25,7 @@ class CsrAuth implements FilterInterface
         if ($cible = controlerSessionFiltre(method_exists($request, 'getPath') ? $request->getPath() : '')) {
             return redirect()->to(site_url($cible));
         }
-        $role = $_SESSION['utilisateur']['role'] ?? '';
-
-        if (!in_array($role, ['CSR', 'Administrateur'], true)) {
+        if (!aRole(['CSR', 'Administrateur'])) {
             return redirect()->to(site_url('login'));
         }
 

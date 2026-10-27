@@ -4,7 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Disponibilités JA (EN22)</title>
+<?php
+// Vue partagée EN22 (page publique tokenisée, défauts ci-dessous) et EJA2 « Mes disponibilités »
+// (compte JA, JaDisponibiliteController) : base des appels AJAX, code/titre d'écran et lien Retour.
+$baseUrl    = $baseUrl    ?? site_url('disponibilite-ja');
+$codeEcran  = $codeEcran  ?? 'EN22';
+$titreEcran = $titreEcran ?? 'Disponibilités JA';
+$retourUrl  = $retourUrl  ?? null;
+?>
+    <title>NIJAC – <?= esc($titreEcran) ?> (<?= esc($codeEcran) ?>)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
@@ -35,6 +43,9 @@
             z-index: 200;
         }
         #page-header h1 { font-size: 1rem; font-weight: 700; margin: 0; }
+        /* Retour poussé à droite ; si le bloc Défiscalisation (ms-auto) est affiché, c'est lui qui pousse le groupe. */
+        #page-header .btn-retour-droite { margin-left: auto; }
+        #page-header #lbl-defisc:not(.d-none) ~ .btn-retour-droite { margin-left: .5rem; }
 
         /* ── Identité JA inline dans l'en-tête ──────────────────────────── */
         .ja-header-sep { opacity: .4; font-weight: 300; font-size: 1.1rem; }
@@ -223,7 +234,7 @@
 <!-- ── En-tête unifié ─────────────────────────────────────────────────────── -->
 <div id="page-header">
     <i class="bi bi-calendar2-check fs-5 flex-shrink-0"></i>
-    <h1>Disponibilités JA <small class="opacity-75" style="font-size:.75rem;">(EN22)</small></h1>
+    <h1><?= esc($titreEcran) ?> <small class="opacity-75" style="font-size:.75rem;">(<?= esc($codeEcran) ?>)</small></h1>
     <span id="ja-info-bar" style="display:none;align-items:center;gap:.65rem;flex-wrap:wrap">
         <span class="ja-header-sep">|</span>
         <i class="bi bi-person-badge flex-shrink-0" style="opacity:.7"></i>
@@ -250,6 +261,13 @@
             data-bs-toggle="modal" data-bs-target="#modal-note">
         <i class="bi bi-sticky-fill me-1"></i>Note
     </button>
+    <?php if ($retourUrl): ?>
+    <!-- Bouton Retour à DROITE, même style que partials/page_header.php (region_index.php…) -->
+    <a href="<?= esc($retourUrl) ?>" class="btn btn-sm py-0 btn-retour-droite" title="Retour au menu"
+       style="flex-shrink:0;background:#fff;color:#1a3a6b;border:1px solid #fff;">
+        <i class="bi bi-arrow-left me-1"></i>Retour
+    </a>
+    <?php endif; ?>
 </div>
 
 <!-- Toolbar utilisateur (visible seulement si une session existe déjà) -->
@@ -371,7 +389,7 @@
 <script>
 'use strict';
 
-const BASE = '<?= site_url('disponibilite-ja') ?>';
+const BASE = <?= json_encode($baseUrl) ?>;
 // Rejoué sur chaque appel d'écriture : resolveIdJaAutorise() (contrôleur) exige
 // ce token à chaque requête, un JA public n'ayant pas de session pour en tenir lieu.
 const TOKEN_JA = <?= json_encode($tokenJa) ?>;

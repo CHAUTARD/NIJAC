@@ -48,7 +48,8 @@ class MessagerieController extends BaseController
     /** Rôle CSR (Commission Sportive Régionale) — ne voit/modifie que le message n°6 (Réengagements), déjà utilisé par EN12 pour les correspondants de club. */
     private function isCsr(): bool
     {
-        return ($_SESSION['utilisateur']['role'] ?? '') === 'CSR';
+        // Restriction CSR seulement si le compte n'a ni Administrateur ni Nominateur (multi-rôles).
+        return aRole('CSR') && !aRole(['Administrateur', 'Nominateur']);
     }
 
     /**
@@ -57,7 +58,8 @@ class MessagerieController extends BaseController
      */
     private function isCraConvoc(): bool
     {
-        return ($_SESSION['utilisateur']['role'] ?? '') === 'CRA Convoc';
+        // Restriction CRA Convoc seulement si le compte n'a ni Administrateur ni Nominateur (multi-rôles).
+        return aRole('CRA Convoc') && !aRole(['Administrateur', 'Nominateur']);
     }
 
     private static function estTypeCra(?string $type): bool
@@ -146,10 +148,11 @@ class MessagerieController extends BaseController
                         (Id_Messagerie BETWEEN 1 AND $nbSys) AS EstSysteme
                  FROM messagerie
                  WHERE (Id_Messagerie BETWEEN 1 AND $nbSys OR Id_Utilisateur IS NULL OR Id_Utilisateur = ?)
-                   AND Type <> ?
+                   AND Type NOT IN (?, ?)
                  ORDER BY (Id_Messagerie BETWEEN 1 AND $nbSys) DESC, Id_Messagerie * (Id_Messagerie BETWEEN 1 AND $nbSys), Type, Sujet"
             );
-            $stmt->execute([$idCurrentUser, TYPE_MESSAGE_CODE_SECURITE]); // code de sécurité (E010) : admin seul
+            // Code de sécurité (E010) et Invitation JA (EN15) : administrateurs seulement.
+            $stmt->execute(array_merge([$idCurrentUser], typesMessagesReservesAdmin()));
             $rows = $stmt->fetchAll();
         }
 
@@ -167,8 +170,8 @@ class MessagerieController extends BaseController
             $row = false; // le rôle CSR ne voit que le message n°6 (Réengagements)
         } elseif ($row && $this->isCraConvoc() && !self::estTypeCra($row['Type'])) {
             $row = false; // le rôle CRA Convoc ne voit que les convocations CRA
-        } elseif ($row && !$this->isAdmin() && $row['Type'] === TYPE_MESSAGE_CODE_SECURITE) {
-            $row = false; // code de sécurité (E010) : visible des seuls administrateurs
+        } elseif ($row && !$this->isAdmin() && in_array($row['Type'], typesMessagesReservesAdmin(), true)) {
+            $row = false; // code de sécurité (E010) / invitation JA (EN15) : visibles des seuls administrateurs
         } elseif ($row && !$this->isAdmin() && !$this->isCsr()) {
             // Même restriction que data() : un nominateur ne voit que les messages
             // système et les siens, jamais le message personnel d'un autre nominateur.
@@ -272,8 +275,9 @@ class MessagerieController extends BaseController
         if (!$orig || ($this->isCraConvoc() && !self::estTypeCra($orig['Type']))) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Message introuvable.']);
         }
-        // Code de sécurité (E010) : message système unique, jamais de copie personnelle (ignorée à l'envoi).
-        if ($orig['Type'] === TYPE_MESSAGE_CODE_SECURITE) {
+        // Code de sécurité (E010) / Invitation JA (EN15) : message système unique, jamais de copie
+        // personnelle (ignorée à l'envoi : résolution avec Id_Utilisateur 0 = message système seul).
+        if (in_array($orig['Type'], typesMessagesReservesAdmin(), true)) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Ce message système ne peut pas être personnalisé.']);
         }
 
@@ -312,9 +316,15 @@ class MessagerieController extends BaseController
     /**
      * Avertissement non bloquant : le message « Convocation clubs » (copie EN14 aux clubs)
      * est envoyé tel quel, sans filtrage — il ne doit pas contenir le lien personnel du JA.
+     * « Invitation JA » (EN15) : commentaire HTML ou texte caché signalés (avertissementsHtmlEmail()) ;
+     * les marqueurs obligatoires sont, eux, contrôlés de façon bloquante dans extractFields().
      */
     private static function avertissementLienJa(array $fields): ?string
     {
+        if ($fields['type'] === TYPE_MESSAGE_INVITATION_JA) {
+            return avertissementsHtmlEmail($fields['message']);
+        }
+
         return $fields['type'] === TYPE_MESSAGE_COPIE_CONVOCATION_CLUBS
             && preg_match('/\{(?:URL_CONVOCATION_JA|LIEN_CONVOCATION)\}/', $fields['sujet'] . $fields['message'])
             ? 'Ce message est envoyé aux clubs : n\'y mettez pas le lien personnel du JA.'
@@ -342,8 +352,14 @@ class MessagerieController extends BaseController
         if (!in_array($type, $this->typesValides($pdo), true)) {
             return 'Type invalide.';
         }
-        if ($type === TYPE_MESSAGE_CODE_SECURITE && !$this->isAdmin()) {
+        if (in_array($type, typesMessagesReservesAdmin(), true) && !$this->isAdmin()) {
             return 'Ce type de message est réservé aux administrateurs.';
+        }
+        // Invitation JA (EN15) : sans {LOGIN} / {MOT_DE_PASSE} dans le corps (ou avec {MOT_DE_PASSE} dans
+        // le sujet), le JA ne pourrait pas se connecter — enregistrement refusé (EA93 et édition depuis EN15).
+        if ($type === TYPE_MESSAGE_INVITATION_JA
+            && ($err = controlerModeleInvitationJa(['Sujet' => $sujet, 'Message' => $message])) !== null) {
+            return $err;
         }
 
         $cc      = (($input['cc'] ?? '0') === '1') ? 1 : 0;

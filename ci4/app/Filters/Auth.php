@@ -18,8 +18,10 @@ use CodeIgniter\HTTP\ResponseInterface;
  * (E006 changement de mot de passe) ou ['filter' => 'auth:CRA Convoc'] (EA93 depuis E009).
  * Le contrôleur reste responsable du filtrage fin par rôle (ex. MessagerieController).
  *
- * Le rôle JA n'a pas de session (voir AuthController) : ses écrans
- * (EN19/EN21/EN22) sont publics, tokenisés.
+ * Le rôle JA (compte juge-arbitre, menu E011) n'est jamais dans ROLES_DEFAUT : il est refusé sur
+ * toute route "auth" sans argument et n'a accès qu'à ses écrans ("jaauth", voir JaAuth.php) et aux
+ * routes dont l'argument le nomme (seulement changer-mot-de-passe). Les écrans publics tokenisés
+ * EN19/EN21/EN22 restent accessibles aux JA sans compte, sans filtre.
  *
  * Session native — voir AdminAuth.php pour le détail de cette contrainte.
  */
@@ -37,11 +39,9 @@ class Auth implements FilterInterface
         if ($cible = controlerSessionFiltre(method_exists($request, 'getPath') ? $request->getPath() : '')) {
             return redirect()->to(site_url($cible));
         }
-        $utilisateur = $_SESSION['utilisateur'];
-
-        $role     = $utilisateur['role'] ?? '';
+        // Multi-rôles : droits = UNION des rôles de la session (aRole() / estAdmin(), app_config.php).
         $autorises = array_merge(self::ROLES_DEFAUT, array_map('trim', (array) ($arguments ?? [])));
-        if (empty($utilisateur['is_admin']) && !in_array($role, $autorises, true)) {
+        if (!estAdmin() && !aRole($autorises)) {
             return redirect()->to(site_url('login'));
         }
 

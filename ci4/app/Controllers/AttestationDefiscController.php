@@ -78,7 +78,7 @@ class AttestationDefiscController extends BaseController
     public function index()
     {
         $u        = $this->sessionUtilisateur();
-        $estStaff = in_array($u['role'] ?? '', ['Defiscalisateur', 'Administrateur'], true);
+        $estStaff = aRole(['Defiscalisateur', 'Administrateur'], $u);
         $idJa     = $this->idJaDepuisToken();
 
         if ($idJa <= 0 && !$estStaff) {

@@ -14,7 +14,8 @@ Le détail complet de chaque écran (fonctionnalités, fichier source, règles m
 
 | Plage de code | Menu | Contenu |
 |---|---|---|
-| E001–E009 | Connexion / mots de passe | Connexion, menus (Admin, Nominateur, CSR, Défiscalisateur, CRA Convoc), changement et réinitialisation de mot de passe |
+| E001–E010 | Connexion / mots de passe | Connexion, menus (Admin, Nominateur, CSR, Défiscalisateur, CRA Convoc), changement et réinitialisation de mot de passe, code de sécurité |
+| E011 + EJA2–EJA4 | Menu JA (compte juge-arbitre) — plage « EJA » pour ses écrans | Menu JA (E011), Mes disponibilités (EJA2), Mes nominations (EJA3), Mes frais / péages / défiscalisation (EJA4) |
 | EN11–EN30 | Nominateur + pages publiques JA | Gestion des JA et des clubs, désidératas, disponibilités, nomination aux rencontres, centre d'envoi, convocation/frais, statistiques, suivi des nominations… |
 | ES31–ES33 | CSR (Commission Sportive Régionale) | Réengagement des clubs, souhaits des équipes |
 | ED51–ED55 | Défiscalisateur | Défiscalisation des JA, barème kilométrique, attestations, comptes EBP |
@@ -24,7 +25,7 @@ Quelques écrans marquants :
 
 | Code | Titre | Description |
 |------|-------|-------------|
-| E001 | Connexion | Authentification, redirection selon le rôle, forçage du changement de mot de passe |
+| E001 | Connexion | Authentification, redirection vers le menu du rôle principal, forçage du changement de mot de passe |
 | EN11 | Juges-Arbitres | Import FFTT (API ou fichier), fiche JA (grade, club, commune, défiscalisation, nationale) |
 | EN14 | Nomination | Affectation JA ↔ rencontres selon les règles métier (nomination valide d'office), envoi des convocations (+ copie sans lien aux correspondants/référents des 2 clubs), feuille de pointage PDF de la journée |
 | EN21 | Convocation et frais JA | Page publique tokenisée : consultation de la convocation, saisie des frais (péage, km, défiscalisation) et accusé de réception de la convocation par le JA |
@@ -149,8 +150,11 @@ ja ─── disponible ─── nomination
 | **CSR** | Menu CSR (ES31–ES33) ; passe aussi le filtre `auth` du menu Nominateur, sans y avoir de lien de menu |
 | **Défiscalisateur** | Menu Défiscalisateur (ED51–ED55) |
 | **CRA Convoc** | Menu CRA Convoc (E009) : Compétitions CRA (EC71), Disponibilités CRA (EC74, + page publique `dispo-cra?ja=TOKEN`), Désignation CRA (EC73), Statistiques CRA (EC75), Degrés Juge-Arbitre (EC72), déconnexion |
+| **JA** | Menu JA (E011, filtre `jaauth`, rôle JA requis — l'Administrateur seul n'y a pas accès) : Mes disponibilités (EJA2), Mes nominations (EJA3), Mes frais (EJA4), changement de mot de passe. Compte dont l'identifiant (`Id_Utilisateur`) est le n° de sa fiche `ja` et le login son adresse email ; créé par l'onglet « Invitation JA » d'EN15 (mot de passe provisoire envoyé par email, à changer à la 1re connexion) ou par EA86 « Nouveau » ; **JA exclusif** : un compte JA n'a que le rôle JA (aucun autre rôle), un compte d'un autre rôle ne peut jamais recevoir JA ; en EA86 seule l'adresse email (= login) d'un compte JA est modifiable, tout le reste est verrouillé ; compte JA sans fiche de même n° : connexion refusée |
 
-La session (native PHP, pas le service Session de CI4) stocke `$_SESSION['utilisateur']` avec les clés `id`, `login`, `nom`, `prenom`, `role`, `is_admin`, `id_departement`, `change_login`, `email`. Un JA ne se connecte jamais : ses écrans (EN19, EN21, EN22, EN25) sont publics, identifiés par un lien tokenisé (Obfuscator) envoyé par email.
+**Multi-rôles** : un utilisateur peut cumuler plusieurs rôles (table de référence `role` + liaison `utilisateur_role`, champ `estPrincipal` : un seul rôle principal par utilisateur). Ses droits sont l'**union** de ses rôles (`aRole()` / `estAdmin()` dans tous les filtres) ; à la connexion il arrive directement sur le menu de son rôle principal (`menuDuRole()`, colonne `role.RouteMenu`), sans page de choix. EA86 : cases à cocher des rôles + choix du rôle principal. Exception : le rôle **JA est exclusif** (non cumulable) — cocher JA décoche et désactive les autres rôles, le serveur refuse tout mélange (« Le rôle JA est exclusif ») ; un compte hérité cumulant déjà JA et d'autres rôles est conservé tel quel (journalisé) et se régularise dans EA86. L'ancienne colonne `utilisateur.Role` est migrée vers `utilisateur_role` puis supprimée par EA98 (`assurerRolesUtilisateurs()` ; conservée tant qu'un utilisateur reste non migré) ; les anciens `assurerRole*()` (extension d'ENUM) n'existent plus.
+
+La session (native PHP, pas le service Session de CI4) stocke `$_SESSION['utilisateur']` avec les clés `id`, `login`, `nom`, `prenom`, `role` (rôle principal), `roles` (tous les rôles), `is_admin`, `id_departement`, `change_login`, `email`, `pwd_version`, `verifie_le` (compte JA : sa fiche est celle de n° `id`). Un JA peut désormais avoir un compte (rôle JA) ; les JA sans compte continuent d'utiliser les écrans publics (EN19, EN21, EN22, EN25), identifiés par un lien tokenisé (Obfuscator) envoyé par email.
 
 Quatre écrans (EA96, EA97, EA98, EA99) restent réservés en plus au compte `CHAUTARD`, vérifié explicitement dans le contrôleur ; EA96 / EA97 / EA98 exigent en outre la double authentification TOTP (EA99).
 

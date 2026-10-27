@@ -23,8 +23,16 @@ use CodeIgniter\HTTP\ResponseInterface;
  */
 class ConvocationJaController extends BaseController
 {
-    private \Obfuscator $obf;
+    protected \Obfuscator $obf;
     private \Obfuscator $obfSansPepper;
+
+    /**
+     * Code écran des traces error_log et de JustificatifPeage (EN21 ; 'EJA4' pour JaFraisController,
+     * qui réutilise accuser(), sauvegarderFrais(), joindreJustificatif() et voirJustificatif() en
+     * redéfinissant seulement nominationAutorisee() / messageLienInvalide() / loginSession() /
+     * tracerActionConnecte()).
+     */
+    protected string $ecran = 'EN21';
 
     public function __construct()
     {
@@ -301,10 +309,10 @@ class ConvocationJaController extends BaseController
      * une session, sinon null. N'autorise ni ne bloque rien (le lien jetonné fait foi) : sert au
      * bouton Retour et à la trace error_log des actions faites via le lien par un connecté.
      */
-    private function loginSession(): ?string
+    protected function loginSession(): ?string
     {
         demarrerSessionNijac();
-        $login = !empty($_SESSION['utilisateur']['role'] ?? null)
+        $login = rolesSession() !== []
             ? (string) ($_SESSION['utilisateur']['login'] ?? '')
             : null;
         session_write_close();
@@ -314,12 +322,31 @@ class ConvocationJaController extends BaseController
     }
 
     /** Trace (sans donnée du JA) d'un accusé/saisie fait via le lien par un utilisateur connecté. */
-    private function tracerActionConnecte(?string $login, string $action, int $idNomination): void
+    protected function tracerActionConnecte(?string $login, string $action, int $idNomination): void
     {
         if ($login !== null) {
             error_log("[NIJAC] EN21 : $action via lien par utilisateur connecté "
                 . preg_replace('/[^\w.@-]/u', '_', $login) . " (nomination $idNomination)");
         }
+    }
+
+    /**
+     * La requête vise-t-elle une nomination autorisée ? EN21 : jeton cnv (Obfuscator + pepper, repli
+     * sans pepper) de cette nomination — le lien fait foi. Redéfinie par JaFraisController (EJA4) :
+     * nomination appartenant au JA de la session, jeton ignoré.
+     */
+    protected function nominationAutorisee(int $idNomination, string $tokenCnv): bool
+    {
+        return $idNomination > 0 && $tokenCnv !== '' && (
+            $this->obf->deobfuscate($tokenCnv) === $idNomination
+            || $this->obfSansPepper->deobfuscate($tokenCnv) === $idNomination
+        );
+    }
+
+    /** Message de refus quand nominationAutorisee() échoue. */
+    protected function messageLienInvalide(): string
+    {
+        return "Lien de convocation invalide. Merci de redemander l'envoi de votre convocation.";
     }
 
     /**
@@ -364,12 +391,8 @@ class ConvocationJaController extends BaseController
             $idNomP   = (int) ($this->request->getPost('id_nomination') ?? 0);
             $tokenCnv = trim((string) ($this->request->getPost('cnv') ?? ''));
             $cible    = trim((string) ($this->request->getPost('cible') ?? ''));
-            $tokenValide = $idNomP > 0 && $tokenCnv !== '' && (
-                $this->obf->deobfuscate($tokenCnv) === $idNomP
-                || $this->obfSansPepper->deobfuscate($tokenCnv) === $idNomP
-            );
-            if (!$tokenValide) {
-                return $this->response->setJSON(['ok' => false, 'err' => "Lien de convocation invalide. Merci de redemander l'envoi de votre convocation."]);
+            if (!$this->nominationAutorisee($idNomP, $tokenCnv)) {
+                return $this->response->setJSON(['ok' => false, 'err' => $this->messageLienInvalide()]);
             }
             if ($cible !== '' && $cible !== (string) $idNomP) {
                 return $this->response->setJSON(['ok' => false, 'err' => 'Action non disponible.']);
@@ -385,7 +408,7 @@ class ConvocationJaController extends BaseController
 
             return $this->response->setJSON($res);
         } catch (\PDOException $e) {
-            error_log('[NIJAC] EN21 accuser : ' . $e->getMessage());
+            error_log('[NIJAC] ' . $this->ecran . ' accuser : ' . $e->getMessage());
 
             return $this->response->setJSON(['ok' => false, 'err' => messageErreur($e, "Erreur technique : l'accusé de réception n'a pas pu être enregistré.")]);
         }
@@ -403,12 +426,8 @@ class ConvocationJaController extends BaseController
             if (!$idNomP) {
                 return $this->response->setJSON(['ok' => false, 'err' => 'Paramètre id_nomination manquant.']);
             }
-            $tokenValide = $tokenCnv !== '' && (
-                $this->obf->deobfuscate($tokenCnv) === $idNomP
-                || $this->obfSansPepper->deobfuscate($tokenCnv) === $idNomP
-            );
-            if (!$tokenValide) {
-                return $this->response->setJSON(['ok' => false, 'err' => "Lien de convocation invalide. Merci de redemander l'envoi de votre convocation."]);
+            if (!$this->nominationAutorisee($idNomP, $tokenCnv)) {
+                return $this->response->setJSON(['ok' => false, 'err' => $this->messageLienInvalide()]);
             }
             $rowNom = $pdo->prepare('
                 SELECT d.Id_JA, n.Id_Rencontre, r.ArbitrageCRA
@@ -495,7 +514,7 @@ class ConvocationJaController extends BaseController
                 'justificatif' => $peages !== null && $peages > 0 && nominationAFichierPeage($pdo),
             ]);
         } catch (\PDOException $e) {
-            error_log('[NIJAC] EN21 sauvegarderFrais : ' . $e->getMessage());
+            error_log('[NIJAC] ' . $this->ecran . ' sauvegarderFrais : ' . $e->getMessage());
 
             return $this->response->setJSON(['ok' => false, 'err' => messageErreur($e, "Erreur technique : les frais n'ont pas pu être enregistrés.")]);
         }
@@ -518,12 +537,8 @@ class ConvocationJaController extends BaseController
             $pdo      = getPDO();
             $idNomP   = (int) ($this->request->getPost('id_nomination') ?? 0);
             $tokenCnv = trim((string) ($this->request->getPost('cnv') ?? ''));
-            $tokenValide = $idNomP > 0 && $tokenCnv !== '' && (
-                $this->obf->deobfuscate($tokenCnv) === $idNomP
-                || $this->obfSansPepper->deobfuscate($tokenCnv) === $idNomP
-            );
-            if (!$tokenValide) {
-                return $this->refusJustificatif("Lien de convocation invalide. Merci de redemander l'envoi de votre convocation.");
+            if (!$this->nominationAutorisee($idNomP, $tokenCnv)) {
+                return $this->refusJustificatif($this->messageLienInvalide());
             }
             if (!nominationAFichierPeage($pdo)) {
                 return $this->refusJustificatif("Le dépôt du justificatif n'est pas encore disponible. Merci de réessayer plus tard.");
@@ -561,7 +576,7 @@ class ConvocationJaController extends BaseController
                 return $this->refusJustificatif($refus);
             }
             try {
-                $nouveau = JustificatifPeage::enregistrer($upload, 'EN21');
+                $nouveau = JustificatifPeage::enregistrer($upload, $this->ecran);
             } catch (\RuntimeException $e) {
                 return $this->refusJustificatif($e->getMessage());
             }
@@ -574,7 +589,7 @@ class ConvocationJaController extends BaseController
 
             // Ancien justificatif remplacé : supprimé seulement maintenant (motif strict + liste serveur).
             if ($ancien !== null && $ancien !== $enregistre) {
-                JustificatifPeage::supprimer($ancien, 'EN21');
+                JustificatifPeage::supprimer($ancien, $this->ecran);
             }
             $this->tracerActionConnecte($login, 'justificatif péage', $idNomP);
 
@@ -584,8 +599,8 @@ class ConvocationJaController extends BaseController
                 'libelle' => JustificatifPeage::libelle($enregistre),
             ]);
         } catch (\Throwable $e) {
-            JustificatifPeage::supprimer($nouveau, 'EN21');   // fichier stocké mais nomination non mise à jour
-            error_log('[NIJAC] EN21 joindreJustificatif : ' . $e->getMessage());
+            JustificatifPeage::supprimer($nouveau, $this->ecran);   // fichier stocké mais nomination non mise à jour
+            error_log('[NIJAC] ' . $this->ecran . ' joindreJustificatif : ' . $e->getMessage());
             $msg = messageErreur($e, "Erreur technique : le justificatif n'a pas pu être enregistré.");
 
             return $this->response->setJSON(['ok' => false, 'msg' => $msg, 'err' => $msg]);
@@ -607,10 +622,7 @@ class ConvocationJaController extends BaseController
         try {
             $idNomP   = (int) ($this->request->getGet('id_nomination') ?? 0);
             $tokenCnv = trim((string) ($this->request->getGet('cnv') ?? ''));
-            $tokenValide = $idNomP > 0 && $tokenCnv !== '' && (
-                $this->obf->deobfuscate($tokenCnv) === $idNomP
-                || $this->obfSansPepper->deobfuscate($tokenCnv) === $idNomP
-            );
+            $tokenValide = $this->nominationAutorisee($idNomP, $tokenCnv);
             $pdo = getPDO();
             if ($tokenValide && nominationAFichierPeage($pdo)) {
                 $st = $pdo->prepare('SELECT FichierPeage FROM nomination WHERE Id_Nomination = ?');
@@ -620,19 +632,19 @@ class ConvocationJaController extends BaseController
                     $nom   = (string) $val;
                     $cible = JustificatifPeage::fichiers()[$nom] ?? null;
                     if ($cible === null) {
-                        error_log('[NIJAC] EN21 voirJustificatif : ' . $nom . ' absent de la liste serveur de _Peage/ (dossier : '
+                        error_log('[NIJAC] ' . $this->ecran . ' voirJustificatif : ' . $nom . ' absent de la liste serveur de _Peage/ (dossier : '
                             . (JustificatifPeage::dossier() ?? 'inaccessible') . ", nomination $idNomP)");
                     }
                 } elseif ($val !== false && $val !== null) {
-                    error_log("[NIJAC] EN21 voirJustificatif : nom stocké invalide (nomination $idNomP)");
+                    error_log("[NIJAC] {$this->ecran} voirJustificatif : nom stocké invalide (nomination $idNomP)");
                 }
             }
         } catch (\Throwable $e) {
-            error_log('[NIJAC] EN21 voirJustificatif : ' . $e->getMessage());
+            error_log('[NIJAC] ' . $this->ecran . ' voirJustificatif : ' . $e->getMessage());
         }
         $ext = $nom !== null ? strtolower(pathinfo($nom, PATHINFO_EXTENSION)) : '';
 
-        return JustificatifPeage::reponse($this->response, $nom, $cible, 'EN21 voirJustificatif', 'justificatif-peage.' . $ext);
+        return JustificatifPeage::reponse($this->response, $nom, $cible, $this->ecran . ' voirJustificatif', 'justificatif-peage.' . $ext);
     }
 
     /** Refus (message affichable) de joindreJustificatif() : `msg` + `err` (clé lue par le reste de la page EN21). */

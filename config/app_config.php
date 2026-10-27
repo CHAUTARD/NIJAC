@@ -563,6 +563,37 @@ function initTableConfiguration(\PDO $pdo): void
         error_log('[NIJAC] Amorçage du message « ' . TYPE_MESSAGE_CODE_SECURITE . ' » : ' . $e->getMessage());
     }
 
+    // Rôles multiples : tables role + utilisateur_role, migration puis suppression de utilisateur.Role
+    // (chaque étape isolée dans assurerRolesUtilisateurs() : un échec est journalisé sans bloquer la suite).
+    try {
+        assurerRolesUtilisateurs($pdo);
+    } catch (\Throwable $e) {
+        error_log('[NIJAC] Rôles des utilisateurs (role / utilisateur_role) : ' . $e->getMessage());
+    }
+
+    // EN15 : message système « Invitation JA » (création des comptes de rôle JA, mot de passe provisoire).
+    try {
+        assurerModeleInvitationJa($pdo);
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] Amorçage du message « ' . TYPE_MESSAGE_INVITATION_JA . ' » : ' . $e->getMessage());
+    }
+
+    // utilisateur.Login élargi à 150 caractères (comme Email) : le login d'un compte de rôle JA est son
+    // adresse email (invitation EN15, EA86). Index UNIQUE uq_utilisateur_login conservé (MODIFY).
+    // Avant ce passage : longueurMaxLoginUtilisateur() lit la longueur réelle, les adresses plus longues
+    // sont ignorées avec motif.
+    try {
+        $long = (int) $pdo->query(
+            "SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'Login'"
+        )->fetchColumn();
+        if ($long > 0 && $long < 150) {
+            $pdo->exec('ALTER TABLE utilisateur MODIFY COLUMN Login VARCHAR(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL');
+        }
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] Élargissement de utilisateur.Login : ' . $e->getMessage());
+    }
+
     // Coupe-circuit de la double authentification (1 = active, 0 = mot de passe seul) : jamais écrasé.
     try {
         $pdo->exec("INSERT IGNORE INTO configuration (cle, valeur, description) VALUES
@@ -609,6 +640,10 @@ function initTableConfiguration(\PDO $pdo): void
             error_log('[NIJAC] Ajout de la colonne utilisateur.' . $colonne . ' : ' . $e->getMessage());
         }
     }
+
+    // Comptes de rôle 'JA' : aucune colonne de lien — convention Id_Utilisateur = ja.Id_JA (voir
+    // etatCompteJa() / creerCompteJa()). Une colonne utilisateur.Id_JA résiduelle (essai antérieur)
+    // n'est ni lue ni écrite, ni supprimée automatiquement (NULL par défaut, sans effet).
 
     // Salles ↔ clubs en plusieurs-à-plusieurs : table club_salle (salle.Id_Club / EstPrincipale
     // obsolètes, conservées). Gère son propre try/catch (voir assurerTableClubSalle()).
@@ -1259,8 +1294,216 @@ function sqlIncrementPwdVersion(\PDO $pdo): string
  */
 function colonnesSessionUtilisateur(\PDO $pdo): string
 {
-    return 'Id_Utilisateur, Login, Nom, Prenom, Role, Id_Departement, Actif, ChangeLogin, Email'
+    // Plus de colonne Role : les rôles sont lus dans utilisateur_role (rolesUtilisateur()).
+    return 'Id_Utilisateur, Login, Nom, Prenom, Id_Departement, Actif, ChangeLogin, Email'
         . (utilisateurAPwdVersion($pdo) ? ', PwdVersion' : '');
+}
+
+/** Message affiché à un compte de rôle 'JA' sans fiche ja valide (connexion E001 / filtre "jaauth"). */
+const MSG_COMPTE_JA_SANS_FICHE = "Votre compte juge-arbitre n'est rattaché à aucune fiche JA : contactez l'administrateur.";
+
+/** La fiche ja $idJa existe-t-elle ? (null / 0 = non) */
+function ficheJaExiste(\PDO $pdo, ?int $idJa): bool
+{
+    if ($idJa === null || $idJa <= 0) {
+        return false;
+    }
+    $st = $pdo->prepare('SELECT 1 FROM ja WHERE Id_JA = ? LIMIT 1');
+    $st->execute([$idJa]);
+
+    return (bool) $st->fetchColumn();
+}
+
+/**
+ * Refus de connexion d'un compte JA (rôle JA exclusif : JA seul ; ligne utilisateur lue avec
+ * colonnesSessionUtilisateur()) : convention Id_Utilisateur = ja.Id_JA — aucune fiche ja de cet Id →
+ * MSG_COMPTE_JA_SANS_FICHE. null = autorisé (compte non-JA, ou fiche présente). Un compte hérité cumulant
+ * JA et d'autres rôles (antérieur à la règle) n'est pas refusé ici : ses écrans JA restent gardés par
+ * idJaCompteSession() / jaauth.
+ */
+function compteJaRefuse(\PDO $pdo, array $row): ?string
+{
+    $id    = (int) ($row['Id_Utilisateur'] ?? 0);
+    $roles = rolesUtilisateur($pdo, $id);
+    if ($roles !== ['JA']) {
+        return null;
+    }
+
+    return ficheJaExiste($pdo, $id) ? null : MSG_COMPTE_JA_SANS_FICHE;
+}
+
+/**
+ * Id de la fiche ja du compte connecté (convention Id_Utilisateur = ja.Id_JA) : $_SESSION['utilisateur']['id']
+ * si la session a le rôle 'JA' (parmi ses rôles) ET qu'une fiche ja de cet Id existe, sinon 0. Garde-fou des écrans
+ * E011, EJA2–EJA4 (filtre "jaauth" ET chaque contrôleur JA) : l'Id ne vient jamais du client.
+ */
+function idJaCompteSession(?\PDO $pdo = null): int
+{
+    $u = $_SESSION['utilisateur'] ?? [];
+    if (!aRole('JA', $u)) {
+        return 0;
+    }
+    $id = (int) ($u['id'] ?? 0);
+    try {
+        return ficheJaExiste($pdo ?? getPDO(), $id) ? $id : 0;
+    } catch (\Throwable $e) {
+        error_log('[NIJAC] idJaCompteSession : vérification de la fiche JA impossible : ' . $e->getMessage());
+
+        return 0;
+    }
+}
+
+/**
+ * Longueur maximale de utilisateur.Login (lue dans information_schema, cache statique) : 150 après
+ * EA98 (élargissement pour les logins = email des comptes JA), 50 avant. Repli 50.
+ */
+function longueurMaxLoginUtilisateur(\PDO $pdo): int
+{
+    static $long = null;
+    if ($long === null) {
+        try {
+            $long = (int) $pdo->query(
+                "SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'Login'"
+            )->fetchColumn();
+        } catch (\PDOException $e) {
+            $long = 0;
+        }
+        if ($long <= 0) {
+            $long = 50;
+        }
+    }
+
+    return $long;
+}
+
+/**
+ * Département d'un compte de rôle JA : CodeDept de la fiche ja s'il existe dans `departement`
+ * (FK utilisateur.Id_Departement), sinon $repli (département de l'utilisateur qui crée le compte,
+ * vérifié de même), sinon null. Même forme que EA86 (code sans zéro de tête, ex. '76', '14').
+ */
+function departementCompteJa(\PDO $pdo, ?string $codeDeptJa, ?string $repli): ?string
+{
+    $st = $pdo->prepare('SELECT CodeDept FROM departement WHERE CodeDept = ? LIMIT 1');
+    foreach ([$codeDeptJa, $repli] as $code) {
+        $code = trim((string) $code);
+        if ($code === '') {
+            continue;
+        }
+        foreach (array_unique([$code, ltrim($code, '0'), str_pad(ltrim($code, '0'), 2, '0', STR_PAD_LEFT)]) as $c) {
+            $st->execute([$c]);
+            if (($trouve = $st->fetchColumn()) !== false) {
+                return (string) $trouve;
+            }
+        }
+    }
+
+    return null;
+}
+
+/**
+ * État du compte d'une fiche ja pour la création d'un compte de rôle JA (invitation EN15 et création
+ * EA86). Lecture seule. Convention : Id_Utilisateur = Id_JA (seul lien compte ↔ fiche), Login = Email.
+ * Retour ['statut' => 'nouveau'|'existant'|'ignore', 'motif' => ?string, 'compte' => ?array] :
+ *  - 'existant' : compte de rôle JA d'Id = n° de fiche, actif ; 'compte' = Id_Utilisateur, Login, Email
+ *    (régénération possible du mot de passe seulement) ;
+ *  - 'ignore'   : motif lisible (Id déjà pris par un compte d'un autre rôle — jamais réattribué —, compte
+ *    JA désactivé, adresse invalide / trop longue, déjà login d'un autre compte ou email d'un autre
+ *    compte JA) — aucun compte n'est jamais écrasé ;
+ *  - 'nouveau'  : création possible.
+ */
+function etatCompteJa(\PDO $pdo, int $idJa, string $email): array
+{
+    $ignore = static fn (string $motif): array => ['statut' => 'ignore', 'motif' => $motif, 'compte' => null];
+    $email  = trim($email);
+
+    if ($idJa <= 0) {
+        return $ignore('fiche JA invalide');
+    }
+
+    // 1. Compte portant déjà l'Id de la fiche.
+    $st = $pdo->prepare('SELECT Id_Utilisateur, Login, Email, Actif FROM utilisateur WHERE Id_Utilisateur = ? LIMIT 1');
+    $st->execute([$idJa]);
+    if ($c = $st->fetch(\PDO::FETCH_ASSOC)) {
+        $roles = rolesUtilisateur($pdo, $idJa);
+        if (!in_array('JA', $roles, true)) {
+            return $ignore('identifiant n° ' . $idJa . ' déjà utilisé par le compte « ' . $c['Login'] . ' » ('
+                . ($roles ? implode(', ', $roles) : 'sans rôle') . ')');
+        }
+        if ($roles !== ['JA']) {
+            // Rôle JA exclusif : compte hérité cumulant JA et d'autres rôles — jamais régénéré (EN15) ni
+            // réutilisé, à régulariser dans EA86.
+            return $ignore('compte « ' . $c['Login'] . ' » cumulant JA et d\'autres rôles (' . implode(', ', $roles)
+                . ') : rôle JA exclusif, à régulariser dans EA86');
+        }
+        if ((int) $c['Actif'] !== 1) {
+            return $ignore('compte JA existant désactivé (EA86)');
+        }
+
+        return ['statut' => 'existant', 'motif' => 'compte déjà existant', 'compte' => [
+            'Id_Utilisateur' => (int) $c['Id_Utilisateur'], 'Login' => (string) $c['Login'], 'Email' => (string) $c['Email'],
+        ]];
+    }
+
+    // 3. Adresse email = futur login.
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return $ignore('adresse email absente ou invalide');
+    }
+    if (mb_strlen($email) > min(150, longueurMaxLoginUtilisateur($pdo))) {
+        return $ignore('adresse email trop longue pour un login (' . min(150, longueurMaxLoginUtilisateur($pdo)) . ' caractères max., chargez EA98)');
+    }
+    if (strcasecmp($email, 'CHAUTARD') === 0) {
+        return $ignore('login réservé');
+    }
+    // Collation _ci de la colonne : comparaison insensible à la casse ; LOWER() par sécurité.
+    $st = $pdo->prepare('SELECT Login FROM utilisateur WHERE LOWER(Login) = LOWER(?) LIMIT 1');
+    $st->execute([$email]);
+    if ($st->fetchColumn() !== false) {
+        return $ignore('adresse déjà utilisée comme login par un autre compte');
+    }
+    $st = $pdo->prepare("SELECT u.Login FROM utilisateur u WHERE " . sqlARole('u.Id_Utilisateur', "'JA'")
+        . " AND LOWER(u.Email) = LOWER(?) LIMIT 1");
+    $st->execute([$email]);
+    if ($st->fetchColumn() !== false) {
+        return $ignore('adresse déjà utilisée par un autre compte JA');
+    }
+
+    return ['statut' => 'nouveau', 'motif' => null, 'compte' => null];
+}
+
+/**
+ * Crée un compte de rôle JA (Id_Utilisateur = Id_JA explicite — seul lien avec la fiche —, Login = Email = $email, Prenom vide,
+ * Nom = nom de la fiche, Actif = 1, ChangeLogin = 1, mot de passe haché). À appeler dans une
+ * transaction, après etatCompteJa() = 'nouveau'. Lève PDOException (doublon de clé…) sans rien masquer.
+ * InnoDB : un Id explicite supérieur à l'AUTO_INCREMENT courant le fait passer à Id + 1 (comptes
+ * suivants numérotés après) ; un Id inférieur, libre, est simplement inséré. Rôle JA (principal) écrit
+ * dans utilisateur_role ; avant EA98, dans l'ancienne colonne utilisateur.Role si elle existe encore.
+ */
+function creerCompteJa(\PDO $pdo, int $idJa, string $email, string $nom, ?string $dept, string $hash): void
+{
+    $tableRoles = tableRolesExiste($pdo);
+    if (!$tableRoles && !utilisateurAColonneRole($pdo)) {
+        throw new \RuntimeException('Création du compte JA impossible : table utilisateur_role absente, chargez EA98.');
+    }
+    $colRole = !$tableRoles ? ', Role' : '';
+    $valRole = $colRole !== '' ? ", 'JA'" : '';
+    try {
+        $pdo->prepare(
+            "INSERT INTO utilisateur (Id_Utilisateur, Login, Password, Nom, Prenom$colRole, Actif, Id_Departement, ChangeLogin, Email)
+             VALUES (?, ?, ?, ?, ''$valRole, 1, ?, 1, ?)"
+        )->execute([$idJa, $email, $hash, mb_substr(trim($nom), 0, 50), $dept, $email]);
+    } catch (\PDOException $e) {
+        if ($tableRoles) {
+            throw $e;
+        }
+        // Avant EA98 : la valeur 'JA' peut manquer dans l'ENUM utilisateur.Role.
+        error_log('[NIJAC] creerCompteJa (avant EA98) : ' . $e->getMessage());
+        throw new \RuntimeException('Création du compte JA impossible avant migration : chargez EA98.', 0, $e);
+    }
+    if (tableRolesExiste($pdo)) {
+        $pdo->prepare("INSERT INTO utilisateur_role (Id_Utilisateur, Role, estPrincipal) VALUES (?, 'JA', 1)")
+            ->execute([$idJa]);
+    }
 }
 
 /**
@@ -1486,13 +1729,16 @@ function accuserReceptionConvocation(\PDO $pdo, int $idNomination, string $cible
 
 /**
  * Ajoute une valeur à l'ENUM d'une colonne si elle n'y est pas déjà — relit l'ENUM existant via
- * SHOW COLUMNS pour ne perdre aucune valeur déjà en place. $defaut doit correspondre au DEFAULT
- * actuel de la colonne (MySQL exige de le repréciser sur un MODIFY COLUMN). $table/$colonne ne
- * sont jamais fournis par l'utilisateur (toujours des littéraux au point d'appel).
+ * SHOW COLUMNS pour ne perdre aucune valeur déjà en place. MySQL exige de repréciser DEFAULT et
+ * NULL / NOT NULL sur un MODIFY COLUMN : on CONSERVE ceux de la colonne lus par SHOW COLUMNS
+ * (`Default`, `Null`) ; $defaut n'est qu'un repli, utilisé seulement si la colonne n'a pas de DEFAULT
+ * lisible appartenant à l'ENUM — et ignoré (aucune clause DEFAULT) s'il n'en fait pas partie, pour que
+ * l'ALTER ne puisse pas échouer sur une valeur par défaut absente de la liste. $table/$colonne ne sont
+ * jamais fournis par l'utilisateur (toujours des littéraux au point d'appel).
  */
 function ajouterValeurEnum(\PDO $pdo, string $table, string $colonne, string $valeur, string $defaut): void
 {
-    $col = $pdo->query("SHOW COLUMNS FROM $table WHERE Field = '$colonne'")->fetch();
+    $col = $pdo->query("SHOW COLUMNS FROM $table WHERE Field = '$colonne'")->fetch(\PDO::FETCH_ASSOC);
     if (!$col || !preg_match("/^enum\((.+)\)$/i", $col['Type'], $m)) {
         return;
     }
@@ -1502,7 +1748,13 @@ function ajouterValeurEnum(\PDO $pdo, string $table, string $colonne, string $va
     }
     $valeurs[] = $valeur;
     $enumList  = implode(',', array_map(fn ($v) => $pdo->quote($v), $valeurs));
-    $pdo->exec("ALTER TABLE $table MODIFY COLUMN $colonne ENUM($enumList) NOT NULL DEFAULT " . $pdo->quote($defaut));
+
+    $actuel = $col['Default'] ?? null;
+    $choix  = ($actuel !== null && in_array((string) $actuel, $valeurs, true)) ? (string) $actuel
+        : (in_array($defaut, $valeurs, true) ? $defaut : null);
+    $null   = strtoupper((string) ($col['Null'] ?? 'NO')) === 'YES' ? 'NULL' : 'NOT NULL';
+    $pdo->exec("ALTER TABLE $table MODIFY COLUMN $colonne ENUM($enumList) $null"
+        . ($choix !== null ? ' DEFAULT ' . $pdo->quote($choix) : ''));
 }
 
 /**
@@ -1514,34 +1766,405 @@ function ajouterTypeMessagerie(\PDO $pdo, string $type): void
     ajouterValeurEnum($pdo, 'messagerie', 'Type', $type, 'Disponibilites');
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * Rôles multiples : table de référence `role` + liaison `utilisateur_role`
+ * (un utilisateur ↔ plusieurs rôles, un rôle ↔ plusieurs utilisateurs).
+ * La colonne utilisateur.Role est migrée puis supprimée par EA98
+ * (assurerRolesUtilisateurs()). Avant EA98 : repli sur cette colonne si elle existe encore.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Rôles de référence (amorçage de la table `role`, repli de menuDuRole() / rolesValides()) : Code => [Libelle, Priorite, RouteMenu]. */
+const ROLES_REFERENCE = [
+    'Administrateur'  => ['Administrateur', 1, 'admin-menu'],
+    'Nominateur'      => ['Nominateur', 2, 'nominateur-menu'],
+    'CSR'             => ['Commission Sportive Régionale', 3, 'csr-menu'],
+    'CRA Convoc'      => ['CRA Convocation', 4, 'cra-convoc-menu'],
+    'Defiscalisateur' => ['Défiscalisateur', 5, 'defiscalisateur-menu'],
+    'JA'              => ['Juge-arbitre', 6, 'ja-menu'],
+];
+
 /**
- * Ajoute le rôle 'CSR' (Commission Sportive Régionale) à l'ENUM utilisateur.Role s'il n'y est pas
- * déjà — permet de créer des comptes CSR depuis EA86 (Gestion des utilisateurs) sans migration
- * manuelle. Idempotente, appelée par UtilisateurController.
+ * La table utilisateur_role existe-t-elle ? (créée par EA98). Cache statique, $rafraichir = true après
+ * création (assurerRolesUtilisateurs()).
  */
-function assurerRoleCsr(\PDO $pdo): void
+function tableRolesExiste(\PDO $pdo, bool $rafraichir = false): bool
 {
-    ajouterValeurEnum($pdo, 'utilisateur', 'Role', 'CSR', 'JA');
+    static $existe = null;
+    if ($existe === null || $rafraichir) {
+        try {
+            $existe = (bool) $pdo->query(
+                "SELECT 1 FROM information_schema.TABLES
+                 WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'utilisateur_role'"
+            )->fetchColumn();
+        } catch (\PDOException $e) {
+            $existe = false;
+        }
+    }
+
+    return $existe;
+}
+
+/** L'ancienne colonne utilisateur.Role existe-t-elle encore ? (repli avant EA98). Cache statique. */
+function utilisateurAColonneRole(\PDO $pdo, bool $rafraichir = false): bool
+{
+    static $existe = null;
+    if ($existe === null || $rafraichir) {
+        try {
+            $existe = (bool) $pdo->query(
+                "SELECT 1 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'utilisateur' AND COLUMN_NAME = 'Role'"
+            )->fetchColumn();
+        } catch (\PDOException $e) {
+            $existe = false;
+        }
+    }
+
+    return $existe;
 }
 
 /**
- * Ajoute le rôle 'Defiscalisateur' à l'ENUM utilisateur.Role s'il n'y est pas déjà — permet de
- * créer des comptes Défiscalisateur depuis EA86 sans migration manuelle. Idempotente, appelée
- * par UtilisateurController, même principe que assurerRoleCsr().
+ * Rôles d'un utilisateur : rôle principal d'abord, puis par priorité (table role). Avant EA98
+ * (utilisateur_role absente) : la colonne utilisateur.Role si elle existe encore, sinon aucun rôle.
  */
-function assurerRoleDefiscalisateur(\PDO $pdo): void
+function rolesUtilisateur(\PDO $pdo, int $idUtilisateur): array
 {
-    ajouterValeurEnum($pdo, 'utilisateur', 'Role', 'Defiscalisateur', 'Nominateur');
+    if ($idUtilisateur <= 0) {
+        return [];
+    }
+    if (tableRolesExiste($pdo)) {
+        $st = $pdo->prepare(
+            'SELECT ur.Role FROM utilisateur_role ur
+             LEFT JOIN role r ON r.Code = ur.Role
+             WHERE ur.Id_Utilisateur = ?
+             ORDER BY ur.estPrincipal DESC, COALESCE(r.Priorite, 99), ur.Role'
+        );
+        $st->execute([$idUtilisateur]);
+
+        return array_values(array_map('strval', $st->fetchAll(\PDO::FETCH_COLUMN)));
+    }
+    if (utilisateurAColonneRole($pdo)) {
+        $st = $pdo->prepare('SELECT Role FROM utilisateur WHERE Id_Utilisateur = ? LIMIT 1');
+        $st->execute([$idUtilisateur]);
+        $role = (string) $st->fetchColumn();
+
+        return $role !== '' ? [$role] : [];
+    }
+
+    return [];
+}
+
+/** Rôle principal d'un utilisateur ('' si aucun rôle). */
+function rolePrincipalUtilisateur(\PDO $pdo, int $idUtilisateur): string
+{
+    return rolesUtilisateur($pdo, $idUtilisateur)[0] ?? '';
 }
 
 /**
- * Ajoute le rôle 'CRA Convoc' à l'ENUM utilisateur.Role s'il n'y est pas déjà — même principe
- * que assurerRoleCsr(). À la connexion, ce rôle est dirigé vers le menu E009
- * (AuthController::redirectForRole(), filtre "craconvocauth").
+ * Rôles retenus pour la session d'un compte (connexion) : rolesUtilisateur() tels quels. Rôle JA exclusif
+ * (EA86 / EN15 refusent tout cumul) : un compte JA sans fiche est refusé par compteJaRefuse() /
+ * revaliderSessionUtilisateur(). Compte hérité cumulant JA et d'autres rôles (antérieur à la règle) :
+ * rien n'est retiré ni supprimé en base, seulement journalisé — à régulariser dans EA86.
  */
-function assurerRoleCraConvoc(\PDO $pdo): void
+function rolesEffectifsCompte(\PDO $pdo, int $idUtilisateur): array
 {
-    ajouterValeurEnum($pdo, 'utilisateur', 'Role', 'CRA Convoc', 'Nominateur');
+    $roles = rolesUtilisateur($pdo, $idUtilisateur);
+    if (in_array('JA', $roles, true) && count($roles) > 1) {
+        error_log('[NIJAC] compte ' . $idUtilisateur . ' cumulant JA et d\'autres rôles (' . implode(', ', $roles)
+            . ') : rôle JA exclusif, à régulariser dans EA86');
+    }
+
+    return $roles;
+}
+
+/** Rôles de la session courante ($_SESSION['utilisateur']['roles'], repli ['role'] d'une session ancienne). */
+function rolesSession(): array
+{
+    return rolesDe($_SESSION['utilisateur'] ?? []);
+}
+
+/** Rôles d'un tableau de session (clé 'roles', sinon 'role' seul). */
+function rolesDe(?array $u): array
+{
+    if (!is_array($u)) {
+        return [];
+    }
+    if (isset($u['roles']) && is_array($u['roles'])) {
+        return array_values(array_map('strval', $u['roles']));
+    }
+    $role = (string) ($u['role'] ?? '');
+
+    return $role !== '' ? [$role] : [];
+}
+
+/** L'utilisateur ($u, défaut = session) a-t-il au moins un des rôles $roles ? */
+function aRole(string|array $roles, ?array $u = null): bool
+{
+    $u ??= $_SESSION['utilisateur'] ?? [];
+
+    return (bool) array_intersect((array) $roles, rolesDe($u));
+}
+
+/** L'utilisateur ($u, défaut = session) est-il administrateur ? (rôle Administrateur ou drapeau is_admin) */
+function estAdmin(?array $u = null): bool
+{
+    $u ??= $_SESSION['utilisateur'] ?? [];
+
+    return !empty($u['is_admin']) || aRole('Administrateur', $u);
+}
+
+/** Route du menu d'un rôle (role.RouteMenu, repli ROLES_REFERENCE puis 'nominateur-menu'). */
+function menuDuRole(string $role): string
+{
+    static $routes = null;
+    if ($routes === null) {
+        $routes = array_map(static fn (array $r): string => $r[2], ROLES_REFERENCE);
+        try {
+            $pdo = getPDO();
+            if (tableRolesExiste($pdo)) {
+                foreach ($pdo->query('SELECT Code, RouteMenu FROM role')->fetchAll(\PDO::FETCH_ASSOC) as $r) {
+                    if (trim((string) $r['RouteMenu']) !== '') {
+                        $routes[(string) $r['Code']] = trim((string) $r['RouteMenu']);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            error_log('[NIJAC] menuDuRole : lecture de la table role impossible : ' . $e->getMessage());
+        }
+    }
+
+    return $routes[$role] ?? 'nominateur-menu';
+}
+
+/** Codes des rôles valides (table role, par priorité ; repli ROLES_REFERENCE avant EA98). */
+function rolesValides(\PDO $pdo): array
+{
+    if (tableRolesExiste($pdo)) {
+        try {
+            $codes = $pdo->query('SELECT Code FROM role ORDER BY Priorite, Code')->fetchAll(\PDO::FETCH_COLUMN);
+            if ($codes) {
+                return array_values(array_map('strval', $codes));
+            }
+        } catch (\PDOException $e) {
+            error_log('[NIJAC] rolesValides : ' . $e->getMessage());
+        }
+    }
+
+    return array_keys(ROLES_REFERENCE);
+}
+
+/** Libellés des rôles [Code => Libelle] (table role, par priorité ; repli ROLES_REFERENCE avant EA98) — EA86. */
+function libellesRoles(\PDO $pdo): array
+{
+    if (tableRolesExiste($pdo)) {
+        try {
+            $libelles = [];
+            foreach ($pdo->query('SELECT Code, Libelle FROM role ORDER BY Priorite, Code')->fetchAll(\PDO::FETCH_ASSOC) as $r) {
+                $code = (string) $r['Code'];
+                $lib  = trim((string) ($r['Libelle'] ?? ''));
+                $libelles[$code] = $lib !== '' ? $lib : (ROLES_REFERENCE[$code][0] ?? $code);
+            }
+            if ($libelles) {
+                return $libelles;
+            }
+        } catch (\PDOException $e) {
+            error_log('[NIJAC] libellesRoles : ' . $e->getMessage());
+        }
+    }
+
+    return array_map(static fn (array $r): string => (string) $r[0], ROLES_REFERENCE);
+}
+
+/**
+ * Remplace les rôles d'un utilisateur (DELETE + INSERT, SANS transaction propre : à l'appelant d'en
+ * ouvrir une). $principal absent de $roles y est ajouté ; vide → premier rôle de la liste. Un seul
+ * estPrincipal = 1 par utilisateur. Avant EA98 (utilisateur_role absente) : repli sur la colonne
+ * utilisateur.Role (rôle principal seul) si elle existe encore.
+ */
+function enregistrerRolesUtilisateur(\PDO $pdo, int $idUtilisateur, array $roles, string $principal): void
+{
+    $roles = array_values(array_unique(array_filter(array_map(static fn ($r): string => trim((string) $r), $roles), 'strlen')));
+    $principal = trim($principal);
+    if ($principal === '') {
+        $principal = $roles[0] ?? '';
+    } elseif (!in_array($principal, $roles, true)) {
+        array_unshift($roles, $principal);
+    }
+
+    if (!tableRolesExiste($pdo)) {
+        if (count($roles) > 1) {
+            throw new \RuntimeException('Plusieurs rôles impossibles : table utilisateur_role absente, chargez EA98.');
+        }
+        if (utilisateurAColonneRole($pdo) && $principal !== '') {
+            $pdo->prepare('UPDATE utilisateur SET Role = ? WHERE Id_Utilisateur = ?')->execute([$principal, $idUtilisateur]);
+        }
+
+        return;
+    }
+
+    $pdo->prepare('DELETE FROM utilisateur_role WHERE Id_Utilisateur = ?')->execute([$idUtilisateur]);
+    $ins = $pdo->prepare('INSERT INTO utilisateur_role (Id_Utilisateur, Role, estPrincipal) VALUES (?, ?, ?)');
+    foreach ($roles as $role) {
+        $ins->execute([$idUtilisateur, $role, $role === $principal ? 1 : 0]);
+    }
+}
+
+/**
+ * Fragment SQL « l'utilisateur $colId a le rôle $placeholder » ($placeholder = '?' ou littéral SQL
+ * déjà quoté, ex. "'JA'" — jamais une saisie utilisateur). Avant EA98 (utilisateur_role absente) :
+ * test direct « $colId IS NOT NULL AND <table de $colId>.Role = $placeholder » (sans sous-requête,
+ * évite l'erreur MySQL 1093 dans un UPDATE utilisateur) si l'ancienne colonne Role existe, sinon toujours faux (0 = 1),
+ * en gardant le même nombre de marqueurs.
+ * $colId DOIT être préfixé (table.colonne ou alias.colonne) : un nom nu serait résolu dans la
+ * sous-requête (ur.Id_Utilisateur = Id_Utilisateur → toujours vrai) → InvalidArgumentException.
+ */
+function sqlARole(string $colId, string $placeholder): string
+{
+    if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/', $colId)) {
+        throw new \InvalidArgumentException("sqlARole : colonne « $colId » non préfixée (attendu table.colonne).");
+    }
+    try {
+        $pdo = getPDO();
+        if (!tableRolesExiste($pdo)) {
+            // Repli sans sous-requête : un EXISTS sur `utilisateur` dans un UPDATE utilisateur
+            // déclencherait l'erreur MySQL 1093 ; on lit la colonne Role de la table/alias de $colId.
+            $table = strstr($colId, '.', true);
+            return utilisateurAColonneRole($pdo)
+                ? "($colId IS NOT NULL AND $table.Role = $placeholder)"
+                : "(0 = 1 AND $placeholder IS NULL)";
+        }
+    } catch (\Throwable $e) {
+        error_log('[NIJAC] sqlARole : ' . $e->getMessage());
+    }
+
+    return "EXISTS(SELECT 1 FROM utilisateur_role ur WHERE ur.Id_Utilisateur = $colId AND ur.Role = $placeholder)";
+}
+
+/**
+ * Migration EA98 (appelée par initTableConfiguration(), idempotente, chaque étape isolée dans son
+ * try/catch + error_log) :
+ *  1. table `role` + amorçage INSERT IGNORE (ROLES_REFERENCE) ;
+ *  2. table `utilisateur_role` (type/collation copiés de utilisateur.Id_Utilisateur et role.Code ;
+ *     FK utilisateur ON DELETE CASCADE, FK role ON UPDATE CASCADE — repli sans FK, index seuls) ;
+ *  3. si utilisateur.Role existe encore : INSERT IGNORE (Id, Role, estPrincipal = 1) pour chaque
+ *     utilisateur sans ligne, puis, SEULEMENT si plus aucun utilisateur n'a de rôle non migré,
+ *     suppression des FK / index portant sur Role et DROP COLUMN Role.
+ */
+function assurerRolesUtilisateurs(\PDO $pdo): void
+{
+    // 1. Table de référence des rôles.
+    try {
+        $pdo->exec(
+            "CREATE TABLE IF NOT EXISTS role (
+                Code      VARCHAR(30) NOT NULL,
+                Libelle   VARCHAR(60) NOT NULL DEFAULT '',
+                Priorite  TINYINT     NOT NULL DEFAULT 99 COMMENT 'Ordre d''affichage / choix du rôle principal (1 = premier)',
+                RouteMenu VARCHAR(50) NOT NULL DEFAULT 'nominateur-menu' COMMENT 'Route du menu d''accueil du rôle',
+                PRIMARY KEY (Code)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Rôles des utilisateurs (référence)'"
+        );
+        $ins = $pdo->prepare('INSERT IGNORE INTO role (Code, Libelle, Priorite, RouteMenu) VALUES (?, ?, ?, ?)');
+        foreach (ROLES_REFERENCE as $code => [$libelle, $priorite, $route]) {
+            $ins->execute([$code, $libelle, $priorite, $route]);
+        }
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] Création / amorçage de la table role : ' . $e->getMessage());
+    }
+
+    // 2. Table de liaison utilisateur ↔ rôles.
+    try {
+        if (!tableRolesExiste($pdo, true)) {
+            $typeUtil = $pdo->query(
+                "SELECT COLUMN_TYPE, CHARACTER_SET_NAME, COLLATION_NAME FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'utilisateur' AND COLUMN_NAME = 'Id_Utilisateur'"
+            )->fetch(\PDO::FETCH_ASSOC);
+            $typeRole = $pdo->query(
+                "SELECT COLUMN_TYPE, CHARACTER_SET_NAME, COLLATION_NAME FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'role' AND COLUMN_NAME = 'Code'"
+            )->fetch(\PDO::FETCH_ASSOC);
+            if (!$typeUtil || !$typeRole) {
+                throw new \PDOException('utilisateur.Id_Utilisateur ou role.Code introuvable');
+            }
+            $defUtil = $typeUtil['COLUMN_TYPE']
+                . ($typeUtil['COLLATION_NAME'] ? " CHARACTER SET {$typeUtil['CHARACTER_SET_NAME']} COLLATE {$typeUtil['COLLATION_NAME']}" : '');
+            $defRole = $typeRole['COLUMN_TYPE']
+                . ($typeRole['COLLATION_NAME'] ? " CHARACTER SET {$typeRole['CHARACTER_SET_NAME']} COLLATE {$typeRole['COLLATION_NAME']}" : '');
+            $ddl = "CREATE TABLE utilisateur_role (
+                        Id_Utilisateur $defUtil NOT NULL,
+                        Role           $defRole NOT NULL,
+                        estPrincipal   TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Rôle principal (un seul par utilisateur, garanti par le code)',
+                        PRIMARY KEY (Id_Utilisateur, Role),
+                        KEY idx_utilisateur_role_role (Role)%s
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                      COMMENT='Rôles des utilisateurs (plusieurs-à-plusieurs) — remplace utilisateur.Role'";
+            try {
+                $pdo->exec(sprintf($ddl, ',
+                        CONSTRAINT fk_utilisateur_role_utilisateur FOREIGN KEY (Id_Utilisateur) REFERENCES utilisateur (Id_Utilisateur) ON DELETE CASCADE ON UPDATE CASCADE,
+                        CONSTRAINT fk_utilisateur_role_role        FOREIGN KEY (Role)           REFERENCES role (Code)                  ON DELETE RESTRICT ON UPDATE CASCADE'));
+            } catch (\PDOException $e) {
+                error_log('[NIJAC] utilisateur_role créée SANS clés étrangères (index seuls) : ' . $e->getMessage());
+                $pdo->exec(sprintf($ddl, ''));
+            }
+            tableRolesExiste($pdo, true);
+        }
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] Création de utilisateur_role : ' . $e->getMessage());
+    }
+
+    if (!tableRolesExiste($pdo, true) || !utilisateurAColonneRole($pdo, true)) {
+        return;
+    }
+
+    // 3a. Migration de utilisateur.Role → utilisateur_role (rôle principal), utilisateurs sans ligne seulement.
+    $cmp = 'CONVERT(u.Role USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(r.Code USING utf8mb4) COLLATE utf8mb4_unicode_ci';
+    try {
+        $pdo->exec(
+            "INSERT IGNORE INTO utilisateur_role (Id_Utilisateur, Role, estPrincipal)
+             SELECT u.Id_Utilisateur, r.Code, 1
+             FROM utilisateur u
+             JOIN role r ON $cmp
+             WHERE NOT EXISTS (SELECT 1 FROM utilisateur_role ur WHERE ur.Id_Utilisateur = u.Id_Utilisateur)"
+        );
+        $restants = (int) $pdo->query(
+            "SELECT COUNT(*) FROM utilisateur u
+             WHERE u.Role IS NOT NULL AND u.Role <> ''
+               AND NOT EXISTS (SELECT 1 FROM utilisateur_role ur WHERE ur.Id_Utilisateur = u.Id_Utilisateur)"
+        )->fetchColumn();
+        if ($restants > 0) {
+            error_log('[NIJAC] Migration utilisateur.Role incomplète (' . $restants
+                . ' utilisateur(s) au rôle inconnu de la table role) : colonne Role conservée');
+
+            return;
+        }
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] Migration utilisateur.Role → utilisateur_role : ' . $e->getMessage() . ' — colonne Role conservée');
+
+        return;
+    }
+
+    // 3b. Suppression des FK puis des index portant sur utilisateur.Role, puis de la colonne.
+    try {
+        $fks = $pdo->query(
+            "SELECT DISTINCT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+             WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'utilisateur' AND COLUMN_NAME = 'Role'
+               AND REFERENCED_TABLE_NAME IS NOT NULL"
+        )->fetchAll(\PDO::FETCH_COLUMN);
+        foreach ($fks as $fk) {
+            $pdo->exec('ALTER TABLE utilisateur DROP FOREIGN KEY `' . str_replace('`', '', (string) $fk) . '`');
+        }
+        $index = $pdo->query(
+            "SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS
+             WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'utilisateur' AND COLUMN_NAME = 'Role'
+               AND INDEX_NAME <> 'PRIMARY'"
+        )->fetchAll(\PDO::FETCH_COLUMN);
+        foreach ($index as $ix) {
+            $pdo->exec('ALTER TABLE utilisateur DROP INDEX `' . str_replace('`', '', (string) $ix) . '`');
+        }
+        $pdo->exec('ALTER TABLE utilisateur DROP COLUMN Role');
+        error_log('[NIJAC] utilisateur.Role migrée vers utilisateur_role puis supprimée');
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] Suppression de utilisateur.Role : ' . $e->getMessage());
+    }
+    utilisateurAColonneRole($pdo, true);
 }
 
 /**
@@ -2023,6 +2646,187 @@ function rendreMessageCodeSecurite(?array $modele, string $code): array
     return $rendu + ['html' => $html, 'texte' => $texte];
 }
 
+// ── Invitation JA (EN15) : création des comptes de rôle JA avec mot de passe provisoire ─────────
+
+/** Type messagerie du message système « Invitation JA » (EN15), éditable en EA93 par un administrateur seulement. */
+defined('TYPE_MESSAGE_INVITATION_JA') || define('TYPE_MESSAGE_INVITATION_JA', 'Invitation JA');
+/** Sujet par défaut du message « Invitation JA » (amorçage EA98 et repli). */
+defined('SUJET_INVITATION_JA') || define('SUJET_INVITATION_JA', 'NIJAC – Vos informations de juge-arbitre sont en ligne');
+/** Longueur du mot de passe provisoire de l'invitation (≥ 12, alphabet sans caractères ambigus). */
+const INVITATION_JA_LONGUEUR_MDP = 14;
+
+/**
+ * Types de messages système réservés aux administrateurs (EA93) : jamais listés ni lus par un
+ * autre rôle, jamais personnalisables (pas de copie perso), exclus des modèles génériques d'EN15.
+ */
+function typesMessagesReservesAdmin(): array
+{
+    return [TYPE_MESSAGE_CODE_SECURITE, TYPE_MESSAGE_INVITATION_JA];
+}
+
+/**
+ * Corps par défaut (HTML, version validée par Patrick, bleu #1f4e8c) du message « Invitation JA » :
+ * liste des informations consultables, encadré des identifiants, bouton « Me connecter à NIJAC » + lien
+ * de secours en clair, encadré orange « mot de passe provisoire », rappel de sécurité, signature CRA /
+ * Ligue de Normandie de Tennis de Table. Marqueurs : {PRENOM} {NOM} (fiche ja), {LOGIN},
+ * {MOT_DE_PASSE} (corps seulement), {LIEN_CONNEXION}. Aucun commentaire HTML, aucun texte caché
+ * (règles anti-spam, voir getNijacMailer()). Nowdoc : marqueurs littéraux. Sert à l'amorçage EA98
+ * (jamais d'écrasement d'une ligne existante) et de repli avant EA98.
+ */
+function corpsParDefautInvitationJa(): string
+{
+    return <<<'NIJAC_INVITATION_JA_HTML'
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-family:Arial,sans-serif;"><tr><td align="center">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;max-width:100%;">
+<tr><td style="background:#1f4e8c;color:#ffffff;padding:20px 28px;font-size:20px;font-weight:bold;">NIJAC – Votre espace juge-arbitre</td></tr>
+<tr><td style="padding:28px;color:#333333;font-size:14px;line-height:1.6;">
+<p style="margin:0 0 16px;">Bonjour {PRENOM} {NOM},</p>
+<p style="margin:0 0 12px;">Nous avons le plaisir de vous informer que vous pouvez désormais consulter vos informations de juge-arbitre sur NIJAC, l'application de nomination des juges-arbitres de la Ligue de Normandie de Tennis de Table :</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+<tr><td style="padding:3px 10px 3px 0;color:#1f4e8c;font-weight:bold;vertical-align:top;">&#8226;</td><td style="padding:3px 0;">vos disponibilités pour les rencontres à venir ;</td></tr>
+<tr><td style="padding:3px 10px 3px 0;color:#1f4e8c;font-weight:bold;vertical-align:top;">&#8226;</td><td style="padding:3px 0;">vos nominations ;</td></tr>
+<tr><td style="padding:3px 10px 3px 0;color:#1f4e8c;font-weight:bold;vertical-align:top;">&#8226;</td><td style="padding:3px 0;">vos frais de péage et justificatifs ;</td></tr>
+<tr><td style="padding:3px 10px 3px 0;color:#1f4e8c;font-weight:bold;vertical-align:top;">&#8226;</td><td style="padding:3px 0;">vos éléments de défiscalisation.</td></tr>
+</table>
+<p style="margin:0 0 8px;">Vos identifiants de connexion :</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#e8f0fb;border-left:4px solid #1f4e8c;border-radius:4px;margin:0 0 20px;">
+<tr><td style="padding:8px 14px;color:#4b5563;width:40%;">Identifiant (votre adresse email)</td><td style="padding:8px 14px;font-weight:bold;">{LOGIN}</td></tr>
+<tr><td style="padding:8px 14px;color:#4b5563;">Mot de passe provisoire</td><td style="padding:8px 14px;font-weight:bold;font-family:Consolas,'Courier New',monospace;font-size:16px;letter-spacing:1px;color:#1f4e8c;">{MOT_DE_PASSE}</td></tr>
+</table>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 16px;"><tr><td align="center" style="background:#1f4e8c;border-radius:6px;"><a href="{LIEN_CONNEXION}" style="display:inline-block;padding:12px 28px;color:#ffffff;font-size:15px;font-weight:bold;text-decoration:none;">Me connecter à NIJAC</a></td></tr></table>
+<p style="margin:0 0 20px;font-size:12px;color:#4b5563;text-align:center;">Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br><a href="{LIEN_CONNEXION}" style="color:#1f4e8c;word-break:break-all;">{LIEN_CONNEXION}</a></p>
+<p style="margin:0 0 16px;background:#fff4e5;border-left:4px solid #f0a020;padding:10px 14px;">Ce mot de passe est <b>provisoire</b> : vous devrez obligatoirement le changer lors de votre première connexion. Un code de sécurité vous sera également envoyé par email à chaque connexion.</p>
+<p style="margin:0 0 16px;">Par mesure de sécurité, ne transmettez jamais votre mot de passe à qui que ce soit, y compris par email ou par téléphone : la Ligue ne vous le demandera jamais.</p>
+<p style="margin:0 0 16px;">Les liens personnels reçus avec vos convocations et vos demandes de disponibilités restent valables.</p>
+<p style="margin:0;">Nous vous remercions pour votre engagement et vous souhaitons une bonne saison.</p>
+<p style="margin:16px 0 0;">Sportivement,<br><b>La Commission Régionale d'Arbitrage (CRA)</b><br>Ligue de Normandie de Tennis de Table</p>
+</td></tr>
+</table>
+</td></tr></table>
+NIJAC_INVITATION_JA_HTML;
+}
+
+/**
+ * Amorce (initTableConfiguration(), EA98) le message système « Invitation JA » : Type ENUM étendu,
+ * ligne créée seulement si aucun message système de ce Type n'existe ; corps existant jamais écrasé.
+ * Cc = 0, ReplyTo = 0 : envoyé au seul JA (il contient son mot de passe provisoire).
+ */
+function assurerModeleInvitationJa(\PDO $pdo): void
+{
+    ajouterTypeMessagerie($pdo, TYPE_MESSAGE_INVITATION_JA);
+
+    $existe = $pdo->prepare('SELECT 1 FROM messagerie WHERE Type = ? AND Id_Utilisateur IS NULL LIMIT 1');
+    $existe->execute([TYPE_MESSAGE_INVITATION_JA]);
+    if ($existe->fetchColumn()) {
+        return;
+    }
+    $pdo->prepare('INSERT INTO messagerie (Type, Sujet, Message, Id_Utilisateur, Cc, ReplyTo) VALUES (?, ?, ?, NULL, 0, 0)')
+        ->execute([TYPE_MESSAGE_INVITATION_JA, SUJET_INVITATION_JA, corpsParDefautInvitationJa()]);
+}
+
+/**
+ * Modèle « Invitation JA » utilisable ? (null = oui, sinon message). Le corps doit contenir {LOGIN}
+ * et {MOT_DE_PASSE} (sinon le JA ne pourrait pas se connecter) ; le sujet ne doit pas contenir
+ * {MOT_DE_PASSE} (il y serait de toute façon retiré). $modele = ligne messagerie (Sujet/Message) ou
+ * null (repli sur le modèle par défaut, toujours valide).
+ */
+function controlerModeleInvitationJa(?array $modele): ?string
+{
+    if ($modele === null || trim((string) ($modele['Message'] ?? '')) === '') {
+        return null;
+    }
+    $corps = (string) $modele['Message'];
+    if (!str_contains($corps, '{LOGIN}') || !str_contains($corps, '{MOT_DE_PASSE}')) {
+        return 'Le message « ' . TYPE_MESSAGE_INVITATION_JA . ' » (EA93) doit contenir les marqueurs {LOGIN} et {MOT_DE_PASSE} dans son corps.';
+    }
+    if (str_contains((string) ($modele['Sujet'] ?? ''), '{MOT_DE_PASSE}')) {
+        return 'Le sujet du message « ' . TYPE_MESSAGE_INVITATION_JA . ' » (EA93) ne doit pas contenir {MOT_DE_PASSE}.';
+    }
+
+    return null;
+}
+
+/**
+ * Sujet/corps de l'invitation. $modele = ligne messagerie système ou null (repli corps par défaut).
+ * Corps HTML (balises détectées) : valeurs échappées htmlspecialchars ; corps texte : valeurs brutes.
+ * {MOT_DE_PASSE} n'est remplacé que dans le corps (retiré du sujet). Le résultat contient le mot de
+ * passe en clair : il ne doit servir qu'à l'envoi (jamais journalisé, jamais renvoyé au navigateur).
+ *
+ * @param array{prenom?:?string, nom?:?string, login:string, mot_de_passe:string, lien:string} $v
+ * @return array{sujet: string, corps: string, html: bool, texte: string}
+ */
+function rendreMessageInvitationJa(?array $modele, array $v): array
+{
+    $sujet = trim((string) ($modele['Sujet'] ?? '')) ?: SUJET_INVITATION_JA;
+    $corps = trim((string) ($modele['Message'] ?? '')) !== '' ? (string) $modele['Message'] : corpsParDefautInvitationJa();
+    $html  = strip_tags($corps) !== $corps;
+    $e     = static fn ($s): string => $html ? htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8') : (string) $s;
+
+    $communs = [
+        '{PRENOM}'         => $e($v['prenom'] ?? ''),
+        '{NOM}'            => $e($v['nom'] ?? ''),
+        '{LOGIN}'          => $e($v['login']),
+        '{LIEN_CONNEXION}' => $e($v['lien']),
+    ];
+    $sujetRendu = trim(strtr($sujet, $communs + ['{MOT_DE_PASSE}' => '']));
+    // Sujet : texte brut (pas d'entités HTML).
+    $sujetRendu = html_entity_decode($sujetRendu, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $corpsRendu = strtr($corps, $communs + ['{MOT_DE_PASSE}' => $e($v['mot_de_passe'])]);
+
+    return [
+        'sujet' => $sujetRendu,
+        'corps' => $corpsRendu,
+        'html'  => $html,
+        'texte' => $html ? altBodyDepuisHtml($corpsRendu) : $corpsRendu,
+    ];
+}
+
+/**
+ * Aperçu du message « Invitation JA » (EN15) : rendu par rendreMessageInvitationJa() avec des valeurs
+ * d'EXEMPLE factices (jamais un vrai mot de passe), échappées côté serveur. Corps texte brut : converti
+ * en HTML échappé (<pre>) pour l'iframe d'aperçu. Retourne ['sujet' => texte, 'html' => document HTML
+ * à placer dans un <iframe sandbox srcdoc>].
+ */
+function apercuMessageInvitationJa(?array $modele): array
+{
+    $rendu = rendreMessageInvitationJa($modele, [
+        'prenom' => 'Jean', 'nom' => 'DUPONT', 'login' => 'jean.dupont@exemple.fr',
+        'mot_de_passe' => 'Exemple-MdP-Provisoire', 'lien' => site_url('login'),
+    ]);
+    $corps = $rendu['html']
+        ? $rendu['corps']
+        : '<pre style="white-space:pre-wrap;font-family:Arial,sans-serif;font-size:14px;">'
+            . htmlspecialchars($rendu['corps'], ENT_QUOTES, 'UTF-8') . '</pre>';
+
+    return [
+        'sujet' => $rendu['sujet'],
+        'html'  => '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><base target="_blank"></head>'
+            . '<body style="margin:0;padding:12px;background:#eef1f6;">' . $corps . '</body></html>',
+    ];
+}
+
+/**
+ * Avertissement NON bloquant (EA93 / EN15) : le corps HTML d'un email contient un commentaire HTML
+ * (hors conditionnels Outlook <!--[if …]> / <![endif]-->) ou du texte caché (display:none,
+ * visibility:hidden, mso-hide:all, font-size:0, max-height:0, opacity:0) — signaux anti-spam.
+ * null = rien détecté.
+ */
+function avertissementsHtmlEmail(string $html): ?string
+{
+    $motifs = [];
+    $sansMso = preg_replace('#<!--<!\[endif\]-->|<!--\[if[^\]]*\]><!-->|<!--\[if[^\]]*\]>|<!\[endif\]-->#i', '', $html) ?? $html;
+    if (str_contains($sansMso, '<!--')) {
+        $motifs[] = 'commentaire HTML (<!-- … -->)';
+    }
+    if (preg_match('/display\s*:\s*none|visibility\s*:\s*hidden|mso-hide\s*:\s*all|font-size\s*:\s*0(?![.\d])|max-height\s*:\s*0(?![.\d])|opacity\s*:\s*0(?![.\d])/i', $html)) {
+        $motifs[] = 'texte caché (display:none, visibility:hidden, mso-hide, taille ou opacité nulle)';
+    }
+
+    return $motifs
+        ? 'Attention, signaux anti-spam détectés : ' . implode(' ; ', $motifs) . '. Le message est enregistré, mais il vaut mieux les retirer.'
+        : null;
+}
+
 /**
  * Règle de robustesse du mot de passe (E008 « mot de passe oublié ») : 10 caractères
  * minimum, avec au moins une minuscule, une majuscule, un chiffre et un caractère
@@ -2160,7 +2964,8 @@ function verifierRappelExpirationFfttApi(): void
         $rendu     = remplacerMarqueursMessage($tpl['Sujet'], $tpl['Message'], $marqueurs);
 
         $emails = $pdo->query(
-            "SELECT Email FROM utilisateur WHERE Role = 'Administrateur' AND Actif = 1 AND Email IS NOT NULL AND Email <> ''"
+            "SELECT u.Email FROM utilisateur u WHERE " . sqlARole('u.Id_Utilisateur', "'Administrateur'")
+            . " AND u.Actif = 1 AND u.Email IS NOT NULL AND u.Email <> ''"
         )->fetchAll(\PDO::FETCH_COLUMN);
 
         foreach ($emails as $email) {
@@ -2747,9 +3552,9 @@ const ROUTES_CHANGE_LOGIN = ['changer-mot-de-passe', 'logout'];
  * nominauth, csrauth, defiscauth, craconvocauth), session ACTIVE (avant session_write_close()).
  *
  * Au plus une fois par SESSION_REVALIDATION_DELAI (horodatage 'verifie_le' ; absent = session
- * ouverte avant cette version, revalidée tout de suite) relit Actif, Role, ChangeLogin et
- * PwdVersion (si la colonne existe) du compte, ainsi que Login : ligne absente, Actif = 0, rôle
- * changé, login changé ou version du mot de passe différente → session détruite (cookie compris, detruireSessionNijac())
+ * ouverte avant cette version, revalidée tout de suite) relit Actif, les rôles (utilisateur_role), ChangeLogin et
+ * PwdVersion (si la colonne existe) du compte, ainsi que Login : ligne absente, Actif = 0, liste
+ * (triée) des rôles changée, compte JA seul sans fiche, login changé ou version du mot de passe différente → session détruite (cookie compris, detruireSessionNijac())
  * et retour à E001. Une session sans 'pwd_version' (ouverte avant EA98 / cette version) adopte
  * la version courante. ChangeLogin passé à 1 en base (EA86 « Écraser » avant EA98) est reporté.
  * Base injoignable : pas de destruction (journalisé), nouvel essai à la requête suivante.
@@ -2769,19 +3574,32 @@ function revaliderSessionUtilisateur(string $chemin = ''): ?string
         try {
             $pdo  = getPDO();
             $stmt = $pdo->prepare(
-                'SELECT Login, Actif, Role, ChangeLogin' . (utilisateurAPwdVersion($pdo) ? ', PwdVersion' : '')
+                'SELECT Login, Actif, ChangeLogin' . (utilisateurAPwdVersion($pdo) ? ', PwdVersion' : '')
                 . ' FROM utilisateur WHERE Id_Utilisateur = ? LIMIT 1'
             );
             $stmt->execute([(int) $u['id']]);
             $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+            // Rôles en base (utilisateur_role) ; compte JA (rôle exclusif) sans fiche ja → session détruite.
+            $rolesBase    = $row ? rolesUtilisateur($pdo, (int) $u['id']) : [];
+            $jaSansFiche  = $rolesBase === ['JA'] && !ficheJaExiste($pdo, (int) $u['id']);
+            $rolesSession = isset($u['roles']) && is_array($u['roles'])
+                ? array_values($u['roles'])
+                : ((string) ($u['role'] ?? '') !== '' ? [(string) $u['role']] : []);
+            sort($rolesBase);
+            sort($rolesSession);
 
             $motif = null;
             if (!$row) {
                 $motif = 'compte supprimé';
             } elseif (!(int) $row['Actif']) {
                 $motif = 'compte désactivé';
-            } elseif ((string) $row['Role'] !== (string) ($u['role'] ?? '')) {
-                $motif = 'rôle modifié';
+            } elseif ($jaSansFiche) {
+                // Compte JA (convention Id_Utilisateur = ja.Id_JA) : fiche supprimée → ses écrans
+                // (E011, EJA2–EJA4) ne doivent pas continuer.
+                $motif = 'fiche JA supprimée';
+            } elseif ($rolesBase !== $rolesSession) {
+                $motif = 'rôles modifiés';
             } elseif ((string) $row['Login'] !== (string) ($u['login'] ?? '')) {
                 // Login renommé (EA86) : la session ne doit pas garder un login (ex. 'CHAUTARD',
                 // accès EA96/EA97/EA98) que le compte n'a plus. Son propre renommage via EA86
@@ -2803,7 +3621,14 @@ function revaliderSessionUtilisateur(string $chemin = ''): ?string
             if ((int) $row['ChangeLogin'] === 1) {
                 $_SESSION['utilisateur']['change_login'] = true;
             }
-            $_SESSION['utilisateur']['is_admin']   = ($row['Role'] === 'Administrateur');
+            // Session ouverte avant les rôles multiples : 'roles' complété (rôle principal en tête).
+            if (!isset($u['roles']) || !is_array($u['roles']) || $retirerJa) {
+                $_SESSION['utilisateur']['roles'] = $roles;
+                if ($retirerJa && (string) ($u['role'] ?? '') === 'JA') {
+                    $_SESSION['utilisateur']['role'] = $roles[0] ?? '';
+                }
+            }
+            $_SESSION['utilisateur']['is_admin']   = in_array('Administrateur', $roles, true);
             $_SESSION['utilisateur']['verifie_le'] = time();
         } catch (\Throwable $e) {
             error_log('[NIJAC] revalidation de session impossible : ' . $e->getMessage());
@@ -2888,12 +3713,26 @@ function verifierMotDePasseUtilisateur(int $idUtilisateur, string $password): bo
 
 /**
  * Construit le tableau $_SESSION['utilisateur'] à partir d'une ligne de la table
- * utilisateur (Id_Utilisateur, Login, Nom, Prenom, Role, Id_Departement, ChangeLogin, Email).
- * Source unique du format de session : connexion (AuthController) et rafraîchissement du
- * profil de l'administrateur qui modifie son propre compte (UtilisateurController, EA86).
+ * utilisateur (colonnesSessionUtilisateur() : Id_Utilisateur, Login, Nom, Prenom, Id_Departement,
+ * ChangeLogin, Email…). Source unique du format de session : connexion (AuthController) et
+ * rafraîchissement du profil de l'administrateur qui modifie son propre compte (UtilisateurController, EA86).
+ * Rôles lus dans utilisateur_role (rolesEffectifsCompte() : rôles tels quels, JA exclusif, cumul hérité journalisé) —
+ * sauf si $row['Roles'] (tableau) est déjà fourni : 'role' = rôle principal, 'roles' = tous,
+ * 'is_admin' = Administrateur ∈ roles.
  */
-function construireSessionUtilisateur(array $row): array
+function construireSessionUtilisateur(array $row, ?\PDO $pdo = null): array
 {
+    if (isset($row['Roles']) && is_array($row['Roles'])) {
+        $roles = array_values($row['Roles']);
+    } else {
+        try {
+            $roles = rolesEffectifsCompte($pdo ?? getPDO(), (int) $row['Id_Utilisateur']);
+        } catch (\Throwable $e) {
+            error_log('[NIJAC] construireSessionUtilisateur : lecture des rôles impossible : ' . $e->getMessage());
+            $roles = [];
+        }
+    }
+
     return [
         'id'             => $row['Id_Utilisateur'],
         // Casse canonique de la base (Login a une collation *_ci, insensible à la casse) :
@@ -2901,10 +3740,11 @@ function construireSessionUtilisateur(array $row): array
         'login'          => $row['Login'],
         'nom'            => $row['Nom'],
         'prenom'         => $row['Prenom'],
-        'role'           => $row['Role'],
+        'role'           => $roles[0] ?? '',
+        'roles'          => $roles,
         'id_departement' => $row['Id_Departement'],
         'change_login'   => (bool) $row['ChangeLogin'],
-        'is_admin'       => ($row['Role'] === 'Administrateur'),
+        'is_admin'       => in_array('Administrateur', $roles, true),
         'email'          => $row['Email'] ?? '',
         // Version du mot de passe (null si la colonne n'existe pas encore, avant EA98) et
         // horodatage de la dernière relecture en base — voir revaliderSessionUtilisateur().
@@ -3212,7 +4052,9 @@ function altBodyDepuisHtml(string $html): string
         $ligne = '';
         foreach ($cellules as $i => $c) {
             $prec  = rtrim(html_entity_decode(strip_tags($ligne), ENT_QUOTES | ENT_HTML5, 'UTF-8'), " \u{00A0}");
-            $ligne .= $i === 0 ? $c : (str_ends_with($prec, ':') ? ' ' : ' : ') . $c;
+            // Puce seule en 1re cellule (•, -, *, ·, ✓) : « • valeur », pas « • : valeur ».
+            $puce   = $i === 1 && preg_match('/^[•\-*·✓✔]$/u', $prec);
+            $ligne .= $i === 0 ? $c : ($puce || str_ends_with($prec, ':') ? ' ' : ' : ') . $c;
         }
         return $S . $ligne . $S;
     }, $t) ?? $t;

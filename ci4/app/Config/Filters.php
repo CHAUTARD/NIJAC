@@ -40,6 +40,7 @@ class Filters extends BaseFilters
         'nominauth'     => \App\Filters\NominateurAuth::class,
         'defiscauth'    => \App\Filters\DefiscalisateurAuth::class,
         'craconvocauth' => \App\Filters\CraConvocAuth::class,
+        'jaauth'        => \App\Filters\JaAuth::class,
         'canonicalhost' => \App\Filters\CanonicalHost::class,
     ];
 

@@ -24,7 +24,7 @@ $routes->get('admin-menu', 'AdminMenuController::index', ['filter' => 'adminauth
 
 // ── E003 Menu nominateur ─────────────────────────────────────────────────────
 // Filtre "auth" sans argument = Administrateur ou Nominateur (ou is_admin) seulement ;
-// les rôles CSR, Defiscalisateur et CRA Convoc ne passent que sur les routes dont
+// les rôles CSR, Defiscalisateur, CRA Convoc et JA ne passent que sur les routes dont
 // l'argument les nomme (ex. "auth:CRA Convoc") — voir Filters/Auth.php.
 $routes->get('nominateur-menu', 'NominateurMenuController::index', ['filter' => 'auth']);
 $routes->get('nominateur-menu/convocations-a-envoyer', 'NominateurMenuController::convocationsAEnvoyer', ['filter' => 'auth']);
@@ -60,6 +60,8 @@ $routes->delete('competition-regionale/(:segment)', 'CompetitionRegionaleControl
 $routes->get('utilisateur', 'UtilisateurController::index', ['filter' => 'adminauth']);
 $routes->get('utilisateur/data', 'UtilisateurController::data', ['filter' => 'adminauth']);
 $routes->get('utilisateur/data/(:segment)', 'UtilisateurController::show/$1', ['filter' => 'adminauth']);
+// Recherche de fiche ja (nom / prénom / licence) pour le rattachement d'un compte de rôle JA (utilisateur.Id_JA).
+$routes->get('utilisateur/fiches-ja', 'UtilisateurController::fichesJa', ['filter' => 'adminauth']);
 $routes->post('utilisateur', 'UtilisateurController::store', ['filter' => 'adminauth']);
 $routes->put('utilisateur/(:segment)', 'UtilisateurController::update/$1', ['filter' => 'adminauth']);
 $routes->delete('utilisateur/(:segment)', 'UtilisateurController::delete/$1', ['filter' => 'adminauth']);
@@ -116,6 +118,17 @@ $routes->get('centrenvoye/ja', 'CentrenvoyeController::ja', ['filter' => 'auth']
 $routes->post('centrenvoye/apercu', 'CentrenvoyeController::apercu', ['filter' => 'auth']);
 $routes->post('centrenvoye/envoyer', 'CentrenvoyeController::envoyer', ['filter' => 'auth']);
 $routes->post('centrenvoye/envoyer-un', 'CentrenvoyeController::envoyerUn', ['filter' => 'auth']);
+// Onglet « Invitation JA » : JA1 actifs du périmètre + état de leur compte, puis création (Id_Utilisateur =
+// Id_JA, Login = email) / régénération du mot de passe et envoi du message système « Invitation JA » (EA93,
+// admin). Même filtre "auth" (Administrateur / Nominateur) et CSRF global que le reste d'EN15.
+$routes->get('centrenvoye/invitation-ja', 'CentrenvoyeController::invitationJa', ['filter' => 'auth']);
+// Aperçu du message « Invitation JA » (valeurs d'exemple, rendu serveur) pour tout rôle d'EN15 ; brouillon
+// et données d'édition réservés à l'administrateur (contrôlé dans le contrôleur) — l'enregistrement passe
+// par la route existante PUT messagerie/(:segment) (droits EA93 inchangés).
+$routes->get('centrenvoye/invitation-ja/modele', 'CentrenvoyeController::invitationJaModele', ['filter' => 'auth']);
+$routes->post('centrenvoye/invitation-ja/apercu', 'CentrenvoyeController::invitationJaApercu', ['filter' => 'auth']);
+$routes->post('centrenvoye/invitation-ja/verifier','CentrenvoyeController::invitationJaVerifier', ['filter' => 'auth']);
+$routes->post('centrenvoye/invitation-ja/envoyer-un', 'CentrenvoyeController::invitationJaEnvoyerUn', ['filter' => 'auth']);
 
 // ── EA85 Nettoyage / Restauration de phase ──────────────────────────────────
 // Outil admin destructeur — toute action hors listage de fichiers exige en
@@ -424,13 +437,13 @@ $routes->get('logout', 'LogoutController::rediriger');
 
 // ── E006 Changement du mot de passe ─────────────────────────────────────────
 // Ouverte depuis la modale toolbar (_modal_mdp.php) sur toute page CI4
-// authentifiée. Filtre "auth:CSR,Defiscalisateur,CRA Convoc" : tout rôle connecté
-// (la modale / le lien est présent sur les menus E004, E005, E009 et leurs écrans).
+// authentifiée. Filtre "auth:CSR,Defiscalisateur,CRA Convoc,JA" : tout rôle connecté
+// (la modale / le lien est présent sur les menus E004, E005, E009, E011 et leurs écrans).
 // Changement forcé (change_login) : tous les filtres d'authentification redirigent
 // ici toute autre route que changer-mot-de-passe / logout. Essais du mot de passe
 // actuel limités par compte (mdp_actuel:<id>).
-$routes->get('changer-mot-de-passe', 'ChangerMotDePasseController::index', ['filter' => 'auth:CSR,Defiscalisateur,CRA Convoc']);
-$routes->post('changer-mot-de-passe', 'ChangerMotDePasseController::index', ['filter' => 'auth:CSR,Defiscalisateur,CRA Convoc']);
+$routes->get('changer-mot-de-passe', 'ChangerMotDePasseController::index', ['filter' => 'auth:CSR,Defiscalisateur,CRA Convoc,JA']);
+$routes->post('changer-mot-de-passe', 'ChangerMotDePasseController::index', ['filter' => 'auth:CSR,Defiscalisateur,CRA Convoc,JA']);
 
 // ── E007 Mot de passe oublié (demande) + E008 Réinitialisation (lien email) ──
 // Pages PUBLIQUES (aucun filtre auth) : l'utilisateur n'est pas connecté. Le
@@ -519,6 +532,40 @@ $routes->get('defiscalisateur-menu', 'DefiscalisateurMenuController::index', ['f
 // Le rôle CRA Convoc n'a accès qu'aux écrans de ce menu ("craconvocauth") + EA93 messagerie (routes
 // "auth:…CRA Convoc", messages CRA filtrés par MessagerieController) + changer-mot-de-passe.
 $routes->get('cra-convoc-menu', 'CraConvocMenuController::index', ['filter' => 'craconvocauth']);
+
+// ── E011 Menu JA ─────────────────────────────────────────────────────────────
+// Rôle « JA » UNIQUEMENT (compte juge-arbitre dont l'Id_Utilisateur est l'Id_JA de sa fiche, créé par
+// EN15 « Invitation JA » ou EA86) — voir JaAuth.php ("jaauth"). L'Administrateur n'y a PAS accès : ces
+// écrans portent sur la fiche d'Id = $_SESSION['utilisateur']['id'] (rôle JA + fiche existante revérifiés
+// par le filtre ET chaque contrôleur, idJaCompteSession()), jamais un id client.
+// Le rôle JA n'a accès qu'à ces écrans + changer-mot-de-passe ("auth:…,JA") ; "auth" sans argument
+// le refuse. Les pages publiques tokenisées EN19/EN21/EN22 restent valables pour les JA sans compte.
+$routes->get('ja-menu', 'JaMenuController::index', ['filter' => 'jaauth']);
+
+// ── EJA2 Mes disponibilités — logique et vue d'EN22 (JaDisponibiliteController extends DisponibiliteJaController) ──
+// Mêmes actions AJAX qu'EN22, fiche = Id du compte de session (paramètres ja / id_ja ignorés).
+$routes->get('ja/disponibilites', 'JaDisponibiliteController::index', ['filter' => 'jaauth']);
+$routes->get('ja/disponibilites/ja', 'JaDisponibiliteController::ja', ['filter' => 'jaauth']);
+$routes->get('ja/disponibilites/journees', 'JaDisponibiliteController::journees', ['filter' => 'jaauth']);
+$routes->post('ja/disponibilites/sauvegarder-dispo-journee', 'JaDisponibiliteController::sauvegarderDispoJournee', ['filter' => 'jaauth']);
+$routes->get('ja/disponibilites/lire-note', 'JaDisponibiliteController::lireNote', ['filter' => 'jaauth']);
+$routes->post('ja/disponibilites/sauvegarder-note', 'JaDisponibiliteController::sauvegarderNote', ['filter' => 'jaauth']);
+$routes->post('ja/disponibilites/sauvegarder-defiscalisation', 'JaDisponibiliteController::sauvegarderDefiscalisation', ['filter' => 'jaauth']);
+$routes->post('ja/disponibilites/sauvegarder-arbitrage-voisins', 'JaDisponibiliteController::sauvegarderArbitrageVoisins', ['filter' => 'jaauth']);
+
+// ── EJA3 Mes nominations — lecture seule, toutes les nominations du JA connecté ──
+$routes->get('ja/nominations', 'JaNominationsController::index', ['filter' => 'jaauth']);
+$routes->get('ja/nominations/data', 'JaNominationsController::data', ['filter' => 'jaauth']);
+
+// ── EJA4 Mes frais / péages / défiscalisation — règles et actions d'EN21 (JaFraisController extends ConvocationJaController) ──
+// Autorisation : nomination appartenant au JA de la session (au lieu du jeton cnv) ; dates J <= D (accusé),
+// J >= D (frais, accusé requis le jour même), justificatif via JustificatifPeage (multipart `justificatif`).
+$routes->get('ja/frais', 'JaFraisController::index', ['filter' => 'jaauth']);
+$routes->get('ja/frais/data', 'JaFraisController::data', ['filter' => 'jaauth']);
+$routes->post('ja/frais/accuse', 'JaFraisController::accuser', ['filter' => 'jaauth']);
+$routes->post('ja/frais/sauvegarder', 'JaFraisController::sauvegarderFrais', ['filter' => 'jaauth']);
+$routes->post('ja/frais/justificatif', 'JaFraisController::joindreJustificatif', ['filter' => 'jaauth']);
+$routes->get('ja/frais/justificatif/voir', 'JaFraisController::voirJustificatif', ['filter' => 'jaauth']);
 
 // ── EC71 Compétitions CRA — CRUD de la table CRA_Competition ─────────────────
 // Accès depuis E009. Rôle « CRA Convoc » ou Administrateur (filtre "craconvocauth").

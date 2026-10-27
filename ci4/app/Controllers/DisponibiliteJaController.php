@@ -63,8 +63,10 @@ class DisponibiliteJaController extends BaseController
      * comprises (identité, disponibilités et note d'un JA sont nominatives).
      *
      * @param bool|null $sessionOk déjà connu de l'appelant (évite de rouvrir la session), sinon lu ici
+     *
+     * Redéfinie par JaDisponibiliteController (EJA2) : Id_JA pris UNIQUEMENT dans la session du compte JA.
      */
-    private function resolveIdJaAutorise(?bool $sessionOk = null): int
+    protected function resolveIdJaAutorise(?bool $sessionOk = null): int
     {
         $tokenGet = trim($this->request->getGet('ja') ?? $this->request->getPost('ja') ?? '');
         if ($tokenGet !== '') {
@@ -96,13 +98,28 @@ class DisponibiliteJaController extends BaseController
         return (bool) $stmt->fetchColumn();
     }
 
+    /**
+     * Session NIJAC « personnel » (nominateur, admin…) ouverte ? Un compte de rôle 'JA' n'en est pas une :
+     * il ne doit pas pouvoir viser un autre JA par ?id_ja=N (ses propres disponibilités : EJA2).
+     */
     private function sessionAuthentifiee(): bool
     {
         demarrerSessionNijac();
-        $ok = !empty($_SESSION['utilisateur']['role'] ?? null);
+        $ok = self::estSessionPersonnel($_SESSION['utilisateur'] ?? []);
         session_write_close();
 
         return $ok;
+    }
+
+    /**
+     * Compte connecté autorisé à utiliser ?id_ja=N en clair : un rôle au moins, et pas un compte JA
+     * (rôle JA exclusif : un compte JA a le seul rôle 'JA').
+     */
+    private static function estSessionPersonnel($u): bool
+    {
+        $roles = is_array($u) ? rolesDe($u) : [];
+
+        return $roles !== [] && $roles !== ['JA'];
     }
 
     public function index()
@@ -118,17 +135,15 @@ class DisponibiliteJaController extends BaseController
         // de CI4 — voir Auth.php pour le détail du conflit avec la session native.
         unset($_SESSION);
 
-        $idJa = $this->resolveIdJaAutorise(!empty($u['role']));
+        $idJa = $this->resolveIdJaAutorise(self::estSessionPersonnel($u));
 
         // Bouton de retour de la toolbar : vers le menu correspondant au rôle
         // réel de la session (Nominateur -> menu nominateur, Administrateur ->
         // menu administrateur), pas systématiquement admin. Absent si la page
         // est ouverte sans session (accès public par un JA).
-        $tbSwitchTo = match ($u['role'] ?? '') {
-            'Administrateur' => 'admin',
-            'Nominateur'      => 'nominateur',
-            default           => null,
-        };
+        $tbSwitchTo = !is_array($u) || $u === [] ? null
+            : (aRole('Administrateur', $u) ? 'admin'
+            : (aRole('Nominateur', $u) ? 'nominateur' : null));
 
         return view('disponibilite_ja_index', [
             'idJa'        => $idJa,

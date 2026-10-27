@@ -13,8 +13,9 @@ class UtilisateurModel extends Model
     protected $returnType     = 'array';
     protected $useSoftDeletes = false;
 
+    // Plus de colonne Role : les rôles vivent dans utilisateur_role (enregistrerRolesUtilisateur()).
     protected $allowedFields = [
-        'Login', 'Password', 'Nom', 'Prenom', 'Role', 'Id_Departement', 'Actif', 'ChangeLogin', 'Email',
+        'Login', 'Password', 'Nom', 'Prenom', 'Id_Departement', 'Actif', 'ChangeLogin', 'Email',
     ];
 
     protected $useTimestamps = false;
