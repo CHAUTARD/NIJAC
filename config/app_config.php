@@ -641,14 +641,14 @@ function initTableConfiguration(\PDO $pdo): void
         }
     }
 
-    // utilisateur.Id_Ja : fiche ja (Id_JA = n° de licence) liée à un compte NON-JA (mode JA E002/E003 ↔
-    // E011 sans reconnexion, POST changer-compte) ; renommage de l'ancienne Id_Utilisateur_Lie, reprise
-    // de la colonne résiduelle Id_JA d'un ancien essai, FK vers ja. Gère son propre try/catch (voir
-    // assurerColonneFicheJaLiee()).
+    // utilisateur.Id_Ja : fiche ja (Id_JA = n° de licence) d'un compte — fiche du compte JA (rôle JA
+    // exclusif, Id_Utilisateur automatique) OU fiche liée d'un compte non-JA (mode JA E002/E003 ↔ E011
+    // sans reconnexion, POST changer-compte) ; index UNIQUE = une fiche, un seul compte. Renommage de
+    // l'ancienne Id_Utilisateur_Lie, reprise de la colonne résiduelle Id_JA d'un ancien essai, reprise
+    // de l'ancienne convention Id_Utilisateur = Id_JA des comptes JA (migrerFichesComptesJa()), FK vers
+    // ja. Gère son propre try/catch (voir assurerColonneFicheJaLiee()). Après la table utilisateur_role
+    // (assurerRolesUtilisateurs() ci-dessus) : la reprise repère les comptes JA par leurs rôles.
     assurerColonneFicheJaLiee($pdo);
-
-    // Comptes de rôle 'JA' purs : Id_Ja toujours NULL — convention Id_Utilisateur = ja.Id_JA (voir
-    // etatCompteJa() / creerCompteJa()), INSERT sans cette colonne (nullable).
 
     // Salles ↔ clubs en plusieurs-à-plusieurs : table club_salle (salle.Id_Club / EstPrincipale
     // obsolètes, conservées). Gère son propre try/catch (voir assurerTableClubSalle()).
@@ -1294,18 +1294,26 @@ function sqlIncrementPwdVersion(\PDO $pdo): string
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
- * Fiche JA liée (utilisateur.Id_Ja = ja.Id_JA, n° de licence ; ancien nom Id_Utilisateur_Lie) : une
- * personne à la fois nominateur (ou autre rôle non-JA, Priorite < 6) et juge-arbitre n'a PAS de second
- * compte JA. Un administrateur renseigne, dans EA86 uniquement, la fiche ja qui correspond à son numéro
- * de licence ; depuis E002 / E003, « Accéder à mon espace JA » (POST changer-compte,
- * ChangerCompteController) passe alors la session en « mode JA » SANS changer de compte :
- * $_SESSION['utilisateur']['id'] reste l'Id du compte (aucune collision avec la convention
- * Id_Utilisateur = Id_JA des comptes JA purs), 'mode_ja' = true, 'id_ja' = fiche liée, 'role' / 'roles'
- * = 'JA', 'is_admin' = false, rôles d'origine mémorisés ('origine_role' / 'origine_roles' — le retour
- * les relit en base). Les écrans E011, EJA2–EJA4 obtiennent la fiche par idJaCompteSession().
- * revaliderSessionUtilisateur() relit le compte (actif, mot de passe, login, rôles d'origine, lien
- * toujours égal à 'id_ja', fiche existante) et détruit la session sinon. Les comptes JA purs (rôle JA
- * seul, Id_Utilisateur = Id_JA) ne portent jamais de lien et restent inchangés.
+ * Fiche JA d'un compte : utilisateur.Id_Ja = ja.Id_JA (n° de licence ; ancien nom Id_Utilisateur_Lie),
+ * index UNIQUE uq_utilisateur_idja = une fiche, un seul compte. Deux usages de la MÊME colonne :
+ *  - compte JA (rôle JA exclusif) : Id_Utilisateur AUTOMATIQUE (jamais d'Id explicite), sa fiche est son
+ *    Id_Ja (creerCompteJa(), idJaDuCompteJa()) — l'ancienne convention Id_Utilisateur = Id_JA est
+ *    abandonnée, reprise une fois par EA98 (migrerFichesComptesJa()) SANS renuméroter les comptes ;
+ *  - fiche liée d'un compte non-JA (nominateur ou autre rôle, Priorite < 6) : pas de second compte JA.
+ *    Un administrateur renseigne, dans EA86 uniquement, la fiche ja qui correspond à son numéro de
+ *    licence ; depuis E002 / E003, « Accéder à mon espace JA » (POST changer-compte,
+ *    ChangerCompteController) passe alors la session en « mode JA » SANS changer de compte :
+ *    $_SESSION['utilisateur']['id'] reste l'Id du compte, 'mode_ja' = true, 'id_ja' = fiche liée,
+ *    'role' / 'roles' = 'JA', 'is_admin' = false, rôles d'origine mémorisés ('origine_role' /
+ *    'origine_roles' — le retour les relit en base).
+ * Les écrans E011, EJA2–EJA4 obtiennent la fiche par idJaCompteSession(). revaliderSessionUtilisateur()
+ * relit le compte (actif, mot de passe, login, rôles, fiche du compte JA / lien toujours égal à 'id_ja' en
+ * mode JA, fiche existante) et détruit la session sinon.
+ *
+ * Tolérance avant EA98 (colonne Id_Ja absente, ou reprise pas encore faite — marqueur de configuration
+ * CLE_CONFIG_COMPTES_JA_ID_JA absent) : un compte JA retrouve sa fiche par la SEULE ancienne convention
+ * (fiche de même Id, non liée à un autre compte ; son Id_Ja éventuel est ignoré) — voir idJaDuCompteJa() /
+ * compteJaDeFiche() — et aucun compte JA n'est créé ni régénéré (EA86 / EN15 : « chargez EA98 »).
  *
  * Nom de colonne : MySQL ignore la casse des noms de colonnes — une colonne résiduelle `Id_JA` (ancien
  * essai) EST la colonne Id_Ja ; la migration EA98 la reprend (assurerColonneFicheJaLiee()).
@@ -1325,6 +1333,21 @@ const INDEX_UNIQUE_FICHE_JA_LIEE_ANCIEN = 'uq_utilisateur_lie';
 
 /** Nom de la contrainte FK utilisateur.Id_Ja → ja.Id_JA (ON DELETE SET NULL). */
 const FK_FICHE_JA_LIEE = 'fk_utilisateur_idja';
+
+/**
+ * Clé de configuration posée ('1') par EA98 une fois les comptes JA repris de l'ancienne convention
+ * Id_Utilisateur = Id_JA vers utilisateur.Id_Ja (migrerFichesComptesJa()). Absente : repli sur l'ancienne
+ * convention pour un compte JA sans Id_Ja. Présente : seul Id_Ja fait foi (une fiche supprimée — FK ON
+ * DELETE SET NULL — ne fait jamais retomber un compte JA sur une autre fiche de même numéro que son Id).
+ */
+const CLE_CONFIG_COMPTES_JA_ID_JA = 'comptes_ja_par_id_ja';
+
+/**
+ * Motif de refus de création / régénération d'un compte JA tant que la reprise EA98 n'est pas faite
+ * (marqueur CLE_CONFIG_COMPTES_JA_ID_JA absent) — affiché par EA86 et EN15 (etatCompteJa() /
+ * creerCompteJa()). Contient « EA98 » (EN15 conserve tel quel un RuntimeException qui le mentionne).
+ */
+const MSG_COMPTE_JA_AVANT_EA98 = 'comptes JA pas encore repris vers utilisateur.Id_Ja : chargez EA98';
 
 /**
  * Colonnes de lien présentes (information_schema, cache statique, $rafraichir = true après migration) :
@@ -1421,7 +1444,8 @@ function retirerFkColonneUtilisateur(\PDO $pdo, string $colonne, bool $toutes = 
  *      colonneFicheJaLiee() — et la migration réessaie au prochain EA98) ;
  *  (c) aucune des deux → Id_Ja créée ;
  *  (d) Id_Ja seule, bon type → rien (sauf nom / type alignés).
- * Puis : valeurs portées par des comptes JA purs → NULL (journalisées) ; colonne résiduelle sans ancienne
+ * Puis : reprise des comptes JA (ancienne convention Id_Utilisateur = Id_JA → Id_Ja, sans renuméroter,
+ * migrerFichesComptesJa()) ; colonne résiduelle sans ancienne
  * colonne ni index uq_utilisateur_idja → comptes non-JA ayant une valeur journalisés (à vérifier, conservés) ;
  * liens vers une fiche inexistante → NULL (journalisés), index UNIQUE uq_utilisateur_idja
  * (assurerIndexUniqueFicheJaLiee()), FK fk_utilisateur_idja → ja(Id_JA) ON DELETE SET NULL ON UPDATE
@@ -1491,16 +1515,10 @@ function assurerColonneFicheJaLiee(\PDO $pdo): void
         }
         colonnesLienFicheJa($pdo, true);
 
-        // Comptes JA purs (rôle JA) : jamais de fiche liée (convention Id_Utilisateur = Id_JA). Une valeur
-        // résiduelle (ancien essai 'Id_JA', 2e passage…) est journalisée puis remise à NULL, dans tous les cas.
+        // Comptes JA : Id_Ja = leur fiche (reprise de l'ancienne convention Id_Utilisateur = Id_JA, une
+        // seule fois, marqueur CLE_CONFIG_COMPTES_JA_ID_JA), comptes JA sans fiche journalisés.
         $estJa = sqlARole('u.Id_Utilisateur', "'JA'");
-        $jaPurs = $pdo->query("SELECT u.Id_Utilisateur, u.$col AS v FROM utilisateur u WHERE u.$col IS NOT NULL AND $estJa")
-            ->fetchAll(\PDO::FETCH_ASSOC);
-        if ($jaPurs) {
-            $pdo->exec("UPDATE utilisateur u SET u.$col = NULL WHERE u.$col IS NOT NULL AND $estJa");
-            error_log("[NIJAC] utilisateur.$col : valeurs des comptes JA remises à NULL (Id_Utilisateur => valeur) : "
-                . implode(', ', array_map(static fn ($r) => (int) $r['Id_Utilisateur'] . ' => ' . (int) $r['v'], $jaPurs)));
-        }
+        migrerFichesComptesJa($pdo);
 
         // Colonne résiduelle (Id_Ja/Id_JA déjà là, sans Id_Utilisateur_Lie) jamais indexée : les valeurs des
         // comptes NON-JA proviennent peut-être de l'ancien essai — journalisées pour vérification par
@@ -1625,6 +1643,225 @@ function assurerIndexUniqueFicheJaLiee(\PDO $pdo): void
 }
 
 /**
+ * Reprise EA98 (idempotente) des comptes de rôle JA vers utilisateur.Id_Ja, appelée par
+ * assurerColonneFicheJaLiee() (colonne Id_Ja en place, utilisateur_role déjà migrée par
+ * assurerRolesUtilisateurs()) :
+ *  - tant que le marqueur CLE_CONFIG_COMPTES_JA_ID_JA n'est pas posé (ancienne convention
+ *    Id_Utilisateur = Id_JA encore en vigueur) : d'abord les Id_Ja résiduels des comptes JA
+ *    (Id_Ja <> Id_Utilisateur, jamais vérifiés, ignorés jusque-là) sont journalisés puis remis à NULL ;
+ *    ensuite, pour chaque compte portant le rôle JA dont Id_Ja est NULL et dont l'Id_Utilisateur
+ *    correspond à une fiche ja existante, Id_Ja = Id_Utilisateur — SANS renuméroter (sessions ouvertes,
+ *    messagerie et journaux gardent le même Id). Fiche déjà portée par un AUTRE compte (lien d'un compte
+ *    non-JA posé pendant que le compte JA était désactivé) : conflit journalisé, Id_Ja du compte JA laissé
+ *    à NULL. Puis marqueur posé MÊME s'il reste de tels conflits : seul Id_Ja fait foi ensuite
+ *    (idJaDuCompteJa()) — ces comptes JA restent sans fiche (connexion refusée) et retirer ensuite le lien
+ *    du compte non-JA dans EA86 ne leur rend PAS la fiche (aucune reprise après le marqueur, et l'Id_Ja
+ *    d'un compte JA n'est modifiable nulle part) : vider la « Fiche JA liée » du compte non-JA (EA86),
+ *    supprimer le compte JA (EA86 — son login = email bloquerait la recréation), puis le recréer pour la
+ *    fiche (EA86 « Nouveau » + rôle JA, ou invitation EN15 : nouvel Id, nouveau mot de passe) ;
+ *  - à chaque passage : comptes JA sans fiche (Id_Ja NULL ou fiche absente) journalisés.
+ * Lève PDOException (journalisée par l'appelant, marqueur alors non posé : nouvel essai au prochain EA98).
+ */
+function migrerFichesComptesJa(\PDO $pdo): void
+{
+    $col   = COLONNE_FICHE_JA_LIEE;
+    $estJa = sqlARole('u.Id_Utilisateur', "'JA'");
+    $liste = static fn (array $l): string => implode(', ', $l);
+
+    if (!comptesJaParIdJa($pdo, true)) {
+        // 1. Id_Ja résiduels des comptes JA (Id_Ja <> Id_Utilisateur) : valeurs jamais vérifiées (ancien
+        //    essai, saisie manuelle…) et ignorées avant le marqueur (idJaDuCompteJa() : ancienne convention
+        //    seule ; aucun compte JA n'est créé avant le marqueur, creerCompteJa()). Journalisées puis remises
+        //    à NULL : seule l'ancienne convention est reprise ci-dessous.
+        $residuels = $pdo->query("SELECT u.Id_Utilisateur, u.$col AS Lien FROM utilisateur u
+                                  WHERE u.$col IS NOT NULL AND u.$col <> u.Id_Utilisateur AND $estJa
+                                  ORDER BY u.Id_Utilisateur")
+            ->fetchAll(\PDO::FETCH_ASSOC);
+        if ($residuels) {
+            error_log("[NIJAC] utilisateur.$col : Id_Ja résiduels de comptes JA (≠ Id_Utilisateur, jamais vérifiés) remis à NULL avant la reprise (Id_Utilisateur => Id_Ja) : "
+                . $liste(array_map(static fn ($r) => (int) $r['Id_Utilisateur'] . ' => ' . (int) $r['Lien'], $residuels)));
+            $raz = $pdo->prepare("UPDATE utilisateur SET $col = NULL WHERE Id_Utilisateur = ? AND $col = ?");
+            foreach ($residuels as $r) {
+                $raz->execute([(int) $r['Id_Utilisateur'], (int) $r['Lien']]);
+            }
+        }
+
+        // 2. Ancienne convention → Id_Ja = Id_Utilisateur (fiche de même Id existante, non portée ailleurs).
+        //    Une valeur vers une fiche absente est retirée plus loin (liens orphelins, assurerColonneFicheJaLiee()).
+        $aReprendre = $pdo->query("SELECT u.Id_Utilisateur FROM utilisateur u JOIN ja ON ja.Id_JA = u.Id_Utilisateur
+                                   WHERE u.$col IS NULL AND $estJa ORDER BY u.Id_Utilisateur")
+            ->fetchAll(\PDO::FETCH_COLUMN);
+        $autre   = $pdo->prepare("SELECT Id_Utilisateur FROM utilisateur WHERE $col = ? AND Id_Utilisateur <> ? LIMIT 1");
+        $maj     = $pdo->prepare("UPDATE utilisateur SET $col = ? WHERE Id_Utilisateur = ? AND $col IS NULL");
+        $repris  = [];
+        $conflits = [];
+        foreach ($aReprendre as $id) {
+            $id = (int) $id;
+            $autre->execute([$id, $id]);
+            if (($idAutre = $autre->fetchColumn()) !== false) {
+                $conflits[] = $id . ' (fiche déjà portée par le compte ' . (int) $idAutre . ')';
+                continue;
+            }
+            $maj->execute([$id, $id]);
+            $repris[] = $id;
+        }
+        if ($repris) {
+            error_log("[NIJAC] utilisateur.$col : comptes JA repris de l'ancienne convention Id_Utilisateur = Id_JA (Id_Ja = Id_Utilisateur, sans renumérotation) : "
+                . $liste($repris));
+        }
+        if ($conflits) {
+            error_log("[NIJAC] utilisateur.$col : comptes JA NON repris, fiche déjà liée à un autre compte (restent sans fiche même après déliaison : délier le compte non-JA, supprimer puis recréer le compte JA dans EA86 / EN15) : "
+                . $liste($conflits));
+        }
+
+        $pdo->prepare("INSERT INTO configuration (cle, valeur, description) VALUES (?, '1', ?)
+                       ON DUPLICATE KEY UPDATE valeur = '1'")
+            ->execute([CLE_CONFIG_COMPTES_JA_ID_JA, 'EA98 — comptes JA repérés par utilisateur.Id_Ja (reprise faite, ne pas modifier)']);
+        comptesJaParIdJa($pdo, true);
+    }
+
+    // Comptes JA sans fiche : refusés à la connexion (compteJaRefuse()) — journalisés à chaque EA98.
+    $sansFiche = $pdo->query("SELECT u.Id_Utilisateur FROM utilisateur u LEFT JOIN ja ON ja.Id_JA = u.$col
+                              WHERE ja.Id_JA IS NULL AND $estJa ORDER BY u.Id_Utilisateur")
+        ->fetchAll(\PDO::FETCH_COLUMN);
+    if ($sansFiche) {
+        error_log("[NIJAC] utilisateur.$col : comptes JA sans fiche ja (connexion refusée, à régulariser dans EA86) : "
+            . $liste(array_map('intval', $sansFiche)));
+    }
+}
+
+/**
+ * Les comptes JA sont-ils repérés par utilisateur.Id_Ja seulement ? Vrai quand la colonne Id_Ja est la
+ * colonne de fiche lue (colonneFicheJaLiee()) ET que la reprise EA98 a posé le marqueur
+ * CLE_CONFIG_COMPTES_JA_ID_JA. Faux = tolérance avant EA98 : un compte JA retrouve sa fiche par la seule
+ * ancienne convention Id_Utilisateur = Id_JA (son Id_Ja éventuel est ignoré), et aucun compte JA ne peut
+ * être créé (etatCompteJa() / creerCompteJa() : « chargez EA98 »). Cache statique ($rafraichir après la
+ * migration) d'une lecture RÉUSSIE seulement : une PDOException (base injoignable, table configuration
+ * illisible) est journalisée puis RELANCÉE, jamais mise en cache comme « faux » (ce qui rouvrirait le repli
+ * de l'ancienne convention) — les appelants refusent par défaut (idJaCompteSession() → 0, filtre jaauth →
+ * 503, connexion / EA86 / EN15 → erreur, aucun accès ni compte créé).
+ */
+function comptesJaParIdJa(\PDO $pdo, bool $rafraichir = false): bool
+{
+    static $marque = null;
+    if (colonneFicheJaLiee($pdo) !== COLONNE_FICHE_JA_LIEE) {
+        return false;
+    }
+    if ($marque === null || $rafraichir) {
+        try {
+            $st = $pdo->prepare('SELECT valeur FROM configuration WHERE cle = ? LIMIT 1');
+            $st->execute([CLE_CONFIG_COMPTES_JA_ID_JA]);
+            $lu = trim((string) $st->fetchColumn()) === '1';
+        } catch (\PDOException $e) {
+            error_log('[NIJAC] comptesJaParIdJa : marqueur ' . CLE_CONFIG_COMPTES_JA_ID_JA . ' illisible : ' . $e->getMessage());
+            throw $e;
+        }
+        $marque = $lu;
+    }
+
+    return $marque;
+}
+
+/**
+ * Id_JA de la fiche du compte JA $idUtilisateur (rôle vérifié par l'appelant), sinon 0. Fonction unique
+ * de résolution compte JA → fiche (idJaCompteSession(), compteJaRefuse(), revaliderSessionUtilisateur(),
+ * EA86) :
+ *  - après la reprise EA98 (marqueur posé, comptesJaParIdJa()) : SEULE utilisateur.Id_Ja fait foi — cette
+ *    fiche si elle existe, sinon 0 ; Id_Ja NULL → 0 (jamais de repli : une fiche supprimée, FK ON DELETE
+ *    SET NULL, ne fait pas retomber le compte sur une autre fiche de même numéro que son Id) ;
+ *  - avant EA98 (colonne absente, ou marqueur pas encore posé) : ancienne convention SEULE — l'Id_Ja
+ *    éventuel d'un compte JA (valeur résiduelle jamais vérifiée, remise à NULL par migrerFichesComptesJa())
+ *    est ignoré ; Id_Utilisateur si une fiche de même Id existe et n'est pas portée par un AUTRE compte
+ *    (Id_Ja), sinon 0.
+ * Lève PDOException (marqueur illisible, base injoignable) : refus par défaut côté appelants.
+ */
+function idJaDuCompteJa(\PDO $pdo, int $idUtilisateur): int
+{
+    if ($idUtilisateur <= 0) {
+        return 0;
+    }
+    $col = colonneFicheJaLiee($pdo);
+    if ($col !== null && comptesJaParIdJa($pdo)) {
+        $st = $pdo->prepare("SELECT $col FROM utilisateur WHERE Id_Utilisateur = ? LIMIT 1");
+        $st->execute([$idUtilisateur]);
+        $v = $st->fetchColumn();
+        if ($v === false || $v === null) {
+            return 0; // compte absent, ou sans fiche après la reprise
+        }
+
+        return ficheJaExiste($pdo, (int) $v) ? (int) $v : 0;
+    }
+    // Ancienne convention (avant EA98) : Id_Ja du compte JA ignoré.
+    $st = $pdo->prepare('SELECT 1 FROM utilisateur WHERE Id_Utilisateur = ? LIMIT 1');
+    $st->execute([$idUtilisateur]);
+    if (!$st->fetchColumn()) {
+        return 0; // compte absent
+    }
+    if (!ficheJaExiste($pdo, $idUtilisateur)) {
+        return 0;
+    }
+    if ($col !== null) {
+        $st = $pdo->prepare("SELECT 1 FROM utilisateur WHERE $col = ? AND Id_Utilisateur <> ? LIMIT 1");
+        $st->execute([$idUtilisateur, $idUtilisateur]);
+        if ($st->fetchColumn()) {
+            return 0; // fiche portée par un autre compte : plus celle de ce compte JA
+        }
+    }
+
+    return $idUtilisateur;
+}
+
+/**
+ * Compte portant le rôle JA dont la fiche est $idJa (Id_Utilisateur, Login, Email, Actif), null sinon :
+ * Id_Ja = $idJa après la reprise EA98 ; avant, l'ancienne convention SEULE (Id_Utilisateur = $idJa, fiche
+ * non portée par un autre compte, Id_Ja du compte JA ignoré) — même règle que idJaDuCompteJa(). Comptes hérités cumulant JA et
+ * d'autres rôles inclus (l'appelant les distingue).
+ */
+function compteJaDeFiche(\PDO $pdo, int $idJa): ?array
+{
+    if ($idJa <= 0) {
+        return null;
+    }
+    $col   = colonneFicheJaLiee($pdo);
+    $estJa = sqlARole('u.Id_Utilisateur', "'JA'");
+    $sel   = 'SELECT u.Id_Utilisateur, u.Login, u.Email, u.Actif FROM utilisateur u WHERE ';
+    if ($col !== null && comptesJaParIdJa($pdo)) {
+        $st = $pdo->prepare($sel . "u.$col = ? AND $estJa ORDER BY u.Id_Utilisateur LIMIT 1");
+    } elseif ($col !== null) {
+        // Avant la reprise EA98 : ancienne convention seule, Id_Ja du compte JA ignoré (idJaDuCompteJa()).
+        $st = $pdo->prepare($sel . "u.Id_Utilisateur = ? AND $estJa
+            AND NOT EXISTS(SELECT 1 FROM utilisateur o WHERE o.$col = u.Id_Utilisateur AND o.Id_Utilisateur <> u.Id_Utilisateur) LIMIT 1");
+    } else {
+        $st = $pdo->prepare($sel . "u.Id_Utilisateur = ? AND $estJa LIMIT 1");
+    }
+    $st->execute([$idJa]);
+
+    return $st->fetch(\PDO::FETCH_ASSOC) ?: null;
+}
+
+/**
+ * Sous-requête SQL (listes EA86) : $champ ('Id_Utilisateur', 'Login'…, nom de colonne interne) du compte
+ * portant le rôle JA dont la fiche est $colFiche (expression SQL, ex. 'ja.Id_JA'), NULL sinon — même
+ * règle que compteJaDeFiche(). $colFiche / $champ viennent du code, jamais d'une saisie.
+ */
+function sqlCompteJaDeFiche(\PDO $pdo, string $colFiche, string $champ = 'Id_Utilisateur'): string
+{
+    $col   = colonneFicheJaLiee($pdo);
+    $estJa = sqlARole('cja.Id_Utilisateur', "'JA'");
+    if ($col === null) {
+        $cond = "cja.Id_Utilisateur = $colFiche";
+    } elseif (comptesJaParIdJa($pdo)) {
+        $cond = "cja.$col = $colFiche";
+    } else {
+        // Avant la reprise EA98 : ancienne convention seule (Id_Ja du compte JA ignoré).
+        $cond = "(cja.Id_Utilisateur = $colFiche
+                  AND NOT EXISTS(SELECT 1 FROM utilisateur cjo WHERE cjo.$col = cja.Id_Utilisateur AND cjo.Id_Utilisateur <> cja.Id_Utilisateur))";
+    }
+
+    return "(SELECT cja.$champ FROM utilisateur cja WHERE $cond AND $estJa ORDER BY cja.Id_Utilisateur LIMIT 1)";
+}
+
+/**
  * Exception = violation de l'index UNIQUE de la fiche liée (fiche déjà liée à un autre compte, course
  * entre deux enregistrements EA86) ? Code MySQL 1062 + nom de l'index (nouveau ou ancien) dans le message.
  */
@@ -1639,9 +1876,9 @@ function estViolationFicheJaLieeUnique(\Throwable $e): bool
 /**
  * Id_JA de la fiche liée au compte $idUtilisateur, si elle est utilisable MAINTENANT (bouton E002 /
  * E003, POST changer-compte action 'ja', idJaCompteSession() et revalidation en mode JA), sinon 0 :
- * colonne présente, compte actif, sans le rôle JA (un compte JA pur ne porte pas de lien — écarte
- * aussi une valeur résiduelle d'Id_JA non encore migrée), lien renseigné, fiche ja existante. Tout est
- * relu en base, jamais pris du client.
+ * colonne présente, compte actif, sans le rôle JA (l'Id_Ja d'un compte JA est SA fiche, résolue par
+ * idJaDuCompteJa(), pas un lien de mode JA), lien renseigné, fiche ja existante. Tout est relu en base,
+ * jamais pris du client.
  */
 function idFicheJaLiee(\PDO $pdo, int $idUtilisateur): int
 {
@@ -1667,8 +1904,11 @@ function idFicheJaLiee(\PDO $pdo, int $idUtilisateur): int
 /**
  * Contrôle serveur de la fiche liée saisie dans EA86 pour le compte $idSource (0 = création) : null =
  * acceptée ($idJa null = aucun lien), sinon message d'erreur. Le compte édité n'a pas le rôle JA
- * ($sourceEstJa : rôles saisis ou en base — donc rôles de Priorite < 6 seulement), la fiche existe et
- * n'est pas déjà liée à un autre compte (l'index UNIQUE le garantit aussi en cas de course).
+ * ($sourceEstJa : rôles saisis ou en base — donc rôles de Priorite < 6 seulement ; l'Id_Ja d'un compte
+ * JA, sa propre fiche, n'est jamais modifiable), la fiche existe, n'a pas de compte JA (compteJaDeFiche() :
+ * Id_Ja d'un compte JA, actif ou non, ou ancienne convention avant EA98 — une fiche n'a jamais deux accès,
+ * le compte JA doit d'abord être supprimé dans EA86) et n'est pas déjà portée par un autre compte (l'index
+ * UNIQUE uq_utilisateur_idja le garantit aussi en cas de course).
  */
 function controlerFicheJaLiee(\PDO $pdo, int $idSource, ?int $idJa, bool $sourceEstJa): ?string
 {
@@ -1680,14 +1920,20 @@ function controlerFicheJaLiee(\PDO $pdo, int $idSource, ?int $idJa, bool $source
         return 'La fiche JA liée nécessite la colonne utilisateur.Id_Ja : chargez EA98.';
     }
     if ($sourceEstJa) {
-        return 'Un compte JA ne peut pas porter de fiche JA liée.';
+        return 'Un compte JA ne peut pas porter de fiche JA liée (sa fiche est fixée à sa création).';
     }
     if ($idJa <= 0 || !ficheJaExiste($pdo, $idJa)) {
         return 'Fiche JA liée introuvable.';
     }
-    // Comptes JA purs exclus : une valeur résiduelle d'Id_JA (pré-EA98) n'est pas un lien.
-    $st = $pdo->prepare("SELECT 1 FROM utilisateur u WHERE u.$col = ? AND u.Id_Utilisateur <> ? AND NOT "
-        . sqlARole('u.Id_Utilisateur', "'JA'") . ' LIMIT 1');
+    // Compte JA de la fiche (actif ou désactivé) : la fiche a déjà son accès.
+    $compteJa = compteJaDeFiche($pdo, $idJa);
+    if ($compteJa !== null && (int) $compteJa['Id_Utilisateur'] !== $idSource) {
+        return 'Cette fiche a déjà un compte JA (« ' . $compteJa['Login'] . ' »'
+            . ((int) $compteJa['Actif'] === 1 ? '' : ', désactivé')
+            . ') : supprimez-le (EA86) avant de la lier à un autre compte.';
+    }
+    // Autre compte portant déjà la fiche (lien d'un compte non-JA).
+    $st = $pdo->prepare("SELECT 1 FROM utilisateur u WHERE u.$col = ? AND u.Id_Utilisateur <> ? LIMIT 1");
     $st->execute([$idJa, $idSource]);
     if ($st->fetchColumn()) {
         return 'Cette fiche JA est déjà liée à un autre compte.';
@@ -1754,10 +2000,10 @@ function ficheJaExiste(\PDO $pdo, ?int $idJa): bool
 
 /**
  * Refus de connexion d'un compte JA (rôle JA exclusif : JA seul ; ligne utilisateur lue avec
- * colonnesSessionUtilisateur()) : convention Id_Utilisateur = ja.Id_JA — aucune fiche ja de cet Id →
- * MSG_COMPTE_JA_SANS_FICHE. null = autorisé (compte non-JA, ou fiche présente). Un compte hérité cumulant
- * JA et d'autres rôles (antérieur à la règle) n'est pas refusé ici : ses écrans JA restent gardés par
- * idJaCompteSession() / jaauth.
+ * colonnesSessionUtilisateur()) : aucune fiche ja résolue par idJaDuCompteJa() (utilisateur.Id_Ja, ou
+ * ancienne convention Id_Utilisateur = Id_JA avant EA98) → MSG_COMPTE_JA_SANS_FICHE. null = autorisé
+ * (compte non-JA, ou fiche présente). Un compte hérité cumulant JA et d'autres rôles (antérieur à la règle)
+ * n'est pas refusé ici : ses écrans JA restent gardés par idJaCompteSession() / jaauth.
  */
 function compteJaRefuse(\PDO $pdo, array $row): ?string
 {
@@ -1767,7 +2013,7 @@ function compteJaRefuse(\PDO $pdo, array $row): ?string
         return null;
     }
 
-    return ficheJaExiste($pdo, $id) ? null : MSG_COMPTE_JA_SANS_FICHE;
+    return idJaDuCompteJa($pdo, $id) > 0 ? null : MSG_COMPTE_JA_SANS_FICHE;
 }
 
 /**
@@ -1775,8 +2021,10 @@ function compteJaRefuse(\PDO $pdo, array $row): ?string
  * chaque contrôleur JA) : l'Id ne vient jamais du client.
  *  - Session en mode JA (compte non-JA + fiche liée, POST changer-compte) : 'id_ja', à condition que
  *    le lien du compte ('id') vaille toujours cette fiche et qu'elle existe (idFicheJaLiee(), relu en base).
- *  - Compte JA pur (convention Id_Utilisateur = ja.Id_JA) : $_SESSION['utilisateur']['id'] si la session
- *    a le rôle 'JA' ET qu'une fiche ja de cet Id existe.
+ *  - Compte JA pur : fiche du compte $_SESSION['utilisateur']['id'] résolue par idJaDuCompteJa()
+ *    (utilisateur.Id_Ja relu en base ; avant EA98, ancienne convention Id_Utilisateur = Id_JA), si la
+ *    session a le rôle 'JA'. Sessions ouvertes avant la reprise EA98 : même Id de compte (aucune
+ *    renumérotation), même fiche — elles continuent sans reconnexion.
  * Erreur SQL / base injoignable : journalisée puis 0 (refus, appelants contrôleurs), ou relancée si
  * $relancer (filtre "jaauth" : il distingue la panne passagère — pas de déconnexion — d'une fiche absente).
  */
@@ -1794,7 +2042,7 @@ function idJaCompteSession(?\PDO $pdo = null, bool $relancer = false): int
             return $idJa > 0 && idFicheJaLiee($pdo ?? getPDO(), $id) === $idJa ? $idJa : 0;
         }
 
-        return ficheJaExiste($pdo ?? getPDO(), $id) ? $id : 0;
+        return idJaDuCompteJa($pdo ?? getPDO(), $id);
     } catch (\Throwable $e) {
         if ($relancer) {
             throw $e;
@@ -1855,14 +2103,18 @@ function departementCompteJa(\PDO $pdo, ?string $codeDeptJa, ?string $repli): ?s
 
 /**
  * État du compte d'une fiche ja pour la création d'un compte de rôle JA (invitation EN15 et création
- * EA86). Lecture seule. Convention : Id_Utilisateur = Id_JA (seul lien compte ↔ fiche), Login = Email.
+ * EA86). Lecture seule. Le compte JA reçoit un Id_Utilisateur automatique, sa fiche est utilisateur.Id_Ja
+ * (index UNIQUE : une fiche, un seul compte), Login = Email.
  * Retour ['statut' => 'nouveau'|'existant'|'ignore', 'motif' => ?string, 'compte' => ?array] :
- *  - 'existant' : compte de rôle JA d'Id = n° de fiche, actif ; 'compte' = Id_Utilisateur, Login, Email
- *    (régénération possible du mot de passe seulement) ;
- *  - 'ignore'   : motif lisible (Id déjà pris par un compte d'un autre rôle — jamais réattribué —, compte
- *    JA désactivé, fiche déjà liée à un compte non-JA (utilisateur.Id_Ja : mode JA, pas de compte JA), adresse invalide / trop longue, déjà login d'un autre compte ou email d'un autre
- *    compte JA) — aucun compte n'est jamais écrasé ;
- *  - 'nouveau'  : création possible.
+ *  - 'existant' : compte de rôle JA de la fiche (compteJaDeFiche() : Id_Ja = fiche, ou ancienne convention
+ *    avant EA98), actif ; 'compte' = Id_Utilisateur, Login, Email (régénération possible du mot de passe
+ *    seulement) ;
+ *  - 'ignore'   : motif lisible (reprise EA98 pas encore faite — marqueur CLE_CONFIG_COMPTES_JA_ID_JA
+ *    absent : MSG_COMPTE_JA_AVANT_EA98 —, compte JA désactivé ou cumulant d'autres rôles, fiche déjà liée à un compte
+ *    non-JA — utilisateur.Id_Ja : mode JA, pas de compte JA —, colonne Id_Ja absente (avant EA98), adresse
+ *    invalide / trop longue, déjà login d'un autre compte ou email d'un autre compte JA) — aucun compte
+ *    n'est jamais écrasé ;
+ *  - 'nouveau'  : création possible (creerCompteJa()).
  */
 function etatCompteJa(\PDO $pdo, int $idJa, string $email): array
 {
@@ -1872,16 +2124,17 @@ function etatCompteJa(\PDO $pdo, int $idJa, string $email): array
     if ($idJa <= 0) {
         return $ignore('fiche JA invalide');
     }
+    // 0. Reprise EA98 pas encore faite (marqueur absent, ou colonne Id_Ja absente) : aucun compte JA créé
+    //    ni régénéré — un Id automatique pourrait égaler un vrai n° de licence (AUTO_INCREMENT poussé par les
+    //    anciens Id explicites) et l'ancienne convention lui attribuerait alors la fiche d'un autre JA.
+    //    PDOException (marqueur illisible) relancée : refus par défaut.
+    if (!comptesJaParIdJa($pdo)) {
+        return $ignore(MSG_COMPTE_JA_AVANT_EA98);
+    }
 
-    // 1. Compte portant déjà l'Id de la fiche.
-    $st = $pdo->prepare('SELECT Id_Utilisateur, Login, Email, Actif FROM utilisateur WHERE Id_Utilisateur = ? LIMIT 1');
-    $st->execute([$idJa]);
-    if ($c = $st->fetch(\PDO::FETCH_ASSOC)) {
-        $roles = rolesUtilisateur($pdo, $idJa);
-        if (!in_array('JA', $roles, true)) {
-            return $ignore('identifiant n° ' . $idJa . ' déjà utilisé par le compte « ' . $c['Login'] . ' » ('
-                . ($roles ? implode(', ', $roles) : 'sans rôle') . ')');
-        }
+    // 1. Compte JA de la fiche.
+    if ($c = compteJaDeFiche($pdo, $idJa)) {
+        $roles = rolesUtilisateur($pdo, (int) $c['Id_Utilisateur']);
         if ($roles !== ['JA']) {
             // Rôle JA exclusif : compte hérité cumulant JA et d'autres rôles — jamais régénéré (EN15) ni
             // réutilisé, à régulariser dans EA86.
@@ -1897,15 +2150,16 @@ function etatCompteJa(\PDO $pdo, int $idJa, string $email): array
         ]];
     }
 
-    // 2. Fiche déjà liée à un compte non-JA (utilisateur.Id_Ja) : la personne accède à son espace JA
-    //    depuis ce compte (mode JA), aucun compte JA à créer. Rôle JA exclu (valeur résiduelle pré-EA98).
-    if (($colLien = colonneFicheJaLiee($pdo)) !== null) {
-        $st = $pdo->prepare("SELECT u.Login FROM utilisateur u WHERE u.$colLien = ? AND NOT "
-            . sqlARole('u.Id_Utilisateur', "'JA'") . ' LIMIT 1');
-        $st->execute([$idJa]);
-        if (($login = $st->fetchColumn()) !== false) {
-            return $ignore('fiche liée au compte « ' . $login . ' » : accès à l\'espace JA depuis ce compte, pas de compte JA');
-        }
+    // 2. Fiche déjà portée par un compte non-JA (utilisateur.Id_Ja) : la personne accède à son espace JA
+    //    depuis ce compte (mode JA), aucun compte JA à créer (l'index UNIQUE le refuserait de toute façon).
+    $colLien = colonneFicheJaLiee($pdo);
+    if ($colLien === null) {
+        return $ignore('colonne utilisateur.Id_Ja absente (fiche du compte JA) : chargez EA98');
+    }
+    $st = $pdo->prepare("SELECT u.Login FROM utilisateur u WHERE u.$colLien = ? LIMIT 1");
+    $st->execute([$idJa]);
+    if (($login = $st->fetchColumn()) !== false) {
+        return $ignore('fiche liée au compte « ' . $login . ' » : accès à l\'espace JA depuis ce compte, pas de compte JA');
     }
 
     // 3. Adresse email = futur login.
@@ -1935,26 +2189,37 @@ function etatCompteJa(\PDO $pdo, int $idJa, string $email): array
 }
 
 /**
- * Crée un compte de rôle JA (Id_Utilisateur = Id_JA explicite — seul lien avec la fiche —, Login = Email = $email, Prenom vide,
- * Nom = nom de la fiche, Actif = 1, ChangeLogin = 1, mot de passe haché). À appeler dans une
- * transaction, après etatCompteJa() = 'nouveau'. Lève PDOException (doublon de clé…) sans rien masquer.
- * InnoDB : un Id explicite supérieur à l'AUTO_INCREMENT courant le fait passer à Id + 1 (comptes
- * suivants numérotés après) ; un Id inférieur, libre, est simplement inséré. Rôle JA (principal) écrit
- * dans utilisateur_role ; avant EA98, dans l'ancienne colonne utilisateur.Role si elle existe encore.
+ * Crée un compte de rôle JA : Id_Utilisateur AUTOMATIQUE (jamais d'Id explicite), fiche = utilisateur.Id_Ja
+ * = $idJa (index UNIQUE : une fiche, un seul compte), Login = Email = $email, Prenom vide, Nom = nom de la
+ * fiche, Actif = 1, ChangeLogin = 1, mot de passe haché. À appeler dans une transaction, après
+ * etatCompteJa() = 'nouveau'. Retourne l'Id_Utilisateur créé (lastInsertId). Lève PDOException (doublon
+ * de login, fiche déjà portée — uq_utilisateur_idja…, marqueur illisible) sans rien masquer ; RuntimeException
+ * (message « … chargez EA98 ») si la reprise EA98 n'est pas faite (marqueur CLE_CONFIG_COMPTES_JA_ID_JA
+ * absent, comptesJaParIdJa()), si la colonne Id_Ja ou la table utilisateur_role manque. Rôle JA (principal) écrit dans
+ * utilisateur_role ; avant EA98, dans l'ancienne colonne utilisateur.Role si elle existe encore.
  */
-function creerCompteJa(\PDO $pdo, int $idJa, string $email, string $nom, ?string $dept, string $hash): void
+function creerCompteJa(\PDO $pdo, int $idJa, string $email, string $nom, ?string $dept, string $hash): int
 {
+    // Reprise EA98 pas encore faite (marqueur absent) : refus — voir etatCompteJa() (étape 0).
+    if (!comptesJaParIdJa($pdo)) {
+        throw new \RuntimeException('Création du compte JA impossible : ' . MSG_COMPTE_JA_AVANT_EA98 . '.');
+    }
     $tableRoles = tableRolesExiste($pdo);
     if (!$tableRoles && !utilisateurAColonneRole($pdo)) {
         throw new \RuntimeException('Création du compte JA impossible : table utilisateur_role absente, chargez EA98.');
+    }
+    // Colonne de fiche (Id_Ja, ou Id_Utilisateur_Lie tant qu'EA98 ne l'a pas reprise) : liste fermée.
+    $colFiche = colonneFicheJaLiee($pdo);
+    if ($colFiche === null) {
+        throw new \RuntimeException('Création du compte JA impossible : colonne utilisateur.Id_Ja absente, chargez EA98.');
     }
     $colRole = !$tableRoles ? ', Role' : '';
     $valRole = $colRole !== '' ? ", 'JA'" : '';
     try {
         $pdo->prepare(
-            "INSERT INTO utilisateur (Id_Utilisateur, Login, Password, Nom, Prenom$colRole, Actif, Id_Departement, ChangeLogin, Email)
-             VALUES (?, ?, ?, ?, ''$valRole, 1, ?, 1, ?)"
-        )->execute([$idJa, $email, $hash, mb_substr(trim($nom), 0, 50), $dept, $email]);
+            "INSERT INTO utilisateur (Login, Password, Nom, Prenom$colRole, Actif, Id_Departement, ChangeLogin, Email, $colFiche)
+             VALUES (?, ?, ?, ''$valRole, 1, ?, 1, ?, ?)"
+        )->execute([$email, $hash, mb_substr(trim($nom), 0, 50), $dept, $email, $idJa]);
     } catch (\PDOException $e) {
         if ($tableRoles) {
             throw $e;
@@ -1963,10 +2228,16 @@ function creerCompteJa(\PDO $pdo, int $idJa, string $email, string $nom, ?string
         error_log('[NIJAC] creerCompteJa (avant EA98) : ' . $e->getMessage());
         throw new \RuntimeException('Création du compte JA impossible avant migration : chargez EA98.', 0, $e);
     }
+    $idUtilisateur = (int) $pdo->lastInsertId();
+    if ($idUtilisateur <= 0) {
+        throw new \RuntimeException('Création du compte JA : identifiant du compte créé illisible.');
+    }
     if (tableRolesExiste($pdo)) {
         // Nom 'JA' converti en Id_Role (schéma Id_Role) ; rôle absent de la table role → exception.
-        insererRoleUtilisateur($pdo, $idJa, 'JA', true);
+        insererRoleUtilisateur($pdo, $idUtilisateur, 'JA', true);
     }
+
+    return $idUtilisateur;
 }
 
 /**
@@ -4373,7 +4644,8 @@ function revaliderSessionUtilisateur(string $chemin = ''): ?string
             $modeJa       = estSessionModeJa($u);
             $rolesBase    = $row ? rolesUtilisateur($pdo, (int) $u['id']) : [];
             $roles        = $rolesBase; // ordre de la base (principal en tête), avant le tri de comparaison
-            $jaSansFiche  = !$modeJa && $rolesBase === ['JA'] && !ficheJaExiste($pdo, (int) $u['id']);
+            // Fiche du compte JA = utilisateur.Id_Ja (avant EA98 : ancienne convention), idJaDuCompteJa().
+            $jaSansFiche  = !$modeJa && $rolesBase === ['JA'] && idJaDuCompteJa($pdo, (int) $u['id']) <= 0;
             $rolesSession = isset($u['roles']) && is_array($u['roles'])
                 ? array_values($u['roles'])
                 : ((string) ($u['role'] ?? '') !== '' ? [(string) $u['role']] : []);
@@ -4386,7 +4658,7 @@ function revaliderSessionUtilisateur(string $chemin = ''): ?string
             } elseif (!(int) $row['Actif']) {
                 $motif = 'compte désactivé';
             } elseif ($jaSansFiche) {
-                // Compte JA (convention Id_Utilisateur = ja.Id_JA) : fiche supprimée → ses écrans
+                // Compte JA : fiche de son Id_Ja supprimée (FK ON DELETE SET NULL) ou absente → ses écrans
                 // (E011, EJA2–EJA4) ne doivent pas continuer.
                 $motif = 'fiche JA supprimée';
             } elseif (!$modeJa && $rolesBase !== $rolesSession) {

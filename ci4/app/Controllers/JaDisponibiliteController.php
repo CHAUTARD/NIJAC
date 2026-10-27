@@ -8,7 +8,7 @@ namespace App\Controllers;
  * Réutilise TOUTE la logique d'EN22 (DisponibiliteJaController : calendrier des journées du
  * championnat régional `competition_regionale`, réponses `disponible`, note, défiscalisation,
  * arbitrage dans les départements voisins) et sa vue `disponibilite_ja_index` ; seule la résolution
- * du JA change : la fiche est celle du compte connecté (convention Id_Utilisateur = ja.Id_JA,
+ * du JA change : la fiche est celle du compte connecté (utilisateur.Id_Ja du compte JA,
  * idJaCompteSession() : rôle JA + fiche existante, ou fiche liée en mode JA, revérifié ici en plus du filtre), jamais un paramètre
  * client (`ja` / `id_ja` ignorés). 0 = refus (parent : JA introuvable).
  * Routes `ja/disponibilites/...` (mêmes noms d'actions qu'EN22, voir Routes.php).
@@ -20,7 +20,7 @@ class JaDisponibiliteController extends DisponibiliteJaController
     public function __construct()
     {
         parent::__construct();
-        // Garde-fou propre au contrôleur, en plus de "jaauth" : rôle JA ET fiche de même Id ($_SESSION lisible).
+        // Garde-fou propre au contrôleur, en plus de "jaauth" : rôle JA ET fiche du compte ($_SESSION lisible).
         $this->idJaSession = idJaCompteSession();
     }
 

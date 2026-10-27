@@ -122,10 +122,10 @@
                     </div>
                     <?php endforeach; ?>
                 </div>
-                <!-- Compte existant non-JA : rôle Juge-Arbitre non cochable (convention Id_Utilisateur = n° de fiche JA) -->
+                <!-- Compte existant non-JA : rôle Juge-Arbitre non cochable (un compte JA naît pour sa fiche : « Nouveau » ou EN15) -->
                 <div id="info-ja-existant" class="form-text small text-secondary d-none">
                     <i class="bi bi-info-circle me-1"></i>Rôle <?= esc($roles['JA'] ?? 'Juge-Arbitre') ?> : un compte existant ne peut pas le recevoir
-                    (l'identifiant d'un compte JA est le n° de sa fiche juge-arbitre). Renseignez plutôt sa « Fiche JA liée (n° de licence) » :
+                    (un compte JA se crée pour sa fiche juge-arbitre, avec « Nouveau » ou l'invitation EN15). Renseignez plutôt sa « Fiche JA liée (n° de licence) » :
                     la personne ouvrira son espace JA depuis son menu, sans compte JA.
                 </div>
             </div>
@@ -142,7 +142,7 @@
                 </div>
             </div>
 
-            <!-- Fiche juge-arbitre (rôle JA uniquement : l'identifiant du compte = n° de la fiche, menu E011) -->
+            <!-- Fiche juge-arbitre (rôle JA uniquement : fiche du compte = utilisateur.Id_Ja, menu E011) -->
             <div id="bloc-fiche-ja" class="mb-2 p-2 border rounded bg-light d-none">
                 <label class="form-label" for="txt-fiche-ja">Fiche juge-arbitre (*) :</label>
                 <input type="hidden" id="hid-id-ja" value="">
@@ -150,9 +150,9 @@
                 <input type="search" id="txt-fiche-ja" class="form-control form-control-sm" autocomplete="off"
                        placeholder="Rechercher par nom, prénom ou n° de licence (2 caractères min.)">
                 <div id="res-fiche-ja" class="list-group small mt-1" style="max-height:180px;overflow:auto;"></div>
-                <div class="form-text small">Obligatoire pour le rôle JA (JA actifs JA1 proposés en premier) ; l'identifiant du compte sera le n° de la fiche (une fiche = un seul compte).</div>
+                <div class="form-text small">Obligatoire pour le rôle JA (JA actifs JA1 proposés en premier) ; la fiche est fixée à la création (une fiche = un seul compte).</div>
             </div>
-            <!-- Compte de rôle JA : convention Id_Utilisateur = n° de fiche, Login = Email, seul l'email modifiable -->
+            <!-- Compte de rôle JA : Id automatique, fiche = Id_Ja, Login = Email, seul l'email modifiable -->
             <div id="info-compte-ja" class="alert alert-warning py-1 px-2 small mb-2 d-none"></div>
 
             <!-- Fiche JA liée (comptes non-JA, utilisateur.Id_Ja) : bouton « Accéder à mon espace JA » sur E002 / E003, sans compte JA ni reconnexion -->
@@ -243,8 +243,8 @@ function definirRoles(roles, principal) {
 function estCompteJa()   { return currentId !== null && rolesCharges.length === 1 && rolesCharges[0] === 'JA'; }
 function estJaCumule()   { return currentId !== null && rolesCharges.includes('JA') && rolesCharges.length > 1; }
 // Rôle JA EXCLUSIF : JA coché → les autres rôles décochés et désactivés (sauf compte hérité cumulé, dont
-// les rôles cochés restent décochables) ; compte existant non-JA : JA non cochable (Id_Utilisateur = n° de
-// fiche) ; compte JA existant : tout verrouillé. Principal ⊂ cochés (JA seul → JA principal) ; son propre
+// les rôles cochés restent décochables) ; compte existant non-JA : JA non cochable (un compte JA naît
+// pour sa fiche) ; compte JA existant : tout verrouillé. Principal ⊂ cochés (JA seul → JA principal) ; son propre
 // compte : Administrateur non retirable, Actif verrouillé. Tout est revérifié côté serveur.
 function majRoles() {
     const coches = rolesCoches();
@@ -336,7 +336,7 @@ function selectionnerLigne($tr) {
         $('#txt-prenom').val(u.Prenom);
         $('#txt-email').val(u.Email || '');
         definirRoles(rolesCharges, u.RolePrincipal || '');
-        definirFicheJa(rolesCharges.includes('JA') ? u.Id_Utilisateur : '', u.FicheJa || ''); // compte JA : fiche de même Id
+        definirFicheJa(rolesCharges.includes('JA') ? (u.IdJaCompte || '') : '', u.FicheJa || ''); // compte JA : sa fiche (Id_Ja)
         majBlocFicheJa();
         chargerFichesLiees(u.IdJaLiee);
         $('#cbo-dept').val(u.Id_Departement);
@@ -345,6 +345,7 @@ function selectionnerLigne($tr) {
         $('#ecraser-force').addClass('d-none');
         $('#mdp-genere-box').addClass('d-none');
         $('#btn-supprimer').prop('disabled', currentId === MOI_ID);
+        saisieAvantJa = null; // compte chargé : aucune saisie de création à rétablir
         majRoles();
         majVerrousJa();
         setStatus('');
@@ -373,6 +374,7 @@ $('#btn-nouveau').on('click', function () {
     $('#ecraser-force').removeClass('d-none');
     $('#mdp-genere-box').addClass('d-none');
     $('#btn-supprimer').prop('disabled', true);
+    saisieAvantJa = null; // formulaire vidé : rien à rétablir
     majVerrousJa();
     setStatus('');
 });
@@ -437,6 +439,7 @@ $('#btn-enregistrer').on('click', function () {
         loginCharge = payload.login;
         rolesCharges = payload.roles.slice();
         $('#txt-id').val(res.id);
+        saisieAvantJa = null; // compte créé / enregistré : plus de saisie de création à rétablir
         $('#chk-ecraser').prop('checked', false).prop('disabled', false);
         $('#ecraser-force').addClass('d-none');
         majRoles();
@@ -531,13 +534,19 @@ function remplirFichesLiees(premier) {
         const id = parseInt(f.Id_JA, 10);
         const liePar = f.LiePar !== null ? parseInt(f.LiePar, 10) : null;
         if (liePar !== null && liePar !== currentId) return; // déjà liée à un autre compte : non proposée
+        // Compte JA de la fiche (actif ou non) : la fiche a déjà un accès → grisée (sauf lien actuel, conservable).
+        const compteJa = f.CompteJa !== null && f.CompteJa !== undefined;
+        const grisee   = compteJa && String(id) !== lienCharge;
         const $opt = $('<option>').val(id)
             .text(id + ' — ' + ((f.Nom || '') + ' ' + (f.Prenom || '')).trim()
-                + (parseInt(f.JA1, 10) === 1 ? '' : ' (inactif JA1)'));
+                + (parseInt(f.JA1, 10) === 1 ? '' : ' (inactif JA1)')
+                + (compteJa ? ' — compte JA existant' : ''))
+            .prop('disabled', grisee);
         const pf = normNom(f.Prenom);
         const meme = nom !== '' && normNom(f.Nom) === nom && (prenom === '' || pf === '' || pf === prenom);
         (meme ? memes : autres).push($opt);
     });
+    const memesLibres = memes.filter($o => !$o.prop('disabled'));
     if (memes.length)  $cbo.append($('<optgroup>').attr('label', 'Même nom').append(memes));
     if (autres.length) $cbo.append($('<optgroup>').attr('label', 'Autres fiches JA').append(autres));
     if (lienCharge !== null && !$cbo.find(`option[value="${lienCharge}"]`).length) {
@@ -547,8 +556,8 @@ function remplirFichesLiees(premier) {
     let v = premier ? (lienCharge !== null ? lienCharge : '') : avant;
     if (!fichesLieesChoixManuel && fichesLieesPreselect !== null && v === fichesLieesPreselect) v = ''; // présélection recalculée
     fichesLieesPreselect = null;
-    if (v === '' && lienCharge === null && !fichesLieesChoixManuel && memes.length === 1) {
-        v = String(memes[0].val());
+    if (v === '' && lienCharge === null && !fichesLieesChoixManuel && memes.length === 1 && memesLibres.length === 1) {
+        v = String(memesLibres[0].val());
         fichesLieesPreselect = v;
     }
     if (v !== '' && !$cbo.find(`option[value="${v}"]`).length) v = '';
@@ -625,27 +634,39 @@ $('.chk-role').on('change', function () {
 });
 
 // Compte JA (EA86, rôle JA exclusif) : création = login, nom, prénom déduits (Login = Email, Nom = fiche,
-// Prénom vide, Id = n° de fiche, JA seul) ; modification = SEUL l'email est modifiable (le login suit),
-// tout le reste est verrouillé. Compte hérité cumulant JA et d'autres rôles : avertissement, champs libres
+// Prénom vide, fiche = Id_Ja, JA seul) ; modification = SEULS l'email (le login suit) et Actif sont
+// modifiables, tout le reste est verrouillé. Compte hérité cumulant JA et d'autres rôles : avertissement, champs libres
 // (à régulariser : JA seul, ou sans JA). Revérifié côté serveur.
+// Création : prénom / login saisis avant de cocher JA, rétablis si JA est décoché (null = pas en mode JA).
+let saisieAvantJa = null;
 function majVerrousJa() {
     const jaExistant = estCompteJa();
     const jaCreation = currentId === null && rolesCoches().includes('JA');
     const cumule     = estJaCumule();
     const ja = jaExistant || jaCreation;
+    if (jaCreation && saisieAvantJa === null) {
+        saisieAvantJa = { prenom: $('#txt-prenom').val(), login: $('#txt-login').val() };
+    } else if (!jaCreation && saisieAvantJa !== null) {
+        if (currentId === null) {
+            $('#txt-prenom').val(saisieAvantJa.prenom);
+            $('#txt-login').val(saisieAvantJa.login);
+        }
+        saisieAvantJa = null;
+    }
     $('#txt-login').prop('disabled', ja);
     $('#txt-nom, #txt-prenom').prop('disabled', ja);
     $('#cbo-dept').prop('disabled', jaExistant);
-    $('#chk-actif').prop('disabled', jaExistant || (currentId !== null && currentId === MOI_ID));
+    // Statut Actif d'un compte JA modifiable (désactivation = fin de ses sessions) ; jamais sur son propre compte.
+    $('#chk-actif').prop('disabled', currentId !== null && currentId === MOI_ID);
     if (jaExistant) $('#chk-ecraser').prop('checked', false).prop('disabled', true);
     $('#txt-fiche-ja').prop('disabled', currentId !== null);
     if (ja) $('#txt-login').val($('#txt-email').val().trim());
     if (jaCreation) $('#txt-prenom').val('');
     $('#info-compte-ja').toggleClass('d-none', !ja && !cumule).text(cumule
-        ? 'Compte cumulant JA et d\'autres rôles (antérieur à la règle « JA exclusif ») : décochez JA, ou gardez JA seul (fiche de même identifiant requise).'
+        ? 'Compte cumulant JA et d\'autres rôles (antérieur à la règle « JA exclusif ») : décochez JA, ou gardez JA seul (fiche rattachée requise).'
         : jaExistant
-        ? 'Compte JA (rôle exclusif) : seule l\'adresse email est modifiable, le login la suit ; nouveau mot de passe depuis l\'onglet « Invitation JA » d\'EN15.'
-        : 'Compte JA : identifiant = n° de la fiche, login = adresse email, nom repris de la fiche, prénom vide, JA seul rôle (exclusif). Mot de passe provisoire affiché après création.');
+        ? 'Compte JA (rôle exclusif) : seuls l\'adresse email (le login la suit) et le statut Actif sont modifiables ; nouveau mot de passe depuis l\'onglet « Invitation JA » d\'EN15.'
+        : 'Compte JA : identifiant attribué automatiquement, rattaché à la fiche choisie, login = adresse email, nom repris de la fiche, prénom vide, JA seul rôle (exclusif). Mot de passe provisoire affiché après création.');
 }
 $('#txt-email').on('input', function () {
     if (estCompteJa() || (currentId === null && rolesCoches().includes('JA'))) {
@@ -666,13 +687,15 @@ $('#txt-fiche-ja').on('input', function () {
             if (!r.data.length) { $res.append($('<div class="list-group-item text-muted">').text('Aucune fiche trouvée.')); return; }
             r.data.forEach(j => {
                 const lib = j.Id_JA + ' — ' + ((j.Nom || '') + ' ' + (j.Prenom || '')).trim();
-                // Identifiant du compte = n° de fiche : déjà porté par un compte (JA ou autre rôle) → indisponible.
-                const prise = !!j.compte_login && parseInt(j.Id_JA, 10) !== currentId;
+                // Fiche ayant déjà son compte JA (Id_Ja = fiche) → indisponible (une fiche = un seul compte).
+                const prise = !!j.compte_login;
+                // Fiche déjà liée à un compte non-JA (mode JA depuis ce compte) : pas de compte JA — revérifié serveur.
+                const liee = !prise && j.LiePar !== null && j.LiePar !== undefined;
                 const $it = $('<button type="button" class="list-group-item list-group-item-action py-1">')
                     .text(lib + (parseInt(j.JA1, 10) === 1 ? '' : ' (inactif JA1)')
-                        + (prise ? ((j.compte_role || '').split(',').includes('JA') ? ' — compte JA déjà créé (« ' + j.compte_login + ' »)'
-                                                           : ' — identifiant déjà pris par « ' + j.compte_login + ' » (' + j.compte_role + ')') : ''))
-                    .prop('disabled', prise)
+                        + (prise ? ' — compte JA déjà créé (« ' + j.compte_login + ' »)' : '')
+                        + (liee ? ' — déjà liée à « ' + (j.LieParLogin || ('compte n° ' + j.LiePar)) + ' »' : ''))
+                    .prop('disabled', prise || liee)
                     .on('click', function () {
                         definirFicheJa(j.Id_JA, lib);
                         // Compte JA : nom de la fiche, prénom vide, login = email (déduits, revérifiés côté serveur).

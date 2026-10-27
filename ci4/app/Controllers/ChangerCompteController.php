@@ -14,7 +14,7 @@ namespace App\Controllers;
  *   action=ja     : fiche = idFicheJaLiee() du compte de session, relue en base (compte actif sans rôle JA,
  *                   lien renseigné, fiche existante) — jamais un id venant du client. Refusée en mode JA
  *                   ou pendant un changement de mot de passe forcé. $_SESSION['utilisateur'] garde 'id'
- *                   (Id du compte : aucune collision avec la convention Id_Utilisateur = Id_JA), le login,
+ *                   (Id du compte, jamais l'Id_JA de la fiche), le login,
  *                   le nom, le mot de passe ('pwd_version') ; reçoit 'mode_ja' = true, 'id_ja', 'role' = 'JA',
  *                   'roles' = ['JA'], 'is_admin' = false, 'origine_role' / 'origine_roles' (rôles du compte
  *                   à la bascule : affichage et revalidation, motifSessionModeJaInvalide()).

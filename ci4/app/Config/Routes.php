@@ -120,8 +120,8 @@ $routes->get('centrenvoye/ja', 'CentrenvoyeController::ja', ['filter' => 'auth']
 $routes->post('centrenvoye/apercu', 'CentrenvoyeController::apercu', ['filter' => 'auth']);
 $routes->post('centrenvoye/envoyer', 'CentrenvoyeController::envoyer', ['filter' => 'auth']);
 $routes->post('centrenvoye/envoyer-un', 'CentrenvoyeController::envoyerUn', ['filter' => 'auth']);
-// Onglet « Invitation JA » : JA1 actifs du périmètre + état de leur compte, puis création (Id_Utilisateur =
-// Id_JA, Login = email) / régénération du mot de passe et envoi du message système « Invitation JA » (EA93,
+// Onglet « Invitation JA » : JA1 actifs du périmètre + état de leur compte, puis création (Id automatique,
+// fiche = utilisateur.Id_Ja, Login = email) / régénération du mot de passe et envoi du message système « Invitation JA » (EA93,
 // admin). Même filtre "auth" (Administrateur / Nominateur) et CSRF global que le reste d'EN15.
 $routes->get('centrenvoye/invitation-ja', 'CentrenvoyeController::invitationJa', ['filter' => 'auth']);
 // Aperçu du message « Invitation JA » (valeurs d'exemple, rendu serveur) pour tout rôle d'EN15 ; brouillon
@@ -545,9 +545,9 @@ $routes->get('defiscalisateur-menu', 'DefiscalisateurMenuController::index', ['f
 $routes->get('cra-convoc-menu', 'CraConvocMenuController::index', ['filter' => 'craconvocauth']);
 
 // ── E011 Menu JA ─────────────────────────────────────────────────────────────
-// Rôle « JA » UNIQUEMENT (compte juge-arbitre dont l'Id_Utilisateur est l'Id_JA de sa fiche, créé par
+// Rôle « JA » UNIQUEMENT (compte juge-arbitre dont la fiche est utilisateur.Id_Ja, créé par
 // EN15 « Invitation JA » ou EA86) — voir JaAuth.php ("jaauth"). L'Administrateur n'y a PAS accès : ces
-// écrans portent sur la fiche d'Id = $_SESSION['utilisateur']['id'], ou en mode JA (compte non-JA, fiche
+// écrans portent sur la fiche du compte $_SESSION['utilisateur']['id'] (idJaDuCompteJa()), ou en mode JA (compte non-JA, fiche
 // liée, POST changer-compte) sur $_SESSION['utilisateur']['id_ja'] (rôle JA + fiche existante / lien
 // revérifiés par le filtre ET chaque contrôleur, idJaCompteSession()), jamais un id client.
 // Le rôle JA n'a accès qu'à ces écrans + changer-mot-de-passe ("auth:…,JA") ; "auth" sans argument

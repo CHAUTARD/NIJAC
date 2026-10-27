@@ -14,8 +14,8 @@ namespace App\Controllers;
  * Anti brute-force : limite par IP (login:<ip>) + par login saisi (login_compte:<login>, 10 échecs /
  * 60 min, logins inconnus compris) + plafond journalier de codes faux par compte (mfa_essai:<id>).
  * Login inconnu/inactif : vérification PBKDF2 sur SecurePasswordHasher::HASH_FACTICE (même durée).
- * Rôle JA : un juge-arbitre peut avoir un compte (EN15 « Invitation JA » ou EA86, Id_Utilisateur = Id_JA
- * de sa fiche) — même 2FA, puis menu E011 ; un compte JA sans fiche valide est refusé (compteJaRefuse()).
+ * Rôle JA : un juge-arbitre peut avoir un compte (EN15 « Invitation JA » ou EA86, Id automatique,
+ * fiche = utilisateur.Id_Ja) — même 2FA, puis menu E011 ; un compte JA sans fiche valide est refusé (compteJaRefuse()).
  * Les écrans publics EN19/EN21/EN22 restent accessibles par lien tokenisé (Obfuscator) aux JA sans compte.
  * Session native (jamais le service Session de CI4) — voir AdminAuth.php
  * pour l'explication complète de l'incompatibilité des deux mécanismes.

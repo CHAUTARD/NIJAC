@@ -735,11 +735,13 @@ class CentrenvoyeController extends BaseController
     // ── Onglet « Invitation JA » : création des comptes de rôle JA (menu E011) ───────────────────
     //
     // Destinataires : JA1 actifs (ja.JA1 = 1) des départements de getDepartementsAutorises(). À l'envoi,
-    // compte utilisateur créé (convention Id_Utilisateur = Id_JA, Login = Email = adresse du JA, Prenom
-    // vide, Nom = nom de la fiche, rôle JA (utilisateur_role), Actif 1, ChangeLogin 1 ; l'Id est le seul lien avec la fiche) avec un mot de passe
+    // compte utilisateur créé (Id_Utilisateur automatique, fiche = utilisateur.Id_Ja — index UNIQUE : une
+    // fiche, un seul compte —, Login = Email = adresse du JA, Prenom vide, Nom = nom de la fiche, rôle JA
+    // (utilisateur_role), Actif 1, ChangeLogin 1) avec un mot de passe
     // provisoire aléatoire, envoyé dans le message système « Invitation JA » (EA93, admin). JA déjà doté
-    // d'un compte : ignoré (« compte déjà existant ») sauf case « Régénérer » (nouveau mot de passe,
-    // ChangeLogin 1, PwdVersion + 1). Conflits (Id ou login déjà pris, adresse invalide…) : ignorés avec
+    // d'un compte (compte JA dont Id_Ja = la fiche, compteJaDeFiche()) : ignoré (« compte déjà existant »)
+    // sauf case « Régénérer » (nouveau mot de passe, ChangeLogin 1, PwdVersion + 1). Conflits (fiche liée à
+    // un compte non-JA, login déjà pris, adresse invalide…) : ignorés avec
     // motif, aucun compte écrasé — voir etatCompteJa(). Le mot de passe n'existe en clair que dans le
     // corps de l'email : jamais journalisé, jamais renvoyé au navigateur.
 
@@ -921,7 +923,15 @@ class CentrenvoyeController extends BaseController
             return $this->response->setJSON(['ok' => false, 'skip' => true, 'nom' => $nomJa, 'msg' => 'hors de votre périmètre']);
         }
 
-        $etat = etatCompteJa($pdo, $idJa, (string) ($ja['Email'] ?? ''));
+        try {
+            // Avant la reprise EA98 (marqueur absent) : 'ignore', motif « … chargez EA98 » (MSG_COMPTE_JA_AVANT_EA98).
+            $etat = etatCompteJa($pdo, $idJa, (string) ($ja['Email'] ?? ''));
+        } catch (\PDOException $e) {
+            // Marqueur / base illisible : refus par défaut, aucun compte créé ni email envoyé.
+            error_log('[NIJAC] EN15 invitation JA (Id_JA ' . $idJa . ') : état du compte illisible : ' . $e->getMessage());
+
+            return $this->response->setJSON(['ok' => false, 'nom' => $nomJa, 'msg' => 'état du compte illisible (erreur base de données) — aucun email envoyé']);
+        }
         if ($etat['statut'] === 'ignore') {
             return $this->response->setJSON(['ok' => false, 'skip' => true, 'nom' => $nomJa, 'msg' => $etat['motif']]);
         }
@@ -944,18 +954,27 @@ class CentrenvoyeController extends BaseController
         ]);
 
         $envoye = false;
+        // Compte JA visé : Id_Utilisateur du compte existant (repéré par sa fiche, etatCompteJa()), ou celui
+        // créé ci-dessous (Id automatique) — jamais l'Id_JA de la fiche.
+        $idCompte = $nouveau ? 0 : (int) $etat['compte']['Id_Utilisateur'];
         try {
             $pdo->beginTransaction();
             if ($nouveau) {
-                creerCompteJa(
+                $idCompte = creerCompteJa(
                     $pdo, $idJa, $login, (string) $ja['Nom'],
                     departementCompteJa($pdo, (string) $ja['CodeDept'], (string) ($moi['id_departement'] ?? '')),
                     \SecurePasswordHasher::hash($mdp)
                 );
             } else {
+                // Compte toujours JA, actif et toujours rattaché à CETTE fiche (relu sous transaction).
                 $up = $pdo->prepare("UPDATE utilisateur SET Password = ?, ChangeLogin = 1" . sqlIncrementPwdVersion($pdo)
                     . " WHERE Id_Utilisateur = ? AND " . sqlARole('utilisateur.Id_Utilisateur', '?') . " AND Actif = 1");
-                $up->execute([\SecurePasswordHasher::hash($mdp), $idJa, 'JA']);
+                if (idJaDuCompteJa($pdo, $idCompte) !== $idJa) {
+                    $pdo->rollBack();
+
+                    return $this->response->setJSON(['ok' => false, 'skip' => true, 'nom' => $nomJa, 'msg' => 'compte modifié entre-temps, rechargez la liste']);
+                }
+                $up->execute([\SecurePasswordHasher::hash($mdp), $idCompte, 'JA']);
                 if ($up->rowCount() !== 1) {
                     $pdo->rollBack();
 
@@ -987,7 +1006,9 @@ class CentrenvoyeController extends BaseController
             $msg = $envoye
                 ? "email envoyé mais enregistrement du compte impossible : son mot de passe n'est pas valable, renvoyez l'invitation"
                 : ($e instanceof \PDOException
-                    ? 'création du compte impossible (identifiant ou login déjà pris ?) — aucun email envoyé'
+                    ? (estViolationFicheJaLieeUnique($e)
+                        ? 'fiche déjà liée à un autre compte — aucun email envoyé'
+                        : 'création du compte impossible (login déjà pris ?) — aucun email envoyé')
                     : ($e instanceof \RuntimeException && str_contains($e->getMessage(), 'EA98')
                         ? $e->getMessage() . ' — aucun email envoyé'
                         : "échec de l'envoi de l'email — aucun compte créé ni modifié"));
@@ -997,7 +1018,7 @@ class CentrenvoyeController extends BaseController
         unset($mdp, $rendu);
         enregistrerEnvois(1);
         error_log('[NIJAC][SEC] EN15 invitation JA : compte ' . ($nouveau ? 'créé' : 'mot de passe régénéré')
-            . ' (Id_Utilisateur ' . $idJa . ') par ' . preg_replace('/[^\w.@-]/u', '_', (string) ($moi['login'] ?? '?')));
+            . ' (Id_Utilisateur ' . $idCompte . ', Id_JA ' . $idJa . ') par ' . preg_replace('/[^\w.@-]/u', '_', (string) ($moi['login'] ?? '?')));
 
         return $this->response->setJSON(['ok' => true, 'nom' => $nomJa, 'statut' => $nouveau ? 'cree' : 'regenere']);
     }

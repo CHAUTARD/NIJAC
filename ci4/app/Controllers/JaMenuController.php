@@ -3,7 +3,7 @@
 namespace App\Controllers;
 
 /**
- * NIJAC – Menu JA (E011), rôle « JA » (compte JA pur dont l'Id_Utilisateur est l'Id_JA de sa fiche ja, ou
+ * NIJAC – Menu JA (E011), rôle « JA » (compte JA pur dont la fiche ja est utilisateur.Id_Ja, ou
  * compte non-JA en mode JA sur sa fiche liée — bouton « Revenir à mon compte … »). Protégé par le filtre "jaauth" (rôle JA uniquement, l'Administrateur n'y a PAS
  * accès — voir JaAuth.php). Boutons : EJA2 Mes disponibilités, EJA3 Mes nominations, EJA4 Mes frais,
  * E006 Changer le mot de passe, Se déconnecter. Seul accès BDD : idJaCompteSession() (garde-fou fiche).
@@ -14,7 +14,7 @@ class JaMenuController extends BaseController
     {
         require_once __DIR__ . '/../../../config/db.php';
         require_once __DIR__ . '/../../../config/app_config.php';
-        // Garde-fou propre au contrôleur, en plus de "jaauth" : rôle JA ET fiche de même Id.
+        // Garde-fou propre au contrôleur, en plus de "jaauth" : rôle JA ET fiche du compte (Id_Ja).
         if (idJaCompteSession() <= 0) {
             return redirect()->to(site_url('login'));
         }

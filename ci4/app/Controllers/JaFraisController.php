@@ -12,7 +12,7 @@ use CodeIgniter\HTTP\ResponseInterface;
  * fraisSaisissables() / etatSaisieFrais(), plafonds frais_max_*, arbitrage club = 0), joindreJustificatif()
  * et voirJustificatif() (App\Libraries\JustificatifPeage). Seule l'autorisation change
  * (nominationAutorisee()) : au lieu du jeton cnv du lien, la nomination doit appartenir au JA de la
- * session (idJaCompteSession() : rôle JA + fiche d'Id = Id_Utilisateur, ou fiche liée en mode JA, jamais un id client) — le jeton éventuellement envoyé est
+ * session (idJaCompteSession() : rôle JA + fiche du compte (utilisateur.Id_Ja), ou fiche liée en mode JA, jamais un id client) — le jeton éventuellement envoyé est
  * ignoré. Liste : JaNominationsController::nominationsDuJa() + état accusé / saisie par nomination.
  */
 class JaFraisController extends ConvocationJaController
@@ -27,7 +27,7 @@ class JaFraisController extends ConvocationJaController
     {
         parent::__construct();
         // Garde-fou propre au contrôleur, en plus de "jaauth" : rôle JA ET fiche de la session (compte JA pur :
-        // Id_Utilisateur = Id_JA ; mode JA : fiche liée relue en base) — 0 = tout refusé.
+        // son Id_Ja, idJaDuCompteJa() ; mode JA : fiche liée relue en base) — 0 = tout refusé.
         $this->idJaSession  = idJaCompteSession();
         $this->loginSession = (string) ($_SESSION['utilisateur']['login'] ?? '');
         $this->modeJa       = estSessionModeJa();
@@ -71,7 +71,7 @@ class JaFraisController extends ConvocationJaController
 
     public function index($nomSeg = null, $cnvSeg = null)
     {
-        if ($this->idJaSession <= 0) { // garde-fou : rôle JA + fiche de la session (Id_Utilisateur, ou fiche liée en mode JA)
+        if ($this->idJaSession <= 0) { // garde-fou : rôle JA + fiche de la session (Id_Ja du compte JA, ou fiche liée en mode JA)
             return redirect()->to(site_url('login'));
         }
         $u = $_SESSION['utilisateur'] ?? [];

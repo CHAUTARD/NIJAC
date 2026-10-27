@@ -7,16 +7,16 @@ use CodeIgniter\HTTP\RequestInterface;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * Accès réservé aux sessions authentifiées avec le rôle « JA » : compte JA pur (convention Id_Utilisateur =
- * ja.Id_JA) ou compte non-JA en mode JA (fiche liée utilisateur.Id_Ja, POST changer-compte) —
- * fiche résolue par idJaCompteSession().
+ * Accès réservé aux sessions authentifiées avec le rôle « JA » : compte JA pur (fiche = utilisateur.Id_Ja,
+ * idJaDuCompteJa() ; avant EA98, ancienne convention Id_Utilisateur = Id_JA) ou compte non-JA en mode JA
+ * (fiche liée utilisateur.Id_Ja, POST changer-compte) — fiche résolue par idJaCompteSession().
  * Utilisé par E011 (Menu JA) et ses écrans EJA2, EJA3, EJA4 (routes `ja-menu`, `ja/...`).
  *
  * Contrairement à "csrauth" / "defiscauth" / "craconvocauth", l'Administrateur n'a PAS accès :
  * ces écrans affichent et modifient les données d'UN JA précis (celui de la session, jamais un id
  * fourni par le client) — un administrateur n'a pas de fiche ja, il passe par EN11 / EN14 / EN28.
  *
- * Compte JA sans fiche ja de même Id (fiche supprimée) : session vidée (nouvel id) + retour à
+ * Compte JA sans fiche ja (Id_Ja vide ou fiche supprimée) : session vidée (nouvel id) + retour à
  * E001 avec un message clair (MSG_COMPTE_JA_SANS_FICHE). Panne SQL pendant cette vérification : journalisée,
  * session conservée, réponse 503 + Retry-After (JSON {ok:false} en AJAX / POST). Session native — voir AdminAuth.php.
  */
@@ -39,7 +39,7 @@ class JaAuth implements FilterInterface
             return redirect()->to(site_url('login'));
         }
 
-        // Fiche de la session : idJaCompteSession() (compte JA pur : Id_Utilisateur = ja.Id_JA ; mode JA :
+        // Fiche de la session : idJaCompteSession() (compte JA pur : son Id_Ja, idJaDuCompteJa() ; mode JA :
         // 'id_ja' = fiche liée au compte, lien relu en base).
         // Panne SQL / base injoignable (exception relancée) ≠ fiche absente (0) : pas de déconnexion,
         // réponse 503 temporaire (Retry-After), la session reste intacte pour la requête suivante.
