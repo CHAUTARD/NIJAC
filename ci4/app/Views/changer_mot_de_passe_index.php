@@ -170,6 +170,16 @@
         <span>NIJAC</span>
         <?php if (!$succes && !empty($moi['change_login'])): ?>
         <?php /* Changement forcé : seuls cet écran et la déconnexion sont accessibles (revaliderSessionUtilisateur()). */ ?>
+        <?php if (!empty($moi['origine_id'])): ?>
+        <?php /* Compte JA lié ouvert sans reconnexion : retour au compte d'origine (seule action de changer-compte acceptée ici). */ ?>
+        <form method="POST" action="<?= site_url('changer-compte') ?>" class="m-0">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="retour">
+            <button type="submit" class="btn btn-link btn-sm p-0 text-decoration-none" style="font-size:.75rem;">
+                <i class="bi bi-arrow-left-right me-1"></i>Revenir à mon compte nominateur
+            </button>
+        </form>
+        <?php endif; ?>
         <form method="POST" action="<?= site_url('logout') ?>" class="m-0">
             <?= csrf_field() ?>
             <button type="submit" class="btn btn-link btn-sm p-0 text-decoration-none" style="font-size:.75rem;">

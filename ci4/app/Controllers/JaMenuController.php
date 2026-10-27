@@ -24,6 +24,8 @@ class JaMenuController extends BaseController
             'nomComplet'  => trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? '')),
             'departement' => $u['id_departement'] ?? '',
             'changeLogin' => !empty($u['change_login']),
+            // Session basculée depuis un compte non-JA (POST changer-compte) : bouton de retour.
+            'origineId'   => (int) ($u['origine_id'] ?? 0),
         ]);
     }
 }

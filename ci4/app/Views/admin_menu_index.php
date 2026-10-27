@@ -137,6 +137,8 @@
             padding: 16px 24px 24px;
             display: flex;
             justify-content: center;
+            flex-wrap: wrap;
+            gap: 16px;
         }
         #zone-deconnexion .menu-btn {
             max-width: 260px;
@@ -486,6 +488,16 @@
 
     <!-- ── Commun, sous les onglets : Quitter ── -->
     <div id="zone-deconnexion">
+        <?php if (!empty($compteJaLie)): ?>
+        <?php /* Compte JA lié (EA86) : bascule vers E011 sans reconnexion, POST changer-compte (cible relue en base). */ ?>
+        <form method="post" action="<?= site_url('changer-compte') ?>" id="form-espace-ja" class="d-none"><?= csrf_field() ?><input type="hidden" name="action" value="ja"></form>
+        <a href="#" class="menu-btn" style="background:#e3f2fd;" onclick="document.getElementById('form-espace-ja').submit(); return false;">
+            <span class="btn-code">E011</span>
+            <div class="btn-icon"><img src="<?= base_url('img/Arbitre_filet.webp') ?>" alt="Espace JA"></div>
+            <span>Accéder à mon espace JA</span>
+            <span class="btn-desc">Menu juge-arbitre, sans vous reconnecter</span>
+        </a>
+        <?php endif; ?>
         <form method="post" action="<?= site_url('logout') ?>" id="form-logout" class="d-none"><?= csrf_field() ?></form>
         <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;" onclick="document.getElementById('form-logout').submit(); return false;">
             <div class="btn-icon"><img src="<?= base_url('img/Quitter.webp') ?>" alt="Se déconnecter"></div>

@@ -215,6 +215,16 @@
 
     <div class="menu-break"></div>
 
+    <?php if (!empty($origineId)): ?>
+    <?php /* Session ouverte depuis un compte non-JA lié (POST changer-compte action=ja) : retour sans reconnexion. */ ?>
+    <form method="post" action="<?= site_url('changer-compte') ?>" id="form-retour-compte" class="d-none"><?= csrf_field() ?><input type="hidden" name="action" value="retour"></form>
+    <a href="#" class="menu-btn" style="background:#e3f2fd;" onclick="document.getElementById('form-retour-compte').submit(); return false;">
+        <div class="btn-icon"><i class="bi bi-arrow-left-right" style="color:#1a3a6b;"></i></div>
+        <span>Revenir à mon compte nominateur</span>
+        <span class="btn-desc">Retour au menu d'origine, sans vous reconnecter</span>
+    </a>
+    <?php endif; ?>
+
     <form method="post" action="<?= site_url('logout') ?>" id="form-logout" class="d-none"><?= csrf_field() ?></form>
     <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;" onclick="document.getElementById('form-logout').submit(); return false;">
         <div class="btn-icon"><img src="<?= base_url('img/Quitter.webp') ?>" alt="Se déconnecter"></div>

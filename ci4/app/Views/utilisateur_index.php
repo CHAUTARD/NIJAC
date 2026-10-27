@@ -149,6 +149,15 @@
             <!-- Compte de rôle JA : convention Id_Utilisateur = n° de fiche, Login = Email, seul l'email modifiable -->
             <div id="info-compte-ja" class="alert alert-warning py-1 px-2 small mb-2 d-none"></div>
 
+            <!-- Compte JA lié (comptes non-JA) : bouton « Accéder à mon espace JA » sur E002 / E003, sans reconnexion -->
+            <div id="bloc-compte-lie" class="mb-2">
+                <label class="form-label" for="cbo-compte-lie">Compte JA lié :</label>
+                <select id="cbo-compte-lie" class="form-select form-select-sm">
+                    <option value="">— Aucun —</option>
+                </select>
+                <div id="aide-compte-lie" class="form-text small">Compte actif de rôle JA de la même personne : elle pourra ouvrir le menu JA (E011) depuis son menu, sans se reconnecter, puis revenir.</div>
+            </div>
+
             <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="chk-actif" checked>
                 <label class="form-check-label fw-bold" for="chk-actif">Actif</label>
@@ -314,6 +323,7 @@ function selectionnerLigne($tr) {
         definirRoles(rolesCharges, u.RolePrincipal || '');
         definirFicheJa(rolesCharges.includes('JA') ? u.Id_Utilisateur : '', u.FicheJa || ''); // compte JA : fiche de même Id
         majBlocFicheJa();
+        chargerComptesJa(u.IdUtilisateurLie);
         $('#cbo-dept').val(u.Id_Departement);
         $('#chk-actif').prop('checked', parseInt(u.Actif) === 1);
         $('#chk-ecraser').prop('checked', false).prop('disabled', false);
@@ -340,6 +350,7 @@ $('#btn-nouveau').on('click', function () {
     definirRoles(['Nominateur'], 'Nominateur');
     definirFicheJa('', '');
     majBlocFicheJa();
+    chargerComptesJa(null);
     $('#cbo-dept').val('');
     $('#chk-actif').prop('checked', true);
     // À la création, le mot de passe aléatoire est toujours généré : case forcée.
@@ -369,6 +380,11 @@ $('#btn-enregistrer').on('click', function () {
         actif:   $('#chk-actif').is(':checked') ? '1' : '0',
         ecraser: (isNew || $('#chk-ecraser').is(':checked')) ? '1' : '0',
     };
+    // Compte JA lié : jamais pour un compte JA (bloc masqué) — revérifié côté serveur. Clé envoyée
+    // seulement si la liste est chargée avec succès ; absente = lien inchangé côté serveur.
+    if (!roles.includes('JA') && comptesJaCharges) {
+        payload.compte_ja_lie = $('#cbo-compte-lie').val() || '';
+    }
     // Email obligatoire (code de sécurité E010) — revérifié côté serveur.
     if (payload.email === '' || !document.getElementById('txt-email').checkValidity()) {
         const msg = payload.email === '' ? "L'adresse email est obligatoire." : 'Adresse email invalide.';
@@ -409,6 +425,8 @@ $('#btn-enregistrer').on('click', function () {
         majRoles();
         majBlocFicheJa();
         majVerrousJa();
+        // Clé omise (liste non chargée) : lien inchangé en base → on recharge avec le lien mémorisé.
+        chargerComptesJa('compte_ja_lie' in payload ? (payload.compte_ja_lie || null) : lienCharge);
         if (res.mdp) {
             $('#mdp-genere-code').text(res.mdp);
             $('#mdp-genere-box').removeClass('d-none');
@@ -458,6 +476,65 @@ function definirFicheJa(id, libelle) {
 }
 function majBlocFicheJa() {
     $('#bloc-fiche-ja').toggleClass('d-none', !rolesCoches().includes('JA'));
+    // Compte JA lié : réservé aux comptes non-JA (un compte JA ne porte pas de lien).
+    $('#bloc-compte-lie').toggleClass('d-none', rolesCoches().includes('JA') || estCompteJa());
+}
+
+// ── Compte JA lié (utilisateur.Id_Utilisateur_Lie) ────────────────────────────
+// Liste = comptes actifs de rôle JA seul avec fiche (GET utilisateur/comptes-ja) ; un compte déjà lié à
+// un autre compte est grisé, le compte édité est exclu. Colonne absente (avant EA98) : liste désactivée.
+// Tous les contrôles sont refaits côté serveur (controlerCompteJaLie()).
+// Chargement asynchrone : la liste n'est vidée/remplie qu'à la réponse ; seule la DERNIÈRE requête est
+// prise en compte (compteur comptesJaReq). Tant que la liste n'est pas chargée avec succès
+// (comptesJaCharges = false : en cours, échec, colonne absente), l'enregistrement OMET compte_ja_lie
+// = lien inchangé côté serveur (jamais d'effacement involontaire).
+let comptesJaReq     = 0;     // n° de la dernière requête GET comptes-ja
+let comptesJaCharges = false; // liste chargée avec succès pour le compte courant
+let lienCharge       = null;  // lien du compte chargé (réappliqué après chargement)
+const AIDE_COMPTE_LIE = $('#aide-compte-lie').text();
+function chargerComptesJa(valeur) {
+    const $cbo = $('#cbo-compte-lie');
+    const req  = ++comptesJaReq;
+    lienCharge = valeur !== null && valeur !== undefined && String(valeur) !== '' ? String(valeur) : null;
+    comptesJaCharges = false;
+    $cbo.prop('disabled', true);
+    $.getJSON(`${UTILISATEUR_BASE}/comptes-ja`).done(function (r) {
+        if (req !== comptesJaReq) return; // réponse périmée (autre compte chargé depuis)
+        $cbo.empty().append($('<option value="">').text('— Aucun —'));
+        if (!r.ok) {
+            $('#aide-compte-lie').addClass('text-danger').text(r.msg || 'Liste des comptes JA indisponible : lien inchangé.');
+            return;
+        }
+        $cbo.prop('disabled', !r.colonne);
+        $('#aide-compte-lie').toggleClass('text-danger', !r.colonne);
+        if (!r.colonne) {
+            $('#aide-compte-lie').text('Colonne utilisateur.Id_Utilisateur_Lie absente : chargez EA98.');
+            return;
+        }
+        $('#aide-compte-lie').text(AIDE_COMPTE_LIE);
+        r.data.forEach(c => {
+            const id = parseInt(c.Id_Utilisateur, 10);
+            if (id === currentId) return;
+            const liePar = c.LiePar !== null ? parseInt(c.LiePar, 10) : null;
+            const prise  = liePar !== null && liePar !== currentId;
+            $cbo.append($('<option>').val(id)
+                .text(id + ' — ' + ((c.Nom || '') + ' ' + (c.Prenom || '')).trim() + ' (' + c.Login + ')'
+                    + (prise ? ' — déjà lié au compte n°' + liePar : ''))
+                .prop('disabled', prise));
+        });
+        const v = lienCharge !== null ? lienCharge : '';
+        if (v !== '' && !$cbo.find(`option[value="${v}"]`).length) {
+            // Lien existant vers un compte devenu inutilisable (inactif, rôle changé…) : affiché pour le retirer.
+            $cbo.append($('<option>').val(v).text(v + ' — compte non utilisable (à retirer)'));
+        }
+        $cbo.val(v);
+        comptesJaCharges = true;
+    }).fail(function () {
+        if (req !== comptesJaReq) return;
+        // Échec : liste vide et désactivée, clé omise à l'enregistrement = lien conservé en base.
+        $cbo.empty().append($('<option value="">').text('— Liste indisponible —')).prop('disabled', true);
+        $('#aide-compte-lie').addClass('text-danger').text('Liste des comptes JA indisponible : le lien actuel sera conservé.');
+    });
 }
 $('.chk-role').on('change', function () {
     // Rôle JA exclusif : cocher JA décoche les autres rôles ; cocher un autre rôle décoche JA.
@@ -540,6 +617,7 @@ $(function () {
     nijacSortableTable('#tbl-utilisateurs thead th[data-col]', 'col', sortState,
         () => nijacSortRows('#tbody-liste', parseInt(sortState.col, 10), sortState.asc));
     chargerListe();
+    chargerComptesJa(null);
 });
 </script>
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>

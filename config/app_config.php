@@ -641,6 +641,10 @@ function initTableConfiguration(\PDO $pdo): void
         }
     }
 
+    // utilisateur.Id_Utilisateur_Lie : compte JA lié à un compte non-JA (bascule E002/E003 ↔ E011 sans
+    // reconnexion, POST changer-compte). Gère son propre try/catch (voir assurerColonneCompteLie()).
+    assurerColonneCompteLie($pdo);
+
     // Comptes de rôle 'JA' : aucune colonne de lien — convention Id_Utilisateur = ja.Id_JA (voir
     // etatCompteJa() / creerCompteJa()). Une colonne utilisateur.Id_JA résiduelle (essai antérieur)
     // n'est ni lue ni écrite, ni supprimée automatiquement (NULL par défaut, sans effet).
@@ -1286,6 +1290,232 @@ function utilisateurAPwdVersion(\PDO $pdo): bool
 function sqlIncrementPwdVersion(\PDO $pdo): string
 {
     return utilisateurAPwdVersion($pdo) ? ', PwdVersion = PwdVersion + 1' : '';
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Compte JA lié (utilisateur.Id_Utilisateur_Lie) : une personne à la fois nominateur (ou autre
+ * rôle non-JA) et JA a DEUX comptes (rôle JA exclusif, Id_Utilisateur = Id_JA). Le lien, réglé
+ * UNIQUEMENT par un administrateur dans EA86, permet depuis le compte non-JA d'ouvrir le menu JA
+ * (E011, EJA2–EJA4) sans se reconnecter, puis de revenir (POST changer-compte,
+ * ChangerCompteController). La session basculée mémorise 'origine_id' (+ 'origine_pwd_version') :
+ * revaliderSessionUtilisateur() la détruit si le compte d'origine est supprimé / désactivé, si son
+ * mot de passe a changé ou si son lien ne pointe plus vers le compte JA courant.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Crée utilisateur.Id_Utilisateur_Lie (même type entier que Id_Utilisateur, NULL) si absente, et son
+ * index UNIQUE uq_utilisateur_lie (assurerIndexUniqueCompteLie()). Idempotent, best-effort (journalisé), appelé par
+ * initTableConfiguration() (EA98).
+ */
+function assurerColonneCompteLie(\PDO $pdo): void
+{
+    try {
+        if (!utilisateurAColonneLie($pdo, true)) {
+            $type = (string) $pdo->query(
+                "SELECT COLUMN_TYPE FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'Id_Utilisateur'"
+            )->fetchColumn();
+            // Seul un type entier est recopié (jamais de texte libre dans le DDL) ; repli INT.
+            if (!preg_match('/^(tiny|small|medium|big)?int(\(\d+\))?( unsigned)?$/i', trim($type))) {
+                $type = 'INT';
+            }
+            $pdo->exec('ALTER TABLE utilisateur ADD COLUMN Id_Utilisateur_Lie ' . $type . ' NULL DEFAULT NULL');
+            utilisateurAColonneLie($pdo, true);
+        }
+        assurerIndexUniqueCompteLie($pdo);
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] Ajout de la colonne utilisateur.Id_Utilisateur_Lie : ' . $e->getMessage());
+    }
+}
+
+/** Nom de l'index UNIQUE sur utilisateur.Id_Utilisateur_Lie (un compte JA lié à UN seul compte). */
+const INDEX_UNIQUE_COMPTE_LIE = 'uq_utilisateur_lie';
+
+/**
+ * Index de utilisateur.Id_Utilisateur_Lie : UNIQUE (uq_utilisateur_lie, plusieurs NULL acceptés) dès
+ * que possible, sinon l'ancien index simple idx_utilisateur_lie. Doublons déjà en base (même compte JA
+ * lié à plusieurs comptes) : l'index simple est gardé et les doublons journalisés — à corriger dans
+ * EA86, la migration réessaie au prochain EA98. Idempotent : l'unique remplace l'index simple.
+ */
+function assurerIndexUniqueCompteLie(\PDO $pdo): void
+{
+    $existe = static function (string $nom) use ($pdo): bool {
+        $st = $pdo->prepare(
+            "SELECT 1 FROM information_schema.STATISTICS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'utilisateur' AND INDEX_NAME = ? LIMIT 1"
+        );
+        $st->execute([$nom]);
+
+        return (bool) $st->fetchColumn();
+    };
+
+    if (!$existe(INDEX_UNIQUE_COMPTE_LIE)) {
+        $doublons = $pdo->query(
+            'SELECT Id_Utilisateur_Lie, COUNT(*) AS nb FROM utilisateur
+             WHERE Id_Utilisateur_Lie IS NOT NULL
+             GROUP BY Id_Utilisateur_Lie HAVING COUNT(*) > 1'
+        )->fetchAll(\PDO::FETCH_ASSOC);
+        if ($doublons) {
+            error_log('[NIJAC] utilisateur.Id_Utilisateur_Lie : index UNIQUE ' . INDEX_UNIQUE_COMPTE_LIE
+                . ' non créé, comptes JA liés à plusieurs comptes (Id_Utilisateur_Lie => nb) : '
+                . implode(', ', array_map(static fn ($d) => (int) $d['Id_Utilisateur_Lie'] . ' => ' . (int) $d['nb'], $doublons))
+                . ' — corrigez les liens dans EA86 puis rechargez EA98.');
+            if (!$existe('idx_utilisateur_lie')) {
+                $pdo->exec('ALTER TABLE utilisateur ADD INDEX idx_utilisateur_lie (Id_Utilisateur_Lie)');
+            }
+
+            return;
+        }
+        $pdo->exec('ALTER TABLE utilisateur ADD UNIQUE INDEX ' . INDEX_UNIQUE_COMPTE_LIE . ' (Id_Utilisateur_Lie)');
+    }
+    // L'index unique couvre les recherches : l'ancien index simple devient redondant.
+    if ($existe('idx_utilisateur_lie')) {
+        $pdo->exec('ALTER TABLE utilisateur DROP INDEX idx_utilisateur_lie');
+    }
+}
+
+/**
+ * Exception = violation de l'index UNIQUE uq_utilisateur_lie (compte JA déjà lié à un autre compte,
+ * course entre deux enregistrements EA86) ? Code MySQL 1062 + nom de l'index dans le message.
+ */
+function estViolationCompteLieUnique(\Throwable $e): bool
+{
+    return $e instanceof \PDOException
+        && (int) ($e->errorInfo[1] ?? 0) === 1062
+        && str_contains($e->getMessage(), INDEX_UNIQUE_COMPTE_LIE);
+}
+
+/**
+ * utilisateur.Id_Utilisateur_Lie existe-t-elle ? (ajoutée par EA98 — absente : aucun lien, bouton
+ * « Accéder à mon espace JA » masqué, champ EA86 désactivé, session basculée détruite). Cache
+ * statique, $rafraichir = true après création (assurerColonneCompteLie()).
+ */
+function utilisateurAColonneLie(\PDO $pdo, bool $rafraichir = false): bool
+{
+    static $existe = null;
+    if ($existe === null || $rafraichir) {
+        try {
+            $existe = (bool) $pdo->query(
+                "SELECT 1 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'Id_Utilisateur_Lie'"
+            )->fetchColumn();
+        } catch (\PDOException $e) {
+            $existe = false;
+        }
+    }
+
+    return $existe;
+}
+
+/**
+ * Le compte $idCible est-il un compte JA utilisable comme compte lié ? Actif, rôle JA SEUL
+ * (rôle exclusif) et fiche ja de même Id (convention Id_Utilisateur = Id_JA).
+ */
+function compteJaLiable(\PDO $pdo, int $idCible): bool
+{
+    if ($idCible <= 0) {
+        return false;
+    }
+    $st = $pdo->prepare('SELECT Actif FROM utilisateur WHERE Id_Utilisateur = ? LIMIT 1');
+    $st->execute([$idCible]);
+    $actif = $st->fetchColumn();
+
+    return $actif !== false && (int) $actif === 1
+        && rolesUtilisateur($pdo, $idCible) === ['JA']
+        && ficheJaExiste($pdo, $idCible);
+}
+
+/**
+ * Id du compte JA lié au compte $idUtilisateur, s'il est utilisable MAINTENANT (bouton E002/E003 et
+ * POST changer-compte action 'ja'), sinon 0 : colonne présente, compte source actif et non-JA, lien
+ * renseigné vers un AUTRE compte, cible liable (compteJaLiable()). Tout est relu en base.
+ */
+function idCompteJaLie(\PDO $pdo, int $idUtilisateur): int
+{
+    if ($idUtilisateur <= 0 || !utilisateurAColonneLie($pdo)) {
+        return 0;
+    }
+    $st = $pdo->prepare('SELECT Actif, Id_Utilisateur_Lie FROM utilisateur WHERE Id_Utilisateur = ? LIMIT 1');
+    $st->execute([$idUtilisateur]);
+    $row = $st->fetch(\PDO::FETCH_ASSOC);
+    if (!$row || !(int) $row['Actif'] || $row['Id_Utilisateur_Lie'] === null) {
+        return 0;
+    }
+    $idCible = (int) $row['Id_Utilisateur_Lie'];
+    if ($idCible === $idUtilisateur || in_array('JA', rolesUtilisateur($pdo, $idUtilisateur), true)) {
+        return 0;
+    }
+
+    return compteJaLiable($pdo, $idCible) ? $idCible : 0;
+}
+
+/**
+ * Contrôle serveur du lien saisi dans EA86 pour le compte $idSource (0 = création) : null = accepté
+ * ($idCible null = aucun lien), sinon message d'erreur. Cible : compte actif de rôle JA seul avec
+ * fiche, différent de la source, non déjà lié à un autre compte. Un compte JA ne porte pas de lien
+ * ($sourceEstJa : rôles de la source, saisis ou en base).
+ */
+function controlerCompteJaLie(\PDO $pdo, int $idSource, ?int $idCible, bool $sourceEstJa): ?string
+{
+    if ($idCible === null) {
+        return null;
+    }
+    if (!utilisateurAColonneLie($pdo)) {
+        return 'Le compte JA lié nécessite la colonne utilisateur.Id_Utilisateur_Lie : chargez EA98.';
+    }
+    if ($sourceEstJa) {
+        return 'Un compte JA ne peut pas porter de compte JA lié.';
+    }
+    if ($idCible <= 0 || $idCible === $idSource) {
+        return 'Compte JA lié invalide.';
+    }
+    if (!compteJaLiable($pdo, $idCible)) {
+        return 'Le compte JA lié doit être un compte actif de rôle JA seul, rattaché à une fiche juge-arbitre.';
+    }
+    $st = $pdo->prepare('SELECT 1 FROM utilisateur WHERE Id_Utilisateur_Lie = ? AND Id_Utilisateur <> ? LIMIT 1');
+    $st->execute([$idCible, $idSource]);
+    if ($st->fetchColumn()) {
+        return 'Ce compte JA est déjà lié à un autre compte.';
+    }
+
+    return null;
+}
+
+/**
+ * Session basculée vers un compte JA ('origine_id' présent) : motif d'invalidation, null = valide.
+ * Colonne absente, compte d'origine supprimé / désactivé, mot de passe d'origine changé (PwdVersion
+ * mémorisée à la bascule) ou lien ne pointant plus vers le compte courant ($u['id']).
+ */
+function motifSessionOrigineInvalide(\PDO $pdo, array $u): ?string
+{
+    $idOrigine = (int) ($u['origine_id'] ?? 0);
+    if ($idOrigine <= 0) {
+        return null;
+    }
+    if (!utilisateurAColonneLie($pdo)) {
+        return 'lien de compte indisponible';
+    }
+    $st = $pdo->prepare(
+        'SELECT Actif, Id_Utilisateur_Lie' . (utilisateurAPwdVersion($pdo) ? ', PwdVersion' : '')
+        . ' FROM utilisateur WHERE Id_Utilisateur = ? LIMIT 1'
+    );
+    $st->execute([$idOrigine]);
+    $row = $st->fetch(\PDO::FETCH_ASSOC);
+    if (!$row) {
+        return 'compte d\'origine supprimé';
+    }
+    if (!(int) $row['Actif']) {
+        return 'compte d\'origine désactivé';
+    }
+    if ((int) ($row['Id_Utilisateur_Lie'] ?? 0) !== (int) ($u['id'] ?? 0)) {
+        return 'lien de compte modifié';
+    }
+    if (array_key_exists('PwdVersion', $row) && isset($u['origine_pwd_version'])
+        && (int) $row['PwdVersion'] !== (int) $u['origine_pwd_version']) {
+        return 'mot de passe du compte d\'origine modifié';
+    }
+
+    return null;
 }
 
 /**
@@ -3545,7 +3775,9 @@ function autoriserDemandeResetMdpIp(): bool
 const SESSION_REVALIDATION_DELAI = 60;
 
 /** Routes accessibles tant que $_SESSION['utilisateur']['change_login'] est vrai (changement forcé). */
-const ROUTES_CHANGE_LOGIN = ['changer-mot-de-passe', 'logout'];
+const ROUTES_CHANGE_LOGIN = ['changer-mot-de-passe', 'logout', 'changer-compte'];
+// 'changer-compte' : seule l'action 'retour' (vers le compte d'origine) y est acceptée pendant un
+// changement forcé — l'action 'ja' est refusée par ChangerCompteController.
 
 /**
  * Revalidation de $_SESSION['utilisateur'] par les filtres d'authentification (auth, adminauth,
@@ -3554,7 +3786,9 @@ const ROUTES_CHANGE_LOGIN = ['changer-mot-de-passe', 'logout'];
  * Au plus une fois par SESSION_REVALIDATION_DELAI (horodatage 'verifie_le' ; absent = session
  * ouverte avant cette version, revalidée tout de suite) relit Actif, les rôles (utilisateur_role), ChangeLogin et
  * PwdVersion (si la colonne existe) du compte, ainsi que Login : ligne absente, Actif = 0, liste
- * (triée) des rôles changée, compte JA seul sans fiche, login changé ou version du mot de passe différente → session détruite (cookie compris, detruireSessionNijac())
+ * (triée) des rôles changée, compte JA seul sans fiche, login changé ou version du mot de passe différente,
+ * session basculée vers le compte JA lié dont le compte d'origine n'est plus valide (motifSessionOrigineInvalide())
+ * → session détruite (cookie compris, detruireSessionNijac())
  * et retour à E001. Une session sans 'pwd_version' (ouverte avant EA98 / cette version) adopte
  * la version courante. ChangeLogin passé à 1 en base (EA86 « Écraser » avant EA98) est reporté.
  * Base injoignable : pas de destruction (journalisé), nouvel essai à la requête suivante.
@@ -3582,6 +3816,7 @@ function revaliderSessionUtilisateur(string $chemin = ''): ?string
 
             // Rôles en base (utilisateur_role) ; compte JA (rôle exclusif) sans fiche ja → session détruite.
             $rolesBase    = $row ? rolesUtilisateur($pdo, (int) $u['id']) : [];
+            $roles        = $rolesBase; // ordre de la base (principal en tête), avant le tri de comparaison
             $jaSansFiche  = $rolesBase === ['JA'] && !ficheJaExiste($pdo, (int) $u['id']);
             $rolesSession = isset($u['roles']) && is_array($u['roles'])
                 ? array_values($u['roles'])
@@ -3608,6 +3843,10 @@ function revaliderSessionUtilisateur(string $chemin = ''): ?string
             } elseif (array_key_exists('PwdVersion', $row) && isset($u['pwd_version'])
                 && (int) $row['PwdVersion'] !== (int) $u['pwd_version']) {
                 $motif = 'mot de passe modifié';
+            } elseif (!empty($u['origine_id'])) {
+                // Session basculée vers le compte JA lié (POST changer-compte) : le compte d'origine
+                // doit rester actif, de même mot de passe, et son lien pointer vers ce compte.
+                $motif = motifSessionOrigineInvalide($pdo, $u);
             }
             if ($motif !== null) {
                 error_log('[NIJAC][SEC] session invalidée (' . $motif . ', Id_Utilisateur ' . (int) $u['id'] . ')');
@@ -3622,11 +3861,8 @@ function revaliderSessionUtilisateur(string $chemin = ''): ?string
                 $_SESSION['utilisateur']['change_login'] = true;
             }
             // Session ouverte avant les rôles multiples : 'roles' complété (rôle principal en tête).
-            if (!isset($u['roles']) || !is_array($u['roles']) || $retirerJa) {
+            if (!isset($u['roles']) || !is_array($u['roles'])) {
                 $_SESSION['utilisateur']['roles'] = $roles;
-                if ($retirerJa && (string) ($u['role'] ?? '') === 'JA') {
-                    $_SESSION['utilisateur']['role'] = $roles[0] ?? '';
-                }
             }
             $_SESSION['utilisateur']['is_admin']   = in_array('Administrateur', $roles, true);
             $_SESSION['utilisateur']['verifie_le'] = time();

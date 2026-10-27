@@ -353,6 +353,7 @@ Page d'accueil d'un juge-arbitre disposant d'un compte utilisateur (rôle `JA`, 
 | Mes nominations | EJA3 | `ja/nominations` |
 | Mes frais | EJA4 | `ja/frais` |
 | Mot de passe | E006 | `changer-mot-de-passe` (filtre `auth:CSR,Defiscalisateur,CRA Convoc,JA`) |
+| Revenir à mon compte nominateur | — | `POST changer-compte` `action=retour` — affiché seulement pour une session ouverte depuis un compte non-JA lié (`origine_id`, voir « Compte JA lié » ci-dessous) |
 | Se déconnecter | — | `POST logout` (formulaire caché `#form-logout` + CSRF) |
 
 ### Règles
@@ -363,6 +364,13 @@ Page d'accueil d'un juge-arbitre disposant d'un compte utilisateur (rôle `JA`, 
 - La fiche vient TOUJOURS de `idJaCompteSession()` (`$_SESSION['utilisateur']['id']` si rôle JA ET fiche existante, sinon 0 = refus), revérifiée par le filtre ET par chaque contrôleur JA (E011, EJA2–EJA4), jamais du client ; toute nomination visée par un id client est vérifiée comme appartenant à ce JA.
 - Les liens publics tokenisés EN19 / EN21 / EN22 restent valables (JA sans compte). Une session de rôle JA ne peut pas utiliser `?id_ja=N` en clair sur EN22 (réservé aux sessions du personnel).
 - Le lien de retour d'E006 ramène ce rôle vers E011.
+
+### Compte JA lié (bascule sans reconnexion)
+- Une personne à la fois nominateur (ou autre rôle non-JA) et JA a **deux comptes** (JA exclusif). Colonne `utilisateur.Id_Utilisateur_Lie` (même type entier que `Id_Utilisateur`, NULL, index UNIQUE `uq_utilisateur_lie` (plusieurs NULL acceptés ; s'il existe déjà des doublons, l'ancien index non unique `idx_utilisateur_lie` est conservé et les doublons journalisés — `assurerIndexUniqueCompteLie()`, EA98), créée par EA98 via `assurerColonneCompteLie()` ; absente → aucun lien, `utilisateurAColonneLie()` à cache `information_schema`) = compte JA lié au compte non-JA. Réglée **uniquement** par un administrateur dans EA86 (champ « Compte JA lié »).
+- E002 / E003 : bouton « Accéder à mon espace JA » (code E011) affiché seulement si `idCompteJaLie()` trouve un lien utilisable (compte source actif et non-JA, cible ≠ source, active, rôle JA seul, fiche `ja` de même Id). Formulaire `POST changer-compte` `action=ja` + `csrf_field()`.
+- `POST changer-compte` (`ChangerCompteController`, filtre `auth:CSR,Defiscalisateur,CRA Convoc,JA`, CSRF global) : **jamais d'id cible venant du client**. `ja` : cible = `idCompteJaLie()` relu en base ; refusé depuis une session déjà basculée ou pendant un changement de mot de passe forcé. `retour` : cible = `origine_id` de la session, revalidé par `motifSessionOrigineInvalide()` (compte existant, actif, même `PwdVersion` qu'à la bascule, lien pointant toujours vers le compte JA courant) — invalide → session détruite, retour E001. Puis `session_regenerate_id(true)`, `$_SESSION['utilisateur']` reconstruit par `construireSessionUtilisateur()` (+ `origine_id` / `origine_pwd_version` pour `ja`), déverrouillage TOTP oublié, journal `[NIJAC][SEC] changer-compte (ja|retour) : Id_Utilisateur X → Y`, redirection vers `menuDuRole()` du compte cible. Pas de nouveau mot de passe ni de code E010 (utilisateur déjà authentifié sur le compte d'origine).
+- Revalidation (`revaliderSessionUtilisateur()`, 1 fois / minute) : une session avec `origine_id` est détruite si le compte d'origine est supprimé / désactivé, si son mot de passe a changé ou si son lien a changé (motifs journalisés). `POST logout` détruit tout.
+- `changer-compte` fait partie de `ROUTES_CHANGE_LOGIN` : un compte JA lié encore en `ChangeLogin = 1` arrive sur E006, qui propose « Revenir à mon compte nominateur » à côté de « Se déconnecter ».
 
 ### Convention des comptes JA (Id_Utilisateur = Id_JA)
 - Un compte de rôle `JA` a **`utilisateur.Id_Utilisateur` = `ja.Id_JA`** de sa fiche : INSERT avec Id explicite (`creerCompteJa()`), par EN15 « Invitation JA » ou EA86 « Nouveau ». Login = Email = adresse du JA, Prénom vide, Nom = nom de la fiche, `ChangeLogin = 1`, rôle `JA` principal dans `utilisateur_role`.
@@ -1813,6 +1821,7 @@ Gérer les comptes utilisateurs de l'application (création, modification, suppr
 | Actif | Booléen | Oui |
 | `ChangeLogin` | Booléen | Forcé à 1 quand un mot de passe est généré |
 | `PwdVersion` | `INT UNSIGNED NOT NULL DEFAULT 0` (créée par EA98) — version du mot de passe, non affichée | Incrémentée à chaque changement de mot de passe (E006, E008, case Écraser) |
+| Compte JA lié | `utilisateur.Id_Utilisateur_Lie` (NULL, créée par EA98) — liste déroulante « Compte JA lié » des comptes actifs de rôle JA seul avec fiche (`GET utilisateur/comptes-ja`, comptes déjà liés ailleurs grisés), masquée pour un compte JA ; désactivée avant EA98. Ouvre le bouton « Accéder à mon espace JA » d'E002 / E003 (voir E011 « Compte JA lié ») | Non |
 | Fiche juge-arbitre | Pas de colonne : pour le rôle `JA`, l'Id du compte EST le n° de la fiche (`Id_Utilisateur = ja.Id_JA`). Bloc affiché seulement quand la case `JA` est cochée à la création : recherche par nom / prénom / n° (`GET utilisateur/fiches-ja?q=`, 20 résultats, JA1 actifs d'abord, fiches dont l'Id est déjà porté par un compte grisées) | Oui à la création d'un compte JA (non modifiable ensuite) |
 
 ### Actions AJAX
@@ -1820,6 +1829,7 @@ Gérer les comptes utilisateurs de l'application (création, modification, suppr
 |--------|---------|-------------|
 | `data` | GET | Retourne tous les utilisateurs avec `Roles` (codes, principal en tête) et `RolePrincipal` (`data/{id}` pour un seul, avec `FicheJa` = libellé de la fiche de même Id pour un compte JA) |
 | `fiches-ja` | GET | Recherche de fiches `ja` (`q` ≥ 2 caractères) : `Id_JA`, `Nom`, `Prenom`, `JA1`, `Email`, `compte_login` / `compte_role` (compte portant déjà l'Id = n° de fiche) |
+| `comptes-ja` | GET | Comptes actifs de rôle JA seul rattachés à une fiche (`Id_Utilisateur`, `Login`, `Nom`, `Prenom`, `LiePar` = compte qui le lie déjà) + `colonne` (Id_Utilisateur_Lie présente) |
 | `store` | POST | Créer un utilisateur (mot de passe aléatoire généré, renvoyé dans `mdp`) |
 | `update` | PUT | Modifier ; régénère le mot de passe si `ecraser=1` (renvoyé dans `mdp`) |
 | `delete` | DELETE | Supprimer un utilisateur |
@@ -1827,6 +1837,7 @@ Gérer les comptes utilisateurs de l'application (création, modification, suppr
 ### Validations
 - Login, Nom, Prénom, **Email**, au moins un rôle, rôle principal, Département obligatoires — email requis côté client (`required`, `checkValidity()`) et serveur (non vide, 150 caractères max, `FILTER_VALIDATE_EMAIL`), en création comme en modification ; pas de contrôle d'unicité (des comptes partagent déjà une adresse)
 - Un compte sans email valide ne peut pas se connecter tant que la double authentification est active (E001) : le corriger ici
+- Compte JA lié (`compte_ja_lie`, vide = aucun, champ absent = inchangé) — `controlerCompteJaLie()` : cible = compte actif de rôle JA seul avec fiche, différent du compte édité, pas déjà lié à un autre compte ; un compte JA ne porte jamais de lien ; colonne absente → « chargez EA98 ». Suppression d'un compte : les liens qui pointaient vers lui sont remis à NULL
 - Rôles valides : `rolesValides()` = codes de la table `role` (par `Priorite` ; repli `ROLES_REFERENCE` avant EA98). Enregistrement par `enregistrerRolesUtilisateur()` (DELETE + INSERT dans `utilisateur_role`, dans la transaction de `store`/`update`), un seul `estPrincipal = 1` par utilisateur. Plus d'ENUM `utilisateur.Role` : colonne migrée puis supprimée par EA98 (`assurerRolesUtilisateurs()`), les anciens `assurerRoleCsr()` / `assurerRoleDefiscalisateur()` / `assurerRoleCraConvoc()` / `assurerRoleJa()` n'existent plus ; un nouveau rôle = une ligne dans `role`
 - Rôle `JA` **exclusif** (non cumulable) : tout jeu de rôles mêlant JA et un autre rôle est refusé côté serveur (`extraireRoles()`, « Le rôle JA est exclusif… ») ; côté client, cocher JA décoche et désactive les autres rôles, cocher un autre rôle décoche JA ; un compte existant non-JA ne peut jamais recevoir JA, un compte JA jamais un autre rôle. Compte hérité cumulant JA et d'autres rôles : avertissement, régularisable (JA seul — fiche de même Id requise, puis mêmes verrous qu'un compte JA — ou sans JA), journalisé.
 - Rôle `JA` — **création** (`creerCompteJaEa86()`, « Nouveau » + case JA cochée) : JA seul rôle (principal) ; fiche obligatoire et existante, mêmes règles qu'EN15 « Invitation JA » (`etatCompteJa()`, `creerCompteJa()`) : `Id_Utilisateur` = n° de fiche (INSERT avec Id explicite, refus si cet Id est déjà pris par un autre compte), Login = Email = adresse saisie, Nom = nom de la fiche, Prénom vide (champs login / nom / prénom désactivés côté client, ignorés côté serveur), département de la fiche (sinon celui choisi), refus si la fiche a déjà un compte ou si l'adresse est déjà le login d'un autre compte / l'email d'un autre compte JA ; mot de passe provisoire affiché comme pour les autres créations. La recherche de fiches grise celles dont l'identifiant est déjà porté par un compte (`compte_login`)

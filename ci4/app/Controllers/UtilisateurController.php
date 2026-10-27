@@ -160,6 +160,55 @@ class UtilisateurController extends BaseController
         return $this->response->setJSON(['ok' => true, 'data' => $st->fetchAll(\PDO::FETCH_ASSOC)]);
     }
 
+    /**
+     * GET utilisateur/comptes-ja : comptes actifs de rôle JA SEUL rattachés à une fiche ja (convention
+     * Id_Utilisateur = Id_JA), proposés dans le champ « Compte JA lié » d'EA86. `LiePar` = Id du compte
+     * qui le lie déjà (null sinon) ; `colonne` = utilisateur.Id_Utilisateur_Lie présente (EA98).
+     * La validation serveur (controlerCompteJaLie()) refait tous les contrôles.
+     */
+    public function comptesJa(): ResponseInterface
+    {
+        $pdo     = getPDO();
+        $colonne = utilisateurAColonneLie($pdo);
+        if (tableRolesExiste($pdo)) {
+            $critere = "EXISTS (SELECT 1 FROM utilisateur_role ur WHERE ur.Id_Utilisateur = u.Id_Utilisateur AND ur.Role = 'JA')
+                    AND NOT EXISTS (SELECT 1 FROM utilisateur_role ur WHERE ur.Id_Utilisateur = u.Id_Utilisateur AND ur.Role <> 'JA')";
+        } elseif (utilisateurAColonneRole($pdo)) {
+            $critere = "u.Role = 'JA'";
+        } else {
+            return $this->response->setJSON(['ok' => true, 'colonne' => $colonne, 'data' => []]);
+        }
+        $liePar = $colonne
+            ? '(SELECT MIN(s.Id_Utilisateur) FROM utilisateur s WHERE s.Id_Utilisateur_Lie = u.Id_Utilisateur)'
+            : 'NULL';
+        $rows = $pdo->query('
+            SELECT u.Id_Utilisateur, u.Login, ja.Nom, ja.Prenom, ' . $liePar . ' AS LiePar
+            FROM utilisateur u
+            JOIN ja ON ja.Id_JA = u.Id_Utilisateur
+            WHERE u.Actif = 1 AND ' . $critere . '
+            ORDER BY ja.Nom, ja.Prenom
+        ')->fetchAll(\PDO::FETCH_ASSOC);
+
+        return $this->response->setJSON(['ok' => true, 'colonne' => $colonne, 'data' => $rows]);
+    }
+
+    /**
+     * Champ `compte_ja_lie` reçu d'EA86 : [présent, valeur] — valeur null = aucun lien (champ vide),
+     * entier sinon (≤ 0 = invalide, refusé par controlerCompteJaLie()). Absent = lien inchangé.
+     */
+    private function compteJaLieSaisi(array $input): array
+    {
+        if (!array_key_exists('compte_ja_lie', $input)) {
+            return [false, null];
+        }
+        $brut = is_scalar($input['compte_ja_lie']) ? trim((string) $input['compte_ja_lie']) : 'x';
+        if ($brut === '') {
+            return [true, null];
+        }
+
+        return [true, ctype_digit($brut) ? (int) $brut : 0];
+    }
+
     /** Libellé « licence — Nom Prénom » d'une fiche ja (null si introuvable). */
     private function libelleFicheJa(?int $idJa): ?string
     {
@@ -234,6 +283,14 @@ class UtilisateurController extends BaseController
             $row['FicheJa'] = in_array('JA', $row['Roles'], true) ? $this->libelleFicheJa($id) : null;
             // Compte hérité cumulant JA et d'autres rôles (antérieur à la règle JA exclusif) : à régulariser.
             $row['JaCumule'] = in_array('JA', $row['Roles'], true) && count($row['Roles']) > 1;
+            // Compte JA lié (bascule E002/E003 ↔ E011), null si aucun ou colonne absente (avant EA98).
+            $row['IdUtilisateurLie'] = null;
+            if (utilisateurAColonneLie(getPDO())) {
+                $st = getPDO()->prepare('SELECT Id_Utilisateur_Lie FROM utilisateur WHERE Id_Utilisateur = ?');
+                $st->execute([$id]);
+                $lie = $st->fetchColumn();
+                $row['IdUtilisateurLie'] = ($lie === false || $lie === null) ? null : (int) $lie;
+            }
         }
 
         return $this->response->setJSON(
@@ -266,6 +323,10 @@ class UtilisateurController extends BaseController
 
         // Rôle JA coché : convention Id_Utilisateur = Id_JA, Login = Email, JA seul (exclusif, creerCompteJaEa86()).
         if (is_array($roles) ? in_array('JA', $roles, true) : $roles === 'JA') {
+            // Un compte JA ne porte jamais de compte JA lié.
+            if ($this->compteJaLieSaisi($input)[1] !== null) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Un compte JA ne peut pas porter de compte JA lié.']);
+            }
             return $this->creerCompteJaEa86($input);
         }
 
@@ -279,6 +340,13 @@ class UtilisateurController extends BaseController
         }
 
         $pdo = getPDO();
+        [$liePresent, $lie] = $this->compteJaLieSaisi($input);
+        if ($liePresent && ($err = controlerCompteJaLie($pdo, 0, $lie, false)) !== null) {
+            return $this->response->setJSON(['ok' => false, 'msg' => $err]);
+        }
+        if ($liePresent && utilisateurAColonneLie($pdo)) {
+            $fields['Id_Utilisateur_Lie'] = $lie;
+        }
         try {
             $pdo->beginTransaction();
             $id = $this->ecrireUtilisateur($pdo, $fields);
@@ -289,9 +357,11 @@ class UtilisateurController extends BaseController
                 $pdo->rollBack();
             }
             error_log('[NIJAC] EA86 création utilisateur : ' . $e->getMessage());
-            $msg = ($e instanceof \RuntimeException && !($e instanceof \PDOException))
-                ? $e->getMessage()
-                : 'Création impossible (erreur base de données).';
+            $msg = estViolationCompteLieUnique($e)
+                ? 'Ce compte JA est déjà lié à un autre compte.'
+                : (($e instanceof \RuntimeException && !($e instanceof \PDOException))
+                    ? $e->getMessage()
+                    : 'Création impossible (erreur base de données).');
 
             return $this->response->setJSON(['ok' => false, 'msg' => $msg]);
         }
@@ -333,7 +403,12 @@ class UtilisateurController extends BaseController
             && in_array('Administrateur', $rolesActuels, true) && !in_array('Administrateur', $r[0], true)) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Vous ne pouvez pas retirer votre propre rôle Administrateur.']);
         }
+        [$liePresent, $lie] = $this->compteJaLieSaisi($input);
         if ($estJa || ($mixte && $r[0] === ['JA'])) {
+            // Un compte JA ne porte jamais de compte JA lié.
+            if ($lie !== null) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Un compte JA ne peut pas porter de compte JA lié.']);
+            }
             return $this->majEmailCompteJa($id, $input, $existant, $r[0], $mixte);
         }
 
@@ -350,6 +425,27 @@ class UtilisateurController extends BaseController
 
         if (is_string($fields)) {
             return $this->response->setJSON(['ok' => false, 'msg' => $fields]);
+        }
+
+        // Compte JA lié (utilisateur.Id_Utilisateur_Lie) : contrôles serveur (controlerCompteJaLie()) ;
+        // champ absent = lien inchangé. Un changement de lien ferme, à la revalidation suivante, une
+        // session basculée vers l'ancien compte JA (motifSessionOrigineInvalide()).
+        // Valeur identique à celle en base = lien inchangé : pas de contrôle (une cible devenue
+        // inactive ne bloque pas la modification du reste du compte) ni d'écriture.
+        if ($liePresent && utilisateurAColonneLie($pdo)) {
+            $st = $pdo->prepare('SELECT Id_Utilisateur_Lie FROM utilisateur WHERE Id_Utilisateur = ?');
+            $st->execute([$id]);
+            $lieBase = $st->fetchColumn();
+            $lieBase = ($lieBase === false || $lieBase === null) ? null : (int) $lieBase;
+            if ($lie === $lieBase) {
+                $liePresent = false;
+            }
+        }
+        if ($liePresent && ($err = controlerCompteJaLie($pdo, $id, $lie, false)) !== null) {
+            return $this->response->setJSON(['ok' => false, 'msg' => $err]);
+        }
+        if ($liePresent && utilisateurAColonneLie($pdo)) {
+            $fields['Id_Utilisateur_Lie'] = $lie;
         }
 
         // Le login du compte réservé ne change jamais (sinon l'accès EA96/EA97/EA98 serait perdu
@@ -386,9 +482,11 @@ class UtilisateurController extends BaseController
                 $pdo->rollBack();
             }
             error_log('[NIJAC] EA86 mise à jour utilisateur ' . $id . ' : ' . $e->getMessage());
-            $msg = ($e instanceof \RuntimeException && !($e instanceof \PDOException))
-                ? $e->getMessage()
-                : 'Mise à jour impossible (erreur base de données).';
+            $msg = estViolationCompteLieUnique($e)
+                ? 'Ce compte JA est déjà lié à un autre compte.'
+                : (($e instanceof \RuntimeException && !($e instanceof \PDOException))
+                    ? $e->getMessage()
+                    : 'Mise à jour impossible (erreur base de données).');
 
             return $this->response->setJSON(['ok' => false, 'msg' => $msg]);
         }
@@ -456,6 +554,10 @@ class UtilisateurController extends BaseController
 
         $db = \Config\Database::connect();
         $db->table('Messagerie')->where('Id_Utilisateur', $id)->delete();
+        // Compte JA supprimé : les liens qui pointaient vers lui sont retirés (colonne EA98).
+        if (utilisateurAColonneLie(getPDO())) {
+            getPDO()->prepare('UPDATE utilisateur SET Id_Utilisateur_Lie = NULL WHERE Id_Utilisateur_Lie = ?')->execute([$id]);
+        }
         if (tableRolesExiste(getPDO())) {
             $db->table('utilisateur_role')->where('Id_Utilisateur', $id)->delete();
         }

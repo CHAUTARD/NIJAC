@@ -29,9 +29,23 @@ class AdminMenuController extends BaseController
             'isChautard'           => ($u['login'] ?? '') === 'CHAUTARD',
             'ffttJoursExpiration'  => getFfttApiJoursAvantExpiration(),
             'infosPhp'             => $this->infosPhp(),
+            // Bouton « Accéder à mon espace JA » (POST changer-compte) : compte JA lié utilisable.
+            'compteJaLie'          => $this->compteJaLieUtilisable((int) ($u['id'] ?? 0)),
         ];
 
         return view('admin_menu_index', $data);
+    }
+
+    /** Le compte a-t-il un compte JA lié utilisable (idCompteJaLie()) ? Base injoignable : non. */
+    private function compteJaLieUtilisable(int $id): bool
+    {
+        try {
+            return idCompteJaLie(getPDO(), $id) > 0;
+        } catch (\Throwable $e) {
+            error_log('[NIJAC] E002 compte JA lié : ' . $e->getMessage());
+
+            return false;
+        }
     }
 
     /**

@@ -271,6 +271,8 @@
         /* Bouton déconnexion : 1re colonne, sur la même (dernière) ligne que Documentation
            (grid-auto-flow: dense rebouche la case libre plutôt que d'ouvrir une nouvelle ligne) */
         #menu-grid .menu-btn-wrap.mbw-logout { grid-column: 1; }
+        /* Bouton « Accéder à mon espace JA » (compte JA lié) : à côté de la déconnexion */
+        #menu-grid .menu-btn-wrap.mbw-ja { grid-column: 2; }
 
         /* Code écran en haut à droite de chaque bouton */
         .menu-btn { position: relative; }
@@ -292,7 +294,7 @@
         /* Écrans moyens / petits : la grille passe de 5 à 3, 2 puis 1 colonne */
         @media (max-width: 1199.98px) {
             .dash-cards, #menu-grid { grid-template-columns: repeat(3, 1fr); }
-            #menu-grid .menu-btn-wrap.mbw-doc, #menu-grid .menu-btn-wrap.mbw-logout { grid-column: auto; }
+            #menu-grid .menu-btn-wrap.mbw-doc, #menu-grid .menu-btn-wrap.mbw-logout, #menu-grid .menu-btn-wrap.mbw-ja { grid-column: auto; }
         }
         @media (max-width: 767.98px) {
             .dash-cards, #menu-grid { grid-template-columns: repeat(2, 1fr); }
@@ -484,6 +486,19 @@
             <span class="btn-desc">Guide des écrans (nouvelle page)</span>
         </a>
     </div>
+
+    <?php if (!empty($compteJaLie)): ?>
+    <?php /* Compte JA lié (EA86) : bascule vers E011 sans reconnexion, POST changer-compte (cible relue en base). */ ?>
+    <div class="menu-btn-wrap mbw-ja">
+        <form method="post" action="<?= site_url('changer-compte') ?>" id="form-espace-ja" class="d-none"><?= csrf_field() ?><input type="hidden" name="action" value="ja"></form>
+        <a href="#" class="menu-btn btn-ja" onclick="document.getElementById('form-espace-ja').submit(); return false;">
+            <span class="btn-code">E011</span>
+            <div class="btn-icon"><img src="<?= base_url('img/Arbitre_filet.webp') ?>" alt="Espace JA"></div>
+            <span>Accéder à mon espace JA</span>
+            <span class="btn-desc">Menu juge-arbitre, sans vous reconnecter</span>
+        </a>
+    </div>
+    <?php endif; ?>
 
     <div class="menu-btn-wrap mbw-logout">
         <form method="post" action="<?= site_url('logout') ?>" id="form-logout" class="d-none"><?= csrf_field() ?></form>

@@ -62,6 +62,8 @@ $routes->get('utilisateur/data', 'UtilisateurController::data', ['filter' => 'ad
 $routes->get('utilisateur/data/(:segment)', 'UtilisateurController::show/$1', ['filter' => 'adminauth']);
 // Recherche de fiche ja (nom / prénom / licence) pour le rattachement d'un compte de rôle JA (utilisateur.Id_JA).
 $routes->get('utilisateur/fiches-ja', 'UtilisateurController::fichesJa', ['filter' => 'adminauth']);
+// Comptes actifs de rôle JA seul proposés pour le champ « Compte JA lié » (utilisateur.Id_Utilisateur_Lie).
+$routes->get('utilisateur/comptes-ja', 'UtilisateurController::comptesJa', ['filter' => 'adminauth']);
 $routes->post('utilisateur', 'UtilisateurController::store', ['filter' => 'adminauth']);
 $routes->put('utilisateur/(:segment)', 'UtilisateurController::update/$1', ['filter' => 'adminauth']);
 $routes->delete('utilisateur/(:segment)', 'UtilisateurController::delete/$1', ['filter' => 'adminauth']);
@@ -444,6 +446,14 @@ $routes->get('logout', 'LogoutController::rediriger');
 // actuel limités par compte (mdp_actuel:<id>).
 $routes->get('changer-mot-de-passe', 'ChangerMotDePasseController::index', ['filter' => 'auth:CSR,Defiscalisateur,CRA Convoc,JA']);
 $routes->post('changer-mot-de-passe', 'ChangerMotDePasseController::index', ['filter' => 'auth:CSR,Defiscalisateur,CRA Convoc,JA']);
+
+// ── Bascule vers le compte JA lié / retour (pas un écran EXXX) ───────────────
+// POST seul (filtre csrf global), tout rôle connecté. action=ja : vers le compte JA lié
+// (utilisateur.Id_Utilisateur_Lie, réglé par un administrateur dans EA86 ; bouton E002 / E003) ;
+// action=retour : vers le compte d'origine mémorisé en session (bouton E011). Cible toujours relue
+// en base, jamais fournie par le client — voir ChangerCompteController. Accessible pendant un
+// changement de mot de passe forcé (ROUTES_CHANGE_LOGIN) pour le seul retour.
+$routes->post('changer-compte', 'ChangerCompteController::index', ['filter' => 'auth:CSR,Defiscalisateur,CRA Convoc,JA']);
 
 // ── E007 Mot de passe oublié (demande) + E008 Réinitialisation (lien email) ──
 // Pages PUBLIQUES (aucun filtre auth) : l'utilisateur n'est pas connecté. Le
