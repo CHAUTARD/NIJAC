@@ -113,13 +113,14 @@ class DisponibiliteJaController extends BaseController
 
     /**
      * Compte connecté autorisé à utiliser ?id_ja=N en clair : un rôle au moins, et pas un compte JA
-     * (rôle JA exclusif : un compte JA a le seul rôle 'JA').
+     * (rôle JA exclusif : un compte JA a le seul rôle 'JA'), ni une session en mode JA (fiche liée :
+     * rôles de session = ['JA'], ses disponibilités passent par EJA2).
      */
     private static function estSessionPersonnel($u): bool
     {
         $roles = is_array($u) ? rolesDe($u) : [];
 
-        return $roles !== [] && $roles !== ['JA'];
+        return $roles !== [] && $roles !== ['JA'] && !estSessionModeJa(is_array($u) ? $u : []);
     }
 
     public function index()

@@ -9,7 +9,7 @@ namespace App\Controllers;
  * championnat régional `competition_regionale`, réponses `disponible`, note, défiscalisation,
  * arbitrage dans les départements voisins) et sa vue `disponibilite_ja_index` ; seule la résolution
  * du JA change : la fiche est celle du compte connecté (convention Id_Utilisateur = ja.Id_JA,
- * idJaCompteSession() : rôle JA + fiche existante, revérifié ici en plus du filtre), jamais un paramètre
+ * idJaCompteSession() : rôle JA + fiche existante, ou fiche liée en mode JA, revérifié ici en plus du filtre), jamais un paramètre
  * client (`ja` / `id_ja` ignorés). 0 = refus (parent : JA introuvable).
  * Routes `ja/disponibilites/...` (mêmes noms d'actions qu'EN22, voir Routes.php).
  */

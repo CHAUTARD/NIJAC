@@ -132,20 +132,20 @@ class NominateurMenuController extends BaseController
             'isAdmin'         => !empty($u['is_admin']),
             'stats'           => $stats,
             'prochaineDateFr' => $prochaineDateFr,
-            // Bouton « Accéder à mon espace JA » (POST changer-compte) : compte JA lié utilisable.
-            'compteJaLie'     => $this->compteJaLieUtilisable((int) ($u['id'] ?? 0)),
+            // Bouton « Accéder à mon espace JA » (POST changer-compte action=ja) : fiche JA liée utilisable, hors mode JA.
+            'compteJaLie'     => !estSessionModeJa($u) && $this->compteJaLieUtilisable((int) ($u['id'] ?? 0)),
         ];
 
         return view('nominateur_menu_index', $data);
     }
 
-    /** Le compte a-t-il un compte JA lié utilisable (idCompteJaLie()) ? Base injoignable : non. */
+    /** Le compte a-t-il une fiche JA liée utilisable (idFicheJaLiee()) ? Base injoignable : non. */
     private function compteJaLieUtilisable(int $id): bool
     {
         try {
-            return idCompteJaLie(getPDO(), $id) > 0;
+            return idFicheJaLiee(getPDO(), $id) > 0;
         } catch (\Throwable $e) {
-            error_log('[NIJAC] E003 compte JA lié : ' . $e->getMessage());
+            error_log('[NIJAC] E003 fiche JA liée : ' . $e->getMessage());
 
             return false;
         }

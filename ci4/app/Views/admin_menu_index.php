@@ -489,7 +489,7 @@
     <!-- ── Commun, sous les onglets : Quitter ── -->
     <div id="zone-deconnexion">
         <?php if (!empty($compteJaLie)): ?>
-        <?php /* Compte JA lié (EA86) : bascule vers E011 sans reconnexion, POST changer-compte (cible relue en base). */ ?>
+        <?php /* Fiche JA liée (EA86) : mode JA vers E011 sans reconnexion ni changement de compte, POST changer-compte (fiche relue en base). */ ?>
         <form method="post" action="<?= site_url('changer-compte') ?>" id="form-espace-ja" class="d-none"><?= csrf_field() ?><input type="hidden" name="action" value="ja"></form>
         <a href="#" class="menu-btn" style="background:#e3f2fd;" onclick="document.getElementById('form-espace-ja').submit(); return false;">
             <span class="btn-code">E011</span>

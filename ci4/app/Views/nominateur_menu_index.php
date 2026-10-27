@@ -271,7 +271,7 @@
         /* Bouton déconnexion : 1re colonne, sur la même (dernière) ligne que Documentation
            (grid-auto-flow: dense rebouche la case libre plutôt que d'ouvrir une nouvelle ligne) */
         #menu-grid .menu-btn-wrap.mbw-logout { grid-column: 1; }
-        /* Bouton « Accéder à mon espace JA » (compte JA lié) : à côté de la déconnexion */
+        /* Bouton « Accéder à mon espace JA » (fiche JA liée) : à côté de la déconnexion */
         #menu-grid .menu-btn-wrap.mbw-ja { grid-column: 2; }
 
         /* Code écran en haut à droite de chaque bouton */
@@ -488,7 +488,7 @@
     </div>
 
     <?php if (!empty($compteJaLie)): ?>
-    <?php /* Compte JA lié (EA86) : bascule vers E011 sans reconnexion, POST changer-compte (cible relue en base). */ ?>
+    <?php /* Fiche JA liée (EA86) : mode JA vers E011 sans reconnexion ni changement de compte, POST changer-compte (fiche relue en base). */ ?>
     <div class="menu-btn-wrap mbw-ja">
         <form method="post" action="<?= site_url('changer-compte') ?>" id="form-espace-ja" class="d-none"><?= csrf_field() ?><input type="hidden" name="action" value="ja"></form>
         <a href="#" class="menu-btn btn-ja" onclick="document.getElementById('form-espace-ja').submit(); return false;">

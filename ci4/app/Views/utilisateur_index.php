@@ -122,6 +122,12 @@
                     </div>
                     <?php endforeach; ?>
                 </div>
+                <!-- Compte existant non-JA : rôle Juge-Arbitre non cochable (convention Id_Utilisateur = n° de fiche JA) -->
+                <div id="info-ja-existant" class="form-text small text-secondary d-none">
+                    <i class="bi bi-info-circle me-1"></i>Rôle <?= esc($roles['JA'] ?? 'Juge-Arbitre') ?> : un compte existant ne peut pas le recevoir
+                    (l'identifiant d'un compte JA est le n° de sa fiche juge-arbitre). Renseignez plutôt sa « Fiche JA liée (n° de licence) » :
+                    la personne ouvrira son espace JA depuis son menu, sans compte JA.
+                </div>
             </div>
 
             <div class="row g-2 mb-2">
@@ -149,13 +155,17 @@
             <!-- Compte de rôle JA : convention Id_Utilisateur = n° de fiche, Login = Email, seul l'email modifiable -->
             <div id="info-compte-ja" class="alert alert-warning py-1 px-2 small mb-2 d-none"></div>
 
-            <!-- Compte JA lié (comptes non-JA) : bouton « Accéder à mon espace JA » sur E002 / E003, sans reconnexion -->
-            <div id="bloc-compte-lie" class="mb-2">
-                <label class="form-label" for="cbo-compte-lie">Compte JA lié :</label>
-                <select id="cbo-compte-lie" class="form-select form-select-sm">
-                    <option value="">— Aucun —</option>
+            <!-- Fiche JA liée (comptes non-JA, utilisateur.Id_Ja) : bouton « Accéder à mon espace JA » sur E002 / E003, sans compte JA ni reconnexion -->
+            <div id="bloc-fiche-liee" class="mb-2">
+                <label class="form-label" for="cbo-fiche-liee">Fiche JA liée (n° de licence) :</label>
+                <select id="cbo-fiche-liee" class="form-select form-select-sm">
+                    <option value="">— Aucune —</option>
                 </select>
-                <div id="aide-compte-lie" class="form-text small">Compte actif de rôle JA de la même personne : elle pourra ouvrir le menu JA (E011) depuis son menu, sans se reconnecter, puis revenir.</div>
+                <div id="aide-fiche-liee" class="form-text small">Fiche juge-arbitre de la même personne (son n° de licence) : elle ouvrira son espace JA (E011) depuis son menu, sans compte JA ni reconnexion, puis reviendra à son compte.</div>
+                <!-- Présélection « même nom » = simple suggestion : jamais envoyée sans ce clic (ou un choix manuel dans la liste) -->
+                <button type="button" id="btn-confirmer-fiche-liee" class="btn btn-sm btn-outline-primary mt-1 d-none">
+                    <i class="bi bi-check2"></i> Suggestion : cliquez pour confirmer cette fiche
+                </button>
             </div>
 
             <div class="form-check">
@@ -252,6 +262,11 @@ function majRoles() {
         if (this.value === 'Administrateur' && currentId !== null && currentId === MOI_ID && rolesCharges.includes('Administrateur')) off = true;
         $(this).prop('disabled', off);
     });
+    // Compte existant non-JA : JA non cochable → explication (« Fiche JA liée » à la place d'un compte JA).
+    const jaInterdit = currentId !== null && !rolesCharges.includes('JA');
+    $('#info-ja-existant').toggleClass('d-none', !jaInterdit);
+    $('.chk-role').filter(function () { return this.value === 'JA'; })
+        .closest('.role-ligne').attr('title', jaInterdit ? $('#info-ja-existant').text().replace(/\s+/g, ' ').trim() : '');
     $('.rad-principal').each(function () {
         const possible = !compteJa && coches.includes(this.value) && (!jaCoche || coches.length === 1);
         $(this).prop('disabled', !possible);
@@ -323,7 +338,7 @@ function selectionnerLigne($tr) {
         definirRoles(rolesCharges, u.RolePrincipal || '');
         definirFicheJa(rolesCharges.includes('JA') ? u.Id_Utilisateur : '', u.FicheJa || ''); // compte JA : fiche de même Id
         majBlocFicheJa();
-        chargerComptesJa(u.IdUtilisateurLie);
+        chargerFichesLiees(u.IdJaLiee);
         $('#cbo-dept').val(u.Id_Departement);
         $('#chk-actif').prop('checked', parseInt(u.Actif) === 1);
         $('#chk-ecraser').prop('checked', false).prop('disabled', false);
@@ -350,7 +365,7 @@ $('#btn-nouveau').on('click', function () {
     definirRoles(['Nominateur'], 'Nominateur');
     definirFicheJa('', '');
     majBlocFicheJa();
-    chargerComptesJa(null);
+    chargerFichesLiees(null);
     $('#cbo-dept').val('');
     $('#chk-actif').prop('checked', true);
     // À la création, le mot de passe aléatoire est toujours généré : case forcée.
@@ -380,10 +395,12 @@ $('#btn-enregistrer').on('click', function () {
         actif:   $('#chk-actif').is(':checked') ? '1' : '0',
         ecraser: (isNew || $('#chk-ecraser').is(':checked')) ? '1' : '0',
     };
-    // Compte JA lié : jamais pour un compte JA (bloc masqué) — revérifié côté serveur. Clé envoyée
-    // seulement si la liste est chargée avec succès ; absente = lien inchangé côté serveur.
-    if (!roles.includes('JA') && comptesJaCharges) {
-        payload.compte_ja_lie = $('#cbo-compte-lie').val() || '';
+    // Fiche JA liée : jamais pour un compte JA (bloc masqué) — revérifié côté serveur. Clé envoyée
+    // seulement si la liste est chargée avec succès ; absente = lien inchangé côté serveur. Présélection
+    // « même nom » non confirmée (ni choix manuel, ni clic « confirmer ») : clé omise, jamais enregistrée.
+    const suggestionNonConfirmee = fichesLieesPreselect !== null && !fichesLieesChoixManuel;
+    if (!roles.includes('JA') && fichesLieesChargees && !suggestionNonConfirmee) {
+        payload.fiche_ja_liee = $('#cbo-fiche-liee').val() || '';
     }
     // Email obligatoire (code de sécurité E010) — revérifié côté serveur.
     if (payload.email === '' || !document.getElementById('txt-email').checkValidity()) {
@@ -426,7 +443,7 @@ $('#btn-enregistrer').on('click', function () {
         majBlocFicheJa();
         majVerrousJa();
         // Clé omise (liste non chargée) : lien inchangé en base → on recharge avec le lien mémorisé.
-        chargerComptesJa('compte_ja_lie' in payload ? (payload.compte_ja_lie || null) : lienCharge);
+        chargerFichesLiees('fiche_ja_liee' in payload ? (payload.fiche_ja_liee || null) : lienCharge);
         if (res.mdp) {
             $('#mdp-genere-code').text(res.mdp);
             $('#mdp-genere-box').removeClass('d-none');
@@ -476,66 +493,126 @@ function definirFicheJa(id, libelle) {
 }
 function majBlocFicheJa() {
     $('#bloc-fiche-ja').toggleClass('d-none', !rolesCoches().includes('JA'));
-    // Compte JA lié : réservé aux comptes non-JA (un compte JA ne porte pas de lien).
-    $('#bloc-compte-lie').toggleClass('d-none', rolesCoches().includes('JA') || estCompteJa());
+    // Fiche JA liée : réservée aux comptes non-JA (un compte JA pur ne porte pas de lien).
+    $('#bloc-fiche-liee').toggleClass('d-none', rolesCoches().includes('JA') || estCompteJa());
 }
 
-// ── Compte JA lié (utilisateur.Id_Utilisateur_Lie) ────────────────────────────
-// Liste = comptes actifs de rôle JA seul avec fiche (GET utilisateur/comptes-ja) ; un compte déjà lié à
-// un autre compte est grisé, le compte édité est exclu. Colonne absente (avant EA98) : liste désactivée.
-// Tous les contrôles sont refaits côté serveur (controlerCompteJaLie()).
-// Chargement asynchrone : la liste n'est vidée/remplie qu'à la réponse ; seule la DERNIÈRE requête est
-// prise en compte (compteur comptesJaReq). Tant que la liste n'est pas chargée avec succès
-// (comptesJaCharges = false : en cours, échec, colonne absente), l'enregistrement OMET compte_ja_lie
-// = lien inchangé côté serveur (jamais d'effacement involontaire).
-let comptesJaReq     = 0;     // n° de la dernière requête GET comptes-ja
-let comptesJaCharges = false; // liste chargée avec succès pour le compte courant
-let lienCharge       = null;  // lien du compte chargé (réappliqué après chargement)
-const AIDE_COMPTE_LIE = $('#aide-compte-lie').text();
-function chargerComptesJa(valeur) {
-    const $cbo = $('#cbo-compte-lie');
-    const req  = ++comptesJaReq;
+// ── Fiche JA liée (utilisateur.Id_Ja = ja.Id_JA, n° de licence) ─────────────────
+// Comptes non-JA seulement (rôles de priorité < 6) : la personne ouvre son espace JA (E011) depuis son menu,
+// sans compte JA. Liste = fiches ja (GET utilisateur/fiches-ja-liables) ; une fiche déjà liée à un AUTRE
+// compte n'est pas proposée. Colonne absente (avant EA98) : liste désactivée. Tous les contrôles sont refaits
+// côté serveur (controlerFicheJaLiee()).
+// Chargement asynchrone : seule la DERNIÈRE requête est prise en compte (compteur fichesLieesReq). Tant que la
+// liste n'est pas chargée avec succès (fichesLieesChargees = false : en cours, échec, colonne absente),
+// l'enregistrement OMET fiche_ja_liee = lien inchangé côté serveur (jamais d'effacement involontaire).
+let fichesLieesReq      = 0;     // n° de la dernière requête GET fiches-ja-liables
+let fichesLieesChargees = false; // liste chargée avec succès pour le compte courant
+let lienCharge          = null;  // fiche liée du compte chargé (réappliquée après chargement)
+let fichesLieesListe    = [];    // dernière liste reçue (re-groupée si le nom / prénom saisi change)
+let fichesLieesPreselect = null; // Id_JA suggéré (même nom, unique, aucun lien) — jamais envoyé sans confirmation (bouton ou choix manuel)
+let fichesLieesChoixManuel = false; // l'admin a choisi lui-même dans la liste : plus de présélection
+const AIDE_FICHE_LIEE = $('#aide-fiche-liee').text();
+// Nom / prénom comparés sans casse, sans accents, espaces réduits (trim).
+function normNom(s) {
+    return String(s || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+// (Re)remplit la liste depuis fichesLieesListe : groupe « Même nom » (fiches disponibles dont le nom — et le
+// prénom si les deux sont renseignés — correspond au compte édité) puis « Autres fiches JA ». Une seule
+// fiche de même nom et aucun lien : présélectionnée dans l'interface seulement, à confirmer par l'admin
+// (bouton « Suggestion : cliquez pour confirmer » ou choix dans la liste) — sinon clé omise à l'enregistrement.
+// premier = juste après chargement (valeur = lien du compte) ; sinon le choix courant est conservé.
+function remplirFichesLiees(premier) {
+    const $cbo  = $('#cbo-fiche-liee');
+    const avant = $cbo.val() || '';
+    const nom = normNom($('#txt-nom').val()), prenom = normNom($('#txt-prenom').val());
+    const memes = [], autres = [];
+    $cbo.empty().append($('<option value="">').text('— Aucune —'));
+    fichesLieesListe.forEach(f => {
+        const id = parseInt(f.Id_JA, 10);
+        const liePar = f.LiePar !== null ? parseInt(f.LiePar, 10) : null;
+        if (liePar !== null && liePar !== currentId) return; // déjà liée à un autre compte : non proposée
+        const $opt = $('<option>').val(id)
+            .text(id + ' — ' + ((f.Nom || '') + ' ' + (f.Prenom || '')).trim()
+                + (parseInt(f.JA1, 10) === 1 ? '' : ' (inactif JA1)'));
+        const pf = normNom(f.Prenom);
+        const meme = nom !== '' && normNom(f.Nom) === nom && (prenom === '' || pf === '' || pf === prenom);
+        (meme ? memes : autres).push($opt);
+    });
+    if (memes.length)  $cbo.append($('<optgroup>').attr('label', 'Même nom').append(memes));
+    if (autres.length) $cbo.append($('<optgroup>').attr('label', 'Autres fiches JA').append(autres));
+    if (lienCharge !== null && !$cbo.find(`option[value="${lienCharge}"]`).length) {
+        // Lien existant vers une fiche absente de la liste : affiché pour pouvoir le retirer.
+        $cbo.append($('<option>').val(lienCharge).text(lienCharge + ' — fiche introuvable (à retirer)'));
+    }
+    let v = premier ? (lienCharge !== null ? lienCharge : '') : avant;
+    if (!fichesLieesChoixManuel && fichesLieesPreselect !== null && v === fichesLieesPreselect) v = ''; // présélection recalculée
+    fichesLieesPreselect = null;
+    if (v === '' && lienCharge === null && !fichesLieesChoixManuel && memes.length === 1) {
+        v = String(memes[0].val());
+        fichesLieesPreselect = v;
+    }
+    if (v !== '' && !$cbo.find(`option[value="${v}"]`).length) v = '';
+    $cbo.val(v);
+    $('#aide-fiche-liee').removeClass('text-danger').toggleClass('text-primary', fichesLieesPreselect !== null)
+        .text(fichesLieesPreselect !== null
+            ? 'Suggestion (fiche JA de même nom) : vérifiez le n° de licence puis cliquez sur « confirmer » — sans confirmation, « Enregistrer » ne crée aucun lien.'
+            : AIDE_FICHE_LIEE);
+    $('#btn-confirmer-fiche-liee').toggleClass('d-none', fichesLieesPreselect === null);
+}
+// Confirmation explicite de la suggestion « même nom » : devient un choix de l'admin (envoyé à l'enregistrement).
+function confirmerFicheLiee() {
+    fichesLieesChoixManuel = true;
+    fichesLieesPreselect = null;
+    $('#btn-confirmer-fiche-liee').addClass('d-none');
+    $('#aide-fiche-liee').removeClass('text-primary')
+        .text('Fiche ' + $('#cbo-fiche-liee').val() + ' confirmée : cliquez sur « Enregistrer » pour créer le lien.');
+}
+$('#btn-confirmer-fiche-liee').on('click', confirmerFicheLiee);
+function chargerFichesLiees(valeur) {
+    const $cbo = $('#cbo-fiche-liee');
+    const req  = ++fichesLieesReq;
     lienCharge = valeur !== null && valeur !== undefined && String(valeur) !== '' ? String(valeur) : null;
-    comptesJaCharges = false;
+    fichesLieesChargees = false;
+    fichesLieesListe = [];
+    fichesLieesPreselect = null;
+    fichesLieesChoixManuel = false;
+    $('#btn-confirmer-fiche-liee').addClass('d-none');
     $cbo.prop('disabled', true);
-    $.getJSON(`${UTILISATEUR_BASE}/comptes-ja`).done(function (r) {
-        if (req !== comptesJaReq) return; // réponse périmée (autre compte chargé depuis)
-        $cbo.empty().append($('<option value="">').text('— Aucun —'));
+    $.getJSON(`${UTILISATEUR_BASE}/fiches-ja-liables`).done(function (r) {
+        if (req !== fichesLieesReq) return; // réponse périmée (autre compte chargé depuis)
+        $cbo.empty().append($('<option value="">').text('— Aucune —'));
+        $('#aide-fiche-liee').removeClass('text-primary');
         if (!r.ok) {
-            $('#aide-compte-lie').addClass('text-danger').text(r.msg || 'Liste des comptes JA indisponible : lien inchangé.');
+            $('#aide-fiche-liee').addClass('text-danger').text(r.msg || 'Liste des fiches JA indisponible : lien inchangé.');
             return;
         }
         $cbo.prop('disabled', !r.colonne);
-        $('#aide-compte-lie').toggleClass('text-danger', !r.colonne);
+        $('#aide-fiche-liee').toggleClass('text-danger', !r.colonne);
         if (!r.colonne) {
-            $('#aide-compte-lie').text('Colonne utilisateur.Id_Utilisateur_Lie absente : chargez EA98.');
+            $('#aide-fiche-liee').text('Colonne utilisateur.Id_Ja absente : chargez EA98.');
             return;
         }
-        $('#aide-compte-lie').text(AIDE_COMPTE_LIE);
-        r.data.forEach(c => {
-            const id = parseInt(c.Id_Utilisateur, 10);
-            if (id === currentId) return;
-            const liePar = c.LiePar !== null ? parseInt(c.LiePar, 10) : null;
-            const prise  = liePar !== null && liePar !== currentId;
-            $cbo.append($('<option>').val(id)
-                .text(id + ' — ' + ((c.Nom || '') + ' ' + (c.Prenom || '')).trim() + ' (' + c.Login + ')'
-                    + (prise ? ' — déjà lié au compte n°' + liePar : ''))
-                .prop('disabled', prise));
-        });
-        const v = lienCharge !== null ? lienCharge : '';
-        if (v !== '' && !$cbo.find(`option[value="${v}"]`).length) {
-            // Lien existant vers un compte devenu inutilisable (inactif, rôle changé…) : affiché pour le retirer.
-            $cbo.append($('<option>').val(v).text(v + ' — compte non utilisable (à retirer)'));
-        }
-        $cbo.val(v);
-        comptesJaCharges = true;
+        fichesLieesListe = Array.isArray(r.data) ? r.data : [];
+        remplirFichesLiees(true);
+        fichesLieesChargees = true;
     }).fail(function () {
-        if (req !== comptesJaReq) return;
+        if (req !== fichesLieesReq) return;
         // Échec : liste vide et désactivée, clé omise à l'enregistrement = lien conservé en base.
         $cbo.empty().append($('<option value="">').text('— Liste indisponible —')).prop('disabled', true);
-        $('#aide-compte-lie').addClass('text-danger').text('Liste des comptes JA indisponible : le lien actuel sera conservé.');
+        $('#aide-fiche-liee').removeClass('text-primary').addClass('text-danger').text('Liste des fiches JA indisponible : le lien actuel sera conservé.');
     });
 }
+// Choix manuel dans la liste : la présélection « même nom » n'est plus réappliquée.
+$('#cbo-fiche-liee').on('change', function () {
+    fichesLieesChoixManuel = true;
+    fichesLieesPreselect = null;
+    $('#btn-confirmer-fiche-liee').addClass('d-none');
+    $('#aide-fiche-liee').removeClass('text-primary').text(AIDE_FICHE_LIEE);
+});
+// Nom / prénom modifiés : regroupement « Même nom » recalculé (liste déjà chargée seulement).
+$('#txt-nom, #txt-prenom').on('change', function () {
+    if (fichesLieesChargees) remplirFichesLiees(false);
+});
 $('.chk-role').on('change', function () {
     // Rôle JA exclusif : cocher JA décoche les autres rôles ; cocher un autre rôle décoche JA.
     if (this.checked) {
@@ -617,7 +694,7 @@ $(function () {
     nijacSortableTable('#tbl-utilisateurs thead th[data-col]', 'col', sortState,
         () => nijacSortRows('#tbody-liste', parseInt(sortState.col, 10), sortState.asc));
     chargerListe();
-    chargerComptesJa(null);
+    chargerFichesLiees(null);
 });
 </script>
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>

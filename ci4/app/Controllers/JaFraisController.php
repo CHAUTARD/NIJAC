@@ -12,7 +12,7 @@ use CodeIgniter\HTTP\ResponseInterface;
  * fraisSaisissables() / etatSaisieFrais(), plafonds frais_max_*, arbitrage club = 0), joindreJustificatif()
  * et voirJustificatif() (App\Libraries\JustificatifPeage). Seule l'autorisation change
  * (nominationAutorisee()) : au lieu du jeton cnv du lien, la nomination doit appartenir au JA de la
- * session (idJaCompteSession() : rôle JA + fiche d'Id = Id_Utilisateur, jamais un id client) — le jeton éventuellement envoyé est
+ * session (idJaCompteSession() : rôle JA + fiche d'Id = Id_Utilisateur, ou fiche liée en mode JA, jamais un id client) — le jeton éventuellement envoyé est
  * ignoré. Liste : JaNominationsController::nominationsDuJa() + état accusé / saisie par nomination.
  */
 class JaFraisController extends ConvocationJaController
@@ -21,13 +21,16 @@ class JaFraisController extends ConvocationJaController
 
     private int $idJaSession;
     private string $loginSession;
+    private bool $modeJa;
 
     public function __construct()
     {
         parent::__construct();
-        // Garde-fou propre au contrôleur, en plus de "jaauth" : rôle JA ET fiche de même Id (0 = tout refusé).
+        // Garde-fou propre au contrôleur, en plus de "jaauth" : rôle JA ET fiche de la session (compte JA pur :
+        // Id_Utilisateur = Id_JA ; mode JA : fiche liée relue en base) — 0 = tout refusé.
         $this->idJaSession  = idJaCompteSession();
         $this->loginSession = (string) ($_SESSION['utilisateur']['login'] ?? '');
+        $this->modeJa       = estSessionModeJa();
     }
 
     /** La nomination appartient-elle au JA connecté ? (jeton ignoré) */
@@ -61,13 +64,14 @@ class JaFraisController extends ConvocationJaController
 
     protected function tracerActionConnecte(?string $login, string $action, int $idNomination): void
     {
-        error_log("[NIJAC] EJA4 : $action par le compte JA "
-            . preg_replace('/[^\w.@-]/u', '_', (string) $login) . " (nomination $idNomination)");
+        error_log("[NIJAC] EJA4 : $action par le compte " . ($this->modeJa ? '' : 'JA ')
+            . preg_replace('/[^\w.@-]/u', '_', (string) $login)
+            . ($this->modeJa ? " en mode JA (fiche {$this->idJaSession})" : '') . " (nomination $idNomination)");
     }
 
     public function index($nomSeg = null, $cnvSeg = null)
     {
-        if ($this->idJaSession <= 0) { // garde-fou : rôle JA + fiche d'Id = Id_Utilisateur
+        if ($this->idJaSession <= 0) { // garde-fou : rôle JA + fiche de la session (Id_Utilisateur, ou fiche liée en mode JA)
             return redirect()->to(site_url('login'));
         }
         $u = $_SESSION['utilisateur'] ?? [];

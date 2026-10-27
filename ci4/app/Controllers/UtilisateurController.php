@@ -163,48 +163,42 @@ class UtilisateurController extends BaseController
     }
 
     /**
-     * GET utilisateur/comptes-ja : comptes actifs de rôle JA SEUL rattachés à une fiche ja (convention
-     * Id_Utilisateur = Id_JA), proposés dans le champ « Compte JA lié » d'EA86. `LiePar` = Id du compte
-     * qui le lie déjà (null sinon) ; `colonne` = utilisateur.Id_Utilisateur_Lie présente (EA98).
-     * La validation serveur (controlerCompteJaLie()) refait tous les contrôles.
+     * GET utilisateur/fiches-ja-liables : fiches ja (n° de licence) proposées dans le champ « Fiche JA liée
+     * (n° de licence) » d'EA86 (comptes non-JA). `LiePar` = Id du compte qui la lie déjà (null sinon : la
+     * vue masque celles liées à un autre compte que le compte édité) ; `colonne` =
+     * colonne utilisateur.Id_Ja (ou l'ancienne Id_Utilisateur_Lie en repli) présente (EA98). La validation serveur (controlerFicheJaLiee()) refait
+     * tous les contrôles.
      */
-    public function comptesJa(): ResponseInterface
+    public function fichesJaLiables(): ResponseInterface
     {
         $pdo     = getPDO();
-        $colonne = utilisateurAColonneLie($pdo);
-        if (tableRolesExiste($pdo)) {
-            [$joinRole, $nomRole] = sqlNomRoleUr($pdo);
-            $critere = "EXISTS (SELECT 1 FROM utilisateur_role ur $joinRole WHERE ur.Id_Utilisateur = u.Id_Utilisateur AND $nomRole = 'JA')
-                    AND NOT EXISTS (SELECT 1 FROM utilisateur_role ur $joinRole WHERE ur.Id_Utilisateur = u.Id_Utilisateur AND $nomRole <> 'JA')";
-        } elseif (utilisateurAColonneRole($pdo)) {
-            $critere = "u.Role = 'JA'";
-        } else {
-            return $this->response->setJSON(['ok' => true, 'colonne' => $colonne, 'data' => []]);
-        }
-        $liePar = $colonne
-            ? '(SELECT MIN(s.Id_Utilisateur) FROM utilisateur s WHERE s.Id_Utilisateur_Lie = u.Id_Utilisateur)'
+        $col     = colonneFicheJaLiee($pdo); // Id_Ja, Id_Utilisateur_Lie (repli avant EA98) ou null
+        $colonne = $col !== null;
+        $liePar  = $colonne
+            // Comptes JA purs exclus (valeur résiduelle d'Id_JA non encore migrée par EA98).
+            ? '(SELECT MIN(s.Id_Utilisateur) FROM utilisateur s WHERE s.' . $col . ' = ja.Id_JA AND NOT '
+                . sqlARole('s.Id_Utilisateur', "'JA'") . ')'
             : 'NULL';
         $rows = $pdo->query('
-            SELECT u.Id_Utilisateur, u.Login, ja.Nom, ja.Prenom, ' . $liePar . ' AS LiePar
-            FROM utilisateur u
-            JOIN ja ON ja.Id_JA = u.Id_Utilisateur
-            WHERE u.Actif = 1 AND ' . $critere . '
-            ORDER BY ja.Nom, ja.Prenom
+            SELECT ja.Id_JA, ja.Nom, ja.Prenom, ja.JA1, ' . $liePar . ' AS LiePar
+            FROM ja
+            ORDER BY ja.Nom, ja.Prenom, ja.Id_JA
         ')->fetchAll(\PDO::FETCH_ASSOC);
 
         return $this->response->setJSON(['ok' => true, 'colonne' => $colonne, 'data' => $rows]);
     }
 
     /**
-     * Champ `compte_ja_lie` reçu d'EA86 : [présent, valeur] — valeur null = aucun lien (champ vide),
-     * entier sinon (≤ 0 = invalide, refusé par controlerCompteJaLie()). Absent = lien inchangé.
+     * Champ `fiche_ja_liee` reçu d'EA86 : [présent, valeur] — valeur null = aucun lien (champ vide),
+     * entier (Id_JA) sinon (≤ 0 = invalide, refusé par controlerFicheJaLiee()). Absent = lien inchangé
+     * (liste non chargée côté client : jamais d'effacement involontaire).
      */
-    private function compteJaLieSaisi(array $input): array
+    private function ficheJaLieeSaisie(array $input): array
     {
-        if (!array_key_exists('compte_ja_lie', $input)) {
+        if (!array_key_exists('fiche_ja_liee', $input)) {
             return [false, null];
         }
-        $brut = is_scalar($input['compte_ja_lie']) ? trim((string) $input['compte_ja_lie']) : 'x';
+        $brut = is_scalar($input['fiche_ja_liee']) ? trim((string) $input['fiche_ja_liee']) : 'x';
         if ($brut === '') {
             return [true, null];
         }
@@ -288,13 +282,15 @@ class UtilisateurController extends BaseController
             $row['FicheJa'] = in_array('JA', $row['Roles'], true) ? $this->libelleFicheJa($id) : null;
             // Compte hérité cumulant JA et d'autres rôles (antérieur à la règle JA exclusif) : à régulariser.
             $row['JaCumule'] = in_array('JA', $row['Roles'], true) && count($row['Roles']) > 1;
-            // Compte JA lié (bascule E002/E003 ↔ E011), null si aucun ou colonne absente (avant EA98).
-            $row['IdUtilisateurLie'] = null;
-            if (utilisateurAColonneLie(getPDO())) {
-                $st = getPDO()->prepare('SELECT Id_Utilisateur_Lie FROM utilisateur WHERE Id_Utilisateur = ?');
+            // Fiche JA liée (Id_JA, mode JA E002/E003 ↔ E011), null si aucune ou colonne absente (avant EA98).
+            $row['IdJaLiee']         = null;
+            $row['FicheLieeLibelle']  = null;
+            if (($col = colonneFicheJaLiee(getPDO())) !== null) {
+                $st = getPDO()->prepare('SELECT ' . $col . ' FROM utilisateur WHERE Id_Utilisateur = ?');
                 $st->execute([$id]);
                 $lie = $st->fetchColumn();
-                $row['IdUtilisateurLie'] = ($lie === false || $lie === null) ? null : (int) $lie;
+                $row['IdJaLiee'] = ($lie === false || $lie === null) ? null : (int) $lie;
+                $row['FicheLieeLibelle'] = $this->libelleFicheJa($row['IdJaLiee']);
             }
         }
 
@@ -328,9 +324,9 @@ class UtilisateurController extends BaseController
 
         // Rôle JA coché : convention Id_Utilisateur = Id_JA, Login = Email, JA seul (exclusif, creerCompteJaEa86()).
         if (is_array($roles) ? in_array('JA', $roles, true) : $roles === 'JA') {
-            // Un compte JA ne porte jamais de compte JA lié.
-            if ($this->compteJaLieSaisi($input)[1] !== null) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Un compte JA ne peut pas porter de compte JA lié.']);
+            // Un compte JA ne porte jamais de fiche JA liée (sa fiche est celle de même Id).
+            if ($this->ficheJaLieeSaisie($input)[1] !== null) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Un compte JA ne peut pas porter de fiche JA liée.']);
             }
             return $this->creerCompteJaEa86($input);
         }
@@ -345,12 +341,13 @@ class UtilisateurController extends BaseController
         }
 
         $pdo = getPDO();
-        [$liePresent, $lie] = $this->compteJaLieSaisi($input);
-        if ($liePresent && ($err = controlerCompteJaLie($pdo, 0, $lie, false)) !== null) {
+        // Fiche JA liée : rôles saisis sans JA (le cas JA est parti vers creerCompteJaEa86() ci-dessus).
+        [$liePresent, $lie] = $this->ficheJaLieeSaisie($input);
+        if ($liePresent && ($err = controlerFicheJaLiee($pdo, 0, $lie, in_array('JA', $roles, true))) !== null) {
             return $this->response->setJSON(['ok' => false, 'msg' => $err]);
         }
-        if ($liePresent && utilisateurAColonneLie($pdo)) {
-            $fields['Id_Utilisateur_Lie'] = $lie;
+        if ($liePresent && ($col = colonneFicheJaLiee($pdo)) !== null) {
+            $fields[$col] = $lie;
         }
         try {
             $pdo->beginTransaction();
@@ -362,8 +359,8 @@ class UtilisateurController extends BaseController
                 $pdo->rollBack();
             }
             error_log('[NIJAC] EA86 création utilisateur : ' . $e->getMessage());
-            $msg = estViolationCompteLieUnique($e)
-                ? 'Ce compte JA est déjà lié à un autre compte.'
+            $msg = estViolationFicheJaLieeUnique($e)
+                ? 'Cette fiche JA est déjà liée à un autre compte.'
                 : (($e instanceof \RuntimeException && !($e instanceof \PDOException))
                     ? $e->getMessage()
                     : 'Création impossible (erreur base de données).');
@@ -408,11 +405,11 @@ class UtilisateurController extends BaseController
             && in_array('Administrateur', $rolesActuels, true) && !in_array('Administrateur', $r[0], true)) {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Vous ne pouvez pas retirer votre propre rôle Administrateur.']);
         }
-        [$liePresent, $lie] = $this->compteJaLieSaisi($input);
+        [$liePresent, $lie] = $this->ficheJaLieeSaisie($input);
         if ($estJa || ($mixte && $r[0] === ['JA'])) {
-            // Un compte JA ne porte jamais de compte JA lié.
+            // Un compte JA ne porte jamais de fiche JA liée (sa fiche est celle de même Id).
             if ($lie !== null) {
-                return $this->response->setJSON(['ok' => false, 'msg' => 'Un compte JA ne peut pas porter de compte JA lié.']);
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Un compte JA ne peut pas porter de fiche JA liée.']);
             }
             return $this->majEmailCompteJa($id, $input, $existant, $r[0], $mixte);
         }
@@ -420,7 +417,7 @@ class UtilisateurController extends BaseController
         // Un compte non-JA ne GAGNE jamais le rôle JA : son Id ne vaudrait pas celui de la fiche
         // (convention Id_Utilisateur = Id_JA) — créer le compte JA avec « Nouveau » ou depuis EN15.
         if (in_array('JA', $r[0], true)) {
-            return $this->response->setJSON(['ok' => false, 'msg' => 'Un compte existant ne peut pas recevoir le rôle JA : créez le compte JA avec « Nouveau » (identifiant = n° de fiche JA) ou depuis l\'onglet « Invitation JA » d\'EN15.']);
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Un compte existant ne peut pas recevoir le rôle Juge-Arbitre (l\'identifiant d\'un compte JA est le n° de sa fiche) : renseignez plutôt sa « Fiche JA liée (n° de licence) » : il accédera à son espace JA depuis son menu, sans compte JA.']);
         }
 
         $mdpGenere = null;
@@ -432,13 +429,13 @@ class UtilisateurController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => $fields]);
         }
 
-        // Compte JA lié (utilisateur.Id_Utilisateur_Lie) : contrôles serveur (controlerCompteJaLie()) ;
-        // champ absent = lien inchangé. Un changement de lien ferme, à la revalidation suivante, une
-        // session basculée vers l'ancien compte JA (motifSessionOrigineInvalide()).
-        // Valeur identique à celle en base = lien inchangé : pas de contrôle (une cible devenue
-        // inactive ne bloque pas la modification du reste du compte) ni d'écriture.
-        if ($liePresent && utilisateurAColonneLie($pdo)) {
-            $st = $pdo->prepare('SELECT Id_Utilisateur_Lie FROM utilisateur WHERE Id_Utilisateur = ?');
+        // Fiche JA liée (utilisateur.Id_Ja = ja.Id_JA) : contrôles serveur (controlerFicheJaLiee() :
+        // compte sans rôle JA — vérifié juste au-dessus —, fiche existante, non liée ailleurs) ; champ absent =
+        // lien inchangé. Un changement de lien ferme, à la revalidation suivante, une session de ce compte
+        // en mode JA sur l'ancienne fiche (motifSessionModeJaInvalide()).
+        // Valeur identique à celle en base = lien inchangé : pas de contrôle ni d'écriture.
+        if ($liePresent && ($col = colonneFicheJaLiee($pdo)) !== null) {
+            $st = $pdo->prepare('SELECT ' . $col . ' FROM utilisateur WHERE Id_Utilisateur = ?');
             $st->execute([$id]);
             $lieBase = $st->fetchColumn();
             $lieBase = ($lieBase === false || $lieBase === null) ? null : (int) $lieBase;
@@ -446,11 +443,11 @@ class UtilisateurController extends BaseController
                 $liePresent = false;
             }
         }
-        if ($liePresent && ($err = controlerCompteJaLie($pdo, $id, $lie, false)) !== null) {
+        if ($liePresent && ($err = controlerFicheJaLiee($pdo, $id, $lie, in_array('JA', $r[0], true))) !== null) {
             return $this->response->setJSON(['ok' => false, 'msg' => $err]);
         }
-        if ($liePresent && utilisateurAColonneLie($pdo)) {
-            $fields['Id_Utilisateur_Lie'] = $lie;
+        if ($liePresent && ($col = colonneFicheJaLiee($pdo)) !== null) {
+            $fields[$col] = $lie; // nom de colonne issu de colonneFicheJaLiee() (liste fermée)
         }
 
         // Le login du compte réservé ne change jamais (sinon l'accès EA96/EA97/EA98 serait perdu
@@ -487,8 +484,8 @@ class UtilisateurController extends BaseController
                 $pdo->rollBack();
             }
             error_log('[NIJAC] EA86 mise à jour utilisateur ' . $id . ' : ' . $e->getMessage());
-            $msg = estViolationCompteLieUnique($e)
-                ? 'Ce compte JA est déjà lié à un autre compte.'
+            $msg = estViolationFicheJaLieeUnique($e)
+                ? 'Cette fiche JA est déjà liée à un autre compte.'
                 : (($e instanceof \RuntimeException && !($e instanceof \PDOException))
                     ? $e->getMessage()
                     : 'Mise à jour impossible (erreur base de données).');
@@ -559,10 +556,8 @@ class UtilisateurController extends BaseController
 
         $db = \Config\Database::connect();
         $db->table('Messagerie')->where('Id_Utilisateur', $id)->delete();
-        // Compte JA supprimé : les liens qui pointaient vers lui sont retirés (colonne EA98).
-        if (utilisateurAColonneLie(getPDO())) {
-            getPDO()->prepare('UPDATE utilisateur SET Id_Utilisateur_Lie = NULL WHERE Id_Utilisateur_Lie = ?')->execute([$id]);
-        }
+        // Fiche JA liée : portée par la ligne supprimée elle-même (aucun autre compte ne pointe vers un
+        // compte) ; suppression d'une fiche ja → FK fk_utilisateur_idja ON DELETE SET NULL (EA98).
         if (tableRolesExiste(getPDO())) {
             $db->table('utilisateur_role')->where('Id_Utilisateur', $id)->delete();
         }

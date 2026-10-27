@@ -62,8 +62,8 @@ $routes->get('utilisateur/data', 'UtilisateurController::data', ['filter' => 'ad
 $routes->get('utilisateur/data/(:segment)', 'UtilisateurController::show/$1', ['filter' => 'adminauth']);
 // Recherche de fiche ja (nom / prénom / licence) pour le rattachement d'un compte de rôle JA (utilisateur.Id_JA).
 $routes->get('utilisateur/fiches-ja', 'UtilisateurController::fichesJa', ['filter' => 'adminauth']);
-// Comptes actifs de rôle JA seul proposés pour le champ « Compte JA lié » (utilisateur.Id_Utilisateur_Lie).
-$routes->get('utilisateur/comptes-ja', 'UtilisateurController::comptesJa', ['filter' => 'adminauth']);
+// Fiches ja (n° de licence) proposées pour le champ « Fiche JA liée » des comptes non-JA (utilisateur.Id_Ja = ja.Id_JA).
+$routes->get('utilisateur/fiches-ja-liables', 'UtilisateurController::fichesJaLiables', ['filter' => 'adminauth']);
 $routes->post('utilisateur', 'UtilisateurController::store', ['filter' => 'adminauth']);
 $routes->put('utilisateur/(:segment)', 'UtilisateurController::update/$1', ['filter' => 'adminauth']);
 $routes->delete('utilisateur/(:segment)', 'UtilisateurController::delete/$1', ['filter' => 'adminauth']);
@@ -447,12 +447,13 @@ $routes->get('logout', 'LogoutController::rediriger');
 $routes->get('changer-mot-de-passe', 'ChangerMotDePasseController::index', ['filter' => 'auth:CSR,Defiscalisateur,CRA Convoc,JA']);
 $routes->post('changer-mot-de-passe', 'ChangerMotDePasseController::index', ['filter' => 'auth:CSR,Defiscalisateur,CRA Convoc,JA']);
 
-// ── Bascule vers le compte JA lié / retour (pas un écran EXXX) ───────────────
-// POST seul (filtre csrf global), tout rôle connecté. action=ja : vers le compte JA lié
-// (utilisateur.Id_Utilisateur_Lie, réglé par un administrateur dans EA86 ; bouton E002 / E003) ;
-// action=retour : vers le compte d'origine mémorisé en session (bouton E011). Cible toujours relue
-// en base, jamais fournie par le client — voir ChangerCompteController. Accessible pendant un
-// changement de mot de passe forcé (ROUTES_CHANGE_LOGIN) pour le seul retour.
+// ── Mode JA d'un compte non-JA / retour (pas un écran EXXX) ──────────────────
+// POST seul (filtre csrf global), tout rôle connecté. action=ja : session en mode JA sur la fiche
+// liée (utilisateur.Id_Ja = ja.Id_JA, réglé par un administrateur dans EA86 ; bouton
+// E002 / E003), SANS changer de compte ; action=retour : rôles d'origine relus en base (bouton E011 /
+// E006). Fiche et rôles toujours relus en base, jamais fournis par le client — voir
+// ChangerCompteController. Accessible pendant un changement de mot de passe forcé (ROUTES_CHANGE_LOGIN)
+// pour le seul retour.
 $routes->post('changer-compte', 'ChangerCompteController::index', ['filter' => 'auth:CSR,Defiscalisateur,CRA Convoc,JA']);
 
 // ── E007 Mot de passe oublié (demande) + E008 Réinitialisation (lien email) ──
@@ -546,8 +547,9 @@ $routes->get('cra-convoc-menu', 'CraConvocMenuController::index', ['filter' => '
 // ── E011 Menu JA ─────────────────────────────────────────────────────────────
 // Rôle « JA » UNIQUEMENT (compte juge-arbitre dont l'Id_Utilisateur est l'Id_JA de sa fiche, créé par
 // EN15 « Invitation JA » ou EA86) — voir JaAuth.php ("jaauth"). L'Administrateur n'y a PAS accès : ces
-// écrans portent sur la fiche d'Id = $_SESSION['utilisateur']['id'] (rôle JA + fiche existante revérifiés
-// par le filtre ET chaque contrôleur, idJaCompteSession()), jamais un id client.
+// écrans portent sur la fiche d'Id = $_SESSION['utilisateur']['id'], ou en mode JA (compte non-JA, fiche
+// liée, POST changer-compte) sur $_SESSION['utilisateur']['id_ja'] (rôle JA + fiche existante / lien
+// revérifiés par le filtre ET chaque contrôleur, idJaCompteSession()), jamais un id client.
 // Le rôle JA n'a accès qu'à ces écrans + changer-mot-de-passe ("auth:…,JA") ; "auth" sans argument
 // le refuse. Les pages publiques tokenisées EN19/EN21/EN22 restent valables pour les JA sans compte.
 $routes->get('ja-menu', 'JaMenuController::index', ['filter' => 'jaauth']);

@@ -3,26 +3,29 @@
 namespace App\Controllers;
 
 /**
- * NIJAC – Bascule entre un compte non-JA et son compte JA lié (POST changer-compte, filtre
+ * NIJAC – Mode JA d'un compte non-JA lié à sa fiche juge-arbitre (POST changer-compte, filtre
  * "auth:CSR,Defiscalisateur,CRA Convoc,JA" = tout rôle connecté, CSRF global).
  *
- * Une personne à la fois nominateur (ou administrateur…) et JA a deux comptes (rôle JA exclusif,
- * Id_Utilisateur = Id_JA). Un administrateur règle dans EA86 utilisateur.Id_Utilisateur_Lie = compte
- * JA lié ; depuis E002 / E003, le bouton « Accéder à mon espace JA » ouvre alors E011 SANS nouvelle
- * saisie de mot de passe ni code (l'utilisateur est déjà authentifié sur le compte d'origine), et
- * E011 propose « Revenir à mon compte nominateur ».
+ * Une personne à la fois nominateur (ou administrateur…, rôle de Priorite < 6) et JA n'a PAS de compte
+ * JA : un administrateur renseigne dans EA86 utilisateur.Id_Ja = ja.Id_JA de sa fiche
+ * (n° de licence). Depuis E002 / E003, « Accéder à mon espace JA » ouvre alors E011 SANS nouvelle
+ * saisie de mot de passe ni code et SANS changer de compte ; E011 propose « Revenir à mon compte … ».
  *
- *   action=ja     : cible = idCompteJaLie() du compte de session, relu en base (lien, cible active,
- *                   rôle JA seul, fiche ja) — jamais un id venant du client. Refusée depuis une session
- *                   déjà basculée ou pendant un changement de mot de passe forcé.
- *   action=retour : cible = 'origine_id' mémorisé en session, revalidé (motifSessionOrigineInvalide() :
- *                   compte existant, actif, même mot de passe, lien pointant toujours vers le compte
- *                   courant) ; invalide → session détruite, retour à E001.
+ *   action=ja     : fiche = idFicheJaLiee() du compte de session, relue en base (compte actif sans rôle JA,
+ *                   lien renseigné, fiche existante) — jamais un id venant du client. Refusée en mode JA
+ *                   ou pendant un changement de mot de passe forcé. $_SESSION['utilisateur'] garde 'id'
+ *                   (Id du compte : aucune collision avec la convention Id_Utilisateur = Id_JA), le login,
+ *                   le nom, le mot de passe ('pwd_version') ; reçoit 'mode_ja' = true, 'id_ja', 'role' = 'JA',
+ *                   'roles' = ['JA'], 'is_admin' = false, 'origine_role' / 'origine_roles' (rôles du compte
+ *                   à la bascule : affichage et revalidation, motifSessionModeJaInvalide()).
+ *   action=retour : session en mode JA uniquement ; rôles d'origine RELUS en base (compte actif, même mot de
+ *                   passe), jamais repris de la session ni du client : construireSessionUtilisateur()
+ *                   reconstruit la session normale. Compte invalide → session détruite, retour à E001.
  *
- * Bascule : session_regenerate_id(true), $_SESSION['utilisateur'] reconstruit par
- * construireSessionUtilisateur() (+ 'origine_id' / 'origine_pwd_version' pour 'ja'), déverrouillage
- * TOTP (EA99) oublié, journal [NIJAC][SEC] (ids seulement), redirection vers menuDuRole() du compte
- * cible. La déconnexion (POST logout) détruit le tout.
+ * Avant toute action : revalidation forcée ('verifie_le' = 0 puis revaliderSessionUtilisateur()) — compte
+ * invalide → session détruite + E001 ; base injoignable → aucune bascule, retour au menu.
+ * Dans les deux cas : session_regenerate_id(true), déverrouillage TOTP (EA99) oublié, journal [NIJAC][SEC]
+ * (ids seulement), redirection vers menuDuRole() du nouveau rôle principal. POST logout détruit le tout.
  *
  * Session : le filtre a ouvert puis refermé la session native ; reprise par un session_start()
  * BRUT, pas demarrerSessionNijac() (voir ChangerMotDePasseController).
@@ -37,52 +40,75 @@ class ChangerCompteController extends BaseController
 
     public function index()
     {
-        $u      = $_SESSION['utilisateur'] ?? [];
-        $idMoi  = (int) ($u['id'] ?? 0);
         $action = (string) ($this->request->getPost('action') ?? '');
-        $menu   = site_url(menuDuRole((string) ($u['role'] ?? '')));
 
-        if ($idMoi <= 0) {
+        // Revalidation FORCÉE avant toute bascule (le filtre a pu la sauter, délai de 60 s) : Actif, rôles,
+        // login, pwd_version, lien / fiche relus en base. Compte invalide → session détruite, E001.
+        $this->reprendreSession();
+        if (!empty($_SESSION['utilisateur']) && is_array($_SESSION['utilisateur'])) {
+            $_SESSION['utilisateur']['verifie_le'] = 0;
+        }
+        $cibleRevalid = empty($_SESSION['utilisateur']) ? 'login' : revaliderSessionUtilisateur('changer-compte');
+        $u            = $_SESSION['utilisateur'] ?? [];
+        $revalidee    = (int) ($u['verifie_le'] ?? 0) > 0;
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+        $idMoi = (int) ($u['id'] ?? 0);
+        $menu  = site_url(menuDuRole((string) ($u['role'] ?? '')));
+
+        if ($cibleRevalid === 'login' || $idMoi <= 0) {
             return redirect()->to(site_url('login'));
+        }
+        if (!$revalidee) {
+            // Base injoignable : revalidation impossible (journalisée) → aucune bascule, session conservée.
+            error_log('[NIJAC] changer-compte : revalidation impossible, bascule annulée (Id_Utilisateur ' . $idMoi . ')');
+            return redirect()->to($menu);
         }
 
         try {
             $pdo = getPDO();
 
             if ($action === 'ja') {
-                if (!empty($u['origine_id']) || !empty($u['change_login'])) {
-                    error_log('[NIJAC][SEC] changer-compte : bascule vers le compte JA refusée (session basculée ou changement de mot de passe en attente, Id_Utilisateur ' . $idMoi . ')');
+                if (estSessionModeJa($u) || !empty($u['change_login'])) {
+                    error_log('[NIJAC][SEC] changer-compte : passage en mode JA refusé (déjà en mode JA ou changement de mot de passe en attente, Id_Utilisateur ' . $idMoi . ')');
                     return redirect()->to($menu);
                 }
-                $idCible = idCompteJaLie($pdo, $idMoi);
-                if ($idCible <= 0) {
-                    error_log('[NIJAC][SEC] changer-compte : aucun compte JA lié utilisable (Id_Utilisateur ' . $idMoi . ')');
+                $idJa = idFicheJaLiee($pdo, $idMoi);
+                if ($idJa <= 0) {
+                    error_log('[NIJAC][SEC] changer-compte : aucune fiche JA liée utilisable (Id_Utilisateur ' . $idMoi . ')');
                     return redirect()->to($menu);
                 }
-                $row = $this->lireCompte($pdo, $idCible);
-                if (!$row) {
-                    return redirect()->to($menu);
-                }
-                $nouvelle = construireSessionUtilisateur($row, $pdo);
-                $nouvelle['origine_id']          = $idMoi;
-                $nouvelle['origine_pwd_version'] = $u['pwd_version'] ?? null;
+                // Rôles d'origine relus en base (pas ceux de la session) : la revalidation les compare.
+                $rolesOrigine = rolesUtilisateur($pdo, $idMoi);
+                $nouvelle = $u;
+                unset($nouvelle['origine_id'], $nouvelle['origine_pwd_version']);
+                $nouvelle['mode_ja']       = true;
+                $nouvelle['id_ja']         = $idJa;
+                $nouvelle['origine_role']  = $rolesOrigine[0] ?? (string) ($u['role'] ?? '');
+                $nouvelle['origine_roles'] = $rolesOrigine;
+                $nouvelle['role']          = 'JA';
+                $nouvelle['roles']         = ['JA'];
+                $nouvelle['is_admin']      = false;
+                $nouvelle['verifie_le']    = time();
+                $cible = 'fiche JA ' . $idJa;
             } elseif ($action === 'retour') {
-                $idOrigine = (int) ($u['origine_id'] ?? 0);
-                if ($idOrigine <= 0) {
+                if (!estSessionModeJa($u)) {
                     return redirect()->to($menu);
                 }
-                $motif = motifSessionOrigineInvalide($pdo, $u);
-                $row   = $motif === null ? $this->lireCompte($pdo, $idOrigine) : null;
-                if ($row) {
-                    $nouvelle = construireSessionUtilisateur($row, $pdo);
-                }
-                if (!$row || rolesDe($nouvelle) === []) {
-                    error_log('[NIJAC][SEC] changer-compte : retour impossible (' . ($motif ?? 'compte d\'origine sans rôle')
-                        . ', Id_Utilisateur ' . $idMoi . ' → ' . $idOrigine . ') : session détruite');
+                $row      = $this->lireCompte($pdo, $idMoi);
+                $nouvelle = $row ? construireSessionUtilisateur($row, $pdo) : null;
+                $motif    = !$row ? 'compte supprimé ou désactivé'
+                    : ((isset($u['pwd_version'], $nouvelle['pwd_version']) && (int) $u['pwd_version'] !== (int) $nouvelle['pwd_version'])
+                        ? 'mot de passe modifié'
+                        : (rolesDe($nouvelle) === [] || aRole('JA', $nouvelle) ? 'rôles du compte invalides' : null));
+                if ($motif !== null) {
+                    error_log('[NIJAC][SEC] changer-compte : retour impossible (' . $motif . ', Id_Utilisateur ' . $idMoi . ') : session détruite');
                     $this->reprendreSession();
                     detruireSessionNijac();
                     return redirect()->to(site_url('login'));
                 }
+                $cible = 'compte';
             } else {
                 return redirect()->to($menu);
             }
@@ -91,14 +117,14 @@ class ChangerCompteController extends BaseController
             return redirect()->to($menu);
         }
 
-        // Nouvel identifiant de session : l'ancien ne donne accès à aucun des deux comptes.
+        // Nouvel identifiant de session : l'ancien ne donne plus accès ni à l'un ni à l'autre mode.
         $this->reprendreSession();
         session_regenerate_id(true);
         unset($_SESSION['totp_ok_ts'], $_SESSION['totp_ok_id']);
         $_SESSION['utilisateur'] = $nouvelle;
         session_write_close();
 
-        error_log('[NIJAC][SEC] changer-compte (' . $action . ') : Id_Utilisateur ' . $idMoi . ' → ' . (int) $nouvelle['id']);
+        error_log('[NIJAC][SEC] changer-compte (' . $action . ') : Id_Utilisateur ' . $idMoi . ' → ' . $cible);
 
         return redirect()->to(site_url(menuDuRole((string) ($nouvelle['role'] ?? ''))));
     }

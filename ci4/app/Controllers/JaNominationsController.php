@@ -10,7 +10,7 @@ use CodeIgniter\HTTP\ResponseInterface;
  *
  * Lecture seule : TOUTES les nominations (passées et à venir) du JA de la session — date, compétition,
  * division, rencontre, club recevant, accusé de réception, frais saisis. La fiche est celle du compte
- * connecté (idJaCompteSession() : rôle JA + fiche d'Id = Id_Utilisateur, jamais un id client). Requête partagée avec EJA4 (JaFraisController) :
+ * connecté (idJaCompteSession() : rôle JA + fiche d'Id = Id_Utilisateur, ou fiche liée en mode JA, jamais un id client). Requête partagée avec EJA4 (JaFraisController) :
  * nominationsDuJa(). Colonnes posées par EA98 lues seulement si présentes (AccuseReception,
  * FichierPeage, rencontre.Forfait).
  */
@@ -24,7 +24,7 @@ class JaNominationsController extends BaseController
 
     public function index()
     {
-        if (idJaCompteSession() <= 0) { // garde-fou : rôle JA + fiche d'Id = Id_Utilisateur
+        if (idJaCompteSession() <= 0) { // garde-fou : rôle JA + fiche de la session (Id_Utilisateur, ou fiche liée en mode JA)
             return redirect()->to(site_url('login'));
         }
         $u = $_SESSION['utilisateur'] ?? [];
