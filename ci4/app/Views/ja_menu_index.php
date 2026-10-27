@@ -72,6 +72,23 @@
             text-decoration: underline dotted;
         }
         #toolbar .ts-pwd-warning:hover { color: #900; }
+        /* Bouton de barre de retour du mode JA (« Menu administrateur » / « Menu nominateur »…), même style que « Menu JA » d'E002/E003 */
+        #btn-switch-retour {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .25rem .75rem;
+            background: #1565c0;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: .82rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background .15s;
+        }
+        #btn-switch-retour:hover { background: #0d47a1; color: #fff; }
 
         /* ── Boutons (mêmes classes et même style que E002/E004/E005/E009) ── */
         #menu-grid {
@@ -179,7 +196,14 @@
     </div>
 </div>
 
-<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
+<?= view('partials/toolbar', [
+    'tbNomComplet'    => $nomComplet,
+    'tbDepartement'   => $departement,
+    // Mode JA d'un compte non-JA (fiche liée, POST changer-compte action=ja) : bouton de retour dans la barre.
+    'tbRetourCompte'  => !empty($modeJa),
+    'tbRetourLibelle' => $libelleMenuOrigine ?? 'Menu nominateur',
+    'tbRetourIcone'   => $iconeMenuOrigine ?? 'bi-people-fill',
+]) ?>
 
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 
@@ -214,16 +238,6 @@
     </a>
 
     <div class="menu-break"></div>
-
-    <?php if (!empty($modeJa)): ?>
-    <?php /* Mode JA d'un compte non-JA (fiche liée, POST changer-compte action=ja) : retour sans reconnexion. */ ?>
-    <form method="post" action="<?= site_url('changer-compte') ?>" id="form-retour-compte" class="d-none"><?= csrf_field() ?><input type="hidden" name="action" value="retour"></form>
-    <a href="#" class="menu-btn" style="background:#e3f2fd;" onclick="document.getElementById('form-retour-compte').submit(); return false;">
-        <div class="btn-icon"><i class="bi bi-arrow-left-right" style="color:#1a3a6b;"></i></div>
-        <span><?= esc($libelleRetour ?? 'Revenir à mon compte nominateur') ?></span>
-        <span class="btn-desc">Retour au menu d'origine, sans vous reconnecter</span>
-    </a>
-    <?php endif; ?>
 
     <form method="post" action="<?= site_url('logout') ?>" id="form-logout" class="d-none"><?= csrf_field() ?></form>
     <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;" onclick="document.getElementById('form-logout').submit(); return false;">
