@@ -132,7 +132,9 @@ class NominateurMenuController extends BaseController
             'isAdmin'         => !empty($u['is_admin']),
             'stats'           => $stats,
             'prochaineDateFr' => $prochaineDateFr,
-            // Bouton « Accéder à mon espace JA » (POST changer-compte action=ja) : fiche JA liée utilisable, hors mode JA.
+            // Bouton de barre « Menu JA » (E011, partials/toolbar) : affiché hors mode JA ; actif (POST changer-compte action=ja)
+            // si fiche JA liée utilisable (idFicheJaLiee()), sinon grisé « Aucune fiche JA liée : voir EA86 ».
+            'menuJaVisible'   => !estSessionModeJa($u),
             'compteJaLie'     => !estSessionModeJa($u) && $this->compteJaLieUtilisable((int) ($u['id'] ?? 0)),
         ];
 

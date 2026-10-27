@@ -87,6 +87,25 @@
             transition: background .15s;
         }
         #btn-switch-admin:hover { background: #0f2550; color: #fff; }
+        /* Bouton de barre « Menu JA » (E011) : bascule en mode JA ; inactif sans fiche JA liée */
+        #btn-switch-ja {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .25rem .75rem;
+            background: #1565c0;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: .82rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background .15s;
+        }
+        #btn-switch-ja:hover { background: #0d47a1; color: #fff; }
+        #btn-switch-ja.tb-inactif,
+        #btn-switch-ja.tb-inactif:hover { background: #9e9e9e; opacity: .65; cursor: not-allowed; }
 
         /* ── Tableau de bord ── */
         #dashboard {
@@ -271,8 +290,6 @@
         /* Bouton déconnexion : 1re colonne, sur la même (dernière) ligne que Documentation
            (grid-auto-flow: dense rebouche la case libre plutôt que d'ouvrir une nouvelle ligne) */
         #menu-grid .menu-btn-wrap.mbw-logout { grid-column: 1; }
-        /* Bouton « Accéder à mon espace JA » (fiche JA liée) : à côté de la déconnexion */
-        #menu-grid .menu-btn-wrap.mbw-ja { grid-column: 2; }
 
         /* Code écran en haut à droite de chaque bouton */
         .menu-btn { position: relative; }
@@ -294,7 +311,7 @@
         /* Écrans moyens / petits : la grille passe de 5 à 3, 2 puis 1 colonne */
         @media (max-width: 1199.98px) {
             .dash-cards, #menu-grid { grid-template-columns: repeat(3, 1fr); }
-            #menu-grid .menu-btn-wrap.mbw-doc, #menu-grid .menu-btn-wrap.mbw-logout, #menu-grid .menu-btn-wrap.mbw-ja { grid-column: auto; }
+            #menu-grid .menu-btn-wrap.mbw-doc, #menu-grid .menu-btn-wrap.mbw-logout { grid-column: auto; }
         }
         @media (max-width: 767.98px) {
             .dash-cards, #menu-grid { grid-template-columns: repeat(2, 1fr); }
@@ -327,7 +344,7 @@
 </div>
 
 <!-- Toolbar : recopié de Nominateur/includes/toolbar.php -->
-<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbSwitchTo' => 'admin']) ?>
+<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowJa' => !empty($menuJaVisible), 'tbJaActif' => !empty($compteJaLie), 'tbSwitchTo' => 'admin']) ?>
 
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 
@@ -486,19 +503,6 @@
             <span class="btn-desc">Guide des écrans (nouvelle page)</span>
         </a>
     </div>
-
-    <?php if (!empty($compteJaLie)): ?>
-    <?php /* Fiche JA liée (EA86) : mode JA vers E011 sans reconnexion ni changement de compte, POST changer-compte (fiche relue en base). */ ?>
-    <div class="menu-btn-wrap mbw-ja">
-        <form method="post" action="<?= site_url('changer-compte') ?>" id="form-espace-ja" class="d-none"><?= csrf_field() ?><input type="hidden" name="action" value="ja"></form>
-        <a href="#" class="menu-btn btn-ja" onclick="document.getElementById('form-espace-ja').submit(); return false;">
-            <span class="btn-code">E011</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Arbitre_filet.webp') ?>" alt="Espace JA"></div>
-            <span>Accéder à mon espace JA</span>
-            <span class="btn-desc">Menu juge-arbitre, sans vous reconnecter</span>
-        </a>
-    </div>
-    <?php endif; ?>
 
     <div class="menu-btn-wrap mbw-logout">
         <form method="post" action="<?= site_url('logout') ?>" id="form-logout" class="d-none"><?= csrf_field() ?></form>

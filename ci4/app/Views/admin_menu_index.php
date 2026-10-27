@@ -67,6 +67,25 @@
         #btn-switch-defisc:hover { background: #bf360c; color: #fff; }
         #btn-switch-craconvoc { background: #00838f; }
         #btn-switch-craconvoc:hover { background: #006064; color: #fff; }
+        /* Bouton de barre « Menu JA » (E011) : bascule en mode JA ; inactif sans fiche JA liée */
+        #btn-switch-ja {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .25rem .75rem;
+            background: #1565c0;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: .82rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background .15s;
+        }
+        #btn-switch-ja:hover { background: #0d47a1; color: #fff; }
+        #btn-switch-ja.tb-inactif,
+        #btn-switch-ja.tb-inactif:hover { background: #9e9e9e; opacity: .65; cursor: not-allowed; }
 
         #page-header {
             background: var(--nijac-blue);
@@ -305,7 +324,7 @@
         </div>
     </div>
 
-    <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowCsr' => true, 'tbShowDefisc' => true, 'tbShowCraConvoc' => true, 'tbSwitchTo' => 'nominateur']) ?>
+    <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowCsr' => true, 'tbShowDefisc' => true, 'tbShowCraConvoc' => true, 'tbShowJa' => !empty($menuJaVisible), 'tbJaActif' => !empty($compteJaLie), 'tbSwitchTo' => 'nominateur']) ?>
 
     <?php if ($ffttJoursExpiration !== null && $ffttJoursExpiration <= 60): ?>
     <div class="alert alert-<?= $ffttJoursExpiration < 0 ? 'danger' : 'warning' ?> d-flex align-items-center gap-2 mb-0" style="border-radius:0;font-size:.85rem;">
@@ -488,16 +507,6 @@
 
     <!-- ── Commun, sous les onglets : Quitter ── -->
     <div id="zone-deconnexion">
-        <?php if (!empty($compteJaLie)): ?>
-        <?php /* Fiche JA liée (EA86) : mode JA vers E011 sans reconnexion ni changement de compte, POST changer-compte (fiche relue en base). */ ?>
-        <form method="post" action="<?= site_url('changer-compte') ?>" id="form-espace-ja" class="d-none"><?= csrf_field() ?><input type="hidden" name="action" value="ja"></form>
-        <a href="#" class="menu-btn" style="background:#e3f2fd;" onclick="document.getElementById('form-espace-ja').submit(); return false;">
-            <span class="btn-code">E011</span>
-            <div class="btn-icon"><img src="<?= base_url('img/Arbitre_filet.webp') ?>" alt="Espace JA"></div>
-            <span>Accéder à mon espace JA</span>
-            <span class="btn-desc">Menu juge-arbitre, sans vous reconnecter</span>
-        </a>
-        <?php endif; ?>
         <form method="post" action="<?= site_url('logout') ?>" id="form-logout" class="d-none"><?= csrf_field() ?></form>
         <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;" onclick="document.getElementById('form-logout').submit(); return false;">
             <div class="btn-icon"><img src="<?= base_url('img/Quitter.webp') ?>" alt="Se déconnecter"></div>
