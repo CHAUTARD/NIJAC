@@ -21,8 +21,6 @@ $routes->post('login/code/renvoi', 'AuthController::renvoyerCode');
 
 // ── E002 Menu administrateur ─────────────────────────────────────────────────
 $routes->get('admin-menu', 'AdminMenuController::index', ['filter' => 'adminauth']);
-$routes->get('admin-menu/python', 'AdminMenuController::python', ['filter' => 'adminauth']);
-
 // ── E003 Menu nominateur ─────────────────────────────────────────────────────
 // Filtre "auth" sans argument = Administrateur ou Nominateur (ou is_admin) seulement ;
 // les rôles CSR, Defiscalisateur, CRA Convoc et JA ne passent que sur les routes dont

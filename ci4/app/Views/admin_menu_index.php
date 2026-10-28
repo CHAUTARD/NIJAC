@@ -284,28 +284,9 @@
             <i class="bi bi-grid-3x3-gap-fill me-2"></i>Menu pour les paramètres
             <small class="opacity-75 ms-2">(E002)</small>
         </div>
-        <button type="button" class="btn btn-sm btn-outline-light" id="btn-version-python" data-bs-toggle="modal" data-bs-target="#modal-version-python" title="Version de Python du serveur">
-            <i class="bi bi-filetype-py me-1"></i>Version Python
-        </button>
         <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#modal-version-php" title="Version de PHP du serveur">
             <i class="bi bi-filetype-php me-1"></i>Version PHP
         </button>
-    </div>
-
-    <!-- Modale « Version Python » : interrogée à l'ouverture (AdminMenuController::python()) -->
-    <div class="modal fade" id="modal-version-python" tabindex="-1" aria-labelledby="modal-version-python-titre" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modal-version-python-titre"><i class="bi bi-filetype-py me-2"></i>Version Python du serveur</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
-                </div>
-                <div class="modal-body" id="python-corps">Recherche en cours…</div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
-                </div>
-            </div>
-        </div>
     </div>
 
     <!-- Modale « Version PHP » : tableau calculé côté serveur (AdminMenuController::infosPhp()) -->
@@ -547,24 +528,6 @@
             const btn = document.querySelector('#menu-tabs [data-bs-target="' + location.hash + '"]');
             if (btn) new bootstrap.Tab(btn).show();
         }
-
-        // Modale « Version Python » : interrogée à chaque ouverture (commande lancée côté serveur à la demande).
-        document.getElementById('modal-version-python').addEventListener('show.bs.modal', function () {
-            const corps = document.getElementById('python-corps');
-            corps.textContent = 'Recherche en cours…';
-            $.getJSON('<?= site_url('admin-menu/python') ?>', function (r) {
-                if (r.ok) {
-                    corps.innerHTML = '<table class="table table-sm table-striped mb-0"><tbody>'
-                        + '<tr><th class="fw-semibold">Version Python</th><td></td></tr>'
-                        + '<tr><th class="fw-semibold">Commande</th><td></td></tr></tbody></table>';
-                    const td = corps.querySelectorAll('td');
-                    td[0].textContent = r.version;
-                    td[1].textContent = r.commande;
-                } else {
-                    corps.textContent = r.msg || 'Version indisponible.';
-                }
-            }).fail(function () { corps.textContent = 'Erreur technique : version indisponible.'; });
-        });
     </script>
 </body>
 </html>
