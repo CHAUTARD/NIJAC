@@ -51,6 +51,29 @@ class AdminMenuController extends BaseController
     }
 
     /**
+     * GET admin-menu/python : bouton « Version Python » d'E002. Commandes fixes (aucune saisie client),
+     * lancées à la demande seulement ; exec() désactivé ou Python absent (cas courant en hébergement
+     * FTP) → {ok:false} sans erreur technique.
+     */
+    public function python()
+    {
+        $off = array_map('trim', explode(',', (string) ini_get('disable_functions')));
+        if (!function_exists('exec') || in_array('exec', $off, true)) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'exec() est désactivé sur ce serveur.']);
+        }
+        foreach (['python3', 'python', 'py'] as $cmd) {
+            $sortie = [];
+            $code   = 1;
+            @exec($cmd . ' --version 2>&1', $sortie, $code);
+            if ($code === 0 && preg_match('/^Python\s+(\S+)/i', trim((string) ($sortie[0] ?? '')), $m)) {
+                return $this->response->setJSON(['ok' => true, 'version' => $m[1], 'commande' => $cmd]);
+            }
+        }
+
+        return $this->response->setJSON(['ok' => false, 'msg' => 'Python n\'est pas installé (ou pas dans le PATH) sur ce serveur.']);
+    }
+
+    /**
      * Bouton « Version PHP » d'E002 : version, SAPI, quelques limites ini et présence
      * des extensions utilisées par l'appli. Volontairement restreint (pas de phpinfo(),
      * aucun chemin serveur ni réglage sensible).
