@@ -308,6 +308,17 @@
 
         .dc-clickable:focus-visible { outline: 3px solid #6a1b9a; outline-offset: 2px; }
 
+        /* Grand écran : la taille des icônes suit la hauteur de la fenêtre pour que tout le menu (3 rangées, tableau de bord et pied de page) tienne sans défiler ;
+           567 px = hauteur du reste de la page, 3 = nombre de rangées ; entre 64 et 150 px. */
+        @media (min-width: 1200px) {
+            :root { --ico: clamp(64px, calc((100vh - 567px) / 3), 150px); }
+            .menu-btn { min-height: 0; padding: 14px 12px 12px; }
+            .menu-btn .btn-icon { width: var(--ico); height: var(--ico); }
+            .menu-btn img, .menu-btn .btn-icon img { width: var(--ico) !important; height: var(--ico) !important; max-width: var(--ico) !important; max-height: var(--ico) !important; }
+            .menu-btn .btn-icon i { font-size: calc(var(--ico) * .64); }
+            #menu-grid { gap: 12px; padding: 12px 24px 12px; }
+        }
+
         /* Écrans moyens / petits : la grille passe de 5 à 3, 2 puis 1 colonne */
         @media (max-width: 1199.98px) {
             .dash-cards, #menu-grid { grid-template-columns: repeat(3, 1fr); }
@@ -326,10 +337,23 @@
             .menu-btn .btn-icon i { font-size: 4rem; }
             #page-header { padding: .5rem .75rem; }
             #toolbar { flex-wrap: wrap; padding: .3rem .75rem; }
+            /* Tableau de bord compact : « Prochaine journée » sur toute la largeur, les 4 compteurs en 2 × 2 */
+            .dash-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+            .dash-card:first-child { grid-column: 1 / -1; }
+            .dash-card { padding: 8px 8px 8px; }
+            .dash-card .dc-icon { display: none; }
+            .dash-card .dc-label { font-size: .64rem; }
             .dash-card .dc-value { font-size: 1.5rem; }
+            /* Pied de page : le copyright (nowrap) dépassait de l'écran et élargissait toute la page */
+            #page-footer, #page-footer.pf-status-left {
+                display: flex; flex-direction: column; align-items: center; gap: .1rem; text-align: center;
+            }
+            #page-footer.pf-status-left #status-bar { justify-self: auto; text-align: center; }
+            .footer-copyright { white-space: normal; }
         }
         @media (max-width: 479.98px) {
-            .dash-cards { grid-template-columns: 1fr; }
+            /* minmax(0, 1fr) : une colonne ne s'élargit plus au contenu (icône 100 px) sur les très petits écrans */
+            #menu-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding-left: 8px; padding-right: 8px; }
         }
     </style>
 </head>
@@ -392,7 +416,7 @@
         <!-- Arbitrages club sans date de saisie -->
         <div class="dash-card dc-orange dc-clickable<?= $stats['club_sans_saisie'] > 0 ? ' dc-alert' : '' ?>" id="card-club-sans-saisie" role="button" tabindex="0">
             <div class="dc-icon"><i class="bi bi-calendar-x"></i></div>
-            <div class="dc-label">Arbitrages club sans date de saisie</div>
+            <div class="dc-label">Arbitrages club sans date</div>
             <div class="dc-value"><?= (int) $stats['club_sans_saisie'] ?></div>
             <div class="dc-sub">rencontres jouées, frais non saisis</div>
         </div>
@@ -497,7 +521,7 @@
     </div>
 
     <div class="menu-btn-wrap mbw-doc">
-        <a href="<?= base_url('Documentation/guide-ecrans-ja.html') ?>" target="_blank" rel="noopener" class="menu-btn btn-doc">
+        <a href="<?= base_url('Documentation/guide-ecrans-nominateur.html') ?>" target="_blank" rel="noopener" class="menu-btn btn-doc">
             <div class="btn-icon"><img src="<?= base_url('img/Documentation.png') ?>" alt="Documentation"></div>
             <span>Documentation</span>
             <span class="btn-desc">Guide des écrans (nouvelle page)</span>
