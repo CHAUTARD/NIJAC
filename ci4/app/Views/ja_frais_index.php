@@ -42,11 +42,18 @@
 <?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <div id="contenu">
-    <div class="small text-muted mb-2">
-        Mêmes règles que le lien de convocation (EN21) : accusé de réception possible jusqu'au jour de la rencontre ;
-        saisie des frais à partir du jour de la rencontre (le jour même, après l'accusé de réception).
-        Indemnité forfaitaire <?= number_format($indemniteForfait, 2, ',', ' ') ?> € et
-        <?= number_format($tauxKm, 2, ',', ' ') ?> €/km (arbitrage CRA uniquement).
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <div class="small text-muted">
+            Mêmes règles que le lien de convocation (EN21) : accusé de réception possible jusqu'au jour de la rencontre ;
+            saisie des frais à partir du jour de la rencontre (le jour même, après l'accusé de réception).
+            Indemnité forfaitaire <?= number_format($indemniteForfait, 2, ',', ' ') ?> € et
+            <?= number_format($tauxKm, 2, ',', ' ') ?> €/km (arbitrage CRA uniquement).
+        </div>
+        <select id="cbo-periode" class="form-select form-select-sm ms-auto" style="width:auto;">
+            <option value="">Toutes</option>
+            <option value="avenir">À venir</option>
+            <option value="passees">Passées</option>
+        </select>
     </div>
     <div class="table-responsive">
         <table id="tbl-frais" class="table table-sm table-bordered table-hover align-middle mb-0">
@@ -142,6 +149,7 @@
 const BASE      = <?= json_encode(site_url('ja/frais')) ?>;
 const INDEMNITE = <?= json_encode($indemniteForfait) ?>;
 const TAUX_KM   = <?= json_encode($tauxKm) ?>;
+const AUJOURDHUI = <?= json_encode(date('Y-m-d')) ?>;
 let lignes = [], justifDispo = false, accuseDispo = false, courante = null;
 // Tri par défaut : date croissante (plus ancienne → plus future), comme l'ordre renvoyé par le serveur.
 const sortState = { col: '0', asc: true };
@@ -154,12 +162,16 @@ function estCra(n) { return parseInt(n.ArbitrageCRA, 10) === 1; }
 function urlVoir(n) { return `${BASE}/justificatif/voir?id_nomination=${encodeURIComponent(n.Id_Nomination)}`; }
 
 function afficher() {
+    const periode = $('#cbo-periode').val();
     const $body = $('#tbody-liste').empty();
-    if (!lignes.length) {
+    const filtrees = lignes.filter(n => !periode
+        || (periode === 'avenir' && n.Date >= AUJOURDHUI)
+        || (periode === 'passees' && n.Date < AUJOURDHUI));
+    if (!filtrees.length) {
         $body.append('<tr><td colspan="10" class="text-center text-muted py-3">Aucune nomination.</td></tr>');
         return;
     }
-    lignes.forEach(n => {
+    filtrees.forEach(n => {
         const cra = estCra(n), saisi = !!n.DateSaisie;
         const etat = n.EtatFrais || {};
         const $accuse = $('<td>').attr('data-sort', n.AccuseReception || '');
@@ -314,6 +326,8 @@ $('#mf-justif-envoyer').on('click', function () {
         .fail(() => nijacToast('Erreur réseau.', 'danger'))
         .always(() => $b.prop('disabled', false));
 });
+
+$('#cbo-periode').on('change', afficher);
 
 $(() => {
     nijacSortableTable('#tbl-frais thead th[data-col]', 'col', sortState, trierLignes);

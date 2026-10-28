@@ -29,6 +29,15 @@ $retourUrl  = $retourUrl  ?? null;
             min-height: 100vh;
         }
 
+        /* ── Pied de page (EJA2 et EN22) : collé en bas de la fenêtre ──────── */
+        body.avec-pied { display: flex; flex-direction: column; }
+        /* Blocs centrés par « margin: auto » : en colonne flex ils se réduiraient à leur contenu au lieu de s'étirer */
+        body.avec-pied #section-cal-grille, body.avec-pied #cartouche-arb-voisins { width: 100%; }
+        #page-footer { margin-top: auto; background: #e8eef7; border-top: 1px solid #c8d4e8; padding: .25rem 1rem; font-size: .8rem; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; flex-shrink: 0; }
+        #page-footer #status-bar { grid-column: 1; justify-self: start; }
+        .footer-copyright { grid-column: 2; justify-self: center; color: #6b7280; white-space: nowrap; }
+        .footer-logo { height: 20px; width: auto; opacity: .75; }
+
         /* ── En-tête ─────────────────────────────────────────────────────── */
         #page-header {
             background: var(--nijac-blue);
@@ -229,7 +238,7 @@ $retourUrl  = $retourUrl  ?? null;
         }
     </style>
 </head>
-<body>
+<body class="avec-pied">
 
 <!-- ── En-tête unifié ─────────────────────────────────────────────────────── -->
 <div id="page-header">
@@ -778,6 +787,7 @@ $(function () {
     }
 });
 </script>
+<?= view('partials/page_footer', ['pfStatusAlign' => 'left']) ?>
 <script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
 </body>
 </html>

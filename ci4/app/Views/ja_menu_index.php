@@ -160,6 +160,13 @@
             transform: translateY(0);
             box-shadow: 1px 2px 4px rgba(0,0,0,.15);
         }
+        /* Bouton documentation : fond hachuré pour le distinguer des écrans */
+        .btn-doc {
+            background-color: #eceff1;
+            background-image: repeating-linear-gradient(45deg,
+                rgba(0,0,0,.07) 0, rgba(0,0,0,.07) 7px,
+                transparent 7px, transparent 15px);
+        }
         .btn-code {
             position: absolute;
             top: 6px;
@@ -244,6 +251,12 @@
         <div class="btn-icon"><img src="<?= base_url('img/Quitter.webp') ?>" alt="Se déconnecter"></div>
         <span style="color:#842029;">Se déconnecter</span>
         <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
+    </a>
+
+    <a href="<?= base_url('Documentation/guide-ecrans-ja.html') ?>" target="_blank" rel="noopener" class="menu-btn btn-doc">
+        <div class="btn-icon"><img src="<?= base_url('img/Documentation.png') ?>" alt="Documentation"></div>
+        <span>Documentation</span>
+        <span class="btn-desc">Guide des écrans (nouvelle page)</span>
     </a>
 
 </div>
