@@ -24,7 +24,6 @@ class AdresseJaController extends BaseController
     private const ID_MESSAGE_DEMANDE_ADRESSE = 5;
 
     private \Obfuscator $obf;
-    private \Obfuscator $obfSansPepper;
 
     public function __construct()
     {
@@ -34,9 +33,6 @@ class AdresseJaController extends BaseController
         require_once __DIR__ . '/../../../Classes/Obfuscator.php';
 
         $this->obf = new \Obfuscator(OBFUSCATOR_SEED, getObfuscatorPepper());
-        // ponytail: repli temporaire pour les jetons envoyés avant l'activation
-        // d'OBFUSCATOR_PEPPER en prod — à retirer une fois ces liens renvoyés/expirés.
-        $this->obfSansPepper = new \Obfuscator(OBFUSCATOR_SEED);
     }
 
     private function startSession(): void
@@ -64,14 +60,8 @@ class AdresseJaController extends BaseController
         }
 
         $id = max(0, $this->obf->deobfuscate($token));
-        if ($id > 0 && $this->jaExiste($id)) {
-            return $id;
-        }
 
-        // Repli sur un jeton envoyé avant l'activation d'OBFUSCATOR_PEPPER en prod.
-        $idLegacy = max(0, $this->obfSansPepper->deobfuscate($token));
-
-        return ($idLegacy > 0 && $this->jaExiste($idLegacy)) ? $idLegacy : 0;
+        return ($id > 0 && $this->jaExiste($id)) ? $id : 0;
     }
 
     private function jaExiste(int $id): bool

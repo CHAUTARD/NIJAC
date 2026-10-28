@@ -27,7 +27,6 @@ use CodeIgniter\HTTP\ResponseInterface;
 class DisponibiliteJaController extends BaseController
 {
     private \Obfuscator $obf;
-    private \Obfuscator $obfSansPepper;
 
     public function __construct()
     {
@@ -36,9 +35,6 @@ class DisponibiliteJaController extends BaseController
         require_once __DIR__ . '/../../../Classes/Obfuscator.php';
 
         $this->obf = new \Obfuscator(OBFUSCATOR_SEED, getObfuscatorPepper());
-        // ponytail: repli temporaire pour les jetons envoyés avant l'activation
-        // d'OBFUSCATOR_PEPPER en prod — à retirer une fois ces liens renvoyés/expirés.
-        $this->obfSansPepper = new \Obfuscator(OBFUSCATOR_SEED);
         // L'index uq_dispo (Id_JA, Id_Rencontre) est posé par initTableConfiguration() (EA98).
     }
 
@@ -73,12 +69,6 @@ class DisponibiliteJaController extends BaseController
             $decoded = $this->obf->deobfuscate($tokenGet);
             if ($decoded > 0 && $this->jaExiste($decoded)) {
                 return $decoded;
-            }
-
-            // Repli sur un jeton envoyé avant l'activation d'OBFUSCATOR_PEPPER en prod.
-            $decodedLegacy = $this->obfSansPepper->deobfuscate($tokenGet);
-            if ($decodedLegacy > 0 && $this->jaExiste($decodedLegacy)) {
-                return $decodedLegacy;
             }
         }
 

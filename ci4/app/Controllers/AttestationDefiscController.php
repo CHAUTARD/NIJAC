@@ -24,7 +24,6 @@ class AttestationDefiscController extends BaseController
     private const CV_AUTORISES = [3, 4, 5, 6, 7];
 
     private \Obfuscator $obf;
-    private \Obfuscator $obfSansPepper;
 
     public function __construct()
     {
@@ -32,9 +31,6 @@ class AttestationDefiscController extends BaseController
         require_once __DIR__ . '/../../../config/app_config.php';
         require_once __DIR__ . '/../../../Classes/Obfuscator.php';
         $this->obf = new \Obfuscator(OBFUSCATOR_SEED, getObfuscatorPepper());
-        // ponytail: repli temporaire pour les jetons envoyés avant l'activation
-        // d'OBFUSCATOR_PEPPER en prod — à retirer une fois ces liens renvoyés/expirés.
-        $this->obfSansPepper = new \Obfuscator(OBFUSCATOR_SEED);
     }
 
     /** Id_JA depuis ?ja=TOKEN (obfusqué) ; 0 si absent ou invalide. */
@@ -46,14 +42,8 @@ class AttestationDefiscController extends BaseController
         }
 
         $d = $this->obf->deobfuscate($t);
-        if ($d > 0 && $this->jaExiste($d)) {
-            return $d;
-        }
 
-        // Repli sur un jeton envoyé avant l'activation d'OBFUSCATOR_PEPPER en prod.
-        $dLegacy = $this->obfSansPepper->deobfuscate($t);
-
-        return ($dLegacy > 0 && $this->jaExiste($dLegacy)) ? $dLegacy : 0;
+        return ($d > 0 && $this->jaExiste($d)) ? $d : 0;
     }
 
     private function jaExiste(int $id): bool

@@ -24,7 +24,6 @@ use CodeIgniter\HTTP\ResponseInterface;
 class ConvocationJaController extends BaseController
 {
     protected \Obfuscator $obf;
-    private \Obfuscator $obfSansPepper;
 
     /**
      * Code écran des traces error_log et de JustificatifPeage (EN21 ; 'EJA4' pour JaFraisController,
@@ -42,9 +41,6 @@ class ConvocationJaController extends BaseController
         require_once __DIR__ . '/../../../Classes/Obfuscator.php';
 
         $this->obf = new \Obfuscator(OBFUSCATOR_SEED, getObfuscatorPepper());
-        // ponytail: repli temporaire pour les jetons envoyés avant l'activation
-        // d'OBFUSCATOR_PEPPER en prod — à retirer une fois ces convocations renvoyées/expirées.
-        $this->obfSansPepper = new \Obfuscator(OBFUSCATOR_SEED);
     }
 
     /**
@@ -70,10 +66,8 @@ class ConvocationJaController extends BaseController
         // du token ?cnv= : un ?nomination=N seul (anciens liens déjà envoyés par
         // email avant ce changement) n'est plus suffisant pour consulter/saisir
         // les frais d'une convocation.
-        $tokenValide = $idNomination > 0 && $tokenCnv !== '' && (
-            $this->obf->deobfuscate($tokenCnv) === $idNomination
-            || $this->obfSansPepper->deobfuscate($tokenCnv) === $idNomination
-        );
+        $tokenValide = $idNomination > 0 && $tokenCnv !== ''
+            && $this->obf->deobfuscate($tokenCnv) === $idNomination;
 
         if ($tokenValide) {
             // Résolution en étapes pour un diagnostic précis quand ça échoue :
@@ -337,10 +331,8 @@ class ConvocationJaController extends BaseController
      */
     protected function nominationAutorisee(int $idNomination, string $tokenCnv): bool
     {
-        return $idNomination > 0 && $tokenCnv !== '' && (
-            $this->obf->deobfuscate($tokenCnv) === $idNomination
-            || $this->obfSansPepper->deobfuscate($tokenCnv) === $idNomination
-        );
+        return $idNomination > 0 && $tokenCnv !== ''
+            && $this->obf->deobfuscate($tokenCnv) === $idNomination;
     }
 
     /** Message de refus quand nominationAutorisee() échoue. */

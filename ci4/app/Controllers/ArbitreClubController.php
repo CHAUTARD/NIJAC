@@ -49,7 +49,6 @@ class ArbitreClubController extends BaseController
     }
 
     private \Obfuscator $obf;
-    private \Obfuscator $obfSansPepper;
 
     public function __construct()
     {
@@ -58,9 +57,6 @@ class ArbitreClubController extends BaseController
         require_once __DIR__ . '/../../../Classes/Obfuscator.php';
 
         $this->obf = new \Obfuscator(OBFUSCATOR_SEED, getObfuscatorPepper());
-        // ponytail: repli temporaire pour les jetons envoyés avant l'activation
-        // d'OBFUSCATOR_PEPPER en prod — à retirer une fois ces liens renvoyés/expirés.
-        $this->obfSansPepper = new \Obfuscator(OBFUSCATOR_SEED);
     }
 
     private function tryJson(\Closure $fn): ResponseInterface
@@ -87,14 +83,8 @@ class ArbitreClubController extends BaseController
         }
 
         $id = $this->obf->deobfuscate($raw);
-        if ($id > 0 && $this->rencontreExiste($id)) {
-            return $id;
-        }
 
-        // Repli sur un jeton envoyé avant l'activation d'OBFUSCATOR_PEPPER en prod.
-        $idLegacy = $this->obfSansPepper->deobfuscate($raw);
-
-        return ($idLegacy > 0 && $this->rencontreExiste($idLegacy)) ? $idLegacy : 0;
+        return ($id > 0 && $this->rencontreExiste($id)) ? $id : 0;
     }
 
     private function rencontreExiste(int $id): bool
