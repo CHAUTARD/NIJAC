@@ -23,10 +23,20 @@ function rot47(string $s): string {
 }
 
 // ── Détection de l'environnement ─────────────────────────────────────────────
-// Mettre NIJAC_ENV=production dans les variables d'environnement Apache
-// ou créer un fichier .env.production à la racine pour basculer automatiquement.
-$isProduction = (getenv('NIJAC_ENV') === 'production')
-             || file_exists(__DIR__ . '/../.env.production');
+// Un seul fichier .env (identifiants de la prod). Développement = accès par un hôte local
+// (nijac, localhost, 127.0.0.1, *.localhost, *.test) ou ligne de commande ; tout autre hôte
+// = production. NIJAC_ENV=production|development (variable Apache) force l'un ou l'autre.
+$nijacEnv = getenv('NIJAC_ENV');
+if ($nijacEnv === 'production' || $nijacEnv === 'development') {
+    $isProduction = ($nijacEnv === 'production');
+} else {
+    $hoteRequete  = strtolower(preg_replace('/:\d+$/', '', (string) ($_SERVER['HTTP_HOST'] ?? '')));
+    $hoteLocal    = ($hoteRequete === '')
+                 || in_array($hoteRequete, ['nijac', 'localhost', '127.0.0.1', '[::1]'], true)
+                 || str_ends_with($hoteRequete, '.localhost')
+                 || str_ends_with($hoteRequete, '.test');
+    $isProduction = !$hoteLocal;
+}
 define('IS_PRODUCTION', $isProduction);
 
 // ── Configuration locale (WAMP / développement) ───────────────────────────────
@@ -50,7 +60,7 @@ if (!$isProduction) {
 
 // ── Constantes communes ───────────────────────────────────────────────────────
 define('DB_CHARSET',   'utf8mb4');
-define('APP_VERSION', '1.3.56');
+define('APP_VERSION', '1.3.57');
 
 // Seed secret pour l'obfuscation des identifiants JA dans les URL publiques
 // (doit rester identique entre génération et décodage)

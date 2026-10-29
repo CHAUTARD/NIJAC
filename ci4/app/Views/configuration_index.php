@@ -811,7 +811,7 @@
 
             <p style="font-size:.85rem;color:#374151;margin-bottom:1.25rem;">
                 Le serveur utilisé est sélectionné automatiquement selon l'environnement d'exécution
-                (présence du fichier <code>.env.production</code> ou variable <code>NIJAC_ENV=production</code>).
+                (hôte d'accès non local, ou variable <code>NIJAC_ENV=production</code>).
             </p>
 
             <div class="smtp-grid">

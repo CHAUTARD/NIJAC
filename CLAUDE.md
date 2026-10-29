@@ -98,7 +98,7 @@ Standard CodeIgniter 4 MVC: `ci4/app/Config/Routes.php` maps each URL to a `Cont
 
 | File | Role |
 |---|---|
-| `config/db.php` | PDO singleton (`getPDO()`), env detection (WAMP vs production via `NIJAC_ENV` or `.env.production`), `rot47()` decoding of DB/SMTP/FFTT secrets from `.env` |
+| `config/db.php` | PDO singleton (`getPDO()`), env detection (WAMP vs production via `NIJAC_ENV` or the request host: local host / CLI = dev, any other host = production; single `.env`), `rot47()` decoding of DB/SMTP/FFTT secrets from `.env` |
 | `config/app_config.php` | DB migrations (`initTableConfiguration()`), all config helpers (`getConfig()`, `getDeptActifs()`, `getDepartementsAutorises()`), PHPMailer factory (`getNijacMailer()`), rate-limit helpers |
 | `config/helpers.php` | Misc shared helpers used by a handful of controllers (adresse/commune/salle lookups) |
 | `Classes/Obfuscator.php` | Bi-directional integer ↔ 8-char token (bcmath + Knuth multiplicative hash, seed = `OBFUSCATOR_SEED = 167` + secret pepper from `getObfuscatorPepper()`) — used to expose JA IDs in public URLs without leaking real PKs |

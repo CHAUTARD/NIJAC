@@ -60,7 +60,7 @@ En production, l'application est déployée sous un chemin (`.../nijac/`) : `app
 
 ### Base de données
 
-PDO singleton et détection d'environnement centralisés dans `config/db.php` (racine, hors `ci4/`) : WAMP par défaut, ou production via `NIJAC_ENV=production` / présence d'un `.env.production`. `ci4/app/Config/Database.php` réutilise ces identifiants, sans en définir de son côté.
+PDO singleton et détection d'environnement centralisés dans `config/db.php` (racine, hors `ci4/`) : WAMP par défaut, ou production dès que l'hôte d'accès n'est pas local (ou `NIJAC_ENV=production`) ; un seul fichier `.env`. `ci4/app/Config/Database.php` réutilise ces identifiants, sans en définir de son côté.
 
 Il n'y a plus de migration automatique à chaque chargement de page : le schéma est créé/mis à jour par `config/app_config.php → initTableConfiguration()`, appelée uniquement à l'ouverture de l'écran **EA98** (Administration BDD) par un administrateur. Ajouter une colonne suppose donc un `ALTER TABLE` explicite par environnement, ou un passage par EA98 après déploiement.
 

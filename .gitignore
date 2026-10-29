@@ -38,3 +38,8 @@ Thumbs.db
 /SQL/*.sql
 /SQL/dev_params.json
 !/SQL/.gitkeep
+
+# Fichiers déposés pour les imports (JA, clubs, comptabilité EBP : données personnelles) : jamais versionnés.
+# Seules les données de référence La Poste (communes, publiques) restent suivies.
+/Importation/*
+!/Importation/La_Poste/
