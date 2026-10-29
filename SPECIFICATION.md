@@ -350,8 +350,7 @@ Page d'accueil d'un juge-arbitre disposant d'un compte utilisateur (rôle `JA`, 
 | Bouton | Code | Destination |
 |--------|------|-------------|
 | Mes disponibilités | EJA2 | `ja/disponibilites` |
-| Mes nominations | EJA3 | `ja/nominations` |
-| Mes frais | EJA4 | `ja/frais` |
+| Mes nominations et frais | EJA4 | `ja/frais` |
 | Mot de passe | E006 | `changer-mot-de-passe` (filtre `auth:CSR,Defiscalisateur,CRA Convoc,JA`) |
 | Menu administrateur / Menu nominateur | — | `POST changer-compte` `action=retour` — affiché seulement en mode JA (`mode_ja`, compte non-JA avec fiche liée, voir « Fiche JA liée — mode JA » ci-dessous) ; libellé et icône = rôle principal d'origine en session (`origine_role`, `JaMenuController::libelleMenuOrigine()` / `iconeMenuOrigine()`, comme les boutons « Menu … » de la barre ; repli « Menu nominateur ») |
 | Se déconnecter | — | `POST logout` (formulaire caché `#form-logout` + CSRF) |
@@ -403,21 +402,9 @@ Identiques à EN22 (seule `resolveIdJaAutorise()` est redéfinie : `idJaCompteSe
 
 ---
 
-## EJA3 – Mes nominations
+## EJA4 – Mes nominations et frais / péages / défiscalisation
 
-**Fichier :** `JaNominationsController` (CI4), vue `ja_nominations_index.php`
-**Accès :** rôle « JA » (filtre `jaauth`), lien depuis E011, retour vers `ja-menu`
-
-### Routes
-`GET ja/nominations` (écran), `GET ja/nominations/data` → `{ok, data[]}`.
-
-### Règles
-- Lecture seule. `nominationsDuJa()` (partagée avec EJA4) : toutes les nominations dont `disponible.Id_JA` = JA de la session, triées par date croissante côté serveur (plus ancienne → plus future) — tri cliquable sur toutes les colonnes (`nijac-sortable-table.js`, valeurs `data-sort` : date ISO, nombres) ; même tri par défaut et même tri cliquable sur le tableau d'EJA4 (sauf colonne Actions) — date, heure, journée, compétition (`division.Nom`), division, équipes, club recevant, arbitrage CRA/Club, forfait (`rencontre.Forfait` si présente), accusé de réception, péage, km, défiscalisation, rapports, justificatif.
-- Colonnes EA98 lues seulement si présentes (`AccuseReception`, `FichierPeage`, `Forfait`). Le nom stocké du justificatif n'est jamais renvoyé : seulement `JustificatifPeage::libelle()`.
-
----
-
-## EJA4 – Mes frais / péages / défiscalisation
+Écran issu de la fusion de l'ancien EJA3 « Mes nominations » (lecture seule, supprimé : routes `ja/nominations*` et vue `ja_nominations_index.php` retirées, code EJA3 libre) et d'EJA4. Colonnes : Date, Division (code, juste après Date), Rencontre (pastille FORFAIT si `rencontre.Forfait`), Arbitrage, Accusé de réception, Péage, Km, Frais kilométriques (Km × `frais_kilometrique`), Prestation (`indemnite_forfaitaire`), Total estimé (Prestation + Péage + Frais km, formule d'EN21), Défisc., Justificatif, Actions ; plus de colonnes « Compétition » ni « Club recevant », aucune information en doublon. Filtre À venir / Passées, lignes à venir surlignées. Pas de « Frais kilométriques », « Prestation » ni « Total estimé » pour les rencontres à venir (date > jour, `AUJOURDHUI` = `date('Y-m-d')` = `jourConvocation()`). Règle km : si le JA a plusieurs prestations CRA le même jour, seule la première (heure, puis Id de rencontre croissant) garde ses km ; les suivantes ont `KilometreAffiche` = 0 (calculé par `JaNominationsController::nominationsDuJa()`, affichage seulement : `nomination.Kilometre` n'est jamais modifié et la saisie reprend la valeur enregistrée) — d'où Frais kilométriques, Total estimé et totaux ajustés ; EN21, EN28 et ED51 n'appliquent pas cette règle. Dernière ligne `<tfoot>` (hors tri client) : totaux péage / km / frais kilométriques / prestation / total estimé, rencontres passées seulement, recalculés à chaque filtre ou rechargement. `JaNominationsController` ne garde que la requête partagée `nominationsDuJa()`.
 
 **Fichier :** `JaFraisController` (CI4, hérite de `ConvocationJaController`), vue `ja_frais_index.php`
 **Accès :** rôle « JA » (filtre `jaauth`), lien depuis E011, retour vers `ja-menu`

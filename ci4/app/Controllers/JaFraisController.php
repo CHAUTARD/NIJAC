@@ -5,7 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Mes frais / péages / défiscalisation (EJA4), menu JA (E011), rôle « JA » (filtre "jaauth").
+ * NIJAC – Mes nominations et frais / péages / défiscalisation (EJA4, ex-EJA3 + EJA4 fusionnés), menu JA (E011), rôle « JA » (filtre "jaauth").
  *
  * Réutilise EN21 (ConvocationJaController) sans dupliquer ses règles : accuser() (J <= D,
  * accuserReceptionConvocation()), sauvegarderFrais() (J >= D, accusé requis le jour même,

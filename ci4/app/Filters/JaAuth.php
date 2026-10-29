@@ -10,7 +10,7 @@ use CodeIgniter\HTTP\ResponseInterface;
  * Accès réservé aux sessions authentifiées avec le rôle « JA » : compte JA pur (fiche = utilisateur.Id_Ja,
  * idJaDuCompteJa() ; avant EA98, ancienne convention Id_Utilisateur = Id_JA) ou compte non-JA en mode JA
  * (fiche liée utilisateur.Id_Ja, POST changer-compte) — fiche résolue par idJaCompteSession().
- * Utilisé par E011 (Menu JA) et ses écrans EJA2, EJA3, EJA4 (routes `ja-menu`, `ja/...`).
+ * Utilisé par E011 (Menu JA) et ses écrans EJA2, EJA4 (routes `ja-menu`, `ja/...`).
  *
  * Contrairement à "csrauth" / "defiscauth" / "craconvocauth", l'Administrateur n'a PAS accès :
  * ces écrans affichent et modifient les données d'UN JA précis (celui de la session, jamais un id

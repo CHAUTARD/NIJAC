@@ -223,18 +223,11 @@
         <span class="btn-desc">Journées du championnat régional</span>
     </a>
 
-    <a href="<?= site_url('ja/nominations') ?>" class="menu-btn" style="background:#ffecb3;">
-        <span class="btn-code">EJA3</span>
-        <div class="btn-icon"><img src="<?= base_url('img/Nomination.webp') ?>" alt="Mes nominations"></div>
-        <span>Mes nominations</span>
-        <span class="btn-desc">Rencontres passées et à venir</span>
-    </a>
-
     <a href="<?= site_url('ja/frais') ?>" class="menu-btn" style="background:#ffecb3;">
         <span class="btn-code">EJA4</span>
-        <div class="btn-icon"><img src="<?= base_url('img/Defiscalisation.webp') ?>" alt="Mes frais"></div>
-        <span>Mes frais</span>
-        <span class="btn-desc">Péages, kilomètres, justificatifs, défiscalisation</span>
+        <div class="btn-icon"><img src="<?= base_url('img/Defiscalisation.webp') ?>" alt="Mes nominations et frais"></div>
+        <span>Mes nominations et frais</span>
+        <span class="btn-desc">Rencontres, accusés, péages, kilomètres, défiscalisation</span>
     </a>
 
     <a href="<?= site_url('changer-mot-de-passe') ?>" class="menu-btn" style="background:#e3e8f0;">

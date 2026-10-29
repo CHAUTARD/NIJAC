@@ -564,11 +564,7 @@ $routes->post('ja/disponibilites/sauvegarder-note', 'JaDisponibiliteController::
 $routes->post('ja/disponibilites/sauvegarder-defiscalisation', 'JaDisponibiliteController::sauvegarderDefiscalisation', ['filter' => 'jaauth']);
 $routes->post('ja/disponibilites/sauvegarder-arbitrage-voisins', 'JaDisponibiliteController::sauvegarderArbitrageVoisins', ['filter' => 'jaauth']);
 
-// ── EJA3 Mes nominations — lecture seule, toutes les nominations du JA connecté ──
-$routes->get('ja/nominations', 'JaNominationsController::index', ['filter' => 'jaauth']);
-$routes->get('ja/nominations/data', 'JaNominationsController::data', ['filter' => 'jaauth']);
-
-// ── EJA4 Mes frais / péages / défiscalisation — règles et actions d'EN21 (JaFraisController extends ConvocationJaController) ──
+// ── EJA4 Mes nominations et frais / péages / défiscalisation (ex-EJA3 « Mes nominations » fusionné, code EJA3 libre) — règles et actions d'EN21 (JaFraisController extends ConvocationJaController) ──
 // Autorisation : nomination appartenant au JA de la session (au lieu du jeton cnv) ; dates J <= D (accusé),
 // J >= D (frais, accusé requis le jour même), justificatif via JustificatifPeage (multipart `justificatif`).
 $routes->get('ja/frais', 'JaFraisController::index', ['filter' => 'jaauth']);

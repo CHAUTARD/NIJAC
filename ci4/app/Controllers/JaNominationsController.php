@@ -3,55 +3,18 @@
 namespace App\Controllers;
 
 use App\Libraries\JustificatifPeage;
-use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Mes nominations (EJA3), menu JA (E011), rôle « JA » (filtre "jaauth").
+ * NIJAC – Requête partagée des nominations du JA (écran EJA4 « Mes nominations et frais », JaFraisController).
  *
- * Lecture seule : TOUTES les nominations (passées et à venir) du JA de la session — date, compétition,
- * division, rencontre, club recevant, accusé de réception, frais saisis. La fiche est celle du compte
- * connecté (idJaCompteSession() : rôle JA + fiche du compte (utilisateur.Id_Ja), ou fiche liée en mode JA, jamais un id client). Requête partagée avec EJA4 (JaFraisController) :
- * nominationsDuJa(). Colonnes posées par EA98 lues seulement si présentes (AccuseReception,
- * FichierPeage, rencontre.Forfait).
+ * Ancien écran EJA3 « Mes nominations » fusionné dans EJA4 : il ne reste ici que nominationsDuJa()
+ * (TOUTES les nominations, passées et à venir, du JA $idJa). Colonnes posées par EA98 lues seulement si
+ * présentes (AccuseReception, FichierPeage, rencontre.Forfait).
  */
 class JaNominationsController extends BaseController
 {
-    public function __construct()
-    {
-        require_once __DIR__ . '/../../../config/db.php';
-        require_once __DIR__ . '/../../../config/app_config.php';
-    }
-
-    public function index()
-    {
-        if (idJaCompteSession() <= 0) { // garde-fou : rôle JA + fiche de la session (Id_Ja du compte JA, ou fiche liée en mode JA)
-            return redirect()->to(site_url('login'));
-        }
-        $u = $_SESSION['utilisateur'] ?? [];
-
-        return view('ja_nominations_index', [
-            'nomComplet'  => trim(($u['prenom'] ?? '') . ' ' . ($u['nom'] ?? '')),
-            'departement' => $u['id_departement'] ?? '',
-            'changeLogin' => !empty($u['change_login']),
-        ]);
-    }
-
-    /** GET ja/nominations/data : liste des nominations du JA connecté. */
-    public function data(): ResponseInterface
-    {
-        try {
-            $idJa = idJaCompteSession(); // 0 → liste vide
-
-            return $this->response->setJSON(['ok' => true, 'data' => self::nominationsDuJa(getPDO(), $idJa)]);
-        } catch (\Throwable $e) {
-            error_log('[NIJAC] EJA3 data : ' . $e->getMessage());
-
-            return $this->response->setJSON(['ok' => false, 'msg' => messageErreur($e, 'Erreur technique : impossible de charger vos nominations.')]);
-        }
-    }
-
     /**
-     * Nominations du JA $idJa (rattachement nomination → disponible.Id_JA), date croissante (plus ancienne → plus future, ordre par défaut d'EJA3 / EJA4).
+     * Nominations du JA $idJa (rattachement nomination → disponible.Id_JA), date croissante (plus ancienne → plus future, ordre par défaut d'EJA4).
      * Aucune donnée d'un autre JA ne peut sortir d'ici : filtre d.Id_JA = ? obligatoire.
      */
     public static function nominationsDuJa(\PDO $pdo, int $idJa): array
@@ -79,7 +42,7 @@ class JaNominationsController extends BaseController
             LEFT JOIN equipe   ee ON ee.Id_Equipe  = r.Id_EquipeExt
             LEFT JOIN Club     cl ON cl.Id_Club    = ed.Id_Club
             WHERE d.Id_JA = ?
-            ORDER BY r.Date ASC, r.Heure ASC, n.Id_Nomination ASC
+            ORDER BY r.Date ASC, r.Heure ASC, r.Id_Rencontre ASC, n.Id_Nomination ASC
         ");
         $st->execute([$idJa]);
         $rows = $st->fetchAll(\PDO::FETCH_ASSOC);
@@ -88,6 +51,32 @@ class JaNominationsController extends BaseController
         foreach ($rows as &$row) {
             $row['Justificatif'] = JustificatifPeage::libelle($row['FichierPeage'] !== null ? (string) $row['FichierPeage'] : null);
             unset($row['FichierPeage']);
+        }
+        unset($row);
+
+        return self::ajusterKilometresDuJour($rows);
+    }
+
+    /**
+     * Règle d'affichage : un JA arbitrant plusieurs rencontres CRA le même jour ne garde les kilomètres que
+     * de la première de la journée ; les suivantes affichent 0 (KilometreAffiche). Ordre déterministe : heure
+     * de la rencontre, puis Id de rencontre croissant (l'ordre SQL de nominationsDuJa()). `Kilometre` (valeur
+     * enregistrée) n'est JAMAIS modifié — il alimente la saisie des frais ; seul KilometreAffiche sert aux
+     * colonnes Km / Frais kilométriques / Total estimé et aux totaux de l'écran EJA4.
+     */
+    private static function ajusterKilometresDuJour(array $rows): array
+    {
+        $vu = [];
+        foreach ($rows as &$row) {
+            $row['KilometreAffiche'] = $row['Kilometre'];
+            if ((int) $row['ArbitrageCRA'] !== 1) {
+                continue;
+            }
+            $jour = (string) $row['Date'];
+            if (isset($vu[$jour])) {
+                $row['KilometreAffiche'] = 0;
+            }
+            $vu[$jour] = true;
         }
         unset($row);
 

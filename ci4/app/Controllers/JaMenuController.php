@@ -5,7 +5,7 @@ namespace App\Controllers;
 /**
  * NIJAC – Menu JA (E011), rôle « JA » (compte JA pur dont la fiche ja est utilisateur.Id_Ja, ou
  * compte non-JA en mode JA sur sa fiche liée — bouton de barre du haut « Menu administrateur » / « Menu nominateur »). Protégé par le filtre "jaauth" (rôle JA uniquement, l'Administrateur n'y a PAS
- * accès — voir JaAuth.php). Boutons : EJA2 Mes disponibilités, EJA3 Mes nominations, EJA4 Mes frais,
+ * accès — voir JaAuth.php). Boutons : EJA2 Mes disponibilités, EJA4 Mes nominations et frais,
  * E006 Changer le mot de passe, Se déconnecter. Seul accès BDD : idJaCompteSession() (garde-fou fiche).
  */
 class JaMenuController extends BaseController

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Mes frais (EJA4)</title>
+    <title>NIJAC – Mes nominations et frais (EJA4)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
@@ -18,6 +18,8 @@
         #tbl-frais { font-size: .85rem; background: #fff; }
         #tbl-frais th { background: #fff3cd; white-space: nowrap; }
         #tbl-frais .etat { font-size: .75rem; }
+        #tbl-frais tr.a-venir td { background: #f1f8e9; }
+        .badge-forfait { background: #fd7e14; }
         #tbl-frais thead th[data-col] { cursor: pointer; user-select: none; white-space: nowrap; }
         #tbl-frais thead th[data-col]::after { content: ' \2195'; opacity: .35; font-size: .8em; }
         #tbl-frais thead th.sort-asc::after  { content: ' \25B2'; opacity: 1; }
@@ -33,7 +35,7 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'cash-coin', 'phTitle' => 'Mes frais', 'phCode' => 'EJA4',
+    'phIcon' => 'cash-coin', 'phTitle' => 'Mes nominations et frais', 'phCode' => 'EJA4',
     'phCrumbLabel' => 'Menu JA', 'phCrumbUrl' => site_url('ja-menu'), 'phBackUrl' => site_url('ja-menu'),
 ]) ?>
 
@@ -44,7 +46,7 @@
 <div id="contenu">
     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
         <div class="small text-muted">
-            Mêmes règles que le lien de convocation (EN21) : accusé de réception possible jusqu'au jour de la rencontre ;
+            Toutes mes nominations, passées et à venir. Mêmes règles que le lien de convocation (EN21) : accusé de réception possible jusqu'au jour de la rencontre ;
             saisie des frais à partir du jour de la rencontre (le jour même, après l'accusé de réception).
             Indemnité forfaitaire <?= number_format($indemniteForfait, 2, ',', ' ') ?> € et
             <?= number_format($tauxKm, 2, ',', ' ') ?> €/km (arbitrage CRA uniquement).
@@ -60,20 +62,34 @@
             <thead>
                 <tr>
                     <th data-col="0">Date</th>
-                    <th data-col="1">Rencontre</th>
-                    <th data-col="2">Arbitrage</th>
-                    <th data-col="3">Accusé de réception</th>
-                    <th data-col="4" class="text-end">Péage</th>
-                    <th data-col="5" class="text-end">Km</th>
-                    <th data-col="6" class="text-center">Défisc.</th>
-                    <th data-col="7" class="text-end">Total estimé</th>
-                    <th data-col="8">Justificatif</th>
+                    <th data-col="1">Division</th>
+                    <th data-col="2">Rencontre</th>
+                    <th data-col="3">Arbitrage</th>
+                    <th data-col="4">Accusé de réception</th>
+                    <th data-col="5" class="text-end">Péage</th>
+                    <th data-col="6" class="text-end">Km</th>
+                    <th data-col="7" class="text-end">Frais kilométriques</th>
+                    <th data-col="8" class="text-end">Prestation</th>
+                    <th data-col="9" class="text-end">Total estimé</th>
+                    <th data-col="10" class="text-center">Défisc.</th>
+                    <th data-col="11">Justificatif</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody id="tbody-liste">
-                <tr><td colspan="10" class="text-center text-muted py-3">Chargement…</td></tr>
+                <tr><td colspan="13" class="text-center text-muted py-3">Chargement…</td></tr>
             </tbody>
+            <tfoot>
+                <tr id="ligne-totaux" class="fw-bold table-warning">
+                    <td colspan="5" class="text-end">Totaux (rencontres passées)</td>
+                    <td class="text-end" id="tot-peage"></td>
+                    <td class="text-end" id="tot-km"></td>
+                    <td class="text-end" id="tot-fraiskm"></td>
+                    <td class="text-end" id="tot-prestation"></td>
+                    <td class="text-end" id="tot-total"></td>
+                    <td colspan="3"></td>
+                </tr>
+            </tfoot>
         </table>
     </div>
 </div>
@@ -167,8 +183,9 @@ function afficher() {
     const filtrees = lignes.filter(n => !periode
         || (periode === 'avenir' && n.Date >= AUJOURDHUI)
         || (periode === 'passees' && n.Date < AUJOURDHUI));
+    majTotaux(filtrees);
     if (!filtrees.length) {
-        $body.append('<tr><td colspan="10" class="text-center text-muted py-3">Aucune nomination.</td></tr>');
+        $body.append('<tr><td colspan="13" class="text-center text-muted py-3">Aucune nomination.</td></tr>');
         return;
     }
     filtrees.forEach(n => {
@@ -195,22 +212,48 @@ function afficher() {
             $('<a class="btn btn-sm btn-outline-secondary py-0" target="_blank" rel="noopener noreferrer" title="Ouvrir la convocation (EN21)">')
                 .attr('href', n.UrlConvocation).html('<i class="bi bi-box-arrow-up-right"></i>'));
         if (!etat.ok && etat.err) $actions.append($('<div class="etat text-muted">').text(etat.err));
-        const total = cra ? INDEMNITE + Number(n.Peage || 0) + Number(n.Kilometre || 0) * TAUX_KM : 0;
+        const passee = n.Date <= AUJOURDHUI; // rencontre pas encore jouée (date > jour) : pas de total estimé
+        const kmAff = n.KilometreAffiche, fraisKm = Number(kmAff || 0) * TAUX_KM; // km ajustés côté serveur (1re prestation du jour)
+        const total = cra && passee ? INDEMNITE + Number(n.Peage || 0) + fraisKm : 0;
         const defisc = cra && saisi && parseInt(n.Defiscalisation, 10) ? 1 : 0;
-        $body.append($('<tr>').attr('data-id', n.Id_Nomination).append(
+        const $renc = $('<td>').attr('data-sort', (n.NomDom || '') + ' / ' + (n.NomExt || '')).text(libRencontre(n));
+        if (parseInt(n.Forfait, 10) === 1 || parseInt(n.Forfait, 10) === 2) $renc.append(' ', $('<span class="badge badge-forfait">').text('FORFAIT'));
+        $body.append($('<tr>').attr('data-id', n.Id_Nomination).toggleClass('a-venir', n.Date >= AUJOURDHUI).append(
             $('<td>').attr('data-sort', (n.Date || '') + ' ' + (n.Heure || '')).text(dateFr(n.Date) + (n.Heure ? ' ' + n.Heure : '')),
-            $('<td>').attr('data-sort', (n.NomDom || '') + ' / ' + (n.NomExt || '')).text(libRencontre(n)).append($('<div class="small text-muted">').text(n.DivisionNom || '')),
+            $('<td>').text(n.DivisionCode || ''),
+            $renc,
             $('<td>').text(cra ? 'CRA' : 'Club'),
             $accuse,
             $('<td class="text-end">').attr('data-sort', cra && saisi ? String(Number(n.Peage || 0)) : '').text(cra && saisi ? euros(n.Peage) : ''),
-            $('<td class="text-end">').attr('data-sort', cra && saisi && n.Kilometre !== null ? String(Number(n.Kilometre)) : '').text(cra && saisi ? (n.Kilometre ?? '') : ''),
+            $('<td class="text-end">').attr('data-sort', cra && saisi && kmAff !== null ? String(Number(kmAff)) : '').text(cra && saisi ? (kmAff ?? '') : ''),
+            $('<td class="text-end">').attr('data-sort', cra && passee ? fraisKm.toFixed(2) : '').text(cra && passee ? euros(fraisKm) : '—'),
+            $('<td class="text-end">').attr('data-sort', cra && passee ? String(INDEMNITE) : '').text(cra && passee ? euros(INDEMNITE) : '—'),
+            $('<td class="text-end">').attr('data-sort', cra && passee ? total.toFixed(2) : '').text(cra && passee ? euros(total) : '—'),
             $('<td class="text-center">').attr('data-sort', String(defisc)).text(defisc ? '✔' : ''),
-            $('<td class="text-end">').attr('data-sort', cra ? total.toFixed(2) : '').text(cra ? euros(total) : ''),
             $justif,
             $actions
         ));
     });
     trierLignes();
+}
+
+// Totaux (tfoot, hors tri) : rencontres passées seulement (date <= jour), sur les lignes affichées.
+// Péage / km : arbitrage CRA avec frais saisis ; total estimé : arbitrage CRA passé (même calcul que la colonne).
+function majTotaux(affichees) {
+    let peage = 0, km = 0, fraisKm = 0, prestation = 0, total = 0;
+    affichees.forEach(n => {
+        if (n.Date > AUJOURDHUI || !estCra(n)) return;
+        const fk = Number(n.KilometreAffiche || 0) * TAUX_KM;
+        fraisKm += fk;
+        prestation += INDEMNITE;
+        total += INDEMNITE + Number(n.Peage || 0) + fk;
+        if (n.DateSaisie) { peage += Number(n.Peage || 0); km += Number(n.KilometreAffiche || 0); }
+    });
+    $('#tot-peage').text(euros(peage));
+    $('#tot-km').text(km);
+    $('#tot-fraiskm').text(euros(fraisKm));
+    $('#tot-prestation').text(euros(prestation));
+    $('#tot-total').text(euros(total));
 }
 
 // ── Tri (clic sur les en-têtes, nijac-sortable-table.js) : valeur data-sort si présente (dates ISO,
