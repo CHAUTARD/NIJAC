@@ -574,6 +574,13 @@ $routes->post('ja/frais/sauvegarder', 'JaFraisController::sauvegarderFrais', ['f
 $routes->post('ja/frais/justificatif', 'JaFraisController::joindreJustificatif', ['filter' => 'jaauth']);
 $routes->get('ja/frais/justificatif/voir', 'JaFraisController::voirJustificatif', ['filter' => 'jaauth']);
 
+// ── EJA3 Ma défiscalisation (ex-code libre) — infos véhicule (ja.Defiscalisation / PuissanceFiscale / VehiculeElectrique),
+// dépôt de la carte grise dans _Defiscalisation/ (lue par ED54) et lien jetonné vers l'attestation ED53 ; fiche = idJaCompteSession().
+$routes->get('ja/defiscalisation', 'JaDefiscController::index', ['filter' => 'jaauth']);
+$routes->post('ja/defiscalisation/sauvegarder', 'JaDefiscController::sauvegarder', ['filter' => 'jaauth']);
+$routes->post('ja/defiscalisation/carte-grise', 'JaDefiscController::deposerCarteGrise', ['filter' => 'jaauth']);
+$routes->get('ja/defiscalisation/carte-grise/voir', 'JaDefiscController::voirCarteGrise', ['filter' => 'jaauth']);
+
 // ── EC71 Compétitions CRA — CRUD de la table CRA_Competition ─────────────────
 // Accès depuis E009. Rôle « CRA Convoc » ou Administrateur (filtre "craconvocauth").
 $routes->get('cra-competition', 'CraCompetitionController::index', ['filter' => 'craconvocauth']);

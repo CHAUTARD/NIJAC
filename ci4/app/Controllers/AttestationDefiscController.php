@@ -100,7 +100,7 @@ class AttestationDefiscController extends BaseController
             'tokenJa'     => $idJa > 0 ? trim($this->request->getGet('ja') ?? '') : '',
             'fiche'       => $fiche,
             'cvAutorises' => self::CV_AUTORISES,
-            'retourUrl'   => $estStaff ? site_url('defiscalisation') : getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr'),
+            'retourUrl'   => $estStaff ? site_url('defiscalisation') : (aRole(['JA'], $u) ? site_url('ja/defiscalisation') : getConfig('url_ligue', 'https://www.ligue-normandie-tt.fr')),
             'nomComplet'  => isset($u['prenom'], $u['nom']) ? trim($u['prenom'] . ' ' . $u['nom']) : '',
             'departement' => $u['id_departement'] ?? '',
             'changeLogin' => !empty($u['change_login']),

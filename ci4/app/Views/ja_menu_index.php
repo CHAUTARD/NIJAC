@@ -225,16 +225,16 @@
 
     <a href="<?= site_url('ja/frais') ?>" class="menu-btn" style="background:#ffecb3;">
         <span class="btn-code">EJA4</span>
-        <div class="btn-icon"><img src="<?= base_url('img/Defiscalisation.webp') ?>" alt="Mes nominations et frais"></div>
+        <div class="btn-icon"><img src="<?= base_url('img/Nomination.webp') ?>" alt="Mes nominations et frais"></div>
         <span>Mes nominations et frais</span>
         <span class="btn-desc">Rencontres, accusés, péages, kilomètres, défiscalisation</span>
     </a>
 
-    <a href="<?= site_url('changer-mot-de-passe') ?>" class="menu-btn" style="background:#e3e8f0;">
-        <span class="btn-code">E006</span>
-        <div class="btn-icon"><i class="bi bi-key-fill" style="color:#1a3a6b;"></i></div>
-        <span>Mot de passe</span>
-        <span class="btn-desc">Changer mon mot de passe</span>
+    <a href="<?= site_url('ja/defiscalisation') ?>" class="menu-btn" style="background:#ffecb3;">
+        <span class="btn-code">EJA3</span>
+        <div class="btn-icon"><img src="<?= base_url('img/Defiscalisation.webp') ?>" alt="Ma défiscalisation"></div>
+        <span>Ma défiscalisation</span>
+        <span class="btn-desc">Explications, véhicule, carte grise, attestation</span>
     </a>
 
     <div class="menu-break"></div>
@@ -244,6 +244,13 @@
         <div class="btn-icon"><img src="<?= base_url('img/Quitter.webp') ?>" alt="Se déconnecter"></div>
         <span style="color:#842029;">Se déconnecter</span>
         <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
+    </a>
+
+    <a href="<?= site_url('changer-mot-de-passe') ?>" class="menu-btn" style="background:#e3e8f0;">
+        <span class="btn-code">E006</span>
+        <div class="btn-icon"><i class="bi bi-key-fill" style="color:#1a3a6b;"></i></div>
+        <span>Mot de passe</span>
+        <span class="btn-desc">Changer mon mot de passe</span>
     </a>
 
     <a href="<?= base_url('Documentation/guide-ecrans-ja.html') ?>" target="_blank" rel="noopener" class="menu-btn btn-doc">

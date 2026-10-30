@@ -350,6 +350,7 @@ Page d'accueil d'un juge-arbitre disposant d'un compte utilisateur (rôle `JA`, 
 | Bouton | Code | Destination |
 |--------|------|-------------|
 | Mes disponibilités | EJA2 | `ja/disponibilites` |
+| Ma défiscalisation | EJA3 | `ja/defiscalisation` |
 | Mes nominations et frais | EJA4 | `ja/frais` |
 | Mot de passe | E006 | `changer-mot-de-passe` (filtre `auth:CSR,Defiscalisateur,CRA Convoc,JA`) |
 | Menu administrateur / Menu nominateur | — | `POST changer-compte` `action=retour` — affiché seulement en mode JA (`mode_ja`, compte non-JA avec fiche liée, voir « Fiche JA liée — mode JA » ci-dessous) ; libellé et icône = rôle principal d'origine en session (`origine_role`, `JaMenuController::libelleMenuOrigine()` / `iconeMenuOrigine()`, comme les boutons « Menu … » de la barre ; repli « Menu nominateur ») |
@@ -401,6 +402,25 @@ En-tête : bouton Retour (vers E011) à droite, même style que `partials/page_h
 Identiques à EN22 (seule `resolveIdJaAutorise()` est redéfinie : `idJaCompteSession()`, paramètres `ja` / `id_ja` ignorés). Pas de fabrication de jeton (`token()` refusé).
 
 ---
+
+## EJA3 – Ma défiscalisation
+
+**Accès :** menu JA (E011), filtre `jaauth`. Contrôleur `JaDefiscController`, vue `ja_defisc_index.php`. Fiche = `idJaCompteSession()` (jamais un id du client), garde-fou répété dans le constructeur (0 = tout refusé).
+
+**Contenu :** (1) bloc explicatif (abandon de frais kilométriques, reçu fiscal, année civile `annee_fiscale`, étapes, lien vers `Documentation/Plaquette_Defiscalisation.pdf`) ; (2) Mes informations : case défiscalisation, puissance fiscale, véhicule électrique ; (3) carte grise (facultative) ; (4) attestation sur l'honneur (état + lien vers ED53).
+
+**Cartouche « Simulation »** (sous le bloc explicatif, lecture seule, aucune table ni colonne) : km des rencontres CRA passées de l'année `annee_fiscale` via `JaNominationsController::nominationsDuJa()` (`KilometreAffiche` : une seule prestation par jour garde ses km, comme EJA4) ; « Sans défiscalisation » = km × config `frais_kilometrique` (même source que la colonne « Frais kilométriques » d'EJA4) ; « Avec défiscalisation » = reçu fiscal `montantBaremeKilometrique()` (table `ComptaDefiscalisation`, majoration `comptadefisc_majoration_electrique` si véhicule électrique, 6 CV si `PuissanceFiscale` vide, avec mention) puis réduction d'impôt = reçu × 66 % (constante `JaDefiscController::TAUX_REDUCTION_IMPOT`, source `Documentation/Plaquette_Defiscalisation.pdf`, plafond 20 % du revenu imposable rappelé). Aucune mission passée : « Aucune mission enregistrée pour le moment ». Estimation indicative.
+
+**Données réutilisées (aucune table ni colonne nouvelle) :** `ja.Defiscalisation`, `ja.PuissanceFiscale` (3 à 7), `ja.VehiculeElectrique` — celles qu'affichent ED51/ED55 et que renseigne ED53 ; dossier `_Defiscalisation/` (refusé en HTTP par `.htaccess` racine + `_Defiscalisation/.htaccess`).
+
+| Route | Méthode | Description |
+|---|---|---|
+| `ja/defiscalisation` | GET | Page ; lien ED53 = `attestation-defisc?ja=<jeton Obfuscator de SA fiche>` |
+| `ja/defiscalisation/sauvegarder` | POST | `defiscalisation` 0/1, `puissance` (vide ou 3 à 7), `electrique` 0/1 → UPDATE de SA fiche |
+| `ja/defiscalisation/carte-grise` | POST multipart | Champ `carte_grise` : ≤ 5 Mo, type détecté par finfo (PDF / JPEG / PNG seulement), signature `%PDF-` ou image décodable ; enregistrée sous le nom serveur `{Id_JA}_cg.{ext}` (nom du client jamais utilisé), l'ancienne carte grise (toute extension) est supprimée après écriture du fichier temporaire ; réponse `{ok, msg, ext, date}` |
+| `ja/defiscalisation/carte-grise/voir` | GET | Sert SA carte grise en `inline`, `nosniff`, `no-store` ; 404 sinon |
+
+**Cohérence défiscalisateur :** ED54 liste les `{Id_JA}.pdf` et propose `_cg.*` via `attestations-defisc/carte-grise/{id}` ; ED51/ED55 relisent les colonnes `ja` ci-dessus. ED53 renvoie un JA connecté vers EJA3 (bouton retour). Pas de circuit de validation : le défiscalisateur consulte les pièces.
 
 ## EJA4 – Mes nominations et frais / péages / défiscalisation
 
