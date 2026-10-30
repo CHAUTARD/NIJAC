@@ -55,6 +55,9 @@
             font-family: 'Segoe UI', system-ui, sans-serif;
         }
 
+        /* Compte JA (menu E011, y compris mode JA) : mêmes couleurs que E011 */
+        body.skin-ja { background: #fff8e1; --nijac-blue: #8d6e00; --nijac-blue-light: #a98500; }
+
         .pwd-card {
             width: 460px;
             border: none;
@@ -112,12 +115,12 @@
         }
     </style>
 </head>
-<body>
+<body class="<?= in_array('JA', (array) ($_SESSION['utilisateur']['roles'] ?? []), true) ? 'skin-ja' : '' ?>">
 
 <div class="pwd-card card">
 
     <div class="pwd-header">
-        <h5><i class="bi bi-key-fill me-2"></i>Changer le mot de passe</h5>
+        <h5><i class="bi bi-key-fill me-2"></i>Changer le mot de passe <small class="ms-2 opacity-75">(E006)</small></h5>
     </div>
 
     <div class="pwd-body">

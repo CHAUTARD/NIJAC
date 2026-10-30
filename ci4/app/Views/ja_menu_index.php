@@ -78,8 +78,8 @@
             align-items: center;
             gap: .35rem;
             padding: .25rem .75rem;
-            background: #1565c0;
-            color: #fff;
+            background: #ffecb3;
+            color: #5d4300;
             border: none;
             border-radius: 5px;
             font-size: .82rem;
@@ -88,7 +88,7 @@
             text-decoration: none;
             transition: background .15s;
         }
-        #btn-switch-retour:hover { background: #0d47a1; color: #fff; }
+        #btn-switch-retour:hover { background: #ffe082; color: #5d4300; }
 
         /* ── Boutons (mêmes classes et même style que E002/E004/E005/E009) ── */
         #menu-grid {
@@ -160,12 +160,9 @@
             transform: translateY(0);
             box-shadow: 1px 2px 4px rgba(0,0,0,.15);
         }
-        /* Bouton documentation : fond hachuré pour le distinguer des écrans */
+        /* Bouton documentation : même fond que les autres boutons du menu */
         .btn-doc {
-            background-color: #eceff1;
-            background-image: repeating-linear-gradient(45deg,
-                rgba(0,0,0,.07) 0, rgba(0,0,0,.07) 7px,
-                transparent 7px, transparent 15px);
+            background-color: #ffecb3;
         }
         .btn-code {
             position: absolute;
@@ -240,13 +237,13 @@
     <div class="menu-break"></div>
 
     <form method="post" action="<?= site_url('logout') ?>" id="form-logout" class="d-none"><?= csrf_field() ?></form>
-    <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;" onclick="document.getElementById('form-logout').submit(); return false;">
+    <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#ffecb3;" onclick="document.getElementById('form-logout').submit(); return false;">
         <div class="btn-icon"><img src="<?= base_url('img/Quitter.webp') ?>" alt="Se déconnecter"></div>
         <span style="color:#842029;">Se déconnecter</span>
         <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
     </a>
 
-    <a href="<?= site_url('changer-mot-de-passe') ?>" class="menu-btn" style="background:#e3e8f0;">
+    <a href="<?= site_url('changer-mot-de-passe') ?>" target="_blank" rel="noopener" class="menu-btn" style="background:#ffecb3;">
         <span class="btn-code">E006</span>
         <div class="btn-icon"><i class="bi bi-key-fill" style="color:#1a3a6b;"></i></div>
         <span>Mot de passe</span>

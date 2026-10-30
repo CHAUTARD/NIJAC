@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
     <style>
-        body { background: #f0f4fa; font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+        body { background: #fff8e1; font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
         #page-header { background: #8d6e00; color: #fff; padding: .5rem 1.25rem; font-size: .9rem; font-weight: 600; }
         #toolbar { background: #f8fafc; border-bottom: 1px solid #dde5f0; padding: .3rem 1rem; display: flex; align-items: center; justify-content: space-between; font-size: .85rem; gap: .75rem; }
         #toolbar .ts-user { color: #1a3a6b; font-weight: 600; }

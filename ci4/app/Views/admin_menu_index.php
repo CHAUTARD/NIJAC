@@ -73,8 +73,8 @@
             align-items: center;
             gap: .35rem;
             padding: .25rem .75rem;
-            background: #1565c0;
-            color: #fff;
+            background: #ffecb3;
+            color: #5d4300;
             border: none;
             border-radius: 5px;
             font-size: .82rem;
@@ -83,7 +83,7 @@
             text-decoration: none;
             transition: background .15s;
         }
-        #btn-switch-ja:hover { background: #0d47a1; color: #fff; }
+        #btn-switch-ja:hover { background: #ffe082; color: #5d4300; }
         #btn-switch-ja.tb-inactif,
         #btn-switch-ja.tb-inactif:hover { background: #9e9e9e; opacity: .65; cursor: not-allowed; }
 

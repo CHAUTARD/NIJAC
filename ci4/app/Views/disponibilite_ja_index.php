@@ -29,6 +29,9 @@ $retourUrl  = $retourUrl  ?? null;
             min-height: 100vh;
         }
 
+        /* ── EJA2 seulement : mêmes couleurs que EJA4 (bandeau #8d6e00) ; EN22 inchangé ── */
+        body.skin-ja { --nijac-blue: #8d6e00; background: #fff8e1; }
+
         /* ── Pied de page (EJA2 et EN22) : collé en bas de la fenêtre ──────── */
         body.avec-pied { display: flex; flex-direction: column; }
         /* Blocs centrés par « margin: auto » : en colonne flex ils se réduiraient à leur contenu au lieu de s'étirer */
@@ -238,7 +241,7 @@ $retourUrl  = $retourUrl  ?? null;
         }
     </style>
 </head>
-<body class="avec-pied">
+<body class="avec-pied<?= $codeEcran === 'EJA2' ? ' skin-ja' : '' ?>">
 
 <!-- ── En-tête unifié ─────────────────────────────────────────────────────── -->
 <div id="page-header">
