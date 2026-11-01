@@ -3879,101 +3879,37 @@ function avertissementsHtmlEmail(string $html): ?string
         : null;
 }
 
-/**
- * Règle de robustesse du mot de passe (E008 « mot de passe oublié ») : 10 caractères
- * minimum, avec au moins une minuscule, une majuscule, un chiffre et un caractère
- * spécial. Retourne null si conforme, sinon le message d'erreur à afficher.
- */
+// Règles de mot de passe : logique pure dans App\Libraries\MotDePasse, fonctions historiques ci-dessous.
+require_once __DIR__ . '/../ci4/app/Libraries/MotDePasse.php';
+
+/** Robustesse (E006/E008) : null si conforme, sinon le message d'erreur. Voir MotDePasse::verifierRobustesse(). */
 function validerRobustesseMotDePasse(string $mdp): ?string
 {
-    if (strlen($mdp) < 10)                     return 'Le mot de passe doit contenir au moins 10 caractères.';
-    if (!preg_match('/[a-z]/', $mdp))          return 'Le mot de passe doit contenir au moins une lettre minuscule.';
-    if (!preg_match('/[A-Z]/', $mdp))          return 'Le mot de passe doit contenir au moins une lettre majuscule.';
-    if (!preg_match('/\d/', $mdp))             return 'Le mot de passe doit contenir au moins un chiffre.';
-    if (!preg_match('/[^a-zA-Z0-9]/', $mdp))   return 'Le mot de passe doit contenir au moins un caractère spécial.';
-    return null;
+    return \App\Libraries\MotDePasse::verifierRobustesse($mdp);
 }
 
-/**
- * Génère un mot de passe aléatoire conforme à validerRobustesseMotDePasse()
- * (au moins un minuscule, un majuscule, un chiffre, un caractère spécial).
- * Caractères ambigus (l/1/I, O/0…) exclus pour la lisibilité. Utilisé par EA86
- * quand l'admin coche « Écraser » (mot de passe provisoire à communiquer).
- */
+/** Mot de passe provisoire aléatoire conforme à la robustesse (EA86 « Écraser », EN15). */
 function genererMotDePasseAleatoire(int $longueur = 12): string
 {
-    $minu = 'abcdefghijkmnpqrstuvwxyz';
-    $maju = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-    $chif = '23456789';
-    $spec = '!@#$%*-_=+';
-    $tous = $minu . $maju . $chif . $spec;
-
-    $car = [
-        $minu[random_int(0, strlen($minu) - 1)],
-        $maju[random_int(0, strlen($maju) - 1)],
-        $chif[random_int(0, strlen($chif) - 1)],
-        $spec[random_int(0, strlen($spec) - 1)],
-    ];
-    for ($i = count($car); $i < max($longueur, 10); $i++) {
-        $car[] = $tous[random_int(0, strlen($tous) - 1)];
-    }
-    for ($i = count($car) - 1; $i > 0; $i--) {           // mélange Fisher-Yates
-        $j = random_int(0, $i);
-        [$car[$i], $car[$j]] = [$car[$j], $car[$i]];
-    }
-
-    return implode('', $car);
+    return \App\Libraries\MotDePasse::genererAleatoire($longueur);
 }
 
-/**
- * Jeton de réinitialisation de mot de passe SANS stockage BDD : la signature HMAC
- * est calculée avec le hash du mot de passe actuel comme clé, donc le jeton devient
- * automatiquement invalide dès que le mot de passe a été changé (usage unique).
- * Format : "<idUtilisateur>-<timestampExpiration>-<hmacSha256>" (tout URL-safe).
- */
+/** Jeton de réinitialisation E007/E008 sans stockage BDD, signé avec le hash du mot de passe courant. */
 function genererJetonResetMdp(int $idUtilisateur, string $hashMdpActuel, int $dureeSecondes = 3600): string
 {
-    $exp = time() + $dureeSecondes;
-    $sig = hash_hmac('sha256', $idUtilisateur . '.' . $exp, cleJetonResetMdp($hashMdpActuel));
-    return $idUtilisateur . '-' . $exp . '-' . $sig;
+    return \App\Libraries\MotDePasse::genererJeton($idUtilisateur, $hashMdpActuel, $dureeSecondes, OBFUSCATOR_SEED, getObfuscatorPepper());
 }
 
-/**
- * Clé HMAC du jeton E008 : hash du mot de passe courant + OBFUSCATOR_SEED (public, documenté)
- * + pepper secret getObfuscatorPepper() (.env, OBFUSCATOR_PEPPER). Le pepper rend le jeton
- * infalsifiable par qui lirait les hash en base (fuite de sauvegarde SQL…) sans le .env.
- * Pepper vide : la clé est EXACTEMENT l'ancienne (hash . seed), donc les liens déjà émis restent
- * valables, mais le gain est nul (seule protection = secret du hash). Pepper renseigné : seule la
- * nouvelle clé est acceptée — les liens émis avant sa mise en place (valables 1 h) sont perdus.
- */
+/** Clé HMAC du jeton E008 (hash courant + OBFUSCATOR_SEED + pepper), voir MotDePasse::cleJeton(). */
 function cleJetonResetMdp(string $hashMdpActuel): string
 {
-    $pepper = getObfuscatorPepper();
-
-    return $hashMdpActuel . OBFUSCATOR_SEED . ($pepper !== '' ? '|reset-mdp|' . $pepper : '');
+    return \App\Libraries\MotDePasse::cleJeton($hashMdpActuel, OBFUSCATOR_SEED, getObfuscatorPepper());
 }
 
-/**
- * Vérifie un jeton produit par genererJetonResetMdp() : retourne l'Id_Utilisateur si
- * le jeton est bien formé, non expiré et signé avec le hash de mot de passe COURANT
- * de l'utilisateur, sinon null. $lookupHash(int $id): ?string doit rendre le hash
- * Password actuel (null si utilisateur inconnu/inactif).
- */
+/** Id_Utilisateur si le jeton est valide (forme, expiration, signature avec le hash courant), sinon null. */
 function verifierJetonResetMdp(string $jeton, callable $lookupHash): ?int
 {
-    if (!preg_match('/^(\d+)-(\d+)-([0-9a-f]{64})$/', $jeton, $m)) {
-        return null;
-    }
-    [, $id, $exp, $sig] = $m;
-    if ((int) $exp < time()) {
-        return null;
-    }
-    $hash = $lookupHash((int) $id);
-    if (!$hash) {
-        return null;
-    }
-    $attendu = hash_hmac('sha256', $id . '.' . $exp, cleJetonResetMdp($hash));
-    return hash_equals($attendu, $sig) ? (int) $id : null;
+    return \App\Libraries\MotDePasse::verifierJeton($jeton, $lookupHash, OBFUSCATOR_SEED, getObfuscatorPepper());
 }
 
 /**
