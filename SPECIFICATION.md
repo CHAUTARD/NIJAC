@@ -10,6 +10,8 @@
 - [E001 – Connexion](#e001--connexion)
 - [E002 – Menu administrateur](#e002--menu-administrateur)
 - [E003 – Menu nominateur](#e003--menu-nominateur)
+- [E004 – Menu CSR](#e004--menu-csr)
+- [E005 – Menu Défiscalisateur](#e005--menu-défiscalisateur)
 - [E006 – Changement du mot de passe](#e006--changement-du-mot-de-passe)
 - [E007 – Mot de passe oublié (demande)](#e007--mot-de-passe-oublié-demande)
 - [E008 – Réinitialisation du mot de passe](#e008--réinitialisation-du-mot-de-passe)
@@ -31,9 +33,13 @@
 - [EN22 – Disponibilité JA](#en22--disponibilité-ja)
 - [EN23 – Date des rencontres](#en23--date-des-rencontres)
 - [EN24 – Remplacement équipe](#en24--remplacement-équipe)
+- [EN25 – Juge-arbitre du club](#en25--juge-arbitre-du-club)
 - [EN27 – Clubs / Associations](#en27--clubs--associations)
 - [EN28 – Suivi des nominations](#en28--suivi-des-nominations)
 - ~~EN30 – Contrôle FFTT 131~~ (écran supprimé, voir EN28 « Mise à jour FFTT 131 »)
+- [ES31 – Club CSR](#es31--club-csr)
+- [ES32 – Message Réengagement CSR](#es32--message-réengagement-csr)
+- [ES33 – Souhaits des équipes](#es33--souhaits-des-équipes)
 - [ED51 – Défiscalisation JA](#ed51--défiscalisation-ja)
 - [ED52 – Barème kilométrique](#ed52--barème-kilométrique)
 - [ED53 – Attestation sur l'honneur](#ed53--attestation-sur-lhonneur)
@@ -42,6 +48,7 @@
 - [EA81 – Salles](#ea81--salles)
 - [EA82 – Import Rencontres](#ea82--import-rencontres)
 - [EA83 – Import Rencontres Nationales](#ea83--import-rencontres-nationales)
+- [EA84 – Calendrier championnat régional](#ea84--calendrier-championnat-régional)
 - [EA85 – Saison / Nettoyage](#ea85--saison--nettoyage)
 - [EA86 – Utilisateurs](#ea86--utilisateurs)
 - [EA87 – Communes](#ea87--communes)
@@ -49,8 +56,10 @@
 - [EA89 – Divisions](#ea89--divisions)
 - [EA90 – Départements](#ea90--départements)
 - [EA91 – Configuration générale](#ea91--configuration-générale)
+- [EA92 – Équipes régionales](#ea92--équipes-régionales)
 - [EA93 – Gestion des messages](#ea93--gestion-des-messages)
 - [EA96 – Test API FFTT](#ea96--test-api-fftt)
+- [EA97 – BugSpid](#ea97--bugspid)
 - [EA98 – Administration base de données](#ea98--administration-base-de-données)
 - [EA99 – Sécurité TOTP](#ea99--sécurité-totp)
 
@@ -58,19 +67,19 @@
 
 ## E001 – Connexion
 
-**Fichier :** `index.php`  
+**Fichier :** `AuthController` (CI4), vue `login_index.php`, routes `GET/POST /` et `GET/POST login`  
 **Accès :** Public (non authentifié)
 
 ### Objectif
 Point d'entrée unique de l'application. Authentifie l'utilisateur et initialise la session.
 
-> **CI4 (à jour) :** il n'y a plus de rôle `JA` ni de connexion JA du tout — voir `AuthController.php`. Un JA
-> n'utilise jamais E001 ; il accède directement à ses écrans (EN19–EN22) via un lien tokenisé (Obfuscator,
-> `?ja=TOKEN`) reçu par email. La description ci-dessous (login Nom + mot de passe licence) est l'ancien
-> comportement, conservée pour l'historique.
+> **Comptes JA :** un juge-arbitre peut avoir un compte de rôle `JA` (exclusif, fiche = `utilisateur.Id_Ja`), créé depuis EA86 ou par
+> l'invitation d'EN15. Il se connecte par E001 comme tout utilisateur (mot de passe puis E010) et arrive sur E011 (menu JA).
+> Un JA **sans** compte continue d'utiliser les pages publiques tokenisées (EN19, EN21, EN22) via le lien `?ja=TOKEN` reçu par
+> email. Un compte non-JA relié à une fiche JA (`utilisateur.Id_Ja`, réglé dans EA86) peut basculer en « mode JA » depuis E002/E003.
 
 ### Interface
-- Champ **Login** (texte) — identifiant Administrateur/Nominateur/CSR
+- Champ **Login** (texte) — identifiant du compte (tous rôles, JA compris ; le login d'un compte JA est son adresse email)
 - Champ **Mot de passe** (password, bouton afficher/masquer)
 - Bouton **Se connecter**
 - Zone de statut (message d'erreur ou de succès)
@@ -162,7 +171,7 @@ Message système `messagerie` de Type `Code de sécurité` (constante `TYPE_MESS
 
 ## E002 – Menu administrateur
 
-**Fichier :** `admin_menu.php`  
+**Fichier :** `AdminMenuController` (CI4), vue `admin_menu_index.php`, route `admin-menu`  
 **Accès :** Administrateur uniquement
 
 ### Objectif
@@ -172,38 +181,42 @@ Page d'accueil de l'espace administrateur. Donne accès à tous les écrans de p
 - Barre utilisateur : nom, département, alerte changement de mot de passe
 - Bouton **Menu nominateur** (bascule vers E003)
 - Bouton **Menu CRA Convoc** (bascule vers E009, route `cra-convoc-menu`), à côté de Menu CSR / Menu Défiscalisateur
+- Bouton **Menu JA** (code E011) : actif seulement si le compte a une fiche JA liée (EA86, `utilisateur.Id_Ja`), sinon grisé avec l'infobulle « Aucune fiche JA liée : voir EA86 » ; `POST changer-compte` (`action=ja`) ouvre le « mode JA » sans changer de compte
 - Bouton **Version PHP** (bandeau de titre, à droite) : modale Bootstrap affichant un tableau calculé côté serveur par `AdminMenuController::infosPhp()` (sans route dédiée, valeurs échappées par `esc()`) — `PHP_VERSION`, `PHP_SAPI`, `memory_limit`, `upload_max_filesize`, `post_max_size`, `max_execution_time` et présence oui/non des extensions bcmath, mbstring, zip, openssl, curl, pdo_mysql, gd, intl, fileinfo ; pas de `phpinfo()`, aucun chemin serveur
 - Grille de boutons (5 colonnes) avec code écran en haut à droite de chaque bouton :
 
-| Bouton | Code | Destination |
-|--------|------|-------------|
-| Club / Association | EN27 | `club.php` (déplacé vers le menu nominateur E003) |
-| Salle | EA81 | `salle.php` |
-| Utilisateur | EA86 | `utilisateur.php` |
-| Communes | EA87 | `communes.php` |
-| Division | EA89 | `division.php` |
-| Import Rencontres | EA82 | `import_rencontres.php` |
-| Import Rencontres Nationales | EA83 | `import_rencontres_nat.php` |
-| Régions | EA88 | `region.php` |
-| Départements | EA90 | `departement.php` |
-| Saison | EA85 | `clean.php` |
-| Configuration | EA91 | `configuration.php` |
-| Test API FFTT *(CHAUTARD seulement)* | EA96 | `fftt_test.php` |
-| Base de données *(CHAUTARD seulement)* | EA98 | `db-admin.php` |
-| Sécurité TOTP *(CHAUTARD seulement)* | EA99 | route `securite-totp` |
-| Se déconnecter | — | `logout.php` |
+| Bouton | Code | Route |
+|--------|------|-------|
+| Salle | EA81 | `salle` |
+| Import Rencontres Régionales | EA82 | `import-rencontres` |
+| Import Rencontres Nationales | EA83 | `import-rencontres-nat` |
+| Calendrier Régional | EA84 | `competition-regionale` |
+| Saison | EA85 | `clean` |
+| Utilisateur | EA86 | `utilisateur` |
+| Gestion des messages | EA93 | `messagerie` |
+| Chargement équipe régionale | EA92 | `equipe-regionale` |
+| Communes | EA87 | `commune` |
+| Départements | EA90 | `departement` |
+| Régions | EA88 | `region` |
+| Division | EA89 | `division` |
+| Configuration | EA91 | `configuration` |
+| Test API FFTT *(CHAUTARD seulement, onglet DBA)* | EA96 | `fftt-test` |
+| BugSpid *(CHAUTARD seulement, onglet DBA)* | EA97 | `bug-spid` |
+| Base de données *(CHAUTARD seulement, onglet DBA)* | EA98 | `db-admin` |
+| Sécurité TOTP *(CHAUTARD seulement, onglet DBA)* | EA99 | `securite-totp` |
+| Se déconnecter | — | `POST logout` (formulaire caché `#form-logout`) |
 
 ### Règles
 - Les boutons **Test API FFTT** (EA96), **BugSpid** (EA97), **Base de données** (EA98) et **Sécurité TOTP** (EA99), regroupés dans l'onglet **DBA**, ne sont visibles que si `$_SESSION['utilisateur']['login'] === 'CHAUTARD'`
 - Le bouton **Se déconnecter** demande une confirmation JavaScript
 
-> **Note :** l'ancien écran Correspondants de clubs (`correspondant.php`) a été supprimé. La gestion des correspondants est désormais intégrée à l'écran EN27 (Clubs / Associations), sous forme de colonnes directement sur la fiche club.
+> **Note :** les écrans Club / Association (EN27), Gestion des équipes (EN29) et Gestion des rencontres (EN23) ont quitté le menu administrateur pour le menu nominateur (E003). La gestion des correspondants de clubs est intégrée à EN27, sous forme de colonnes sur la fiche club.
 
 ---
 
 ## E003 – Menu nominateur
 
-**Fichier :** `Nominateur/menu.php`  
+**Fichier :** `NominateurMenuController` (CI4), vue `nominateur_menu_index.php`, route `nominateur-menu`  
 **Accès :** Administrateur et Nominateur
 
 ### Objectif
@@ -221,26 +234,75 @@ Page d'accueil de l'espace nominateur avec tableau de bord et accès aux fonctio
 5 cartes sur une ligne (3 colonnes en dessous de 1200 px, 2 en dessous de 768 px, 1 en dessous de 480 px). Les cartes « Convocations à envoyer », « Rencontres sans JA » et « Arbitrages club sans date de saisie » prennent un fond d'alerte si la valeur est > 0. Aucun badge de compteur sur les boutons de menu.
 
 ### Boutons de menu
-| Bouton | Code | Destination |
-|--------|------|-------------|
-| Juge-Arbitre | EN11 | `jugearbitre.php` |
-| Disponibilités JA | EN13 | `disponibilites.php` |
-| Nomination JA | EN14 | `nomination.php` |
-| Gestion des messages | EA93 | `messagerie.php` |
-| Centre d'envoi | EN15 | `centrenvoye.php` |
-| Comptes EBP des JA | ED55 | `compta.php` |
-| Désidératas clubs | EN12 | `JA_R3R4.php` |
-| Statistiques JA | EN17 | `stats_ja.php` |
-| Se déconnecter | — | `../logout.php` |
+| Bouton | Code | Route |
+|--------|------|-------|
+| Juge-Arbitre | EN11 | `jugearbitre` |
+| Club / Association | EN27 | `club` |
+| Disponibilités JA | EN13 | `disponibilites` |
+| Nomination JA | EN14 | `nomination` |
+| Suivi des nominations | EN28 | `suivi-nomination` |
+| Centre d'envoi | EN15 | `centrenvoye` |
+| Gestion des équipes | EN29 | `gestion-equipes` |
+| Remplacement équipe | EN24 | `remplacement-equipe` |
+| Gestion des rencontres | EN23 | `gestion-rencontres` |
+| Statistiques JA | EN17 | `stats-ja` |
+| Documentation | — | lien d'aide |
+| Se déconnecter | — | `POST logout` |
+
+Boutons de bascule en bandeau : Menu CSR (E004), Menu Défiscalisateur (E005), Menu CRA Convoc (E009), Menu JA (E011, compte avec fiche JA liée). Désidératas clubs (EN12), Gestion des messages (EA93) et Comptes EBP (ED55) ne sont plus sur ce menu : EN12 reste accessible par son URL `desiderata-clubs` (filtre `auth`), EA93 par E002/E009, ED55 par E005.
 
 ### Règle département Seine-Maritime (76)
 Le département 76 inclut automatiquement l'Eure (27) dans tous les calculs, configuré via `regles_departements` dans la table `configuration`.
 
 ---
 
+## E004 – Menu CSR
+
+**Fichier :** `CsrMenuController` (CI4), vue `csr_menu_index.php`, route `csr-menu`
+**Accès :** rôle CSR (Commission Sportive Régionale) ou Administrateur (filtre `csrauth`)
+
+### Objectif
+Page d'accueil du rôle CSR. Aucun accès base : la page ne lit que `$_SESSION['utilisateur']`.
+
+### Boutons de menu
+| Bouton | Code | Route |
+|--------|------|-------|
+| Club CSR | ES31 | `club-csr` |
+| Message Réengagement | ES32 | `reengagement-csr` |
+| Souhaits des équipes | ES33 | `souhait-equipe` |
+| Se déconnecter | — | `POST logout` |
+
+### Règles
+- Le rôle CSR n'accède qu'à E004, ES31, ES32, ES33 et aux routes partagées dont l'argument de filtre le nomme : `changer-mot-de-passe` (E006), `messagerie/data/(:segment)` et `PUT messagerie/(:segment)` (ES32, message n°6 seulement).
+- Les filtres `auth` (sans argument) et `nominauth` refusent le rôle CSR.
+
+---
+
+## E005 – Menu Défiscalisateur
+
+**Fichier :** `DefiscalisateurMenuController` (CI4), vue `defiscalisateur_menu_index.php`, route `defiscalisateur-menu`
+**Accès :** rôle Defiscalisateur ou Administrateur (filtre `defiscauth`)
+
+### Objectif
+Page d'accueil du rôle Défiscalisateur. Même structure que E004 : aucun accès base, lecture de `$_SESSION['utilisateur']` seulement.
+
+### Boutons de menu
+| Bouton | Code | Route |
+|--------|------|-------|
+| Défiscalisation JA | ED51 | `defiscalisation` |
+| Attestation sur l'honneur | ED53 | `attestation-defisc` |
+| Attestations reçues | ED54 | `attestations-defisc` |
+| Comptes EBP des JA | ED55 | `compta` |
+| Se déconnecter | — | `POST logout` |
+
+### Règles
+- Le rôle Defiscalisateur n'accède qu'à E005, ED51–ED55 (`defiscauth` ; ED53 sans filtre, contrôle dans le contrôleur) et à `changer-mot-de-passe` (E006).
+
+---
+
 ## E006 – Changement du mot de passe
 
-**Fichier :** `changer_mot_de_passe.php`  
+**Fichier :** `ChangerMotDePasseController` (CI4), vue `changer_mot_de_passe_index.php`, route `changer-mot-de-passe`  
 **Accès :** Tout utilisateur authentifié (Administrateur, Nominateur ou CSR) — sans objet pour un JA, qui n'a plus de login ni de mot de passe (voir E001)
 
 ### Objectif
@@ -708,7 +770,7 @@ Toutes renvoient `{ok: bool, msg}` ; en cas d'erreur de validation `ok=false` et
 
 ## EN11 – Juges-Arbitres
 
-**Fichier :** `Nominateur/jugearbitre.php`  
+**Fichier :** `JugearbitreController` (CI4), vue `jugearbitre_index.php`, route `jugearbitre`  
 **Accès :** Administrateur et Nominateur
 
 ### Objectif
@@ -772,7 +834,7 @@ Modale Créer/Modifier : 5 cases à cocher **JA1, JA2, JA3, JAN, JAI** (infobull
 
 ## EN12 – Désidératas clubs
 
-**Fichier :** `Nominateur/JA_R3R4.php`  
+**Fichier :** `DesiderataClubsController` (CI4), vue `desiderata_clubs_index.php`, route `desiderata-clubs`  
 **Accès :** Administrateur et Nominateur
 
 ### Objectif
@@ -800,7 +862,7 @@ Sélectionner les clubs ayant des équipes de la **Pré-Nationale à la R4M** et
 
 ## EN13 – Disponibilités JA
 
-**Fichier :** `Nominateur/disponibilites.php`  
+**Fichier :** `DisponibilitesController` (CI4), vue `disponibilites_index.php`, route `disponibilites`  
 **Accès :** Administrateur et Nominateur
 
 ### Objectif
@@ -827,7 +889,7 @@ Le lien généré depuis cet écran vers `disponibilite-ja` (EN22) porte l'`Id_J
 
 ## EN14 – Nomination JA
 
-**Fichier :** `Nominateur/nomination.php`  
+**Fichier :** `NominationController` (CI4), vue `nomination_index.php`, route `nomination`  
 **Accès :** Nominateur ou Administrateur — filtre "nominauth" (`NominateurAuth.php`) sur toutes les routes `nomination*` ; les rôles CSR, Defiscalisateur et CRA Convoc sont redirigés vers la connexion
 
 ### Objectif
@@ -908,7 +970,7 @@ Le fichier legacy `Nominateur/nomination.php` testait `!$journee` (avec `$journe
 
 ## EN15 – Centre d'envoi
 
-**Fichier :** `Nominateur/centrenvoye.php`  
+**Fichier :** `CentrenvoyeController` (CI4), vue `centrenvoye_index.php`, route `centrenvoye`  
 **Accès :** Administrateur et Nominateur
 
 ### Objectif
@@ -963,7 +1025,7 @@ Annonce aux JA qu'ils peuvent consulter leurs informations sur NIJAC (menu E011)
 
 ## ED55 – Comptes EBP des JA
 
-**Fichier :** `Nominateur/compta.php`  
+**Fichier :** `ComptaController` (CI4), vue `compta_index.php`, route `compta`  
 **Accès :** Défiscalisateur et Administrateur (menu E005, filtre `defiscauth`)
 
 ### Objectif
@@ -996,7 +1058,7 @@ Motif partagé **liste + panneau d'édition** (`asset/css/nijac-liste-edit.css`)
 
 ## EN17 – Statistiques JA
 
-**Fichier :** `Nominateur/stats_ja.php`  
+**Fichier :** `StatsJaController` (CI4), vue `stats_ja_index.php`, route `stats-ja`  
 **Accès :** Administrateur et Nominateur
 
 ### Objectif
@@ -1033,7 +1095,7 @@ Rapport agrégé, en lecture seule, des arbitrages et frais par JA pour une phas
 
 ## EN18 – Désidératas club
 
-**Fichier :** `Nominateur/desiderata_club.php`  
+**Fichier :** `DesiderataClubController` (CI4), vue `desiderata_club_index.php`, route `desiderata-club`  
 **Accès :** Public, sans authentification — page protégée par un jeton signé `?club=<Id_Club>-<MAC>` (`tokenDesiderataClub()`, HMAC-SHA256 — le numéro de club seul est refusé)
 
 ### Objectif
@@ -1078,7 +1140,7 @@ La recopie `equipe.ArbitrageCRA` → `rencontre.ArbitrageCRA` (à la création, 
 
 ## EN19 – Adresse domicile JA
 
-**Fichier :** `Nominateur/adresse_ja.php`  
+**Fichier :** `AdresseJaController` (CI4), vue `adresse_ja_index.php`, route `adresse-ja`  
 **Accès :** Page publique (sans session), accessible via un lien tokenisé ; certaines actions internes exigent une session nominateur
 
 ### Objectif
@@ -1110,7 +1172,7 @@ Permettre à un Juge-Arbitre de renseigner ou corriger son code postal et sa vil
 
 ## EN21 – Convocation et frais JA
 
-**Fichier :** `Nominateur/convocation_ja.php`  
+**Fichier :** `ConvocationJaController` (CI4), vue `convocation_ja_index.php`, route `convocation-ja`  
 **Accès :** Page publique — aucune authentification. URL jetonnée par un token `cnv` (Obfuscator de l'`Id_Nomination`), servie en **segments de chemin** : `convocation-ja/<Id_Nomination>/<tokenCnv>`. Cette forme sans `?`/`=`/`&` évite la troncature du lien dans les emails en texte brut (encodage quoted-printable + auto-lien des webmails) qui, en prod, faisait arriver le lien sans le paramètre `nomination` (message « Paramètre nomination manquant »). L'ancienne forme `?nomination=<id>&cnv=<token>` reste acceptée pour les convocations déjà envoyées.
 
 ### Objectif
@@ -1152,7 +1214,7 @@ Affiche la convocation officielle imprimable (format A4) d'un Juge-Arbitre pour 
 
 ## EN22 – Disponibilité JA
 
-**Fichier :** `Nominateur/disponibilite_ja.php`  
+**Fichier :** `DisponibiliteJaController` (CI4), vue `disponibilite_ja_index.php`, route `disponibilite-ja`  
 **Accès :** Page publique — aucune authentification (le fichier legacy se labellisait par erreur "EA88", déjà attribué à Régions)
 
 ### Objectif
@@ -1350,9 +1412,34 @@ Popup « Modifier » (nomination existante seulement, absent de « Saisir le JA 
 
 ---
 
+## EN25 – Juge-arbitre du club
+
+**Fichier :** `ArbitreClubController` (CI4), vue `arbitre_club_index.php`, routes `arbitre-club`, `arbitre-club/rechercher-ja`, `POST arbitre-club/enregistrer`
+**Accès :** public, lien jetonné `?renc=TOKEN` (Obfuscator de `Id_Rencontre`), sans authentification
+
+### Objectif
+Le correspondant du club recevant désigne le juge-arbitre d'une rencontre en arbitrage club. Le lien part d'EN14 (« Demander le JA au club », message n°7) ou d'EN28 (« Relancer le club »).
+
+### Interface
+Rappel de la rencontre, liste déroulante des JA actifs rattachés au club (tri alphabétique), recherche par nom d'un JA « hors club », bouton d'enregistrement. Avertissement (sans blocage) si la réponse arrive plus de 5 jours après la rencontre (`DELAI_JOURS`).
+
+### Actions AJAX
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `arbitre-club/rechercher-ja` | GET | Recherche d'un JA actif par nom |
+| `arbitre-club/enregistrer` | POST | Crée la nomination pour `renc` + `id_ja` |
+
+### Règles
+- Lien invalide ou rencontre introuvable → « Lien invalide ou rencontre introuvable. ».
+- JA choisi : actif (`JA1 = 1`), au plus 2 nominations ce jour-là (`nominationsJourJa()`), toutes dans la même salle (mêmes règles qu'EN14).
+- Nomination déjà existante : refusée si `EmailEnvoye = 1` (« Contactez la CRA ») ; sinon elle est remplacée.
+- Écriture en une transaction : `disponible` (`Reponse = 'P'`, note « Juge-arbitre désigné par le club le JJ/MM/AAAA ») réutilisée ou créée, puis `nomination` (`Peage`/`Kilometre`/`Defiscalisation` = 0, `DateSaisie` = jour, `EmailEnvoye` = 0). Aucune validation manuelle en EN14.
+
+---
+
 ## EN27 – Clubs / Associations
 
-**Fichier :** `club.php`  
+**Fichier :** `ClubController` (CI4), vue `club_index.php`, route `club`  
 **Accès :** Nominateur ou Administrateur (filtre "auth") — ex-EA80, déplacé du menu admin vers le menu nominateur (E003, après EN11)
 
 ### Objectif
@@ -1387,6 +1474,77 @@ Le filtre Département (JS) propose l'option « 76 + 27 » (`deptFiltre` accepte
 ### Synchronisation FFTT
 - `get_clubs_dept_fftt` liste les clubs d'un département via l'API FFTT pour sélection
 - `sync_fftt_club` récupère le détail d'un club FFTT et met à jour en une fois le nom du club, sa salle principale (nom, adresse, commune ; à défaut, une salle existante au même lieu est liée en principale via `club_salle`, sinon elle est créée) et son correspondant (nom, email, téléphone)
+
+---
+
+## ES31 – Club CSR
+
+**Fichier :** `ClubCsrController` (CI4), vue `club_csr_index.php`, routes `club-csr`, `club-csr/liste`, `PUT club-csr/(:segment)`, `POST club-csr/envoyer`
+**Accès :** rôle CSR ou Administrateur (filtre `csrauth`)
+
+### Objectif
+Variante de la gestion des clubs (EN27) pour la CSR : liste des clubs, correction des coordonnées du correspondant et envoi groupé du message de réengagement.
+
+### Interface
+- Même liste de clubs qu'EN27, **sans** synchronisation FFTT ni filtre « Plusieurs salles » ; filtre « Club Régional » côté vue (`EstRegional` = club ayant au moins une équipe en Régionale `R…` ou Pré-Nationale `PN…`).
+- Case à cocher par ligne et bouton d'envoi groupé.
+
+### Actions AJAX
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `club-csr/liste` | GET | Tous les clubs avec indicateur `EstRegional` |
+| `club-csr/(:segment)` | PUT | Modifie `nom` (obligatoire), `equipe_nom`, `cor_nom`, `cor_email`, `cor_tel` |
+| `club-csr/envoyer` | POST | Envoie le message n°6 (Réengagements) aux correspondants des clubs cochés (`ids` = JSON) |
+
+### Règles
+- Envoi : `checkRateLimit()` sur le nombre de clubs ; un club sans `CorEmail` est ignoré et listé à part ; modèle absent → « Modèle de message n°6 introuvable (à créer dans EA93) ».
+- Marqueurs du message : `{NOM_CLUB}`, `{CORR_NOM}`, `{URL_DESIDERATA}` (lien EN18 jetonné `tokenDesiderataClub()`), `{URL_LIGUE}`, `{YEAR_PHASE}`, `{UTI_NOM}`, `{UTI_PRENOM}`.
+- Même message n°6 qu'EN12 ; en mode Développement, les adresses sont redirigées par `NijacMailer`.
+
+---
+
+## ES32 – Message Réengagement CSR
+
+**Fichier :** `ReengagementCsrController` (CI4), vue `reengagement_csr_index.php`, route `reengagement-csr`
+**Accès :** rôle CSR ou Administrateur (filtre `csrauth`)
+
+### Objectif
+Permettre à la CSR de modifier le texte du message de réengagement (n°6) sans accéder à l'ensemble d'EA93.
+
+### Interface
+Coquille légère : seulement le formulaire d'EA93 réduit au message `Id_Messagerie = 6` (sujet, corps, cartouche de marqueurs avec valeurs d'exemple) et un bouton **Enregistrer**.
+
+### Règles
+- Aucune logique d'écriture dans le contrôleur : la vue appelle `GET messagerie/data/6` et `PUT messagerie/6` (routes `auth:CSR,CRA Convoc`).
+- `MessagerieController::isCsr()` restreint le rôle CSR au message n°6 (`ID_MESSAGE_CSR`).
+
+---
+
+## ES33 – Souhaits des équipes
+
+**Fichier :** `SouhaitEquipeController` (CI4), vue `souhait_equipe_index.php`, routes `souhait-equipe*`
+**Accès :** rôle CSR ou Administrateur (filtre `csrauth`)
+
+### Objectif
+Saisie par la CSR du jour souhaité (`equipe.JourSouhaite`) et du souhait d'arbitrage (`equipe.ArbitrageCRA`) des équipes régionales.
+
+### Interface
+Tableau des équipes (club, nom d'équipe, division en lecture seule) ; jour et arbitrage éditables. Import d'un classeur CRA (xlsx) converti en CSV, puis exécution du CSV, avec consultation des rapports.
+
+### Actions AJAX
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `souhait-equipe/liste` | GET | Équipes (hors nationales) + `divisionsSaisie` |
+| `souhait-equipe/(:num)` | PUT | Modifie `jour_souhaite` (`Samedi`/`Dimanche`) et `souhait_ja` (`CRA`/`Club`) |
+| `souhait-equipe/xlsx-csv` | POST | Lit un `.xlsx` CRA (feuille « SECTEUR… », en-tête ligne 3, données dès la ligne 4) et renvoie un CSV prêt à charger ; signale les lignes sans équipe NIJAC |
+| `souhait-equipe/maj-csv` | POST | « Exécuter le CSV » : met à jour `JourSouhaite` (toute division) et `ArbitrageCRA` (R3M/R4M seulement) |
+| `souhait-equipe/rapports` | GET | 2 derniers rapports d'exécution (`souhait_equipe_rapport`) |
+
+### Règles
+- Le jour et l'arbitrage ne se saisissent que pour **R3M** et **R4M** (`DIVISIONS_SAISIE`), contrôlé aussi côté serveur.
+- Rapprochement CSV sur N° club + n° d'équipe final (+ Division si la colonne existe) ; colonnes repérées par leur en-tête, repli positionnel.
+- Colonne E du classeur CRA : « Dimanche » sinon Samedi ; colonne G : « … du club » → Club sinon CRA.
+- Table `souhait_equipe_rapport` (créée à la demande), seuls les 2 derniers rapports sont conservés.
 
 ---
 
@@ -1558,7 +1716,7 @@ Consulter les documents déposés par les JA via ED53 dans le répertoire `_Defi
 
 ## EA81 – Salles
 
-**Fichier :** `salle.php`  
+**Fichier :** `SalleController` (CI4), vue `salle_index.php`, route `salle`  
 **Accès :** Administrateur et Nominateur
 
 ### Objectif
@@ -1767,9 +1925,38 @@ seul l'appel qui liste les noms de fichiers y est soumis.
 
 ---
 
+## EA84 – Calendrier championnat régional
+
+**Fichier :** `CompetitionRegionaleController` (CI4), vue `competition_regionale_index.php`, route `competition-regionale`
+**Accès :** Administrateur uniquement (filtre `adminauth`)
+
+### Objectif
+Gérer le calendrier (date et heure) des rencontres du championnat régional, table `competition_regionale` (créée et amorcée par `DisponibilitesController` à partir du fichier « Disponibilités JA 2ème phase » d'`Importation/`).
+
+### Champs
+| Champ | Type | Obligatoire |
+|-------|------|-------------|
+| Date | `AAAA-MM-JJ` valide | Oui |
+| Heure | `HH:MM` | Oui |
+| Commentaire | Texte | Non |
+
+### Actions AJAX
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `competition-regionale/data` | GET | Liste triée par date puis heure |
+| `competition-regionale/data/(:segment)` | GET | Charge une ligne |
+| `competition-regionale` | POST | Crée |
+| `competition-regionale/(:segment)` | PUT / DELETE | Modifie / supprime |
+
+### Règles
+- Date et heure uniques : doublon → « Cette date/heure existe déjà. »
+- Pas de modèle CI4 : accès PDO direct.
+
+---
+
 ## EA85 – Saison / Nettoyage
 
-**Fichier :** `clean.php`  
+**Fichier :** `CleanController` (CI4), vue `clean_index.php`, route `clean`  
 **Accès :** Administrateur uniquement
 
 ### Objectif
@@ -1811,7 +1998,7 @@ Préparer l'application pour une nouvelle saison : sauvegarde SQL puis vidage de
 
 ## EA86 – Utilisateurs
 
-**Fichier :** `utilisateur.php`  
+**Fichier :** `UtilisateurController` (CI4), vue `utilisateur_index.php`, route `utilisateur`  
 **Accès :** Administrateur uniquement
 
 ### Objectif
@@ -1869,7 +2056,7 @@ Gérer les comptes utilisateurs de l'application (création, modification, suppr
 
 ## EA87 – Communes
 
-**Fichier :** `communes.php`  
+**Fichier :** `CommuneController` (CI4), vue `commune_index.php`, route `commune`  
 **Accès :** Administrateur uniquement
 
 ### Objectif
@@ -1902,7 +2089,7 @@ Gérer le référentiel INSEE des codes postaux et communes utilisé pour la gé
 
 ## EA88 – Régions
 
-**Fichier :** `region.php`  
+**Fichier :** `RegionController` (CI4), vue `region_index.php`, route `region`  
 **Accès :** Administrateur uniquement
 
 ### Objectif
@@ -1932,7 +2119,7 @@ Référentiel des régions administratives, utilisé pour rattacher les départe
 
 ## EA89 – Divisions
 
-**Fichier :** `division.php`  
+**Fichier :** `DivisionController` (CI4), vue `division_index.php`, route `division`  
 **Accès :** Administrateur uniquement
 
 ### Objectif
@@ -1970,7 +2157,7 @@ Définir les divisions sportives et leur niveau hiérarchique, utilisés pour cl
 
 ## EA90 – Départements
 
-**Fichier :** `departement.php`  
+**Fichier :** `DepartementController` (CI4), vue `departement_index.php`, route `departement`  
 **Accès :** Administrateur uniquement
 
 ### Objectif
@@ -2005,7 +2192,7 @@ Référentiel des départements, rattachés à une région (EA88). Sert de base 
 
 ## EA91 – Configuration générale
 
-**Fichier :** `configuration.php`  
+**Fichier :** `ConfigurationController` (CI4), vue `configuration_index.php`, route `configuration`  
 **Accès :** Administrateur uniquement
 
 ### Objectif
@@ -2058,9 +2245,32 @@ Toute sortie d'email dans l'application appelle `getEmailDestinataire($email)` :
 
 ---
 
+## EA92 – Équipes régionales
+
+**Fichier :** `EquipeRegionaleController` (CI4), vue `equipe_regionale_index.php`, route `equipe-regionale`
+**Accès :** Administrateur uniquement (filtre `adminauth`)
+
+### Objectif
+Consulter les équipes régionales chargées par l'import FFTT (EA82, table `equipe`), charger les équipes depuis un fichier texte et corriger les champs liés aux désidératas.
+
+### Actions AJAX
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `equipe-regionale/liste` | GET | Équipes avec division (couleur), jusqu'à 3 clubs, `JAdemande`, `ReEngagement`, `JourSouhaite`, `SouhaitJA` (CRA/Club), `DesiderataSaison` |
+| `equipe-regionale/import-txt` | POST | Import du fichier texte `club_Reg_R4.PN.txt` |
+| `equipe-regionale/(:num)` | PUT | Modifie `re_engagement` (`O`/`N`), `jour_souhaite` (`Samedi`/`Dimanche`), `souhait_ja` (`CRA`/`Club`), `desiderata_saison` |
+| `equipe-regionale/(:num)` | DELETE | Supprime l'équipe |
+
+### Règles
+- Pas de création manuelle : les équipes viennent des imports. Seuls les champs de désidératas sont modifiables.
+- Import texte : sections par en-tête (« PRENATIONALE », « REGIONALE 1_SECTEUR_27_76 », « R1 FEMININE »…) suivies de lignes `N° club(s)<tab>Nom équipe`. Division déduite de l'en-tête (PN, R*n*, suffixe M/F) ; upsert sur (`Nom`, `Division`) ; `Id_Club`/`Id_Club2`/`Id_Club3` (un 4e club est ignoré et signalé) ; `ReEngagement` forcé à `O`.
+- `ArbitrageCRA` laissé inchangé si aucun souhait n'est envoyé.
+
+---
+
 ## EA93 – Gestion des messages
 
-**Fichier :** `Nominateur/messagerie.php`  
+**Fichier :** `MessagerieController` (CI4), vue `messagerie_index.php`, route `messagerie`  
 **Accès :** Administrateur et Nominateur
 
 ### Objectif
@@ -2098,7 +2308,7 @@ Créer et gérer les modèles de messages utilisés pour les convocations, rappe
 
 ## EA96 – Test API FFTT
 
-**Fichier :** `fftt_test.php`  
+**Fichier :** `FfttTestController` (CI4), vue `fftt_test_index.php`, route `fftt-test`  
 **Accès :** Administrateur (uniquement utilisateur `CHAUTARD`, même restriction que EA98) + double authentification TOTP (EA99) : `guardChautard()` appelle `TotpChautard::controlerAcces('fftt-test')` — sans session déverrouillée, la page renvoie vers EA99 et les appels AJAX/POST reçoivent `{ok:false, totp:true, url, msg}`
 
 ### Objectif
@@ -2130,6 +2340,36 @@ Interface de diagnostic/débogage de l'intégration API FFTT (Smartping v2) : v�
 ### Règles
 - Page strictement en lecture : aucune action n'effectue d'INSERT/UPDATE en base
 - Identifiants lus via `getFfttAppId()` / `getFfttAppKey()` (`.env`), `serial` FFTT persisté dans la config (`fftt_serial`)
+
+---
+
+## EA97 – BugSpid
+
+**Fichier :** `BugSpidController` (CI4), vue `bug_spid_index.php`, route `bug-spid`
+**Accès :** Administrateur (`adminauth`) **et** login `CHAUTARD` (`guardChautard()`) + déverrouillage TOTP (EA99). Bouton dans l'onglet DBA d'E002.
+
+### Objectif
+File de corrections des clubs dupliqués : l'import a créé un club « fantôme » (code alphabétique) parce que le nom du club ne correspondait à aucun `Club.EquipeNom`. Chaque ligne décrit une fusion ancien `Id_Club` → code FFTT réel.
+
+### Données
+Table `BugSpid` (`Id_BugSpid`, `Description`, `AncienIdClub`, `NouveauIdClub`, `EquipeNom`), créée à la demande ; les anciennes colonnes de suivi (`Statut`, `DateAjout`, `DateExecution`, `Resultat`) sont retirées.
+
+### Actions AJAX
+| Action | Méthode | Description |
+|--------|---------|-------------|
+| `bug-spid/data` | GET | Liste des lignes |
+| `bug-spid` | POST | Ajoute une ligne |
+| `bug-spid/(:num)` | PUT / DELETE | Modifie / supprime |
+| `bug-spid/nom-club/(:num)` | GET | Nom du club d'un code |
+| `bug-spid/(:num)/xml-club-b` | POST | Teste `xml_club_b` pour le nom de la ligne (diagnostic, n'écrit rien) |
+| `bug-spid/pdf-csv` | POST | Extrait d'un PDF FFTT la liste « N° club ; nom » et renvoie un CSV (extraction PHP pure) |
+| `bug-spid/maj-csv` | POST | Renseigne `NouveauIdClub` des lignes non identifiées par rapprochement de nom, sans rien exécuter |
+| `bug-spid/executer` | POST | Exécute les lignes cochées (`ids` = JSON), une transaction par ligne |
+
+### Règles d'exécution
+- Garde-fou : `NouveauIdClub` doit être un code à 8 chiffres différent de `AncienIdClub`, sinon la ligne est refusée.
+- Trois étapes par ligne : `UPDATE equipe SET Id_Club = nouveau`, `DELETE FROM Club WHERE Id_Club = ancien`, puis `UPDATE Club SET EquipeNom` si renseigné.
+- Une erreur sur une ligne n'empêche pas les suivantes ; le résultat de chaque ligne est renvoyé.
 
 ---
 
