@@ -5152,241 +5152,102 @@ function altBodyDepuisHtml(string $html): string
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2FA TOTP (RFC 6238 — SHA-1, 6 chiffres, pas de 30 s, compatible Google Authenticator) des
-// écrans réservés au login CHAUTARD (EA96 / EA97 / EA98), activée / saisie sur EA99
-// (TotpController, App\Libraries\TotpChautard). Fonctions pures ci-dessous (PHP natif, aucune
-// dépendance) ; stockage : utilisateur.TotpSecret (secret base32 chiffré AES-256-GCM),
-// utilisateur.TotpDernierPas (anti-rejeu), utilisateur.TotpSecours (JSON des codes de secours
-// hachés) — colonnes créées par initTableConfiguration() (EA98).
-//
-// PROCÉDURE D'URGENCE (téléphone perdu, pepper changé, codes de secours épuisés) — via la
-// console SQL de l'hébergeur (phpMyAdmin), ou EA98 après déverrouillage sur EA99 par un code de
-// secours (puis mot de passe dans EA98) :
-//   UPDATE utilisateur SET TotpSecret=NULL, TotpDernierPas=NULL, TotpSecours=NULL WHERE Login='CHAUTARD';
-// (réinitialise la 2FA : la prochaine ouverture d'EA96/97/98 renvoie vers l'activation EA99).
+// 2FA TOTP (RFC 6238) des écrans réservés au login CHAUTARD (EA96 / EA97 / EA98), activée / saisie
+// sur EA99 (TotpController, App\Libraries\TotpChautard). La logique pure (base32, code, vérification,
+// chiffrement du secret, codes de secours) et la procédure d'urgence sont dans App\Libraries\Totp ;
+// les fonctions ci-dessous y délèguent et gardent leurs noms historiques pour les appelants.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TOTP_PAS_SECONDES  = 30;
-const TOTP_CHIFFRES      = 6;
-const TOTP_TOLERANCE_PAS = 1;     // ±1 pas (décalage d'horloge du téléphone)
-const TOTP_SESSION_DUREE = 1800;  // validité glissante (s) du déverrouillage EA96/97/98 en session
-const TOTP_NB_SECOURS    = 8;     // codes de secours à usage unique générés à l'activation
-const TOTP_EMETTEUR      = 'NIJAC';
-// Sel constant de la clé de chiffrement du secret TOTP : clé = SHA-256(sel + pepper
-// getObfuscatorPepper(), .env non versionné). Pepper vide : clé dérivée du SEUL sel constant,
-// présent dans le dépôt — le chiffrement ne protège alors plus le secret d'un lecteur de la base
-// ayant aussi le code source. Changer le pepper rend le secret indéchiffrable (procédure d'urgence
-// ci-dessus, ou déverrouillage par code de secours).
-const TOTP_SEL_CLE       = 'NIJAC|totp-secret|v1|';
+require_once __DIR__ . '/../ci4/app/Libraries/Totp.php';
 
-/** Encodage base32 RFC 4648 (A-Z2-7), sans padding « = » (format attendu par Google Authenticator). */
+use App\Libraries\Totp;
+
+const TOTP_PAS_SECONDES  = Totp::PAS_SECONDES;
+const TOTP_CHIFFRES      = Totp::CHIFFRES;
+const TOTP_TOLERANCE_PAS = Totp::TOLERANCE_PAS;
+const TOTP_SESSION_DUREE = Totp::SESSION_DUREE;
+const TOTP_NB_SECOURS    = Totp::NB_SECOURS;
+const TOTP_EMETTEUR      = Totp::EMETTEUR;
+const TOTP_SEL_CLE       = Totp::SEL_CLE;
+
 function base32Encoder(string $binaire): string
 {
-    $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-    $bits     = '';
-    foreach (str_split($binaire) as $c) {
-        if ($c !== '') {
-            $bits .= str_pad(decbin(ord($c)), 8, '0', STR_PAD_LEFT);
-        }
-    }
-    if ($bits === '') {
-        return '';
-    }
-    $sortie = '';
-    foreach (str_split($bits, 5) as $bloc) {
-        $sortie .= $alphabet[bindec(str_pad($bloc, 5, '0', STR_PAD_RIGHT))];
-    }
-
-    return $sortie;
+    return Totp::base32Encoder($binaire);
 }
 
-/** Décodage base32 (casse, espaces, tirets et padding ignorés) ; false si caractère invalide. */
 function base32Decoder(string $texte): string|false
 {
-    $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-    $texte    = strtoupper(str_replace([' ', '-', '='], '', $texte));
-    $bits     = '';
-    foreach (str_split($texte) as $c) {
-        if ($c === '') {
-            continue;
-        }
-        $v = strpos($alphabet, $c);
-        if ($v === false) {
-            return false;
-        }
-        $bits .= str_pad(decbin($v), 5, '0', STR_PAD_LEFT);
-    }
-    $sortie = '';
-    foreach (str_split($bits, 8) as $octet) {
-        if (strlen($octet) === 8) {
-            $sortie .= chr(bindec($octet));
-        }
-    }
-
-    return $sortie;
+    return Totp::base32Decoder($texte);
 }
 
-/** Nouveau secret TOTP : 20 octets aléatoires (160 bits, taille recommandée pour HMAC-SHA1), en base32. */
 function genererSecretTotp(): string
 {
-    return base32Encoder(random_bytes(20));
+    return Totp::genererSecret();
 }
 
-/** Pas TOTP courant (ou de l'instant $t). */
 function totpPasCourant(?int $t = null): int
 {
-    return intdiv($t ?? time(), TOTP_PAS_SECONDES);
+    return Totp::pasCourant($t);
 }
 
-/**
- * Code TOTP/HOTP (RFC 4226 §5.3 + RFC 6238) pour le secret BINAIRE $secret (base32 décodé) et le
- * pas $pas, sur $chiffres chiffres (zéros de tête conservés).
- */
 function totpCode(string $secret, int $pas, int $chiffres = TOTP_CHIFFRES): string
 {
-    $compteur = pack('N2', ($pas >> 32) & 0xFFFFFFFF, $pas & 0xFFFFFFFF);
-    $hmac     = hash_hmac('sha1', $compteur, $secret, true);
-    $offset   = ord($hmac[19]) & 0x0F;
-    $valeur   = ((ord($hmac[$offset]) & 0x7F) << 24)
-              | (ord($hmac[$offset + 1]) << 16)
-              | (ord($hmac[$offset + 2]) << 8)
-              | ord($hmac[$offset + 3]);
-
-    return str_pad((string) ($valeur % (10 ** $chiffres)), $chiffres, '0', STR_PAD_LEFT);
+    return Totp::code($secret, $pas, $chiffres);
 }
 
-/**
- * Pas (dans la tolérance ±TOTP_TOLERANCE_PAS autour de $t) pour lequel $code est valide, ou null.
- * Comparaison hash_equals sur chaque pas (pas de sortie anticipée) ; le pas le plus récent gagne.
- */
 function totpPasCorrespondant(string $secret, string $code, ?int $t = null): ?int
 {
-    $code = preg_replace('/\s+/', '', $code) ?? '';
-    if (!preg_match('/^\d{' . TOTP_CHIFFRES . '}$/', $code)) {
-        return null;
-    }
-    $courant = totpPasCourant($t);
-    $trouve  = null;
-    for ($d = -TOTP_TOLERANCE_PAS; $d <= TOTP_TOLERANCE_PAS; $d++) {
-        if (hash_equals(totpCode($secret, $courant + $d), $code)) {
-            $trouve = $courant + $d;
-        }
-    }
-
-    return $trouve;
+    return Totp::pasCorrespondant($secret, $code, $t);
 }
 
-/**
- * Vérifie un code TOTP avec anti-rejeu : le pas accepté doit être STRICTEMENT supérieur à
- * $dernierPas (dernier pas déjà utilisé, null = aucun). En cas de succès $dernierPas reçoit le
- * pas accepté (à enregistrer en base par l'appelant) ; inchangé sinon.
- */
 function verifierTotp(string $secret, string $code, ?int &$dernierPas, ?int $t = null): bool
 {
-    $pas = totpPasCorrespondant($secret, $code, $t);
-    if ($pas === null || ($dernierPas !== null && $pas <= $dernierPas)) {
-        return false;
-    }
-    $dernierPas = $pas;
-
-    return true;
+    return Totp::verifier($secret, $code, $dernierPas, $t);
 }
 
-/** URI otpauth:// à encoder dans le QR code (libellé NIJAC:<login>, émetteur NIJAC). */
 function uriOtpauth(string $secretBase32, string $login): string
 {
-    return 'otpauth://totp/' . rawurlencode(TOTP_EMETTEUR) . ':' . rawurlencode($login)
-        . '?secret=' . $secretBase32 . '&issuer=' . rawurlencode(TOTP_EMETTEUR);
+    return Totp::uriOtpauth($secretBase32, $login);
 }
 
-/** Clé AES-256 du secret TOTP : SHA-256(sel constant + pepper) — voir TOTP_SEL_CLE. */
 function cleChiffrementTotp(string $pepper): string
 {
-    return hash('sha256', TOTP_SEL_CLE . $pepper, true);
+    return Totp::cleChiffrement($pepper);
 }
 
-/** Chiffre le secret (base32) en AES-256-GCM : « v1: » + base64(iv 12 o + tag 16 o + chiffré). */
 function chiffrerSecretTotp(string $secretBase32, string $pepper): string
 {
-    $iv      = random_bytes(12);
-    $tag     = '';
-    $chiffre = openssl_encrypt($secretBase32, 'aes-256-gcm', cleChiffrementTotp($pepper), OPENSSL_RAW_DATA, $iv, $tag, '', 16);
-    if ($chiffre === false) {
-        throw new \RuntimeException('Chiffrement du secret TOTP impossible.');
-    }
-
-    return 'v1:' . base64_encode($iv . $tag . $chiffre);
+    return Totp::chiffrerSecret($secretBase32, $pepper);
 }
 
-/** Déchiffre le secret (base32) ; null si format inconnu, données altérées ou mauvaise clé (pepper changé). */
 function dechiffrerSecretTotp(string $stocke, string $pepper): ?string
 {
-    if (!str_starts_with($stocke, 'v1:')) {
-        return null;
-    }
-    $brut = base64_decode(substr($stocke, 3), true);
-    if ($brut === false || strlen($brut) <= 28) {
-        return null;
-    }
-    $clair = openssl_decrypt(substr($brut, 28), 'aes-256-gcm', cleChiffrementTotp($pepper), OPENSSL_RAW_DATA, substr($brut, 0, 12), substr($brut, 12, 16));
-
-    return $clair === false ? null : $clair;
+    return Totp::dechiffrerSecret($stocke, $pepper);
 }
 
-/** Normalise un code de secours saisi (majuscules, sans espaces ni tirets). */
 function normaliserCodeSecours(string $code): string
 {
-    return strtoupper(str_replace([' ', '-'], '', trim($code)));
+    return Totp::normaliserCodeSecours($code);
 }
 
-/** La saisie a-t-elle la forme d'un code de secours (10 caractères base32) ? */
 function estFormatCodeSecours(string $code): bool
 {
-    return (bool) preg_match('/^[A-Z2-7]{10}$/', normaliserCodeSecours($code));
+    return Totp::estFormatCodeSecours($code);
 }
 
-/**
- * Génère TOTP_NB_SECOURS codes de secours (10 caractères base32 = 50 bits, affichés « XXXXX-XXXXX »).
- * Hachés par password_hash() (bcrypt) : SecurePasswordHasher (PBKDF2 600 000 itérations) rendrait
- * la vérification des 8 codes beaucoup trop lente, et ces codes aléatoires n'en ont pas besoin.
- *
- * @return array{codes: string[], haches: string[]} codes en clair (affichés UNE fois) + hachés (stockés)
- */
+/** @return array{codes: string[], haches: string[]} codes en clair (affichés UNE fois) + hachés (stockés) */
 function genererCodesSecours(): array
 {
-    $codes  = [];
-    $haches = [];
-    for ($i = 0; $i < TOTP_NB_SECOURS; $i++) {
-        $c        = substr(base32Encoder(random_bytes(7)), 0, 10);
-        $codes[]  = substr($c, 0, 5) . '-' . substr($c, 5);
-        $haches[] = password_hash($c, PASSWORD_DEFAULT);
-    }
-
-    return ['codes' => $codes, 'haches' => $haches];
+    return Totp::genererCodesSecours();
 }
 
 /**
- * Consomme un code de secours : retourne la liste des hachés restants (sans celui utilisé),
- * ou null si le code ne correspond à aucun.
- *
  * @param string[] $haches
- * @return string[]|null
+ * @return string[]|null liste des hachés restants, ou null si le code ne correspond à aucun
  */
 function consommerCodeSecours(array $haches, string $code): ?array
 {
-    if (!estFormatCodeSecours($code)) {
-        return null;
-    }
-    $code = normaliserCodeSecours($code);
-    foreach ($haches as $i => $h) {
-        if (is_string($h) && password_verify($code, $h)) {
-            unset($haches[$i]);
-
-            return array_values($haches);
-        }
-    }
-
-    return null;
+    return Totp::consommerCodeSecours($haches, $code);
 }
 
 /**
