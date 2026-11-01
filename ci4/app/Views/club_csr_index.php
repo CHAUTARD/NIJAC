@@ -9,8 +9,10 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('asset/css/nijac-chrome.css') ?>">
 
     <style>
+        :root { --ph-bg: #6a1b9a; }
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
             background: #f0f4fa;
@@ -19,38 +21,7 @@
             height: 100vh;
             overflow: hidden;
         }
-
-        #toolbar {
-            background: #f8fafc;
-            border-bottom: 1px solid #dde5f0;
-            padding: .3rem 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: .85rem;
-            flex-shrink: 0;
-        }
-        #toolbar .ts-user { color: #1a3a6b; font-weight: 600; }
-        #toolbar .ts-pwd-warning {
-            display: <?= $changeLogin ? 'inline-flex' : 'none' ?>;
-            align-items: center;
-            gap: .35rem;
-            color: #c00;
-            font-weight: 700;
-            cursor: pointer;
-            text-decoration: underline dotted;
-        }
-        #toolbar .ts-pwd-warning:hover { color: #900; }
-
-        /* ── En-tête (violet, propre au rôle CSR — voir E004) ── */
-        #page-header {
-            background: #6a1b9a;
-            color: #fff;
-            padding: .5rem 1.25rem;
-            font-size: .9rem;
-            font-weight: 600;
-            flex-shrink: 0;
-        }
+        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
 
         /* ── Grille ── */
         #grid-wrapper { flex: 1; overflow: auto; }
@@ -105,28 +76,6 @@
         #tbl-clubs thead th.sort-asc .sort-icon::after  { content: '▲'; opacity: 1; }
         #tbl-clubs thead th.sort-desc .sort-icon::after { content: '▼'; opacity: 1; }
         #tbl-clubs thead th[data-field]:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
-
-        #page-footer {
-            background: #e8eef7;
-            border-top: 1px solid #c8d4e8;
-            padding: .25rem 1rem;
-            font-size: .8rem;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-shrink: 0;
-            gap: 1rem;
-        }
-        #status-bar { color: #374151; min-height: 18px; }
-        .footer-copyright { color: #6b7280; white-space: nowrap; }
-        .footer-logo { height: 20px; width: auto; opacity: .75; }
-        #page-footer.pf-status-left {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
-            align-items: center;
-        }
-        #page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
-        #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
     </style>
 </head>
 <body>

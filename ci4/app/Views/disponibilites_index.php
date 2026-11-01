@@ -8,26 +8,15 @@
 <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
 <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
 <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
+<link rel="stylesheet" href="<?= base_url('asset/css/nijac-chrome.css') ?>">
 <style>
+        :root { --ph-bg: #2e7d32; }
 :root { --col-dispo:#2e7d32; }
 
 body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
-
-/* ── Toolbar ── */
-#toolbar {
-    background: #f8fafc;
-    border-bottom: 1px solid #dde5f0;
-    padding: .3rem 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: .85rem;
-    flex-shrink: 0;
-}
 .ts-user { color:#1a3a6b; font-weight:600; }
 .ts-pwd-warning { display:<?= $changeLogin ? 'inline-flex' : 'none' ?>; align-items:center; gap:.35rem; color:#c00; font-weight:700; cursor:pointer; text-decoration:underline dotted; }
-/* ── En-tête ── */
-#page-header { background:#2e7d32; color:#fff; padding:.5rem 1.25rem; display:flex; align-items:center; gap:.75rem; font-size:.9rem; font-weight:600; flex-shrink:0; }
+#page-header { display: flex; align-items: center; gap: .75rem; }
 
 /* ── Bandeau département ── */
 #barre-dept { --strip-bg:#fff; background:#fff; border-bottom:2px solid #dee2e6; padding:.6rem 1.25rem; display:flex; align-items:center; gap:.9rem; flex-wrap:wrap; }
@@ -127,29 +116,6 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 
 /* ── Spinner ── */
 #spinner-dept { display:none; }
-
-/* ── Pied de page ── */
-#page-footer {
-    background: #e8eef7;
-    border-top: 1px solid #c8d4e8;
-    padding: .25rem 1rem;
-    font-size: .8rem;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-shrink: 0;
-    gap: 1rem;
-}
-#status-bar { color: #374151; min-height: 18px; }
-.footer-copyright { color: #6b7280; white-space: nowrap; }
-.footer-logo { height: 20px; width: auto; opacity: .75; }
-#page-footer.pf-status-left {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    align-items: center;
-}
-#page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
-#page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
 
 </style>
 <link rel="stylesheet" href="<?= base_url('asset/css/nijac-skin.css') ?>">

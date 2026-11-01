@@ -8,12 +8,12 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('asset/css/nijac-chrome.css') ?>">
     <style>
+        :root { --ph-bg: #8d6e00; }
         body { background: #fff8e1; font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
-        #page-header { background: #8d6e00; color: #fff; padding: .5rem 1.25rem; font-size: .9rem; font-weight: 600; }
-        #toolbar { background: #f8fafc; border-bottom: 1px solid #dde5f0; padding: .3rem 1rem; display: flex; align-items: center; justify-content: space-between; font-size: .85rem; gap: .75rem; }
-        #toolbar .ts-user { color: #1a3a6b; font-weight: 600; }
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; align-items: center; gap: .35rem; color: #c00; font-weight: 700; cursor: pointer; text-decoration: underline dotted; }
+        #toolbar { gap: .75rem; }
+        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
         #contenu { flex: 1; padding: 1rem; }
         #tbl-frais { font-size: .85rem; background: #fff; }
         #tbl-frais th { background: #fff3cd; white-space: nowrap; }
@@ -24,12 +24,6 @@
         #tbl-frais thead th[data-col]::after { content: ' \2195'; opacity: .35; font-size: .8em; }
         #tbl-frais thead th.sort-asc::after  { content: ' \25B2'; opacity: 1; }
         #tbl-frais thead th.sort-desc::after { content: ' \25BC'; opacity: 1; }
-        #page-footer { background: #e8eef7; border-top: 1px solid #c8d4e8; padding: .25rem 1rem; font-size: .8rem; display: flex; justify-content: center; align-items: center; flex-shrink: 0; }
-        #page-footer.pf-status-left { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
-        #page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; }
-        #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
-        .footer-copyright { color: #6b7280; white-space: nowrap; }
-        .footer-logo { height: 20px; width: auto; opacity: .75; }
     </style>
 </head>
 <body>

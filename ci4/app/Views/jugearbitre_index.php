@@ -9,8 +9,10 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('asset/css/nijac-chrome.css') ?>">
 
     <style>
+        :root { --ph-bg: #2e7d32; }
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
             background: #f0f4fa;
@@ -44,18 +46,6 @@
 
         /* Cartouches statistiques : contenu centré (EN11 uniquement) */
         #stat-cards .stat-card { text-align: center; }
-
-        /* Recherche / comboboxes / badge : style partagé (asset/css/nijac.css) */
-
-        /* ── En-tête ── */
-        #page-header {
-            background: #2e7d32;
-            color: #fff;
-            padding: .5rem 1.25rem;
-            font-size: .9rem;
-            font-weight: 600;
-            flex-shrink: 0;
-        }
 
         /* ── MenuStrip ── */
         #menu-strip {
@@ -101,7 +91,6 @@
         /* Mot du header de la colonne clé primaire (N° JA = Id_JA), pas le fond —
            même orange que les autres écrans liste/édition. */
         #tbl-ja thead th.th-pk { color: #e65100; }
-
 
         #tbl-ja tbody tr { border-bottom: 1px solid #e0e8f0; }
         #tbl-ja tbody tr:hover   { background: #dce8f8; }
@@ -221,30 +210,6 @@
         }
         #menu-colonnes-list .mc-move:hover:not(:disabled) { background: #e8eef7; }
         #menu-colonnes-list .mc-move:disabled { opacity: .3; cursor: default; }
-
-        /* ── Spinner ── */
-
-        #page-footer {
-            background: #e8eef7;
-            border-top: 1px solid #c8d4e8;
-            padding: .25rem 1rem;
-            font-size: .8rem;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-shrink: 0;
-            gap: 1rem;
-        }
-        #status-bar { color: #374151; min-height: 18px; }
-        .footer-copyright { color: #6b7280; white-space: nowrap; }
-        .footer-logo { height: 20px; width: auto; opacity: .75; }
-        #page-footer.pf-status-left {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
-            align-items: center;
-        }
-        #page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
-        #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
     </style>
 
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-skin.css') ?>">

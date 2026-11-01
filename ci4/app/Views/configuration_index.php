@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('asset/css/nijac-chrome.css') ?>">
 
     <style>
         body {
@@ -18,13 +19,6 @@
             flex-direction: column;
             height: 100vh;
             overflow: hidden;
-        }
-
-        /* ── En-tête ── */
-        #page-header {
-            background: var(--nijac-blue);
-            color: #fff; padding: .5rem 1.25rem;
-            font-size: .9rem; font-weight: 600; flex-shrink: 0;
         }
 
         #toolbar {
@@ -273,28 +267,6 @@
         .smtp-save-row button.prod:hover:not(:disabled)  { background: #15803d; }
         .smtp-save-row button:disabled { opacity: .5; cursor: default; }
         .smtp-msg { font-size: .82rem; min-height: 18px; }
-
-        #page-footer {
-            background: #e8eef7;
-            border-top: 1px solid #c8d4e8;
-            padding: .25rem 1rem;
-            font-size: .8rem;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-shrink: 0;
-            gap: 1rem;
-        }
-        #status-bar { color: #374151; min-height: 18px; }
-        .footer-copyright { color: #6b7280; white-space: nowrap; }
-        .footer-logo { height: 20px; width: auto; opacity: .75; }
-        #page-footer.pf-status-left {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
-            align-items: center;
-        }
-        #page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
-        #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
     </style>
 </head>
 <body>
