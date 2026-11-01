@@ -300,9 +300,9 @@ class NominationController extends BaseController
         }
 
         // Changement de JA : l'accusé de réception de l'ancien JA n'est pas hérité (colonne EA98).
-        $razAccuse = nominationAAccuseReception($pdo) ? ', AccuseReception = NULL' : '';
+        $razAccuse = ', AccuseReception = NULL';
         // Modification manuelle : elle ne vient plus du fichier FFTT 131 (colonne EA98).
-        $razAccuse .= nominationAF131($pdo) ? ', F131 = 0' : '';
+        $razAccuse .= ', F131 = 0';
         $pdo->prepare("
             UPDATE nomination SET
                 Id_Disponible = ?, DateNomination = CURDATE(), EmailEnvoye = 0,
@@ -376,8 +376,8 @@ class NominationController extends BaseController
             $pdo    = getPDO();
             $deptPh = implode(',', array_fill(0, count($deptsAutorises), '?'));
             // Colonne ajoutée par EA98 : EN14 reste fonctionnel avant la migration.
-            $colAccuse = nominationAAccuseReception($pdo) ? 'n.AccuseReception' : 'NULL AS AccuseReception';
-            $colDemandeClub = rencontreADateDemandeClub($pdo) ? 'r.DateDemandeClub' : 'NULL AS DateDemandeClub';
+            $colAccuse = 'n.AccuseReception';
+            $colDemandeClub = 'r.DateDemandeClub';
 
             $stmt = $pdo->prepare("
                 SELECT

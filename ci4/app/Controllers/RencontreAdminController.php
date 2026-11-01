@@ -61,7 +61,7 @@ class RencontreAdminController extends BaseController
     {
         return $this->tryJson(function () {
             // Forfait lu seulement si la colonne existe (tolérance avant EA98), sinon 0.
-            $colForfait = rencontreAForfait(getPDO()) ? 'r.Forfait' : '0 AS Forfait';
+            $colForfait = 'r.Forfait';
             $rows = getPDO()->query(
                 'SELECT r.Id_Rencontre, r.Date, r.Heure, r.Poule, r.Journee, r.Phase,
                         r.Id_EquipeDom, r.Id_EquipeExt, r.id_Salle, r.Commentaire,

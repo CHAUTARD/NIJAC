@@ -70,11 +70,11 @@ class SuiviNominationController extends BaseController
 
             $pdo  = getPDO();
             // Accusé de réception EN21 : colonne ajoutée par EA98, lue seulement si présente.
-            $colAccuse = nominationAAccuseReception($pdo) ? 'n.AccuseReception' : 'NULL AS AccuseReception';
+            $colAccuse = 'n.AccuseReception';
             // Repère « 131 » : colonne ajoutée par EA98, lue seulement si présente.
-            $colAccuse .= nominationAF131($pdo) ? ', n.F131' : ', 0 AS F131';
+            $colAccuse .= ', n.F131';
             // Justificatif de péage (nom du fichier de _Peage/) : colonne ajoutée par EA98, lue seulement si présente.
-            $colAccuse .= nominationAFichierPeage($pdo) ? ', n.FichierPeage' : ', NULL AS FichierPeage';
+            $colAccuse .= ', n.FichierPeage';
             // Forfait (rencontre.Forfait, EA98) : 1 = équipe recevante, 2 = équipe extérieure ; NomForfait = nom de
             // l'équipe forfait tel qu'affiché dans les colonnes Domicile / Extérieur. Colonne absente → 0 / NULL.
             $colAccuse .= rencontreAForfait($pdo)
@@ -1240,7 +1240,7 @@ class SuiviNominationController extends BaseController
         if ($dateMin !== null) {
             $tol  = self::F131_TOLERANCE_JOURS;
             // Forfait (EA98) : une rencontre en forfait n'a pas besoin de JA (colonne absente → jamais forfait).
-            $colForfait = rencontreAForfait($pdo) ? 'r.Forfait' : '0 AS Forfait';
+            $colForfait = 'r.Forfait';
             $stmt = $pdo->prepare('
                 SELECT r.Id_Rencontre, r.Date, r.ArbitrageCRA, ed.Nom AS NomDom, ee.Nom AS NomExt, ed.Id_Club AS IdClubDom,
                        ed.Division AS DivisionDom, n.Id_Nomination, ' . $colForfait . '

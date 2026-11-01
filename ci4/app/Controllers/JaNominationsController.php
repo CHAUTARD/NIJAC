@@ -22,9 +22,9 @@ class JaNominationsController extends BaseController
         if ($idJa <= 0) {
             return [];
         }
-        $colAccuse  = nominationAAccuseReception($pdo) ? 'n.AccuseReception' : 'NULL';
-        $colFichier = nominationAFichierPeage($pdo) ? 'n.FichierPeage' : 'NULL';
-        $colForfait = rencontreAForfait($pdo) ? 'r.Forfait' : '0';
+        $colAccuse  = 'n.AccuseReception';
+        $colFichier = 'n.FichierPeage';
+        $colForfait = 'r.Forfait';
 
         $st = $pdo->prepare("
             SELECT n.Id_Nomination, r.Id_Rencontre, r.Date, TIME_FORMAT(r.Heure, '%H:%i') AS Heure,
