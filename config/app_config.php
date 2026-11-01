@@ -4378,11 +4378,13 @@ function enregistrerEnvois(int $nb): void
     }
 }
 
+// Compteurs de tentatives (fichier JSON verrouillé) : logique dans App\Libraries\Tentatives, fonctions historiques ci-dessous.
+require_once __DIR__ . '/../ci4/app/Libraries/Tentatives.php';
+
 /**
- * Anti brute-force générique : verrou par clé arbitraire (IP, Id_Utilisateur...)
- * dans un fichier JSON — pas $_SESSION comme checkRateLimit() : un tiers qui
- * tente de deviner un mot de passe peut simplement ignorer le cookie de
- * session à chaque essai et repartir avec un compteur à zéro.
+ * Anti brute-force générique : verrou par clé arbitraire (IP, Id_Utilisateur...) dans un fichier
+ * JSON — pas $_SESSION comme checkRateLimit() : un tiers qui tente de deviner un mot de passe peut
+ * simplement ignorer le cookie de session à chaque essai et repartir avec un compteur à zéro.
  *
  * Retourne null si la tentative est autorisée, ou un message d'erreur sinon.
  * Appeler enregistrerTentative() après chaque tentative à comptabiliser
@@ -4390,24 +4392,11 @@ function enregistrerEnvois(int $nb): void
  */
 function checkTentativesRateLimit(string $cle, int $max, int $fenetreMinutes): ?string
 {
-    $now   = time();
-    $debut = $now - $fenetreMinutes * 60;
-
-    $tentatives = array_filter(tentativesLire()[$cle] ?? [], fn (int $ts) => $ts > $debut);
-    if (count($tentatives) >= $max) {
-        $attente = (int) ceil((min($tentatives) + $fenetreMinutes * 60 - $now) / 60);
-        return "Trop de tentatives. Réessayez dans environ {$attente} minute(s).";
-    }
-    return null;
+    return \App\Libraries\Tentatives::verifier(tentativesFichier(), $cle, $max, $fenetreMinutes);
 }
 
-/**
- * Durée de conservation (minutes) des horodatages du fichier de tentatives, toutes clés
- * confondues : au moins la plus longue fenêtre utilisée (plafond journalier mfa_essai:<id>).
- * Avant, la purge utilisait la fenêtre de la clé en cours d'écriture (15 min), ce qui effaçait
- * les compteurs à fenêtre plus longue (login_compte 60 min) à chaque échec par IP.
- */
-const TENTATIVES_RETENTION_MINUTES = 1440;
+/** Durée de conservation (minutes) des horodatages du fichier de tentatives, toutes clés confondues. */
+const TENTATIVES_RETENTION_MINUTES = \App\Libraries\Tentatives::RETENTION_MINUTES;
 
 /**
  * Chemin du fichier JSON des tentatives (verrou flock, partagé par toutes les clés).
@@ -4421,35 +4410,13 @@ function tentativesFichier(): string
 /** Enregistre une tentative pour la clé donnée. */
 function enregistrerTentative(string $cle, int $fenetreMinutes): void
 {
-    $now   = time();
-    $debut = $now - max($fenetreMinutes, TENTATIVES_RETENTION_MINUTES) * 60;
-
-    $fp = fopen(tentativesFichier(), 'c+');
-    if (!$fp) return;
-
-    flock($fp, LOCK_EX);
-    $data = json_decode(stream_get_contents($fp) ?: '', true) ?: [];
-
-    // Purge des horodatages expirés (toutes clés) pour éviter que le fichier ne grossisse indéfiniment.
-    foreach ($data as $k => $timestamps) {
-        $data[$k] = array_values(array_filter($timestamps, fn (int $ts) => $ts > $debut));
-        if (!$data[$k]) unset($data[$k]);
-    }
-    $data[$cle][] = $now;
-
-    rewind($fp);
-    ftruncate($fp, 0);
-    fwrite($fp, json_encode($data));
-    flock($fp, LOCK_UN);
-    fclose($fp);
+    \App\Libraries\Tentatives::enregistrer(tentativesFichier(), $cle, $fenetreMinutes);
 }
 
 /** Lecture brute du fichier de tentatives (séparée pour rester appelable sans écrire). */
 function tentativesLire(): array
 {
-    $fichier = tentativesFichier();
-    if (!is_file($fichier)) return [];
-    return json_decode(file_get_contents($fichier) ?: '', true) ?: [];
+    return \App\Libraries\Tentatives::lire(tentativesFichier());
 }
 
 /**
