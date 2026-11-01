@@ -229,10 +229,9 @@ class ConvocationJaController extends BaseController
         }
         $heure = $rencontre ? substr($rencontre['Heure'] ?? '09:00', 0, 5) : '';
 
-        // Accusé de réception (colonne nomination.AccuseReception, EA98) : bloc masqué
-        // tant que la colonne n'existe pas ou en cas d'erreur.
+        // Accusé de réception (colonne nomination.AccuseReception) : bloc masqué en cas d'erreur.
         $accuse = null;
-        if ($ja && $rencontre && !$erreur && nominationAAccuseReception($pdo)) {
+        if ($ja && $rencontre && !$erreur) {
             try {
                 $st = $pdo->prepare('SELECT AccuseReception FROM nomination WHERE Id_Nomination = ?');
                 $st->execute([$idNomination]);
@@ -251,11 +250,11 @@ class ConvocationJaController extends BaseController
             ? fraisSaisissables($rencontre['Date'], $accuse !== null && !$accuse['date'] && $accuse['accusable'])
             : ['ok' => false, 'err' => null, 'attendAccuse' => false];
 
-        // Justificatif de péage (colonne nomination.FichierPeage, EA98) : null = fonction indisponible (colonne absente,
-        // arbitrage club, erreur) → ni bouton ni popup. Seul le fait qu'un justificatif est joint (+ type/date lus dans
+        // Justificatif de péage (colonne nomination.FichierPeage) : null = fonction indisponible (arbitrage club,
+        // erreur) → ni bouton ni popup. Seul le fait qu'un justificatif est joint (+ type/date lus dans
         // le nom généré par le serveur) est exposé, jamais le chemin ni le contenu.
         $justificatif = null;
-        if ($ja && $rencontre && !$erreur && !$arbitrageClub && nominationAFichierPeage($pdo)) {
+        if ($ja && $rencontre && !$erreur && !$arbitrageClub) {
             try {
                 $st = $pdo->prepare('SELECT FichierPeage FROM nomination WHERE Id_Nomination = ?');
                 $st->execute([$idNomination]);
@@ -344,19 +343,14 @@ class ConvocationJaController extends BaseController
     /**
      * État de la saisie des frais (EN21) d'une nomination, règles de dates centralisées dans
      * fraisSaisissables() (config/app_config.php) : refusée avant la date de la rencontre (J < D) ;
-     * le jour même (J = D), conditionnée à l'accusé de réception s'il manque (colonne
-     * nomination.AccuseReception présente (EA98), NULL, JA rattaché) ; après (J > D),
-     * libre. Colonne absente avant EA98 → pas de condition d'accusé.
+     * le jour même (J = D), conditionnée à l'accusé de réception s'il manque (nomination.AccuseReception
+     * NULL, JA rattaché) ; après (J > D), libre.
      * Retourne le tableau de fraisSaisissables() ['ok', 'err', 'attendAccuse'].
      */
     public static function etatSaisieFrais(\PDO $pdo, int $idNomination): array
     {
-        $colonne = nominationAAccuseReception($pdo);
         $st = $pdo->prepare(
-            'SELECT r.Date, '
-            . ($colonne
-                ? '(n.AccuseReception IS NULL AND d.Id_JA IS NOT NULL)'
-                : '0') . ' AS AccuseManquant
+            'SELECT r.Date, (n.AccuseReception IS NULL AND d.Id_JA IS NOT NULL) AS AccuseManquant
              FROM nomination n
              LEFT JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
              JOIN rencontre  r ON r.Id_Rencontre  = n.Id_Rencontre
@@ -389,10 +383,6 @@ class ConvocationJaController extends BaseController
             if ($cible !== '' && $cible !== (string) $idNomP) {
                 return $this->response->setJSON(['ok' => false, 'err' => 'Action non disponible.']);
             }
-            if (!nominationAAccuseReception($pdo)) {
-                return $this->response->setJSON(['ok' => false, 'err' => "L'accusé de réception n'est pas encore disponible. Merci de réessayer plus tard."]);
-            }
-
             $res = accuserReceptionConvocation($pdo, $idNomP, $cible);
             if ($res['ok']) {
                 $this->tracerActionConnecte($login, 'accusé', $idNomP);
@@ -499,11 +489,11 @@ class ConvocationJaController extends BaseController
             $stmt->execute($params);
             $this->tracerActionConnecte($login, 'saisie', $idNomP);
 
-            // Péage > 0 enregistré : la page propose de joindre le justificatif (popup), si la colonne existe (EA98).
+            // Péage > 0 enregistré : la page propose de joindre le justificatif (popup).
             return $this->response->setJSON([
                 'ok'           => true,
                 'affected'     => $stmt->rowCount(),
-                'justificatif' => $peages !== null && $peages > 0 && nominationAFichierPeage($pdo),
+                'justificatif' => $peages !== null && $peages > 0,
             ]);
         } catch (\PDOException $e) {
             error_log('[NIJAC] ' . $this->ecran . ' sauvegarderFrais : ' . $e->getMessage());
@@ -532,10 +522,6 @@ class ConvocationJaController extends BaseController
             if (!$this->nominationAutorisee($idNomP, $tokenCnv)) {
                 return $this->refusJustificatif($this->messageLienInvalide());
             }
-            if (!nominationAFichierPeage($pdo)) {
-                return $this->refusJustificatif("Le dépôt du justificatif n'est pas encore disponible. Merci de réessayer plus tard.");
-            }
-
             $st = $pdo->prepare('
                 SELECT n.Peage, n.FichierPeage, r.ArbitrageCRA
                 FROM nomination n
@@ -616,7 +602,7 @@ class ConvocationJaController extends BaseController
             $tokenCnv = trim((string) ($this->request->getGet('cnv') ?? ''));
             $tokenValide = $this->nominationAutorisee($idNomP, $tokenCnv);
             $pdo = getPDO();
-            if ($tokenValide && nominationAFichierPeage($pdo)) {
+            if ($tokenValide) {
                 $st = $pdo->prepare('SELECT FichierPeage FROM nomination WHERE Id_Nomination = ?');
                 $st->execute([$idNomP]);
                 $val = $st->fetchColumn();

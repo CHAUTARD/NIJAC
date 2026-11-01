@@ -386,8 +386,7 @@ function initTableConfiguration(\PDO $pdo): void
     }
 
     // rencontre.Forfait : 0 = Non, 1 = forfait équipe domicile, 2 = forfait équipe extérieure — EN23.
-    // Placée après Frais si présente, sinon en fin de table. Lue / écrite seulement si présente
-    // (rencontreAForfait(), tolérance avant passage EA98).
+    // Placée après Frais si présente, sinon en fin de table.
     try {
         $existe = $pdo->query(
             "SELECT 1 FROM information_schema.COLUMNS
@@ -406,7 +405,6 @@ function initTableConfiguration(\PDO $pdo): void
 
     // rencontre.DateDemandeClub : date/heure du dernier envoi (ou relance) de la demande
     // d'arbitrage au club — envoyerDemandeJaClub() (EN14 / EN28). NULL = jamais envoyée.
-    // Lue / écrite seulement si présente (rencontreADateDemandeClub(), tolérance avant EA98).
     try {
         $existe = $pdo->query(
             "SELECT 1 FROM information_schema.COLUMNS
@@ -453,7 +451,6 @@ function initTableConfiguration(\PDO $pdo): void
 
     // nomination.F131 : 1 = la dernière modification de cette nomination vient du fichier
     // FFTT 131 (EN28 « Mise à jour FFTT 131 ») ; remis à 0 par une modification manuelle (EN14/EN28).
-    // Lue / écrite seulement si présente (nominationAF131(), tolérance avant passage EA98).
     try {
         $existe = $pdo->query(
             "SELECT 1 FROM information_schema.COLUMNS
@@ -751,28 +748,6 @@ function getFfttApiJoursAvantExpiration(): ?int
     }
 
     return (int) (new \DateTime('today'))->diff($date)->format('%r%a');
-}
-
-/**
- * nomination.AccuseReception existe-t-elle ? (ajoutée par EA98 — EN21/EN28 la lisent
- * seulement si présente, pour ne pas planter avant la migration). Cache statique : une
- * seule vérification par requête.
- */
-function nominationAAccuseReception(\PDO $pdo): bool
-{
-    static $existe = null;
-    if ($existe === null) {
-        try {
-            $existe = (bool) $pdo->query(
-                "SELECT 1 FROM information_schema.COLUMNS
-                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nomination' AND COLUMN_NAME = 'AccuseReception'"
-            )->fetchColumn();
-        } catch (\PDOException $e) {
-            $existe = false;
-        }
-    }
-
-    return $existe;
 }
 
 /**
@@ -2241,93 +2216,6 @@ function creerCompteJa(\PDO $pdo, int $idJa, string $email, string $nom, ?string
 }
 
 /**
- * nomination.F131 existe-t-elle ? (ajoutée par EA98 — EN14/EN28 la lisent / l'écrivent
- * seulement si présente). Cache statique : une seule vérification par requête.
- */
-function nominationAF131(\PDO $pdo): bool
-{
-    static $existe = null;
-    if ($existe === null) {
-        try {
-            $existe = (bool) $pdo->query(
-                "SELECT 1 FROM information_schema.COLUMNS
-                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nomination' AND COLUMN_NAME = 'F131'"
-            )->fetchColumn();
-        } catch (\PDOException $e) {
-            $existe = false;
-        }
-    }
-
-    return $existe;
-}
-
-/**
- * nomination.FichierPeage existe-t-elle ? (ajoutée par EA98 — EN28 la lit / l'écrit seulement
- * si présente ; sinon lecture = NULL et champ justificatif désactivé). Cache statique : une seule
- * vérification par requête.
- */
-function nominationAFichierPeage(\PDO $pdo): bool
-{
-    static $existe = null;
-    if ($existe === null) {
-        try {
-            $existe = (bool) $pdo->query(
-                "SELECT 1 FROM information_schema.COLUMNS
-                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nomination' AND COLUMN_NAME = 'FichierPeage'"
-            )->fetchColumn();
-        } catch (\PDOException $e) {
-            $existe = false;
-        }
-    }
-
-    return $existe;
-}
-
-/**
- * rencontre.Forfait existe-t-elle ? (ajoutée par EA98 — EN23 la lit / l'écrit seulement
- * si présente ; sinon lecture = 0 et liste désactivée). Cache statique : une seule
- * vérification par requête.
- */
-function rencontreAForfait(\PDO $pdo): bool
-{
-    static $existe = null;
-    if ($existe === null) {
-        try {
-            $existe = (bool) $pdo->query(
-                "SELECT 1 FROM information_schema.COLUMNS
-                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rencontre' AND COLUMN_NAME = 'Forfait'"
-            )->fetchColumn();
-        } catch (\PDOException $e) {
-            $existe = false;
-        }
-    }
-
-    return $existe;
-}
-
-/**
- * rencontre.DateDemandeClub existe-t-elle ? (ajoutée par EA98 — envoyerDemandeJaClub()
- * l'écrit et EN14 la lit seulement si présente ; sinon lecture = NULL). Cache statique :
- * une seule vérification par requête.
- */
-function rencontreADateDemandeClub(\PDO $pdo): bool
-{
-    static $existe = null;
-    if ($existe === null) {
-        try {
-            $existe = (bool) $pdo->query(
-                "SELECT 1 FROM information_schema.COLUMNS
-                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rencontre' AND COLUMN_NAME = 'DateDemandeClub'"
-            )->fetchColumn();
-        } catch (\PDOException $e) {
-            $existe = false;
-        }
-    }
-
-    return $existe;
-}
-
-/**
  * Règle stricte de disponibilité pour nommer un JA en arbitrage CRA, identique à EN14
  * (NominationController::sqlDispoRencontre()) : une réponse 'O' sur la rencontre ou la journée
  * (Id_Rencontre NULL, même date) ET aucune réponse 'N' ni sur la rencontre ni sur la journée.
@@ -3117,18 +3005,16 @@ function envoyerDemandeJaClub(\PDO $pdo, int $idRenc, array $moi, string $sujetE
     $mail->send();
 
     // Trace de l'envoi (une relance écrase la date précédente). date_demande = date
-    // enregistrée (Y-m-d H:i:s), null si colonne absente ou UPDATE en échec.
+    // enregistrée (Y-m-d H:i:s), null si l'UPDATE échoue.
     $dateDemande = null;
-    if (rencontreADateDemandeClub($pdo)) {
-        try {
-            $pdo->prepare('UPDATE rencontre SET DateDemandeClub = NOW() WHERE Id_Rencontre = ?')
-                ->execute([$idRenc]);
-            $lue = $pdo->prepare('SELECT DateDemandeClub FROM rencontre WHERE Id_Rencontre = ?');
-            $lue->execute([$idRenc]);
-            $dateDemande = $lue->fetchColumn() ?: null;
-        } catch (\PDOException $e) {
-            error_log('[NIJAC] DateDemandeClub non mise à jour (rencontre ' . $idRenc . ') : ' . $e->getMessage());
-        }
+    try {
+        $pdo->prepare('UPDATE rencontre SET DateDemandeClub = NOW() WHERE Id_Rencontre = ?')
+            ->execute([$idRenc]);
+        $lue = $pdo->prepare('SELECT DateDemandeClub FROM rencontre WHERE Id_Rencontre = ?');
+        $lue->execute([$idRenc]);
+        $dateDemande = $lue->fetchColumn() ?: null;
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] DateDemandeClub non mise à jour (rencontre ' . $idRenc . ') : ' . $e->getMessage());
     }
 
     $nb = count($mail->getToAddresses()) + count($mail->getCcAddresses());

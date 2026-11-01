@@ -97,10 +97,9 @@ class JaFraisController extends ConvocationJaController
         try {
             $pdo   = getPDO();
             $rows  = JaNominationsController::nominationsDuJa($pdo, $this->idJaSession);
-            $colAr = nominationAAccuseReception($pdo);
             foreach ($rows as &$row) {
                 $id = (int) $row['Id_Nomination'];
-                $row['Accusable'] = $colAr && convocationAccusable($pdo, $id);
+                $row['Accusable'] = convocationAccusable($pdo, $id);
                 $row['EtatFrais'] = self::etatSaisieFrais($pdo, $id);
                 // Lien EN21 (même jeton que les convocations envoyées) : convocation complète / impression.
                 $row['UrlConvocation'] = site_url('convocation-ja/' . $id . '/' . $this->obf->obfuscate($id));
@@ -110,8 +109,8 @@ class JaFraisController extends ConvocationJaController
             return $this->response->setJSON([
                 'ok'                => true,
                 'data'              => $rows,
-                'accuseDispo'       => $colAr,
-                'justificatifDispo' => nominationAFichierPeage($pdo),
+                'accuseDispo'       => true,
+                'justificatifDispo' => true,
             ]);
         } catch (\Throwable $e) {
             error_log('[NIJAC] EJA4 data : ' . $e->getMessage());

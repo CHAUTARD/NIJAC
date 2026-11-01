@@ -50,8 +50,7 @@ class RencontreAdminController extends BaseController
             'changeLogin'  => !empty($moi['change_login']),
             'deptActifs'   => getDeptActifs(),
             'divisionNoms' => getDivisionNoms(),
-            // rencontre.Forfait absente (EA98 pas encore passé) : liste Forfait désactivée.
-            'forfaitDispo' => rencontreAForfait(getPDO()),
+            'forfaitDispo' => true,
         ];
 
         return view('rencontre_admin_index', $data);
@@ -150,7 +149,6 @@ class RencontreAdminController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Forfait invalide (0, 1 ou 2).']);
             }
             $forfait     = (int) $forfaitRaw;
-            $avecForfait = rencontreAForfait($pdo);
 
             if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Date invalide.']);
@@ -204,16 +202,9 @@ class RencontreAdminController extends BaseController
             $dateHeureChangee = substr((string) $etatAvant['Date'], 0, 10) !== $date
                 || substr((string) $etatAvant['Heure'], 0, 8) !== $heure;
 
-            // Forfait écrit seulement si la colonne existe (tolérance avant EA98).
-            $params = [$date, $heure, $poule, $journee, $phase, $idEquipeDom, $idEquipeExt, $idSalle, $arbitrageCra, $frais];
-            if ($avecForfait) {
-                $params[] = $forfait;
-            }
-            $params[] = $commentaire;
-            $params[] = $idRencontre;
+            $params = [$date, $heure, $poule, $journee, $phase, $idEquipeDom, $idEquipeExt, $idSalle, $arbitrageCra, $frais, $forfait, $commentaire, $idRencontre];
             $stmt = $pdo->prepare(
-                'UPDATE rencontre SET Date=?, Heure=?, Poule=?, Journee=?, Phase=?, Id_EquipeDom=?, Id_EquipeExt=?, id_Salle=?, ArbitrageCRA=?, Frais=?, '
-                . ($avecForfait ? 'Forfait=?, ' : '') . 'Commentaire=?
+                'UPDATE rencontre SET Date=?, Heure=?, Poule=?, Journee=?, Phase=?, Id_EquipeDom=?, Id_EquipeExt=?, id_Salle=?, ArbitrageCRA=?, Frais=?, Forfait=?, Commentaire=?
                  WHERE Id_Rencontre=?'
             );
             $stmt->execute($params);

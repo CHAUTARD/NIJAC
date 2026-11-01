@@ -898,16 +898,14 @@ class NominationController extends BaseController
             }
 
             // EN14 : un seul envoi par rencontre (EN28 « Relancer le club » peut toujours renvoyer).
-            if (rencontreADateDemandeClub($pdo)) {
-                $st = $pdo->prepare('SELECT DateDemandeClub FROM rencontre WHERE Id_Rencontre = ?');
-                $st->execute([$idRenc]);
-                $dejaDemande = $st->fetchColumn();
-                if ($dejaDemande !== false && $dejaDemande !== null && $dejaDemande !== '') {
-                    return $this->response->setJSON([
-                        'ok'  => false,
-                        'err' => 'Une demande a déjà été envoyée le ' . date('d/m/Y', strtotime((string) $dejaDemande)) . ' pour cette rencontre.',
-                    ]);
-                }
+            $st = $pdo->prepare('SELECT DateDemandeClub FROM rencontre WHERE Id_Rencontre = ?');
+            $st->execute([$idRenc]);
+            $dejaDemande = $st->fetchColumn();
+            if ($dejaDemande !== false && $dejaDemande !== null && $dejaDemande !== '') {
+                return $this->response->setJSON([
+                    'ok'  => false,
+                    'err' => 'Une demande a déjà été envoyée le ' . date('d/m/Y', strtotime((string) $dejaDemande)) . ' pour cette rencontre.',
+                ]);
             }
 
             // Cœur d'envoi partagé avec EN28 (« Relancer le club ») : config/app_config.php.

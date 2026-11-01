@@ -53,8 +53,7 @@ class SuiviNominationController extends BaseController
             'nomComplet'  => trim(($u['nom'] ?? '') . ' ' . ($u['prenom'] ?? '')),
             'departement' => $u['id_departement'] ?? '',
             'divisionNoms' => getDivisionNoms(),
-            // Justificatif de péage (nomination.FichierPeage, EA98) : champ de la popup désactivé si la colonne manque.
-            'fichierPeageDispo' => nominationAFichierPeage(getPDO()),
+            'fichierPeageDispo' => true,
             // Popup 131 : bouton « Supprimer » des fichiers serveur affiché aux administrateurs seulement.
             'estAdmin' => self::estAdmin(),
         ]);
@@ -69,17 +68,11 @@ class SuiviNominationController extends BaseController
             }
 
             $pdo  = getPDO();
-            // Accusé de réception EN21 : colonne ajoutée par EA98, lue seulement si présente.
-            $colAccuse = 'n.AccuseReception';
-            // Repère « 131 » : colonne ajoutée par EA98, lue seulement si présente.
-            $colAccuse .= ', n.F131';
-            // Justificatif de péage (nom du fichier de _Peage/) : colonne ajoutée par EA98, lue seulement si présente.
-            $colAccuse .= ', n.FichierPeage';
-            // Forfait (rencontre.Forfait, EA98) : 1 = équipe recevante, 2 = équipe extérieure ; NomForfait = nom de
-            // l'équipe forfait tel qu'affiché dans les colonnes Domicile / Extérieur. Colonne absente → 0 / NULL.
-            $colAccuse .= rencontreAForfait($pdo)
-                ? ', r.Forfait, CASE r.Forfait WHEN 1 THEN ed.Nom WHEN 2 THEN ee.Nom END AS NomForfait'
-                : ', 0 AS Forfait, NULL AS NomForfait';
+            // Accusé de réception EN21, repère « 131 », justificatif de péage (nom du fichier de _Peage/).
+            $colAccuse = 'n.AccuseReception, n.F131, n.FichierPeage';
+            // Forfait (rencontre.Forfait) : 1 = équipe recevante, 2 = équipe extérieure ; NomForfait = nom de
+            // l'équipe forfait tel qu'affiché dans les colonnes Domicile / Extérieur.
+            $colAccuse .= ', r.Forfait, CASE r.Forfait WHEN 1 THEN ed.Nom WHEN 2 THEN ee.Nom END AS NomForfait';
             // Toutes les rencontres du périmètre (même critère qu'EN14 : club recevant), nommées ou non.
             // Une nomination au plus par rencontre (uq_nomination_rencontre) → une ligne par rencontre ;
             // sans nomination, les colonnes n.* / ja.* sont NULL (ligne « Aucun JA »).
@@ -235,16 +228,11 @@ class SuiviNominationController extends BaseController
             }
             [$peage, $km] = $frais;
 
-            // Justificatif de péage (colonne EA98) : fichier `peage_fichier` (multipart) facultatif, ou case
+            // Justificatif de péage : fichier `peage_fichier` (multipart) facultatif, ou case
             // `peage_supprimer` = 1 pour le retirer. Ni l'un ni l'autre → justificatif inchangé (comportement antérieur).
-            $colPeage = nominationAFichierPeage($pdo);
             $upload   = $this->request->getFile('peage_fichier');
             $avecFichier = $upload !== null && $upload->getError() !== UPLOAD_ERR_NO_FILE;
             $retirer  = (string) $this->request->getPost('peage_supprimer') === '1';
-            if (($avecFichier || $retirer) && !$colPeage) {
-                return $this->response->setJSON(['ok' => false,
-                    'msg' => 'Colonne nomination.FichierPeage absente : chargez l\'écran EA98 (Administration BDD).']);
-            }
             if ($avecFichier) {
                 $refus = JustificatifPeage::controler($upload);
                 if ($refus !== null) {
@@ -253,8 +241,7 @@ class SuiviNominationController extends BaseController
             }
 
             $stmt = $pdo->prepare('
-                SELECT n.Id_Nomination, n.Id_Rencontre, n.Id_Disponible, d.Id_JA AS IdJaActuel, r.Date, ed.Id_Club AS IdClubDom'
-                . ($colPeage ? ', n.FichierPeage' : ', NULL AS FichierPeage') . '
+                SELECT n.Id_Nomination, n.Id_Rencontre, n.Id_Disponible, d.Id_JA AS IdJaActuel, r.Date, ed.Id_Club AS IdClubDom, n.FichierPeage
                 FROM nomination n
                 JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
                 JOIN rencontre r  ON r.Id_Rencontre  = n.Id_Rencontre
@@ -321,15 +308,13 @@ class SuiviNominationController extends BaseController
                         }
                     }
 
-                    // Nouveau JA : l'accusé de réception de l'ancien JA n'est pas hérité (colonne EA98).
-                    if (nominationAAccuseReception($pdo)) {
-                        $pdo->prepare('UPDATE nomination SET AccuseReception = NULL WHERE Id_Nomination = ?')->execute([$idNom]);
-                    }
+                    // Nouveau JA : l'accusé de réception de l'ancien JA n'est pas hérité.
+                    $pdo->prepare('UPDATE nomination SET AccuseReception = NULL WHERE Id_Nomination = ?')->execute([$idNom]);
                 }
 
                 $pdo->prepare('UPDATE rencontre SET ArbitrageCRA = ? WHERE Id_Rencontre = ?')->execute([$arbCra, $nom['Id_Rencontre']]);
-                // FFTT 131 (colonne EA98) : la case de la popup fait foi ; absente de la requête → remise à 0.
-                $setF131 = nominationAF131($pdo) ? ', F131 = ' . $f131 : '';
+                // FFTT 131 : la case de la popup fait foi ; absente de la requête → remise à 0.
+                $setF131 = ', F131 = ' . $f131;
                 $pdo->prepare("
                     UPDATE nomination SET Id_Disponible = ?, Peage = ?, Kilometre = ?, Defiscalisation = ?, DateSaisie = CURDATE()$setF131$setPeage
                     WHERE Id_Nomination = ?
@@ -872,7 +857,7 @@ class SuiviNominationController extends BaseController
         try {
             $pdo   = getPDO();
             $depts = $this->deptsAutorises();
-            if (preg_match(JustificatifPeage::MOTIF_NOM, $nom) && $depts && nominationAFichierPeage($pdo)) {
+            if (preg_match(JustificatifPeage::MOTIF_NOM, $nom) && $depts) {
                 // Département du club recevant de la rencontre qui porte ce justificatif (même critère que la liste EN28).
                 $stmt = $pdo->prepare('
                     SELECT SUBSTRING(ed.Id_Club, 3, 2) FROM nomination n
@@ -932,9 +917,6 @@ class SuiviNominationController extends BaseController
         $serveur = $tous[0];
         if ($serveur['taille'] > self::F131_TAILLE_MAX) {
             throw new \RuntimeException('Fichier trop volumineux (5 Mo maximum).');
-        }
-        if (!nominationAF131($pdo)) {
-            throw new \RuntimeException('Colonne nomination.F131 absente : chargez l\'écran EA98 (Administration BDD).');
         }
         $depts = $this->perimetre131();
         if (!$depts) {
@@ -1219,7 +1201,7 @@ class SuiviNominationController extends BaseController
      * dejaNommees, aRenseigner, ignorees), rencontres[] (rencontres R3M / R4M sans JA rapprochées d'au moins une ligne, triées
      * par date : idRencontre, date, division, dom, ext, idJa, nomJa, prenomJa, club, resultat « À renseigner » ou
      * « Ignoré : motif », note) et ops[] = [rencontre, Id_JA] des seules rencontres « À renseigner » (ecrireCreation131()).
-     * Une rencontre sans JA en forfait (rencontre.Forfait ≠ 0, lu seulement si rencontreAForfait()) n'a pas besoin de JA :
+     * Une rencontre sans JA en forfait (rencontre.Forfait ≠ 0) n'a pas besoin de JA :
      * jamais « À renseigner », « Ignoré : forfait » (compté dans ignorees).
      * Public static : testable hors CodeIgniter.
      */
