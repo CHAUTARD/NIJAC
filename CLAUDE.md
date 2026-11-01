@@ -123,7 +123,9 @@ Every CI4 controller pulls in `config/db.php` (and most also `config/app_config.
 
 ### View / header convention
 
-There is no shared header/layout partial (no equivalent of the old `includes/page_header.php`). Each view file (`ci4/app/Views/xxx_index.php`) is a full standalone HTML document that inlines its own `<head>`, its own `#page-header` markup (title, `EXXXX` badge, back link via `site_url(...)`), and its own `<style>` block. New screens should copy the header block from an existing view (e.g. [region_index.php](ci4/app/Views/region_index.php)) rather than trying to factor it out.
+There is no shared layout: each view file (`ci4/app/Views/xxx_index.php`) is a full standalone HTML document that writes its own `<head>` and `<style>` block. The page « chrome » is shared through three partials in `ci4/app/Views/partials/`, called with `view('partials/…', [...])` (arguments documented at the top of each file): `page_header.php` (`#page-header`: icon, title, `EXXXX` badge, optional breadcrumb, back link), `toolbar.php` (`#toolbar`: user, password warning, role-switch buttons) and `page_footer.php` (`#page-footer`: status bar + copyright). Copy the call pattern from an existing view (e.g. [region_index.php](ci4/app/Views/region_index.php)).
+
+Their CSS lives in `asset/css/nijac-chrome.css` (link it after `nijac.css`): do not redeclare those rules inline. Per-screen settings: header colour via `:root { --ph-bg: #2e7d32; }` in the view's `<style>` (default NIJAC blue), and the password-warning visibility via the single rule `#toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }`. `body` layout stays in the view. `asset/css/nijac-liste-edit.css` (list + edit-panel screens) still carries its own copy of these rules, and about ten views (e.g. `stats_ja`, `fftt_test`, `cra_dispo`) still keep inline variants because their look differs from the shared CSS.
 
 The CSRF token is exposed via `<meta name="csrf-token" content="<?= csrf_hash() ?>">` in every view's `<head>`, and `asset/js/nijac-csrf.js` reads that meta tag to inject the `X-CSRF-Token` header on jQuery AJAX calls.
 
