@@ -120,9 +120,12 @@
             transform: translateY(0);
             box-shadow: 1px 2px 4px rgba(0,0,0,.15);
         }
-        /* Bouton documentation : même fond que les autres boutons du menu */
+        /* Bouton documentation : fond hachuré pour le distinguer des écrans */
         .btn-doc {
-            background-color: #ffecb3;
+            background-color: #eceff1;
+            background-image: repeating-linear-gradient(45deg,
+                rgba(0,0,0,.07) 0, rgba(0,0,0,.07) 7px,
+                transparent 7px, transparent 15px);
         }
         .btn-code {
             position: absolute;

@@ -33,6 +33,8 @@
             resize: vertical;
             min-height: 220px;
         }
+        /* Éditeur HTML visuel (TinyMCE) à la place du textarea */
+        .tox-tinymce { flex: 1 1 auto; min-height: 320px; }
 
         #cartouche-marqueurs code {
             display: inline-block;
@@ -314,6 +316,7 @@ if ($isCsr) {
 
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
+<?= view('partials/editeur_html') ?>
 <script>
 'use strict';
 
@@ -572,6 +575,8 @@ $('#btn-supprimer').on('click', function () {
 $(document).on('click', '[data-marqueur]', function () {
     const ta    = document.getElementById('txt-message');
     const texte = $(this).data('marqueur');
+    // Éditeur HTML visuel (nijac-editeur.js) : insertion au curseur de l'éditeur.
+    if (window.nijacEditeur && nijacEditeur.inserer('txt-message', texte)) { majBoutonApercu(); return; }
     const debut = ta.selectionStart ?? ta.value.length;
     const fin   = ta.selectionEnd   ?? debut;
     ta.setRangeText(texte, debut, fin, 'end');
@@ -583,6 +588,12 @@ $('#txt-message').on('input', majBoutonApercu);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 $(function () {
+    // Éditeur HTML visuel (si TinyMCE est installé) ; « Code source » réservé aux administrateurs.
+    // Menu « Marqueurs » de l'éditeur (utile en plein écran) = marqueurs visibles du cartouche.
+    const marqueursActifs = () => [...new Set($('#cartouche-marqueurs [data-marqueur]')
+        .filter(function () { return !$(this).closest('.d-none').length; })
+        .map(function () { return String($(this).attr('data-marqueur')); }).get())];
+    if (window.nijacEditeur) nijacEditeur.attacher('txt-message', { source: IS_ADMIN, marqueurs: marqueursActifs });
     chargerListe();
     majBoutonApercu();
 });

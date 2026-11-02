@@ -119,6 +119,9 @@ $routes->get('centrenvoye/ja', 'CentrenvoyeController::ja', ['filter' => 'auth']
 $routes->post('centrenvoye/apercu', 'CentrenvoyeController::apercu', ['filter' => 'auth']);
 $routes->post('centrenvoye/envoyer', 'CentrenvoyeController::envoyer', ['filter' => 'auth']);
 $routes->post('centrenvoye/envoyer-un', 'CentrenvoyeController::envoyerUn', ['filter' => 'auth']);
+// Pièces jointes (onglets génériques) : dépôt multipart / retrait, liées à la session (WRITEPATH/uploads/en15/).
+$routes->post('centrenvoye/pj', 'CentrenvoyeController::pjAjouter', ['filter' => 'auth']);
+$routes->post('centrenvoye/pj/supprimer', 'CentrenvoyeController::pjSupprimer', ['filter' => 'auth']);
 // Onglet « Invitation JA » : JA1 actifs du périmètre + état de leur compte, puis création (Id automatique,
 // fiche = utilisateur.Id_Ja, Login = email) / régénération du mot de passe et envoi du message système « Invitation JA » (EA93,
 // admin). Même filtre "auth" (Administrateur / Nominateur) et CSRF global que le reste d'EN15.

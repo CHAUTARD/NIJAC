@@ -147,8 +147,6 @@
                 rgba(0,0,0,.07) 0, rgba(0,0,0,.07) 7px,
                 transparent 7px, transparent 15px);
         }
-        /* Bouton documentation : dernière colonne de la grille, sans code écran */
-        #menu-grid .btn-doc { grid-column: -2 / -1; }
 
         .btn-code {
             position: absolute;
@@ -165,6 +163,8 @@
             padding: 0 24px 24px;
             display: flex;
             justify-content: center;
+            flex-wrap: wrap;
+            gap: 16px;
         }
         #zone-deconnexion .menu-btn {
             max-width: 260px;
@@ -236,21 +236,20 @@
         <span class="btn-desc">Import CSV et saisie du n° de compte EBP des JA</span>
     </a>
 
-    <a href="<?= base_url('Documentation/guide-ecrans-defiscalisateur.html') ?>" target="_blank" rel="noopener" class="menu-btn btn-doc">
-        <div class="btn-icon"><img src="<?= base_url('img/Documentation.png') ?>" alt="Documentation"></div>
-        <span>Documentation</span>
-        <span class="btn-desc">Guide des écrans (nouvelle page)</span>
-    </a>
-
 </div>
 
-<!-- Déconnexion : ligne à part, centrée -->
+<!-- Déconnexion + Documentation : ligne à part, centrée -->
 <div id="zone-deconnexion">
     <form method="post" action="<?= site_url('logout') ?>" id="form-logout" class="d-none"><?= csrf_field() ?></form>
     <a href="<?= site_url('logout') ?>" id="lnk-logout" class="menu-btn" style="background:#f8d7da;" onclick="document.getElementById('form-logout').submit(); return false;">
         <div class="btn-icon"><img src="<?= base_url('img/Quitter.webp') ?>" alt="Se déconnecter"></div>
         <span style="color:#842029;">Se déconnecter</span>
         <span class="btn-desc" style="color:#842029;">Fermer la session en cours</span>
+    </a>
+    <a href="<?= base_url('Documentation/guide-ecrans-defiscalisateur.html') ?>" target="_blank" rel="noopener" class="menu-btn btn-doc">
+        <div class="btn-icon"><img src="<?= base_url('img/Documentation.png') ?>" alt="Documentation"></div>
+        <span>Documentation</span>
+        <span class="btn-desc">Guide des écrans (nouvelle page)</span>
     </a>
 </div>
 

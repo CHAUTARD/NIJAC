@@ -64,7 +64,8 @@ Served from the root `asset/` folder via `base_url('asset/js/...')` — not dupl
 
 | Fichier | Chargé par | Fonctions |
 |---------|-----------|-----------|
-| `asset/js/nijac-csrf.js` | Chaque vue (`<script src="<?= base_url('asset/js/nijac-csrf.js') ?>">`) | Préfiltre jQuery AJAX — lit `<meta name="csrf-token">` et injecte le header `X-CSRF-Token` |
+| `asset/js/nijac-csrf.js` | Chaque vue (`<script src="<?= base_url('asset/js/nijac-csrf.js') ?>">`) | Préfiltre jQuery AJAX — lit `<meta name="csrf-token">` et injecte le header `X-CSRF-Token` · envoie tout PUT / PATCH / DELETE en POST + `_method` (l'hébergeur de production refuse PUT/DELETE : 403 vide ; CI4 `spoofRequestMethod()` rétablit la méthode, routes inchangées) |
+| `asset/js/nijac-editeur.js` | EN15, EA93, via `view('partials/editeur_html')` (après jQuery, avant le script de la vue ; rien n'est chargé si `asset/tinymce/tinymce.min.js` est absent) | Éditeur HTML visuel TinyMCE auto-hébergé (`asset/tinymce/`, « TinyMCE Community » GPL, `license_key: 'gpl'`, français si `langs/fr_FR.js`) sur `#txt-message` : `nijacEditeur.attacher(id, {source})` (bouton « Code source » = administrateur), `nijacEditeur.inserer(id, marqueur)` · `$.valHooks.textarea` / `$.propHooks.readOnly` : `.val()` et `.prop('readonly')` du textarea suivent l'éditeur · contenu non modifié rendu à l'identique · document complet : seul le `<body>` est édité · commentaires conditionnels Outlook protégés |
 | `asset/js/nijac-toast.js` | Chaque vue | `nijacToast(msg, type, duration)` · `nijacConfirm(msg, onConfirm, onCancel)` — remplaçants de `alert()` / `confirm()` |
 | `asset/js/nijac-sortable-table.js` | Vues avec tableaux triables | Tri de colonnes côté client |
 

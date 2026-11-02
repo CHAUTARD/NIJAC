@@ -68,6 +68,9 @@
             font-size: .88rem;
             flex: 1;
         }
+        #conv-copie-bar { display: flex; }
+        /* Éditeur HTML visuel (TinyMCE) à la place du textarea */
+        #grp-message .tox-tinymce { flex: 1 1 auto; min-height: 320px; }
 
         /* ── Cartouche marqueurs ── */
         #cartouche-marqueurs {
@@ -101,6 +104,16 @@
             margin: .1rem .15rem .1rem 0;
         }
 
+        /* Afficher / masquer les marqueurs : masqués par défaut, choix mémorisé dans le navigateur */
+        #cartouche-marqueurs #cart-bascule { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+        #cartouche-marqueurs .cart-bascule-txt { color: #1f4e8c; text-transform: none; letter-spacing: 0; font-weight: 600; }
+        #cartouche-marqueurs .txt-afficher { display: none; }
+        #cartouche-marqueurs.replie .txt-afficher { display: inline; }
+        #cartouche-marqueurs.replie .txt-masquer  { display: none; }
+        #cartouche-marqueurs.replie .bi-chevron-up { transform: rotate(180deg); }
+        #cartouche-marqueurs.replie #cart-bascule { margin-bottom: 0; }
+        /* !important : les sections sont affichées par .toggle() (style en ligne) selon l'onglet */
+        #cartouche-marqueurs.replie > :not(#cart-bascule) { display: none !important; }
         #cartouche-marqueurs code:hover  { background: #cfe0f8; border-color: #7aaddf; transform: scale(1.06); }
         #cartouche-marqueurs code:active { transform: scale(.95); }
 
@@ -110,13 +123,15 @@
             border-top: 1px solid #dee2e6;
             padding: .4rem .75rem;
             display: flex;
-            align-items: flex-start;
+            align-items: center;
             gap: .75rem;
             flex-shrink: 0;
             flex-wrap: wrap;
         }
 
-        #result-envoi { font-size: .82rem; flex: 1; }
+        /* Compte rendu sous la barre : Envoyer reste aligné à droite (ms-auto) */
+        #result-envoi { font-size: .82rem; flex: 1 0 100%; }
+        #result-envoi:empty { display: none; }
 
         /* ── Panneau JA (droite) ── */
         #panel-ja {
@@ -260,18 +275,20 @@
         <div id="panel-message-body">
 
             <!-- Bandeau copie club recevant (Convocation uniquement) -->
-            <div id="conv-copie-bar" class="mb-2" style="display:none;background:#eef6ef;border:1px solid #cfe6d4;border-radius:6px;padding:.4rem .6rem;">
-                <div class="fw-semibold mb-1" style="font-size:.72rem;color:#15612f;text-transform:uppercase;letter-spacing:.04em;">
-                    <i class="bi bi-people-fill me-1"></i>Copie au club recevant — sans le lien de saisie des frais
+            <!-- Titre et cases sur une même ligne (passage à la ligne si la largeur manque) ; display:flex dans le <style>
+                 (pas de classe d-flex : son !important empêcherait .toggle() de masquer le bandeau) -->
+            <div id="conv-copie-bar" class="mb-2 align-items-center flex-wrap column-gap-3 row-gap-1" style="display:none;background:#eef6ef;border:1px solid #cfe6d4;border-radius:6px;padding:.4rem .6rem;">
+                <div class="fw-semibold" style="font-size:.72rem;color:#15612f;text-transform:uppercase;letter-spacing:.04em;">
+                    <i class="bi bi-people-fill me-1"></i><span title="Copie au club recevant — sans le lien de saisie des frais">Copie club recevant — sans lien des frais</span>
                 </div>
                 <div class="d-flex flex-wrap gap-3">
                     <div class="form-check mb-0">
                         <input class="form-check-input" type="checkbox" id="chk-cc-corr">
-                        <label class="form-check-label" for="chk-cc-corr" style="font-size:.82rem;">Cc au correspondant du club reçu</label>
+                        <label class="form-check-label" for="chk-cc-corr" style="font-size:.82rem;" title="Cc au correspondant du club reçu">Cc correspondant</label>
                     </div>
                     <div class="form-check mb-0">
                         <input class="form-check-input" type="checkbox" id="chk-cc-ref">
-                        <label class="form-check-label" for="chk-cc-ref" style="font-size:.82rem;">Cc au référent du club reçu</label>
+                        <label class="form-check-label" for="chk-cc-ref" style="font-size:.82rem;" title="Cc au référent du club reçu">Cc référent</label>
                     </div>
                 </div>
             </div>
@@ -303,25 +320,28 @@
                 <div id="invit-erreur" class="text-danger small fw-semibold"></div>
             </div>
 
-            <div class="mb-2 d-flex align-items-center gap-2" id="grp-cc">
-                <div class="form-check mb-0">
-                    <input class="form-check-input" type="checkbox" id="chk-cc">
-                    <label class="form-check-label" for="chk-cc">Cc :</label>
+            <!-- Cc et Reply-To sur une même ligne (masqués ensemble pour l'Invitation JA) -->
+            <div class="d-flex align-items-center column-gap-4">
+                <div class="mb-2 d-flex align-items-center gap-2 flex-fill" id="grp-cc" style="min-width:0;">
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="chk-cc">
+                        <label class="form-check-label text-nowrap" for="chk-cc">Cc :</label>
+                    </div>
+                    <input type="email" id="txt-cc" class="form-control form-control-sm flex-grow-1" style="min-width:0;" maxlength="150">
                 </div>
-                <input type="email" id="txt-cc" class="form-control form-control-sm" style="max-width:280px;" maxlength="150">
+
+                <div class="mb-2 d-flex align-items-center gap-2 flex-fill" id="grp-replyto" style="min-width:0;">
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="chk-replyto">
+                        <label class="form-check-label text-nowrap" for="chk-replyto">Reply-To :</label>
+                    </div>
+                    <input type="email" id="txt-replyto" class="form-control form-control-sm flex-grow-1" style="min-width:0;" readonly tabindex="-1">
+                </div>
             </div>
 
-            <div class="mb-2 d-flex align-items-center gap-2" id="grp-replyto">
-                <div class="form-check mb-0">
-                    <input class="form-check-input" type="checkbox" id="chk-replyto">
-                    <label class="form-check-label" for="chk-replyto">Reply-To :</label>
-                </div>
-                <input type="email" id="txt-replyto" class="form-control form-control-sm" style="max-width:280px;" readonly tabindex="-1">
-            </div>
-
-            <div class="mb-2" id="grp-sujet">
-                <label class="form-label" for="txt-sujet">Sujet :</label>
-                <input type="text" id="txt-sujet" class="form-control form-control-sm" maxlength="150">
+            <div class="mb-2 d-flex align-items-center gap-2" id="grp-sujet">
+                <label class="form-label mb-0 text-nowrap" for="txt-sujet">Sujet :</label>
+                <input type="text" id="txt-sujet" class="form-control form-control-sm flex-grow-1" maxlength="150">
             </div>
 
             <div class="mb-1 d-flex flex-column flex-grow-1" id="grp-message">
@@ -344,8 +364,11 @@
             </div>
 
             <!-- Cartouche marqueurs (mis à jour selon l'onglet actif) -->
-            <div id="cartouche-marqueurs" class="mb-1">
-                <div class="cart-titre"><i class="bi bi-braces me-1"></i>Marqueurs disponibles — clic pour insérer</div>
+            <div id="cartouche-marqueurs" class="mb-1 replie">
+                <div class="cart-titre" id="cart-bascule" role="button" tabindex="0" aria-expanded="false" title="Afficher / masquer les marqueurs">
+                    <span><i class="bi bi-braces me-1"></i>Marqueurs disponibles — clic pour insérer</span>
+                    <span class="cart-bascule-txt"><span class="txt-masquer">Masquer</span><span class="txt-afficher">Afficher</span><i class="bi bi-chevron-up ms-1"></i></span>
+                </div>
                 <div id="cart-communs">
                     <span class="badge bg-secondary me-1 fw-normal" style="font-size:.68rem;">Tous</span>
                     <code data-cible="message" data-marqueur="{PRENOM}">{PRENOM}</code>
@@ -407,7 +430,18 @@
 
         <!-- Barre d'envoi -->
         <div id="envoi-bar">
-            <button class="btn btn-sm btn-success px-3" id="btn-envoyer">
+            <!-- Pièces jointes (tous les onglets sauf Invitation JA) : déposées sur le serveur, jointes à chaque email -->
+            <div id="grp-pj" class="d-flex align-items-center flex-wrap gap-2" style="font-size:.8rem;">
+                <button type="button" id="btn-pj" class="btn btn-sm btn-outline-secondary py-0" style="font-size:.78rem;">
+                    <i class="bi bi-paperclip me-1"></i>Joindre des fichiers
+                </button>
+                <input type="file" id="fic-pj" multiple hidden accept="<?= esc($pjLimites['accept']) ?>">
+                <span id="pj-liste" class="d-flex flex-wrap gap-1"></span>
+                <span id="pj-info" class="text-muted" style="font-size:.72rem;">
+                    <?= (int) $pjLimites['fichiers'] ?> fichiers max., <?= (int) ($pjLimites['octets'] >> 20) ?> Mo chacun, <?= (int) ($pjLimites['total'] >> 20) ?> Mo au total (PDF, images, Word, Excel…)
+                </span>
+            </div>
+            <button class="btn btn-sm btn-success px-3 ms-auto" id="btn-envoyer">
                 <i class="bi bi-send me-1"></i>Envoyer
             </button>
             <div id="result-envoi"></div>
@@ -547,10 +581,12 @@
 
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
+<?= view('partials/editeur_html') ?>
 <script>
 'use strict';
 
 const CENTRENVOYE_BASE = '<?= site_url('centrenvoye') ?>';
+const EST_ADMIN = <?= !empty($estAdmin) ? 'true' : 'false' ?>;
 const MESSAGERIE_BASE  = <?= json_encode(site_url('messagerie')) ?>;
 const MODELES  = <?= json_encode($modeles, JSON_HEX_TAG | JSON_HEX_APOS) ?>;
 const MON_EMAIL = <?= json_encode($monEmail, JSON_HEX_TAG | JSON_HEX_APOS) ?>;
@@ -620,6 +656,7 @@ function chargerModele(type) {
     $('#invit-bar').toggle(inv);
     $('#invit-message-pied').attr('style', inv ? 'font-size:.78rem;' : 'display:none !important;font-size:.78rem;');
     $('#grp-cc, #grp-replyto').toggle(!inv);
+    $('#grp-pj').toggle(!inv); // l'Invitation JA n'emporte jamais de pièce jointe
     $('#cart-communs').toggle(!inv);
     $('#cartouche-marqueurs').show();
     if (inv) {
@@ -1019,6 +1056,65 @@ $('#btn-apercu-html').on('click', function () {
     new bootstrap.Modal(document.getElementById('modal-apercu-html')).show();
 });
 
+// ── Pièces jointes : dépôt sur le serveur (session), jointes à chaque email ──
+let piecesJointes = []; // [{id, nom, taille}] renvoyé par le serveur
+
+function tailleLisible(o) {
+    return o >= 1048576 ? (o / 1048576).toFixed(1).replace('.', ',') + ' Mo' : Math.max(1, Math.round(o / 1024)) + ' Ko';
+}
+function afficherPj(liste) {
+    piecesJointes = Array.isArray(liste) ? liste : [];
+    const $l = $('#pj-liste').empty();
+    piecesJointes.forEach(p => $l.append(
+        $('<span class="badge text-bg-light border fw-normal d-inline-flex align-items-center gap-1" style="font-size:.76rem;">')
+            .append($('<i class="bi bi-file-earmark">'), $('<span>').text(`${p.nom} (${tailleLisible(p.taille)})`))
+            .append($('<button type="button" class="btn-close btn-pj-retirer" style="font-size:.55rem;" title="Retirer">').attr('data-id', p.id))
+    ));
+    $('#pj-info').toggle(!piecesJointes.length);
+}
+
+$('#btn-pj').on('click', () => $('#fic-pj').trigger('click'));
+$('#fic-pj').on('change', function () {
+    if (!this.files.length) return;
+    const fd = new FormData();
+    Array.from(this.files).forEach(f => fd.append('fichiers[]', f));
+    this.value = '';
+    $('#btn-pj').prop('disabled', true).html('<i class="bi bi-hourglass-split me-1"></i>Dépôt…');
+    $.ajax({ url: `${CENTRENVOYE_BASE}/pj`, method: 'POST', data: fd, processData: false, contentType: false, dataType: 'json' })
+        .done(r => { afficherPj(r.pj); if (!r.ok) nijacToast(r.msg || 'Dépôt impossible.', 'danger', 8000); })
+        .fail(() => toast('Erreur réseau (fichier trop volumineux ?).', false))
+        .always(() => $('#btn-pj').prop('disabled', false).html('<i class="bi bi-paperclip me-1"></i>Joindre des fichiers'));
+});
+$('#pj-liste').on('click', '.btn-pj-retirer', function () {
+    $.post(`${CENTRENVOYE_BASE}/pj/supprimer`, { id: $(this).attr('data-id') }, r => afficherPj(r.pj), 'json')
+        .fail(() => toast('Erreur réseau.', false));
+});
+
+// Marqueurs de l'onglet actif (sections du cartouche affichées, même cartouche replié) → menu
+// « Marqueurs » de l'éditeur HTML, utile en plein écran.
+function marqueursActifs() {
+    const liste = [];
+    $('#cartouche-marqueurs > div:not(#cart-bascule)').each(function () {
+        if (this.style.display === 'none') return;
+        $(this).find('[data-marqueur]').each(function () {
+            const m = String($(this).attr('data-marqueur'));
+            if (!liste.includes(m)) liste.push(m);
+        });
+    });
+    return liste;
+}
+
+// ── Afficher / masquer les marqueurs (masqués par défaut, choix mémorisé) ────
+const CLE_MARQUEURS = 'nijac_en15_marqueurs_visibles';
+function afficherMarqueurs(visible, memoriser) {
+    $('#cartouche-marqueurs').toggleClass('replie', !visible);
+    $('#cart-bascule').attr('aria-expanded', visible ? 'true' : 'false');
+    if (memoriser) { try { localStorage.setItem(CLE_MARQUEURS, visible ? '1' : '0'); } catch (e) { /* stockage indisponible */ } }
+}
+try { afficherMarqueurs(localStorage.getItem(CLE_MARQUEURS) === '1', false); } catch (e) { /* masqués */ }
+$('#cart-bascule').on('click', () => afficherMarqueurs($('#cartouche-marqueurs').hasClass('replie'), true))
+    .on('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(this).trigger('click'); } });
+
 // ── Clic sur un marqueur : insérer à la position du curseur ──────────────────
 let dernierChamp = 'message'; // 'sujet' ou 'message'
 $('#txt-sujet').on('focus', () => { dernierChamp = 'sujet'; });
@@ -1027,6 +1123,8 @@ $('#txt-message').on('focus', () => { dernierChamp = 'message'; });
 $(document).on('click', '[data-marqueur]', function () {
     const ta    = document.getElementById(dernierChamp === 'sujet' ? 'txt-sujet' : 'txt-message');
     const texte = $(this).data('marqueur');
+    // Éditeur HTML visuel (nijac-editeur.js) : insertion au curseur de l'éditeur.
+    if (dernierChamp !== 'sujet' && window.nijacEditeur && nijacEditeur.inserer('txt-message', texte)) return;
     const debut = ta.selectionStart ?? ta.value.length;
     const fin   = ta.selectionEnd   ?? debut;
     ta.setRangeText(texte, debut, fin, 'end');
@@ -1093,7 +1191,9 @@ $('#btn-envoyer').on('click', function () {
     if (!sujet || !message) { toast('Le sujet et le message sont obligatoires.', false); return; }
     if (!ids.length)         { toast('Aucun destinataire sélectionné.', false); return; }
 
-    nijacConfirm(`Envoyer le message à ${ids.length} JA ?\n\n${noms.join('\n')}`, function () {
+    const lignePj = piecesJointes.length
+        ? `\n\nPièce(s) jointe(s) : ${piecesJointes.map(p => p.nom).join(', ')}` : '';
+    nijacConfirm(`Envoyer le message à ${ids.length} JA ?\n\n${noms.join('\n')}${lignePj}`, function () {
         demarrerEnvoi(sujet, message, ids);
     });
 });
@@ -1184,6 +1284,7 @@ function demarrerEnvoi(sujet, message, ids) {
                 saison:  saisonCourante ?? '',
                 cc:      $('#chk-cc').is(':checked') ? $('#txt-cc').val().trim() : '',
                 reply_to: $('#chk-replyto').is(':checked') ? '1' : '0',
+                pj:      JSON.stringify(piecesJointes.map(p => p.id)),
             };
             if (typeActif === 'Convocation') {
                 postData.id_nomination = id;
@@ -1220,6 +1321,8 @@ function demarrerEnvoi(sujet, message, ids) {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 $(function () {
+    // Éditeur HTML visuel (si TinyMCE est installé) ; « Code source » réservé aux administrateurs.
+    if (window.nijacEditeur) nijacEditeur.attacher('txt-message', { source: EST_ADMIN, marqueurs: marqueursActifs });
     chargerModele(typeActif);
     chargerJA();
 });

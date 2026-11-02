@@ -18,6 +18,32 @@ use CodeIgniter\HTTP\ResponseInterface;
  */
 class CentrenvoyeController extends BaseController
 {
+    // ── Pièces jointes (onglets génériques, pas l'Invitation JA) ──────────────────
+    // Déposées une fois (POST centrenvoye/pj), gardées dans WRITEPATH/uploads/en15/ sous un nom
+    // généré par le serveur (32 hex, sans extension), référencées dans la session de
+    // l'utilisateur ($_SESSION['en15_pj'][id] = nom, taille, mime, ts) : un id n'est utilisable
+    // que par la session qui l'a déposé. Jointes à chaque email de envoyerUn() (JA seulement,
+    // pas la copie aux clubs). Vidées au rechargement d'EN15 ; fichiers de plus de 24 h purgés.
+    public const PJ_MAX_FICHIERS = 5;
+    public const PJ_MAX_OCTETS   = 5 * 1024 * 1024;   // par fichier
+    public const PJ_MAX_TOTAL    = 8 * 1024 * 1024;   // par message (≈ 11 Mo une fois encodé)
+    private const PJ_DUREE       = 86400;
+    /** Extension autorisée → types MIME acceptés (finfo ; Office / OpenDocument récents = archive zip). */
+    private const PJ_TYPES = [
+        'pdf'  => ['application/pdf'],
+        'jpg'  => ['image/jpeg'], 'jpeg' => ['image/jpeg'], 'png' => ['image/png'], 'gif' => ['image/gif'],
+        'doc'  => ['application/msword', 'application/vnd.ms-office', 'application/CDFV2', 'application/x-ole-storage'],
+        'xls'  => ['application/vnd.ms-excel', 'application/vnd.ms-office', 'application/CDFV2', 'application/x-ole-storage'],
+        'ppt'  => ['application/vnd.ms-powerpoint', 'application/vnd.ms-office', 'application/CDFV2', 'application/x-ole-storage'],
+        'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/zip'],
+        'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/zip'],
+        'pptx' => ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/zip'],
+        'odt'  => ['application/vnd.oasis.opendocument.text', 'application/zip'],
+        'ods'  => ['application/vnd.oasis.opendocument.spreadsheet', 'application/zip'],
+        'txt'  => ['text/plain'],
+        'csv'  => ['text/plain', 'text/csv', 'application/csv'],
+    ];
+
     public function __construct()
     {
         require_once __DIR__ . '/../../../config/db.php';
@@ -84,6 +110,7 @@ class CentrenvoyeController extends BaseController
     {
         $moi = $this->moi();
         $pdo = getPDO();
+        $this->pjVider(); // page neuve = aucune pièce jointe
 
         $modeles = [];
         // Le code de sécurité (E010) et l'invitation JA ne sont jamais des modèles génériques d'EN15
@@ -106,9 +133,175 @@ class CentrenvoyeController extends BaseController
             'modeles'     => $modeles,
             'monEmail'    => $moi['email'] ?? '',
             'modeDev'     => isModeDeveloppement(),
+            'estAdmin'    => $this->estAdmin(), // bouton « Code source » de l'éditeur HTML
+            'pjLimites'   => [
+                'fichiers' => self::PJ_MAX_FICHIERS,
+                'octets'   => self::PJ_MAX_OCTETS,
+                'total'    => self::PJ_MAX_TOTAL,
+                'accept'   => '.' . implode(',.', array_keys(self::PJ_TYPES)),
+            ],
         ];
 
         return view('centrenvoye_index', $data);
+    }
+
+    // ── Pièces jointes ──────────────────────────────────────────────────────────
+
+    private function pjDossier(): string
+    {
+        return WRITEPATH . 'uploads/en15/';
+    }
+
+    /** Liste publique (id, nom, taille) des pièces jointes de la session, dans l'ordre de dépôt. */
+    private function pjListe(): array
+    {
+        $liste = [];
+        foreach ($_SESSION['en15_pj'] ?? [] as $id => $p) {
+            $liste[] = ['id' => $id, 'nom' => $p['nom'], 'taille' => $p['taille']];
+        }
+
+        return $liste;
+    }
+
+    /** Supprime toutes les pièces jointes de la session (fichiers compris). */
+    private function pjVider(): void
+    {
+        foreach (array_keys($_SESSION['en15_pj'] ?? []) as $id) {
+            @unlink($this->pjDossier() . $id);
+        }
+        unset($_SESSION['en15_pj']);
+    }
+
+    /** Purge les fichiers de plus de 24 h (sessions abandonnées) — noms 32 hex seulement. */
+    private function pjPurger(): void
+    {
+        foreach (glob($this->pjDossier() . '*') ?: [] as $f) {
+            if (preg_match('/^[0-9a-f]{32}$/', basename($f)) && is_file($f) && filemtime($f) < time() - self::PJ_DUREE) {
+                @unlink($f);
+            }
+        }
+    }
+
+    /** Nom affiché / transmis : sans chemin ni caractères de contrôle, 100 caractères max. */
+    private function pjNomPropre(string $nom, string $ext): string
+    {
+        $nom = preg_replace('/[\x00-\x1F\x7F"\\\\\/:*?<>|]+/u', '_', basename(str_replace('\\', '/', $nom))) ?? '';
+        $nom = trim($nom, " .\t");
+        if (mb_strlen($nom) > 100) {
+            $nom = mb_substr(pathinfo($nom, PATHINFO_FILENAME), 0, 95) . '.' . $ext;
+        }
+
+        return $nom !== '' ? $nom : 'piece-jointe.' . $ext;
+    }
+
+    /** POST centrenvoye/pj (multipart fichiers[]) : dépose une ou plusieurs pièces jointes. */
+    public function pjAjouter(): ResponseInterface
+    {
+        $fichiers = $this->request->getFileMultiple('fichiers') ?? [];
+        if (!$fichiers) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Aucun fichier reçu.', 'pj' => $this->pjListe()]);
+        }
+
+        $dossier = $this->pjDossier();
+        if (!is_dir($dossier) && !@mkdir($dossier, 0755, true)) {
+            log_message('error', '[EN15] pièces jointes : dossier ' . $dossier . ' impossible à créer');
+
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Dépôt des pièces jointes impossible (dossier serveur).', 'pj' => $this->pjListe()]);
+        }
+        $this->pjPurger();
+
+        $_SESSION['en15_pj'] ??= [];
+        $total   = array_sum(array_column($_SESSION['en15_pj'], 'taille'));
+        $erreurs = [];
+        $finfo   = new \finfo(FILEINFO_MIME_TYPE);
+
+        foreach ($fichiers as $f) {
+            $nomClient = (string) $f->getClientName();
+            if (!$f->isValid()) {
+                $erreurs[] = "« {$nomClient} » : " . ($f->getError() === UPLOAD_ERR_INI_SIZE || $f->getError() === UPLOAD_ERR_FORM_SIZE
+                    ? 'fichier trop volumineux pour le serveur.' : 'dépôt incomplet.');
+                continue;
+            }
+            $ext    = strtolower(pathinfo($nomClient, PATHINFO_EXTENSION));
+            $taille = (int) $f->getSize();
+            $mime   = (string) $finfo->file($f->getTempName());
+            if (!isset(self::PJ_TYPES[$ext]) || !in_array($mime, self::PJ_TYPES[$ext], true)) {
+                $erreurs[] = "« {$nomClient} » : type de fichier non autorisé.";
+                continue;
+            }
+            if ($taille <= 0 || $taille > self::PJ_MAX_OCTETS) {
+                $erreurs[] = "« {$nomClient} » : " . ($taille <= 0 ? 'fichier vide.' : 'plus de ' . (self::PJ_MAX_OCTETS >> 20) . ' Mo.');
+                continue;
+            }
+            if (count($_SESSION['en15_pj']) >= self::PJ_MAX_FICHIERS) {
+                $erreurs[] = "« {$nomClient} » : " . self::PJ_MAX_FICHIERS . ' pièces jointes au maximum.';
+                continue;
+            }
+            if ($total + $taille > self::PJ_MAX_TOTAL) {
+                $erreurs[] = "« {$nomClient} » : total des pièces jointes limité à " . (self::PJ_MAX_TOTAL >> 20) . ' Mo.';
+                continue;
+            }
+
+            $id = bin2hex(random_bytes(16));
+            try {
+                $f->move($dossier, $id);
+            } catch (\Throwable $e) {
+                log_message('error', '[EN15] pièce jointe non enregistrée : ' . $e->getMessage());
+                $erreurs[] = "« {$nomClient} » : enregistrement impossible sur le serveur.";
+                continue;
+            }
+            // Le MIME envoyé au destinataire est celui de l'extension (un docx détecté « zip » reste un docx).
+            $_SESSION['en15_pj'][$id] = [
+                'nom'    => $this->pjNomPropre($nomClient, $ext),
+                'taille' => $taille,
+                'mime'   => self::PJ_TYPES[$ext][0],
+                'ts'     => time(),
+            ];
+            $total += $taille;
+        }
+
+        return $this->response->setJSON([
+            'ok'  => !$erreurs,
+            'msg' => implode("\n", $erreurs),
+            'pj'  => $this->pjListe(),
+        ]);
+    }
+
+    /** POST centrenvoye/pj/supprimer (id) : retire une pièce jointe de la session. */
+    public function pjSupprimer(): ResponseInterface
+    {
+        $id = (string) $this->request->getPost('id');
+        if (preg_match('/^[0-9a-f]{32}$/', $id) && isset($_SESSION['en15_pj'][$id])) {
+            @unlink($this->pjDossier() . $id);
+            unset($_SESSION['en15_pj'][$id]);
+        }
+
+        return $this->response->setJSON(['ok' => true, 'pj' => $this->pjListe()]);
+    }
+
+    /**
+     * Pièces jointes demandées par envoyerUn() (JSON d'ids) → [[chemin, nom, mime], …],
+     * ou message d'erreur si l'une n'appartient pas à la session ou a disparu.
+     *
+     * @return array{0: array, 1: ?string}
+     */
+    private function pjPourEnvoi(string $brut): array
+    {
+        $ids = json_decode($brut !== '' ? $brut : '[]', true);
+        if (!is_array($ids)) {
+            return [[], 'Liste des pièces jointes invalide.'];
+        }
+        $pj = [];
+        foreach (array_unique(array_map('strval', $ids)) as $id) {
+            $p      = $_SESSION['en15_pj'][$id] ?? null;
+            $chemin = $this->pjDossier() . $id;
+            if (!preg_match('/^[0-9a-f]{32}$/', $id) || $p === null || !is_file($chemin)) {
+                return [[], 'Pièce jointe introuvable ou expirée : retirez-la puis joignez-la de nouveau.'];
+            }
+            $pj[] = [$chemin, $p['nom'], $p['mime']];
+        }
+
+        return [$pj, null];
     }
 
     public function journees(): ResponseInterface
@@ -415,6 +608,10 @@ class CentrenvoyeController extends BaseController
         if (!$identifiant || $sujet === '' || $message === '') {
             return $this->response->setJSON(['ok' => false, 'msg' => 'Paramètres manquants.']);
         }
+        [$piecesJointes, $errPj] = $this->pjPourEnvoi(trim((string) $this->request->getPost('pj')));
+        if ($errPj !== null) {
+            return $this->response->setJSON(['ok' => false, 'msg' => $errPj]);
+        }
 
         $errRl = checkRateLimit(1);
         if ($errRl !== null) {
@@ -535,6 +732,9 @@ class CentrenvoyeController extends BaseController
             $mail->Body    = $corps;
             if ($isHtml) {
                 $mail->AltBody = altBodyDepuisHtml($corps);
+            }
+            foreach ($piecesJointes as [$chemin, $nomPj, $mimePj]) {
+                $mail->addAttachment($chemin, $nomPj, 'base64', $mimePj);
             }
             $mail->send();
             enregistrerEnvois(1);
