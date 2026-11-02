@@ -40,7 +40,7 @@
 <div id="contenu">
     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
         <div class="small text-muted">
-            Toutes mes nominations, passées et à venir. Mêmes règles que le lien de convocation (EN21) : accusé de réception possible jusqu'au jour de la rencontre ;
+            Toutes mes nominations, passées et à venir. Mêmes règles que le lien de convocation (EN21) :
             saisie des frais à partir du jour de la rencontre (le jour même, après l'accusé de réception).
             Indemnité forfaitaire <?= number_format($indemniteForfait, 2, ',', ' ') ?> € et
             <?= number_format($tauxKm, 2, ',', ' ') ?> €/km (arbitrage CRA uniquement).
@@ -160,7 +160,7 @@ const BASE      = <?= json_encode(site_url('ja/frais')) ?>;
 const INDEMNITE = <?= json_encode($indemniteForfait) ?>;
 const TAUX_KM   = <?= json_encode($tauxKm) ?>;
 const AUJOURDHUI = <?= json_encode(date('Y-m-d')) ?>;
-let lignes = [], justifDispo = false, accuseDispo = false, courante = null;
+let lignes = [], justifDispo = false, courante = null;
 // Tri par défaut : date croissante (plus ancienne → plus future), comme l'ordre renvoyé par le serveur.
 const sortState = { col: '0', asc: true };
 
@@ -188,9 +188,6 @@ function afficher() {
         const $accuse = $('<td>').attr('data-sort', n.AccuseReception || '');
         if (n.AccuseReception) {
             $accuse.text('Le ' + dateHeureFr(n.AccuseReception));
-        } else if (accuseDispo && n.Accusable) {
-            $accuse.append($('<button type="button" class="btn btn-sm btn-outline-success py-0 btn-accuser">')
-                .attr('data-id', n.Id_Nomination).html('<i class="bi bi-check2-circle me-1"></i>Accuser réception'));
         } else {
             $accuse.text('—');
         }
@@ -276,7 +273,6 @@ function charger(rouvrirId = null) {
         if (!r.ok) { nijacToast(r.msg || 'Erreur de chargement.', 'danger'); return; }
         lignes = r.data || [];
         justifDispo = !!r.justificatifDispo;
-        accuseDispo = !!r.accuseDispo;
         afficher();
         if (rouvrirId) {
             const n = lignes.find(x => String(x.Id_Nomination) === String(rouvrirId));
@@ -298,15 +294,6 @@ function majBlocJustif(n) {
     }
     $('#mf-justif-fichier').val('');
 }
-
-// ── Accusé de réception (ConvocationJaController::accuser(), réutilisé) ──
-$(document).on('click', '.btn-accuser', function () {
-    const id = $(this).data('id');
-    $.post(`${BASE}/accuse`, { id_nomination: id }, function (r) {
-        if (r.ok) { nijacToast('Accusé de réception enregistré.', 'success'); charger(); }
-        else nijacToast(r.err || 'Action impossible.', 'danger');
-    }, 'json').fail(() => nijacToast('Erreur réseau.', 'danger'));
-});
 
 // ── Ouverture de la saisie ──
 $(document).on('click', '.btn-saisir', function () {
