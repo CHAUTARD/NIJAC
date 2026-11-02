@@ -650,6 +650,53 @@ function initTableConfiguration(\PDO $pdo): void
     // Salles ↔ clubs en plusieurs-à-plusieurs : table club_salle (salle.Id_Club / EstPrincipale
     // obsolètes, conservées). Gère son propre try/catch (voir assurerTableClubSalle()).
     assurerTableClubSalle($pdo);
+
+    // Copies personnelles de messagerie supprimées avec leur utilisateur (FK ON DELETE CASCADE, au
+    // lieu de SET NULL qui les transformait en messages communs). Gère son propre try/catch.
+    assurerCascadeMessagerieUtilisateur($pdo);
+}
+
+/**
+ * FK messagerie.Id_Utilisateur → utilisateur.Id_Utilisateur en ON DELETE CASCADE / ON UPDATE CASCADE.
+ * Id_Utilisateur NULL = message commun, renseigné = copie personnelle : avec l'ancien ON DELETE SET NULL,
+ * supprimer un utilisateur (EA86) transformait ses copies en messages communs. Une FK existante avec une
+ * autre règle est supprimée puis recréée (nom fk_messagerie_utilisateur) ; idempotent (rien si déjà en
+ * CASCADE). Les copies devenues communes AVANT cette migration ne sont pas identifiables : non touchées.
+ */
+function assurerCascadeMessagerieUtilisateur(\PDO $pdo): void
+{
+    try {
+        $fks = $pdo->query(
+            "SELECT k.CONSTRAINT_NAME, rc.DELETE_RULE FROM information_schema.KEY_COLUMN_USAGE k
+             JOIN information_schema.REFERENTIAL_CONSTRAINTS rc
+               ON rc.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA AND rc.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+             WHERE k.TABLE_SCHEMA = DATABASE() AND LOWER(k.TABLE_NAME) = 'messagerie'
+               AND k.COLUMN_NAME = 'Id_Utilisateur' AND LOWER(k.REFERENCED_TABLE_NAME) = 'utilisateur'"
+        )->fetchAll(\PDO::FETCH_ASSOC);
+
+        $ok = false;
+        foreach ($fks as $fk) {
+            if (strtoupper((string) $fk['DELETE_RULE']) === 'CASCADE' && !$ok) {
+                $ok = true;
+                continue;
+            }
+            $pdo->exec('ALTER TABLE messagerie DROP FOREIGN KEY `' . str_replace('`', '', $fk['CONSTRAINT_NAME']) . '`');
+            error_log('[NIJAC] messagerie : FK ' . $fk['CONSTRAINT_NAME'] . ' (ON DELETE ' . $fk['DELETE_RULE'] . ') supprimée');
+        }
+        if (!$ok) {
+            // Copies orphelines (utilisateur inexistant) : la FK serait refusée — supprimées et journalisées.
+            $orph = $pdo->exec('DELETE m FROM messagerie m LEFT JOIN utilisateur u ON u.Id_Utilisateur = m.Id_Utilisateur
+                WHERE m.Id_Utilisateur IS NOT NULL AND u.Id_Utilisateur IS NULL');
+            if ($orph) {
+                error_log("[NIJAC] messagerie : $orph copie(s) personnelle(s) sans utilisateur supprimée(s)");
+            }
+            $pdo->exec('ALTER TABLE messagerie ADD CONSTRAINT fk_messagerie_utilisateur FOREIGN KEY (Id_Utilisateur)
+                REFERENCES utilisateur (Id_Utilisateur) ON DELETE CASCADE ON UPDATE CASCADE');
+            error_log('[NIJAC] messagerie : FK fk_messagerie_utilisateur créée en ON DELETE CASCADE');
+        }
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] FK messagerie.Id_Utilisateur → utilisateur (ON DELETE CASCADE) : ' . $e->getMessage());
+    }
 }
 
 /**
@@ -3401,6 +3448,12 @@ function controlerModeleInvitationJa(?array $modele): ?string
     }
     if (str_contains((string) ($modele['Sujet'] ?? ''), '{MOT_DE_PASSE}')) {
         return 'Le sujet du message « ' . TYPE_MESSAGE_INVITATION_JA . ' » (EA93) ne doit pas contenir {MOT_DE_PASSE}.';
+    }
+    // Le mot de passe s'affiche en texte, jamais dans une balise (lien, image, attribut) : une URL
+    // contenant {MOT_DE_PASSE} l'enverrait à un site tiers à l'ouverture ou au clic. Depuis EN15, chaque
+    // nominateur peut enregistrer sa copie de ce message.
+    if (preg_match('/<[^>]*\{MOT_DE_PASSE\}[^>]*>/', $corps)) {
+        return 'Le marqueur {MOT_DE_PASSE} doit apparaître dans le texte du message, pas dans un lien, une image ou un attribut.';
     }
 
     return null;

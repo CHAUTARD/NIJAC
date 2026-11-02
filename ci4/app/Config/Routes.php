@@ -131,6 +131,9 @@ $routes->get('centrenvoye/invitation-ja', 'CentrenvoyeController::invitationJa',
 // par la route existante PUT messagerie/(:segment) (droits EA93 inchangés).
 $routes->get('centrenvoye/invitation-ja/modele', 'CentrenvoyeController::invitationJaModele', ['filter' => 'auth']);
 $routes->post('centrenvoye/invitation-ja/apercu', 'CentrenvoyeController::invitationJaApercu', ['filter' => 'auth']);
+// Copie personnelle « Invitation JA » d'un nominateur (ses seuls envois) : enregistrer / revenir au message commun.
+$routes->post('centrenvoye/invitation-ja/enregistrer', 'CentrenvoyeController::invitationJaEnregistrer', ['filter' => 'auth']);
+$routes->post('centrenvoye/invitation-ja/commun', 'CentrenvoyeController::invitationJaCommun', ['filter' => 'auth']);
 $routes->post('centrenvoye/invitation-ja/verifier','CentrenvoyeController::invitationJaVerifier', ['filter' => 'auth']);
 $routes->post('centrenvoye/invitation-ja/envoyer-un', 'CentrenvoyeController::invitationJaEnvoyerUn', ['filter' => 'auth']);
 

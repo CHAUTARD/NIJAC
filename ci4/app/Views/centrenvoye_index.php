@@ -295,10 +295,14 @@
 
             <!-- Invitation JA : message système (EA93 ; aperçu pour tous, édition admin ci-dessous), comptes créés à l'envoi -->
             <div id="invit-bar" class="mb-2" style="display:none;background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:.6rem .75rem;font-size:.84rem;">
-                <div class="fw-semibold mb-1" style="color:#8d6e00;">
-                    <i class="bi bi-person-badge me-1"></i>Annoncer aux JA qu'ils peuvent consulter leurs informations sur NIJAC
+                <div class="fw-semibold mb-1 d-flex justify-content-between align-items-center" id="invit-bascule"
+                     role="button" tabindex="0" aria-expanded="false" aria-controls="invit-infos"
+                     title="Afficher / masquer les informations" style="color:#8d6e00;cursor:pointer;user-select:none;">
+                    <span><i class="bi bi-person-badge me-1"></i>Annoncer aux JA qu'ils peuvent consulter leurs informations sur NIJAC</span>
+                    <span class="text-nowrap ms-2" style="font-size:.78rem;"><span id="invit-bascule-txt">Afficher les informations</span><i class="bi bi-chevron-down ms-1" id="invit-bascule-ico"></i></span>
                 </div>
-                <ul class="mb-2 ps-3">
+                <!-- Informations masquées par défaut (choix mémorisé dans le navigateur) -->
+                <ul class="mb-2 ps-3" id="invit-infos" style="display:none;">
                     <li>Pour chaque JA coché, un <strong>compte NIJAC de rôle JA</strong> est créé à l'envoi : identifiant = son adresse email,
                         <strong>mot de passe provisoire</strong> généré par le serveur et envoyé uniquement dans l'email (jamais affiché ici),
                         changement obligatoire à la première connexion, puis menu E011.</li>
@@ -307,7 +311,7 @@
                         envoyer un <strong>nouveau mot de passe</strong> (l'ancien cesse de fonctionner et leurs sessions ouvertes sont fermées).</li>
                     <li>Ignorés avec motif : JA sans email valide, adresse déjà utilisée comme login par un autre compte, identifiant
                         (= n° de fiche JA) déjà pris par un autre compte, compte désactivé — aucun compte existant n'est jamais écrasé.</li>
-                    <li>Texte du message : message système « Invitation JA » affiché dans le champ Message ci-dessous (bouton « Aperçu HTML »), modifiable par un administrateur ici ou en EA93 ; l'envoi utilise le message enregistré.</li>
+                    <li>Texte du message : message « Invitation JA » affiché dans le champ Message ci-dessous (bouton « Aperçu HTML »), modifiable par un nominateur ici : une copie du message est créée pour son seul usage (un administrateur modifie le message commun en EA93) ; l'envoi utilise le message enregistré.</li>
                 </ul>
                 <div class="form-check mb-1">
                     <input class="form-check-input" type="checkbox" id="chk-regenerer">
@@ -355,9 +359,14 @@
                 <textarea id="txt-message" class="form-control form-control-sm flex-grow-1"></textarea>
                 <!-- Invitation JA : message système retrouvé par Type ; lecture seule hors administrateur -->
                 <div id="invit-message-pied" class="mt-1 d-flex align-items-center gap-2 flex-wrap" style="display:none !important;font-size:.78rem;">
-                    <span id="invit-lecture-seule" class="text-muted"><i class="bi bi-lock me-1"></i>Lecture seule — modifiable par un administrateur (ici ou en EA93).</span>
-                    <span id="invit-absent" class="text-muted" style="display:none;">Message système « Invitation JA » pas encore créé (chargez EA98) : texte par défaut affiché.</span>
-                    <button type="button" id="btn-invit-enregistrer" class="btn btn-sm btn-primary py-0 ms-auto" style="display:none;">
+                    <span id="invit-absent" class="text-muted" style="display:none;">Message système « Invitation JA » pas encore créé (chargez EA98) : texte par défaut affiché, non modifiable.</span>
+                    <!-- Message utilisé : commun (administrateur, ou nominateur sans copie) / copie personnelle du nominateur -->
+                    <span id="invit-source" class="text-muted"></span>
+                    <button type="button" id="btn-invit-commun" class="btn btn-sm btn-outline-secondary py-0 ms-auto" style="display:none;"
+                            title="Supprimer votre copie et utiliser de nouveau le message commun">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Revenir au message commun
+                    </button>
+                    <button type="button" id="btn-invit-enregistrer" class="btn btn-sm btn-primary py-0" style="display:none;">
                         <i class="bi bi-floppy me-1"></i>Enregistrer le message
                     </button>
                 </div>
@@ -850,10 +859,11 @@ function lancerInvitations(ids, regen) {
 }
 
 // ── Invitation JA : Sujet / Message = message système (comme EA93) ──────────
-// Champ Message modifiable par un administrateur seulement (sinon lecture seule) ; bouton « Aperçu HTML »
+// Champ Message modifiable par tout rôle d'EN15 : chacun enregistre sa copie personnelle (créée au premier
+// enregistrement, ses seuls envois) ; le message commun ne se modifie qu'en EA93 ; bouton « Aperçu HTML »
 // (EA93) : rendu par le serveur avec des valeurs d'exemple échappées, modale + iframe sandbox (aucun
 // script). Enregistrement : PUT messagerie/{Id}, mêmes contrôles qu'EA93.
-let modeleInvitation = null, apercuEnregistre = null;
+let modeleInvitation = null, apercuEnregistre = null, peutEditerInvitation = false;
 
 // Comme EA93 : bouton Aperçu HTML masqué pour un message en texte brut.
 function estMessageHtml(texte) {
@@ -871,11 +881,15 @@ function chargerModeleInvitation() {
         modeleInvitation = r.modele || null;
         apercuEnregistre = r.apercu || null;
         const editable = !!r.peut_editer;
+        peutEditerInvitation = editable;
         $('#txt-sujet').val(modeleInvitation ? modeleInvitation.sujet : '').prop('readonly', !editable);
         $('#txt-message').val(modeleInvitation ? modeleInvitation.message : '').prop('readonly', !editable);
-        $('#invit-lecture-seule').toggle(!editable && !r.absent);
         $('#invit-absent').toggle(!!r.absent);
-        $('#btn-invit-enregistrer').toggle(editable);
+        $('#invit-source').toggle(editable).html(r.perso
+            ? '<i class="bi bi-person-check me-1"></i>Votre copie personnelle — utilisée pour vos seuls envois.'
+            : '<i class="bi bi-people me-1"></i>Message commun (modifiable en EA93) — en l\'enregistrant ici, vous créez votre copie personnelle.');
+        $('#btn-invit-commun').toggle(editable && !!r.perso);
+        $('#btn-invit-enregistrer').toggle(editable).toggleClass('ms-auto', !r.perso);
         $('#cart-invitation').toggle(editable);
         $('#cartouche-marqueurs').toggle(editable);
         majBoutonApercu();
@@ -888,9 +902,9 @@ function montrerApercuInvitation(apercu) {
     bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-apercu-invit')).show();
 }
 
-// Administrateur : aperçu du contenu du champ (brouillon, rendu serveur) ; autres rôles : message enregistré.
+// Aperçu du contenu du champ (brouillon, rendu serveur) ; message non modifiable (avant EA98) : aperçu enregistré.
 function apercuInvitation() {
-    if (!(modeleInvitation && modeleInvitation.id)) {
+    if (!peutEditerInvitation) {
         if (apercuEnregistre) montrerApercuInvitation(apercuEnregistre);
         return;
     }
@@ -908,6 +922,7 @@ function controleInvitationClient(sujet, corps) {
     if (!sujet || !corps) erreurs.push('Le sujet et le message sont obligatoires.');
     if (!corps.includes('{LOGIN}') || !corps.includes('{MOT_DE_PASSE}')) erreurs.push('Le message doit contenir {LOGIN} et {MOT_DE_PASSE}.');
     if (sujet.includes('{MOT_DE_PASSE}')) erreurs.push('Le sujet ne doit pas contenir {MOT_DE_PASSE}.');
+    if (/<[^>]*\{MOT_DE_PASSE\}[^>]*>/.test(corps)) erreurs.push('{MOT_DE_PASSE} doit être dans le texte, pas dans un lien, une image ou un attribut.');
     const sansMso = corps.replace(/<!--<!\[endif\]-->|<!--\[if[^\]]*\]><!-->|<!--\[if[^\]]*\]>|<!\[endif\]-->/gi, '');
     if (sansMso.includes('<!--')) avert.push('commentaire HTML');
     if (/display\s*:\s*none|visibility\s*:\s*hidden|mso-hide\s*:\s*all|font-size\s*:\s*0(?![.\d])|max-height\s*:\s*0(?![.\d])|opacity\s*:\s*0(?![.\d])/i.test(corps)) avert.push('texte caché');
@@ -915,28 +930,41 @@ function controleInvitationClient(sujet, corps) {
 }
 
 $('#btn-invit-enregistrer').on('click', function () {
-    if (!(modeleInvitation && modeleInvitation.id)) return;
+    if (!peutEditerInvitation) return;
     const sujet = $('#txt-sujet').val().trim(), corps = $('#txt-message').val().trim();
     const c = controleInvitationClient(sujet, corps);
     if (c.erreurs.length) { toast(c.erreurs.join(' '), false); return; }
+    enregistrerCopieInvitation(sujet, corps, c.avert);
+});
+
+// Copie personnelle « Invitation JA » (tout rôle d'EN15 ; créée au premier enregistrement, ses seuls envois).
+function enregistrerCopieInvitation(sujet, corps, avert) {
     nijacConfirm(
-        'Enregistrer le message système « Invitation JA » ? Il sera utilisé pour toutes les prochaines invitations.'
-        + (c.avert.length ? `\n\nAttention (anti-spam) : ${c.avert.join(', ')} détecté(s) — il vaut mieux les retirer.` : ''),
+        'Enregistrer votre copie du message « Invitation JA » ? Elle sera utilisée pour vos seuls envois ; les autres nominateurs gardent leur message.'
+        + (avert.length ? `\n\nAttention (anti-spam) : ${avert.join(', ')} détecté(s) — il vaut mieux les retirer.` : ''),
         function () {
-            $.ajax({
-                url: `${MESSAGERIE_BASE}/${encodeURIComponent(modeleInvitation.id)}`, method: 'PUT', dataType: 'json',
-                data: { type: INVITATION, sujet, message: corps, cc: String(modeleInvitation.cc), replyto: String(modeleInvitation.replyto) },
-            }).done(function (r) {
-                if (!r.ok) { toast(r.msg || 'Enregistrement impossible.', false); return; }
-                toast(r.msg || 'Message mis à jour.');
+            $.post(`${CENTRENVOYE_BASE}/invitation-ja/enregistrer`, { sujet, message: corps }, function (r) {
+                if (!r.ok) { toast(r.msg || r.err || 'Enregistrement impossible.', false); return; }
+                toast(r.msg);
                 if (r.avertissement) nijacToast(r.avertissement, 'warning', 8000);
                 chargerModeleInvitation();
-                chargerInvitation(); // erreur_modele éventuelle levée
-            }).fail(() => toast("Erreur réseau lors de l'enregistrement.", false));
+                chargerInvitation();
+            }, 'json').fail(() => toast("Erreur réseau lors de l'enregistrement.", false));
         },
         null,
-        { type: 'question', title: 'Message « Invitation JA »', confirmLabel: 'Enregistrer' }
+        { type: 'question', title: 'Votre message « Invitation JA »', confirmLabel: 'Enregistrer' }
     );
+}
+
+$('#btn-invit-commun').on('click', function () {
+    nijacConfirm('Supprimer votre copie du message « Invitation JA » et utiliser de nouveau le message commun ?', function () {
+        $.post(`${CENTRENVOYE_BASE}/invitation-ja/commun`, {}, function (r) {
+            if (!r.ok) { toast(r.msg || r.err || 'Opération impossible.', false); return; }
+            toast(r.msg);
+            chargerModeleInvitation();
+            chargerInvitation();
+        }, 'json').fail(() => toast('Erreur réseau.', false));
+    }, null, { type: 'warning', title: 'Message « Invitation JA »', confirmLabel: 'Revenir au message commun' });
 });
 
 // ── Chargement JA ─────────────────────────────────────────────────────────────
@@ -1103,6 +1131,19 @@ function marqueursActifs() {
     });
     return liste;
 }
+
+// ── Invitation JA : afficher / masquer les informations (masquées par défaut, choix mémorisé) ──
+const CLE_INVIT_INFOS = 'nijac_en15_invit_infos_visibles';
+function afficherInfosInvitation(visible, memoriser) {
+    $('#invit-infos').toggle(visible);
+    $('#invit-bascule').attr('aria-expanded', visible ? 'true' : 'false');
+    $('#invit-bascule-txt').text(visible ? 'Masquer les informations' : 'Afficher les informations');
+    $('#invit-bascule-ico').toggleClass('bi-chevron-down', !visible).toggleClass('bi-chevron-up', visible);
+    if (memoriser) { try { localStorage.setItem(CLE_INVIT_INFOS, visible ? '1' : '0'); } catch (e) { /* stockage indisponible */ } }
+}
+try { afficherInfosInvitation(localStorage.getItem(CLE_INVIT_INFOS) === '1', false); } catch (e) { /* masquées */ }
+$('#invit-bascule').on('click', () => afficherInfosInvitation($('#invit-infos').css('display') === 'none', true))
+    .on('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(this).trigger('click'); } });
 
 // ── Afficher / masquer les marqueurs (masqués par défaut, choix mémorisé) ────
 const CLE_MARQUEURS = 'nijac_en15_marqueurs_visibles';

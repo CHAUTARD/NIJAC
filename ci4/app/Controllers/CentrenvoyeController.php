@@ -946,9 +946,28 @@ class CentrenvoyeController extends BaseController
     // corps de l'email : jamais journalisé, jamais renvoyé au navigateur.
 
     /** Modèle système « Invitation JA » (Id_Utilisateur 0 = jamais de copie personnelle). */
+    /**
+     * Message « Invitation JA » utilisé par l'utilisateur connecté : sa copie personnelle (enregistrée
+     * depuis EN15) en priorité, sinon le message système commun (resoudreModeleMessagerieParType()).
+     */
     private function modeleInvitationJa(\PDO $pdo): ?array
     {
-        return resoudreModeleMessagerieParType($pdo, TYPE_MESSAGE_INVITATION_JA, 0);
+        return resoudreModeleMessagerieParType($pdo, TYPE_MESSAGE_INVITATION_JA, $this->idUtilisateur());
+    }
+
+    private function idUtilisateur(): int
+    {
+        return (int) ($this->moi()['id'] ?? 0);
+    }
+
+    /** Copie personnelle « Invitation JA » de l'utilisateur connecté (ligne messagerie) ou null. */
+    private function copieInvitationJa(\PDO $pdo): ?array
+    {
+        $st = $pdo->prepare('SELECT Id_Messagerie, Sujet, Message FROM messagerie
+            WHERE Type = ? AND Id_Utilisateur = ? ORDER BY Id_Messagerie LIMIT 1');
+        $st->execute([TYPE_MESSAGE_INVITATION_JA, $this->idUtilisateur()]);
+
+        return $st->fetch(\PDO::FETCH_ASSOC) ?: null;
     }
 
     /** Administrateur ? (mêmes droits d'édition des messages système qu'EA93, MessagerieController::isAdmin()). */
@@ -961,9 +980,9 @@ class CentrenvoyeController extends BaseController
      * GET centrenvoye/invitation-ja/modele : aperçu du message « Invitation JA » tel qu'il sera envoyé
      * (message système retrouvé par Type — même ligne que resoudreModeleMessagerieParType(…, 0) —, sinon
      * corps par défaut), rendu côté serveur avec des valeurs d'exemple (apercuMessageInvitationJa()).
-     * Tout rôle d'EN15 : `apercu` + `modele` (Sujet, Message bruts — ce Type seulement, affichés en lecture
-     * seule). Administrateur : en plus Id, Cc, ReplyTo pour l'édition, enregistrée par PUT messagerie/{Id}
-     * (contrôles d'EA93 inchangés).
+     * Tout rôle d'EN15 (administrateur compris) : `apercu` + `modele` (Sujet, Message bruts — ce Type
+     * seulement) du message qu'il utilise (copie personnelle d'abord), `perso` (copie existante) ;
+     * enregistrement par invitationJaEnregistrer(). Le message commun ne se modifie qu'en EA93.
      * `absent` = aucune ligne système (avant EA98) : aperçu du corps par défaut, édition impossible.
      */
     public function invitationJaModele(): ResponseInterface
@@ -974,29 +993,28 @@ class CentrenvoyeController extends BaseController
                 WHERE Type = ? AND Id_Utilisateur IS NULL ORDER BY Id_Messagerie LIMIT 1');
             $st->execute([TYPE_MESSAGE_INVITATION_JA]);
             $ligne  = $st->fetch(\PDO::FETCH_ASSOC) ?: null;
+            $copie  = $this->copieInvitationJa($pdo);
             $modele = $this->modeleInvitationJa($pdo);
 
+            // Tout rôle d'EN15, administrateur compris, édite ici SA copie personnelle (POST
+            // invitation-ja/enregistrer), utilisée pour ses seuls envois ; sans copie, il part du message
+            // commun, modifiable uniquement en EA93 (administrateur). Ligne système requise (sinon Type
+            // absent de l'ENUM avant EA98).
             $rep = [
                 'ok'            => true,
                 'apercu'        => apercuMessageInvitationJa($modele),
                 'absent'        => $ligne === null,
                 'erreur_modele' => controlerModeleInvitationJa($modele),
-                'peut_editer'   => $this->estAdmin() && $ligne !== null,
+                'peut_editer'   => $ligne !== null,
+                'perso'         => $copie !== null,
             ];
-            // Code source (Sujet / Message) fourni à tout rôle d'EN15 pour CE Type seulement (champ Message en
-            // lecture seule hors administrateur) : le corps ne contient que des marqueurs, aucune donnée
-            // personnelle. Id / Cc / ReplyTo (nécessaires à l'enregistrement) : administrateur seulement.
+            // Code source (Sujet / Message) du message utilisé par cet utilisateur : le corps ne contient
+            // que des marqueurs, aucune donnée personnelle.
+            $source = $copie ?? $ligne;
             $rep['modele'] = [
-                'sujet'   => $ligne ? (string) $ligne['Sujet'] : SUJET_INVITATION_JA,
-                'message' => $ligne ? (string) $ligne['Message'] : corpsParDefautInvitationJa(),
+                'sujet'   => $source ? (string) $source['Sujet'] : SUJET_INVITATION_JA,
+                'message' => $source ? (string) $source['Message'] : corpsParDefautInvitationJa(),
             ];
-            if ($rep['peut_editer']) {
-                $rep['modele'] += [
-                    'id'      => (int) $ligne['Id_Messagerie'],
-                    'cc'      => (int) $ligne['Cc'],
-                    'replyto' => (int) $ligne['ReplyTo'],
-                ];
-            }
 
             return $this->response->setJSON($rep);
         } catch (\Throwable $e) {
@@ -1005,16 +1023,13 @@ class CentrenvoyeController extends BaseController
     }
 
     /**
-     * POST centrenvoye/invitation-ja/apercu (sujet, message) : aperçu d'un BROUILLON (administrateur
-     * seulement, rien n'est enregistré) — même rendu serveur que invitationJaModele(), plus `erreur`
+     * POST centrenvoye/invitation-ja/apercu (sujet, message) : aperçu d'un BROUILLON (tout rôle d'EN15,
+     * rien n'est enregistré) — même rendu serveur que invitationJaModele(), plus `erreur`
      * (controlerModeleInvitationJa(), bloquant à l'enregistrement) et `avertissement`
      * (avertissementsHtmlEmail(), non bloquant).
      */
     public function invitationJaApercu(): ResponseInterface
     {
-        if (!$this->estAdmin()) {
-            return $this->response->setJSON(['ok' => false, 'msg' => 'Action réservée aux administrateurs.']);
-        }
         $brouillon = [
             'Sujet'   => trim((string) ($this->request->getPost('sujet') ?? '')),
             'Message' => trim((string) ($this->request->getPost('message') ?? '')),
@@ -1026,6 +1041,65 @@ class CentrenvoyeController extends BaseController
             'erreur'        => controlerModeleInvitationJa($brouillon),
             'avertissement' => avertissementsHtmlEmail($brouillon['Message']),
         ]);
+    }
+
+    /**
+     * POST centrenvoye/invitation-ja/enregistrer (sujet, message) : enregistre la copie personnelle
+     * « Invitation JA » de l'utilisateur connecté, administrateur compris (créée au premier
+     * enregistrement, Cc / ReplyTo repris du message commun), utilisée pour ses seuls envois. Le message
+     * commun ne se modifie qu'en EA93. Mêmes contrôles que le message commun.
+     */
+    public function invitationJaEnregistrer(): ResponseInterface
+    {
+        $sujet   = trim((string) ($this->request->getPost('sujet') ?? ''));
+        $message = trim((string) ($this->request->getPost('message') ?? ''));
+        if ($sujet === '' || $message === '') {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Le sujet et le message sont obligatoires.']);
+        }
+        if (mb_strlen($sujet) > 150) {
+            return $this->response->setJSON(['ok' => false, 'msg' => 'Sujet limité à 150 caractères.']);
+        }
+        if ($err = controlerModeleInvitationJa(['Sujet' => $sujet, 'Message' => $message])) {
+            return $this->response->setJSON(['ok' => false, 'msg' => $err]);
+        }
+
+        try {
+            $pdo = getPDO();
+            $st  = $pdo->prepare('SELECT Cc, ReplyTo FROM messagerie WHERE Type = ? AND Id_Utilisateur IS NULL ORDER BY Id_Messagerie LIMIT 1');
+            $st->execute([TYPE_MESSAGE_INVITATION_JA]);
+            $commun = $st->fetch(\PDO::FETCH_ASSOC);
+            if (!$commun) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Message « Invitation JA » pas encore créé (chargez EA98).']);
+            }
+            if ($copie = $this->copieInvitationJa($pdo)) {
+                $pdo->prepare('UPDATE messagerie SET Sujet = ?, Message = ? WHERE Id_Messagerie = ?')
+                    ->execute([$sujet, $message, $copie['Id_Messagerie']]);
+            } else {
+                $pdo->prepare('INSERT INTO messagerie (Id_Utilisateur, Type, Sujet, Message, Cc, ReplyTo) VALUES (?, ?, ?, ?, ?, ?)')
+                    ->execute([$this->idUtilisateur(), TYPE_MESSAGE_INVITATION_JA, $sujet, $message, (int) $commun['Cc'], (int) $commun['ReplyTo']]);
+            }
+
+            return $this->response->setJSON([
+                'ok'            => true,
+                'msg'           => 'Votre copie du message « Invitation JA » est enregistrée.',
+                'avertissement' => avertissementsHtmlEmail($message),
+            ]);
+        } catch (\Throwable $e) {
+            return $this->repondreErreur($e);
+        }
+    }
+
+    /** POST centrenvoye/invitation-ja/commun : supprime la copie personnelle (retour au message commun). */
+    public function invitationJaCommun(): ResponseInterface
+    {
+        try {
+            getPDO()->prepare('DELETE FROM messagerie WHERE Type = ? AND Id_Utilisateur = ?')
+                ->execute([TYPE_MESSAGE_INVITATION_JA, $this->idUtilisateur()]);
+
+            return $this->response->setJSON(['ok' => true, 'msg' => 'Vous utilisez de nouveau le message commun.']);
+        } catch (\Throwable $e) {
+            return $this->repondreErreur($e);
+        }
     }
 
     /**
