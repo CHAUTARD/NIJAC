@@ -43,3 +43,4 @@ Thumbs.db
 # Seules les données de référence La Poste (communes, publiques) restent suivies.
 /Importation/*
 !/Importation/La_Poste/
+/prod.bat

@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
     <meta charset="utf-8">
-    <title><?= lang('Errors.badRequest') ?></title>
+    <title>Requête invalide — NIJAC</title>
 
     <style>
         div.logo {
@@ -76,7 +76,7 @@
         <?php if (ENVIRONMENT !== 'production') : ?>
             <?= nl2br(esc($message)) ?>
         <?php else : ?>
-            <?= lang('Errors.sorryBadRequest') ?>
+            Désolé, la requête n'a pas pu être traitée.
         <?php endif; ?>
     </p>
 </div>

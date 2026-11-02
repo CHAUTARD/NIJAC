@@ -58,6 +58,19 @@
             transform: scale(.95);
         }
 
+        /* Libellés « Type : » / « Sujet : » alignés devant leur champ */
+        .lib-ligne { width: 3.5rem; flex-shrink: 0; }
+
+        /* Afficher / masquer les marqueurs (fermés par défaut, choix mémorisé) */
+        #cart-bascule { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+        #cartouche-marqueurs .cart-bascule-txt { color: #1f4e8c; text-transform: none; letter-spacing: 0; font-weight: 600; }
+        #cartouche-marqueurs .txt-afficher { display: none; }
+        #cartouche-marqueurs.replie .txt-afficher { display: inline; }
+        #cartouche-marqueurs.replie .txt-masquer  { display: none; }
+        #cartouche-marqueurs.replie .bi-chevron-up { transform: rotate(180deg); }
+        #cartouche-marqueurs.replie #cart-bascule { margin-bottom: 0 !important; }
+        #cartouche-marqueurs.replie > :not(#cart-bascule) { display: none !important; }
+
     </style>
 </head>
 <body>
@@ -119,8 +132,9 @@ if ($isCsr) {
             <input type="text" id="txt-id" class="form-control form-control-sm" readonly tabindex="-1">
         </div>
 
-        <div class="mb-2<?= $isCsr ? ' d-none' : '' ?>">
-            <label class="form-label" for="cbo-type">Type :</label>
+        <!-- Libellé et champ sur une même ligne (Type, puis Sujet) -->
+        <div class="mb-2 d-flex align-items-center gap-2<?= $isCsr ? ' d-none' : '' ?>">
+            <label class="form-label mb-0 lib-ligne" for="cbo-type">Type :</label>
             <select id="cbo-type" class="form-select form-select-sm" style="max-width:280px">
                 <?php foreach ($enumTypes as $v): ?>
                 <option value="<?= esc($v) ?>"><?= esc($v) ?></option>
@@ -128,19 +142,21 @@ if ($isCsr) {
             </select>
         </div>
 
-        <div class="mb-2<?= $isCsr ? ' d-none' : '' ?>">
-            <label class="form-label" for="txt-sujet">Sujet :</label>
-            <input type="text" id="txt-sujet" class="form-control form-control-sm" maxlength="150" autocomplete="off">
+        <div class="mb-2 d-flex align-items-center gap-2<?= $isCsr ? ' d-none' : '' ?>">
+            <label class="form-label mb-0 lib-ligne" for="txt-sujet">Sujet :</label>
+            <input type="text" id="txt-sujet" class="form-control form-control-sm flex-grow-1" maxlength="150" autocomplete="off">
         </div>
 
-        <div class="mb-2 form-check<?= $isCsr ? ' d-none' : '' ?>">
-            <input class="form-check-input" type="checkbox" id="chk-cc">
-            <label class="form-check-label" for="chk-cc">Mettre le nominateur en copie (Cc) lors de l'envoi</label>
-        </div>
-
-        <div class="mb-2 form-check<?= $isCsr ? ' d-none' : '' ?>">
-            <input class="form-check-input" type="checkbox" id="chk-replyto">
-            <label class="form-check-label" for="chk-replyto">Utiliser l'email du nominateur (Reply-To) pour les réponses à l'email</label>
+        <!-- Cases Cc et Reply-To sur une même ligne (libellé complet en info-bulle) -->
+        <div class="mb-2 d-flex flex-wrap align-items-center column-gap-4<?= $isCsr ? ' d-none' : '' ?>">
+            <div class="form-check mb-0" title="Mettre le nominateur en copie (Cc) lors de l'envoi">
+                <input class="form-check-input" type="checkbox" id="chk-cc">
+                <label class="form-check-label" for="chk-cc">Nominateur en copie (Cc)</label>
+            </div>
+            <div class="form-check mb-0" title="Utiliser l'email du nominateur (Reply-To) pour les réponses à l'email">
+                <input class="form-check-input" type="checkbox" id="chk-replyto">
+                <label class="form-check-label" for="chk-replyto">Réponses au nominateur (Reply-To)</label>
+            </div>
         </div>
 
         <div class="mb-2 flex-grow-1 d-flex flex-column">
@@ -164,20 +180,18 @@ if ($isCsr) {
             <button class="btn btn-sm btn-supprimer px-3<?= $isCsr ? ' d-none' : '' ?>" id="btn-supprimer" disabled>
                 <i class="bi bi-trash3 me-1"></i>Supprimer
             </button>
-            <button class="btn btn-sm px-3<?= $isCsr ? ' d-none' : '' ?>" id="btn-dupliquer" disabled
-                    style="background:#fff3cd;border:1px solid #ffc107;font-weight:600;"
-                    title="Copier ce message pour le personnaliser">
-                <i class="bi bi-copy me-1"></i>Copier pour personnaliser
-            </button>
         </div>
         <div id="msg-systeme-info" class="mt-2 small text-warning d-none">
-            <i class="bi bi-lock-fill me-1"></i>Message système — lecture seule. Utilisez <strong>Copier pour personnaliser</strong> pour créer votre propre version.
+            <i class="bi bi-lock-fill me-1"></i>Message système — lecture seule (modifiable par un administrateur).
         </div>
 
         <!-- Cartouche des marqueurs disponibles -->
-        <div id="cartouche-marqueurs" class="mt-3 border rounded p-2" style="background:#f8f9fa;font-size:.78rem;">
-            <div class="fw-bold text-secondary mb-1" style="font-size:.75rem;letter-spacing:.04em;text-transform:uppercase;">
-                <i class="bi bi-braces me-1"></i>Marqueurs disponibles
+        <!-- Fermé par défaut ; clic sur le titre = ouvrir / fermer (choix mémorisé dans le navigateur) -->
+        <div id="cartouche-marqueurs" class="mt-3 border rounded p-2 replie" style="background:#f8f9fa;font-size:.78rem;">
+            <div class="fw-bold text-secondary mb-1" id="cart-bascule" role="button" tabindex="0" aria-expanded="false"
+                 title="Afficher / masquer les marqueurs" style="font-size:.75rem;letter-spacing:.04em;text-transform:uppercase;">
+                <span><i class="bi bi-braces me-1"></i>Marqueurs disponibles</span>
+                <span class="cart-bascule-txt"><span class="txt-masquer">Masquer</span><span class="txt-afficher">Afficher</span><i class="bi bi-chevron-up ms-1"></i></span>
             </div>
             <div class="mb-1">
                 <span class="badge bg-secondary me-1 fw-normal">Tous types</span>
@@ -495,9 +509,6 @@ function selectionnerLigne($tr) {
         $('#chk-replyto').prop('disabled', locked);
         $('#btn-enregistrer').prop('disabled', locked);
         $('#btn-supprimer').prop('disabled', locked);
-        // Actif si message système (pour tous) ou message d'un autre utilisateur (admin)
-        const peutDupliquer = estSys || (IS_ADMIN && currentId !== null);
-        $('#btn-dupliquer').prop('disabled', !peutDupliquer);
         $('#msg-systeme-info').toggleClass('d-none', !locked);
         majBoutonApercu();
         majMarqueursCra();
@@ -518,20 +529,10 @@ $('#btn-nouveau').on('click', function () {
     $('#chk-replyto').prop('disabled', false).prop('checked', false);
     $('#btn-enregistrer').prop('disabled', false);
     $('#btn-supprimer').prop('disabled', true);
-    $('#btn-dupliquer').prop('disabled', true);
     $('#msg-systeme-info').addClass('d-none');
     majBoutonApercu();
     majMarqueursCra();
     setStatus('');
-});
-
-// ── Dupliquer ─────────────────────────────────────────────────────────────────
-$('#btn-dupliquer').on('click', function () {
-    if (!currentId) return;
-    $.ajax({ url: `${MESSAGERIE_BASE}/${currentId}/dupliquer`, method: 'POST', dataType: 'json' }).done(function (res) {
-        if (res.ok) { toast(res.msg); chargerListe(res.id); }
-        else toast(res.msg, false);
-    });
 });
 
 // ── Aperçu HTML ──────────────────────────────────────────────────────────────
@@ -570,6 +571,17 @@ $('#btn-supprimer').on('click', function () {
         });
     }, null, {type: 'danger'});
 });
+
+// ── Afficher / masquer les marqueurs (fermés par défaut, choix mémorisé) ────
+const CLE_MARQUEURS = 'nijac_ea93_marqueurs_visibles';
+function afficherMarqueurs(visible, memoriser) {
+    $('#cartouche-marqueurs').toggleClass('replie', !visible);
+    $('#cart-bascule').attr('aria-expanded', visible ? 'true' : 'false');
+    if (memoriser) { try { localStorage.setItem(CLE_MARQUEURS, visible ? '1' : '0'); } catch (e) { /* stockage indisponible */ } }
+}
+try { afficherMarqueurs(localStorage.getItem(CLE_MARQUEURS) === '1', false); } catch (e) { /* fermés */ }
+$('#cart-bascule').on('click', () => afficherMarqueurs($('#cartouche-marqueurs').hasClass('replie'), true))
+    .on('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(this).trigger('click'); } });
 
 // ── Clic sur un marqueur : insérer à la position du curseur ──────────────────
 $(document).on('click', '[data-marqueur]', function () {
