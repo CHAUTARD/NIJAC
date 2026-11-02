@@ -648,7 +648,7 @@ function initTableConfiguration(\PDO $pdo): void
     assurerColonneFicheJaLiee($pdo);
 
     // Salles ↔ clubs en plusieurs-à-plusieurs : table club_salle (salle.Id_Club / EstPrincipale
-    // obsolètes, conservées). Gère son propre try/catch (voir assurerTableClubSalle()).
+    // obsolètes, supprimées si tous les liens sont dans club_salle). Gère son propre try/catch (voir assurerTableClubSalle()).
     assurerTableClubSalle($pdo);
 
     // Copies personnelles de messagerie supprimées avec leur utilisateur (FK ON DELETE CASCADE, au
@@ -811,9 +811,8 @@ function sqlSalleEffective(string $r, string $e): string
 
 /**
  * Table de liaison club_salle (plusieurs-à-plusieurs club ↔ salle, créée par EA98) présente ?
- * Source de vérité des salles d'un club et de SA salle principale. Avant EA98, tous les helpers
- * ci-dessous retombent sur l'ancien modèle salle.Id_Club / salle.EstPrincipale (colonnes
- * obsolètes conservées en base, plus lues ni écrites une fois club_salle créée).
+ * Source de vérité des salles d'un club et de SA salle principale (les anciennes colonnes
+ * salle.Id_Club / salle.EstPrincipale sont supprimées par EA98, assurerTableClubSalle()).
  * Cache statique ($rafraichir = true après création de la table par la migration).
  */
 function clubSalleExiste(?\PDO $pdo = null, bool $rafraichir = false): bool
@@ -840,14 +839,10 @@ function clubSalleExiste(?\PDO $pdo = null, bool $rafraichir = false): bool
 function sqlIdSallePrincipale(string $colClub, bool $repliPremiere = false): string
 {
     if ($repliPremiere) {
-        return clubSalleExiste()
-            ? "(SELECT csx.Id_Salle FROM club_salle csx WHERE csx.Id_Club = $colClub ORDER BY csx.EstPrincipale DESC, csx.Id_Salle LIMIT 1)"
-            : "(SELECT sx.Id_Salle FROM salle sx WHERE sx.Id_Club = $colClub ORDER BY sx.EstPrincipale DESC, sx.Id_Salle LIMIT 1)";
+        return "(SELECT csx.Id_Salle FROM club_salle csx WHERE csx.Id_Club = $colClub ORDER BY csx.EstPrincipale DESC, csx.Id_Salle LIMIT 1)";
     }
 
-    return clubSalleExiste()
-        ? "(SELECT MIN(csx.Id_Salle) FROM club_salle csx WHERE csx.Id_Club = $colClub AND csx.EstPrincipale = 1)"
-        : "(SELECT MIN(sx.Id_Salle) FROM salle sx WHERE sx.Id_Club = $colClub AND sx.EstPrincipale = 1)";
+    return "(SELECT MIN(csx.Id_Salle) FROM club_salle csx WHERE csx.Id_Club = $colClub AND csx.EstPrincipale = 1)";
 }
 
 /**
@@ -857,9 +852,6 @@ function sqlIdSallePrincipale(string $colClub, bool $repliPremiere = false): str
  */
 function sqlJoinSallePrincipale(string $colClub, string $s, string $jointure = 'LEFT JOIN'): string
 {
-    if (!clubSalleExiste()) {
-        return "$jointure salle $s ON $s.Id_Club = $colClub AND $s.EstPrincipale = 1";
-    }
     $cs = 'cs_' . $s;
 
     return "$jointure club_salle $cs ON $cs.Id_Club = $colClub AND $cs.EstPrincipale = 1
@@ -872,9 +864,6 @@ function sqlJoinSallePrincipale(string $colClub, string $s, string $jointure = '
  */
 function sqlJoinSallesClub(string $colClub, string $s, string $jointure = 'LEFT JOIN'): string
 {
-    if (!clubSalleExiste()) {
-        return "$jointure salle $s ON $s.Id_Club = $colClub";
-    }
     $cs = 'cs_' . $s;
 
     return "$jointure club_salle $cs ON $cs.Id_Club = $colClub
@@ -884,32 +873,26 @@ function sqlJoinSallesClub(string $colClub, string $s, string $jointure = 'LEFT 
 /** Colonne SQL « salle principale du club » d'une jointure sqlJoinSallesClub()/sqlJoinSallePrincipale() d'alias $s. */
 function sqlColPrincipale(string $s): string
 {
-    return clubSalleExiste() ? "cs_$s.EstPrincipale" : "$s.EstPrincipale";
+    return "cs_$s.EstPrincipale";
 }
 
 /** Sous-requête SQL scalaire : nombre de salles liées au club $colClub. */
 function sqlNbSallesClub(string $colClub): string
 {
-    return clubSalleExiste()
-        ? "(SELECT COUNT(*) FROM club_salle csn WHERE csn.Id_Club = $colClub)"
-        : "(SELECT COUNT(*) FROM salle sn WHERE sn.Id_Club = $colClub)";
+    return "(SELECT COUNT(*) FROM club_salle csn WHERE csn.Id_Club = $colClub)";
 }
 
 /** Sous-requête SQL (liste) : Id_Salle des salles liées au club $colClub — pour « IN (…) ». */
 function sqlIdsSallesClub(string $colClub): string
 {
-    return clubSalleExiste()
-        ? "SELECT csl.Id_Salle FROM club_salle csl WHERE csl.Id_Club = $colClub"
-        : "SELECT sl.Id_Salle FROM salle sl WHERE sl.Id_Club = $colClub";
+    return "SELECT csl.Id_Salle FROM club_salle csl WHERE csl.Id_Club = $colClub";
 }
 
 /** Salles liées au club $idClub, principale d'abord : [['Id_Salle', 'Nom', 'EstPrincipale'], …]. */
 function sallesDuClub(\PDO $pdo, string $idClub): array
 {
-    $st = $pdo->prepare(clubSalleExiste($pdo)
-        ? 'SELECT s.Id_Salle, s.Nom, cs.EstPrincipale FROM club_salle cs JOIN salle s ON s.Id_Salle = cs.Id_Salle
-           WHERE cs.Id_Club = ? ORDER BY cs.EstPrincipale DESC, s.Id_Salle'
-        : 'SELECT s.Id_Salle, s.Nom, s.EstPrincipale FROM salle s WHERE s.Id_Club = ? ORDER BY s.EstPrincipale DESC, s.Id_Salle');
+    $st = $pdo->prepare('SELECT s.Id_Salle, s.Nom, cs.EstPrincipale FROM club_salle cs JOIN salle s ON s.Id_Salle = cs.Id_Salle
+                         WHERE cs.Id_Club = ? ORDER BY cs.EstPrincipale DESC, s.Id_Salle');
     $st->execute([$idClub]);
 
     return $st->fetchAll(\PDO::FETCH_ASSOC);
@@ -918,11 +901,8 @@ function sallesDuClub(\PDO $pdo, string $idClub): array
 /** Clubs liés à chaque salle : [Id_Salle => [['Id_Club', 'Nom', 'EstPrincipale'], …]] (principale d'abord, puis nom). */
 function liensClubsSalles(\PDO $pdo): array
 {
-    $rows = $pdo->query(clubSalleExiste($pdo)
-        ? 'SELECT cs.Id_Salle, cs.Id_Club, c.Nom, cs.EstPrincipale FROM club_salle cs JOIN club c ON c.Id_Club = cs.Id_Club
-           ORDER BY cs.Id_Salle, cs.EstPrincipale DESC, c.Nom'
-        : 'SELECT s.Id_Salle, s.Id_Club, c.Nom, s.EstPrincipale FROM salle s JOIN club c ON c.Id_Club = s.Id_Club
-           ORDER BY s.Id_Salle')->fetchAll(\PDO::FETCH_ASSOC);
+    $rows = $pdo->query('SELECT cs.Id_Salle, cs.Id_Club, c.Nom, cs.EstPrincipale FROM club_salle cs JOIN club c ON c.Id_Club = cs.Id_Club
+                         ORDER BY cs.Id_Salle, cs.EstPrincipale DESC, c.Nom')->fetchAll(\PDO::FETCH_ASSOC);
     $liens = [];
     foreach ($rows as $r) {
         $liens[(int) $r['Id_Salle']][] = ['Id_Club' => $r['Id_Club'], 'Nom' => $r['Nom'], 'EstPrincipale' => (int) $r['EstPrincipale']];
@@ -935,34 +915,22 @@ function liensClubsSalles(\PDO $pdo): array
  * Lie le club $idClub à la salle $idSalle (sans effet si déjà lié). $principale : true = devient
  * LA salle principale du club (l'ancienne cesse de l'être), false = n'est pas/plus principale,
  * null = drapeau inchangé (nouvelle liaison : non principale).
- * Ancien modèle (avant EA98) : une salle n'a qu'un club, salle.Id_Club est remplacé.
  */
 function lierClubSalle(\PDO $pdo, string $idClub, int $idSalle, ?bool $principale = null): void
 {
-    if (!clubSalleExiste($pdo)) {
-        // EstPrincipale évalué AVANT Id_Club (affectations MySQL de gauche à droite) : un
-        // changement de club ne garde pas le drapeau de l'ancien.
-        $pdo->prepare('UPDATE salle SET EstPrincipale = CASE WHEN Id_Club <=> ? THEN EstPrincipale ELSE 0 END, Id_Club = ? WHERE Id_Salle = ?')
-            ->execute([$idClub, $idClub, $idSalle]);
-    } else {
-        $pdo->prepare('INSERT IGNORE INTO club_salle (Id_Club, Id_Salle, EstPrincipale) VALUES (?, ?, 0)')
-            ->execute([$idClub, $idSalle]);
-    }
+    $pdo->prepare('INSERT IGNORE INTO club_salle (Id_Club, Id_Salle, EstPrincipale) VALUES (?, ?, 0)')
+        ->execute([$idClub, $idSalle]);
     if ($principale === true) {
         definirSallePrincipale($pdo, $idClub, $idSalle);
     } elseif ($principale === false) {
-        $pdo->prepare(clubSalleExiste($pdo)
-            ? 'UPDATE club_salle SET EstPrincipale = 0 WHERE Id_Club = ? AND Id_Salle = ?'
-            : 'UPDATE salle SET EstPrincipale = 0 WHERE Id_Club = ? AND Id_Salle = ?')->execute([$idClub, $idSalle]);
+        $pdo->prepare('UPDATE club_salle SET EstPrincipale = 0 WHERE Id_Club = ? AND Id_Salle = ?')->execute([$idClub, $idSalle]);
     }
 }
 
 /** Retire le lien club ↔ salle (la salle n'est jamais supprimée). */
 function delierClubSalle(\PDO $pdo, string $idClub, int $idSalle): void
 {
-    $pdo->prepare(clubSalleExiste($pdo)
-        ? 'DELETE FROM club_salle WHERE Id_Club = ? AND Id_Salle = ?'
-        : 'UPDATE salle SET Id_Club = NULL, EstPrincipale = 0 WHERE Id_Club = ? AND Id_Salle = ?')->execute([$idClub, $idSalle]);
+    $pdo->prepare('DELETE FROM club_salle WHERE Id_Club = ? AND Id_Salle = ?')->execute([$idClub, $idSalle]);
 }
 
 /**
@@ -972,9 +940,7 @@ function delierClubSalle(\PDO $pdo, string $idClub, int $idSalle): void
  */
 function definirSallePrincipale(\PDO $pdo, string $idClub, ?int $idSalle): void
 {
-    $pdo->prepare(clubSalleExiste($pdo)
-        ? 'UPDATE club_salle SET EstPrincipale = CASE WHEN Id_Salle = ? THEN 1 ELSE 0 END WHERE Id_Club = ?'
-        : 'UPDATE salle SET EstPrincipale = CASE WHEN Id_Salle = ? THEN 1 ELSE 0 END WHERE Id_Club = ?')->execute([$idSalle, $idClub]);
+    $pdo->prepare('UPDATE club_salle SET EstPrincipale = CASE WHEN Id_Salle = ? THEN 1 ELSE 0 END WHERE Id_Club = ?')->execute([$idSalle, $idClub]);
 }
 
 /**
@@ -995,13 +961,6 @@ function trouverOuCreerSalle(\PDO $pdo, array $champs, ?string $idClub = null): 
     // comparée aux autres, puis retirée si une fiche existante désigne le même lieu.
     classesLieuxSalles($pdo, true);
     $autres = array_values(array_diff(sallesMemeLieu($pdo, $id), [$id]));
-    if ($autres && !clubSalleExiste($pdo)) {
-        // Ancien modèle (avant EA98) : une fiche n'a qu'un club — jamais celle d'un autre club.
-        $st = $pdo->prepare('SELECT Id_Salle FROM salle WHERE Id_Salle IN (' . implode(',', array_map('intval', $autres)) . ')
-                             AND (Id_Club IS NULL OR Id_Club = ?)');
-        $st->execute([(string) $idClub]);
-        $autres = array_map('intval', $st->fetchAll(\PDO::FETCH_COLUMN));
-    }
     if (!$autres) {
         return ['id' => $id, 'cree' => true];
     }
@@ -1064,12 +1023,14 @@ function nbReferencesSalle(\PDO $pdo, int $idSalle, ?array $refs = null): int
  * Table de liaison club_salle « une salle ↔ plusieurs clubs, un club ↔ plusieurs salles » (appelée
  * par initTableConfiguration(), EA98, idempotente) : créée seulement si absente (types/collation
  * copiés de club.Id_Club et salle.Id_Salle, FK CASCADE si possible, sinon sans FK avec index —
- * error_log). Colonnes salle.Id_Club / salle.EstPrincipale obsolètes (plus lues ni écrites).
+ * error_log). Colonnes salle.Id_Club / salle.EstPrincipale supprimées (supprimerColonnesSalleObsoletes()).
  */
 function assurerTableClubSalle(\PDO $pdo): void
 {
     try {
         if (clubSalleExiste($pdo, true)) {
+            supprimerColonnesSalleObsoletes($pdo);
+
             return;
         }
         $typeClub = $pdo->query(
@@ -1103,8 +1064,62 @@ function assurerTableClubSalle(\PDO $pdo): void
             $pdo->exec(sprintf($ddl, ''));
         }
         clubSalleExiste($pdo, true);
+        supprimerColonnesSalleObsoletes($pdo);
     } catch (\PDOException $e) {
         error_log('[NIJAC] Création de club_salle : ' . $e->getMessage());
+    }
+}
+
+/**
+ * Supprime les colonnes obsolètes salle.Id_Club / salle.EstPrincipale (idempotent, best-effort).
+ * Garde-fou : refus (journalisé, colonnes conservées) si un lien salle.Id_Club n'existe pas encore
+ * dans club_salle — aucune donnée perdue. Les FK et index qui portent sur Id_Club sont retirés avant.
+ */
+function supprimerColonnesSalleObsoletes(\PDO $pdo): void
+{
+    try {
+        $cols = $pdo->query(
+            "SELECT COLUMN_NAME FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'salle'
+               AND COLUMN_NAME IN ('Id_Club', 'EstPrincipale')"
+        )->fetchAll(\PDO::FETCH_COLUMN);
+        if (!$cols) {
+            return;
+        }
+        if (in_array('Id_Club', $cols, true)) {
+            $manquants = (int) $pdo->query(
+                'SELECT COUNT(*) FROM salle s WHERE s.Id_Club IS NOT NULL
+                 AND NOT EXISTS (SELECT 1 FROM club_salle cs WHERE cs.Id_Club = s.Id_Club AND cs.Id_Salle = s.Id_Salle)'
+            )->fetchColumn();
+            if ($manquants > 0) {
+                error_log("[NIJAC] salle.Id_Club / EstPrincipale conservées : $manquants lien(s) absent(s) de club_salle");
+
+                return;
+            }
+        }
+        $fks = $pdo->query(
+            "SELECT DISTINCT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+             WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'salle'
+               AND COLUMN_NAME IN ('Id_Club', 'EstPrincipale') AND REFERENCED_TABLE_NAME IS NOT NULL"
+        )->fetchAll(\PDO::FETCH_COLUMN);
+        foreach ($fks as $fk) {
+            $pdo->exec('ALTER TABLE salle DROP FOREIGN KEY `' . str_replace('`', '', $fk) . '`');
+        }
+        $idx = $pdo->query(
+            "SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS
+             WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'salle'
+               AND COLUMN_NAME IN ('Id_Club', 'EstPrincipale') AND INDEX_NAME <> 'PRIMARY'"
+        )->fetchAll(\PDO::FETCH_COLUMN);
+        foreach ($idx as $i) {
+            try {
+                $pdo->exec('ALTER TABLE salle DROP INDEX `' . str_replace('`', '', $i) . '`');
+            } catch (\PDOException $e) {
+                // index déjà retiré avec une colonne d'un index composite
+            }
+        }
+        $pdo->exec('ALTER TABLE salle ' . implode(', ', array_map(fn ($c) => "DROP COLUMN `$c`", $cols)));
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] Suppression de salle.Id_Club / EstPrincipale : ' . $e->getMessage());
     }
 }
 

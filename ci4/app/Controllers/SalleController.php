@@ -68,7 +68,7 @@ class SalleController extends BaseController
         $isAdmin = $this->isAdmin();
         $pdo     = getPDO();
 
-        // Clubs liés : club_salle (liensClubsSalles(), repli salle.Id_Club avant EA98), assemblés ci-dessous.
+        // Clubs liés : club_salle (liensClubsSalles()), assemblés ci-dessous.
         $sql = 'SELECT s.Id_Salle, s.Nom, s.Adresse, s.Telephone, s.Id_Laposte, s.Cp, s.Ville,
                        COALESCE(
                            NULLIF(CONCAT(lp.CodePostal, \' \', lp.Nom), \' \'),
@@ -107,7 +107,7 @@ class SalleController extends BaseController
         }
         unset($r);
 
-        return $this->response->setJSON(['ok' => true, 'data' => $rows, 'multiClubs' => clubSalleExiste($pdo)]);
+        return $this->response->setJSON(['ok' => true, 'data' => $rows, 'multiClubs' => true]);
     }
 
     /**
@@ -138,9 +138,6 @@ class SalleController extends BaseController
             if ($inconnus) {
                 return [[], 'Id_Club inconnu : ' . implode(', ', $inconnus) . '.'];
             }
-        }
-        if (count($norm) > 1 && !clubSalleExiste($pdo)) {
-            return [[], 'Une salle ne peut être liée qu\'à un seul club tant que la migration EA98 (table club_salle) n\'a pas été chargée.'];
         }
 
         return [array_values($norm), null];
@@ -339,9 +336,7 @@ class SalleController extends BaseController
         }
         $pdo->beginTransaction();
         try {
-            if (clubSalleExiste($pdo)) {
-                $pdo->prepare('DELETE FROM club_salle WHERE Id_Salle = ?')->execute([$id]);
-            }
+            $pdo->prepare('DELETE FROM club_salle WHERE Id_Salle = ?')->execute([$id]);
             $pdo->prepare('DELETE FROM salle WHERE Id_Salle = ?')->execute([$id]);
             $pdo->commit();
         } catch (\Throwable $e) {
