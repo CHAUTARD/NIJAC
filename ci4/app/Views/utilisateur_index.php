@@ -48,7 +48,21 @@
 
     <!-- ── Liste ── -->
     <div id="panel-liste">
-        <div id="liste-header">Utilisateurs</div>
+        <div id="liste-header" class="d-flex align-items-center justify-content-between gap-2">
+            <span>Utilisateurs</span>
+            <select id="cbo-filtre-role" class="form-select form-select-sm w-auto" title="Filtrer sur un rôle">
+                <option value="">Tous les rôles</option>
+                <?php foreach ($roles as $code => $libelle): ?>
+                    <option value="<?= esc($code) ?>"><?= esc($libelle) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <select id="cbo-filtre-dept" class="form-select form-select-sm w-auto d-none" style="min-width:16rem" title="Filtrer sur le département (rôle Juge-Arbitre)">
+                <option value="">Tous les départements</option>
+                <?php foreach ($deptActifs as $d): ?>
+                    <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept'] . ' – ' . $d['nom']) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
         <div id="table-wrapper">
             <table id="tbl-utilisateurs">
                 <thead>
@@ -300,6 +314,8 @@ function chargerListe(selectId = null) {
             const $tr = $('<tr>')
                 .toggleClass('inactif', !actif)
                 .attr('data-id', u.Id_Utilisateur)
+                .attr('data-roles', u.Roles || '')
+                .attr('data-dept', u.Id_Departement || '')
                 .append(
                     $('<td>').text(u.Login),
                     $('<td>').text(u.Nom),
@@ -313,12 +329,27 @@ function chargerListe(selectId = null) {
             $body.append($tr);
         });
 
+        filtrerParRole();
+
         if (selectId) {
             const $tr = $(`#tbody-liste tr[data-id="${selectId}"]`);
             if ($tr.length) selectionnerLigne($tr);
         }
     }, 'json');
 }
+
+// Filtre de la liste sur un rôle (n'importe lequel des rôles du compte, pas seulement le principal)
+function filtrerParRole() {
+    const role = $('#cbo-filtre-role').val();
+    // Le filtre département n'apparaît que pour le rôle Juge-Arbitre
+    $('#cbo-filtre-dept').toggleClass('d-none', role !== 'JA');
+    const dept = role === 'JA' ? $('#cbo-filtre-dept').val() : '';
+    $('#tbody-liste tr[data-id]').each(function () {
+        const roles = String($(this).attr('data-roles') || '').split(',');
+        $(this).toggle((!role || roles.includes(role)) && (!dept || String($(this).attr('data-dept')) === dept));
+    });
+}
+$('#cbo-filtre-role, #cbo-filtre-dept').on('change', filtrerParRole);
 
 function selectionnerLigne($tr) {
     $('#tbody-liste tr').removeClass('selected');
