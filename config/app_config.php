@@ -434,6 +434,23 @@ function initTableConfiguration(\PDO $pdo): void
         // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
     }
 
+    // ja.Classement (obsolète, jamais lu ni écrit) supprimé ; ja.TypeLicence CHAR(1) = type de licence.
+    try {
+        $colsJa = $pdo->query(
+            "SELECT COLUMN_NAME FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ja'"
+        )->fetchAll(\PDO::FETCH_COLUMN);
+        $colsJaMin = array_map('strtolower', $colsJa);
+        if (in_array('classement', $colsJaMin, true)) {
+            $pdo->exec('ALTER TABLE ja DROP COLUMN Classement');
+        }
+        if (!in_array('typelicence', $colsJaMin, true)) {
+            $pdo->exec('ALTER TABLE ja ADD COLUMN TypeLicence CHAR(1) NULL DEFAULT NULL');
+        }
+    } catch (\PDOException $e) {
+        // best-effort — SQL manuel possible si l'ALTER échoue ici (droits…).
+    }
+
     // nomination.AccuseReception : date/heure de l'accusé de réception de la
     // convocation par le JA (EN21, POST convocation-ja/accuse) ; NULL = pas encore.
     // Lue par EN21 et EN28 seulement si présente (tolérance avant passage EA98).

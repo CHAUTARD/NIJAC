@@ -358,6 +358,7 @@
                 <th style="width:140px" data-field="prenom">Prénom<span class="sort-icon"></span></th>
                 <th style="width:210px" data-field="email">Email<span class="sort-icon"></span></th>
                 <th style="width:120px" data-field="telephone">Téléphone<span class="sort-icon"></span></th>
+                <th style="width:44px" data-field="type_licence" title="Type de licence : D = Dirigeant, C = Compétition, L = Loisir, E = Évènementielle">Typ<span class="sort-icon"></span></th>
                 <?php foreach (['ja1' => 'JA1', 'ja2' => 'JA2', 'ja3' => 'JA3', 'jan' => 'JAN', 'jai' => 'JAI'] as $cleG => $codeG): ?>
                 <th style="width:44px" class="col-grade" data-field="<?= $cleG ?>" title="<?= esc($gradesLibelles[$codeG] ?? $codeG) ?>"><?= $codeG ?><span class="sort-icon"></span></th>
                 <?php endforeach; ?>
@@ -640,6 +641,16 @@
               <label class="form-label fw-semibold">N° Compte EBP</label>
               <input type="text" class="form-control form-control-sm" id="nja-cpte-ebp" placeholder="">
             </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="nja-type-licence">Type de licence</label>
+              <select class="form-select form-select-sm" id="nja-type-licence">
+                <option value="">— Non renseigné —</option>
+                <option value="D">D — Dirigeant</option>
+                <option value="C">C — Compétition</option>
+                <option value="L">L — Loisir</option>
+                <option value="E">E — Évènementielle</option>
+              </select>
+            </div>
             <div class="col-12">
               <div class="d-flex gap-4 mt-1">
                 <?php foreach (['ja1' => 'JA1', 'ja2' => 'JA2', 'ja3' => 'JA3', 'jan' => 'JAN', 'jai' => 'JAI'] as $cleG => $codeG): ?>
@@ -702,6 +713,7 @@ const DISPONIBILITE_JA_BASE = '<?= site_url('disponibilite-ja') ?>';
 // { "14": ["27","50","61"], ... } — départements voisins (région) de chaque code dept.
 const VOISINS_PAR_DEPT = <?= json_encode($voisinsParDept ?? [], JSON_UNESCAPED_UNICODE) ?>;
 
+const LIBELLES_LICENCE = { D: 'Dirigeant', C: 'Compétition', L: 'Loisir', E: 'Évènementielle' };
 let lignes     = [];
 // Clés JS des 5 grades (= colonnes ja.JA1…JAI)
 const GRADES = { ja1: 'JA1', ja2: 'JA2', ja3: 'JA3', jan: 'JAN', jai: 'JAI' };
@@ -796,6 +808,7 @@ function renderGrille() {
             $tr.append(makeTd(l.prenom,           idx, 'prenom',          false));
             $tr.append(makeTd(l.email,            idx, 'email',           false));
             $tr.append(makeTd(l.telephone,        idx, 'telephone',       false));
+            $tr.append(makeTd(l.type_licence,     idx, 'type_licence',    true).attr('title', LIBELLES_LICENCE[l.type_licence] || ''));
             Object.entries(GRADES).forEach(([cle, code]) => {
                 $tr.append(makeTdHtml(l[cle]
                     ? `<span class="badge-actif" title="${code}">✓</span>`
@@ -917,6 +930,7 @@ function chargerListe() {
             cp:                     r.CP    ?? '',
             ville:                  r.Ville ?? '',
             date_validation_fftt:     r.DateValidationFFTT ?? null,
+            type_licence:             r.TypeLicence ?? '',
         }));
         renderGrille();
     }, 'json').fail(() => { spinner(false); toast('Erreur réseau.', false); });
@@ -1419,6 +1433,7 @@ function ouvrirModaleJa(record) {
         $('#nja-cp').val(record.cp || '');
         $('#nja-ville').val(record.ville || '');
         $('#nja-cpte-ebp').val(record.num_compte_ebp || '');
+        $('#nja-type-licence').val(record.type_licence || '');
         $('.nja-grade-chk').each(function () { this.checked = !!record[this.dataset.cle]; });
         $('#nja-defisc').prop('checked', !!record.defiscalisation);
         $('#nja-nationale').prop('checked', !!record.nationale);
@@ -1439,6 +1454,7 @@ function ouvrirModaleJa(record) {
         $('#nja-id-label').html('N° Licence <span class="text-danger">*</span>');
         $('#nja-id').val('').prop('disabled', false);
         $('.nja-grade-chk').each(function () { this.checked = this.dataset.cle === 'ja1'; });
+        $('#nja-type-licence').val('');
         $('#nja-nationale').prop('checked', true); // cohérent avec le défaut 1 de ja.Nationale
         $('#nja-id-club').html('<option value="">— Sélectionnez d\'abord un département —</option>').prop('disabled', false);
     }
@@ -1572,6 +1588,7 @@ $('#btn-enregistrer-ja').on('click', function () {
         num_compte_ebp:  $('#nja-cpte-ebp').val().trim() || null,
         defiscalisation: $('#nja-defisc').is(':checked') ? 1 : 0,
         nationale:       $('#nja-nationale').is(':checked') ? 1 : 0,
+        type_licence:    $('#nja-type-licence').val() || null,
     };
     // Les 5 grades (ja1, ja2, ja3, jan, jai) : toujours envoyés → réécrits en UPDATE
     $('.nja-grade-chk').each(function () { record[this.dataset.cle] = this.checked ? 1 : 0; });

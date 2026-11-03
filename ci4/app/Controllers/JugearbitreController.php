@@ -160,7 +160,7 @@ class JugearbitreController extends BaseController
             'SELECT j.Id_JA, j.Nom, j.Prenom, j.Email, j.Telephone,
                     j.Grade, j.JA1, j.JA2, j.JA3, j.JAN, j.JAI, j.Id_Club, j.Id_LaPoste,
                     j.Defiscalisation, j.Nationale, j.NumCompteEBP,
-                    j.DateValidationFFTT,
+                    j.DateValidationFFTT, j.TypeLicence,
                     j.ArbitreAutresDepts, j.DeptsArbitrage,
                     j.Cp, j.Ville, j.CodeDept,
                     cl.Nom AS NomClub,
@@ -202,6 +202,7 @@ class JugearbitreController extends BaseController
             'CP'                     => $r['CodePostalJA'],
             'Ville'                  => $r['VilleJA'],
             'DateValidationFFTT'     => $r['DateValidationFFTT'],
+            'TypeLicence'            => $r['TypeLicence'],
         ], $rows);
 
         return $this->response->setJSON(['ok' => true, 'data' => $rows]);
@@ -301,14 +302,14 @@ class JugearbitreController extends BaseController
         $stmtInsert = $pdo->prepare(
             'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Telephone, Grade, JA1, JA2, JA3, JAN, JAI,
                              Id_Club, Id_LaPoste, Defiscalisation, Nationale, NumCompteEBP,
-                             Cp, Ville, DateValidationFFTT, CodeDept)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, DEFAULT(Nationale)), ?, ?, ?, ?, ?)'
+                             Cp, Ville, DateValidationFFTT, CodeDept, TypeLicence)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, DEFAULT(Nationale)), ?, ?, ?, ?, ?, ?)'
         );
         $stmtInsertAuto = $pdo->prepare(
             'INSERT INTO ja (Nom, Prenom, Email, Telephone, Grade, JA1, JA2, JA3, JAN, JAI,
                              Id_Club, Id_LaPoste, Defiscalisation, Nationale, NumCompteEBP,
-                             Cp, Ville, DateValidationFFTT, CodeDept)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, DEFAULT(Nationale)), ?, ?, ?, ?, ?)'
+                             Cp, Ville, DateValidationFFTT, CodeDept, TypeLicence)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, DEFAULT(Nationale)), ?, ?, ?, ?, ?, ?)'
         );
 
         foreach ($lignes as $l) {
@@ -330,6 +331,10 @@ class JugearbitreController extends BaseController
             $idLap     = ($l['id_laposte'] ?? '') !== '' ? (int) $l['id_laposte'] : null;
             $deptManuel = ($l['dept'] ?? '') !== '' ? trim((string) $l['dept']) : null;
             $cpteEbp   = ($l['num_compte_ebp'] ?? '') !== '' ? trim($l['num_compte_ebp']) : null;
+            // null = clé absente ou vide (import CSV 102 seul) → UPDATE n'y touche pas
+            $typeLicence = ($l['type_licence'] ?? '') !== ''
+                ? mb_strtoupper(mb_substr(trim((string) $l['type_licence']), 0, 1, 'UTF-8'), 'UTF-8')
+                : null;
             // Cp/Ville sont NOT NULL en base : chaîne vide plutôt que null si inconnu
             $cp    = trim((string) ($l['cp'] ?? ''));
             $ville = trim((string) ($l['ville'] ?? ''));
@@ -380,6 +385,10 @@ class JugearbitreController extends BaseController
                             $setOpt .= 'NumCompteEBP=?, ';
                             $paramsOpt[] = $cpteEbp;
                         }
+                        if ($typeLicence !== null) {
+                            $setOpt .= 'TypeLicence=?, ';
+                            $paramsOpt[] = $typeLicence;
+                        }
                         foreach ($autres as $colJa => $v) {
                             if ($v !== null) {
                                 $setOpt .= "$colJa=?, ";
@@ -396,11 +405,11 @@ class JugearbitreController extends BaseController
                         ));
                         $updates++;
                     } else {
-                        $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, $grade, ...$autresIns, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid, $codeDept]);
+                        $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, $grade, ...$autresIns, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid, $codeDept, $typeLicence]);
                         $inserts++;
                     }
                 } else {
-                    $stmtInsertAuto->execute([$nom, $prenom, $email, $tel, $grade, ...$autresIns, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid, $codeDept]);
+                    $stmtInsertAuto->execute([$nom, $prenom, $email, $tel, $grade, ...$autresIns, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid, $codeDept, $typeLicence]);
                     $inserts++;
                 }
             } catch (\PDOException $ex) {
@@ -534,6 +543,9 @@ class JugearbitreController extends BaseController
             'id_laposte' => $idLaPoste,
             'cp'         => $cp,
             'ville'      => $ville,
+            // Champ `type` de xml_licence_b tel quel (1re lettre) ; vide = null,
+            // upsertJaFftt() ne touche alors pas à la valeur en base.
+            'type_licence' => strtoupper(substr(ffttStr($lb['type'] ?? ''), 0, 1)) ?: null,
         ];
     }
 
@@ -557,20 +569,21 @@ class JugearbitreController extends BaseController
         if ($exists->fetchColumn()) {
             $pdo->prepare(
                 'UPDATE ja SET JA1=?, JA2=?, JA3=?, JAN=?, JAI=?, DateValidationFFTT=?,
+                 TypeLicence = COALESCE(?, TypeLicence),
                  Cp = COALESCE(Cp, ?), Ville = COALESCE(Ville, ?), Id_LaPoste = COALESCE(Id_LaPoste, ?)
                  WHERE Id_JA=?'
-            )->execute([...$niveaux, $d['date_valid'], $d['cp'], $d['ville'], $d['id_laposte'], $d['licence']]);
+            )->execute([...$niveaux, $d['date_valid'], $d['type_licence'] ?? null, $d['cp'], $d['ville'], $d['id_laposte'], $d['licence']]);
 
             return false;
         }
 
         $pdo->prepare(
             'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Grade, JA1, JA2, JA3, JAN, JAI, Id_Club,
-                             Defiscalisation, DateValidationFFTT,
+                             Defiscalisation, DateValidationFFTT, TypeLicence,
                              Id_LaPoste, Cp, Ville)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)'
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)'
         )->execute([$d['licence'], $d['nom'], $d['prenom'], $d['email'] ?: null, $d['grade'], ...$niveaux, $d['id_club'],
-            $d['date_valid'], $d['id_laposte'], $d['cp'], $d['ville']]);
+            $d['date_valid'], $d['type_licence'] ?? null, $d['id_laposte'], $d['cp'], $d['ville']]);
 
         return true;
     }
@@ -821,6 +834,11 @@ class JugearbitreController extends BaseController
             $email        = trim((string) ($ligne[$col['Mail']] ?? ''));
             $telPortable  = trim((string) ($ligne[$col['Portable']] ?? ''));
             $telFixe      = trim((string) ($ligne[$col['Téléphone']] ?? ''));
+            // « Type licence » (colonne facultative du CSV) : 1 lettre, absente si vide
+            // (majBdd() ne touche alors pas à la valeur en base).
+            $typeLicence  = isset($col['Type licence'])
+                ? mb_strtoupper(mb_substr(trim((string) ($ligne[$col['Type licence']] ?? '')), 0, 1, 'UTF-8'), 'UTF-8')
+                : '';
 
             if ($nom === '' && $prenom === '') {
                 continue;
@@ -855,7 +873,7 @@ class JugearbitreController extends BaseController
                 'id_laposte'           => null, // résolu côté JS avec progression
                 'cp'                   => $cp,
                 'ville'                => $ville,
-            ] + $grades;
+            ] + ($typeLicence !== '' ? ['type_licence' => $typeLicence] : []) + $grades;
         }
         fclose($handle);
 

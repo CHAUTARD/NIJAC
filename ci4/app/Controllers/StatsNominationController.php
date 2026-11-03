@@ -43,7 +43,7 @@ class StatsNominationController extends BaseController
         try {
             $depts = $this->deptsAutorises();
             if (!$depts) {
-                return $this->response->setJSON(['ok' => true, 'rencontres' => [], 'compteurs' => [], 'clubs' => []]);
+                return $this->response->setJSON(['ok' => true, 'rencontres' => [], 'compteurs' => [], 'jaSans' => [], 'nomsDept' => new \stdClass(), 'clubs' => []]);
             }
 
             $pdo = getPDO();
@@ -71,20 +71,45 @@ class StatsNominationController extends BaseController
             $stmt->execute($depts);
             $rencontres = $stmt->fetchAll();
 
-            // Nombre de nominations par JA (rencontres du périmètre)
+            // « JA nominés » et « JA sans nomination » : tous les départements actifs de la ligue
+            // (pas le périmètre du nominateur), JA rattachés par ja.CodeDept.
+            $deptsLigue = array_map(
+                static fn ($d) => str_pad((string) $d['CodeDept'], 2, '0', STR_PAD_LEFT),
+                getDeptActifs()
+            );
+            $phLigue = implode(',', array_fill(0, max(1, count($deptsLigue)), '?'));
+            $deptsLigue = $deptsLigue ?: [''];
+
+            // Nombre de nominations par JA de la ligue (toutes ses nominations de la saison)
             $stmt = $pdo->prepare("
-                SELECT ja.Id_JA, ja.Nom, ja.Prenom, COUNT(*) AS Nb
+                SELECT ja.Id_JA, ja.Nom, ja.Prenom, ja.CodeDept, COUNT(*) AS Nb
                 FROM nomination n
                 JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
                 JOIN ja           ON ja.Id_JA        = d.Id_JA
-                JOIN rencontre r  ON r.Id_Rencontre  = n.Id_Rencontre
-                JOIN equipe ed    ON ed.Id_Equipe    = r.Id_EquipeDom
-                WHERE SUBSTRING(ed.Id_Club, 3, 2) IN ($ph)
+                WHERE ja.CodeDept IN ($phLigue)
                 GROUP BY ja.Id_JA
-                ORDER BY Nb DESC, ja.Nom, ja.Prenom
+                ORDER BY ja.CodeDept, Nb DESC, ja.Nom, ja.Prenom
             ");
-            $stmt->execute($depts);
+            $stmt->execute($deptsLigue);
             $compteurs = $stmt->fetchAll();
+
+            // Cartouche « JA sans nomination » : JA actifs (JA1 = 1, comme les JA nominables ailleurs)
+            // exerçant dans un département de la ligue (ja.CodeDept) sans aucune nomination (la table `nomination`
+            // ne contient que la saison en cours). Le regroupement par département est fait côté client.
+            $stmt = $pdo->prepare("
+                SELECT ja.Id_JA, ja.Nom, ja.Prenom, ja.CodeDept
+                FROM ja
+                WHERE ja.JA1 = 1
+                  AND ja.CodeDept IN ($phLigue)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM nomination n
+                      JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                      WHERE d.Id_JA = ja.Id_JA
+                  )
+                ORDER BY ja.CodeDept, ja.Nom, ja.Prenom
+            ");
+            $stmt->execute($deptsLigue);
+            $jaSans = $stmt->fetchAll();
 
             // Cartouche « Prestations par club » : tous les clubs du périmètre (y compris
             // sans équipe ni JA), prestations dues = nb équipes nationales × nombre_arbitrage_national
@@ -179,8 +204,10 @@ class StatsNominationController extends BaseController
 
             // Libellés du filtre « Département » (EN26) : seulement les départements présents dans les clubs.
             $nomsDept = [];
+            $nomsDeptPad = []; // clé = code sur 2 caractères, comme ja.CodeDept
             foreach (getDeptActifs() as $d) {
                 $nomsDept[(int) $d['CodeDept']] = $d['nom'];
+                $nomsDeptPad[str_pad((string) $d['CodeDept'], 2, '0', STR_PAD_LEFT)] = $d['nom'];
             }
             $deptsClubs = [];
             foreach ($clubs as $c) {
@@ -192,6 +219,8 @@ class StatsNominationController extends BaseController
                 'ok'         => true,
                 'rencontres' => $rencontres,
                 'compteurs'  => $compteurs,
+                'jaSans'     => $jaSans,
+                'nomsDept'   => (object) $nomsDeptPad,
                 'clubsRegionale' => $clubsRegionale,
                 'clubs'      => $clubs,
                 'deptsClubs' => array_values($deptsClubs),

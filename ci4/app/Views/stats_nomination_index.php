@@ -32,10 +32,13 @@ table.recap tr:hover td { background:#f4f9f4; }
 .statut-badge.valide { background:#e8f5e9; color:#2e7d32; }
 .statut-badge.envoye { background:#e3f2fd; color:#1565c0; }
 
-#tbl-compteurs { width:100%; border-collapse:collapse; font-size:.85rem; background:#fff; }
-#tbl-compteurs th, #tbl-compteurs td { padding:.4rem .7rem; border-bottom:1px solid #eee; text-align:left; }
-#tbl-compteurs th { background:#1a3a6b; color:#fff; }
-#tbl-compteurs td.nb { text-align:right; font-weight:700; font-variant-numeric:tabular-nums; }
+table.tbl-sans td.nb { text-align:right; font-weight:700; font-variant-numeric:tabular-nums; }
+
+details.dept-det { margin:.4rem 0; border:1px solid #d6e4f5; border-radius:8px; overflow:hidden; }
+.dept-titre { font-size:.9rem; font-weight:700; color:#1565c0; background:#e3f2fd; padding:.45rem .8rem; cursor:pointer; user-select:none; list-style-position:inside; }
+table.tbl-sans { width:100%; border-collapse:collapse; font-size:.85rem; background:#fff; }
+table.tbl-sans th, table.tbl-sans td { padding:.35rem .7rem; border-bottom:1px solid #eee; text-align:left; }
+table.tbl-sans th { background:#1a3a6b; color:#fff; }
 
 /* Cartouche restauré « Clubs avec équipes en régionale » (préfixe reg-) */
 #tbl-clubs-reg { width:100%; min-width:560px; border-collapse:collapse; font-size:.85rem; background:#fff; }
@@ -159,11 +162,20 @@ details.club-accent { border-left-color:#e65100; } .club-accent .sect-ico { back
             <i class="bi bi-chevron-right sect-chev"></i>
         </summary>
         <div class="sect-body">
-        <table id="tbl-compteurs">
-            <thead><tr><th>Juge-arbitre</th><th style="text-align:right">Nominations</th></tr></thead>
-            <tbody id="compteurs-body"></tbody>
-        </table>
+        <div id="compteurs-body"></div>
         </div>
+        </details>
+
+        <details class="sect-btn ja-accent">
+        <summary class="sect-head">
+            <span class="sect-ico"><i class="bi bi-person-x"></i></span>
+            <span class="sect-txt">
+                <span class="sect-titre">JA sans nomination <span class="badge bg-secondary" id="nb-ja-sans"></span></span>
+                <span class="sect-desc">JA actifs (JA1) de la ligue n’ayant aucune nomination, par département</span>
+            </span>
+            <i class="bi bi-chevron-right sect-chev"></i>
+        </summary>
+        <div class="sect-body" id="ja-sans-body"></div>
         </details>
 
         <details class="sect-btn club-accent">
@@ -363,13 +375,43 @@ function rendu(res) {
     });
     $('#journees').html(html);
 
-    // Tableau des compteurs
-    let cbody = '';
-    if (!res.compteurs.length) cbody = '<tr><td colspan="2" class="text-muted">Aucune nomination.</td></tr>';
-    res.compteurs.forEach(c => {
-        cbody += `<tr><td>${escHtml(c.Nom + ' ' + c.Prenom)}</td><td class="nb">${escHtml(c.Nb)}</td></tr>`;
-    });
-    $('#compteurs-body').html(cbody);
+    // Listes par département (JA nominés, JA sans nomination) : une section repliable par département,
+    // fermée par défaut ; l'état ouvert est conservé au rechargement (charger() re-render tout).
+    const nomsDept = res.nomsDept || {};
+    const ouvertsDept = new Set([...document.querySelectorAll('details.dept-det[open]')].map(d => d.dataset.cle));
+    function sectionsParDept(liste, prefixe, enTete, ligne, vide) {
+        if (!liste.length) return vide;
+        const parDept = new Map();
+        liste.forEach(x => {
+            const d = String(x.CodeDept ?? '');
+            if (!parDept.has(d)) parDept.set(d, []);
+            parDept.get(d).push(x);
+        });
+        let h = '';
+        parDept.forEach((items, d) => {
+            const cle = prefixe + '|' + d;
+            const titre = d ? escHtml(d) + (nomsDept[d] ? ' — ' + escHtml(nomsDept[d]) : '') : 'Département non renseigné';
+            h += `<details class="dept-det" data-cle="${escHtml(cle)}"${ouvertsDept.has(cle) ? ' open' : ''}>
+                <summary class="dept-titre">${titre} <span class="badge bg-secondary">${items.length}</span></summary>
+                <div class="recap-scroll"><table class="tbl-sans"><thead><tr>${enTete}</tr></thead><tbody>${items.map(ligne).join('')}</tbody></table></div>
+                </details>`;
+        });
+        return h;
+    }
+
+    // Cartouche « JA nominés » : classés par département puis par nombre de nominations décroissant (ordre du serveur)
+    $('#compteurs-body').html(sectionsParDept(res.compteurs, 'nom',
+        '<th>Juge-arbitre</th><th style="text-align:right">Nominations</th>',
+        c => `<tr><td>${escHtml(c.Nom + ' ' + c.Prenom)}</td><td class="nb">${escHtml(c.Nb)}</td></tr>`,
+        '<p class="text-muted mb-0">Aucune nomination.</p>'));
+
+    // Cartouche « JA sans nomination » (licence, prénom, nom)
+    const jaSans = res.jaSans || [];
+    $('#ja-sans-body').html(sectionsParDept(jaSans, 'sans',
+        '<th>N° licence</th><th>Prénom</th><th>Nom</th>',
+        j => `<tr><td>${escHtml(j.Id_JA)}</td><td>${escHtml(j.Prenom)}</td><td>${escHtml(j.Nom)}</td></tr>`,
+        '<p class="text-muted mb-0">Tous les JA actifs de la ligue ont au moins une nomination.</p>'));
+    $('#nb-ja-sans').text(jaSans.length);
 
     // Cartouche restauré « Clubs avec équipes en régionale » — nominations faites par les JA du club / nombre à effectuer
     $('#reg-coef-nat').text('× ' + (res.coefNat ?? ''));
