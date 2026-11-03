@@ -41,6 +41,7 @@ tr.ligne-ja { cursor:pointer; }
 #nom-ja-body tr.nom-avenir.teinte0 td { background:#e1effa; }
 #nom-ja-body tr.nom-avenir.teinte1 td { background:#c3e0f6; }
 tr.ligne-ja:hover td { background:#eef3fb; }
+span.pastille-club { display:inline-block; min-width:2rem; padding:.05rem .6rem; text-align:center; border:1px solid #2e9e4f; border-radius:999px; background:#e6f6ea; color:#1e7e34; font-weight:700; }
 table.tbl-sans td.nb { text-align:right; font-weight:700; font-variant-numeric:tabular-nums; }
 
 details.dept-det { margin:.4rem 0; border:1px solid #d6e4f5; border-radius:8px; overflow:hidden; }
@@ -423,8 +424,8 @@ function rendu(res) {
 
     // Cartouche « JA nominés » : classés par département puis par nombre de nominations décroissant (ordre du serveur)
     $('#compteurs-body').html(sectionsParDept(res.compteurs, 'nom',
-        '<th>Juge-arbitre</th><th style="text-align:right">Nominations</th><th></th>',
-        c => `<tr class="ligne-ja" data-id="${escHtml(c.Id_JA)}" title="Double-clic : voir les nominations"><td>${escHtml(c.Nom + ' ' + c.Prenom)}</td><td class="nb">${escHtml(c.Nb)}</td><td style="text-align:center"><button type="button" class="btn btn-sm btn-outline-primary py-0 btn-voir-nom" title="Voir les nominations"><i class="bi bi-eye"></i></button></td></tr>`,
+        '<th>Juge-arbitre</th><th style="text-align:right">CRA</th><th style="text-align:right">Club</th><th style="text-align:right">Total</th><th></th>',
+        c => `<tr class="ligne-ja" data-id="${escHtml(c.Id_JA)}" title="Double-clic : voir les nominations"><td>${escHtml(c.Nom + ' ' + c.Prenom)}</td><td class="nb">${escHtml(c.NbCra ?? 0)}</td><td class="nb">${escHtml(c.NbClub ?? 0)}</td><td class="nb">${(+c.NbCra === 0 && +c.NbClub > 0) ? '<span class="pastille-club" title="Arbitrages club uniquement">' + escHtml(c.Nb) + '</span>' : escHtml(c.Nb)}</td><td style="text-align:center"><button type="button" class="btn btn-sm btn-outline-primary py-0 btn-voir-nom" title="Voir les nominations"><i class="bi bi-eye"></i></button></td></tr>`,
         '<p class="text-muted mb-0">Aucune nomination.</p>'));
 
     // Cartouche « JA sans nomination » (licence, prénom, nom)

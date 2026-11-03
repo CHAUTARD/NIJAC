@@ -82,7 +82,8 @@ class StatsNominationController extends BaseController
 
             // Nombre de nominations par JA de la ligue (toutes ses nominations de la saison)
             $stmt = $pdo->prepare("
-                SELECT ja.Id_JA, ja.Nom, ja.Prenom, ja.CodeDept, COUNT(*) AS Nb
+                SELECT ja.Id_JA, ja.Nom, ja.Prenom, ja.CodeDept, COUNT(*) AS Nb,
+                       SUM(d.Reponse = 'O') AS NbCra, SUM(d.Reponse = 'P') AS NbClub
                 FROM nomination n
                 JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
                 JOIN ja           ON ja.Id_JA        = d.Id_JA
