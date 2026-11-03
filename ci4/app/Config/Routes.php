@@ -239,6 +239,7 @@ $routes->post('nomination/demander-ja-club', 'NominationController::demanderJaCl
 // Mêmes rôles qu'EN14/EN28 : Nominateur, Administrateur (filtre nominauth, CSR exclu).
 $routes->get('stats-nomination', 'StatsNominationController::index', ['filter' => 'nominauth']);
 $routes->get('stats-nomination/data', 'StatsNominationController::data', ['filter' => 'nominauth']);
+$routes->get('stats-nomination/ja', 'StatsNominationController::nominationsJa', ['filter' => 'nominauth']);
 
 // ── EN28 Suivi des nominations ───────────────────────────────────────────────
 // Menu nominateur (E003), après EN14. Nominations du périmètre + frais saisis

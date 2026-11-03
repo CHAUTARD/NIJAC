@@ -32,6 +32,15 @@ table.recap tr:hover td { background:#f4f9f4; }
 .statut-badge.valide { background:#e8f5e9; color:#2e7d32; }
 .statut-badge.envoye { background:#e3f2fd; color:#1565c0; }
 
+table.tbl-sans tbody tr:nth-child(odd) td { background:#f2f6fb; }
+table.tbl-sans tbody tr:nth-child(even) td { background:#e1eaf5; }
+table.tbl-sans tbody tr:hover td { background:#cfdff2; }
+tr.ligne-ja { cursor:pointer; }
+#nom-ja-body tr.nom-passee.teinte0 td { background:#e3f5e1; }
+#nom-ja-body tr.nom-passee.teinte1 td { background:#c8ebc4; }
+#nom-ja-body tr.nom-avenir.teinte0 td { background:#e1effa; }
+#nom-ja-body tr.nom-avenir.teinte1 td { background:#c3e0f6; }
+tr.ligne-ja:hover td { background:#eef3fb; }
 table.tbl-sans td.nb { text-align:right; font-weight:700; font-variant-numeric:tabular-nums; }
 
 details.dept-det { margin:.4rem 0; border:1px solid #d6e4f5; border-radius:8px; overflow:hidden; }
@@ -251,6 +260,18 @@ details.club-accent { border-left-color:#e65100; } .club-accent .sect-ico { back
 
 </div>
 
+<div class="modal fade" id="modal-nom-ja" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Nominations de <span id="nom-ja-nom"></span> <span class="badge bg-secondary" id="nom-ja-nb"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+      </div>
+      <div class="modal-body" id="nom-ja-body"></div>
+    </div>
+  </div>
+</div>
+
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/bootstrap.bundle.min.js') ?>"></script>
 <script src="<?= base_url('asset/js/nijac-csrf.js') ?>"></script>
@@ -259,6 +280,7 @@ details.club-accent { border-left-color:#e65100; } .club-accent .sect-ico { back
 'use strict';
 
 const DATA_URL = '<?= site_url('stats-nomination/data') ?>';
+const JA_URL   = '<?= site_url('stats-nomination/ja') ?>';
 
 function escHtml(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -401,8 +423,8 @@ function rendu(res) {
 
     // Cartouche « JA nominés » : classés par département puis par nombre de nominations décroissant (ordre du serveur)
     $('#compteurs-body').html(sectionsParDept(res.compteurs, 'nom',
-        '<th>Juge-arbitre</th><th style="text-align:right">Nominations</th>',
-        c => `<tr><td>${escHtml(c.Nom + ' ' + c.Prenom)}</td><td class="nb">${escHtml(c.Nb)}</td></tr>`,
+        '<th>Juge-arbitre</th><th style="text-align:right">Nominations</th><th></th>',
+        c => `<tr class="ligne-ja" data-id="${escHtml(c.Id_JA)}" title="Double-clic : voir les nominations"><td>${escHtml(c.Nom + ' ' + c.Prenom)}</td><td class="nb">${escHtml(c.Nb)}</td><td style="text-align:center"><button type="button" class="btn btn-sm btn-outline-primary py-0 btn-voir-nom" title="Voir les nominations"><i class="bi bi-eye"></i></button></td></tr>`,
         '<p class="text-muted mb-0">Aucune nomination.</p>'));
 
     // Cartouche « JA sans nomination » (licence, prénom, nom)
@@ -528,6 +550,27 @@ $('#btn-export-csv').on('click', function () {
 });
 
 let dernierChargement = 0;
+
+// Double-clic sur un JA nominé (ou bouton œil) : liste de ses nominations dans une popup
+$(document).on('dblclick click', 'tr.ligne-ja', function (e) {
+    if (e.type === 'click' && !$(e.target).closest('.btn-voir-nom').length) return;
+    const id = $(this).data('id');
+    $('#nom-ja-nom').text($(this).find('td:first').text());
+    $('#nom-ja-nb').text('');
+    $('#nom-ja-body').html('<p class="text-muted mb-0">Chargement…</p>');
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-nom-ja')).show();
+    $.get(JA_URL, { id: id }, function (r) {
+        if (!r.ok) { $('#nom-ja-body').html('<p class="text-danger mb-0">' + escHtml(r.err || 'Erreur.') + '</p>'); return; }
+        $('#nom-ja-nb').text(r.lignes.length);
+        let teinte = 1, derniere = null;
+        const d0 = new Date(), aujourdhui = d0.getFullYear() + '-' + String(d0.getMonth() + 1).padStart(2, '0') + '-' + String(d0.getDate()).padStart(2, '0');
+        $('#nom-ja-body').html(r.lignes.length
+            ? '<table class="tbl-sans"><thead><tr><th>Date</th><th>Division</th><th>Rencontre</th></tr></thead><tbody>'
+              + r.lignes.map(l => { const dt = String(l.Date).substr(0, 10); if (dt !== derniere) { teinte = 1 - teinte; derniere = dt; } return `<tr class="${dt < aujourdhui ? 'nom-passee' : 'nom-avenir'} teinte${teinte}"><td>${escHtml(fmtDate(l.Date))}${l.Heure ? ' ' + escHtml(String(l.Heure).substr(0, 5)) : ''}</td><td>${escHtml(l.DivisionCode)}${l.Poule ? ' ' + escHtml(l.Poule) : ''}</td><td>${escHtml(l.NomDom)} – ${escHtml(l.NomExt || '')}</td></tr>`; }).join('')
+              + '</tbody></table>'
+            : '<p class="text-muted mb-0">Aucune nomination.</p>');
+    }, 'json').fail(function () { $('#nom-ja-body').html('<p class="text-danger mb-0">Erreur réseau.</p>'); });
+});
 
 function charger() {
     dernierChargement = Date.now();

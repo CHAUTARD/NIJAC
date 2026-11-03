@@ -233,4 +233,53 @@ class StatsNominationController extends BaseController
             return $this->response->setJSON(['ok' => false, 'err' => messageErreur($e, 'Erreur technique : statistiques indisponibles.')]);
         }
     }
+
+    /**
+     * Liste des nominations d'un JA (double-clic sur une ligne de « JA nominés »).
+     * Même périmètre que le cartouche : JA d'un département actif de la ligue.
+     */
+    public function nominationsJa(): ResponseInterface
+    {
+        try {
+            $idJa = (int) $this->request->getGet('id');
+            if ($idJa <= 0) {
+                return $this->response->setJSON(['ok' => false, 'err' => 'JA invalide.']);
+            }
+
+            $deptsLigue = array_map(
+                static fn ($d) => str_pad((string) $d['CodeDept'], 2, '0', STR_PAD_LEFT),
+                getDeptActifs()
+            );
+            $deptsLigue = $deptsLigue ?: [''];
+            $phLigue    = implode(',', array_fill(0, count($deptsLigue), '?'));
+
+            $pdo  = getPDO();
+            $stmt = $pdo->prepare("
+                SELECT ja.Nom, ja.Prenom, r.Journee, r.Date, r.Heure, r.Poule,
+                       dv.Division AS DivisionCode, dv.Color AS DivisionColor,
+                       ed.Nom AS NomDom, ee.Nom AS NomExt
+                FROM nomination n
+                JOIN disponible d ON d.Id_Disponible = n.Id_Disponible
+                JOIN ja           ON ja.Id_JA        = d.Id_JA
+                JOIN rencontre r  ON r.Id_Rencontre  = n.Id_Rencontre
+                JOIN equipe ed    ON ed.Id_Equipe    = r.Id_EquipeDom
+                JOIN division dv  ON dv.Division     = ed.Division
+                LEFT JOIN equipe ee ON ee.Id_Equipe  = r.Id_EquipeExt
+                WHERE ja.Id_JA = ? AND ja.CodeDept IN ($phLigue)
+                ORDER BY r.Date, r.Heure, r.Id_Rencontre
+            ");
+            $stmt->execute(array_merge([$idJa], $deptsLigue));
+            $lignes = $stmt->fetchAll();
+
+            return $this->response->setJSON([
+                'ok'      => true,
+                'ja'      => $lignes ? trim($lignes[0]['Prenom'] . ' ' . $lignes[0]['Nom']) : '',
+                'lignes'  => $lignes,
+            ]);
+        } catch (\Throwable $e) {
+            error_log('[NIJAC] EN26 nominations JA : ' . $e->getMessage());
+
+            return $this->response->setJSON(['ok' => false, 'err' => messageErreur($e, 'Erreur technique : nominations indisponibles.')]);
+        }
+    }
 }
