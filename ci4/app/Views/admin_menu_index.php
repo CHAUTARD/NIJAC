@@ -451,7 +451,7 @@
                     <span class="btn-code">EA99</span>
                     <div class="btn-icon"><i class="bi bi-shield-lock-fill" style="color: #1f3a5f;" aria-hidden="true"></i></div>
                     <span>Sécurité TOTP</span>
-                    <span class="btn-desc">Double authentification sur smartphone</span>
+                    <span class="btn-desc">Double authentification (2FAS Auth)</span>
                 </a>
 
             </div>

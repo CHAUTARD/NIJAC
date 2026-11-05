@@ -215,7 +215,9 @@ class SuiviNominationController extends BaseController
             // Case « FFTT 131 » de la popup : null si absente de la requête (ancien comportement : remise à 0).
             $f131Raw  = $this->request->getPost('f131');
 
-            if ($idNom <= 0 || $idJa <= 0 || !$depts) {
+            // id_ja = 0 (« Pas de JA ») : la nomination est supprimée.
+            $retrait = (string) $this->request->getPost('id_ja') === '0';
+            if ($idNom <= 0 || ($idJa <= 0 && !$retrait) || !$depts) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Paramètres invalides.']);
             }
             if ($f131Raw !== null && !in_array((string) $f131Raw, ['0', '1'], true)) {
@@ -252,6 +254,16 @@ class SuiviNominationController extends BaseController
             $nom = $stmt->fetch();
             if (!$nom) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Nomination introuvable.']);
+            }
+
+            if ($retrait) {
+                $ancien = $nom['FichierPeage'] !== null ? (string) $nom['FichierPeage'] : null;
+                $pdo->prepare('DELETE FROM nomination WHERE Id_Nomination = ?')->execute([$idNom]);
+                if ($ancien !== null) {
+                    JustificatifPeage::supprimer($ancien);
+                }
+
+                return $this->response->setJSON(['ok' => true, 'msg' => 'Juge-arbitre retiré : nomination supprimée.']);
             }
 
             // Nouveau justificatif enregistré AVANT la transaction (supprimé si elle échoue) ; l'ancien n'est supprimé

@@ -107,11 +107,10 @@
             <div id="bloc-activation">
                 <p class="mb-2">
                     L'accès à <strong><?= esc($retourCode) ?></strong> (et aux autres écrans réservés EA96 / EA97 / EA98)
-                    exige désormais un code d'une application d'authentification (Google Authenticator, Microsoft
-                    Authenticator, FreeOTP…).
+                    exige désormais un code de l'application d'authentification <strong>2FAS Auth</strong>.
                 </p>
                 <ol class="mb-3">
-                    <li>Dans l'application, ajoutez un compte en scannant ce QR code :</li>
+                    <li>Dans <strong>2FAS Auth</strong>, ajoutez un compte en scannant ce QR code :</li>
                 </ol>
                 <div id="qr" data-uri="<?= esc($uri, 'attr') ?>"></div>
                 <p class="mb-1 mt-2">Ou saisissez manuellement cette clé (type « basée sur l'heure ») :</p>
@@ -174,7 +173,7 @@
             <?php if ($erreur !== ''): ?>
             <div class="alert alert-danger small"><?= esc($erreur) ?></div>
             <?php endif; ?>
-            <p class="mb-2">Saisissez le code à 6 chiffres affiché par votre application d'authentification pour accéder à
+            <p class="mb-2">Saisissez le code à 6 chiffres affiché par <strong>2FAS Auth</strong> pour accéder à
                <strong><?= esc($retourCode) ?></strong>.</p>
             <form id="form-verifier" autocomplete="off" class="d-flex gap-2 align-items-center flex-wrap">
                 <input type="text" id="ver-code" class="form-control champ-code" inputmode="numeric"

@@ -511,6 +511,8 @@ function relancerClub(n, $btn) {
 let jaListe = null;      // JA actifs du périmètre, chargés à la première ouverture
 let modifNom = null;     // nomination en cours de modification
 let reqDispo = null;     // requête ja-disponibles en cours (abandonnée si la liste est redemandée)
+/** Première entrée de la liste en modification : retire le JA (la nomination est supprimée). */
+const optionPasDeJa = () => $('<option>').val('0').text('Pas de JA');
 const option = j => $('<option>').val(j.Id_JA).text(`${j.Nom} ${j.Prenom} (${j.Id_JA})`);
 
 /**
@@ -527,7 +529,7 @@ function chargerJaDisponibles(n) {
         if (!res.ok) { vide('—'); toast(escHtml(res.msg), false); return; }
         if (!res.ja.length) { vide('Aucun JA disponible pour cette rencontre'); return; }
         $sel.empty().prop('disabled', false);
-        if (!n.Id_Nomination) $sel.append($('<option>').val('').text('— Choisir le JA —'));
+        $sel.append(n.Id_Nomination ? optionPasDeJa() : $('<option>').val('').text('— Choisir le JA —'));
         $sel.append(res.ja.map(j => option(j).text(`${j.Nom} ${j.Prenom} (${j.Id_JA})${j.actuel ? ' — actuel' : ''}`)));
         if (n.Id_Nomination) $sel.val(n.Id_JA);
         $btn.prop('disabled', false);
@@ -557,6 +559,7 @@ function remplirListeJa(n) {
         const [prenom, ...nom] = String(n.NomJa ?? '').split(' ');
         liste = [{ Id_JA: n.Id_JA, Nom: nom.join(' '), Prenom: prenom }, ...liste];
     }
+    $sel.append(optionPasDeJa());
     liste.forEach(j => $sel.append(option(j)));
     $sel.val(n.Id_JA);
 }
@@ -608,6 +611,19 @@ $('#btn-modif-enregistrer').on('click', function () {
     if (!modifNom) return;
     const saisie = !modifNom.Id_Nomination;
     if (saisie && !$('#modif-ja').val()) { toast('Choisissez le juge-arbitre.', false); return; }
+    if (!saisie && $('#modif-ja').val() === '0') {
+        // « Pas de JA » : la nomination est supprimée (la rencontre redevient sans JA).
+        nijacConfirm(`Retirer le juge-arbitre de la rencontre ${modifNom.NomDom} vs ${modifNom.NomExt ?? '?'} ? La nomination sera supprimée.`, function () {
+            const $b = $('#btn-modif-enregistrer').prop('disabled', true);
+            $.post(`${SUIVI_BASE}/modifier`, { id_nomination: modifNom.Id_Nomination, id_ja: 0 }, null, 'json').done(function (r) {
+                toast(escHtml(r.msg), !!r.ok);
+                if (!r.ok) return;
+                bootstrap.Modal.getInstance('#modal-modif').hide();
+                chargerListe();
+            }).fail(() => toast('Erreur réseau.', false)).always(() => $b.prop('disabled', false));
+        }, null, { type: 'danger', confirmLabel: 'Retirer le JA' });
+        return;
+    }
     const justif = saisie || !FICHIER_PEAGE_DISPO ? null : ($('#modif-justif')[0].files[0] || null);
     if (justif && justif.size > JUSTIF_TAILLE_MAX) { toast('Justificatif trop volumineux (5 Mo maximum).', false); return; }
     const $btn = $(this).prop('disabled', true);
