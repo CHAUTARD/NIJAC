@@ -37,6 +37,7 @@ class CraDesignationController extends BaseController
         return view('cra_designation_index', [
             'nomComplet'  => trim(($u['nom'] ?? '') . ' ' . ($u['prenom'] ?? '')),
             'departement' => $u['id_departement'] ?? '',
+            'peutConvoquer' => aRole('CRA Nominateur'),   // envoi des convocations : rôle CRA Nominateur uniquement
         ]);
     }
 
@@ -217,6 +218,10 @@ class CraDesignationController extends BaseController
      */
     public function convocations(): ResponseInterface
     {
+        // Envoi des convocations réservé au rôle CRA Nominateur (ni CRA Convoc ni l'administrateur seuls n'en ont le droit).
+        if (!aRole('CRA Nominateur')) {
+            return $this->response->setJSON(['ok' => false, 'msg' => "L'envoi des convocations est réservé au rôle CRA Nominateur."]);
+        }
         $pdo      = getPDO();
         $moi      = $_SESSION['utilisateur'] ?? [];
         $id       = (int) ($this->request->getPost('id') ?? 0);

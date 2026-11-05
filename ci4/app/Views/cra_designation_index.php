@@ -263,6 +263,7 @@
 <script>
 'use strict';
 const BASE = '<?= site_url('cra-designation') ?>';
+const PEUT_CONVOQUER = <?= !empty($peutConvoquer) ? 'true' : 'false' ?>;   // rôle CRA Nominateur
 const GRADES = ['JA1', 'JA2', 'JA3', 'JAN', 'JAI'];
 let competitions = [];
 let jas = [];
@@ -327,7 +328,7 @@ function valeurTri(c, col) {
 }
 
 /** Cochable pour l'envoi des convocations : au moins un JA principal désigné. */
-const cochable = c => Number(c.NbDesJA) > 0;
+const cochable = c => PEUT_CONVOQUER && Number(c.NbDesJA) > 0;
 
 /** 'AAAA-MM-JJ HH:MM:SS' → 'JJ/MM/AAAA à HH:MM'. */
 function formatDateHeure(dt) {
@@ -342,7 +343,8 @@ function majCoches() {
     $('#chk-tout').prop({ checked: $cases.length > 0 && nbCoches === $cases.length,
         indeterminate: nbCoches > 0 && nbCoches < $cases.length, disabled: !$cases.length });
     $('#nb-coches').text(coches.size);
-    $('#btn-convoquer').prop('disabled', !coches.size);
+    $('#btn-convoquer').prop('disabled', !PEUT_CONVOQUER || !coches.size)
+        .attr('title', PEUT_CONVOQUER ? '' : "Envoi réservé au rôle CRA Nominateur");
 }
 
 /** Tableau des compétitions : recherche (n°, libellé, lieu, dépt), tri, ligne courante surlignée. */
@@ -384,7 +386,7 @@ function afficherListe() {
             .attr('title', sansJa ? 'Aucun JA principal désigné' : (complete ? 'Désignation complète' : null)).append(
             $('<td class="td-c td-chk">').append($('<input type="checkbox" class="chk-conv form-check-input">')
                 .val(id).prop({ checked: coches.has(id), disabled: !cochable(c) })
-                .attr({ title: cochable(c) ? 'Envoyer les convocations' : 'Aucun JA principal désigné : rien à convoquer',
+                .attr({ title: !PEUT_CONVOQUER ? 'Envoi réservé au rôle CRA Nominateur' : (cochable(c) ? 'Envoyer les convocations' : 'Aucun JA principal désigné : rien à convoquer'),
                     'aria-label': `Envoyer les convocations de la compétition n°${c.Numero}` })),
             $etat,
             $('<td class="nowrap">').text(formatDates(c.DateDebut, c.DateFin)),
