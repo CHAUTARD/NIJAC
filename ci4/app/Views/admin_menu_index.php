@@ -200,6 +200,7 @@
         .btn-configuration{ background-color: #eceff1; }
         .btn-dbadmin      { background-color: #fce4ec; }
         .btn-region       { background-color: #e8eaf6; }
+        .btn-role         { background-color: #ede7f6; }
         .btn-departement  { background-color: #e1f5fe; }
         .btn-competition-regionale { background-color: #f3e5f5; }
         .btn-equipe-regionale { background-color: #e8f5e9; }
@@ -409,6 +410,13 @@
                     <div class="btn-icon"><img src="<?= base_url('img/podium.png') ?>" alt="Division"></div>
                     <span>Division</span>
                     <span class="btn-desc">Définir les divisions et leur niveau</span>
+                </a>
+
+                <a href="<?= site_url('role') ?>" class="menu-btn btn-role">
+                    <span class="btn-code">EA94</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/Role.png') ?>" alt="Rôles"></div>
+                    <span>Les rôles</span>
+                    <span class="btn-desc">Gérer la table des rôles</span>
                 </a>
 
                 <a href="<?= site_url('configuration') ?>" class="menu-btn btn-configuration">

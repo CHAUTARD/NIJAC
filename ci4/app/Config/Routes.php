@@ -96,6 +96,14 @@ $routes->post('commune', 'CommuneController::store', ['filter' => 'adminauth']);
 $routes->post('commune/import', 'CommuneController::importCsv', ['filter' => 'adminauth']);
 $routes->put('commune/(:segment)', 'CommuneController::updateCoords/$1', ['filter' => 'adminauth']);
 
+// ── EA94 Rôles (table role) ──────────────────────────────────────────────────
+$routes->get('role', 'RoleController::index', ['filter' => 'adminauth']);
+$routes->get('role/data', 'RoleController::data', ['filter' => 'adminauth']);
+$routes->get('role/data/(:num)', 'RoleController::show/$1', ['filter' => 'adminauth']);
+$routes->post('role', 'RoleController::store', ['filter' => 'adminauth']);
+$routes->put('role/(:num)', 'RoleController::update/$1', ['filter' => 'adminauth']);
+$routes->delete('role/(:num)', 'RoleController::delete/$1', ['filter' => 'adminauth']);
+
 // ── EA93 Messagerie ──────────────────────────────────────────────────────────
 // Filtre "auth" (pas "adminauth") : accessible aux Nominateurs (leurs messages
 // + les systèmes), modification/suppression des messages système restreinte à
