@@ -95,7 +95,6 @@ function initTableConfiguration(\PDO $pdo): void
         $pdo->exec('
             CREATE TABLE IF NOT EXISTS CRA_Competition (
                 Id_CRA_Competition INT AUTO_INCREMENT PRIMARY KEY,
-                Numero             INT NOT NULL,
                 DateDebut          DATE NOT NULL,
                 DateFin            DATE NULL,
                 Libelle            VARCHAR(150) NOT NULL,
@@ -104,42 +103,50 @@ function initTableConfiguration(\PDO $pdo): void
                 Lieu               VARCHAR(100) NOT NULL,
                 NiveauJA           VARCHAR(20) NOT NULL,
                 NbrJA              TINYINT UNSIGNED NOT NULL DEFAULT 1,
-                NbrAdjoint         TINYINT UNSIGNED NOT NULL DEFAULT 0,
-                UNIQUE KEY uq_cra_numero (Numero)
+                NbrAdjoint         TINYINT UNSIGNED NOT NULL DEFAULT 0
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ');
+        // Le n° de compétition n'existe plus : Id_CRA_Competition (auto-incrément) en tient lieu.
+        if ($pdo->query("SHOW COLUMNS FROM CRA_Competition LIKE 'Numero'")->fetch()) {
+            try {
+                $pdo->exec('ALTER TABLE CRA_Competition DROP INDEX uq_cra_numero');
+            } catch (\PDOException $e) {
+                // index absent ou déjà supprimé
+            }
+            $pdo->exec('ALTER TABLE CRA_Competition DROP COLUMN Numero');
+        }
         if (!(int) $pdo->query('SELECT COUNT(*) FROM CRA_Competition')->fetchColumn()) {
             $stmtCra = $pdo->prepare('INSERT INTO CRA_Competition
-                (Numero, DateDebut, DateFin, Libelle, NbTablesMin, NbTablesMax, Lieu, NiveauJA)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+                (DateDebut, DateFin, Libelle, NbTablesMin, NbTablesMax, Lieu, NiveauJA)
+                VALUES (?, ?, ?, ?, ?, ?, ?)');
             foreach ([
-                [1,  '2026-10-10', null, '1er tour Critérium Féminin et Benjamins Normandie', 16, null, 'Saint-Pierre-lès-Elbeuf', 'JA2'],
-                [2,  '2026-10-11', null, '1er tour Jeunes et Seniors Régionale 1 Normandie', 16, null, 'Saint-Pierre-lès-Elbeuf', 'JA2'],
-                [3,  '2026-10-11', null, '1er tour Seniors Régionale 2 Zone 1', 8, null, 'Cormelles-le-Royal', 'JA2'],
-                [4,  '2026-10-11', null, '1er tour Seniors Régionale 2 Zone 2', 8, null, 'AS Stéphanaise', 'JA2'],
-                [5,  '2026-11-14', '2026-11-15', '2e tour Critérium fédéral Nationale 2', 24, null, 'Flers', 'JAN JA3'],
-                [6,  '2026-11-14', null, '2e tour Critérium Féminin et Benjamins Normandie', 16, null, 'Vire', 'JA2'],
-                [7,  '2026-11-15', null, '2e tour Jeunes et Seniors Régionale 1 Normandie', 16, null, 'Vire', 'JA2'],
-                [8,  '2026-11-15', null, '2e tour Seniors Régionale 2 Zone 1', 8, null, 'Cormelles-le-Royal', 'JA2'],
-                [9,  '2026-11-15', null, '2e tour Seniors Régionale 2 Zone 2', 8, null, 'Caudebec-lès-Elbeuf', 'JA2'],
-                [10, '2026-11-28', null, 'Tournoi régional féminin', 16, 24, 'À déterminer', 'JA3'],
-                [11, '2027-01-09', null, 'Journée qualificative Championnats de France Vétérans', 24, null, 'Bolbec', 'JA3'],
-                [12, '2027-01-10', null, 'Top Détection', 22, 24, 'Bolbec', 'JA3'],
-                [13, '2027-01-30', null, '3e tour Critérium Féminin et Benjamins Normandie', 16, null, 'Le Havre', 'JA2'],
-                [14, '2027-01-31', null, '3e tour Jeunes et Seniors Régionale 1 Normandie', 16, null, 'Le Havre', 'JA2'],
-                [15, '2027-01-31', null, '3e tour Seniors Régionale 2 - Cormelles', 8, null, 'Cormelles-le-Royal', 'JA2'],
-                [16, '2027-01-31', null, '3e tour Seniors Régionale 2 - Zone 2', 8, null, 'Caudebec-lès-Elbeuf ou Saint-Étienne-du-Rouvray', 'JA2'],
-                [17, '2027-02-20', null, 'Coupe nationale Vétérans - échelon régional', 14, 16, 'Caudebec-lès-Elbeuf', 'JA3'],
-                [18, '2027-02-21', null, 'Titres individuels Normandie', 24, null, 'Saint-Lô', 'JA3'],
-                [19, '2027-03-06', '2027-03-07', '4e tour Critérium fédéral Nationale 2', 24, null, 'Saint-Pierre-lès-Elbeuf', 'JAN JA3'],
-                [20, '2027-03-06', null, '4e tour Critérium Féminin et Benjamins Normandie', 16, null, 'Flers', 'JA2'],
-                [21, '2027-03-07', null, '4e tour Jeunes et Seniors Régionale 1 Normandie', 16, null, 'Flers', 'JA2'],
-                [22, '2027-03-07', null, '4e tour Seniors Régionale 2 Zone 1', 8, null, 'Cormelles-le-Royal', 'JA2'],
-                [23, '2027-03-07', null, '4e tour Seniors Régionale 2 Zone 2', 8, null, 'Pacy-sur-Eure', 'JA2'],
-                [24, '2027-04-17', '2027-04-18', 'Finale régionale par classements', 24, null, 'Le Havre', 'JA3'],
-                [25, '2027-05-15', '2027-05-16', 'Grand Prix Jeunes Crédit Agricole', 40, 50, 'Saint-Pierre-lès-Elbeuf', 'JA3'],
-                [26, '2027-06-12', '2027-06-13', 'Titres régionaux Championnat par équipes', 16, null, 'Ducey', 'JA3'],
-                [27, '2027-06-12', '2027-06-13', 'Inter-comités', 20, 24, 'À déterminer', 'JA3'],
+                ['2026-10-10', null, '1er tour Critérium Féminin et Benjamins Normandie', 16, null, 'Saint-Pierre-lès-Elbeuf', 'JA2'],
+                ['2026-10-11', null, '1er tour Jeunes et Seniors Régionale 1 Normandie', 16, null, 'Saint-Pierre-lès-Elbeuf', 'JA2'],
+                ['2026-10-11', null, '1er tour Seniors Régionale 2 Zone 1', 8, null, 'Cormelles-le-Royal', 'JA2'],
+                ['2026-10-11', null, '1er tour Seniors Régionale 2 Zone 2', 8, null, 'AS Stéphanaise', 'JA2'],
+                ['2026-11-14', '2026-11-15', '2e tour Critérium fédéral Nationale 2', 24, null, 'Flers', 'JAN JA3'],
+                ['2026-11-14', null, '2e tour Critérium Féminin et Benjamins Normandie', 16, null, 'Vire', 'JA2'],
+                ['2026-11-15', null, '2e tour Jeunes et Seniors Régionale 1 Normandie', 16, null, 'Vire', 'JA2'],
+                ['2026-11-15', null, '2e tour Seniors Régionale 2 Zone 1', 8, null, 'Cormelles-le-Royal', 'JA2'],
+                ['2026-11-15', null, '2e tour Seniors Régionale 2 Zone 2', 8, null, 'Caudebec-lès-Elbeuf', 'JA2'],
+                ['2026-11-28', null, 'Tournoi régional féminin', 16, 24, 'À déterminer', 'JA3'],
+                ['2027-01-09', null, 'Journée qualificative Championnats de France Vétérans', 24, null, 'Bolbec', 'JA3'],
+                ['2027-01-10', null, 'Top Détection', 22, 24, 'Bolbec', 'JA3'],
+                ['2027-01-30', null, '3e tour Critérium Féminin et Benjamins Normandie', 16, null, 'Le Havre', 'JA2'],
+                ['2027-01-31', null, '3e tour Jeunes et Seniors Régionale 1 Normandie', 16, null, 'Le Havre', 'JA2'],
+                ['2027-01-31', null, '3e tour Seniors Régionale 2 - Cormelles', 8, null, 'Cormelles-le-Royal', 'JA2'],
+                ['2027-01-31', null, '3e tour Seniors Régionale 2 - Zone 2', 8, null, 'Caudebec-lès-Elbeuf ou Saint-Étienne-du-Rouvray', 'JA2'],
+                ['2027-02-20', null, 'Coupe nationale Vétérans - échelon régional', 14, 16, 'Caudebec-lès-Elbeuf', 'JA3'],
+                ['2027-02-21', null, 'Titres individuels Normandie', 24, null, 'Saint-Lô', 'JA3'],
+                ['2027-03-06', '2027-03-07', '4e tour Critérium fédéral Nationale 2', 24, null, 'Saint-Pierre-lès-Elbeuf', 'JAN JA3'],
+                ['2027-03-06', null, '4e tour Critérium Féminin et Benjamins Normandie', 16, null, 'Flers', 'JA2'],
+                ['2027-03-07', null, '4e tour Jeunes et Seniors Régionale 1 Normandie', 16, null, 'Flers', 'JA2'],
+                ['2027-03-07', null, '4e tour Seniors Régionale 2 Zone 1', 8, null, 'Cormelles-le-Royal', 'JA2'],
+                ['2027-03-07', null, '4e tour Seniors Régionale 2 Zone 2', 8, null, 'Pacy-sur-Eure', 'JA2'],
+                ['2027-04-17', '2027-04-18', 'Finale régionale par classements', 24, null, 'Le Havre', 'JA3'],
+                ['2027-05-15', '2027-05-16', 'Grand Prix Jeunes Crédit Agricole', 40, 50, 'Saint-Pierre-lès-Elbeuf', 'JA3'],
+                ['2027-06-12', '2027-06-13', 'Titres régionaux Championnat par équipes', 16, null, 'Ducey', 'JA3'],
+                ['2027-06-12', '2027-06-13', 'Inter-comités', 20, 24, 'À déterminer', 'JA3'],
             ] as $ligneCra) {
                 $stmtCra->execute($ligneCra);
             }

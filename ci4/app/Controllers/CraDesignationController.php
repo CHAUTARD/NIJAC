@@ -47,7 +47,7 @@ class CraDesignationController extends BaseController
     public function data(): ResponseInterface
     {
         $pdo = getPDO();
-        $competitions = $pdo->query('SELECT c.Id_CRA_Competition, c.Numero, c.DateDebut, c.DateFin, c.Libelle,
+        $competitions = $pdo->query('SELECT c.Id_CRA_Competition, c.Id_CRA_Competition AS Numero, c.DateDebut, c.DateFin, c.Libelle,
                 c.NbTablesMin, c.NbTablesMax, c.Lieu, c.Id_Club, c.NomClub, c.NiveauJA, c.NbrJA, c.NbrAdjoint,
                 SUBSTRING(NULLIF(c.Id_Club, \'\'), 3, 2) AS CodeDept,
                 (SELECT COUNT(*) FROM CRA_Designation d WHERE d.Id_CRA_Competition = c.Id_CRA_Competition AND d.Role = \'JA\') AS NbDesJA,
@@ -59,7 +59,7 @@ class CraDesignationController extends BaseController
                 (SELECT MAX(d.DateConvocation) FROM CRA_Designation d WHERE d.Id_CRA_Competition = c.Id_CRA_Competition) AS DerniereConvocation,
                 (SELECT COUNT(*) FROM CRA_Designation d JOIN ja j ON j.Id_JA = d.Id_JA
                     WHERE d.Id_CRA_Competition = c.Id_CRA_Competition AND COALESCE(j.Email, \'\') = \'\') AS NbSansEmail
-            FROM CRA_Competition c ORDER BY c.DateDebut, c.Numero')->fetchAll(\PDO::FETCH_ASSOC);
+            FROM CRA_Competition c ORDER BY c.DateDebut, c.Id_CRA_Competition')->fetchAll(\PDO::FETCH_ASSOC);
         // Quotas (NbrJA = total, adjoints compris) et état : désignations au-delà
         // des quotas (anciennes, avant la règle « total ») = « à corriger ».
         foreach ($competitions as &$c) {
@@ -227,7 +227,7 @@ class CraDesignationController extends BaseController
         $renvoyer = $this->request->getPost('renvoyer') === '1';
 
         // Salle du club organisateur : principale en priorité, sinon la première.
-        $stmt = $pdo->prepare('SELECT c.Id_CRA_Competition, c.Numero, c.DateDebut, c.DateFin, c.Libelle, c.Lieu,
+        $stmt = $pdo->prepare('SELECT c.Id_CRA_Competition, c.Id_CRA_Competition AS Numero, c.DateDebut, c.DateFin, c.Libelle, c.Lieu,
                 c.NbTablesMin, c.NbTablesMax, c.NbrJA, c.NbrAdjoint, c.NiveauJA,
                 s.Nom AS SalleNom, s.Adresse AS SalleAdresse, s.Cp AS SalleCp, s.Ville AS SalleVille
             FROM CRA_Competition c
@@ -460,7 +460,7 @@ class CraDesignationController extends BaseController
     private function indisponibles(\PDO $pdo, int $id): array
     {
         $stmt = $pdo->prepare('SELECT d2.Id_JA, CONCAT(UPPER(j.Nom), \' \', j.Prenom) AS Nom,
-                c2.Numero, c2.Libelle, c2.DateDebut, c2.DateFin
+                c2.Id_CRA_Competition AS Numero, c2.Libelle, c2.DateDebut, c2.DateFin
             FROM CRA_Competition c
             JOIN CRA_Competition c2 ON c2.Id_CRA_Competition <> c.Id_CRA_Competition
               AND c2.DateDebut <= COALESCE(c.DateFin, c.DateDebut)
@@ -468,7 +468,7 @@ class CraDesignationController extends BaseController
             JOIN CRA_Designation d2 ON d2.Id_CRA_Competition = c2.Id_CRA_Competition
             JOIN ja j ON j.Id_JA = d2.Id_JA
             WHERE c.Id_CRA_Competition = ?
-            ORDER BY c2.DateDebut, c2.Numero');
+            ORDER BY c2.DateDebut, c2.Id_CRA_Competition');
         $stmt->execute([$id]);
         $out = [];
         foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $r) {

@@ -81,7 +81,7 @@ class CraDispoController extends BaseController
     {
         $pdo = getPDO();
         $nb = fn ($cond) => "(SELECT COUNT(*) FROM CRA_Dispo d WHERE d.Id_CRA_Competition = c.Id_CRA_Competition AND $cond)";
-        $competitions = $pdo->query('SELECT c.Id_CRA_Competition, c.Numero, c.DateDebut, c.DateFin, c.Libelle, c.Lieu, c.NiveauJA,
+        $competitions = $pdo->query('SELECT c.Id_CRA_Competition, c.Id_CRA_Competition AS Numero, c.DateDebut, c.DateFin, c.Libelle, c.Lieu, c.NiveauJA,
                 (COALESCE(c.DateFin, c.DateDebut) < CURDATE()) AS Passee,
                 ' . $nb('d.DateDemande IS NOT NULL') . ' AS NbDemandes,
                 ' . $nb("d.Disponible = 'Disponible'") . ' AS NbDispo,
@@ -89,7 +89,7 @@ class CraDispoController extends BaseController
                 ' . $nb("d.Disponible = 'Disponible sous condition'") . ' AS NbCondition,
                 ' . $nb("d.Disponible = 'Indisponible'") . ' AS NbIndispo,
                 ' . $nb("d.DateDemande IS NOT NULL AND d.Disponible = 'Non renseigné'") . ' AS NbSans
-            FROM CRA_Competition c ORDER BY c.DateDebut, c.Numero')->fetchAll(\PDO::FETCH_ASSOC);
+            FROM CRA_Competition c ORDER BY c.DateDebut, c.Id_CRA_Competition')->fetchAll(\PDO::FETCH_ASSOC);
 
         [$where, $depts] = $this->filtreJa();
         $stmt = $pdo->prepare("SELECT j.Id_JA, j.Nom, j.Prenom, j.JA2, j.JA3, j.JAN, j.JAI, cl.Nom AS NomClub,
@@ -162,12 +162,12 @@ class CraDispoController extends BaseController
         $nom = trim($ja['Prenom'] . ' ' . $ja['Nom']);
 
         $ph   = implode(',', array_fill(0, count($ids), '?'));
-        $stmt = $pdo->prepare("SELECT c.Id_CRA_Competition, c.Numero, c.DateDebut, c.DateFin, c.Libelle, c.Lieu, c.NiveauJA,
+        $stmt = $pdo->prepare("SELECT c.Id_CRA_Competition, c.Id_CRA_Competition AS Numero, c.DateDebut, c.DateFin, c.Libelle, c.Lieu, c.NiveauJA,
                 d.Id_CRA_Dispo, d.Disponible, d.DateDemande
             FROM CRA_Competition c
             LEFT JOIN CRA_Dispo d ON d.Id_CRA_Competition = c.Id_CRA_Competition AND d.Id_JA = ?
             WHERE c.Id_CRA_Competition IN ($ph) AND COALESCE(c.DateFin, c.DateDebut) >= CURDATE()
-            ORDER BY c.DateDebut, c.Numero");
+            ORDER BY c.DateDebut, c.Id_CRA_Competition");
         $stmt->execute([$idJa, ...$ids]);
         $compets = array_values(array_filter(
             $stmt->fetchAll(\PDO::FETCH_ASSOC),
@@ -365,7 +365,7 @@ class CraDispoController extends BaseController
         }
 
         // 2. Épreuves : date + libellé, sinon position (ligne r = n° r−1).
-        $compets = $pdo->query('SELECT Id_CRA_Competition, Numero, DateDebut, Libelle FROM CRA_Competition')->fetchAll(\PDO::FETCH_ASSOC);
+        $compets = $pdo->query('SELECT Id_CRA_Competition, Id_CRA_Competition AS Numero, DateDebut, Libelle FROM CRA_Competition')->fetchAll(\PDO::FETCH_ASSOC);
         $parDateLib = [];
         $parNumero  = [];
         foreach ($compets as $c) {
@@ -697,11 +697,11 @@ class CraDispoController extends BaseController
     private function lignesPubliques(int $idJa): array
     {
         $stmt = getPDO()->prepare('SELECT d.Id_CRA_Dispo, d.Disponible, d.Commentaire, d.DateReponse,
-                c.Id_CRA_Competition, c.Numero, c.DateDebut, c.DateFin, c.Libelle, c.Lieu, c.NiveauJA,
+                c.Id_CRA_Competition, c.Id_CRA_Competition AS Numero, c.DateDebut, c.DateFin, c.Libelle, c.Lieu, c.NiveauJA,
                 (COALESCE(c.DateFin, c.DateDebut) >= CURDATE()) AS Modifiable
             FROM CRA_Dispo d JOIN CRA_Competition c ON c.Id_CRA_Competition = d.Id_CRA_Competition
             WHERE d.Id_JA = ? AND d.DateDemande IS NOT NULL
-            ORDER BY c.DateDebut, c.Numero');
+            ORDER BY c.DateDebut, c.Id_CRA_Competition');
         $stmt->execute([$idJa]);
 
         return array_map(function ($l) {

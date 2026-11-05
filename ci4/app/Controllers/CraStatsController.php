@@ -29,9 +29,9 @@ class CraStatsController extends BaseController
             'nomComplet'   => trim(($u['nom'] ?? '') . ' ' . ($u['prenom'] ?? '')),
             'departement'  => $u['id_departement'] ?? '',
             // Graphe : JA prévus (NbrJA + NbrAdjoint) et JA convoqués (désignations avec DateConvocation) par compétition.
-            'competitions' => getPDO()->query('SELECT c.Numero, c.NbrJA + c.NbrAdjoint AS Prevus, COUNT(d.DateConvocation) AS Convoques
+            'competitions' => getPDO()->query('SELECT c.Id_CRA_Competition AS Numero, c.NbrJA + c.NbrAdjoint AS Prevus, COUNT(d.DateConvocation) AS Convoques
                 FROM CRA_Competition c LEFT JOIN CRA_Designation d ON d.Id_CRA_Competition = c.Id_CRA_Competition
-                GROUP BY c.Id_CRA_Competition, c.Numero, c.NbrJA, c.NbrAdjoint, c.DateDebut ORDER BY c.DateDebut, c.Numero')->fetchAll(\PDO::FETCH_ASSOC),
+                GROUP BY c.Id_CRA_Competition, c.NbrJA, c.NbrAdjoint, c.DateDebut ORDER BY c.DateDebut, c.Id_CRA_Competition')->fetchAll(\PDO::FETCH_ASSOC),
         ]);
     }
 

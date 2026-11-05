@@ -145,10 +145,6 @@
             </div>
             <div class="modal-body">
                 <div class="row g-2 mb-2">
-                    <div class="col-3">
-                        <label class="form-label" for="txt-numero">N° :</label>
-                        <input type="number" id="txt-numero" class="form-control form-control-sm" min="1" required>
-                    </div>
                     <div class="col">
                         <label class="form-label" for="txt-date-debut">Date de début :</label>
                         <input type="date" id="txt-date-debut" class="form-control form-control-sm" required>
@@ -305,7 +301,6 @@ function chargerListe() {
 function ouvrirModal(c) {
     currentId = c ? c.Id_CRA_Competition : null;
     $('#modal-titre').text(c ? `Modifier la compétition n°${c.Numero}` : 'Nouvelle compétition');
-    $('#txt-numero').val(c ? c.Numero : '');
     $('#txt-date-debut').val(c ? c.DateDebut : '');
     $('#txt-date-fin').val(c ? (c.DateFin ?? '') : '');
     $('#txt-libelle').val(c ? c.Libelle : '');
@@ -371,7 +366,6 @@ $('#tbody-liste').on('click', 'tr[data-id]', function (e) {
 $('#form-competition').on('submit', function (e) {
     e.preventDefault();
     const payload = {
-        numero:        $('#txt-numero').val().trim(),
         date_debut:    $('#txt-date-debut').val(),
         date_fin:      $('#txt-date-fin').val(),
         libelle:       $('#txt-libelle').val().trim(),

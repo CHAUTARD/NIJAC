@@ -15,7 +15,7 @@ use CodeIgniter\HTTP\ResponseInterface;
 class CraCompetitionController extends BaseController
 {
     private const NIVEAUX = ['JA2', 'JA3', 'JAN JA3'];
-    private const COLONNES = 'Id_CRA_Competition, Numero, DateDebut, DateFin, Libelle, NbTablesMin, NbTablesMax, Lieu, Id_Club, NomClub, NiveauJA, NbrJA, NbrAdjoint';
+    private const COLONNES = 'Id_CRA_Competition, Id_CRA_Competition AS Numero, DateDebut, DateFin, Libelle, NbTablesMin, NbTablesMax, Lieu, Id_Club, NomClub, NiveauJA, NbrJA, NbrAdjoint';
     /** Normalisation SQL commune au Lieu saisi : tirets/apostrophes → espaces (collation _ci = casse/accents ignorés). */
     private const NORM = "REPLACE(REPLACE(%s, '-', ' '), '''', ' ')";
 
@@ -40,7 +40,7 @@ class CraCompetitionController extends BaseController
     {
         // CodeDept = positions 3-4 de l'Id_Club (ex. 09760004 → 76), NULL si pas de club.
         $rows = getPDO()->query('SELECT ' . self::COLONNES . ', SUBSTRING(NULLIF(Id_Club, \'\'), 3, 2) AS CodeDept
-            FROM CRA_Competition ORDER BY DateDebut, Numero')
+            FROM CRA_Competition ORDER BY DateDebut, Id_CRA_Competition')
             ->fetchAll(\PDO::FETCH_ASSOC);
 
         return $this->response->setJSON(['ok' => true, 'data' => $rows]);
@@ -79,14 +79,14 @@ class CraCompetitionController extends BaseController
 
     public function store(): ResponseInterface
     {
-        [$f, $err] = $this->valider($this->request->getPost(), null);
+        [$f, $err] = $this->valider($this->request->getPost());
         if ($err) {
             return $this->response->setJSON(['ok' => false, 'msg' => $err]);
         }
 
         getPDO()->prepare('INSERT INTO CRA_Competition
-            (Numero, DateDebut, DateFin, Libelle, NbTablesMin, NbTablesMax, Lieu, Id_Club, NomClub, NiveauJA, NbrJA, NbrAdjoint)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')->execute(array_values($f));
+            (DateDebut, DateFin, Libelle, NbTablesMin, NbTablesMax, Lieu, Id_Club, NomClub, NiveauJA, NbrJA, NbrAdjoint)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')->execute(array_values($f));
 
         return $this->response->setJSON(['ok' => true, 'msg' => 'Compétition créée.', 'id' => (int) getPDO()->lastInsertId()]);
     }
@@ -100,12 +100,12 @@ class CraCompetitionController extends BaseController
             return $this->response->setJSON(['ok' => false, 'msg' => 'Compétition introuvable.']);
         }
 
-        [$f, $err] = $this->valider($this->request->getRawInput(), $id);
+        [$f, $err] = $this->valider($this->request->getRawInput());
         if ($err) {
             return $this->response->setJSON(['ok' => false, 'msg' => $err]);
         }
 
-        getPDO()->prepare('UPDATE CRA_Competition SET Numero = ?, DateDebut = ?, DateFin = ?, Libelle = ?,
+        getPDO()->prepare('UPDATE CRA_Competition SET DateDebut = ?, DateFin = ?, Libelle = ?,
             NbTablesMin = ?, NbTablesMax = ?, Lieu = ?, Id_Club = ?, NomClub = ?, NiveauJA = ?,
             NbrJA = ?, NbrAdjoint = ? WHERE Id_CRA_Competition = ?')
             ->execute([...array_values($f), $id]);
@@ -127,9 +127,8 @@ class CraCompetitionController extends BaseController
      * Valide et normalise les champs du formulaire.
      * Retourne [champs ordonnés comme les colonnes INSERT, message d'erreur ou null].
      */
-    private function valider(array $in, ?int $idExclu): array
+    private function valider(array $in): array
     {
-        $numero  = trim((string) ($in['numero'] ?? ''));
         $debut   = trim((string) ($in['date_debut'] ?? ''));
         $fin     = trim((string) ($in['date_fin'] ?? ''));
         $libelle = trim((string) ($in['libelle'] ?? ''));
@@ -142,11 +141,8 @@ class CraCompetitionController extends BaseController
         $nbrJa   = $nbrJa === '' ? '1' : $nbrJa;   // défauts si absents
         $nbrAdj  = $nbrAdj === '' ? '0' : $nbrAdj;
 
-        if ($numero === '' || $debut === '' || $libelle === '' || $lieu === '' || $niveau === '') {
-            return [null, 'N°, date de début, libellé, lieu et niveau JA sont obligatoires.'];
-        }
-        if (!ctype_digit($numero) || (int) $numero < 1) {
-            return [null, 'Le n° doit être un entier positif.'];
+        if ($debut === '' || $libelle === '' || $lieu === '' || $niveau === '') {
+            return [null, 'Date de début, libellé, lieu et niveau JA sont obligatoires.'];
         }
         if (!$this->dateValide($debut)) {
             return [null, 'Date de début invalide.'];
@@ -194,14 +190,8 @@ class CraCompetitionController extends BaseController
             }
         }
 
-        $doublon = getPDO()->prepare('SELECT 1 FROM CRA_Competition WHERE Numero = ? AND Id_CRA_Competition <> ?');
-        $doublon->execute([(int) $numero, $idExclu ?? 0]);
-        if ($doublon->fetchColumn()) {
-            return [null, "Le n° $numero est déjà utilisé par une autre compétition."];
-        }
-
         return [[
-            (int) $numero, $debut, $fin ?: null, $libelle,
+            $debut, $fin ?: null, $libelle,
             $min === '' ? null : (int) $min, $max === '' ? null : (int) $max,
             $lieu, $idClub ?: null, $nomClub, $niveau, (int) $nbrJa, (int) $nbrAdj,
         ], null];
