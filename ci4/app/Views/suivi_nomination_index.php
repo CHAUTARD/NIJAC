@@ -531,7 +531,10 @@ function chargerJaDisponibles(n) {
         $sel.empty().prop('disabled', false);
         $sel.append(n.Id_Nomination ? optionPasDeJa() : $('<option>').val('').text('— Choisir le JA —'));
         $sel.append(res.ja.map(j => option(j).text(`${j.Nom} ${j.Prenom} (${j.Id_JA})${j.actuel ? ' — actuel' : ''}`)));
-        if (n.Id_Nomination) $sel.val(n.Id_JA);
+        if (n.Id_Nomination) {
+            if (res.ja.some(j => +j.Id_JA === +n.Id_JA)) $sel.val(n.Id_JA);
+            else $sel.prepend($('<option>').val('').text('— Choisir le JA —')).val('');
+        }
         $btn.prop('disabled', false);
     }, 'json').fail(function (xhr, statut) {
         if (statut === 'abort') return;
@@ -554,14 +557,11 @@ function remplirListeJa(n) {
         $sel.append($('<optgroup label="Autres JA du périmètre">').append(autres.map(option)));
         return;
     }
-    // le JA actuel reste sélectionnable même s'il n'est pas dans la liste (inactif, autre département)
-    if (!liste.some(j => +j.Id_JA === +n.Id_JA)) {
-        const [prenom, ...nom] = String(n.NomJa ?? '').split(' ');
-        liste = [{ Id_JA: n.Id_JA, Nom: nom.join(' '), Prenom: prenom }, ...liste];
-    }
+    // seuls les JA1 du périmètre sont proposés ; si le JA actuel n'en fait pas partie, rien n'est présélectionné
     $sel.append(optionPasDeJa());
     liste.forEach(j => $sel.append(option(j)));
-    $sel.val(n.Id_JA);
+    if (liste.some(j => +j.Id_JA === +n.Id_JA)) $sel.val(n.Id_JA);
+    else $sel.prepend($('<option>').val('').text('— Choisir le JA —')).val('');
 }
 
 /** Popup « Modifier la nomination », ou, sans nomination, « Saisir le JA » (arbitrage club) / « Nommer un JA » (arbitrage CRA). */
@@ -610,7 +610,7 @@ $('#modif-arbitrage').on('change', function () {
 $('#btn-modif-enregistrer').on('click', function () {
     if (!modifNom) return;
     const saisie = !modifNom.Id_Nomination;
-    if (saisie && !$('#modif-ja').val()) { toast('Choisissez le juge-arbitre.', false); return; }
+    if (!$('#modif-ja').val() && $('#modif-ja').val() !== '0') { toast('Choisissez le juge-arbitre.', false); return; }
     if (!saisie && $('#modif-ja').val() === '0') {
         // « Pas de JA » : la nomination est supprimée (la rencontre redevient sans JA).
         nijacConfirm(`Retirer le juge-arbitre de la rencontre ${modifNom.NomDom} vs ${modifNom.NomExt ?? '?'} ? La nomination sera supprimée.`, function () {

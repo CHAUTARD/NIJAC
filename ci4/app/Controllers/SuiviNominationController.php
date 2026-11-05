@@ -126,7 +126,7 @@ class SuiviNominationController extends BaseController
      * GET ja-disponibles?rencontre=ID : JA proposés pour nommer / modifier le JA d'une rencontre en arbitrage CRA.
      * Même filtre que les contrôles du clic (saisir()/modifier()), en une requête : JA actif du périmètre,
      * règle stricte d'EN14 (jaDisponiblePourNomination()) et règle du jour (controlerJourJa()).
-     * Le JA actuellement nommé est toujours inclus (actuel = true), même s'il ne passe plus la règle.
+     * Le JA actuellement nommé est inclus (actuel = true) même s'il ne passe plus la règle, à condition d'être JA1.
      */
     public function jaDisponibles(): ResponseInterface
     {
@@ -179,12 +179,12 @@ class SuiviNominationController extends BaseController
         $stmt = $pdo->prepare("
             SELECT j.Id_JA, j.Nom, j.Prenom, j.Id_Club
             FROM ja j
-            WHERE j.Id_JA = ? OR (
-                j.JA1 = 1 AND j.CodeDept IN ($in)
+            WHERE j.JA1 = 1 AND (j.Id_JA = ? OR (
+                j.CodeDept IN ($in)
                 AND {$rep('O')} AND NOT {$rep('N')}
                 AND (SELECT COUNT(*) $jour) < 2
                 AND NOT EXISTS (SELECT 1 $jour AND $autreLieu)
-            )
+            ))
             ORDER BY j.Nom, j.Prenom
         ");
         $d = $rc['Date'];
@@ -1225,7 +1225,7 @@ class SuiviNominationController extends BaseController
 
         // JA connus (Id_JA = licence) et leur club.
         $jas = [];
-        foreach ($pdo->query('SELECT j.Id_JA, j.Nom, j.Prenom, c.Nom AS NomClub FROM ja j LEFT JOIN club c ON c.Id_Club = j.Id_Club') as $j) {
+        foreach ($pdo->query('SELECT j.Id_JA, j.Nom, j.Prenom, j.JA1, c.Nom AS NomClub FROM ja j LEFT JOIN club c ON c.Id_Club = j.Id_Club') as $j) {
             $jas[(int) $j['Id_JA']] = $j;
         }
 
@@ -1305,6 +1305,8 @@ class SuiviNominationController extends BaseController
                 $motif = 'licence illisible dans le fichier (' . ($l['brut'] === '' ? 'vide' : $l['brut']) . ')';
             } elseif ($ja === null) {
                 $motif = 'JA inconnu : licence ' . $l['licence'] . ' absente de la base';
+            } elseif ((int) $ja['JA1'] !== 1) {
+                $motif = 'JA non actif au 1er degré (JA1) : licence ' . $l['licence'];
             }
             $rencontres[] = [
                 'idRencontre' => (int) $rc['Id_Rencontre'],
