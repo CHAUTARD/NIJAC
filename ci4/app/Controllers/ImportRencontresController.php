@@ -580,7 +580,7 @@ class ImportRencontresController extends BaseController
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Rencontre introuvable']);
             }
 
-            $stmtJa = $pdo->prepare('SELECT Id_JA, Nom, Prenom, Grade FROM ja WHERE Id_Club = ? AND JA1 = 1 ORDER BY Nom, Prenom');
+            $stmtJa = $pdo->prepare('SELECT Id_JA, Nom, Prenom, ' . sqlGradesJa('ja') . ' AS Grade FROM ja WHERE Id_Club = ? AND JA1 = 1 ORDER BY Nom, Prenom');
             $stmtJa->execute([$renc['Id_Club']]);
 
             return $this->response->setJSON(['ok' => true, 'arbitres' => $stmtJa->fetchAll()]);

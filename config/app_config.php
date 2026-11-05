@@ -155,6 +155,15 @@ function initTableConfiguration(\PDO $pdo): void
         // best-effort
     }
 
+    // ja.Grade (texte FFTT) supprimée : les degrés sont portés par JA1/JA2/JA3/JAN/JAI (voir sqlGradesJa()).
+    try {
+        if ($pdo->query("SHOW COLUMNS FROM ja LIKE 'Grade'")->fetch()) {
+            $pdo->exec('ALTER TABLE ja DROP COLUMN Grade');
+        }
+    } catch (\PDOException $e) {
+        error_log('[NIJAC] EA98 : suppression de ja.Grade impossible : ' . $e->getMessage());
+    }
+
     // EC71 : club organisateur (Id_Club = Club.Id_Club ; le nom est lu par jointure sur Club, plus de copie NomClub),
     // renseigné à la main via la recherche « club à partir du Lieu » — pas de backfill.
     try {
@@ -4472,6 +4481,29 @@ function getLimitrophesRegion(string $dept): array
     } catch (PDOException $e) {
         return [];
     }
+}
+
+/** Tous les départements français de la table departement (Corse 2A/2B en fin) : ['CodeDept', 'nom']. */
+function getTousDepartements(): array
+{
+    try {
+        return getPDO()->query(
+            'SELECT CodeDept, nom FROM departement
+             ORDER BY (CodeDept IN ("2A", "2B")), CAST(CodeDept AS UNSIGNED), CodeDept'
+        )->fetchAll();
+    } catch (PDOException $e) {
+        return [];
+    }
+}
+
+/**
+ * Libellé des degrés d'un JA (« JA1 JA2 »…), calculé à partir des colonnes JA1/JA2/JA3/JAN/JAI de la table
+ * `ja` (alias $alias) ; NULL si aucun degré. Remplace l'ancienne colonne ja.Grade (supprimée par EA98) :
+ * à utiliser en SELECT, `' . sqlGradesJa('ja') . ' AS Grade`.
+ */
+function sqlGradesJa(string $alias = 'ja'): string
+{
+    return "NULLIF(CONCAT_WS(' ', IF($alias.JA1 = 1, 'JA1', NULL), IF($alias.JA2 = 1, 'JA2', NULL), IF($alias.JA3 = 1, 'JA3', NULL), IF($alias.JAN = 1, 'JAN', NULL), IF($alias.JAI = 1, 'JAI', NULL)), '')";
 }
 
 /**

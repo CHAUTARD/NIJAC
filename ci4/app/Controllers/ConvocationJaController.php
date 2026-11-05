@@ -105,7 +105,7 @@ class ConvocationJaController extends BaseController
         if ($idJa && $idRencontre) {
             try {
                 $stmtJa = $pdo->prepare('
-                    SELECT ja.Id_JA, ja.Nom, ja.Prenom, ja.Grade,
+                    SELECT ja.Id_JA, ja.Nom, ja.Prenom, ' . sqlGradesJa('ja') . ' AS Grade,
                            ja.PuissanceFiscale, ja.VehiculeElectrique, ja.Defiscalisation,
                            cl.Nom AS Association,
                            lp.CodePostal AS Cp,

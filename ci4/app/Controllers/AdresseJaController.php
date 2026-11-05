@@ -86,7 +86,7 @@ class AdresseJaController extends BaseController
         if ($idJa > 0) {
             try {
                 $stmt = $pdo->prepare('
-                    SELECT ja.Id_JA, ja.Nom, ja.Prenom, ja.Grade,
+                    SELECT ja.Id_JA, ja.Nom, ja.Prenom, ' . sqlGradesJa('ja') . ' AS Grade,
                            ja.Id_LaPoste,
                            COALESCE(lp.CodePostal, ja.Cp)  AS Cp,
                            COALESCE(lp.Nom,        ja.Ville) AS Ville

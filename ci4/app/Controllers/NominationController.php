@@ -485,6 +485,7 @@ class NominationController extends BaseController
             // Rencontres du jour pour lesquelles le JA est disponible selon la règle unique
             // sqlDispoRencontre() — la même que celle revérifiée à la nomination.
             $dispoSql  = $this->sqlDispoRencontre('ja.Id_JA', 'rok.Id_Rencontre', 'rok.Date');
+            $gradeSql  = sqlGradesJa('ja');
 
             $stmt = $pdo->prepare("
                 SELECT
@@ -493,7 +494,7 @@ class NominationController extends BaseController
                     ja.Prenom,
                     ja.Telephone,                    -- feuille de pointage PDF (JA nommé en cours de session)
                     ja.Email,
-                    ja.Grade,
+                    $gradeSql AS Grade,
                     COALESCE(ja.Nationale, 0)        AS Nationale,
                     ja.Id_Club,
                     ja.CodeDept                      AS CodeDept,
@@ -566,7 +567,7 @@ class NominationController extends BaseController
                 return $this->response->setJSON($res);
             }
 
-            $jaInfo = $pdo->prepare('SELECT Nom, Prenom, Grade, Id_Club FROM ja WHERE Id_JA = ?');
+            $jaInfo = $pdo->prepare('SELECT Nom, Prenom, ' . sqlGradesJa('ja') . ' AS Grade, Id_Club FROM ja WHERE Id_JA = ?');
             $jaInfo->execute([$idJa]);
             $ja = $jaInfo->fetch();
 

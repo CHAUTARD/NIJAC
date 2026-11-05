@@ -353,7 +353,6 @@
         <thead>
             <tr>
                 <th class="th-pk" style="width:70px"  data-field="id">N° JA<span class="sort-icon"></span></th>
-                <th style="width:55px;display:none"  data-field="grade">Grade<span class="sort-icon"></span></th>
                 <th style="width:160px" data-field="nom">Nom<span class="sort-icon"></span></th>
                 <th style="width:140px" data-field="prenom">Prénom<span class="sort-icon"></span></th>
                 <th style="width:210px" data-field="email">Email<span class="sort-icon"></span></th>
@@ -585,15 +584,6 @@
               <label class="form-label fw-semibold" id="nja-id-label">N° Licence <span class="text-danger">*</span></label>
               <input type="number" class="form-control form-control-sm" id="nja-id" min="1" placeholder="N° licence FFTT">
             </div>
-            <div class="col-md-2">
-              <label class="form-label fw-semibold">Grade <span class="text-danger">*</span></label>
-              <select class="form-select form-select-sm" id="nja-grade" required>
-                <option value="">— Choisir —</option>
-                <option value="JA1">JA1</option>
-                <option value="JA2">JA2</option>
-                <option value="JA3">JA3</option>
-              </select>
-            </div>
             <div class="col-md-4">
               <label class="form-label fw-semibold">Nom <span class="text-danger">*</span></label>
               <input type="text" class="form-control form-control-sm text-uppercase" id="nja-nom" required placeholder="NOM">
@@ -616,8 +606,8 @@
                   <label class="form-label fw-semibold">Exerce dans</label>
                   <select class="form-select form-select-sm" id="nja-dept">
                     <option value="">— Tous —</option>
-                    <?php foreach ($deptActifs as $d): ?>
-                    <option value="<?= (int) $d['CodeDept'] ?>"><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?></option>
+                    <?php foreach ($deptTous as $d): ?>
+                    <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept']) ?> — <?= esc($d['nom']) ?></option>
                     <?php endforeach; ?>
                   </select>
                 </div>
@@ -755,7 +745,6 @@ function lignesFiltreesTriees() {
             String(l.prenom          ?? '').toLowerCase().includes(term) ||
             String(l.email           ?? '').toLowerCase().includes(term) ||
             String(l.telephone       ?? '').toLowerCase().includes(term) ||
-            String(l.grade           ?? '').toLowerCase().includes(term) ||
             String(l.id_club         ?? '').toLowerCase().includes(term) ||
             String(l.nom_club        ?? '').toLowerCase().includes(term) ||
             String(l.cp              ?? '').toLowerCase().includes(term) ||
@@ -803,7 +792,6 @@ function renderGrille() {
                 : '<span class="badge-inactif">Non</span>';
 
             $tr.append(makeTd(l.id,              idx, 'id',              true));
-            $tr.append(makeTd(l.grade,            idx, 'grade',           false));
             $tr.append(makeTd(l.nom,              idx, 'nom',             false));
             $tr.append(makeTd(l.prenom,           idx, 'prenom',          false));
             $tr.append(makeTd(l.email,            idx, 'email',           false));
@@ -911,7 +899,6 @@ function chargerListe() {
             prenom:          r.Prenom,
             email:           r.Email,
             telephone:       r.Telephone,
-            grade:           r.Grade,
             ja1:             +r.JA1,
             ja2:             +r.JA2,
             ja3:             +r.JA3,
@@ -1236,7 +1223,7 @@ const LS_COLONNES = 'nijac_en11_colonnes_cachees';
 const LS_ORDRE    = 'nijac_en11_colonnes_ordre';
 // Colonnes masquées tant que l'utilisateur n'a rien choisi (toutes restent
 // activables depuis le menu « Colonnes »).
-const COLONNES_CACHEES_DEFAUT = ['grade', 'date_validation_fftt', 'defiscalisation',
+const COLONNES_CACHEES_DEFAUT = ['date_validation_fftt', 'defiscalisation',
     'nationale', 'num_compte_ebp', 'arbitre_autres_depts', 'depts_arbitrage'];
 // Ordre naturel du thead = source de vérité des champs existants.
 const CHAMPS_NATURELS = [...document.querySelectorAll('#tbl-ja thead th[data-field]')]
@@ -1425,7 +1412,6 @@ function ouvrirModaleJa(record) {
         $('#btn-enregistrer-ja').html('<i class="bi bi-check-lg me-1"></i>Enregistrer');
         $('#nja-id-label').html('N° Licence');
         $('#nja-id').val(record.id).prop('disabled', true);
-        $('#nja-grade').val(record.grade || '');
         $('#nja-nom').val(record.nom || '');
         $('#nja-prenom').val(record.prenom || '');
         $('#nja-email').val(record.email || '');
@@ -1555,12 +1541,11 @@ $('#nja-nom').on('input', function () { $(this).val($(this).val().toUpperCase())
 
 // Enregistrer
 $('#btn-enregistrer-ja').on('click', function () {
-    const grade  = $('#nja-grade').val().trim();
     const nom    = $('#nja-nom').val().trim().toUpperCase();
     const prenom = $('#nja-prenom').val().trim();
 
-    if (!grade || !nom || !prenom) {
-        toast('Grade, Nom et Prénom sont obligatoires.', false);
+    if (!nom || !prenom) {
+        toast('Nom et Prénom sont obligatoires.', false);
         return;
     }
 
@@ -1575,7 +1560,6 @@ $('#btn-enregistrer-ja').on('click', function () {
 
     const record = {
         id:              idJa,
-        grade,
         nom,
         prenom,
         email:           $('#nja-email').val().trim() || null,

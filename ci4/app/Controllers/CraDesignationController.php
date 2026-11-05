@@ -69,16 +69,12 @@ class CraDesignationController extends BaseController
         }
         unset($c);
 
-        $depts = array_column(getDeptActifs(), 'CodeDept');
-        $where = '(j.JA2 = 1 OR j.JA3 = 1 OR j.JAN = 1 OR j.JAI = 1)';
-        if ($depts) {
-            $where .= ' AND j.CodeDept IN (' . implode(',', array_fill(0, count($depts), '?')) . ')';
-        }
-        $stmt = $pdo->prepare("SELECT j.Id_JA, j.Nom, j.Prenom, j.JA2, j.JA3, j.JAN, j.JAI, cl.Nom AS NomClub,
+        // Tous les JA de la table (tous départements, tous degrés) avec leur grade : le filtre sur le(s) grade(s)
+        // requis pour le rôle est appliqué côté écran (eligible) et contrôlé par save().
+        $stmt = $pdo->query("SELECT j.Id_JA, j.Nom, j.Prenom, j.JA1, j.JA2, j.JA3, j.JAN, j.JAI, cl.Nom AS NomClub,
                 COALESCE(NULLIF(j.CodeDept, ''), SUBSTRING(NULLIF(j.Id_Club, ''), 3, 2)) AS CodeDept
             FROM ja j LEFT JOIN Club cl ON cl.Id_Club = j.Id_Club
-            WHERE $where ORDER BY j.Nom, j.Prenom");
-        $stmt->execute($depts);
+            ORDER BY j.Nom, j.Prenom");
 
         return $this->response->setJSON(['ok' => true, 'competitions' => $competitions, 'jas' => $stmt->fetchAll(\PDO::FETCH_ASSOC), 'modeDev' => isModeDeveloppement()]);
     }

@@ -260,7 +260,7 @@ class StatsJaController extends BaseController
                     'ja.Id_JA',
                     'ja.Nom',
                     'ja.Prenom',
-                    'ja.Grade',
+                    sqlGradesJa('ja') . ' AS Grade',
                     'cl.Nom                             AS Club',
                     'COUNT(n.Id_Nomination)             AS nb_arbitrages',
                     self::SQL_NB_CLUB . '               AS nb_arbitrages_club',
@@ -272,7 +272,7 @@ class StatsJaController extends BaseController
                         + ' . self::SQL_NB_CRA . ' * :indem2 AS total_frais',
                 ],
                 '
-                GROUP BY ja.Id_JA, ja.Nom, ja.Prenom, ja.Grade, cl.Nom
+                GROUP BY ja.Id_JA, ja.Nom, ja.Prenom, ja.JA1, ja.JA2, ja.JA3, ja.JAN, ja.JAI, cl.Nom
                 HAVING nb_arbitrages > 0
                 ' . self::SQL_ORDRE_JA,
                 $dateDebut,
@@ -500,7 +500,7 @@ class StatsJaController extends BaseController
             [
                 'ja.Nom',
                 'ja.Prenom',
-                'ja.Grade',
+                sqlGradesJa('ja') . ' AS Grade',
                 'cl.Nom AS Club',
                 'COUNT(n.Id_Nomination)             AS Arbitrages',
                 self::SQL_NB_CLUB . '               AS ArbitragesClub',
@@ -511,7 +511,7 @@ class StatsJaController extends BaseController
                     + ' . self::SQL_PEAGE . '
                     + ' . self::SQL_NB_CRA . ' * :indem2 AS Total',
             ],
-            ' GROUP BY ja.Id_JA, ja.Nom, ja.Prenom, ja.Grade, cl.Nom HAVING Arbitrages > 0' . self::SQL_ORDRE_JA,
+            ' GROUP BY ja.Id_JA, ja.Nom, ja.Prenom, ja.JA1, ja.JA2, ja.JA3, ja.JAN, ja.JAI, cl.Nom HAVING Arbitrages > 0' . self::SQL_ORDRE_JA,
             $dateDebut,
             $dateFin,
             $depts

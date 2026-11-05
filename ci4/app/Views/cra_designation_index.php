@@ -306,7 +306,7 @@ function eligible(ja, min) {
 }
 
 function libelleJa(j) {
-    const grades = GRADES.slice(1).filter(g => Number(j[g]) === 1).join(' ');
+    const grades = GRADES.filter(g => Number(j[g]) === 1).join(' ') || 'aucun grade';
     return `${(j.Nom || '').toUpperCase()} ${j.Prenom || ''}${j.CodeDept ? ` (${j.CodeDept})` : ''} — ${j.NomClub || 'sans club'} — ${grades}`;
 }
 
@@ -419,6 +419,7 @@ function creerSlot(role, rang, min) {
     const $sel = $('<select class="form-select form-select-sm">').attr('data-role', role)
         .append('<option value="">— non désigné —</option>');
     // data-nom : seul « nom prénom » sert au filtre (pas le club ni les grades du libellé)
+    // Tous les JA de la table, filtrés sur le(s) grade(s) requis pour ce rôle (eligible).
     jas.filter(j => eligible(j, min)).forEach(j => $('<option>').val(j.Id_JA).text(libelleJa(j))
         .attr('data-nom', `${j.Nom || ''} ${j.Prenom || ''}`.toLowerCase()).appendTo($sel));
     const $rech = $('<input type="search" class="form-control form-control-sm" placeholder="Filtrer…">');

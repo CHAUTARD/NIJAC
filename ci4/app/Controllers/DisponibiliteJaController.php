@@ -160,7 +160,7 @@ class DisponibiliteJaController extends BaseController
             }
 
             $stmt = $pdo->prepare('
-                SELECT ja.Id_JA, ja.Nom, ja.Prenom, ja.Grade,
+                SELECT ja.Id_JA, ja.Nom, ja.Prenom, ' . sqlGradesJa('ja') . ' AS Grade,
                        ja.ArbitreAutresDepts, ja.DeptsArbitrage, ja.Defiscalisation,
                        lp.CodePostal AS Cp,
                        lp.Nom        AS Ville

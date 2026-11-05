@@ -84,11 +84,12 @@ class DisponibilitesController extends BaseController
         // postal personnel du JA (comme avant) excluait à tort les JA qui résident
         // hors région mais officient pour un club de la région.
         $placeholders = implode(',', array_fill(0, count($depts), '?'));
+        $gradeSql     = sqlGradesJa('ja');
         $stmt         = $pdo->prepare("
             SELECT ja.Id_JA,
                    ja.Nom,
                    ja.Prenom,
-                   ja.Grade,
+                   $gradeSql AS Grade,
                    cl.Nom      AS Club,
                    COALESCE(lp.CodePostal, ja.Cp)    AS Cp,
                    COALESCE(lp.Nom,        ja.Ville) AS Ville,

@@ -129,6 +129,7 @@ class JugearbitreController extends BaseController
             'isAdmin'         => $this->isAdmin(),
             'deptUser'        => $moi['id_departement'] ?? '',
             'deptActifs'      => getDeptActifs(),
+            'deptTous'        => getTousDepartements(),   // combo « Exerce dans » de la modale de création
             'deptLimitrophes' => getDepartementsLimitrophes(),
             // Infobulles des 5 grades (colonnes + cases de la modale) : Code → Libelle
             'gradesLibelles'  => $this->gradesLibelles(),
@@ -158,7 +159,7 @@ class JugearbitreController extends BaseController
 
         $stmt = $pdo->prepare(
             'SELECT j.Id_JA, j.Nom, j.Prenom, j.Email, j.Telephone,
-                    j.Grade, j.JA1, j.JA2, j.JA3, j.JAN, j.JAI, j.Id_Club, j.Id_LaPoste,
+                     ' . sqlGradesJa('j') . ' AS Grade, j.JA1, j.JA2, j.JA3, j.JAN, j.JAI, j.Id_Club, j.Id_LaPoste,
                     j.Defiscalisation, j.Nationale, j.NumCompteEBP,
                     j.DateValidationFFTT, j.TypeLicence,
                     j.ArbitreAutresDepts, j.DeptsArbitrage,
@@ -183,7 +184,6 @@ class JugearbitreController extends BaseController
             'Prenom'                 => $r['Prenom'],
             'Email'                  => $r['Email'],
             'Telephone'              => $r['Telephone'],
-            'Grade'                  => $r['Grade'],
             'JA1'                    => $r['JA1'],
             'JA2'                    => $r['JA2'],
             'JA3'                    => $r['JA3'],
@@ -300,16 +300,16 @@ class JugearbitreController extends BaseController
         // absente (imports) prend le défaut de la table (1, cf. initTableConfiguration()).
         $stmtCheck  = $pdo->prepare('SELECT COUNT(*) FROM ja WHERE Id_JA = ?');
         $stmtInsert = $pdo->prepare(
-            'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Telephone, Grade, JA1, JA2, JA3, JAN, JAI,
-                             Id_Club, Id_LaPoste, Defiscalisation, Nationale, NumCompteEBP,
-                             Cp, Ville, DateValidationFFTT, CodeDept, TypeLicence)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, DEFAULT(Nationale)), ?, ?, ?, ?, ?, ?)'
-        );
-        $stmtInsertAuto = $pdo->prepare(
-            'INSERT INTO ja (Nom, Prenom, Email, Telephone, Grade, JA1, JA2, JA3, JAN, JAI,
+            'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Telephone, JA1, JA2, JA3, JAN, JAI,
                              Id_Club, Id_LaPoste, Defiscalisation, Nationale, NumCompteEBP,
                              Cp, Ville, DateValidationFFTT, CodeDept, TypeLicence)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, DEFAULT(Nationale)), ?, ?, ?, ?, ?, ?)'
+        );
+        $stmtInsertAuto = $pdo->prepare(
+            'INSERT INTO ja (Nom, Prenom, Email, Telephone, JA1, JA2, JA3, JAN, JAI,
+                             Id_Club, Id_LaPoste, Defiscalisation, Nationale, NumCompteEBP,
+                             Cp, Ville, DateValidationFFTT, CodeDept, TypeLicence)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, DEFAULT(Nationale)), ?, ?, ?, ?, ?, ?)'
         );
 
         foreach ($lignes as $l) {
@@ -318,7 +318,6 @@ class JugearbitreController extends BaseController
             $prenom    = trim($l['prenom'] ?? '');
             $email     = ($l['email'] ?? '') !== '' ? $l['email'] : null;
             $tel       = $this->formaterTelephone(($l['telephone'] ?? '') !== '' ? $l['telephone'] : null);
-            $grade     = trim($l['grade'] ?? '');
             $autres    = []; // JA1/JA2/JA3/JAN/JAI → 0|1, null = clé absente
             foreach (['JA1' => 'ja1', 'JA2' => 'ja2', 'JA3' => 'ja3', 'JAN' => 'jan', 'JAI' => 'jai'] as $colJa => $cle) {
                 $autres[$colJa] = array_key_exists($cle, $l) ? (!empty($l[$cle]) ? 1 : 0) : null;
@@ -395,21 +394,21 @@ class JugearbitreController extends BaseController
                                 $paramsOpt[] = $v;
                             }
                         }
-                        $sql = "UPDATE ja SET {$setOpt}Nom=?, Prenom=?, Email=?, Telephone=?, Grade=?,
+                        $sql = "UPDATE ja SET {$setOpt}Nom=?, Prenom=?, Email=?, Telephone=?,
                                        Id_Club=?, Id_LaPoste=?,
                                        Cp=?, Ville=?, CodeDept=?
                                 WHERE Id_JA=?";
                         $pdo->prepare($sql)->execute(array_merge(
                             $paramsOpt,
-                            [$nom, $prenom, $email, $tel, $grade, $idClub, $idLap, $cp, $ville, $codeDept, $id]
+                            [$nom, $prenom, $email, $tel, $idClub, $idLap, $cp, $ville, $codeDept, $id]
                         ));
                         $updates++;
                     } else {
-                        $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, $grade, ...$autresIns, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid, $codeDept, $typeLicence]);
+                        $stmtInsert->execute([$id, $nom, $prenom, $email, $tel, ...$autresIns, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid, $codeDept, $typeLicence]);
                         $inserts++;
                     }
                 } else {
-                    $stmtInsertAuto->execute([$nom, $prenom, $email, $tel, $grade, ...$autresIns, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid, $codeDept, $typeLicence]);
+                    $stmtInsertAuto->execute([$nom, $prenom, $email, $tel, ...$autresIns, $idClub, $idLap, $defisc, $nationale, $cpteEbp, $cp, $ville, $dateValid, $codeDept, $typeLicence]);
                     $inserts++;
                 }
             } catch (\PDOException $ex) {
@@ -578,11 +577,11 @@ class JugearbitreController extends BaseController
         }
 
         $pdo->prepare(
-            'INSERT INTO ja (Id_JA, Nom, Prenom, Email, Grade, JA1, JA2, JA3, JAN, JAI, Id_Club,
+            'INSERT INTO ja (Id_JA, Nom, Prenom, Email, JA1, JA2, JA3, JAN, JAI, Id_Club,
                              Defiscalisation, DateValidationFFTT, TypeLicence,
                              Id_LaPoste, Cp, Ville)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)'
-        )->execute([$d['licence'], $d['nom'], $d['prenom'], $d['email'] ?: null, $d['grade'], ...$niveaux, $d['id_club'],
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)'
+        )->execute([$d['licence'], $d['nom'], $d['prenom'], $d['email'] ?: null, ...$niveaux, $d['id_club'],
             $d['date_valid'], $d['type_licence'] ?? null, $d['id_laposte'], $d['cp'], $d['ville']]);
 
         return true;
