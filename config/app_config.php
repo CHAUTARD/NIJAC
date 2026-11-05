@@ -899,12 +899,6 @@ function sqlNbSallesClub(string $colClub): string
     return "(SELECT COUNT(*) FROM club_salle csn WHERE csn.Id_Club = $colClub)";
 }
 
-/** Sous-requête SQL (liste) : Id_Salle des salles liées au club $colClub — pour « IN (…) ». */
-function sqlIdsSallesClub(string $colClub): string
-{
-    return "SELECT csl.Id_Salle FROM club_salle csl WHERE csl.Id_Club = $colClub";
-}
-
 /** Salles liées au club $idClub, principale d'abord : [['Id_Salle', 'Nom', 'EstPrincipale'], …]. */
 function sallesDuClub(\PDO $pdo, string $idClub): array
 {
@@ -4739,11 +4733,6 @@ function genererSecretTotp(): string
     return Totp::genererSecret();
 }
 
-function totpPasCourant(?int $t = null): int
-{
-    return Totp::pasCourant($t);
-}
-
 function totpCode(string $secret, int $pas, int $chiffres = TOTP_CHIFFRES): string
 {
     return Totp::code($secret, $pas, $chiffres);
@@ -4762,11 +4751,6 @@ function verifierTotp(string $secret, string $code, ?int &$dernierPas, ?int $t =
 function uriOtpauth(string $secretBase32, string $login): string
 {
     return Totp::uriOtpauth($secretBase32, $login);
-}
-
-function cleChiffrementTotp(string $pepper): string
-{
-    return Totp::cleChiffrement($pepper);
 }
 
 function chiffrerSecretTotp(string $secretBase32, string $pepper): string
