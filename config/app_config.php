@@ -106,15 +106,6 @@ function initTableConfiguration(\PDO $pdo): void
                 NbrAdjoint         TINYINT UNSIGNED NOT NULL DEFAULT 0
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ');
-        // Le n° de compétition n'existe plus : Id_CRA_Competition (auto-incrément) en tient lieu.
-        if ($pdo->query("SHOW COLUMNS FROM CRA_Competition LIKE 'Numero'")->fetch()) {
-            try {
-                $pdo->exec('ALTER TABLE CRA_Competition DROP INDEX uq_cra_numero');
-            } catch (\PDOException $e) {
-                // index absent ou déjà supprimé
-            }
-            $pdo->exec('ALTER TABLE CRA_Competition DROP COLUMN Numero');
-        }
         if (!(int) $pdo->query('SELECT COUNT(*) FROM CRA_Competition')->fetchColumn()) {
             $stmtCra = $pdo->prepare('INSERT INTO CRA_Competition
                 (DateDebut, DateFin, Libelle, NbTablesMin, NbTablesMax, Lieu, NiveauJA)
@@ -155,23 +146,11 @@ function initTableConfiguration(\PDO $pdo): void
         // best-effort
     }
 
-    // ja.Grade (texte FFTT) supprimée : les degrés sont portés par JA1/JA2/JA3/JAN/JAI (voir sqlGradesJa()).
-    try {
-        if ($pdo->query("SHOW COLUMNS FROM ja LIKE 'Grade'")->fetch()) {
-            $pdo->exec('ALTER TABLE ja DROP COLUMN Grade');
-        }
-    } catch (\PDOException $e) {
-        error_log('[NIJAC] EA98 : suppression de ja.Grade impossible : ' . $e->getMessage());
-    }
-
     // EC71 : club organisateur (Id_Club = Club.Id_Club ; le nom est lu par jointure sur Club, plus de copie NomClub),
     // renseigné à la main via la recherche « club à partir du Lieu » — pas de backfill.
     try {
         if (!$pdo->query("SHOW COLUMNS FROM CRA_Competition LIKE 'Id_Club'")->fetch()) {
             $pdo->exec("ALTER TABLE CRA_Competition ADD COLUMN Id_Club CHAR(8) COLLATE utf8mb4_unicode_ci NULL AFTER Lieu");
-        }
-        if ($pdo->query("SHOW COLUMNS FROM CRA_Competition LIKE 'NomClub'")->fetch()) {
-            $pdo->exec('ALTER TABLE CRA_Competition DROP COLUMN NomClub');
         }
     } catch (\PDOException $e) {
         // best-effort
