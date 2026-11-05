@@ -140,8 +140,8 @@
         <p class="small text-muted mt-2 mb-0">La puissance fiscale figure sur la carte grise, rubrique P.6.</p>
     </div>
 
-    <div class="carte carte-etape <?= $ja['etape1'] ? '' : 'etape-off' ?>">
-        <h2><span class="num">2</span>Ma carte grise <span class="small text-muted fw-normal">(facultative, mais recommandée)</span></h2>
+    <div class="carte carte-etape <?= $ja['etape1'] ? '' : 'etape-off' ?>" id="carte-etape2">
+        <h2><span class="num">2</span>Ma carte grise <span class="small text-muted fw-normal">(requise pour l'étape&nbsp;3)</span></h2>
         <p class="small etape-msg <?= $ja['etape1'] ? 'd-none' : '' ?>"><i class="bi bi-lock-fill me-1"></i>Enregistrez d'abord l'étape&nbsp;1 (défiscalisation souhaitée et puissance fiscale renseignée).</p>
         <p class="mb-2">
             État&nbsp;:
@@ -158,9 +158,9 @@
         <p class="small text-muted mt-2 mb-0">Formats PDF, JPEG ou PNG, 5&nbsp;Mo maximum. Un nouvel envoi remplace le précédent. Seul le défiscalisateur de la Ligue y a accès.</p>
     </div>
 
-    <div class="carte carte-etape <?= $ja['etape1'] ? '' : 'etape-off' ?>">
+    <div class="carte carte-etape <?= ($ja['etape1'] && $carteGrise) ? '' : 'etape-off' ?>" id="carte-etape3">
         <h2><span class="num">3</span>Mon attestation sur l'honneur</h2>
-        <p class="small etape-msg <?= $ja['etape1'] ? 'd-none' : '' ?>"><i class="bi bi-lock-fill me-1"></i>Enregistrez d'abord l'étape&nbsp;1 (défiscalisation souhaitée et puissance fiscale renseignée).</p>
+        <p class="small etape-msg <?= ($ja['etape1'] && $carteGrise) ? 'd-none' : '' ?>"><i class="bi bi-lock-fill me-1"></i>Renseignez d'abord l'étape&nbsp;2 (dépôt de la carte grise).</p>
         <p class="mb-2">
             État&nbsp;:
             <span class="<?= $attestation ? 'etat-ok' : 'etat-ko' ?>">
@@ -185,14 +185,18 @@
 'use strict';
 const BASE = <?= json_encode(site_url('ja/defiscalisation')) ?>;
 
-// Étapes 2 et 3 : actives seulement quand l'étape 1 est ENREGISTRÉE (défiscalisation cochée + puissance fiscale).
-function majEtapes(ok) {
-    $('.carte-etape').toggleClass('etape-off', !ok);
-    $('.etape-msg').toggleClass('d-none', ok);
-    $('#f-cg, #btn-cg').prop('disabled', !ok);
-    $('#lnk-attestation').toggleClass('disabled', !ok).attr('aria-disabled', ok ? null : 'true').attr('tabindex', ok ? null : '-1');
+// Étape 2 active seulement quand l'étape 1 est ENREGISTRÉE (défiscalisation cochée + puissance fiscale) ;
+// étape 3 active seulement quand l'étape 2 est renseignée (carte grise déposée).
+let etape1 = <?= $ja['etape1'] ? 'true' : 'false' ?>;
+let etape2 = <?= $carteGrise ? 'true' : 'false' ?>;
+function majEtapes() {
+    const ok3 = etape1 && etape2;
+    $('#carte-etape2').toggleClass('etape-off', !etape1).find('.etape-msg').toggleClass('d-none', etape1);
+    $('#carte-etape3').toggleClass('etape-off', !ok3).find('.etape-msg').toggleClass('d-none', ok3);
+    $('#f-cg, #btn-cg').prop('disabled', !etape1);
+    $('#lnk-attestation').toggleClass('disabled', !ok3).attr('aria-disabled', ok3 ? null : 'true').attr('tabindex', ok3 ? null : '-1');
 }
-majEtapes(<?= $ja['etape1'] ? 'true' : 'false' ?>);
+majEtapes();
 
 $('#btn-infos').on('click', function () {
     const $b = $(this).prop('disabled', true);
@@ -202,7 +206,7 @@ $('#btn-infos').on('click', function () {
         electrique: $('#f-elec').is(':checked') ? 1 : 0,
     }, null, 'json').done(function (r) {
         nijacToast(r.msg || (r.ok ? 'Enregistré.' : 'Erreur.'), r.ok ? 'success' : 'danger');
-        if (r.ok) { majEtapes(!!r.etape1); }
+        if (r.ok) { etape1 = !!r.etape1; majEtapes(); }
     }).fail(function () {
         nijacToast('Erreur réseau, merci de réessayer.', 'danger');
     }).always(function () { $b.prop('disabled', false); });
@@ -222,6 +226,7 @@ $('#btn-cg').on('click', function () {
                 $('#cg-etat').text('déposée (' + r.ext + ', ' + r.date + ')').removeClass('etat-ko').addClass('etat-ok');
                 $('#cg-voir').removeClass('d-none');
                 $('#f-cg').val('');
+                etape2 = true; majEtapes();
             }
         })
         .fail(function () { nijacToast('Erreur réseau, merci de réessayer.', 'danger'); })

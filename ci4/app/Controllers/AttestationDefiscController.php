@@ -152,6 +152,19 @@ class AttestationDefiscController extends BaseController
             }
 
             $dir = __DIR__ . '/../../../_Defiscalisation';
+            // L'attestation (étape 3 d'EJA3) exige la carte grise (étape 2) : jointe à l'instant ou déjà déposée.
+            if ($cg === null) {
+                $dejaDeposee = false;
+                foreach (glob($dir . '/' . $idJa . '_cg.*') ?: [] as $f) {
+                    if (is_file($f) && !is_link($f)) {
+                        $dejaDeposee = true;
+                        break;
+                    }
+                }
+                if (!$dejaDeposee) {
+                    return $this->response->setJSON(['ok' => false, 'msg' => 'Déposez d\'abord votre carte grise (étape 2).']);
+                }
+            }
             if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
                 return $this->response->setJSON(['ok' => false, 'msg' => 'Répertoire _Defiscalisation absent.']);
             }

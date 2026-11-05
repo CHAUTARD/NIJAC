@@ -3165,7 +3165,7 @@ function sujetParDefautCopieConvocationClubs(): string
 }
 
 /**
- * Corps par défaut du message « Convocation clubs » : même charte que modeleHtmlConvocationJa(),
+ * Corps par défaut du message « Convocation clubs » : même charte que le message n°3 « Convocation » (EN14),
  * destiné à un correspondant de club — aucun lien personnel du JA ni consigne qui lui est destinée.
  */
 function modeleHtmlCopieConvocationClubs(): string
@@ -3957,48 +3957,6 @@ function destinatairesCopieClubs(array $clubs, ?string $emailJa): array
     }
 
     return $dest;
-}
-
-/**
- * Corps par défaut du message système n°3 « Convocation » (EN14) : e-mail HTML
- * (tableaux + styles en ligne) avec le bouton « Consulter et confirmer ma
- * convocation » vers {URL_CONVOCATION_JA} (EN21). La copie aux clubs n'en
- * dérive pas (message dédié modeleHtmlCopieConvocationClubs()). Plus appelé par le
- * code (la migration EA98 du message n°3 a été retirée) : conservé comme référence
- * du corps par défaut.
- */
-function modeleHtmlConvocationJa(): string
-{
-    return <<<'NIJAC_CONVOCATION_HTML'
-<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>Convocation — Juge-Arbitre</title></head><body style="margin:0;padding:0;background-color:#eef1f6;color:#1f2937;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#eef1f6" style="background-color:#eef1f6;"><tr><td align="center" style="padding:24px 12px;">
-<!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#ffffff;border:1px solid #d5dbe5;border-radius:8px;font-family:Arial,Helvetica,sans-serif;color:#1f2937;"><tr><td bgcolor="#1a3a6b" style="background-color:#1a3a6b;padding:22px 28px;border-radius:8px 8px 0 0;">
-<span style="display:block;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#c9d6ea;">Ligue de Normandie de Tennis de Table</span>
-<span style="display:block;font-size:22px;font-weight:bold;line-height:30px;color:#ffffff;">Convocation — Juge-Arbitre</span>
-</td></tr><tr><td style="padding:26px 28px 6px 28px;font-size:15px;line-height:23px;color:#1f2937;">
-Bonjour {PRENOM},<br><br>
-Nous avons l'avantage de vous informer que vous êtes désigné(e) pour diriger la rencontre suivante du Championnat de France par Équipes {SEXE}.
-</td></tr><tr><td style="padding:16px 28px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f3f6fb" style="background-color:#f3f6fb;border-left:4px solid #1a3a6b;border-radius:4px;font-size:14px;line-height:21px;color:#1f2937;"><tr><td colspan="2" style="padding:14px 16px 4px 16px;font-size:17px;font-weight:bold;color:#1a3a6b;">{DOM} <span style="color:#6b7280;font-weight:normal;">à</span> {EXT}</td></tr><tr><td width="34%" valign="top" style="padding:6px 16px;color:#4b5563;">Date</td><td valign="top" style="padding:6px 16px 6px 0;font-weight:bold;color:#1f2937;">{DATE_LONGUE} à {HEURE}</td></tr><tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Compétition</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">Journée n° {JOURNEE} — Division : {DIVISION} — Poule : {POULE}</td></tr><tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Juge-arbitre</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{PRENOM} {NOM}</td></tr><tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Club recevant</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{NOM_CLUB}</td></tr><tr><td valign="top" style="padding:6px 16px;color:#4b5563;">Adresse</td><td valign="top" style="padding:6px 16px 6px 0;color:#1f2937;">{SALLE_NOM}<br>{SALLE_ADRESSE}<br>{SALLE_CP} {SALLE_VILLE}</td></tr><tr><td valign="top" style="padding:6px 16px 14px 16px;color:#4b5563;">Correspondant</td><td valign="top" style="padding:6px 16px 14px 0;color:#1f2937;">{CORR_NOM}<br>Tél : {CORR_TEL}<br>Courriel : <a href="mailto:{CORR_EMAIL}" style="color:#1a3a6b;">{CORR_EMAIL}</a></td></tr></table></td></tr><tr><td style="padding:0 28px 6px 28px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#fff6e5" style="background-color:#fff6e5;border:1px solid #f0c36d;border-radius:4px;font-size:14px;line-height:21px;color:#5c3d00;"><tr><td style="padding:12px 16px;">
-<strong style="color:#8a5a00;">Actions attendues :</strong><br>
-• Confirmer votre désignation en cliquant sur le bouton ci-dessous ou Signaler au plus vite toute indisponibilité ou difficulté particulière.<br>
-• Conserver les justificatifs nécessaires à l'établissement de vos frais et compléter votre convocation dans un délai de 5 jours après la rencontre.
-</td></tr></table></td></tr><tr><td style="padding:0;"><div style="padding:12px 28px 8px 28px;font-size:15px;line-height:23px;color:#1f2937;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;"><tr><td align="center" bgcolor="#1a3a6b" style="background-color:#1a3a6b;border-radius:6px;">
-<!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{URL_CONVOCATION_JA}" style="height:48px;v-text-anchor:middle;width:380px;" arcsize="12%" strokecolor="#1a3a6b" fillcolor="#1a3a6b"><w:anchorlock/><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">Consulter et confirmer ma convocation</center></v:roundrect><![endif]-->
-<!--[if !mso]><!--><a href="{URL_CONVOCATION_JA}" target="_blank" style="display:inline-block;padding:14px 28px;min-height:20px;line-height:20px;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:6px;background-color:#1a3a6b;">Consulter et confirmer ma convocation</a><!--<![endif]-->
-</td></tr></table>
-<br>
-<span style="font-size:12px;line-height:18px;color:#6b7280;">Si le bouton ne fonctionne pas, valider ce lien :<br><a href="{URL_CONVOCATION_JA}" style="color:#1a3a6b;word-break:break-all;">{URL_CONVOCATION_JA}</a></span>
-</div></td></tr><tr><td style="padding:18px 28px 24px 28px;font-size:15px;line-height:23px;color:#1f2937;">
-Nous vous remercions pour votre investissement au service du tennis de table normand et vous souhaitons une excellente rencontre.<br><br>
-<strong>{UTI_PRENOM} {UTI_NOM}</strong><br>
-<span style="font-size:13px;color:#4b5563;">Ligue de Normandie de Tennis de Table</span>
-</td></tr><tr><td bgcolor="#f3f4f6" style="background-color:#f3f4f6;padding:14px 28px;border-top:1px solid #e5e7eb;border-radius:0 0 8px 8px;font-size:11px;line-height:17px;color:#6b7280;">
-Message envoyé automatiquement par l'application de nomination des juges-arbitres de la Ligue. Pour toute question, répondez à ce message.<br>
-<a href="{URL_LIGUE}" style="color:#1a3a6b;">{URL_LIGUE}</a>
-</td></tr></table>
-<!--[if mso]></td></tr></table><![endif]-->
-</td></tr></table></body></html>
-NIJAC_CONVOCATION_HTML;
 }
 
 /**

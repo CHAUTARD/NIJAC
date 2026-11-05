@@ -223,7 +223,7 @@ $enElec = ($modeJa && $fiche && $fiche['cv'] !== null && $fiche['electrique']);
 <div id="toolbar" class="no-print">
     <?php if ($modeJa): ?>
     <label class="cg-field" for="f-cartegrise">
-        <i class="bi bi-paperclip"></i>Carte grise <span class="cg-opt">(PDF/image, facultatif)</span>
+        <i class="bi bi-paperclip"></i>Carte grise <span class="cg-opt">(PDF/image, obligatoire si non déjà déposée)</span>
         <input type="file" id="f-cartegrise" accept=".pdf,image/*">
     </label>
     <button class="btn-valider" id="btn-valider"><i class="bi bi-send-check"></i>Valider et transmettre</button>
