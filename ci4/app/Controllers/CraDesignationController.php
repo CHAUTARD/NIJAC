@@ -48,7 +48,7 @@ class CraDesignationController extends BaseController
     {
         $pdo = getPDO();
         $competitions = $pdo->query('SELECT c.Id_CRA_Competition, c.Id_CRA_Competition AS Numero, c.DateDebut, c.DateFin, c.Libelle,
-                c.NbTablesMin, c.NbTablesMax, c.Lieu, c.Id_Club, c.NomClub, c.NiveauJA, c.NbrJA, c.NbrAdjoint,
+                c.NbTablesMin, c.NbTablesMax, c.Lieu, c.Id_Club, (SELECT cl.Nom FROM Club cl WHERE cl.Id_Club = c.Id_Club) AS NomClub, c.NiveauJA, c.NbrJA, c.NbrAdjoint,
                 SUBSTRING(NULLIF(c.Id_Club, \'\'), 3, 2) AS CodeDept,
                 (SELECT COUNT(*) FROM CRA_Designation d WHERE d.Id_CRA_Competition = c.Id_CRA_Competition AND d.Role = \'JA\') AS NbDesJA,
                 (SELECT COUNT(*) FROM CRA_Designation d WHERE d.Id_CRA_Competition = c.Id_CRA_Competition AND d.Role = \'Adjoint\') AS NbDesAdj,

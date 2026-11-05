@@ -15,7 +15,7 @@ use CodeIgniter\HTTP\ResponseInterface;
 class CraCompetitionController extends BaseController
 {
     private const NIVEAUX = ['JA2', 'JA3', 'JAN JA3'];
-    private const COLONNES = 'Id_CRA_Competition, Id_CRA_Competition AS Numero, DateDebut, DateFin, Libelle, NbTablesMin, NbTablesMax, Lieu, Id_Club, NomClub, NiveauJA, NbrJA, NbrAdjoint';
+    private const COLONNES = 'Id_CRA_Competition, Id_CRA_Competition AS Numero, DateDebut, DateFin, Libelle, NbTablesMin, NbTablesMax, Lieu, Id_Club, (SELECT cl.Nom FROM Club cl WHERE cl.Id_Club = CRA_Competition.Id_Club) AS NomClub, NiveauJA, NbrJA, NbrAdjoint';
     /** Normalisation SQL commune au Lieu saisi : tirets/apostrophes → espaces (collation _ci = casse/accents ignorés). */
     private const NORM = "REPLACE(REPLACE(%s, '-', ' '), '''', ' ')";
 
@@ -85,8 +85,8 @@ class CraCompetitionController extends BaseController
         }
 
         getPDO()->prepare('INSERT INTO CRA_Competition
-            (DateDebut, DateFin, Libelle, NbTablesMin, NbTablesMax, Lieu, Id_Club, NomClub, NiveauJA, NbrJA, NbrAdjoint)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')->execute(array_values($f));
+            (DateDebut, DateFin, Libelle, NbTablesMin, NbTablesMax, Lieu, Id_Club, NiveauJA, NbrJA, NbrAdjoint)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')->execute(array_values($f));
 
         return $this->response->setJSON(['ok' => true, 'msg' => 'Compétition créée.', 'id' => (int) getPDO()->lastInsertId()]);
     }
@@ -106,7 +106,7 @@ class CraCompetitionController extends BaseController
         }
 
         getPDO()->prepare('UPDATE CRA_Competition SET DateDebut = ?, DateFin = ?, Libelle = ?,
-            NbTablesMin = ?, NbTablesMax = ?, Lieu = ?, Id_Club = ?, NomClub = ?, NiveauJA = ?,
+            NbTablesMin = ?, NbTablesMax = ?, Lieu = ?, Id_Club = ?, NiveauJA = ?,
             NbrJA = ?, NbrAdjoint = ? WHERE Id_CRA_Competition = ?')
             ->execute([...array_values($f), $id]);
 
@@ -178,14 +178,12 @@ class CraCompetitionController extends BaseController
             return [null, "Trop d'adjoints : « JA (total) » inclut les adjoints et il faut au moins un JA principal, donc au plus " . ((int) $nbrJa - 1) . ' adjoint(s) pour ' . (int) $nbrJa . ' JA en tout.'];
         }
 
-        // NomClub n'est jamais lu depuis le formulaire : recopié de Club.Nom.
+        // Le nom du club n'est pas stocké : lu par jointure sur Club.
         $idClub  = trim((string) ($in['id_club'] ?? ''));
-        $nomClub = null;
         if ($idClub !== '') {
             $club = getPDO()->prepare('SELECT Nom FROM Club WHERE Id_Club = ?');
             $club->execute([$idClub]);
-            $nomClub = $club->fetchColumn();
-            if ($nomClub === false) {
+            if ($club->fetchColumn() === false) {
                 return [null, "Le club $idClub n'existe pas."];
             }
         }
@@ -193,7 +191,7 @@ class CraCompetitionController extends BaseController
         return [[
             $debut, $fin ?: null, $libelle,
             $min === '' ? null : (int) $min, $max === '' ? null : (int) $max,
-            $lieu, $idClub ?: null, $nomClub, $niveau, (int) $nbrJa, (int) $nbrAdj,
+            $lieu, $idClub ?: null, $niveau, (int) $nbrJa, (int) $nbrAdj,
         ], null];
     }
 

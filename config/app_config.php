@@ -155,14 +155,14 @@ function initTableConfiguration(\PDO $pdo): void
         // best-effort
     }
 
-    // EC71 : club organisateur (Id_Club = Club.Id_Club, NomClub = copie dénormalisée de Club.Nom),
+    // EC71 : club organisateur (Id_Club = Club.Id_Club ; le nom est lu par jointure sur Club, plus de copie NomClub),
     // renseigné à la main via la recherche « club à partir du Lieu » — pas de backfill.
     try {
         if (!$pdo->query("SHOW COLUMNS FROM CRA_Competition LIKE 'Id_Club'")->fetch()) {
             $pdo->exec("ALTER TABLE CRA_Competition ADD COLUMN Id_Club CHAR(8) COLLATE utf8mb4_unicode_ci NULL AFTER Lieu");
         }
-        if (!$pdo->query("SHOW COLUMNS FROM CRA_Competition LIKE 'NomClub'")->fetch()) {
-            $pdo->exec("ALTER TABLE CRA_Competition ADD COLUMN NomClub VARCHAR(100) COLLATE utf8mb4_unicode_ci NULL AFTER Id_Club");
+        if ($pdo->query("SHOW COLUMNS FROM CRA_Competition LIKE 'NomClub'")->fetch()) {
+            $pdo->exec('ALTER TABLE CRA_Competition DROP COLUMN NomClub');
         }
     } catch (\PDOException $e) {
         // best-effort
