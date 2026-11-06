@@ -1328,11 +1328,42 @@ $(document).on('click', '.btn-suppr-un', function () {
 
 $('#btn-params-dev').on('click', function () {
     if (!pwdOk) return;
+    const mdp = $('#pwd-global').val();
+
     spinner(true);
-    $.post(`${CLEAN_BASE}/restaurer-params-dev`, { password: $('#pwd-global').val() }, res => {
+    $.post(`${CLEAN_BASE}/params-dev-memorises`, { password: mdp }, res => {
         spinner(false);
-        nijacToast(res.msg, res.ok ? 'success' : 'danger');
-        if (res.ok) setStatus(res.msg);
+        if (!res.ok) { nijacToast(res.msg, 'danger'); return; }
+
+        const explications = {
+            etat_logiciel: 'état du logiciel (« Developpement » = environnement de test ; « Operationnel » viendrait de la production)',
+            email_developpement: 'adresse vers laquelle tous les e-mails sont redirigés en mode Développement'
+        };
+        const val = v => (v === null || v === undefined || v === '') ? '(vide)' : '« ' + v + ' »';
+        const detail = res.lignes.map(l =>
+            '• ' + l.cle + ' — ' + (explications[l.cle] || '') + '\n' +
+            '    valeur actuelle   : ' + val(l.actuelle) + '\n' +
+            '    valeur mémorisée  : ' + val(l.memorisee) +
+            (l.actuelle === l.memorisee ? '   (identique, aucun changement)' : '   (sera appliquée)')
+        ).join('\n\n');
+
+        nijacConfirm(
+            'RESTAURATION DES PARAMÈTRES DEV\n\n' +
+            'Une restauration totale avec un dump de production a écrasé ces paramètres de la table « configuration ». ' +
+            'Les valeurs locales avaient été mémorisées avant la restauration (fichier SQL/dev_params.json) :\n\n' +
+            detail + '\n\n' +
+            'Aucune autre donnée n\'est modifiée. Le fichier mémorisé est ensuite supprimé : l\'opération n\'est possible qu\'une fois par restauration totale.',
+            function () {
+                spinner(true);
+                $.post(`${CLEAN_BASE}/restaurer-params-dev`, { password: $('#pwd-global').val() }, r => {
+                    spinner(false);
+                    nijacToast(r.msg, r.ok ? 'success' : 'danger');
+                    if (r.ok) setStatus(r.msg);
+                }, 'json').fail(() => { spinner(false); nijacToast('Erreur réseau.', 'danger'); });
+            },
+            null,
+            { type: 'warning', title: 'Restaurer les paramètres dev', confirmLabel: 'Restaurer', size: 'lg' }
+        );
     }, 'json').fail(() => { spinner(false); nijacToast('Erreur réseau.', 'danger'); });
 });
 

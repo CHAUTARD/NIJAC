@@ -189,6 +189,9 @@ class NijacMailer extends \PHPMailer\PHPMailer\PHPMailer
         if (strpos((string) $name, '@') !== false) {
             $name = ''; // le nom d'affichage exposerait une adresse réelle
         }
+        // Le client de messagerie affiche le nom, pas l'adresse : sans marque, « À : Prénom NOM » donnerait
+        // l'impression que le message est parti au destinataire réel. Nom préfixé « [DEV] » (adresse = adresse dev).
+        $name = trim('[DEV] ' . trim((string) $name));
         return [$this->adresseDev, $name];
     }
 }

@@ -17,7 +17,7 @@
 - [E008 – Réinitialisation du mot de passe](#e008--réinitialisation-du-mot-de-passe)
 - [E009 – Menu CRA Convoc](#e009--menu-cra-convoc)
 - [EC71 – Compétitions CRA](#ec71--compétitions-cra)
-- [EC72 – Degrés Juge-Arbitre](#ec72--degrés-juge-arbitre)
+- [EA95 – Degrés Juge-Arbitre](#ea95--degrés-juge-arbitre)
 - [EC73 – Désignation CRA](#ec73--désignation-cra)
 - [EC74 – Disponibilités CRA](#ec74--disponibilités-cra)
 - [EC75 – Statistiques CRA](#ec75--statistiques-cra)
@@ -392,7 +392,7 @@ Page d'accueil du rôle « CRA Convoc », atteinte automatiquement après connex
 | Disponibilités CRA | EC74 | `cra-dispo` |
 | Désignation CRA | EC73 | `cra-designation` |
 | Statistiques CRA | EC75 | `cra-stats` |
-| Degrés Juge-Arbitre | EC72 | `cra-juge-arbitre` |
+| Degrés Juge-Arbitre | EA95 | `cra-juge-arbitre` |
 | Se déconnecter | — | `POST logout` (formulaire caché `#form-logout` + CSRF, comme tous les menus) |
 
 ### Règles
@@ -511,7 +511,7 @@ Identiques à EN22 (seule `resolveIdJaAutorise()` est redéfinie : `idJaCompteSe
 ## EC71 – Compétitions CRA
 
 **Fichier :** `CraCompetitionController` (CI4), vue `cra_competition_index.php`, route `cra-competition`
-**Accès :** rôle « CRA Convoc » ou Administrateur (filtre `craconvocauth`) sur toutes les routes · lien depuis E009, retour vers `cra-convoc-menu`
+**Accès :** Administrateur uniquement (filtre `adminauth`) sur toutes les routes · lien depuis E002 (onglet Gestion des tables, après EA94), retour vers `admin-menu#tab-tables`
 
 ### Objectif
 Gérer le calendrier des compétitions régionales (table `CRA_Competition`, créée et seedée par `initTableConfiguration()`).
@@ -691,7 +691,7 @@ Créée par `initTableConfiguration()` (InnoDB utf8mb4_unicode_ci, best-effort) 
 ## EC75 – Statistiques CRA
 
 **Fichier :** `CraStatsController` (CI4), vue `cra_stats_index.php`, route `cra-stats`
-**Accès :** rôle « CRA Convoc » ou Administrateur (filtre `craconvocauth`) sur toutes les routes · lien depuis E009 (après EC73, avant EC72), retour vers `cra-convoc-menu`
+**Accès :** rôle « CRA Convoc » ou Administrateur (filtre `craconvocauth`) sur toutes les routes · lien depuis E009 (après EC73), retour vers `cra-convoc-menu`
 
 ### Objectif
 Lister les JA disponibles avec leurs nombres de nominations comme JA principal et comme adjoint, pour répartir les désignations (par défaut, les JA les moins nommés en haut). Lecture seule.
@@ -732,10 +732,10 @@ Ligne de totaux en pied (somme principal, adjoint, total des lignes affichées).
 
 ---
 
-## EC72 – Degrés Juge-Arbitre
+## EA95 – Degrés Juge-Arbitre
 
 **Fichier :** `CraJugeArbitreController` (CI4), vue `cra_juge_arbitre_index.php`, route `cra-juge-arbitre`
-**Accès :** rôle « CRA Convoc » ou Administrateur (filtre `craconvocauth`) sur toutes les routes · lien depuis E009, retour vers `cra-convoc-menu`
+**Accès :** Administrateur uniquement (filtre `adminauth`) sur toutes les routes · lien depuis E002 (onglet Gestion des tables, après EA94), retour vers `admin-menu#tab-tables`
 
 ### Objectif
 Gérer la table de référence des degrés de la filière juge-arbitre (table `JugeArbitre`, créée et seedée par `initTableConfiguration()` : JA1, JA2, JA3, JAN, JAI).

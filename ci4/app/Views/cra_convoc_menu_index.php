@@ -208,13 +208,6 @@
         <span class="btn-desc">JA disponibles et nombre de désignations</span>
     </a>
 
-    <a href="<?= site_url('cra-juge-arbitre') ?>" class="menu-btn" style="background:#b2dfdb;">
-        <span class="btn-code">EC72</span>
-        <div class="btn-icon"><img src="<?= base_url('img/Arbitre_filet.webp') ?>" alt="Degrés Juge-Arbitre"></div>
-        <span>Degrés Juge-Arbitre</span>
-        <span class="btn-desc">Référentiel JA1, JA2, JA3, JAN, JAI</span>
-    </a>
-
     <a href="<?= site_url('messagerie') ?>" class="menu-btn" style="background:#b2dfdb;">
         <span class="btn-code">EA93</span>
         <div class="btn-icon"><img src="<?= base_url('img/Messagerie.png') ?>" alt="Modèles de convocation"></div>

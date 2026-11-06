@@ -5,7 +5,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 
 /**
- * NIJAC – Degrés Juge-Arbitre (EC72), rôle « CRA Convoc ».
+ * NIJAC – Degrés Juge-Arbitre (EA95), rôle « CRA Convoc ».
  *
  * CRUD de la table de référence JugeArbitre (créée et seedée par
  * initTableConfiguration()). Accès depuis E009, filtre "craconvocauth"

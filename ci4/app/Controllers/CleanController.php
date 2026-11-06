@@ -696,6 +696,40 @@ class CleanController extends BaseController
     }
 
     /**
+     * DEV UNIQUEMENT : lecture seule — valeurs mémorisées (SQL/dev_params.json) et valeurs
+     * actuellement en base, pour la popup de confirmation de restaurerParamsDev().
+     */
+    public function paramsDevMemorises(): ResponseInterface
+    {
+        return $this->tryJson(function () {
+            if (IS_PRODUCTION) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Action interdite en production.']);
+            }
+            if ($err = $this->verifierMdpRequete()) {
+                return $err;
+            }
+
+            $fichier = $this->sqlDir() . '/dev_params.json';
+            $params  = is_file($fichier) ? json_decode((string) file_get_contents($fichier), true) : null;
+            if (!is_array($params) || !$params) {
+                return $this->response->setJSON(['ok' => false, 'msg' => 'Aucun paramètre dev mémorisé (aucune restauration totale faite depuis ce poste).']);
+            }
+
+            $st = getPDO()->query("SELECT cle, valeur FROM configuration WHERE cle IN ('etat_logiciel', 'email_developpement')");
+            $actuel = $st->fetchAll(\PDO::FETCH_KEY_PAIR);
+
+            $lignes = [];
+            foreach (['etat_logiciel', 'email_developpement'] as $cle) {
+                if (isset($params[$cle])) {
+                    $lignes[] = ['cle' => $cle, 'actuelle' => $actuel[$cle] ?? null, 'memorisee' => $params[$cle]];
+                }
+            }
+
+            return $this->response->setJSON(['ok' => true, 'lignes' => $lignes]);
+        });
+    }
+
+    /**
      * DEV UNIQUEMENT : réapplique etat_logiciel et email_developpement tels qu'ils étaient
      * avant la dernière restauration totale (instantané SQL/dev_params.json), pour qu'un
      * dump de production ne laisse pas le dev en « Operationnel » avec les mails réels.

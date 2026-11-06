@@ -161,6 +161,7 @@ $routes->post('clean/sauvegarde-totale', 'CleanController::sauvegardeTotale', ['
 $routes->post('clean/sauvegarde-table', 'CleanController::sauvegardeTable', ['filter' => 'adminauth']);
 $routes->post('clean/restaurer', 'CleanController::restaurer', ['filter' => 'adminauth']);
 $routes->post('clean/restaurer-total', 'CleanController::restaurerTotal', ['filter' => 'adminauth']);
+$routes->post('clean/params-dev-memorises', 'CleanController::paramsDevMemorises', ['filter' => 'adminauth']);
 $routes->post('clean/restaurer-params-dev', 'CleanController::restaurerParamsDev', ['filter' => 'adminauth']);
 $routes->post('clean/restaurer-table','CleanController::restaurerTableFull', ['filter' => 'adminauth']);
 
@@ -553,7 +554,7 @@ $routes->post('club-csr/envoyer', 'ClubCsrController::envoyer', ['filter' => 'cs
 $routes->get('defiscalisateur-menu', 'DefiscalisateurMenuController::index', ['filter' => 'defiscauth']);
 
 // ── E009 Menu CRA Convoc ─────────────────────────────────────────────────────
-// Rôle « CRA Convoc » ou Administrateur — voir CraConvocAuth.php. Compétitions CRA (EC71), Disponibilités CRA (EC74), Désignation CRA (EC73), Statistiques CRA (EC75), Degrés Juge-Arbitre (EC72) + déconnexion.
+// Rôle « CRA Convoc » ou Administrateur — voir CraConvocAuth.php. Compétitions CRA (EC71), Disponibilités CRA (EC74), Désignation CRA (EC73), Statistiques CRA (EC75) + déconnexion.
 // Le rôle CRA Convoc n'a accès qu'aux écrans de ce menu ("craconvocauth") + EA93 messagerie (routes
 // "auth:…CRA Convoc", messages CRA filtrés par MessagerieController) + changer-mot-de-passe.
 $routes->get('cra-convoc-menu', 'CraConvocMenuController::index', ['filter' => 'craconvocauth']);
@@ -637,14 +638,14 @@ $routes->post('dispo-cra', 'CraDispoController::valider');
 $routes->get('cra-stats', 'CraStatsController::index', ['filter' => 'craconvocauth']);
 $routes->get('cra-stats/data', 'CraStatsController::data', ['filter' => 'craconvocauth']);
 
-// ── EC72 Degrés Juge-Arbitre — CRUD de la table de référence JugeArbitre ─────
-// Accès depuis E009. Rôle « CRA Convoc » ou Administrateur (filtre "craconvocauth").
+// ── EA95 Degrés Juge-Arbitre — CRUD de la table de référence JugeArbitre ─────
+// Accès depuis E002 (Gestion des tables). Administrateur uniquement (filtre "adminauth").
 // Code non modifiable (= colonne de `ja`) ; suppression refusée si un JA a cette colonne à 1.
-$routes->get('cra-juge-arbitre', 'CraJugeArbitreController::index', ['filter' => 'craconvocauth']);
-$routes->get('cra-juge-arbitre/data', 'CraJugeArbitreController::data', ['filter' => 'craconvocauth']);
-$routes->post('cra-juge-arbitre', 'CraJugeArbitreController::store', ['filter' => 'craconvocauth']);
-$routes->put('cra-juge-arbitre/(:num)', 'CraJugeArbitreController::update/$1', ['filter' => 'craconvocauth']);
-$routes->delete('cra-juge-arbitre/(:num)', 'CraJugeArbitreController::delete/$1', ['filter' => 'craconvocauth']);
+$routes->get('cra-juge-arbitre', 'CraJugeArbitreController::index', ['filter' => 'adminauth']);
+$routes->get('cra-juge-arbitre/data', 'CraJugeArbitreController::data', ['filter' => 'adminauth']);
+$routes->post('cra-juge-arbitre', 'CraJugeArbitreController::store', ['filter' => 'adminauth']);
+$routes->put('cra-juge-arbitre/(:num)', 'CraJugeArbitreController::update/$1', ['filter' => 'adminauth']);
+$routes->delete('cra-juge-arbitre/(:num)', 'CraJugeArbitreController::delete/$1', ['filter' => 'adminauth']);
 
 // ── ED51 Défiscalisation JA ──────────────────────────────────────────────────
 $routes->get('defiscalisation', 'DefiscalisationController::index', ['filter' => 'defiscauth']);

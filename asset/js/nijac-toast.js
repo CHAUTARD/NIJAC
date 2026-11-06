@@ -82,6 +82,7 @@ function nijacToast(message, type, duration) {
  *                title        : titre de la modale (défaut selon type)
  *                confirmLabel : texte du bouton confirmer (défaut selon type)
  *                cancelLabel  : texte du bouton annuler  (défaut : 'Annuler')
+ *                size         : 'sm' (défaut) | 'md' | 'lg' | 'xl' — largeur de la modale
  *              }
  *
  *  Raccourci suppression : nijacConfirm(msg, cb, null, {type:'danger'})
@@ -99,6 +100,7 @@ function nijacConfirm(message, onConfirm, onCancel, opts) {
     const title        = opts.title        || t.title;
     const confirmLabel = opts.confirmLabel || t.label;
     const cancelLabel  = opts.cancelLabel  || 'Annuler';
+    const size         = ['md', 'lg', 'xl'].includes(opts.size) ? opts.size : 'sm';
 
     const mid = 'nijac-confirm-modal';
     let modal = document.getElementById(mid);
@@ -124,6 +126,11 @@ function nijacConfirm(message, onConfirm, onCancel, opts) {
             '</div>';
         document.body.appendChild(modal);
     }
+
+    // Largeur : la modale est réutilisée d'un appel à l'autre, on remet la classe à chaque fois
+    const dlg = modal.querySelector('.modal-dialog');
+    dlg.classList.remove('modal-sm', 'modal-lg', 'modal-xl');
+    if (size !== 'md') dlg.classList.add('modal-' + size);
 
     // Mise à jour dynamique du thème et des textes
     const header = document.getElementById(mid + '-header');
@@ -173,3 +180,64 @@ function nijacConfirm(message, onConfirm, onCancel, opts) {
 function toast(msg, ok = true) {
     nijacToast(msg, ok ? 'success' : 'danger');
 }
+
+/* ── Fenêtres modales déplaçables ────────────────────────────────────────────
+ *  Toute modale Bootstrap (.modal > .modal-dialog > .modal-content > .modal-header)
+ *  se déplace en saisissant son en-tête (souris, doigt ou stylet). Délégation sur
+ *  document : fonctionne aussi pour les modales créées dynamiquement. Le
+ *  déplacement utilise la propriété CSS « translate » (n'interfère pas avec le
+ *  transform d'animation de Bootstrap), reste borné à l'écran et est remis à
+ *  zéro à chaque fermeture. Les boutons / champs de l'en-tête restent cliquables.
+ * ─────────────────────────────────────────────────────────────────────────── */
+(function () {
+    var drag = null;
+
+    document.addEventListener('pointerdown', function (e) {
+        if (e.button !== 0 || !e.target.closest) return;
+        var header = e.target.closest('.modal-header');
+        if (!header || e.target.closest('button, a, input, select, textarea, label')) return;
+        var dialog = header.closest('.modal-dialog');
+        if (!dialog || !dialog.closest('.modal')) return;
+
+        var r = dialog.getBoundingClientRect();
+        var m = (dialog.style.translate || '0px 0px').split(' ');
+        drag = {
+            dialog: dialog, header: header, id: e.pointerId,
+            x0: e.clientX, y0: e.clientY,
+            tx: parseFloat(m[0]) || 0, ty: parseFloat(m[1]) || 0,
+            // marges de déplacement : l'en-tête doit rester visible
+            minDx: 40 - r.right, maxDx: window.innerWidth - 40 - r.left,
+            minDy: -r.top, maxDy: window.innerHeight - 40 - r.top
+        };
+        header.setPointerCapture(e.pointerId);
+        header.style.cursor = 'grabbing';
+        header.style.userSelect = 'none';
+        header.style.touchAction = 'none';
+        e.preventDefault();
+    });
+
+    document.addEventListener('pointermove', function (e) {
+        if (!drag || e.pointerId !== drag.id) return;
+        var dx = Math.min(drag.maxDx, Math.max(drag.minDx, e.clientX - drag.x0));
+        var dy = Math.min(drag.maxDy, Math.max(drag.minDy, e.clientY - drag.y0));
+        drag.dialog.style.translate = (drag.tx + dx) + 'px ' + (drag.ty + dy) + 'px';
+    });
+
+    function fin(e) {
+        if (!drag || e.pointerId !== drag.id) return;
+        drag.header.style.cursor = '';
+        drag = null;
+    }
+    document.addEventListener('pointerup', fin);
+    document.addEventListener('pointercancel', fin);
+
+    // Curseur « main » sur les en-têtes et remise en place à la fermeture
+    var style = document.createElement('style');
+    style.textContent = '.modal-dialog > .modal-content > .modal-header { cursor: grab; }';
+    document.head.appendChild(style);
+
+    document.addEventListener('hidden.bs.modal', function (e) {
+        var d = e.target.querySelector && e.target.querySelector('.modal-dialog');
+        if (d) d.style.translate = '';
+    });
+})();

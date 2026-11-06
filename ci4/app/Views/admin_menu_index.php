@@ -416,7 +416,14 @@
                     <span class="btn-code">EA94</span>
                     <div class="btn-icon"><img src="<?= base_url('img/Role.png') ?>" alt="Rôles"></div>
                     <span>Les rôles</span>
-                    <span class="btn-desc">Gérer la table des rôles</span>
+                    <span class="btn-desc">Gérer les rôles de l'application</span>
+                </a>
+
+                <a href="<?= site_url('cra-juge-arbitre') ?>" class="menu-btn btn-role">
+                    <span class="btn-code">EA95</span>
+                    <div class="btn-icon"><img src="<?= base_url('img/Arbitre_filet.webp') ?>" alt="Degrés Juge-Arbitre"></div>
+                    <span>Degrés Juge-Arbitre</span>
+                    <span class="btn-desc">Référentiel JA1, JA2, JA3, JAN, JAI</span>
                 </a>
 
                 <a href="<?= site_url('configuration') ?>" class="menu-btn btn-configuration">

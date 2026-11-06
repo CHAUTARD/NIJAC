@@ -784,8 +784,9 @@ function getConfig(string $cle, string $defaut = ''): string
  */
 function getEmailDestinataire(string $email): string
 {
-    if (getConfig('etat_logiciel', 'Developpement') === 'Developpement') {
-        return getConfig('email_developpement', 'patrick.chautard@free.fr');
+    if (isModeDeveloppement()) {
+        // Adresse lue uniquement dans la configuration (EA91) : jamais de repli en dur. Vide = NijacMailer bloque l'envoi.
+        return trim(getConfig('email_developpement', ''));
     }
     return $email;
 }
@@ -4558,7 +4559,8 @@ function getFfttRawClient(): \App\Libraries\FfttRawClient
  */
 function isModeDeveloppement(): bool
 {
-    return getConfig('etat_logiciel', 'Developpement') === 'Developpement';
+    // Sûr par défaut : seul « Operationnel » envoie de vrais emails ; clé absente, vide ou valeur inattendue = Développement.
+    return getConfig('etat_logiciel', 'Developpement') !== 'Operationnel';
 }
 
 /**

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
-    <title>NIJAC – Degrés Juge-Arbitre (EC72)</title>
+    <title>NIJAC – Degrés Juge-Arbitre (EA95)</title>
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/bootstrap-icons.min.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
@@ -76,8 +76,8 @@
 <body>
 
 <?= view('partials/page_header', [
-    'phIcon' => 'award', 'phTitle' => 'Degrés Juge-Arbitre', 'phCode' => 'EC72',
-    'phCrumbLabel' => 'CRA Convoc', 'phCrumbUrl' => site_url('cra-convoc-menu'), 'phBackUrl' => site_url('cra-convoc-menu'),
+    'phIcon' => 'award', 'phTitle' => 'Degrés Juge-Arbitre', 'phCode' => 'EA95',
+    'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu') . '#tab-tables', 'phBackUrl' => site_url('admin-menu') . '#tab-tables',
 ]) ?>
 
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowPwdWarning' => false]) ?>
