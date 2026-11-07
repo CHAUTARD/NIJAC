@@ -22,27 +22,6 @@
             overflow: hidden;
         }
 
-        #toolbar {
-            background: #f8fafc;
-            border-bottom: 1px solid #dde5f0;
-            padding: .3rem 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: .85rem;
-            flex-shrink: 0;
-        }
-        #toolbar .ts-user { color: #1a3a6b; font-weight: 600; }
-        #toolbar .ts-pwd-warning {
-            display: <?= $changeLogin ? 'inline-flex' : 'none' ?>;
-            align-items: center;
-            gap: .35rem;
-            color: #c00;
-            font-weight: 700;
-            cursor: pointer;
-            text-decoration: underline dotted;
-        }
-        #toolbar .ts-pwd-warning:hover { color: #900; }
 
         /* Cartouches statistiques : contenu centré (EN11 uniquement) */
         #stat-cards .stat-card { text-align: center; }
@@ -213,6 +192,7 @@
     </style>
 
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-skin.css') ?>">
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -222,20 +202,10 @@
     'phCrumbColor' => '#d0f0d0', 'phBadgeColor' => '#d0f0d0',
 ]) ?>
 
-<!-- Bandeau utilisateur + cartes statistiques (EN11) -->
+<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbId' => 'toolbar-user']) ?>
+
+<!-- Cartes statistiques (EN11) -->
 <div id="toolbar">
-    <div class="en-user">
-        <span class="en-avatar"><i class="bi bi-person-fill"></i></span>
-        <div>
-            <div class="en-u-label">Utilisateur</div>
-            <div class="en-u-name"><?= esc($nomComplet) ?><?= $departement ? ' · ' . esc($departement) : '' ?></div>
-        </div>
-    </div>
-    <?php if ($changeLogin): ?>
-    <a class="ts-pwd-warning" href="<?= site_url('changer-mot-de-passe') ?>" id="lnk-chg-pwd" data-base="<?= site_url('changer-mot-de-passe') ?>">
-        <i class="bi bi-key-fill"></i>Mot de passe à modifier
-    </a>
-    <?php endif; ?>
     <span style="flex:1"></span>
     <div id="stat-cards">
         <div class="stat-card">
@@ -255,8 +225,6 @@
         </div>
     </div>
 </div>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Input file caché pour import XLSX JA -->
 <input type="file" id="file-input" accept=".csv,.txt" style="display:none">
@@ -948,9 +916,6 @@ const DEPT_ACTIFS_CODES = <?= json_encode(array_map('strval', array_column($dept
 let importFfttEnCours = false;
 <?php endif; ?>
 
-function escHtml(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 
 <?php if ($isAdmin): ?>
 let _scanJAs = []; // JAs trouvés lors du scan limitrophe

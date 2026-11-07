@@ -13,7 +13,6 @@
         :root { --ph-bg: #8d6e00; }
         body { background: #fff8e1; font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
         #toolbar { gap: .75rem; }
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
         #contenu { flex: 1; padding: 1rem; max-width: 960px; width: 100%; margin: 0 auto; }
         .carte { background: #fff; border: 1px solid #dde5f0; border-radius: .5rem; padding: 1rem 1.25rem; margin-bottom: 1rem; }
         .carte h2 { font-size: 1.05rem; font-weight: 700; color: #1a3a6b; margin-bottom: .75rem; }
@@ -37,8 +36,6 @@
 ]) ?>
 
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <div id="contenu">
 

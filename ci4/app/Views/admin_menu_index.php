@@ -19,7 +19,6 @@
             flex-direction: column;
         }
 
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
 
         #btn-switch-nominateur, #btn-switch-csr, #btn-switch-defisc, #btn-switch-craconvoc {
             display: inline-flex;
@@ -292,8 +291,6 @@
         <?php endif; ?>
     </div>
     <?php endif; ?>
-
-    <?php require __DIR__ . '/_modal_mdp.php'; ?>
 
     <ul class="nav nav-tabs" id="menu-tabs" role="tablist">
         <li class="nav-item" role="presentation">

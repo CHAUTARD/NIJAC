@@ -268,6 +268,7 @@
         .smtp-save-row button:disabled { opacity: .5; cursor: default; }
         .smtp-msg { font-size: .82rem; min-height: 18px; }
     </style>
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -276,13 +277,8 @@
     'phCrumbLabel' => 'Admin', 'phCrumbUrl' => site_url('admin-menu') . '#tab-tables', 'phBackUrl' => site_url('admin-menu') . '#tab-tables',
 ]) ?>
 
-<!-- Toolbar : recopié de includes/toolbar.php -->
-<div id="toolbar">
-    <span style="color:#1a3a6b;font-weight:600;">
-        <i class="bi bi-person-fill me-1"></i>Utilisateur : <?= esc($nomComplet) ?><?= $departement ? ' (' . esc($departement) . ')' : '' ?>
-    </span>
-    <span id="etat-status" class="ms-3 text-muted"></span>
-</div>
+<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowPwdWarning' => false,
+    'tbExtra' => '<span id="etat-status" class="ms-3" style="color:rgba(255,255,255,.85);"></span>']) ?>
 
 <!-- Spinner -->
 <?= view('partials/spinner_overlay') ?>
@@ -931,9 +927,6 @@
 <script>
 'use strict';
 
-function escHtml(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 
 const BASE = '<?= site_url('configuration') ?>';
 let etatSelectionne = '<?= $etatCourant ?>';

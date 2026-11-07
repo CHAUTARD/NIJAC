@@ -30,7 +30,6 @@
         }
 
         #toolbar { gap: .75rem; }
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
 
         /* Visible seulement pour un Administrateur qui prévisualise le menu CSR (voir E003) — masqué pour le rôle CSR lui-même. */
         #btn-switch-admin {
@@ -192,8 +191,6 @@
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbSwitchTo' => 'admin']) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Grille -->
 <div id="menu-grid">

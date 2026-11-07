@@ -31,26 +31,6 @@
             gap: .75rem;
         }
 
-        #toolbar-user {
-            background: #f8fafc;
-            border-bottom: 1px solid #dde5f0;
-            padding: .3rem 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: .85rem;
-        }
-        #toolbar-user .ts-user { color: #1a3a6b; font-weight: 600; }
-        #toolbar-user .ts-pwd-warning {
-            display: <?= $changeLogin ? 'inline-flex' : 'none' ?>;
-            align-items: center;
-            gap: .35rem;
-            color: #c00;
-            font-weight: 700;
-            cursor: pointer;
-            text-decoration: underline dotted;
-        }
-        #toolbar-user .ts-pwd-warning:hover { color: #900; }
 
         #toolbar {
             background: #fff;
@@ -256,8 +236,6 @@
 
 <!-- Toolbar utilisateur -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbId' => 'toolbar-user']) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- ── Toolbar : année fiscale (config EA91 annee_fiscale), pas de sélection ici ── -->
 <div id="toolbar">

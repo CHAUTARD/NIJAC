@@ -24,7 +24,7 @@ $phBadgeOpacityOnly = $phBadgeOpacityOnly ?? false;
         <small class="ms-2" style="color:<?= esc($phBadgeColor) ?>;">(<?= esc($phCode) ?>)</small>
         <?php endif; ?>
     </div>
-    <a href="<?= esc($phBackUrl) ?>" class="btn btn-sm py-0" style="flex-shrink:0;background:#fff;color:#1a3a6b;border:1px solid #fff;">
+    <a href="<?= esc($phBackUrl) ?>" class="btn btn-sm ph-retour" style="flex-shrink:0;">
         <i class="bi bi-arrow-left me-1"></i>Retour
     </a>
 </div>

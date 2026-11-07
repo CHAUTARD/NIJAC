@@ -12,7 +12,6 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-liste-edit.css') ?>">
 
     <style>
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
         #panel-liste { width: 55%; }
 
         /* Bandeau de titre : strip clair — même style qu'EA92 / EN29 / EN23. */
@@ -36,6 +35,7 @@
         }
 
     </style>
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -46,8 +46,6 @@
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Split -->
 <div id="split-container">
@@ -139,9 +137,6 @@ const DIVISION_BASE = '<?= site_url('division') ?>';
 let currentId = null;
 const sortState = { col: '2', asc: true }; // 2 = colonne Ord, tri par défaut (voir DivisionController::data())
 
-function escHtml(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 
 // Texte noir ou blanc selon la luminance de la couleur de fond, pour rester lisible
 // quelle que soit la couleur de division choisie.

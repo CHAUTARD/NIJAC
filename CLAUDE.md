@@ -2,12 +2,24 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Utlise Sonnet pour les questions complexes..
 Réponses courtes : résultat, puis seulement ce qui demande une action de ma part
 
-## Routes des modèles
-- Code simple, résumés ->  Sonnet 5.5
-! - Architecture, refacto -> Opus 5.5
+# Choix du modèle selon la tâche
+
+Délègue les tâches suivantes à un sous-agent (outil Agent) en précisant le modèle indiqué.
+
+| Tâche | Modèle | Pourquoi |
+|---|---|---|
+| Résumer des articles, extraire du contenu simple | haiku | Extraction simple, sans raisonnement complexe |
+| Déboguer du code | sonnet | Très bon en code, retour rapide, identification claire des bogues |
+| Analyser des articles de recherche complexes, longs documents spécialisés | opus | Analyse approfondie, critique méthodologique, perspectives d'avenir |
+
+## Règles
+- Pour un résumé ou une extraction simple, utilise `model: "haiku"`.
+- Pour le débogage et le code courant, utilise `model: "sonnet"`.
+- Pour une analyse approfondie d'un document long ou spécialisé, utilise `model: "opus"`.
+- Pour toute autre tâche, garde le modèle de la session.
+- Indique en une ligne quel modèle tu as choisi et pourquoi.
 - Contexte minimal pour chaque subagent
 
 ## Vérification
@@ -67,6 +79,7 @@ Served from the root `asset/` folder via `base_url('asset/js/...')` — not dupl
 | `asset/js/nijac-csrf.js` | Chaque vue (`<script src="<?= base_url('asset/js/nijac-csrf.js') ?>">`) | Préfiltre jQuery AJAX — lit `<meta name="csrf-token">` et injecte le header `X-CSRF-Token` · envoie tout PUT / PATCH / DELETE en POST + `_method` (l'hébergeur de production refuse PUT/DELETE : 403 vide ; CI4 `spoofRequestMethod()` rétablit la méthode, routes inchangées) |
 | `asset/js/nijac-editeur.js` | EN15, EA93, via `view('partials/editeur_html')` (après jQuery, avant le script de la vue ; rien n'est chargé si `asset/tinymce/tinymce.min.js` est absent) | Éditeur HTML visuel TinyMCE auto-hébergé (`asset/tinymce/`, « TinyMCE Community » GPL, `license_key: 'gpl'`, français si `langs/fr_FR.js`) sur `#txt-message` : `nijacEditeur.attacher(id, {source})` (bouton « Code source » = administrateur), `nijacEditeur.inserer(id, marqueur)` · `$.valHooks.textarea` / `$.propHooks.readOnly` : `.val()` et `.prop('readonly')` du textarea suivent l'éditeur · contenu non modifié rendu à l'identique · document complet : seul le `<body>` est édité · commentaires conditionnels Outlook protégés |
 | `asset/js/nijac-toast.js` | Chaque vue | `nijacToast(msg, type, duration)` · `nijacConfirm(msg, onConfirm, onCancel)` — remplaçants de `alert()` / `confirm()` · rend aussi **toutes les modales Bootstrap déplaçables** par leur en-tête (délégation sur `document`, CSS `translate`, remise à zéro à la fermeture) |
+| `asset/js/nijac-utils.js` | Vues qui l'utilisent (balise dans le `<head>`) | `escHtml(s)` — échappement HTML partagé (plus de copie inline dans les vues) |
 | `asset/js/nijac-sortable-table.js` | Vues avec tableaux triables | Tri de colonnes côté client |
 
 `nijacToast` types : `'success'` (vert) · `'danger'` (rouge) · `'warning'` (orange) · `'info'` (bleu).
@@ -126,7 +139,7 @@ Every CI4 controller pulls in `config/db.php` (and most also `config/app_config.
 
 There is no shared layout: each view file (`ci4/app/Views/xxx_index.php`) is a full standalone HTML document that writes its own `<head>` and `<style>` block. The page « chrome » is shared through three partials in `ci4/app/Views/partials/`, called with `view('partials/…', [...])` (arguments documented at the top of each file): `page_header.php` (`#page-header`: icon, title, `EXXXX` badge, optional breadcrumb, back link), `toolbar.php` (`#toolbar`: user, password warning, role-switch buttons) and `page_footer.php` (`#page-footer`: status bar + copyright). Copy the call pattern from an existing view (e.g. [region_index.php](ci4/app/Views/region_index.php)).
 
-Their CSS lives in `asset/css/nijac-chrome.css` (link it after `nijac.css`): do not redeclare those rules inline. Per-screen settings: header colour via `:root { --ph-bg: #2e7d32; }` in the view's `<style>` (default NIJAC blue), and the password-warning visibility via the single rule `#toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }`. `body` layout stays in the view. `asset/css/nijac-liste-edit.css` (list + edit-panel screens) still carries its own copy of these rules, and about ten views (e.g. `stats_ja`, `fftt_test`, `cra_dispo`) still keep inline variants because their look differs from the shared CSS.
+Their CSS lives in `asset/css/nijac-chrome.css` (link it after `nijac.css`): do not redeclare those rules inline. Per-screen settings: header colour via `:root { --ph-bg: #2e7d32; }` in the view's `<style>` (default NIJAC blue), and the password warning: `partials/toolbar.php` renders the « Mot de passe à modifier » link **and** the E006 modal (`_modal_mdp.php`) only when `$_SESSION['utilisateur']['change_login']` is true — views no longer carry any `.ts-pwd-warning` CSS nor `require '_modal_mdp.php'`. The toolbar is moved into `#page-header` (centred, buttons « Menu … » + Retour on the right) by a small script in the partial; its styles (`.in-header`, `.ph-retour`) live in `nijac.css` / `nijac-chrome.css`. `body` layout stays in the view. `asset/css/nijac-liste-edit.css` (list + edit-panel screens) still carries its own copy of these rules, and about ten views (e.g. `stats_ja`, `fftt_test`, `cra_dispo`) still keep inline variants because their look differs from the shared CSS.
 
 The CSRF token is exposed via `<meta name="csrf-token" content="<?= csrf_hash() ?>">` in every view's `<head>`, and `asset/js/nijac-csrf.js` reads that meta tag to inject the `X-CSRF-Token` header on jQuery AJAX calls.
 

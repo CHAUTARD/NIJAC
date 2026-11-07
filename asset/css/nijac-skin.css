@@ -22,12 +22,7 @@ body { background: var(--en-bg); color: var(--en-ink); }
     border-radius: 999px; padding: .08rem .55rem; font-size: .68rem;
     font-weight: 700; vertical-align: middle; letter-spacing: .5px;
 }
-#page-header a.btn {
-    background: rgba(255,255,255,.15) !important; color: #fff !important;
-    border: 1px solid rgba(255,255,255,.35) !important; border-radius: 999px !important;
-    padding: .3rem .95rem !important; font-weight: 600;
-}
-#page-header a.btn:hover { background: rgba(255,255,255,.28) !important; }
+/* Bouton Retour : style standard du partial page_header (blanc), comme EC75 */
 
 /* ── Bandeau utilisateur ── */
 #toolbar, #toolbar-user {

@@ -38,6 +38,7 @@
         }
         #panel-division { margin-top: .3rem; }
     </style>
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -208,9 +209,6 @@ let divisionFiltre   = '';
 let searchTerm        = '';
 const sortState = { col: null, asc: true };
 
-function esc(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
 
 /* Calcule la luminosité d'une couleur hex et retourne '#fff' ou '#111' selon le contraste */
 function textColorFor(hex) {

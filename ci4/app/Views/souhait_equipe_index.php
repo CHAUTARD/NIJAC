@@ -26,6 +26,7 @@
         #hint-division { font-size: .8rem; color: #92400e; background: #fff3cd; border: 1px solid #f59e0b; border-radius: 6px; padding: .4rem .6rem; }
         tr.hors-saisie td { color: #9ca3af; }
     </style>
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -362,10 +363,6 @@ $('#file-csv').on('change', function () {
 });
 
 // ── Rapports d'exécution ────────────────────────────────────────────────────
-function escHtml(s) {
-    return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
 $('#btn-rapports').on('click', function () {
     $('#rapports-body').html('<div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm"></span> Chargement…</div>');
     new bootstrap.Modal('#modalRapports').show();

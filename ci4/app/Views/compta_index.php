@@ -11,7 +11,6 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-liste-edit.css') ?>">
     <style>
         #panel-liste { width: 62%; }
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
 
         /* Bandeau de filtres : mêmes comboboxes « label en encoche » que EN11
            (nijac.css .combo-field). Fond orange très clair (skin
@@ -95,6 +94,7 @@
         #import-result .ir-search:hover { text-decoration: none; }
     </style>
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-skin-orange.css') ?>">
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -235,9 +235,6 @@ let currentId   = null;
 let searchTerm  = '';
 const sortState = { col: null, asc: true };
 
-function h(s) {
-    return String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
-}
 function setStatus(msg, ok = true) {
     $('#form-status').text(msg).removeClass('text-danger text-success').addClass(ok ? 'text-success' : 'text-danger');
 }
@@ -455,7 +452,7 @@ function afficherResultatImport(ok, res) {
     let html = '<button type="button" class="ir-close" title="Fermer">✕</button>';
 
     if (!ok) {
-        html += `<div><strong>❌ ${h(res)}</strong></div>`;
+        html += `<div><strong>❌ ${escHtml(res)}</strong></div>`;
         $box.html(html).show();
         $box.find('.ir-close').on('click', () => $box.hide());
         return;
@@ -467,9 +464,9 @@ function afficherResultatImport(ok, res) {
     const sect = (titre, arr, clickable) =>
         `<h6>${titre}</h6><ul>` + arr.map(r => {
             const nom = clickable
-                ? `<a href="#" class="ir-search" data-nom="${h(r.nom)}">${h(r.nom)}</a>`
-                : h(r.nom);
-            return `<li>${nom} → ${h(r.compte)}</li>`;
+                ? `<a href="#" class="ir-search" data-nom="${escHtml(r.nom)}">${escHtml(r.nom)}</a>`
+                : escHtml(r.nom);
+            return `<li>${nom} → ${escHtml(r.compte)}</li>`;
         }).join('') + '</ul>';
 
     html += `<div><strong>✅ ${res.nb_maj} compte(s) mis à jour sur ${res.nb_lignes} ligne(s) analysée(s)</strong></div>`;

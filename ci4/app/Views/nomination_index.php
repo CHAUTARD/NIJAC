@@ -16,8 +16,6 @@
 body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
 
 #page-header { display: flex; align-items: center; gap: .75rem; }
-.ts-user { color:#1a3a6b; font-weight:600; }
-.ts-pwd-warning { display:<?= $changeLogin ? 'inline-flex' : 'none' ?>; align-items:center; gap:.35rem; color:#c00; font-weight:700; cursor:pointer; text-decoration:underline dotted; }
 
 #barre-selection { --strip-bg:#fff; background:#fff; border-bottom:1px solid #dee2e6; padding:.5rem 1.25rem; display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; flex-shrink:0; }
 #barre-selection .combo-field > select { min-width:150px; }
@@ -116,6 +114,7 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 }
 </style>
 <link rel="stylesheet" href="<?= base_url('asset/css/nijac-skin.css') ?>">
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -127,8 +126,6 @@ body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; height:1
 
 <!-- Toolbar : recopié de Nominateur/includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Barre de sélection -->
 <div id="barre-selection">
@@ -1289,13 +1286,6 @@ function haversineKm(lat1, lon1, lat2, lon2) {
     return Math.round(R * 2 * Math.asin(Math.sqrt(Math.min(1, a))));
 }
 
-function escHtml(s) {
-    return String(s || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
 </script>
 <script src="<?= base_url('asset/js/nijac-toast.js') ?>"></script>
 </body>

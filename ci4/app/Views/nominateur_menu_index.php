@@ -30,7 +30,6 @@
         }
 
         #toolbar { gap: .75rem; }
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
         #btn-switch-admin {
             display: <?= $isAdmin ? 'inline-flex' : 'none' ?>;
             align-items: center;
@@ -316,6 +315,7 @@
             #menu-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding-left: 8px; padding-right: 8px; }
         }
     </style>
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -329,8 +329,6 @@
 
 <!-- Toolbar : recopié de Nominateur/includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowJa' => !empty($menuJaVisible), 'tbJaActif' => !empty($compteJaLie), 'tbSwitchTo' => 'admin']) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- ── Tableau de bord ── -->
 <div id="dashboard">
@@ -572,9 +570,6 @@
 <script>
 'use strict';
 
-function escHtml(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 
 function formatDateFr(s) {
     if (!s) return '';

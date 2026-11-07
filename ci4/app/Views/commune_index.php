@@ -21,7 +21,6 @@
             overflow: hidden;
         }
 
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
         #import-options {
             display: none;
             align-items: center;
@@ -139,6 +138,7 @@
         #import-progress .box p { margin: .5rem 0 1rem; font-size: .9rem; color: #374151; }
 
     </style>
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -149,8 +149,6 @@
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Spinner -->
 <?= view('partials/spinner_overlay') ?>
@@ -441,9 +439,6 @@
 <script>
 'use strict';
 
-function escHtml(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 const COMMUNE_BASE = '<?= site_url('commune') ?>';
 
 let lignes           = [];
@@ -493,19 +488,18 @@ function renderGrille() {
 
     // Tout est rendu sur une seule page (jusqu'à 20 000 lignes) : on construit
     // le HTML en une passe et on l'injecte d'un bloc plutôt que ligne par ligne.
-    const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
     const html = affichees.map(r => {
         const latVal = r.Latitude  ?? '';
         const lonVal = r.Longitude ?? '';
         const latCls = latVal === '' ? 'col-coords text-muted fst-italic' : 'col-coords';
         const lonCls = lonVal === '' ? 'col-coords text-muted fst-italic' : 'col-coords';
-        return `<tr data-insee="${esc(r.Id_LaPoste)}" data-nom="${esc(r.Nom)}" data-cp="${esc(r.CodePostal)}" data-lat="${esc(latVal)}" data-lon="${esc(lonVal)}">`
+        return `<tr data-insee="${escHtml(r.Id_LaPoste)}" data-nom="${escHtml(r.Nom)}" data-cp="${escHtml(r.CodePostal)}" data-lat="${escHtml(latVal)}" data-lon="${escHtml(lonVal)}">`
             + `<td class="col-id">${String(r.Id_LaPoste).padStart(5, '0')}</td>`
-            + `<td>${esc(r.CodePostal)}</td>`
-            + `<td>${esc(r.Nom)}</td>`
-            + `<td class="${latCls}">${latVal !== '' ? esc(latVal) : '—'}</td>`
-            + `<td class="${lonCls}">${lonVal !== '' ? esc(lonVal) : '—'}</td>`
-            + `<td>${esc(r.CodeDept)} ${r.NomDept ? '– ' + esc(r.NomDept) : ''}</td>`
+            + `<td>${escHtml(r.CodePostal)}</td>`
+            + `<td>${escHtml(r.Nom)}</td>`
+            + `<td class="${latCls}">${latVal !== '' ? escHtml(latVal) : '—'}</td>`
+            + `<td class="${lonCls}">${lonVal !== '' ? escHtml(lonVal) : '—'}</td>`
+            + `<td>${escHtml(r.CodeDept)} ${r.NomDept ? '– ' + escHtml(r.NomDept) : ''}</td>`
             + `</tr>`;
     }).join('');
     $body.html(html);

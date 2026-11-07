@@ -21,7 +21,6 @@
             overflow: hidden;
         }
 
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
         /* ── Bandeau mot de passe (revérification avant exécution SQL) ── */
         #pwd-banner {
             background: #f0f4fa;
@@ -169,6 +168,7 @@
         #empty-msg { text-align: center; padding: 2.5rem 1rem; color: #888; font-size: .9rem; }
 
     </style>
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -179,8 +179,6 @@
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => '']) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Bandeau mot de passe : revérifié avant toute requête SQL (une session volée
      ne suffit plus à exécuter du SQL sans connaître le mot de passe) -->
@@ -257,9 +255,6 @@ function setStatus(msg, ok = true) {
     $('#status-bar').html(msg).css('color', ok ? '#374151' : '#c00');
 }
 
-function escHtml(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 
 // Session TOTP expirée côté serveur (res.totp) : retour vers EA99 pour revalider le code.
 function verifierRetourTotp(res) {

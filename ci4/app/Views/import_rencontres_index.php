@@ -11,7 +11,6 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-chrome.css') ?>">
     <style>
         body { background: #f0f4fa; font-family: 'Segoe UI', system-ui, sans-serif; }
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
         #content { padding: 1.25rem 1.5rem; }
 
         /* ── Bouton FFTT ── */
@@ -100,6 +99,7 @@
         #spinner-fftt { display:none; }
         #spinner-fftt.show { display:inline-block; }
     </style>
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -110,8 +110,6 @@
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <div id="content">
 
@@ -261,9 +259,6 @@ let   phaseKey        = <?= json_encode($phaseKey,    JSON_UNESCAPED_UNICODE) ?>
 let   phaseLabel      = <?= json_encode($phaseLabel,  JSON_UNESCAPED_UNICODE) ?>;
 
 /* ── Utilitaires ──────────────────────────────────────────────────────────── */
-function esc(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
 function spin(id, show) { $(`#${id}`).toggleClass('d-none', !show); }
 
 /* ── État global ──────────────────────────────────────────────────────────── */
@@ -285,12 +280,12 @@ function renderLigueCard(ligue) {
     $('#ligue-card').html(`
         <div class="ligue-card flex-column align-items-start gap-2">
             <div class="d-flex align-items-center gap-3">
-                <div class="ligue-id">${esc(ligue.id)}</div>
+                <div class="ligue-id">${escHtml(ligue.id)}</div>
                 <div>
                     <div class="ligue-nom">
-                        <i class="bi bi-check-circle-fill text-success me-1"></i>${esc(ligue.libelle)}
+                        <i class="bi bi-check-circle-fill text-success me-1"></i>${escHtml(ligue.libelle)}
                     </div>
-                    <div class="ligue-sub">Identifiant FFTT : <code>${esc(ligue.id)}</code></div>
+                    <div class="ligue-sub">Identifiant FFTT : <code>${escHtml(ligue.id)}</code></div>
                 </div>
             </div>
             <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -341,12 +336,12 @@ $('#btn-fftt').on('click', function () {
 
         if (!r.ok) {
             let html = `<div class="alert alert-danger mt-3">
-                <i class="bi bi-x-circle-fill me-2"></i><strong>Ligue non trouvée.</strong> ${esc(r.msg)}`;
+                <i class="bi bi-x-circle-fill me-2"></i><strong>Ligue non trouvée.</strong> ${escHtml(r.msg)}`;
             if (r.ligues?.length) {
                 html += `<details class="mt-2"><summary style="cursor:pointer;font-size:.83rem;">
                     ${r.ligues.length} ligues disponibles</summary>
                     <ul class="mb-0 mt-1" style="font-size:.82rem;">`;
-                r.ligues.forEach(l => html += `<li>${esc(l)}</li>`);
+                r.ligues.forEach(l => html += `<li>${escHtml(l)}</li>`);
                 html += '</ul></details>';
             }
             html += '</div>';
@@ -376,7 +371,7 @@ function chargerEpreuves() {
 
     $.post(`${IMPORT_RENC_BASE}/charger-epreuves`, { organisme: ligueId }, function (r) {
         if (!r.ok) {
-            $('#liste-epreuves').html(`<div class="text-danger">${esc(r.msg)}</div>`);
+            $('#liste-epreuves').html(`<div class="text-danger">${escHtml(r.msg)}</div>`);
             return;
         }
         // On ne conserve que le Championnat de France par Équipes Féminin et
@@ -412,8 +407,8 @@ function renderEpreuves() {
             <div class="epreuve-item">
                 <i class="bi bi-check-circle-fill text-success flex-shrink-0" style="margin-top:.15rem;"></i>
                 <span>
-                    <span class="intitule">${esc(intitule)}</span>
-                    <span class="ep-id">(${esc(ep.idepreuve ?? '')})</span>
+                    <span class="intitule">${escHtml(intitule)}</span>
+                    <span class="ep-id">(${escHtml(ep.idepreuve ?? '')})</span>
                 </span>
             </div>`);
     });
@@ -527,7 +522,7 @@ $('#btn-importer').on('click', async function () {
                             const ic = icons[l.type] ?? 'bi-dot';
                             return `<div style="display:flex;gap:.4rem;align-items:baseline;">
                                 <i class="bi ${ic}" style="font-size:.7rem;flex-shrink:0;margin-top:.15rem;"></i>
-                                <span><strong>${esc(l.op)}</strong> ${esc(l.val)}</span>
+                                <span><strong>${escHtml(l.op)}</strong> ${escHtml(l.val)}</span>
                             </div>`;
                         }).join('');
                         $(`#${rowDiv}`).after(`
@@ -536,7 +531,7 @@ $('#btn-importer').on('click', async function () {
                             </div>`);
                     }
                 } else {
-                    mettreAJourLigne(rowDiv, false, esc(rr.msg));
+                    mettreAJourLigne(rowDiv, false, escHtml(rr.msg));
                     bilanTotal.erreurs++;
                 }
             } catch (e) {
@@ -570,14 +565,14 @@ function ajouterLigneProgression(libelle, epIntitule, ok, msg) {
     const rowId = 'dp-' + Math.random().toString(36).slice(2);
 
     const nom = libelle
-        ? `${esc(libelle)} <span class="text-muted fw-normal" style="font-size:.78rem;">(${esc(epIntitule)})</span>`
-        : `<span class="text-muted">${esc(epIntitule)}</span>`;
+        ? `${escHtml(libelle)} <span class="text-muted fw-normal" style="font-size:.78rem;">(${escHtml(epIntitule)})</span>`
+        : `<span class="text-muted">${escHtml(epIntitule)}</span>`;
 
     $('#liste-progression').append(`
         <div class="div-progress" id="${rowId}">
             ${iconeOk(ok)}
             <span class="dp-nom">${nom}</span>
-            <span class="dp-stats">${esc(msg)}</span>
+            <span class="dp-stats">${escHtml(msg)}</span>
         </div>`);
     $('html,body').animate({ scrollTop: $(`#${rowId}`).offset().top - 20 }, 150);
     return rowId;
@@ -602,7 +597,7 @@ function ajouterSousLigne(parentId, label, ok, msg) {
         <div class="div-progress div-progress-sub" id="${rowId}" style="padding-left:2rem;font-size:.82rem;opacity:.9;">
             ${iconeOk(ok)}
             <span class="dp-nom">${label}</span>
-            <span class="dp-stats">${esc(msg)}</span>
+            <span class="dp-stats">${escHtml(msg)}</span>
         </div>`);
     return rowId;
 }
@@ -637,7 +632,7 @@ function rafraichirEtatTables(afficherMsg) {
 
         let rows = Object.entries(counts).map(([t, n]) => {
             const cls = n > 0 ? 'text-warning fw-semibold' : 'text-success';
-            return `<tr><td class="pe-3">${esc(t)}</td><td class="${cls} text-end">${n.toLocaleString('fr-FR')} enr.</td></tr>`;
+            return `<tr><td class="pe-3">${escHtml(t)}</td><td class="${cls} text-end">${n.toLocaleString('fr-FR')} enr.</td></tr>`;
         }).join('');
 
         let html = `<table class="mb-2" style="font-size:.82rem;">${rows}</table>`;
@@ -684,7 +679,7 @@ function chargerListeRencontres() {
 
     $.get(`${IMPORT_RENC_BASE}/liste-rencontres`, function (r) {
         if (!r.ok) {
-            $('#tbody-renc').html(`<tr><td colspan="10" class="text-danger p-2">${esc(r.msg)}</td></tr>`);
+            $('#tbody-renc').html(`<tr><td colspan="10" class="text-danger p-2">${escHtml(r.msg)}</td></tr>`);
             return;
         }
         toutesRencontres = r.rencontres ?? [];
@@ -776,14 +771,14 @@ function renderListeRencontres() {
             ? `<span class="badge bg-success">${rc.NbNominations}</span>`
             : '<span class="text-muted">—</span>';
         return `<tr>
-            <td class="fw-semibold">${esc(date)}</td>
-            <td>${esc(heure)}</td>
-            <td>${esc(rc.Journee ?? '—')}</td>
-            <td>${esc(rc.Poule ?? '—')}</td>
-            <td>${esc(rc.Phase ?? '—')}</td>
-            <td><span class="badge" style="background:${bg};color:${fg}">${esc(rc.DivisionCode)}</span></td>
-            <td>${esc(rc.NomDom ?? '—')}</td>
-            <td>${esc(rc.NomExt ?? '—')}</td>
+            <td class="fw-semibold">${escHtml(date)}</td>
+            <td>${escHtml(heure)}</td>
+            <td>${escHtml(rc.Journee ?? '—')}</td>
+            <td>${escHtml(rc.Poule ?? '—')}</td>
+            <td>${escHtml(rc.Phase ?? '—')}</td>
+            <td><span class="badge" style="background:${bg};color:${fg}">${escHtml(rc.DivisionCode)}</span></td>
+            <td>${escHtml(rc.NomDom ?? '—')}</td>
+            <td>${escHtml(rc.NomExt ?? '—')}</td>
             <td class="text-center">${arb}</td>
             <td class="text-center">${nom}</td>
         </tr>`;
@@ -810,7 +805,7 @@ function chargerCandidatsArbitre() {
 
     $.get(`${IMPORT_RENC_BASE}/candidats-arbitre`, { id_rencontre: daIdRencontre }, function (r) {
         if (!r.ok) {
-            $('#da-liste-arbitres').html(`<div class="alert alert-danger mb-0">${esc(r.msg)}</div>`);
+            $('#da-liste-arbitres').html(`<div class="alert alert-danger mb-0">${escHtml(r.msg)}</div>`);
             return;
         }
         if (!r.arbitres.length) {
@@ -819,8 +814,8 @@ function chargerCandidatsArbitre() {
         }
         const rows = r.arbitres.map(a => `
             <button type="button" class="list-group-item list-group-item-action btn-choisir-arbitre" data-id="${a.Id_JA}">
-                <strong>${esc(a.Prenom)} ${esc(a.Nom)}</strong>
-                <span class="text-muted ms-2" style="font-size:.8rem;">${esc(a.Grade ?? '')}</span>
+                <strong>${escHtml(a.Prenom)} ${escHtml(a.Nom)}</strong>
+                <span class="text-muted ms-2" style="font-size:.8rem;">${escHtml(a.Grade ?? '')}</span>
             </button>`).join('');
         $('#da-liste-arbitres').html(`<div class="list-group">${rows}</div>`);
     }, 'json').fail(function () {
@@ -833,7 +828,7 @@ $(document).on('click', '.btn-designer-arbitre', function () {
     const rc = toutesRencontres.find(r => +r.Id_Rencontre === daIdRencontre);
     const date = rc?.Date ? rc.Date.substring(0, 10).split('-').reverse().join('/') : '';
     $('#da-rencontre-label').html(rc
-        ? `<strong>${esc(rc.NomDom)}</strong> vs ${esc(rc.NomExt ?? '—')} — ${esc(rc.DivisionCode)} — ${esc(date)}`
+        ? `<strong>${escHtml(rc.NomDom)}</strong> vs ${escHtml(rc.NomExt ?? '—')} — ${escHtml(rc.DivisionCode)} — ${escHtml(date)}`
         : '');
 
     bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-designer-arbitre')).show();

@@ -64,18 +64,18 @@ $retourUrl  = $retourUrl  ?? null;
         #ja-info-bar .ja-ib-nom {
             font-size: .95rem;
             font-weight: 700;
-            color: #fff;
+            color: var(--nijac-blue);
         }
         #ja-info-bar .ja-ib-loc {
             font-size: .82rem;
-            color: rgba(255,255,255,.8);
+            color: #4b5563;
             display: flex;
             align-items: center;
             gap: .3rem;
         }
         #ja-info-bar .ja-ib-grade {
-            background: rgba(255,255,255,.22);
-            color: #fff;
+            background: #e3ebf7;
+            color: var(--nijac-blue);
             border-radius: 10px;
             padding: .1rem .5rem;
             font-size: .75rem;
@@ -83,26 +83,6 @@ $retourUrl  = $retourUrl  ?? null;
         }
 
         /* ── Toolbar utilisateur (visible seulement si session) ────────── */
-        #toolbar {
-            background: #f8fafc;
-            border-bottom: 1px solid #dde5f0;
-            padding: .3rem 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: .85rem;
-        }
-        #toolbar .ts-user { color: #1a3a6b; font-weight: 600; }
-        #toolbar .ts-pwd-warning {
-            display: <?= $changeLogin ? 'inline-flex' : 'none' ?>;
-            align-items: center;
-            gap: .35rem;
-            color: #c00;
-            font-weight: 700;
-            cursor: pointer;
-            text-decoration: underline dotted;
-        }
-        #toolbar .ts-pwd-warning:hover { color: #900; }
         #btn-switch-admin {
             display: inline-flex;
             align-items: center;
@@ -247,36 +227,26 @@ $retourUrl  = $retourUrl  ?? null;
 <div id="page-header">
     <i class="bi bi-calendar2-check fs-5 flex-shrink-0"></i>
     <h1><?= esc($titreEcran) ?> <small class="opacity-75" style="font-size:.75rem;">(<?= esc($codeEcran) ?>)</small></h1>
-    <span id="ja-info-bar" style="display:none;align-items:center;gap:.65rem;flex-wrap:wrap">
-        <span class="ja-header-sep">|</span>
-        <i class="bi bi-person-badge flex-shrink-0" style="opacity:.7"></i>
-        <span class="ja-ib-nom" id="ja-ib-nom"></span>
-        <span class="ja-ib-grade" id="ja-ib-grade" style="display:none"></span>
-        <span class="ja-ib-loc" id="ja-ib-loc" style="display:none">
-            <i class="bi bi-geo-alt-fill" style="color:rgba(255,255,255,.6)"></i>
-            <span id="ja-ib-cp"></span> <span id="ja-ib-ville"></span>
-        </span>
-    </span>
-    <label id="lbl-defisc" class="d-none ms-auto align-items-center gap-2"
+    <label id="lbl-defisc" data-ph-droite class="d-none ms-auto align-items-center gap-2"
            style="font-size:.84rem;font-weight:700;color:#fff;cursor:pointer;user-select:none;">
         <input type="checkbox" id="chk-defisc" style="width:1.1rem;height:1.1rem;cursor:pointer;accent-color:#2e7d32;">
         Défiscalisation
     </label>
-    <a href="<?= base_url('Documentation/Plaquette_Defiscalisation.pdf') ?>" target="_blank"
+    <a href="<?= base_url('Documentation/Plaquette_Defiscalisation.pdf') ?>" target="_blank" data-ph-droite
        class="btn btn-sm ms-1"
        style="background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;font-size:.84rem;font-weight:700;"
        title="Ouvrir la plaquette de défiscalisation (PDF)">
         <i class="bi bi-file-earmark-pdf-fill me-1"></i>Défiscalisation
     </a>
-    <button id="btn-note" class="btn btn-sm ms-1 d-none"
+    <button id="btn-note" data-ph-droite class="btn btn-sm ms-1 d-none"
             style="background:#f0c040;color:#1a3a6b;border:none;font-size:.84rem;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.3)"
             data-bs-toggle="modal" data-bs-target="#modal-note">
         <i class="bi bi-sticky-fill me-1"></i>Note
     </button>
     <?php if ($retourUrl): ?>
     <!-- Bouton Retour à DROITE, même style que partials/page_header.php (region_index.php…) -->
-    <a href="<?= esc($retourUrl) ?>" class="btn btn-sm py-0 btn-retour-droite" title="Retour au menu"
-       style="flex-shrink:0;background:#fff;color:#1a3a6b;border:1px solid #fff;">
+    <a href="<?= esc($retourUrl) ?>" class="btn btn-sm ph-retour btn-retour-droite" title="Retour au menu"
+       style="flex-shrink:0;">
         <i class="bi bi-arrow-left me-1"></i>Retour
     </a>
     <?php endif; ?>
@@ -284,8 +254,6 @@ $retourUrl  = $retourUrl  ?? null;
 
 <!-- Toolbar utilisateur (visible seulement si une session existe déjà) -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowLabel' => false, 'tbSwitchTo' => $tbSwitchTo]) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- ── Modale Note ─────────────────────────────────────────────────────────── -->
 <div class="modal fade" id="modal-note" tabindex="-1" aria-labelledby="modal-note-label" aria-hidden="true">
@@ -365,6 +333,15 @@ $retourUrl  = $retourUrl  ?? null;
 <!-- ── Vue calendrier mensuelle ───────────────────────────────────────── -->
 <div id="section-cal-grille">
     <div id="nav-saison" style="display:flex;align-items:center;gap:.75rem;padding:.5rem 0 .6rem;flex-wrap:wrap;">
+        <span id="ja-info-bar" style="display:none;align-items:center;gap:.65rem;flex-wrap:wrap">
+        <i class="bi bi-person-badge flex-shrink-0" style="opacity:.7;color:var(--nijac-blue)"></i>
+        <span class="ja-ib-nom" id="ja-ib-nom"></span>
+        <span class="ja-ib-grade" id="ja-ib-grade" style="display:none"></span>
+        <span class="ja-ib-loc" id="ja-ib-loc" style="display:none">
+            <i class="bi bi-geo-alt-fill" style="color:#6b7280"></i>
+            <span id="ja-ib-cp"></span> <span id="ja-ib-ville"></span>
+        </span>
+        </span>
         <span id="lbl-saison-cal" style="font-size:.92rem;font-weight:700;color:var(--nijac-blue);flex:1;text-align:center;"></span>
     </div>
     <div class="cal-legende">

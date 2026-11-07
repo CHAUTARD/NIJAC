@@ -13,13 +13,6 @@
 
         #page-header { background: #2e7d32; color: #fff; padding: .5rem 1.25rem; font-size: .9rem; font-weight: 600; display: flex; align-items: center; gap: .75rem; }
 
-        #toolbar-user { background: #f8fafc; border-bottom: 1px solid #dde5f0; padding: .3rem 1rem; display: flex; align-items: center; justify-content: space-between; font-size: .85rem; }
-        #toolbar-user .ts-user { color: #1a3a6b; font-weight: 600; }
-        #toolbar-user .ts-pwd-warning {
-            display: <?= $changeLogin ? 'inline-flex' : 'none' ?>;
-            align-items: center; gap: .35rem; color: #c00; font-weight: 700; cursor: pointer; text-decoration: underline dotted;
-        }
-        #toolbar-user .ts-pwd-warning:hover { color: #900; }
 
         #toolbar { --strip-bg: #f8fafc; background: #f8fafc; border-bottom: 1px solid #dde5f0; padding: .4rem 1rem; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; font-size: .85rem; }
 
@@ -87,6 +80,7 @@
         #page-footer.pf-status-left .footer-copyright { grid-column: 2; justify-self: center; }
     </style>
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-skin.css') ?>">
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -98,8 +92,6 @@
 
 <!-- Toolbar utilisateur : recopié de Nominateur/includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbId' => 'toolbar-user']) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Barre de filtres -->
 <div id="toolbar">
@@ -212,7 +204,6 @@ let _rows = [];
 const sortState = { col: 'Nom', asc: true };
 
 function fmt2(v) { return parseFloat(v || 0).toFixed(2).replace('.', ','); }
-function esc(s)  { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 function gradeBadge(g) {
     g = g || '';
@@ -220,7 +211,7 @@ function gradeBadge(g) {
     let cls = 'grade-other';
     if (low.includes('national')) cls = 'grade-national';
     else if (low.includes('régional') || low.includes('regional')) cls = 'grade-regional';
-    return g ? `<span class="grade-badge ${cls}">${esc(g)}</span>` : '<span class="text-muted">–</span>';
+    return g ? `<span class="grade-badge ${cls}">${escHtml(g)}</span>` : '<span class="text-muted">–</span>';
 }
 
 function renderTable() {
@@ -237,9 +228,9 @@ function renderTable() {
     });
 
     $('#stats-tbody').html(sorted.map(r => `<tr>
-        <td><strong>${esc(r.Nom)}</strong>&nbsp;${esc(r.Prenom)}</td>
+        <td><strong>${escHtml(r.Nom)}</strong>&nbsp;${escHtml(r.Prenom)}</td>
         <td>${gradeBadge(r.Grade)}</td>
-        <td>${esc(r.Club || '–')}</td>
+        <td>${escHtml(r.Club || '–')}</td>
         <td class="num"><strong>${r.nb_arbitrages}</strong></td>
         <td class="num">${r.nb_arbitrages_club}</td>
         <td class="num">${parseInt(r.total_km)}</td>

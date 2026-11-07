@@ -42,6 +42,7 @@ class Filters extends BaseFilters
         'craconvocauth' => \App\Filters\CraConvocAuth::class,
         'jaauth'        => \App\Filters\JaAuth::class,
         'canonicalhost' => \App\Filters\CanonicalHost::class,
+        'minifierhtml'  => \App\Filters\MinifierHtml::class,
     ];
 
     /**
@@ -92,6 +93,7 @@ class Filters extends BaseFilters
             // 'invalidchars',
         ],
         'after' => [
+            'minifierhtml', // allège le HTML des pages (indentations, lignes vides, commentaires) ; scripts/styles/pre/textarea intacts
             // 'honeypot',
             // 'secureheaders',
         ],

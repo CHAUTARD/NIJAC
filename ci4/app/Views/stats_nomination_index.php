@@ -13,7 +13,6 @@
 body { background:#f0f4fa; font-family:'Segoe UI',system-ui,sans-serif; }
 #page-header { background:var(--nom-green); color:#fff; padding:.5rem 1.25rem; font-size:.9rem; font-weight:600; display:flex; align-items:center; gap:.75rem; }
 #toolbar { background:#f8fafc; border-bottom:1px solid #dde5f0; padding:.3rem 1rem; font-size:.85rem; }
-.ts-user { color:#1a3a6b; font-weight:600; }
 
 .wrap { max-width:1100px; margin:1rem auto 3rem; padding:0 1rem; }
 
@@ -131,6 +130,7 @@ details.club-accent { border-left-color:#e65100; } .club-accent .sect-ico { back
     .cal-jour { font-size:.95rem; }
 }
 </style>
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -283,9 +283,6 @@ details.club-accent { border-left-color:#e65100; } .club-accent .sect-ico { back
 const DATA_URL = '<?= site_url('stats-nomination/data') ?>';
 const JA_URL   = '<?= site_url('stats-nomination/ja') ?>';
 
-function escHtml(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 
 function fmtDate(d) {
     if (!d) return '';

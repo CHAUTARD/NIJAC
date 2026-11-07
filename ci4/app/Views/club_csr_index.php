@@ -21,7 +21,6 @@
             height: 100vh;
             overflow: hidden;
         }
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
 
         /* ── Grille ── */
         #grid-wrapper { flex: 1; overflow: auto; }
@@ -87,8 +86,6 @@
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Spinner -->
 <?= view('partials/spinner_overlay') ?>

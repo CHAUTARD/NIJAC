@@ -11,7 +11,6 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-chrome.css') ?>">
     <style>
         body { background: #f0f4fa; font-family: 'Segoe UI', system-ui, sans-serif; }
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
 
         .badge-div { display:inline-block; font-size:.75rem; font-weight:700; padding:.15rem .45rem; border-radius:4px; white-space:nowrap; }
         .bdiv-N1M { background:#1a3a6b; color:#fff; }
@@ -43,6 +42,7 @@
         #spinner { display:none; position:fixed; inset:0; background:rgba(255,255,255,.5); z-index:9999; align-items:center; justify-content:center; }
         #spinner.show { display:flex; }
     </style>
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -53,8 +53,6 @@
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <div id="spinner"><div class="spinner-border text-primary" style="width:3rem;height:3rem;"></div></div>
 
@@ -315,7 +313,6 @@ const REGION_GENTILE = <?= json_encode($regionGentile) ?>;
 function spinner(v) { $('#spinner').toggleClass('show', v); }
 function isNorm(d)  { return d && DEPTS_NORM.includes(String(d)); }
 function deptName(d){ return (d && ALL_DEPTS[d]) ? ALL_DEPTS[d] : (d || ''); }
-function esc(s)     { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // Fige un instantané de l'état sauvegardé en base (CodeDept/Id_Club) au moment du chargement,
 // pour distinguer les valeurs affichées (éditées en local, pas encore enregistrées) de ce qui
@@ -327,8 +324,8 @@ function stampSaved(list) {
 
 function deptBadge(dept) {
     if (!dept) return '<span style="font-size:.7rem;color:#9ca3af;">—</span>';
-    if (isNorm(dept)) return `<span style="font-size:.68rem;font-weight:700;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:3px;padding:.05rem .3rem;" title="${esc(deptName(dept))}">NOR</span>`;
-    return `<span style="font-size:.68rem;font-weight:600;color:#6b7280;background:#f3f4f6;border:1px solid #d1d5db;border-radius:3px;padding:.05rem .3rem;" title="${esc(deptName(dept))}">${esc(dept)}</span>`;
+    if (isNorm(dept)) return `<span style="font-size:.68rem;font-weight:700;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:3px;padding:.05rem .3rem;" title="${escHtml(deptName(dept))}">NOR</span>`;
+    return `<span style="font-size:.68rem;font-weight:600;color:#6b7280;background:#f3f4f6;border:1px solid #d1d5db;border-radius:3px;padding:.05rem .3rem;" title="${escHtml(deptName(dept))}">${escHtml(dept)}</span>`;
 }
 
 // ── 1. Charger depuis FFTT ────────────────────────────────────────────────────
@@ -339,14 +336,14 @@ $('#btn-charger').on('click', async function () {
     try {
         const r = await $.post(`${NAT_BASE}/charger-depuis-api`, {}, null, 'json');
         spinner(false);
-        if (!r.ok) { $('#res-charger').html(`<div class="alert alert-danger py-2">${esc(r.err)}</div>`); return; }
+        if (!r.ok) { $('#res-charger').html(`<div class="alert alert-danger py-2">${escHtml(r.err)}</div>`); return; }
         const s = r.stats;
         let html = `<div class="alert alert-success py-2">
             <i class="bi bi-check-circle me-1"></i>
             <strong>${s.divisions} division(s)</strong> traitées —
             <strong>${s.equipes} équipe(s)</strong> nouvelles insérées` +
             (s.associations > 0 ? ` — <strong>${s.associations}</strong> association(s) club/département automatique(s)` : '') + `.`;
-        if (s.erreurs?.length) html += `<br><span class="text-warning">${s.erreurs.length} erreur(s) : ${s.erreurs.map(e=>esc(e)).join(', ')}</span>`;
+        if (s.erreurs?.length) html += `<br><span class="text-warning">${s.erreurs.length} erreur(s) : ${s.erreurs.map(e=>escHtml(e)).join(', ')}</span>`;
         html += '</div>';
         $('#res-charger').html(html);
         chargerEquipes();
@@ -392,8 +389,8 @@ function renderAssoc() {
         const savedNorm = isNorm(e.SavedCodeDept);
         const rowOk     = !!e.SavedCodeDept && (!savedNorm || !!e.SavedIdClub);
         const clubCell = `
-            <div class="club-search-wrap" data-id="${e.Id_EquipeNat}" data-nom="${esc(e.Nom)}">
-                <div class="club-display ${haClub?'':'empty'}">${haClub ? esc(e.NomClub) : '— non associé —'}</div>
+            <div class="club-search-wrap" data-id="${e.Id_EquipeNat}" data-nom="${escHtml(e.Nom)}">
+                <div class="club-display ${haClub?'':'empty'}">${haClub ? escHtml(e.NomClub) : '— non associé —'}</div>
                 <button class="btn btn-xs btn-outline-secondary btn-changer-club py-0 px-1" style="font-size:.76rem;"><i class="bi bi-search"></i></button>
                 ${haClub ? `<button class="btn btn-xs btn-outline-danger btn-effacer-club py-0 px-1" style="font-size:.76rem;"><i class="bi bi-x"></i></button>` : ''}
                 <div class="club-popup"><input class="club-popup-input" placeholder="Chercher…" autocomplete="off"><div class="club-results"></div></div>
@@ -401,20 +398,20 @@ function renderAssoc() {
 
         const $tr = $('<tr>').addClass(rowOk?'assoc-ok':'').attr('data-id', e.Id_EquipeNat);
         $tr.html(`
-            <td><span class="badge-div bdiv-${esc(e.id_division)}">${esc(e.id_division)}</span></td>
+            <td><span class="badge-div bdiv-${escHtml(e.id_division)}">${escHtml(e.id_division)}</span></td>
             <td style="text-align:center;">${e.Poule||'—'}</td>
             <td style="text-align:center;">${e.Rang||'—'}</td>
             <td class="cell-num-club" style="text-align:center;">
-                <input type="text" class="input-numclub form-control form-control-sm text-center px-1" value="${haClub ? esc(e.Id_Club) : ''}" placeholder="N° club" maxlength="8" style="width:80px;font-size:.8rem;" data-id="${e.Id_EquipeNat}">
+                <input type="text" class="input-numclub form-control form-control-sm text-center px-1" value="${haClub ? escHtml(e.Id_Club) : ''}" placeholder="N° club" maxlength="8" style="width:80px;font-size:.8rem;" data-id="${e.Id_EquipeNat}">
             </td>
             <td>${clubCell}</td>
-            <td style="font-weight:600;">${esc(e.Nom)}</td>
+            <td style="font-weight:600;">${escHtml(e.Nom)}</td>
             <td style="text-align:center;">
-                <input type="text" class="input-dept form-control form-control-sm text-center px-1" value="${esc(e.CodeDept??'')}" placeholder="76" maxlength="3" style="width:58px;display:inline-block;" data-id="${e.Id_EquipeNat}">
+                <input type="text" class="input-dept form-control form-control-sm text-center px-1" value="${escHtml(e.CodeDept??'')}" placeholder="76" maxlength="3" style="width:58px;display:inline-block;" data-id="${e.Id_EquipeNat}">
                 <span class="dept-badge ms-1" data-id="${e.Id_EquipeNat}">${deptBadge(e.CodeDept)}</span>
             </td>
             <td style="text-align:center;">
-                <button class="btn btn-sm btn-success btn-sauver py-0" data-id="${e.Id_EquipeNat}" data-dept="${esc(e.CodeDept??'')}" data-club="${e.Id_Club??''}"><i class="bi bi-floppy"></i></button>
+                <button class="btn btn-sm btn-success btn-sauver py-0" data-id="${e.Id_EquipeNat}" data-dept="${escHtml(e.CodeDept??'')}" data-club="${e.Id_Club??''}"><i class="bi bi-floppy"></i></button>
             </td>`);
         $body.append($tr);
     });
@@ -444,7 +441,7 @@ function searchClubs($input, onDone) {
     const xhr = $.getJSON(`${NAT_BASE}/recherche-club`, {q}, function(r) {
         $res.empty();
         if (!r.ok || !r.clubs.length) { $res.html('<div class="club-result text-muted">Aucun club.</div>'); onDone && onDone(); return; }
-        r.clubs.forEach(c => $('<div class="club-result">').html(`<strong>${esc(c.Nom)}</strong> <small class="text-muted">#${c.Id_Club}</small>`).attr({'data-id-club':c.Id_Club,'data-nom-club':c.Nom}).appendTo($res));
+        r.clubs.forEach(c => $('<div class="club-result">').html(`<strong>${escHtml(c.Nom)}</strong> <small class="text-muted">#${c.Id_Club}</small>`).attr({'data-id-club':c.Id_Club,'data-nom-club':c.Nom}).appendTo($res));
         onDone && onDone();
     });
     $input.data('searchXhr', xhr);
@@ -490,7 +487,7 @@ function pickClubResult($result) {
     const dept   = deptFromIdClub(idClub);
     const eq = equipes.find(e => +e.Id_EquipeNat === idEn);
     if (eq) { eq.Id_Club=idClub; eq.NomClub=nom; eq.CodeDept=dept; }
-    $wrap.find('.club-display').removeClass('empty').html(esc(nom));
+    $wrap.find('.club-display').removeClass('empty').html(escHtml(nom));
     $tr.find('.input-numclub').val(idClub);
     $tr.find('.input-dept').val(dept);
     $tr.find('.dept-badge').html(deptBadge(dept));
@@ -539,7 +536,7 @@ $(document).on('change', '.input-numclub', function() {
         const dept = deptFromIdClub(r.club.Id_Club);
         if (eq) { eq.Id_Club = r.club.Id_Club; eq.NomClub = r.club.Nom; eq.CodeDept = dept; }
         $input.val(r.club.Id_Club);
-        $tr.find('.club-display').removeClass('empty').html(esc(r.club.Nom));
+        $tr.find('.club-display').removeClass('empty').html(escHtml(r.club.Nom));
         $tr.find('.input-dept').val(dept);
         $tr.find('.dept-badge').html(deptBadge(dept));
         $tr.find('.btn-sauver').attr('data-club', r.club.Id_Club).attr('data-dept', dept);
@@ -611,10 +608,10 @@ $(document).on('click', '.stat-card[data-code-dept]', function () {
         $list.append('<li class="text-muted">Aucun club.</li>');
     } else {
         liste.forEach(c => $list.append(
-            `<li class="mb-2"><strong>${esc(c.nom)}</strong><br><span class="text-muted small">${esc(c.equipes.join(', '))}</span></li>`
+            `<li class="mb-2"><strong>${escHtml(c.nom)}</strong><br><span class="text-muted small">${escHtml(c.equipes.join(', '))}</span></li>`
         ));
     }
-    $('#modal-clubs-dept-titre').html(`<i class="bi bi-building me-2"></i>Clubs — ${esc(label)}`);
+    $('#modal-clubs-dept-titre').html(`<i class="bi bi-building me-2"></i>Clubs — ${escHtml(label)}`);
     new bootstrap.Modal(document.getElementById('modal-clubs-dept')).show();
 });
 
@@ -657,7 +654,7 @@ $.getJSON(`${NAT_BASE}/fichiers-excel`, function (r) {
     }
     $sel.append('<option value="">— Choisir un fichier —</option>');
     r.fichiers.forEach(f => {
-        $sel.append(`<option value="${esc(f)}">${esc(f)}</option>`);
+        $sel.append(`<option value="${escHtml(f)}">${escHtml(f)}</option>`);
     });
     $('#btn-analyser-excel').prop('disabled', false);
 }).fail(() => {
@@ -735,7 +732,7 @@ $('#btn-importer-excel').on('click', async function() {
     try {
         const r = await $.post(`${NAT_BASE}/importer-excel`, {}, null, 'json');
         spinner(false);
-        if (!r.ok) { $('#res-import-excel').html(`<div class="alert alert-danger py-2">${esc(r.err)}</div>`); return; }
+        if (!r.ok) { $('#res-import-excel').html(`<div class="alert alert-danger py-2">${escHtml(r.err)}</div>`); return; }
         const s = r.stats;
         let html = `<div class="d-flex flex-wrap gap-2 mb-2">
             <div class="stat-card"><div class="sv text-success">${s.rencontres_creees}</div><div class="sl">Rencontres créées</div></div>
@@ -746,14 +743,14 @@ $('#btn-importer-excel').on('click', async function() {
         </div>`;
         if (s.erreurs?.length) {
             html += '<div class="alert alert-warning py-2"><strong>Avertissements :</strong><ul class="mb-0">';
-            s.erreurs.forEach(e => html += `<li>${esc(e)}</li>`);
+            s.erreurs.forEach(e => html += `<li>${escHtml(e)}</li>`);
             html += '</ul></div>';
         } else {
             html += '<div class="alert alert-success py-2"><i class="bi bi-check-circle me-1"></i>Import terminé sans erreur.</div>';
         }
         if (s.log?.length) {
             const icons = {rencontre:'bi-calendar-check text-success', equipe:'bi-people-fill text-primary'};
-            const rows = s.log.map(l => `<div><i class="bi ${icons[l.type]??'bi-dot'}" style="font-size:.7rem;"></i> ${esc(l.val)}</div>`).join('');
+            const rows = s.log.map(l => `<div><i class="bi ${icons[l.type]??'bi-dot'}" style="font-size:.7rem;"></i> ${escHtml(l.val)}</div>`).join('');
             html += `<div class="log-detail mt-1">${rows}</div>`;
         }
         $('#res-import-excel').html(html);
@@ -781,17 +778,17 @@ $('#btn-debug-club').on('click', async function () {
 
     try {
         const r = await $.getJSON(`${NAT_BASE}/debug-club?numclu=` + encodeURIComponent(numclu));
-        if (!r.ok) { logLine(`<span style="color:#f87171;">Erreur : ${esc(r.err)}</span>`); return; }
-        logLine(`<span style="color:#94a3b8;">${r.equipes.length} équipe(s) retournée(s) par xml_equipe pour ${esc(numclu)} :</span>`);
+        if (!r.ok) { logLine(`<span style="color:#f87171;">Erreur : ${escHtml(r.err)}</span>`); return; }
+        logLine(`<span style="color:#94a3b8;">${r.equipes.length} équipe(s) retournée(s) par xml_equipe pour ${escHtml(numclu)} :</span>`);
         r.equipes.forEach((eq, i) => {
             logLine(`<span style="color:#e2e8f0;"><strong>#${i+1}</strong> ${JSON.stringify(eq)}</span>`);
         });
         if (!r.equipes.length) {
             logLine(`<span style="color:#facc15;">XML brut :</span>`);
-            logLine(`<span style="color:#94a3b8;">${esc(r.raw)}</span>`);
+            logLine(`<span style="color:#94a3b8;">${escHtml(r.raw)}</span>`);
         }
     } catch(e) {
-        const detail = e && e.status ? `HTTP ${e.status} — ${esc((e.responseText || '(corps vide)').substring(0,500))}` : esc(String(e));
+        const detail = e && e.status ? `HTTP ${e.status} — ${escHtml((e.responseText || '(corps vide)').substring(0,500))}` : escHtml(String(e));
         logLine(`<span style="color:#f87171;">Erreur réseau : ${detail}</span>`);
     } finally {
         $(this).prop('disabled', false);
@@ -820,7 +817,7 @@ $('#btn-scanner').on('click', async function () {
 
         // Étape 1 : lister tous les clubs
         const rClubs = await $.getJSON(`${NAT_BASE}/clubs-region`);
-        if (!rClubs.ok) { logLine('<span style="color:#f87171;">Erreur : ' + esc(rClubs.err??'') + '</span>'); return; }
+        if (!rClubs.ok) { logLine('<span style="color:#f87171;">Erreur : ' + escHtml(rClubs.err??'') + '</span>'); return; }
 
         const clubs  = rClubs.clubs;
         const total  = clubs.length;
@@ -835,7 +832,7 @@ $('#btn-scanner').on('click', async function () {
             const pct = Math.round(traites / total * 100);
             $('#scan-bar').css('width', pct + '%');
             $('#scan-counter').text(`${traites} / ${total}`);
-            $('#scan-label').text(esc(club.nom) + ' (' + club.dept + ')');
+            $('#scan-label').text(escHtml(club.nom) + ' (' + club.dept + ')');
 
             try {
                 const r = await $.post(`${NAT_BASE}/scanner-club`, {
@@ -846,7 +843,7 @@ $('#btn-scanner').on('click', async function () {
 
                 if (!r.ok) {
                     erreurs++;
-                    logLine(`<span style="color:#f87171;">✗ ${esc(club.nom)} — ${esc(r.err??'')}</span>`);
+                    logLine(`<span style="color:#f87171;">✗ ${escHtml(club.nom)} — ${escHtml(r.err??'')}</span>`);
                     continue;
                 }
 
@@ -856,15 +853,15 @@ $('#btn-scanner').on('click', async function () {
                         const icon  = isNew ? '⊕' : '↺';
                         const color = isNew ? '#4ade80' : '#facc15';
                         if (isNew) trouves++; else doublons++;
-                        logLine(`<span style="color:${color};">${icon} <strong style="color:#e2e8f0;">${esc(club.nom)}</strong> — <span style="color:#93c5fd;">${esc(n.div)}</span> — ${esc(n.lib)}</span>`);
+                        logLine(`<span style="color:${color};">${icon} <strong style="color:#e2e8f0;">${escHtml(club.nom)}</strong> — <span style="color:#93c5fd;">${escHtml(n.div)}</span> — ${escHtml(n.lib)}</span>`);
                     });
                 } else {
-                    logLine(`<span style="color:#475569;">— ${esc(club.nom)} — Pas d'équipe Nationale</span>`);
+                    logLine(`<span style="color:#475569;">— ${escHtml(club.nom)} — Pas d'équipe Nationale</span>`);
                 }
             } catch(e) {
                 erreurs++;
-                const detail = e && e.status ? `HTTP ${e.status} — ${esc((e.responseText || '(corps vide)').substring(0,500))}` : esc(String(e));
-                logLine(`<span style="color:#f87171;">✗ ${esc(club.nom)} — ${detail}</span>`);
+                const detail = e && e.status ? `HTTP ${e.status} — ${escHtml((e.responseText || '(corps vide)').substring(0,500))}` : escHtml(String(e));
+                logLine(`<span style="color:#f87171;">✗ ${escHtml(club.nom)} — ${detail}</span>`);
             }
         }
 
@@ -873,7 +870,7 @@ $('#btn-scanner').on('click', async function () {
         $('#scan-label').text('Scan terminé.');
         $('#scan-counter').text(`${traites} / ${total}`);
         const msg = `${trouves} équipe(s) nouvelle(s), ${doublons} déjà connue(s)${erreurs ? ', ' + erreurs + ' erreur(s)' : ''}.`;
-        $('#scan-status').html(`<span class="text-success fw-semibold"><i class="bi bi-check-circle me-1"></i>${esc(msg)}</span>`);
+        $('#scan-status').html(`<span class="text-success fw-semibold"><i class="bi bi-check-circle me-1"></i>${escHtml(msg)}</span>`);
         logLine(`<span style="color:#94a3b8; border-top:1px solid #334155; display:block; margin-top:.4rem; padding-top:.4rem;">Terminé — ${msg}</span>`);
 
         // Rafraîchir la table d'association
@@ -887,7 +884,7 @@ $('#btn-scanner').on('click', async function () {
             });
         }
     } catch(e) {
-        logLine(`<span style="color:#f87171;">Erreur inattendue : ${esc(String(e))}</span>`);
+        logLine(`<span style="color:#f87171;">Erreur inattendue : ${escHtml(String(e))}</span>`);
     } finally {
         $btn.prop('disabled', false);
     }

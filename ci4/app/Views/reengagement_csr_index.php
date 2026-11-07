@@ -14,7 +14,6 @@
     <style>
         /* Violet, propre au rôle CSR — voir E004/ES31. */
         #page-header { background: #6a1b9a; }
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
 
         #panel-form {
             width: 50%;
@@ -84,8 +83,6 @@
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- ── Deux colonnes : formulaire à gauche, rendu HTML en direct à droite ── -->
 <div id="split-container">

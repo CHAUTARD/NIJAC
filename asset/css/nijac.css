@@ -143,3 +143,36 @@ input.filter-ctl { font-weight: 400; color: inherit; }
 .division-badges .badge.active { border-color: var(--nijac-blue); }
 .division-badges .badge.badge-toutes { background: #eef2f9 !important; color: var(--nijac-blue) !important; border-color: #d3dae6 !important; }
 .filter-ctl:disabled { opacity: .55; }
+
+/* ── Barre utilisateur regroupée dans l'en-tête (déplacée par partials/toolbar.php) ── */
+#page-header .in-header {
+    background: none !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    padding: 0;
+    gap: 1rem;
+    justify-content: center;
+    flex: 1 1 auto;
+    font-size: .8rem;
+}
+#page-header .in-header .ts-user { color: #fff; font-weight: 600; }
+#page-header .in-header .ts-pwd-warning { color: #ffd2d2; }
+#page-header .in-header .ts-pwd-warning:hover { color: #fff; }
+#page-header:has(> .in-header) > div:first-child { flex: 0 1 auto !important; }
+#page-header > .ph-droite { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: .5rem; flex-shrink: 0; }
+
+/* Bouton « Retour » standard du bandeau (pilule translucide, comme EC75) */
+#page-header a.ph-retour {
+    background: rgba(255,255,255,.15) !important; color: #fff !important;
+    border: 1px solid rgba(255,255,255,.35) !important; border-radius: 999px !important;
+    padding: .3rem .95rem !important; font-weight: 600;
+}
+#page-header a.ph-retour:hover { background: rgba(255,255,255,.28) !important; }
+
+/* Alerte « Mot de passe à modifier » (partials/toolbar.php) : style de base indépendant du conteneur */
+.ts-pwd-warning {
+    display: inline-flex; align-items: center; gap: .35rem;
+    color: #c00; font-weight: 700; cursor: pointer; text-decoration: underline dotted;
+}
+.ts-pwd-warning:hover { color: #900; }
+.ts-user { color: #1a3a6b; font-weight: 600; }

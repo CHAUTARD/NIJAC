@@ -16,6 +16,7 @@
         #zone-import { padding: .5rem .75rem; background: #f4f7fb; border-bottom: 1px solid #c8d4e8; }
         #zone-import .zone-import-btns { display: flex; gap: .5rem; flex-wrap: wrap; }
     </style>
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -430,9 +431,6 @@ function appelerXmlClubB(id) {
     });
 }
 
-function escHtml(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 
 $(document).on('click', '.btn-utiliser-numero', function () {
     const id     = +$(this).data('id');

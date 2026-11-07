@@ -20,7 +20,6 @@
             min-height: 100vh;
         }
 
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
         /* ── Mise en page : onglets + rangées de cartes ── */
         #main-content {
             flex: 1;
@@ -341,6 +340,7 @@
         .no-backup i { font-size: 2rem; display: block; margin-bottom: .5rem; color: #d1d5db; }
 
     </style>
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -351,8 +351,6 @@
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Bandeau mot de passe -->
 <div id="pwd-banner">
@@ -722,9 +720,6 @@
 <script>
 'use strict';
 
-function escHtml(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 
 const CLEAN_BASE = '<?= site_url('clean') ?>';
 

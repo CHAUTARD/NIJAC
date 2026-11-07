@@ -61,6 +61,7 @@
         #f131-log table { margin-bottom: 0; }
         #f131-log thead th { position: sticky; top: 0; background: #eef2f9; }
     </style>
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -314,14 +315,6 @@ function formatDateHeure(dt) {
 }
 
 /** Échappement HTML (même fonction qu'EN14) : toast() rend son message en innerHTML. */
-function escHtml(s) {
-    return String(s || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
-
 /* Couleur de texte (blanc/noir) selon la luminosité du fond — identique à EN23 */
 function textColorFor(hex) {
     const c = hex.replace('#', '');

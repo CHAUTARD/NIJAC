@@ -23,7 +23,6 @@
             height: 100vh;
             overflow: hidden;
         }
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
 
         #page-header { display: flex; align-items: center; gap: 1rem; }
 
@@ -174,6 +173,7 @@
         #tbl-ja .badge-grade     { background: #1a3a6b; color: #fff; }
         #tbl-ja tbody tr:nth-child(even) { background: #f5f7fb; }
     </style>
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -185,8 +185,6 @@
 
 <!-- Toolbar : recopié de Nominateur/includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Barre de filtres -->
 <div id="filter-bar">
@@ -338,12 +336,6 @@ async function apiPost(action, data) {
         body: new URLSearchParams(data).toString()
     });
     return r.json();
-}
-
-function escHtml(s) {
-    return String(s ?? '')
-        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // ── Données brutes + sélection + tri ──────────────────────────────────────────

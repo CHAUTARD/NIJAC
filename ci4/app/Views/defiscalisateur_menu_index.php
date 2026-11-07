@@ -31,7 +31,6 @@
         }
 
         #toolbar { gap: .75rem; }
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
 
         /* Visible seulement pour un Administrateur qui prévisualise le menu Défiscalisateur. */
         #btn-switch-admin {
@@ -203,8 +202,6 @@
 <!-- Toolbar : recopié de includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbSwitchTo' => 'admin']) ?>
 
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
-
 <!-- Grille -->
 <div id="menu-grid">
 
@@ -215,7 +212,7 @@
         <span class="btn-desc">Frais cumulés des JA défiscalisés sur une période, export CSV</span>
     </a>
 
-    <a href="<?= site_url('attestation-defisc') ?>" class="menu-btn btn-attestation">
+    <a href="<?= site_url('attestation-defisc') ?>?retour=menu" class="menu-btn btn-attestation">
         <span class="btn-code">ED53</span>
         <div class="btn-icon"><img src="<?= base_url('img/AttestationHonneur.webp') ?>" alt="Attestation sur l'honneur"></div>
         <span>Attestation sur l'honneur</span>

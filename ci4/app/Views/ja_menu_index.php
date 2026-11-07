@@ -31,7 +31,6 @@
         }
 
         #toolbar { gap: .75rem; }
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
         /* Bouton de barre de retour du mode JA (« Menu administrateur » / « Menu nominateur »…), même style que « Menu JA » d'E002/E003 */
         #btn-switch-retour {
             display: inline-flex;
@@ -171,8 +170,6 @@
     'tbRetourLibelle' => $libelleMenuOrigine ?? 'Menu nominateur',
     'tbRetourIcone'   => $iconeMenuOrigine ?? 'bi-people-fill',
 ]) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <div id="menu-grid">
 

@@ -121,6 +121,7 @@
         #tbl-equipes { font-size: .8rem; }
     }
 </style>
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -262,12 +263,6 @@
 'use strict';
 const ID_CLUB       = <?= json_encode($tokenClub ?? '') ?>;   // jeton signé (pas le numéro de club)
 const DESID_BASE = '<?= site_url('desiderata-club') ?>';
-
-function escHtml(s) {
-    return String(s ?? '')
-        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 
 function radioGroup(name, id, options, current) {
     return options.map(([val, label], i) => {

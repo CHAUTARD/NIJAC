@@ -13,7 +13,6 @@
 
     <style>
         #page-header { background: #2e7d32; }
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
 
         /* ── Panneau message (gauche) ── */
         #panel-message {
@@ -230,6 +229,7 @@
 
     </style>
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-skin.css') ?>">
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -241,8 +241,6 @@
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <div id="split-container">
 
@@ -1239,9 +1237,6 @@ $('#btn-envoyer').on('click', function () {
     });
 });
 
-function escHtml(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 
 function demarrerEnvoi(sujet, message, ids) {
     const total   = ids.length;

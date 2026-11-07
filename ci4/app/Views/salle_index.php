@@ -20,7 +20,6 @@
             height: 100vh;
             overflow: hidden;
         }
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
 
         #grid-wrapper { flex: 1; overflow: auto; }
 
@@ -28,14 +27,17 @@
             width: 100%;
             font-size: .83rem;
             border-collapse: collapse;
-            min-width: 800px;
+            table-layout: fixed; /* colonnes à largeur fixe (proportionnelles) : le tableau tient dans l'écran, le texte long est tronqué avec … */
+            min-width: 0;
         }
 
         #tbl-salles thead th {
             background: #e8eef7;
             border: 1px solid #c8d4e8;
-            padding: .35rem .5rem;
+            padding: .35rem .4rem;
             white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
             position: sticky;
             top: 0;
             z-index: 1;
@@ -63,17 +65,21 @@
             outline: none;
             white-space: nowrap;
             overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         td.col-id, td.col-nom-club { background: #f0f4fa; }
         td.col-id .cell-inner, td.col-nom-club .cell-inner { color: #6b7280; font-style: italic; }
 
         td.col-principale { text-align: center; vertical-align: middle; }
+        td[data-field="la_poste"] .cell-inner, #tbl-salles thead th[data-field="la_poste"],
+        td[data-field="cp"] .cell-inner, #tbl-salles thead th[data-field="cp"] { text-align: center; }
         td.col-principale input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
 
         /* Comboboxes de filtre, badge de comptage et menu « Colonnes » :
            style partagé dans asset/css/nijac.css (.combo-field, .count-badge). */
     </style>
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -86,8 +92,6 @@
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Spinner -->
 <?= view('partials/spinner_overlay') ?>
@@ -113,17 +117,11 @@
     <span class="combo-field">
         <label for="sel-dept">Département</label>
         <select id="sel-dept">
+            <option value="region" selected>Région uniquement</option>
             <option value="">Tous les départements</option>
             <?php foreach ($deptActifs as $d): ?>
             <option value="<?= (int) $d['CodeDept'] ?>"><?= (int) $d['CodeDept'] ?> — <?= esc($d['nom']) ?></option>
             <?php endforeach; ?>
-        </select>
-    </span>
-    <span class="combo-field">
-        <label for="sel-perimetre">Périmètre</label>
-        <select id="sel-perimetre">
-            <option value="1">Région uniquement</option>
-            <option value="0">Tous les départements</option>
         </select>
     </span>
 <?php else: ?>
@@ -158,18 +156,18 @@
     <table id="tbl-salles">
         <thead>
             <tr>
-                <th style="width:70px"  data-field="id_salle">Id_Salle<span class="sort-icon"></span></th>
+                <th style="width:55px"  data-field="id_salle">Id_Salle<span class="sort-icon"></span></th>
                 <th style="width:80px"  data-field="id_club">Id_Club<span class="sort-icon"></span></th>
-                <th style="width:210px" data-field="nom_club" title="Clubs liés à la salle (★ = salle principale du club)">Clubs liés<span class="sort-icon"></span></th>
-                <th style="width:200px" data-field="nom">Nom<span class="sort-icon"></span></th>
-                <th style="width:230px" data-field="adresse">Adresse<span class="sort-icon"></span></th>
-                <th style="width:120px" data-field="telephone">Téléphone<span class="sort-icon"></span></th>
-                <th style="width:90px"  data-field="cp">Code postal<span class="sort-icon"></span></th>
-                <th style="width:170px" data-field="ville">Ville<span class="sort-icon"></span></th>
-                <th style="width:80px"  data-field="la_poste">La Poste<span class="sort-icon"></span></th>
-                <th style="width:90px"  data-field="est_principale" title="Salle principale d'au moins un de ses clubs (à modifier dans la fiche)">Principale<span class="sort-icon"></span></th>
+                <th style="width:150px" data-field="nom_club" title="Clubs liés à la salle (★ = salle principale du club)">Clubs liés<span class="sort-icon"></span></th>
+                <th style="width:150px" data-field="nom">Nom<span class="sort-icon"></span></th>
+                <th style="width:200px" data-field="adresse">Adresse<span class="sort-icon"></span></th>
+                <th style="width:88px"  data-field="telephone">Téléphone<span class="sort-icon"></span></th>
+                <th style="width:70px"  data-field="cp">Code postal<span class="sort-icon"></span></th>
+                <th style="width:130px" data-field="ville">Ville<span class="sort-icon"></span></th>
+                <th style="width:50px"  data-field="la_poste">La Poste<span class="sort-icon"></span></th>
+                <th style="width:55px"  data-field="est_principale" title="Salle principale d'au moins un de ses clubs (à modifier dans la fiche)">Principale<span class="sort-icon"></span></th>
                 <?php if ($isAdmin): ?>
-                <th style="width:96px"></th>
+                <th style="width:68px"></th>
                 <?php endif; ?>
             </tr>
         </thead>
@@ -318,9 +316,6 @@
 <script>
 'use strict';
 
-function escHtml(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 const SALLE_BASE = '<?= site_url('salle') ?>';
 const LAPOSTE_BASE = '<?= site_url('laposte') ?>';
 
@@ -744,7 +739,7 @@ $(function () {
 
 // ── Affichage / masquage des colonnes (mémorisé dans le navigateur) ──────────
 const LS_COLONNES = 'nijac_ea81_colonnes_cachees';
-const COLONNES_CACHEES_DEFAUT = ['id_salle'];   // N° masqué tant que l'utilisateur n'a rien choisi
+const COLONNES_CACHEES_DEFAUT = ['id_salle', 'telephone'];   // N° et téléphone (non renseigné) masqués tant que l'utilisateur n'a rien choisi
 let colonnesCachees;
 try {
     const brut = localStorage.getItem(LS_COLONNES);
@@ -794,14 +789,14 @@ $('#search-input').on('input', function () {
     renderGrille();
 });
 
+// Une seule liste : « Région uniquement » (défaut) / « Tous les départements » / un département précis.
 $('#sel-dept').on('change', function () {
-    deptFiltre = $(this).val();
+    const v = $(this).val();
+    filtreEnRegion = (v === 'region');
+    const nouveau = (v === 'region') ? '' : v;
+    if (nouveau === deptFiltre) { renderGrille(); return; }   // même requête serveur : simple refiltrage local
+    deptFiltre = nouveau;
     chargerListe();
-});
-
-$('#sel-perimetre').on('change', function () {
-    filtreEnRegion = $(this).val() === '1';
-    renderGrille();
 });
 
 let syncEnCours = false;

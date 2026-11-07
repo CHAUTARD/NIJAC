@@ -33,7 +33,7 @@
 }
 #toolbar .ts-user { color: #1a3a6b; font-weight: 600; }
 #toolbar .ts-pwd-warning {
-    display: none; /* la vue bascule en inline-flex si $changeLogin est vrai */
+    display: inline-flex; /* rendue par partials/toolbar.php seulement si change_login */
     align-items: center;
     gap: .35rem;
     color: #c00;
@@ -42,6 +42,21 @@
     text-decoration: underline dotted;
 }
 #toolbar .ts-pwd-warning:hover { color: #900; }
+
+/* ── Barre utilisateur regroupée dans l'en-tête (déplacée par partials/toolbar.php) ── */
+#page-header .in-header {
+    background: none !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    padding: 0;
+    gap: 1rem;
+    justify-content: center;
+    flex: 1 1 auto;
+    font-size: .8rem;
+}
+#page-header .in-header .ts-user { color: #fff; font-weight: 600; }
+#page-header .in-header .ts-pwd-warning { color: #ffd2d2; }
+#page-header .in-header .ts-pwd-warning:hover { color: #fff; }
 
 /* ── Pied de page ── */
 #page-footer {
@@ -60,7 +75,7 @@
 .footer-logo { height: 20px; width: auto; opacity: .75; }
 #page-footer.pf-status-left {
     display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
 }
 #page-footer.pf-status-left #status-bar { grid-column: 1; justify-self: start; text-align: left; }
@@ -69,3 +84,13 @@
     #page-footer.pf-status-left { display: flex; flex-direction: column; gap: .2rem; }
     .footer-copyright { white-space: normal; text-align: center; }
 }
+#page-header:has(> .in-header) > div:first-child { flex: 0 1 auto !important; }
+#page-header > .ph-droite { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: .5rem; flex-shrink: 0; }
+
+/* Bouton « Retour » standard du bandeau (pilule translucide, comme EC75) */
+#page-header a.ph-retour {
+    background: rgba(255,255,255,.15) !important; color: #fff !important;
+    border: 1px solid rgba(255,255,255,.35) !important; border-radius: 999px !important;
+    padding: .3rem .95rem !important; font-weight: 600;
+}
+#page-header a.ph-retour:hover { background: rgba(255,255,255,.28) !important; }

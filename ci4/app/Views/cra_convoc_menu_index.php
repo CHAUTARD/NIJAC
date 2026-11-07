@@ -31,7 +31,6 @@
         }
 
         #toolbar { gap: .75rem; }
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
 
         /* Visible seulement pour un Administrateur qui prévisualise le menu CRA Convoc. */
         #btn-switch-admin {
@@ -176,8 +175,6 @@
 
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbSwitchTo' => 'admin']) ?>
 
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
-
 <div id="menu-grid">
 
     <a href="<?= site_url('cra-competition') ?>" class="menu-btn" style="background:#b2dfdb;">
@@ -208,7 +205,7 @@
         <span class="btn-desc">JA disponibles et nombre de désignations</span>
     </a>
 
-    <a href="<?= site_url('messagerie') ?>" class="menu-btn" style="background:#b2dfdb;">
+    <a href="<?= site_url('messagerie') ?>?retour=cra-convoc-menu" class="menu-btn" style="background:#b2dfdb;">
         <span class="btn-code">EA93</span>
         <div class="btn-icon"><img src="<?= base_url('img/Messagerie.png') ?>" alt="Modèles de convocation"></div>
         <span>Modèles de convocation</span>

@@ -14,7 +14,6 @@
     <style>
         /* Violet quand ouvert depuis le menu CSR (E004), vert Nominateur sinon — voir isCsr(). */
         #page-header { background: <?= $isCsr ? '#6a1b9a' : '#2e7d32' ?>; }
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
         #panel-liste { width: 44%; }
         #table-wrapper { min-height: 9rem; }
         #panel-form { display: flex; flex-direction: column; }
@@ -72,6 +71,7 @@
         #cartouche-marqueurs.replie > :not(#cart-bascule) { display: none !important; }
 
     </style>
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -86,6 +86,17 @@ if ($isCsr) {
 } else {
     $backLabel = 'Nominateur';  $backUrl = site_url('nominateur-menu');
 }
+// Menu d'origine explicite (?retour=…, liste blanche) : prioritaire sur le rôle — un cumul de rôles ne renvoie plus au mauvais menu.
+$menusRetour = [
+    'csr-menu'         => ['CSR',        site_url('csr-menu')],
+    'cra-convoc-menu'  => ['CRA Convoc', site_url('cra-convoc-menu')],
+    'admin-menu'       => ['Admin',      site_url('admin-menu') . '#tab-tables'],
+    'nominateur-menu'  => ['Nominateur', site_url('nominateur-menu')],
+];
+$retourDemande = (string) service('request')->getGet('retour');
+if (isset($menusRetour[$retourDemande])) {
+    [$backLabel, $backUrl] = $menusRetour[$retourDemande];
+}
 ?>
 <?= view('partials/page_header', [
     'phIcon' => 'envelope-fill', 'phTitle' => 'Gestion des messages', 'phCode' => 'EA93',
@@ -97,8 +108,6 @@ if ($isCsr) {
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Split -->
 <div id="split-container">
@@ -338,9 +347,6 @@ const MESSAGERIE_BASE = '<?= site_url('messagerie') ?>';
 const IS_ADMIN         = <?= $isAdmin ? 'true' : 'false' ?>;
 const IS_CSR            = <?= $isCsr ? 'true' : 'false' ?>;
 
-function escHtml(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 
 // ── Valeurs d'exemple pour l'aperçu des marqueurs ──────────────────────────────
 const MARQUEURS_EXEMPLE = {

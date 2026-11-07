@@ -13,7 +13,6 @@
         :root { --ph-bg: #8d6e00; }
         body { background: #fff8e1; font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
         #toolbar { gap: .75rem; }
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
         #contenu { flex: 1; padding: 1rem; }
         #tbl-frais { font-size: .85rem; background: #fff; }
         #tbl-frais th { background: #fff3cd; white-space: nowrap; }
@@ -34,8 +33,6 @@
 ]) ?>
 
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <div id="contenu">
     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">

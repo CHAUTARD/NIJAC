@@ -21,25 +21,6 @@
 
         #page-header { background: #e65100; color: #fff; }
 
-        #toolbar-user {
-            background: #f8fafc;
-            border-bottom: 1px solid #dde5f0;
-            padding: .3rem 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: .85rem;
-        }
-        #toolbar-user .ts-user { color: #1a3a6b; font-weight: 600; }
-        #toolbar-user .ts-pwd-warning {
-            display: <?= $changeLogin ? 'inline-flex' : 'none' ?>;
-            align-items: center;
-            gap: .35rem;
-            color: #c00;
-            font-weight: 700;
-            cursor: pointer;
-            text-decoration: underline dotted;
-        }
 
         #main-content { flex: 1; padding: 1.25rem; overflow-y: auto; }
 
@@ -100,8 +81,6 @@
 ]) ?>
 
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbId' => 'toolbar-user']) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <div id="main-content">
     <div id="wrap">

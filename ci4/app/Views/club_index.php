@@ -21,7 +21,6 @@
             height: 100vh;
             overflow: hidden;
         }
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
 
         /* ── Grille ── */
         #grid-wrapper { flex: 1; overflow: auto; }
@@ -94,6 +93,7 @@
 
     </style>
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-skin.css') ?>">
+    <script src="<?= base_url('asset/js/nijac-utils.js') ?>"></script>
 </head>
 <body>
 
@@ -104,8 +104,6 @@
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Spinner -->
 <?= view('partials/spinner_overlay') ?>
@@ -403,9 +401,6 @@ function setStatus(msg, ok = true) {
 }
 
 // Les libellés renvoyés par l'API FFTT (noms de club, etc.) ne doivent jamais être injectés bruts dans le DOM
-function escHtml(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 
 // ── Tri & Recherche ───────────────────────────────────────────────────────────
 function lignesFiltreesTriees() {

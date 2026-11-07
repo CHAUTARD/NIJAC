@@ -10,7 +10,6 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac.css') ?>">
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-liste-edit.css') ?>">
     <style>
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
         #panel-liste { width: 54%; }
         #tbl-depts td.col-limitrophe {
             max-width: 160px;
@@ -48,8 +47,6 @@
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <div id="split-container">
 

@@ -12,7 +12,6 @@
     <link rel="stylesheet" href="<?= base_url('asset/css/nijac-liste-edit.css') ?>">
 
     <style>
-        #toolbar .ts-pwd-warning { display: <?= $changeLogin ? 'inline-flex' : 'none' ?>; }
         #panel-liste { width: 54%; }
         #tbl-utilisateurs tbody tr.inactif td { color: #bbb; }
         #txt-id { background: #f0f4fa; width: 80px; }
@@ -40,8 +39,6 @@
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
 <?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement]) ?>
-
-<?php require __DIR__ . '/_modal_mdp.php'; ?>
 
 <!-- Split -->
 <div id="split-container">
