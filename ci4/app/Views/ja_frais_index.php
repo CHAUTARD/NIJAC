@@ -23,7 +23,8 @@
         #tbl-frais thead th[data-col]::after { content: ' \2195'; opacity: .35; font-size: .8em; }
         #tbl-frais thead th.sort-asc::after  { content: ' \25B2'; opacity: 1; }
         #tbl-frais thead th.sort-desc::after { content: ' \25BC'; opacity: 1; }
-    </style>
+    .pill-non { display:inline-block; background:#c62828; color:#fff; border:1px solid #8e0000; border-radius:999px; padding:.1rem .8rem; font-weight:600; }
+</style>
 </head>
 <body>
 
@@ -63,7 +64,7 @@
                     <th data-col="8" class="text-end">Prestation</th>
                     <th data-col="9" class="text-end">Total estimé</th>
                     <th data-col="10" class="text-center">Défisc.</th>
-                    <th data-col="11">Justificatif</th>
+                    <th data-col="11" class="text-center">Justificatif</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -85,65 +86,6 @@
     </div>
 </div>
 
-<!-- ── Modale de saisie des frais ── -->
-<div class="modal fade" id="modal-frais" tabindex="-1" aria-labelledby="modal-frais-titre" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header" style="background:#8d6e00;color:#fff;">
-                <h5 class="modal-title fs-6" id="modal-frais-titre">Frais</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fermer"></button>
-            </div>
-            <div class="modal-body">
-                <div id="mf-rencontre" class="fw-bold mb-2" style="color:#1a3a6b;"></div>
-                <div id="mf-bloc-cra">
-                    <div class="row g-2 mb-2">
-                        <div class="col">
-                            <label class="form-label small" for="mf-peages">Péages (€)</label>
-                            <input type="text" id="mf-peages" class="form-control form-control-sm" inputmode="decimal" placeholder="0,00">
-                            <div class="form-text small">Maximum <?= number_format($maxPeage, 2, ',', ' ') ?> €</div>
-                        </div>
-                        <div class="col">
-                            <label class="form-label small" for="mf-km">Kilomètres</label>
-                            <input type="number" id="mf-km" class="form-control form-control-sm" min="0" max="<?= (int) $maxKm ?>" step="1">
-                            <div class="form-text small">Maximum <?= (int) $maxKm ?> km</div>
-                        </div>
-                    </div>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" id="mf-defisc">
-                        <label class="form-check-label" for="mf-defisc">Je demande la défiscalisation de ces frais</label>
-                    </div>
-                </div>
-                <div id="mf-info-club" class="alert alert-info py-1 px-2 small d-none">
-                    Arbitrage club : ni indemnité, ni péage, ni kilomètres — seul le rapport est à saisir.
-                </div>
-                <div class="mb-2">
-                    <label class="form-label small" for="mf-rap-acc">Rapport — accueil</label>
-                    <textarea id="mf-rap-acc" class="form-control form-control-sm" rows="2" maxlength="1000"></textarea>
-                </div>
-                <div class="mb-2">
-                    <label class="form-label small" for="mf-rap-eq">Rapport — équipements</label>
-                    <textarea id="mf-rap-eq" class="form-control form-control-sm" rows="2" maxlength="1000"></textarea>
-                </div>
-
-                <!-- Justificatif de péage (CRA, Peage > 0 enregistré, colonne présente) -->
-                <div id="mf-bloc-justif" class="border rounded p-2 bg-light d-none">
-                    <div class="small fw-bold mb-1"><i class="bi bi-paperclip me-1"></i>Justificatif de péage</div>
-                    <div id="mf-justif-etat" class="small text-muted mb-1"></div>
-                    <div class="input-group input-group-sm">
-                        <input type="file" id="mf-justif-fichier" class="form-control" accept="image/jpeg,image/png,image/gif,image/webp,application/pdf">
-                        <button type="button" class="btn btn-outline-secondary" id="mf-justif-envoyer">Joindre</button>
-                    </div>
-                    <div class="form-text small">Image ou PDF, 5 Mo maximum. Enregistrez d'abord le montant du péage.</div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fermer</button>
-                <button type="button" class="btn btn-sm btn-primary" id="mf-enregistrer"><i class="bi bi-floppy me-1"></i>Enregistrer</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <?= view('partials/page_footer', ['pfStatusAlign' => 'left']) ?>
 
 <script src="<?= base_url('asset/js/jquery-3.7.1.min.js') ?>"></script>
@@ -157,7 +99,7 @@ const BASE      = <?= json_encode(site_url('ja/frais')) ?>;
 const INDEMNITE = <?= json_encode($indemniteForfait) ?>;
 const TAUX_KM   = <?= json_encode($tauxKm) ?>;
 const AUJOURDHUI = <?= json_encode(date('Y-m-d')) ?>;
-let lignes = [], justifDispo = false, courante = null;
+let lignes = [], justifDispo = false;
 // Tri par défaut : date croissante (plus ancienne → plus future), comme l'ordre renvoyé par le serveur.
 const sortState = { col: '0', asc: true };
 
@@ -188,18 +130,22 @@ function afficher() {
         } else {
             $accuse.text('—');
         }
-        const $justif = $('<td>');
+        const $justif = $('<td class="text-center">');
         if (n.Justificatif) {
             $justif.append($('<a target="_blank" rel="noopener noreferrer">').attr('href', urlVoir(n)).text(n.Justificatif));
+        } else if (cra && saisi && Number(n.Peage || 0) > 0) {
+            $justif.append($('<span class="pill-non">').text('Non'));
         }
         const $actions = $('<td class="text-nowrap">');
-        const $btn = $('<button type="button" class="btn btn-sm btn-primary py-0 me-1 btn-saisir">')
-            .attr('data-id', n.Id_Nomination).html('<i class="bi bi-pencil-square me-1"></i>' + (saisi ? 'Modifier' : 'Saisir'))
-            .prop('disabled', !etat.ok);
-        $actions.append($btn,
-            $('<a class="btn btn-sm btn-outline-secondary py-0" target="_blank" rel="noopener noreferrer" title="Ouvrir la convocation (EN21)">')
+        $actions.append(
+            $('<a class="btn btn-sm btn-outline-secondary py-0" target="_blank" rel="noopener noreferrer" data-bs-toggle="tooltip" data-bs-title="Ouvrir la convocation (EN21) pour saisir ou modifier les frais et joindre le justificatif de péage">')
                 .attr('href', n.UrlConvocation).html('<i class="bi bi-box-arrow-up-right"></i>'));
-        if (!etat.ok && etat.err) $actions.append($('<div class="etat text-muted">').text(etat.err));
+        if (!etat.ok && etat.err) $actions.append($('<span class="etat text-muted ms-2">').text(etat.err.replace(/^La saisie des frais sera possible à partir du /, 'Saisir les frais à partir du ')));
+        if (etat.ok) $actions.append($('<span class="etat text-muted ms-2">').text(saisi ? 'Modifier les frais' : 'Saisir les frais'));
+        if (justifDispo && cra && saisi && Number(n.Peage || 0) > 0 && !n.Justificatif) {
+            $actions.append($('<span class="etat text-danger fw-bold ms-2">')
+                .html('<i class="bi bi-exclamation-circle me-1"></i>Justificatif de péage manquant.'));
+        }
         const passee = n.Date <= AUJOURDHUI; // rencontre pas encore jouée (date > jour) : pas de total estimé
         const kmAff = n.KilometreAffiche, fraisKm = Number(kmAff || 0) * TAUX_KM; // km ajustés côté serveur (1re prestation du jour)
         const total = cra && passee ? INDEMNITE + Number(n.Peage || 0) + fraisKm : 0;
@@ -223,6 +169,7 @@ function afficher() {
         ));
     });
     trierLignes();
+    document.querySelectorAll('#tbody-liste [data-bs-toggle="tooltip"]').forEach(el => bootstrap.Tooltip.getOrCreateInstance(el));
 }
 
 // Totaux (tfoot, hors tri) : rencontres passées seulement (date <= jour), sur les lignes affichées.
@@ -271,82 +218,9 @@ function charger(rouvrirId = null) {
         lignes = r.data || [];
         justifDispo = !!r.justificatifDispo;
         afficher();
-        if (rouvrirId) {
-            const n = lignes.find(x => String(x.Id_Nomination) === String(rouvrirId));
-            if (n) majBlocJustif(n);
-        }
     }).fail(() => nijacToast('Erreur réseau.', 'danger'));
 }
 
-function majBlocJustif(n) {
-    courante = n;
-    const visible = justifDispo && estCra(n) && Number(n.Peage || 0) > 0 && n.DateSaisie;
-    $('#mf-bloc-justif').toggleClass('d-none', !visible);
-    $('#mf-justif-etat').empty();
-    if (n.Justificatif) {
-        $('#mf-justif-etat').append(document.createTextNode(n.Justificatif + ' — '),
-            $('<a target="_blank" rel="noopener noreferrer">').attr('href', urlVoir(n)).text('Consulter'));
-    } else {
-        $('#mf-justif-etat').text('Aucun justificatif joint.');
-    }
-    $('#mf-justif-fichier').val('');
-}
-
-// ── Ouverture de la saisie ──
-$(document).on('click', '.btn-saisir', function () {
-    const n = lignes.find(x => String(x.Id_Nomination) === String($(this).data('id')));
-    if (!n) return;
-    const cra = estCra(n);
-    $('#mf-rencontre').text(dateFr(n.Date) + ' — ' + libRencontre(n));
-    $('#mf-bloc-cra').toggleClass('d-none', !cra);
-    $('#mf-info-club').toggleClass('d-none', cra);
-    $('#mf-peages').val(n.DateSaisie && n.Peage !== null ? String(n.Peage).replace('.', ',') : '');
-    $('#mf-km').val(n.DateSaisie && n.Kilometre !== null ? n.Kilometre : '');
-    $('#mf-defisc').prop('checked', parseInt(n.Defiscalisation, 10) === 1);
-    $('#mf-rap-acc').val(n.RapportAccueil || '');
-    $('#mf-rap-eq').val(n.RapportEquipements || '');
-    majBlocJustif(n);
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-frais')).show();
-});
-
-// ── Enregistrement (ConvocationJaController::sauvegarderFrais(), réutilisé) ──
-$('#mf-enregistrer').on('click', function () {
-    if (!courante) return;
-    const id = courante.Id_Nomination;
-    const $b = $(this).prop('disabled', true);
-    $.post(`${BASE}/sauvegarder`, {
-        id_nomination:       id,
-        peages:              $('#mf-peages').val().trim(),
-        km:                  $('#mf-km').val().trim(),
-        defiscalisation:     $('#mf-defisc').is(':checked') ? '1' : '',
-        rapport_accueil:     $('#mf-rap-acc').val().trim(),
-        rapport_equipements: $('#mf-rap-eq').val().trim(),
-    }, function (r) {
-        if (!r.ok) { nijacToast(r.err || 'Enregistrement impossible.', 'danger'); return; }
-        nijacToast(r.justificatif ? 'Frais enregistrés. Vous pouvez joindre le justificatif de péage.' : 'Frais enregistrés.', 'success');
-        charger(id);
-    }, 'json').fail(() => nijacToast('Erreur réseau.', 'danger')).always(() => $b.prop('disabled', false));
-});
-
-// ── Justificatif (ConvocationJaController::joindreJustificatif(), réutilisé) ──
-$('#mf-justif-envoyer').on('click', function () {
-    if (!courante) return;
-    const f = document.getElementById('mf-justif-fichier').files[0];
-    if (!f) { nijacToast('Choisissez le fichier du justificatif (image ou PDF).', 'warning'); return; }
-    const fd = new FormData();
-    fd.append('id_nomination', courante.Id_Nomination);
-    fd.append('justificatif', f);
-    const id = courante.Id_Nomination;
-    const $b = $(this).prop('disabled', true);
-    $.ajax({ url: `${BASE}/justificatif`, method: 'POST', data: fd, processData: false, contentType: false, dataType: 'json' })
-        .done(function (r) {
-            if (!r.ok) { nijacToast(r.msg || r.err || 'Envoi impossible.', 'danger'); return; }
-            nijacToast(r.msg || 'Justificatif enregistré.', 'success');
-            charger(id);
-        })
-        .fail(() => nijacToast('Erreur réseau.', 'danger'))
-        .always(() => $b.prop('disabled', false));
-});
 
 $('#cbo-periode').on('change', afficher);
 

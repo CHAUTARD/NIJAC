@@ -2345,10 +2345,10 @@ function dateConvocationAccusable(?string $dateRencontre, ?string $jour = null):
  * Règle de date de la saisie des frais (EN21) : possible seulement si J >= D. Le jour même (J = D),
  * où l'accusé reste possible, la saisie reste en plus conditionnée à l'accusé de réception
  * ($accuseManquant = colonne AccuseReception présente (EA98), NULL, nomination rattachée
- * à un JA). Après D, saisie libre (l'accusé n'est plus possible). Fonction pure.
+ * à un JA). Après D, saisie libre pendant 7 jours (l'accusé n'est plus possible), puis consultation seule. Fonction pure.
  * Retourne ['ok' => bool, 'err' => ?string, 'attendAccuse' => bool (seul l'accusé bloque)].
  */
-function fraisSaisissables(?string $dateRencontre, bool $accuseManquant, ?string $jour = null): array
+function fraisSaisissables(?string $dateRencontre, bool $accuseManquant, ?string $jour = null, bool $ignorerDelai = false): array
 {
     $d = dateRencontreNormalisee($dateRencontre);
     $j = $jour ?? jourConvocation();
@@ -2358,6 +2358,11 @@ function fraisSaisissables(?string $dateRencontre, bool $accuseManquant, ?string
     if ($j < $d) {
         return ['ok' => false, 'err' => 'La saisie des frais sera possible à partir du '
             . date('d/m/Y', strtotime($d)) . '.', 'attendAccuse' => false];
+    }
+    // Plus de 7 jours après la rencontre : consultation seule (modification par le nominateur, EN28).
+    // ($ignorerDelai : dépôt du justificatif de péage, jamais bloqué par ce délai.)
+    if (!$ignorerDelai && $j > date('Y-m-d', strtotime($d . ' +7 days'))) {
+        return ['ok' => false, 'err' => 'Consultation, pour modifier contacter votre Nominateur.', 'attendAccuse' => false];
     }
     if ($j === $d && $accuseManquant) {
         return ['ok' => false, 'err' => 'Pour saisir vos frais, accusez d\'abord réception de cette convocation.', 'attendAccuse' => true];

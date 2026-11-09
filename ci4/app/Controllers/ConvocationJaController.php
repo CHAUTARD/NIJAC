@@ -293,6 +293,9 @@ class ConvocationJaController extends BaseController
             // accusé de réception requis s'il manque (convocation accusable mais pas encore accusée).
             'etatFrais'        => $etatFrais,
             'fraisBloques'     => !$etatFrais['ok'],
+            'justifBloque'     => $rencontre
+                ? !fraisSaisissables($rencontre['Date'], $accuse !== null && !$accuse['date'] && $accuse['accusable'], null, true)['ok']
+                : true,
             'justificatif'     => $justificatif,
         ]);
     }
@@ -347,7 +350,7 @@ class ConvocationJaController extends BaseController
      * NULL, JA rattaché) ; après (J > D), libre.
      * Retourne le tableau de fraisSaisissables() ['ok', 'err', 'attendAccuse'].
      */
-    public static function etatSaisieFrais(\PDO $pdo, int $idNomination): array
+    public static function etatSaisieFrais(\PDO $pdo, int $idNomination, bool $ignorerDelai = false): array
     {
         $st = $pdo->prepare(
             'SELECT r.Date, (n.AccuseReception IS NULL AND d.Id_JA IS NOT NULL) AS AccuseManquant
@@ -359,7 +362,7 @@ class ConvocationJaController extends BaseController
         $st->execute([$idNomination]);
         $row = $st->fetch();
 
-        return fraisSaisissables($row ? (string) $row['Date'] : null, $row && (int) $row['AccuseManquant']);
+        return fraisSaisissables($row ? (string) $row['Date'] : null, $row && (int) $row['AccuseManquant'], null, $ignorerDelai);
     }
 
     /**
@@ -537,7 +540,7 @@ class ConvocationJaController extends BaseController
             if (!(int) $row['ArbitrageCRA']) {
                 return $this->refusJustificatif('Action non disponible.');
             }
-            $etatFrais = self::etatSaisieFrais($pdo, $idNomP);
+            $etatFrais = self::etatSaisieFrais($pdo, $idNomP, true); // justificatif : pas de blocage à 7 jours
             if (!$etatFrais['ok']) {
                 return $this->refusJustificatif((string) $etatFrais['err']);
             }

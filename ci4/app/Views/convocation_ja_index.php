@@ -538,7 +538,7 @@
           Seuls le type et la date sont affichés ; « Consulter » ouvre GET convocation-ja/justificatif/voir (id_nomination + cnv
           seulement : le nom de fichier est lu en base côté serveur, jamais exposé).  -->
     <?php $urlVoirJustif = site_url('convocation-ja/justificatif/voir') . '?' . http_build_query(['id_nomination' => (int) $idNomination, 'cnv' => $tokenCnv]); ?>
-    <div id="justif-bloc"<?= ($fraisBloques || (float) $peages <= 0) ? ' style="display:none"' : '' ?>>
+    <div id="justif-bloc"<?= ($justifBloque || (float) $peages <= 0) ? ' style="display:none"' : '' ?>>
         <span id="justif-etat">
         <?php if ($justificatif['libelle']): ?>
             <span class="justif-ok"><i class="bi bi-paperclip me-1"></i>Justificatif de péage joint (<?= esc($justificatif['libelle']) ?>)</span>
