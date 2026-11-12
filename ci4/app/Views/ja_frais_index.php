@@ -62,7 +62,7 @@
                     <th data-col="6" class="text-end">Km</th>
                     <th data-col="7" class="text-end">Frais kilométriques</th>
                     <th data-col="8" class="text-end">Prestation</th>
-                    <th data-col="9" class="text-end">Total estimé</th>
+                    <th data-col="9" class="text-end">Total</th>
                     <th data-col="10" class="text-center">Défisc.</th>
                     <th data-col="11" class="text-center">Justificatif</th>
                     <th>Actions</th>
@@ -73,7 +73,7 @@
             </tbody>
             <tfoot>
                 <tr id="ligne-totaux" class="fw-bold table-warning">
-                    <td colspan="5" class="text-end">Totaux (rencontres passées)</td>
+                    <td colspan="5" class="text-end">Totaux</td>
                     <td class="text-end" id="tot-peage"></td>
                     <td class="text-end" id="tot-km"></td>
                     <td class="text-end" id="tot-fraiskm"></td>

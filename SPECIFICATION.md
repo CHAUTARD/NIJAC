@@ -504,6 +504,7 @@ Identiques à EN22 (seule `resolveIdJaAutorise()` est redéfinie : `idJaCompteSe
 
 ### Règles
 - Mêmes règles qu'EN21, sans duplication : J <= D pour l'accusé, J >= D pour les frais (le jour même, accusé requis s'il manque), plafonds `frais_max_peages` / `frais_max_km`, arbitrage club = aucun frais, justificatif seulement si Peage > 0 enregistré (contrôles, stockage et suppression de l'ancien fichier par `JustificatifPeage`).
+- Écran en consultation + renvoi vers EN21 : plus de bouton Saisir/Modifier ni de modale de saisie ; la colonne Actions contient le lien vers la convocation EN21 (info-bulle Bootstrap) suivi, sur la même ligne, des messages : « Saisir les frais » / « Modifier les frais » (frais saisis), « Saisir les frais à partir du JJ/MM/AAAA. » (avant la rencontre), « Consultation, pour modifier contacter votre Nominateur. » (après 7 jours), « Justificatif de péage manquant. » en rouge (CRA, péage > 0, sans justificatif). Colonne Justificatif centrée : lien du fichier, ou pastille rouge « Non » si péage saisi sans justificatif.
 - Seule l'autorisation diffère (`nominationAutorisee()` redéfinie) : la nomination doit appartenir au JA de la session (jeton `cnv` ignoré) ; refus neutre « Nomination introuvable. ». Actions journalisées `[NIJAC] EJA4 : … par le compte JA <login> (nomination N)`.
 
 ---
@@ -1239,6 +1240,7 @@ Affiche la convocation officielle imprimable (format A4) d'un Juge-Arbitre pour 
   - **Accusé de réception** possible seulement si `J <= D` (`dateConvocationAccusable()`, via `convocationAccusable()`), en plus d'un JA rattaché ; contrôlé côté serveur par `accuser()`, indépendamment du navigateur
   - **Saisie des frais** possible seulement si `J >= D` (`fraisSaisissables()`) ; avant, refus serveur + vue désactivée avec « La saisie des frais sera possible à partir du JJ/MM/AAAA. »
   - **Dépendance accusé → frais le jour même** : `J = D` (les deux actions possibles) → la saisie des frais reste conditionnée à l'accusé de réception (s'il manque, colonne présente, nomination valide). `J > D` : accusé impossible, saisie libre. Choix conservé de l'ancienne règle, modifiable dans `fraisSaisissables()`
+  - **Consultation seule après 7 jours** : `J > D + 7 jours` → saisie refusée côté serveur (`fraisSaisissables()`, message « Consultation, pour modifier contacter votre Nominateur. »), champs grisés et bouton masqué en EN21 ; modification par le nominateur (EN28). Le **dépôt du justificatif de péage n'est jamais bloqué par ce délai** (`fraisSaisissables(..., $ignorerDelai = true)` via `etatSaisieFrais($pdo, $id, true)` dans `joindreJustificatif()` ; bloc justificatif EN21 piloté par `justifBloque`) ; les règles J >= D et Peage > 0 enregistré restent exigées. Le justificatif n'est jamais obligatoire pour enregistrer les frais.
   - EN28 « Rappel » (`DateSaisie IS NULL`) n'applique pas ces règles : un rappel envoyé avant la rencontre mène à une page où la saisie s'ouvrira le jour de la rencontre
 
 ---
