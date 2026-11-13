@@ -59,6 +59,7 @@
                     <option value="<?= esc($d['CodeDept']) ?>"><?= esc($d['CodeDept'] . ' – ' . $d['nom']) ?></option>
                 <?php endforeach; ?>
             </select>
+            <span id="nb-selection" class="small text-muted ms-auto text-nowrap"></span>
         </div>
         <div id="table-wrapper">
             <table id="tbl-utilisateurs">
@@ -341,10 +342,14 @@ function filtrerParRole() {
     // Le filtre département n'apparaît que pour le rôle Juge-Arbitre
     $('#cbo-filtre-dept').toggleClass('d-none', role !== 'JA');
     const dept = role === 'JA' ? $('#cbo-filtre-dept').val() : '';
+    let nb = 0;
     $('#tbody-liste tr[data-id]').each(function () {
         const roles = String($(this).attr('data-roles') || '').split(',');
-        $(this).toggle((!role || roles.includes(role)) && (!dept || String($(this).attr('data-dept')) === dept));
+        const visible = (!role || roles.includes(role)) && (!dept || String($(this).attr('data-dept')) === dept);
+        $(this).toggle(visible);
+        if (visible) nb++;
     });
+    $('#nb-selection').text(nb + (nb > 1 ? ' enregistrements' : ' enregistrement'));
 }
 $('#cbo-filtre-role, #cbo-filtre-dept').on('change', filtrerParRole);
 
