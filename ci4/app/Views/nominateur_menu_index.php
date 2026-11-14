@@ -46,6 +46,26 @@
             transition: background .15s;
         }
         #btn-switch-admin:hover { background: #0f2550; color: #fff; }
+        #btn-switch-csr, #btn-switch-defisc, #btn-switch-craconvoc {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .25rem .75rem;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: .82rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background .15s;
+        }
+        #btn-switch-csr { background: #6a1b9a; }
+        #btn-switch-csr:hover { background: #4a148c; color: #fff; }
+        #btn-switch-defisc { background: #e65100; }
+        #btn-switch-defisc:hover { background: #bf360c; color: #fff; }
+        #btn-switch-craconvoc { background: #00838f; }
+        #btn-switch-craconvoc:hover { background: #006064; color: #fff; }
         /* Bouton de barre « Menu JA » (E011) : bascule en mode JA ; inactif sans fiche JA liée */
         #btn-switch-ja {
             display: inline-flex;
@@ -328,7 +348,7 @@
 </div>
 
 <!-- Toolbar : recopié de Nominateur/includes/toolbar.php -->
-<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowJa' => !empty($menuJaVisible), 'tbJaActif' => !empty($compteJaLie), 'tbSwitchTo' => 'admin']) ?>
+<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowCsr' => !empty($menuCsrVisible), 'tbShowDefisc' => !empty($menuDefiscVisible), 'tbShowCraConvoc' => !empty($menuCraVisible), 'tbShowJa' => !empty($menuJaVisible), 'tbJaActif' => !empty($compteJaLie), 'tbSwitchTo' => 'admin']) ?>
 
 <!-- ── Tableau de bord ── -->
 <div id="dashboard">

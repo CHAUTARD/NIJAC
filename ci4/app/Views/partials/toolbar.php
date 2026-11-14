@@ -8,6 +8,7 @@
  *             $tbShowCsr (def. false — affiche le bouton "Menu CSR", avant $tbSwitchTo ; nécessite le CSS #btn-switch-csr dans la vue),
  *             $tbShowDefisc (def. false — affiche le bouton "Menu Défiscalisateur", avant $tbSwitchTo ; nécessite le CSS #btn-switch-defisc dans la vue),
  *             $tbShowCraConvoc (def. false — affiche le bouton "Menu CRA Convoc", avant $tbSwitchTo ; nécessite le CSS #btn-switch-craconvoc dans la vue),
+ *             $tbShowNominateur (def. false — affiche le bouton "Menu nominateur" EN PLUS de $tbSwitchTo (cas d'un administrateur sur E004/E005/E009) ; nécessite le CSS #btn-switch-nominateur dans la vue),
  *             $tbShowJa (def. false — affiche le bouton "Menu JA" (E011), avant $tbSwitchTo ; nécessite le CSS #btn-switch-ja dans la vue),
  *             $tbJaActif (def. false — fiche JA liée utilisable : bouton = POST changer-compte action=ja ; sinon bouton grisé inactif « Aucune fiche JA liée : voir EA86 »),
  *             $tbRetourCompte (def. false — mode JA d'un compte non-JA (E011) : bouton de retour = POST changer-compte action=retour ; nécessite le CSS #btn-switch-retour dans la vue),
@@ -21,6 +22,7 @@ $tbSwitchTo       = $tbSwitchTo ?? null;
 $tbShowCsr        = $tbShowCsr ?? false;
 $tbShowDefisc     = $tbShowDefisc ?? false;
 $tbShowCraConvoc  = $tbShowCraConvoc ?? false;
+$tbShowNominateur = $tbShowNominateur ?? false;
 $tbShowJa         = $tbShowJa ?? false;
 $tbJaActif        = $tbJaActif ?? false;
 $tbRetourCompte   = $tbRetourCompte ?? false;
@@ -40,7 +42,7 @@ $tbChangeLogin    = $tbShowPwdWarning && !empty($_SESSION['utilisateur']['change
         <i class="bi bi-key-fill"></i>Mot de passe à modifier
     </a>
     <?php endif; ?>
-    <?php if ($tbShowCsr || $tbShowDefisc || $tbShowCraConvoc || $tbShowJa || $tbSwitchTo || $tbRetourCompte): ?>
+    <?php if ($tbShowCsr || $tbShowDefisc || $tbShowCraConvoc || $tbShowNominateur || $tbShowJa || $tbSwitchTo || $tbRetourCompte): ?>
     <div style="display:flex;align-items:center;gap:.5rem;">
         <?php if ($tbShowCsr): ?>
         <a id="btn-switch-csr" href="<?= site_url('csr-menu') ?>" title="Basculer vers le menu CSR">
@@ -55,6 +57,11 @@ $tbChangeLogin    = $tbShowPwdWarning && !empty($_SESSION['utilisateur']['change
         <?php if ($tbShowCraConvoc): ?>
         <a id="btn-switch-craconvoc" href="<?= site_url('cra-convoc-menu') ?>" title="Basculer vers le menu CRA Convoc">
             <i class="bi bi-envelope-paper-fill"></i>Menu CRA Convoc
+        </a>
+        <?php endif; ?>
+        <?php if ($tbShowNominateur && $tbSwitchTo !== 'nominateur'): ?>
+        <a id="btn-switch-nominateur" href="<?= site_url('nominateur-menu') ?>" title="Basculer vers le menu nominateur">
+            <i class="bi bi-people-fill"></i>Menu nominateur
         </a>
         <?php endif; ?>
         <?php if ($tbShowJa): ?>

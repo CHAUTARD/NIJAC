@@ -48,6 +48,26 @@
             transition: background .15s;
         }
         #btn-switch-admin:hover { background: #0f2550; color: #fff; }
+        #btn-switch-nominateur, #btn-switch-defisc, #btn-switch-craconvoc {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .25rem .75rem;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: .82rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background .15s;
+        }
+        #btn-switch-nominateur { background: #2e7d32; }
+        #btn-switch-nominateur:hover { background: #1b5e20; color: #fff; }
+        #btn-switch-defisc { background: #e65100; }
+        #btn-switch-defisc:hover { background: #bf360c; color: #fff; }
+        #btn-switch-craconvoc { background: #00838f; }
+        #btn-switch-craconvoc:hover { background: #006064; color: #fff; }
 
         /* ── Grille de boutons (mêmes classes et même style que E002, pour une apparence
            identique) ── */
@@ -190,7 +210,7 @@
 </div>
 
 <!-- Toolbar : recopié de includes/toolbar.php -->
-<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbSwitchTo' => 'admin']) ?>
+<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowDefisc' => !empty($menuDefiscVisible), 'tbShowCraConvoc' => !empty($menuCraVisible), 'tbShowNominateur' => !empty($isAdmin), 'tbSwitchTo' => $menuSwitchTo]) ?>
 
 <!-- Grille -->
 <div id="menu-grid">

@@ -134,6 +134,10 @@ class NominateurMenuController extends BaseController
             'prochaineDateFr' => $prochaineDateFr,
             // Bouton de barre « Menu JA » (E011, partials/toolbar) : affiché hors mode JA ; actif (POST changer-compte action=ja)
             // si fiche JA liée utilisable (idFicheJaLiee()), sinon grisé « Aucune fiche JA liée : voir EA86 ».
+            // Boutons de barre vers les menus E004 / E005 / E009 : rôle correspondant ou administrateur (comme csrauth / defiscauth / craconvocauth).
+            'menuCsrVisible'    => estAdmin($u) || aRole(['CSR'], $u),
+            'menuDefiscVisible' => estAdmin($u) || aRole(['Defiscalisateur'], $u),
+            'menuCraVisible'    => estAdmin($u) || aRole(['CRA Convoc'], $u),
             'menuJaVisible'   => !estSessionModeJa($u),
             'compteJaLie'     => !estSessionModeJa($u) && $this->compteJaLieUtilisable((int) ($u['id'] ?? 0)),
         ];

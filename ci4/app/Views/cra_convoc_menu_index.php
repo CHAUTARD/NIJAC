@@ -49,6 +49,26 @@
             transition: background .15s;
         }
         #btn-switch-admin:hover { background: #0f2550; color: #fff; }
+        #btn-switch-nominateur, #btn-switch-csr, #btn-switch-defisc {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .25rem .75rem;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: .82rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background .15s;
+        }
+        #btn-switch-nominateur { background: #2e7d32; }
+        #btn-switch-nominateur:hover { background: #1b5e20; color: #fff; }
+        #btn-switch-csr { background: #6a1b9a; }
+        #btn-switch-csr:hover { background: #4a148c; color: #fff; }
+        #btn-switch-defisc { background: #e65100; }
+        #btn-switch-defisc:hover { background: #bf360c; color: #fff; }
 
         /* ── Boutons (mêmes classes et même style que E002/E004/E005) — seulement 2,
            centrés sur une ligne plutôt qu'une grille de 5 colonnes ── */
@@ -173,7 +193,7 @@
     </div>
 </div>
 
-<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbSwitchTo' => 'admin']) ?>
+<?= view('partials/toolbar', ['tbNomComplet' => $nomComplet, 'tbDepartement' => $departement, 'tbShowCsr' => !empty($menuCsrVisible), 'tbShowDefisc' => !empty($menuDefiscVisible), 'tbShowNominateur' => !empty($isAdmin), 'tbSwitchTo' => $menuSwitchTo]) ?>
 
 <div id="menu-grid">
 
