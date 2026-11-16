@@ -657,11 +657,12 @@ class NominationController extends BaseController
                 LEFT JOIN laposte lp_r ON lp_r.Id_LaPoste = s_r.Id_Laposte
                 " . sqlJoinSallePrincipale('ed.Id_Club', 's_c') . "
                 LEFT JOIN laposte lp_c ON lp_c.Id_LaPoste = s_c.Id_Laposte
-                WHERE r.Journee = ? AND r.Date = ?
+                WHERE r.Date = ?
                   AND r.Id_Rencontre IN ($placeholders)
                   AND SUBSTRING(ed.Id_Club, 3, 2) IN ($deptPh)
             ");
-            $stmt->execute([$journee, $date, ...$idsRencontre, ...$deptsAutorises]);
+            // La liste EN14 est par date (toutes journées confondues) : pas de filtre Journee, les ids cochés font foi.
+            $stmt->execute([$date, ...$idsRencontre, ...$deptsAutorises]);
             $nominations = $stmt->fetchAll();
 
             $moi     = $_SESSION['utilisateur'] ?? [];
